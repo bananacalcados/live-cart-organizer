@@ -6,7 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Users, Loader2, Send, Copy, Check, Save, Clock, ShieldCheck, ShieldOff } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Bot, Users, Loader2, Send, Copy, Check, Save, Clock, ShieldCheck, ShieldOff, RefreshCw, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -91,10 +92,15 @@ const AIAgents = () => {
   // Execution history
   const [lastExecution, setLastExecution] = useState<any>(null);
 
+  // RFM Health
+  const [rfmHealth, setRfmHealth] = useState<{ lastUpdate: string | null; segments: Record<string, number> } | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState(false);
+
   useEffect(() => {
     loadNovidades();
     loadLastExecution();
     calculateAutoContext();
+    loadRfmHealth();
   }, []);
 
   const loadNovidades = async () => {
@@ -135,6 +141,51 @@ const AIAgents = () => {
           setFilterSummary(input.filter_summary);
         }
       }
+    }
+  };
+
+  const loadRfmHealth = async () => {
+    // Get last update timestamp
+    const { data: latest } = await supabase
+      .from('zoppy_customers')
+      .select('rfm_updated_at')
+      .not('rfm_updated_at', 'is', null)
+      .order('rfm_updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // Get segment counts  
+    const { data: allCustomers } = await supabase
+      .from('zoppy_customers')
+      .select('rfm_segment')
+      .not('rfm_segment', 'is', null);
+
+    const segments: Record<string, number> = {};
+    (allCustomers || []).forEach((c: any) => {
+      const seg = c.rfm_segment || 'others';
+      segments[seg] = (segments[seg] || 0) + 1;
+    });
+
+    setRfmHealth({
+      lastUpdate: latest?.rfm_updated_at || null,
+      segments,
+    });
+  };
+
+  const handleRecalculateRfm = async () => {
+    setIsRecalculating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('zoppy-sync-customers', {
+        body: { mode: 'calculate_rfm' },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`RFM recalculado: ${data.count} clientes`);
+      loadRfmHealth();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao recalcular RFM');
+    } finally {
+      setIsRecalculating(false);
     }
   };
 
@@ -413,6 +464,58 @@ const AIAgents = () => {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* RFM Health Section */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Saúde do RFM</CardTitle>
+            </div>
+            <div className="flex items-center gap-3">
+              {rfmHealth?.lastUpdate && (
+                <span className="text-xs text-muted-foreground">
+                  Último cálculo: {new Date(rfmHealth.lastUpdate).toLocaleString('pt-BR')}
+                </span>
+              )}
+              <Button variant="outline" size="sm" onClick={handleRecalculateRfm} disabled={isRecalculating}>
+                {isRecalculating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <RefreshCw className="h-3 w-3 mr-1" />}
+                Recalcular agora
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {rfmHealth && Object.keys(rfmHealth.segments).length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Segmento</TableHead>
+                    <TableHead className="text-right">Clientes</TableHead>
+                    <TableHead className="text-right">%</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(rfmHealth.segments)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([seg, count]) => {
+                      const total = Object.values(rfmHealth.segments).reduce((s, v) => s + v, 0);
+                      return (
+                        <TableRow key={seg}>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">{seg}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">{count.toLocaleString('pt-BR')}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">{total > 0 ? ((count / total) * 100).toFixed(1) : 0}%</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">Nenhum dado RFM calculado ainda. Clique em "Recalcular agora".</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

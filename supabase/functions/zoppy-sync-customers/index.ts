@@ -80,99 +80,19 @@ serve(async (req) => {
     const mode = body.mode || 'from_api';
 
     if (mode === 'calculate_rfm') {
-      console.log('Calculating RFM scores directly from zoppy_customers...');
+      console.log('Calculating RFM scores via calculate_rfm_scores()...');
 
-      // Fetch all customers with purchases directly from zoppy_customers (already aggregated)
-      // Process in batches to avoid CPU timeout
-      let allCustomers: any[] = [];
-      let from = 0;
-      const batchSize = 1000;
-      while (true) {
-        const { data, error } = await supabase
-          .from('zoppy_customers')
-          .select('zoppy_id, first_name, last_name, phone, email, total_orders, total_spent, last_purchase_at, first_purchase_at, city, state, gender, address1, ddd, region_type')
-          .gt('total_orders', 0)
-          .range(from, from + batchSize - 1);
-        if (error) { console.error('Fetch error:', error); throw error; }
-        if (!data || data.length === 0) break;
-        allCustomers = allCustomers.concat(data);
-        if (data.length < batchSize) break;
-        from += batchSize;
-      }
+      const { data, error } = await supabase.rpc('calculate_rfm_scores');
+      if (error) { console.error('RFM calculation error:', error); throw error; }
 
-      console.log(`Found ${allCustomers.length} customers with purchases`);
+      console.log('RFM calculation result:', data);
 
-      if (allCustomers.length === 0) {
-        return new Response(JSON.stringify({ success: true, message: 'No customers found', count: 0 }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-
-      const now = new Date();
-
-      // Pre-compute sorted arrays for quintile calculation
-      const recencies: number[] = [];
-      const frequencies: number[] = [];
-      const monetaries: number[] = [];
-      for (const c of allCustomers) {
-        recencies.push((now.getTime() - new Date(c.last_purchase_at || now).getTime()) / (1000 * 60 * 60 * 24));
-        frequencies.push(c.total_orders || 0);
-        monetaries.push(c.total_spent || 0);
-      }
-      recencies.sort((a, b) => a - b);
-      frequencies.sort((a, b) => a - b);
-      monetaries.sort((a, b) => a - b);
-
-      // Use binary search for quintile instead of findIndex (O(log n) vs O(n))
-      function binarySearchInsert(arr: number[], val: number): number {
-        let lo = 0, hi = arr.length;
-        while (lo < hi) {
-          const mid = (lo + hi) >> 1;
-          if (arr[mid] < val) lo = mid + 1;
-          else hi = mid;
-        }
-        return lo;
-      }
-
-      function getQuintile(value: number, sortedValues: number[], inverse = false): number {
-        const position = binarySearchInsert(sortedValues, value);
-        const percentile = position / sortedValues.length;
-        const score = Math.ceil(percentile * 5);
-        const clamped = Math.max(1, Math.min(5, score));
-        return inverse ? (6 - clamped) : clamped;
-      }
-
-      // Process and upsert in chunks
-      let upserted = 0;
-      const CHUNK = 200;
-      for (let i = 0; i < allCustomers.length; i += CHUNK) {
-        const chunk = allCustomers.slice(i, i + CHUNK);
-        const upsertBatch = chunk.map(c => {
-          const recencyDays = (now.getTime() - new Date(c.last_purchase_at || now).getTime()) / (1000 * 60 * 60 * 24);
-          const rScore = getQuintile(recencyDays, recencies, true);
-          const fScore = getQuintile(c.total_orders || 0, frequencies);
-          const mScore = getQuintile(c.total_spent || 0, monetaries);
-          const totalScore = rScore + fScore + mScore;
-          const segment = getRfmSegment(rScore, fScore, mScore);
-
-          return {
-            zoppy_id: c.zoppy_id,
-            rfm_recency_score: rScore,
-            rfm_frequency_score: fScore,
-            rfm_monetary_score: mScore,
-            rfm_total_score: totalScore,
-            rfm_segment: segment,
-            rfm_calculated_at: now.toISOString(),
-            avg_ticket: c.total_orders > 0 ? +((c.total_spent || 0) / c.total_orders).toFixed(2) : 0,
-          };
-        });
-
-        const { error } = await supabase.from('zoppy_customers').upsert(upsertBatch, { onConflict: 'zoppy_id' });
-        if (error) { console.error('Upsert error:', error); throw error; }
-        upserted += upsertBatch.length;
-      }
-
-      return new Response(JSON.stringify({ success: true, count: upserted, message: `RFM calculado para ${upserted} clientes` }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ 
+        success: true, 
+        count: data?.updated || 0, 
+        segments: data?.segments || {},
+        message: `RFM recalculado para ${data?.updated || 0} clientes` 
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (mode === 'from_api') {

@@ -9961,11 +9961,16 @@ export type Database = {
           preferred_style: string | null
           region_type: string | null
           rfm_calculated_at: string | null
+          rfm_f_score: number | null
           rfm_frequency_score: number | null
+          rfm_m_score: number | null
           rfm_monetary_score: number | null
+          rfm_r_score: number | null
           rfm_recency_score: number | null
+          rfm_score: number | null
           rfm_segment: string | null
           rfm_total_score: number | null
+          rfm_updated_at: string | null
           shoe_size: string | null
           source: string | null
           state: string | null
@@ -10014,11 +10019,16 @@ export type Database = {
           preferred_style?: string | null
           region_type?: string | null
           rfm_calculated_at?: string | null
+          rfm_f_score?: number | null
           rfm_frequency_score?: number | null
+          rfm_m_score?: number | null
           rfm_monetary_score?: number | null
+          rfm_r_score?: number | null
           rfm_recency_score?: number | null
+          rfm_score?: number | null
           rfm_segment?: string | null
           rfm_total_score?: number | null
+          rfm_updated_at?: string | null
           shoe_size?: string | null
           source?: string | null
           state?: string | null
@@ -10067,11 +10077,16 @@ export type Database = {
           preferred_style?: string | null
           region_type?: string | null
           rfm_calculated_at?: string | null
+          rfm_f_score?: number | null
           rfm_frequency_score?: number | null
+          rfm_m_score?: number | null
           rfm_monetary_score?: number | null
+          rfm_r_score?: number | null
           rfm_recency_score?: number | null
+          rfm_score?: number | null
           rfm_segment?: string | null
           rfm_total_score?: number | null
+          rfm_updated_at?: string | null
           shoe_size?: string | null
           source?: string | null
           state?: string | null
@@ -10188,6 +10203,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_rfm_scores: { Args: never; Returns: Json }
       check_order_ai_paused: {
         Args: { p_phone: string }
         Returns: {
