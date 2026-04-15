@@ -120,6 +120,11 @@ serve(async (req) => {
         );
     }
 
+    // Add quote support to any media type
+    if (quotedMessageId) {
+      payload.quotedMessageId = quotedMessageId;
+    }
+
     const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/${endpoint}`;
     console.log(`[zapi-send-media] Sending ${mediaType} to ${formattedPhone} via ${endpoint}`);
     console.log(`[zapi-send-media] Payload image type: ${mediaUrl.startsWith('data:') ? 'base64' : 'URL'}, URL preview: ${mediaUrl.substring(0, 80)}`);
