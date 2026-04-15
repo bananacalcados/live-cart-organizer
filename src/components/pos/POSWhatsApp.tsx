@@ -1002,6 +1002,24 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               className="h-7 text-[10px] bg-white/10 border-white/20 text-white"
             />
           )}
+          {/* Attendant switcher */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+            onClick={() => {
+              setSelectedSellerId(null);
+              setSelectedSellerName(null);
+              sessionStorage.removeItem(sellerKey);
+              sessionStorage.removeItem(sellerNameKey);
+              setShowSellerGate(true);
+              setShowDashboard(false);
+            }}
+            title="Trocar Atendente"
+          >
+            <HeadphonesIcon className="h-4 w-4" />
+            <span className="hidden sm:inline">Trocar</span>
+          </Button>
           {selectedSellerId && (
             <Button
               variant="ghost"
