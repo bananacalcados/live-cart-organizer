@@ -1,0 +1,1 @@
+ALTER TABLE public.pos_sellers ADD COLUMN IF NOT EXISTS linked_user_id uuid REFERENCES auth.users(id) DEFAULT NULL;
