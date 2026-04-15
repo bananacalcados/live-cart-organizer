@@ -589,6 +589,7 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
                     mediaUrl={msg.media_url}
                     mediaType={msg.media_type}
                     message={msg.message}
+                    direction={msg.direction}
                     imageClassName="max-w-full rounded mb-1"
                     videoClassName="max-w-full rounded mb-1"
                     audioClassName="max-w-full mb-1"

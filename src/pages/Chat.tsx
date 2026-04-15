@@ -80,6 +80,7 @@ function MessageMedia({ msg }: { msg: Message }) {
       mediaUrl={msg.media_url}
       mediaType={msg.media_type}
       message={msg.message}
+      direction={msg.direction}
       imageClassName="max-w-full rounded-md mb-1"
       imageStyle={{ maxHeight: 280 }}
       videoClassName="max-w-full rounded-md mb-1"

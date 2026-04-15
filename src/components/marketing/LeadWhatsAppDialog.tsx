@@ -172,6 +172,7 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
                       mediaUrl={msg.media_url}
                       mediaType={msg.media_type}
                       message={msg.message}
+                      direction={msg.direction}
                       imageClassName="rounded max-w-full max-h-48 mb-1"
                       audioClassName="max-w-full mb-1"
                       pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
