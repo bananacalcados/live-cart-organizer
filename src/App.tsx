@@ -27,6 +27,7 @@ const POS = lazy(() => import("./pages/POS"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Management = lazy(() => import("./pages/Management"));
 const Admin = lazy(() => import("./pages/Admin"));
+const AIAgents = lazy(() => import("./pages/AIAgents"));
 const LandingPage = lazy(() => import("./pages/LandingPage"));
 const BananaLanding = lazy(() => import("./pages/BananaLanding"));
 const BananaLandingGV = lazy(() => import("./pages/BananaLandingGV"));
@@ -96,6 +97,7 @@ const App = () => (
               <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><Inventory /></ProtectedRoute>} />
               <Route path="/management" element={<ProtectedRoute requiredModule="management"><Management /></ProtectedRoute>} />
               <Route path="/admin" element={<ProtectedRoute requiredModule="admin"><Admin /></ProtectedRoute>} />
+              <Route path="/ai-agents" element={<ProtectedRoute requiredModule="admin"><AIAgents /></ProtectedRoute>} />
               <Route path="/presenter/:eventId" element={<ProtectedRoute requiredModule="events"><PresenterDashboard /></ProtectedRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
