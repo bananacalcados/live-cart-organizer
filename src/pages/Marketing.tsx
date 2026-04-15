@@ -162,6 +162,14 @@ export default function Marketing() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [landingPages, setLandingPages] = useState<any[]>([]);
+  const [showCreateLandingPage, setShowCreateLandingPage] = useState(false);
+  const [newLpTitle, setNewLpTitle] = useState("");
+  const [newLpSlug, setNewLpSlug] = useState("");
+  const [newLpDescription, setNewLpDescription] = useState("");
+  const [newLpCampaignId, setNewLpCampaignId] = useState("");
+  const [newLpThankYou, setNewLpThankYou] = useState("Obrigado! Você foi cadastrado com sucesso.");
+  const [newLpWhatsapp, setNewLpWhatsapp] = useState("");
+  const [creatingLp, setCreatingLp] = useState(false);
 
   // Leads state
   const [leads, setLeads] = useState<any[]>([]);
