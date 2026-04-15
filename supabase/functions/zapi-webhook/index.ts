@@ -311,6 +311,7 @@ serve(async (req) => {
         }
 
         // Fallback: save as outgoing
+        const quotedMsgId = asString((payload.quotedMsg as Record<string, unknown>)?.messageId) || null;
         const { error: insertError } = await supabase.from('whatsapp_messages').insert({
           phone,
           message: displayMessage,
@@ -319,6 +320,7 @@ serve(async (req) => {
           status,
           is_group: isGroup,
           whatsapp_number_id: whatsappNumberId,
+          quoted_message_id: quotedMsgId,
           ...(mediaInfo ? { media_type: mediaInfo.mediaType, media_url: mediaInfo.mediaUrl } : {}),
         });
 
@@ -348,6 +350,7 @@ serve(async (req) => {
 
         let insertError: unknown = null;
         if (!skipInsert) {
+          const quotedMsgIdIn = asString((payload.quotedMsg as Record<string, unknown>)?.messageId) || null;
           const { error } = await supabase.from('whatsapp_messages').insert({
             phone,
             message: displayMessage,
@@ -357,6 +360,7 @@ serve(async (req) => {
             is_group: isGroup,
             sender_name: senderName,
             whatsapp_number_id: whatsappNumberId,
+            quoted_message_id: quotedMsgIdIn,
             ...(mediaInfo ? { media_type: mediaInfo.mediaType, media_url: mediaInfo.mediaUrl } : {}),
           });
           insertError = error;
