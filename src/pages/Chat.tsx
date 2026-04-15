@@ -956,6 +956,9 @@ export default function ChatPage() {
               </Button>
             </div>
 
+          {/* Attendant metrics */}
+          <AttendantMetrics isAdmin={isAdmin} />
+
           {/* Conversation list */}
           <div className="flex-1 overflow-y-auto">
             {filteredConversations.length === 0 ? (
