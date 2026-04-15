@@ -1,5 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply } from "lucide-react";
+import { QuotedMessagePreview, QuotedMessageData } from "./QuotedMessagePreview";
+import { QuotedMessageBubble } from "./QuotedMessageBubble";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
