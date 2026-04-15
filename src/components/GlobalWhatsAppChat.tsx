@@ -13,6 +13,7 @@ import { ChatView } from "./chat/ChatView";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "./chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useSupportPhones } from "@/hooks/useSupportPhones";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { toast } from "sonner";
 
 export function GlobalWhatsAppChat() {
@@ -41,6 +42,7 @@ export function GlobalWhatsAppChat() {
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
+  const currentUserId = useCurrentUserId();
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 

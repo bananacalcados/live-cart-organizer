@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useZapi } from '@/hooks/useZapi';
+import { useCurrentUserId } from '@/hooks/useCurrentUserId';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +38,7 @@ interface SupportWhatsAppChatProps {
 }
 
 export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClose }: SupportWhatsAppChatProps) {
+  const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);

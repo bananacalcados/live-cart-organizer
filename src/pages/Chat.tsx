@@ -24,6 +24,7 @@ import { useSupportPhones } from "@/hooks/useSupportPhones";
 import { Message, Conversation, ChatFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { STAGES } from "@/types/order";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 import { InstagramReferralCard } from "@/components/chat/InstagramReferralCard";
@@ -125,6 +126,7 @@ interface ChatContact {
 
 export default function ChatPage() {
   const navigate = useNavigate();
+  const currentUserId = useCurrentUserId();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [stickyConversationKeys, setStickyConversationKeys] = useState<Set<string>>(new Set());
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
