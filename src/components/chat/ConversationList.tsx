@@ -279,8 +279,44 @@ export function ConversationList({
             </button>
           ))}
         </div>
-        
-        {/* Chat type filter */}
+
+        {/* Tag filter chips */}
+        {allUniqueTags.length > 0 && onSelectedTagFiltersChange && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 whitespace-nowrap">
+            {selectedTagFilters.length > 0 && (
+              <button
+                onClick={() => onSelectedTagFiltersChange([])}
+                className="px-2 py-1 rounded-full text-[10px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 flex-shrink-0 transition-colors"
+              >
+                ✕ Limpar
+              </button>
+            )}
+            {allUniqueTags.map(tag => {
+              const isSelected = selectedTagFilters.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  onClick={() => {
+                    if (isSelected) {
+                      onSelectedTagFiltersChange(selectedTagFilters.filter(t => t !== tag));
+                    } else {
+                      onSelectedTagFiltersChange([...selectedTagFilters, tag]);
+                    }
+                  }}
+                  className={cn(
+                    "px-3 py-1 rounded-full text-[11px] font-medium flex-shrink-0 transition-colors",
+                    isSelected
+                      ? "bg-[#00a884] text-white"
+                      : "bg-[#1a2228] text-gray-400 hover:bg-[#2a3942]"
+                  )}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         <div className="flex gap-1">
           {(['all', 'contacts', 'groups'] as const).map(f => (
             <button
