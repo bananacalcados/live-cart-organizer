@@ -90,8 +90,42 @@ export function ChatView({
   const [actionLoading, setActionLoading] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
 
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const scrollToMessage = useCallback((messageId: string) => {
+    const element = document.getElementById(`msg-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element.classList.add('bg-[#2a3942]/50');
+      setTimeout(() => element.classList.remove('bg-[#2a3942]/50'), 2000);
+    }
+  }, []);
+
+  const handleReplyToMsg = useCallback((msg: Message) => {
+    if (!onQuoteMessage) return;
+    onQuoteMessage({
+      message_id: msg.message_id || '',
+      message: msg.message || '',
+      sender_name: (msg as any).sender_name || undefined,
+      direction: msg.direction,
+      media_type: msg.media_type || undefined,
+    });
+  }, [onQuoteMessage]);
+
+  const handleTouchStart = useCallback((msg: Message) => {
+    if (!onQuoteMessage) return;
+    const timer = setTimeout(() => handleReplyToMsg(msg), 500);
+    longPressTimerRef.current = timer;
+  }, [onQuoteMessage, handleReplyToMsg]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   // Load tags from chat_contacts when conversation changes
