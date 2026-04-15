@@ -92,10 +92,15 @@ const AIAgents = () => {
   // Execution history
   const [lastExecution, setLastExecution] = useState<any>(null);
 
+  // RFM Health
+  const [rfmHealth, setRfmHealth] = useState<{ lastUpdate: string | null; segments: Record<string, number> } | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState(false);
+
   useEffect(() => {
     loadNovidades();
     loadLastExecution();
     calculateAutoContext();
+    loadRfmHealth();
   }, []);
 
   const loadNovidades = async () => {
