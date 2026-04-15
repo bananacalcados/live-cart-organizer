@@ -602,6 +602,38 @@ export default function Marketing() {
     fetchPresets();
   };
 
+  const handleCreateLandingPage = async () => {
+    if (!newLpTitle.trim() || !newLpSlug.trim() || !newLpCampaignId) {
+      toast.error("Preencha título, slug e campanha");
+      return;
+    }
+    setCreatingLp(true);
+    try {
+      const { error } = await supabase.from('campaign_landing_pages').insert({
+        title: newLpTitle.trim(),
+        slug: newLpSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''),
+        campaign_id: newLpCampaignId,
+        description: newLpDescription.trim() || null,
+        thank_you_message: newLpThankYou.trim(),
+        whatsapp_redirect: newLpWhatsapp.trim() || null,
+        is_active: true,
+        form_fields: [
+          { name: 'nome', label: 'Nome', type: 'text', required: true },
+          { name: 'whatsapp', label: 'WhatsApp', type: 'tel', required: true },
+          { name: 'email', label: 'E-mail', type: 'email', required: false },
+        ],
+      });
+      if (error) throw error;
+      toast.success("Landing page criada!");
+      setShowCreateLandingPage(false);
+      setNewLpTitle(""); setNewLpSlug(""); setNewLpDescription(""); setNewLpCampaignId(""); setNewLpWhatsapp("");
+      setNewLpThankYou("Obrigado! Você foi cadastrado com sucesso.");
+      fetchLandingPages();
+    } catch (err: any) {
+      toast.error(err.message?.includes('duplicate') ? "Slug já existe" : "Erro ao criar landing page");
+    } finally { setCreatingLp(false); }
+  };
+
   // ─── Campaign actions ──────────────────────────────
 
   const updateCampaignStatus = async (id: string, status: string) => {
