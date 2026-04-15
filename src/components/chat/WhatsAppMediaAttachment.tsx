@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AudioPlayer } from "./AudioPlayer";
 import { ExternalLink, FileText, Paperclip, X, ZoomIn, ZoomOut, Download } from "lucide-react";
 
 interface WhatsAppMediaAttachmentProps {
