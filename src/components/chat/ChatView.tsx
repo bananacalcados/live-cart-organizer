@@ -487,6 +487,16 @@ export function ChatView({
                   {isAuto && (
                     <p className="text-amber-400 text-[10px] mb-0.5">🤖 Automática</p>
                   )}
+                  {quotedOriginal && (
+                    <QuotedMessageBubble
+                      originalMessage={quotedOriginal.message}
+                      originalDirection={quotedOriginal.direction}
+                      originalSenderName={(quotedOriginal as any).sender_name}
+                      originalMediaType={quotedOriginal.media_type}
+                      contactName={conversation?.customerName}
+                      onClick={() => scrollToMessage(quotedOriginal.message_id || '')}
+                    />
+                  )}
                   <InstagramReferralCard referral={msg.referral} />
                   <WhatsAppMediaAttachment
                     mediaUrl={msg.media_url}
