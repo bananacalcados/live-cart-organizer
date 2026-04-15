@@ -164,7 +164,7 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
                 </div>
               </div>
             )}
-            <ScrollArea className="max-h-[250px]">
+            <ScrollArea className="max-h-[300px]">
               {filtered.length === 0 ? (
                 <div className="p-4 text-center text-xs text-muted-foreground">
                   {replies.length === 0
