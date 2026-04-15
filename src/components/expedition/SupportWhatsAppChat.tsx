@@ -196,6 +196,7 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
                   mediaUrl={msg.media_url}
                   mediaType={msg.media_type}
                   message={msg.message}
+                  direction={msg.direction}
                   imageClassName="max-w-full rounded mb-1"
                   imageStyle={{ maxHeight: 200 }}
                   videoClassName="max-w-full rounded mb-1"

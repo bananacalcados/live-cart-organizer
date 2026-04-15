@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AudioPlayer } from "./AudioPlayer";
 import { ExternalLink, FileText, Paperclip, X, ZoomIn, ZoomOut, Download } from "lucide-react";
 
 interface WhatsAppMediaAttachmentProps {
@@ -12,6 +13,7 @@ interface WhatsAppMediaAttachmentProps {
   audioClassName?: string;
   pdfClassName?: string;
   documentClassName?: string;
+  direction?: string;
 }
 
 function getAttachmentName(mediaUrl?: string | null, message?: string | null) {
@@ -106,6 +108,7 @@ export function WhatsAppMediaAttachment({
   audioClassName = "w-full mb-1",
   pdfClassName = "w-full h-64 rounded-md border border-border bg-background mb-2",
   documentClassName = "mb-1 rounded-md border border-border bg-muted/40 p-3",
+  direction,
 }: WhatsAppMediaAttachmentProps) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
@@ -136,7 +139,7 @@ export function WhatsAppMediaAttachment({
   }
 
   if (mediaType === "audio") {
-    return <audio src={mediaUrl} controls className={audioClassName} />;
+    return <AudioPlayer src={mediaUrl} direction={direction} className="mb-1" />;
   }
 
   if (isPdf) {
