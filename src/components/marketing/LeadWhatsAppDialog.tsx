@@ -113,6 +113,7 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
       await supabase.from('whatsapp_messages').insert({
         phone: sendPhone, message: text, direction: 'outgoing', status: 'sent',
         whatsapp_number_id: selectedNumberId || null,
+        sender_user_id: currentUserId || null,
       });
       loadMessages();
     } catch (err) {

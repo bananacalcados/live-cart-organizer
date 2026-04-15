@@ -594,6 +594,7 @@ export default function ChatPage() {
           whatsapp_number_id: numberId,
           message_id: sendResult.messageId || null,
           channel: useMessenger ? messengerChannel : 'whatsapp',
+          sender_user_id: currentUserId || null,
         } as any);
         loadMessages(selectedPhone, false, selectedConvNumberId);
       }
@@ -628,6 +629,7 @@ export default function ChatPage() {
         whatsapp_number_id: numberId,
         message_id: sendResult.messageId || null,
         channel: useMessenger ? messengerChannel : 'whatsapp',
+        sender_user_id: currentUserId || null,
       } as any);
       loadMessages(selectedPhone, false, selectedConvNumberId);
     }
@@ -737,6 +739,7 @@ export default function ChatPage() {
           status: 'sent',
           message_id: result.messageId,
           whatsapp_number_id: numberId || null,
+          sender_user_id: currentUserId || null,
         });
         toast.success('Template enviado!');
         loadMessages(selectedPhone, false, selectedConvNumberId);

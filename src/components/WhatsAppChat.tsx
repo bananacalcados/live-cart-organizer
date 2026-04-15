@@ -416,6 +416,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           media_url: mediaUrl,
           message_id: result.messageId || null,
           whatsapp_number_id: selectedNumberId || null,
+          sender_user_id: currentUserId || null,
         });
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         // Track that we sent a message for no-response timer
@@ -463,6 +464,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         status: 'sent',
         message_id: result.messageId || null,
         whatsapp_number_id: selectedNumberId || null,
+        sender_user_id: currentUserId || null,
       });
       // Deactivate any active AI session so AI doesn't respond while operator is chatting
       await supabase
@@ -602,6 +604,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           status: 'sent',
           message_id: result.messageId,
           whatsapp_number_id: selectedNumberId || null,
+          sender_user_id: currentUserId || null,
         });
         toast.success('Template enviado!');
         loadMessages();
@@ -652,6 +655,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               status: 'sent',
               media_type: 'audio',
               media_url: mediaUrl,
+              sender_user_id: currentUserId || null,
             });
             updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
           }

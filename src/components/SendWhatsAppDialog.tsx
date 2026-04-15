@@ -92,6 +92,7 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
         direction: 'outgoing',
         status: 'sent',
         whatsapp_number_id: selectedNumberId || null,
+        sender_user_id: currentUserId || null,
       });
       onOpenChange(false);
     }

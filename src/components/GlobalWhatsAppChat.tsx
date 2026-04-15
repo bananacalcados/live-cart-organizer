@@ -196,6 +196,7 @@ export function GlobalWhatsAppChat() {
       await supabase.from('whatsapp_messages').insert({
         phone: selectedPhone, message: messageText, direction: 'outgoing', status: 'sent',
         whatsapp_number_id: selectedNumberId || null,
+        sender_user_id: currentUserId || null,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
     } catch (error) {
@@ -223,6 +224,7 @@ export function GlobalWhatsAppChat() {
       }
       await supabase.from('whatsapp_messages').insert({
         phone: selectedPhone, message: '[áudio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: audioUrl,
+        sender_user_id: currentUserId || null,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success('Áudio enviado!');

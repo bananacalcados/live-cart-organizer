@@ -101,7 +101,7 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
 
     const result = await sendMessage(phone, text);
     if (result.success) {
-      await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: text, direction: 'outgoing', status: 'sent' });
+      await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: text, direction: 'outgoing', status: 'sent', sender_user_id: currentUserId || null });
       setMessages(prev => prev.filter(m => m.id !== tempId));
     } else {
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
@@ -120,7 +120,7 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
     if (url) {
       const result = await sendMedia(phone, url, mediaType as any);
       if (result.success) {
-        await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: `[${mediaType}]`, direction: 'outgoing', status: 'sent', media_type: mediaType, media_url: url });
+        await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: `[${mediaType}]`, direction: 'outgoing', status: 'sent', media_type: mediaType, media_url: url, sender_user_id: currentUserId || null });
         loadMessages();
       }
     }
@@ -147,7 +147,7 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
         if (url) {
           const result = await sendMedia(phone, url, 'audio');
           if (result.success) {
-            await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: '[audio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: url });
+            await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: '[audio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: url, sender_user_id: currentUserId || null });
             loadMessages();
           }
         }
