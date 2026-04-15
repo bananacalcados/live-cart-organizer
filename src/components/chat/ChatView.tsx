@@ -570,6 +570,15 @@ export function ChatView({
         </div>
       </ScrollArea>
 
+      {/* Quoted message preview */}
+      {quotedMessage && onCancelQuote && (
+        <QuotedMessagePreview
+          quoted={quotedMessage}
+          contactName={conversation?.customerName}
+          onCancel={onCancelQuote}
+        />
+      )}
+
       {/* Input */}
       <div className="p-2 border-t bg-[#f0f0f0] dark:bg-[#202c33] flex items-center gap-2 flex-shrink-0">
         {isRecording ? (
