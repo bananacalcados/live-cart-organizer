@@ -1,0 +1,1 @@
+ALTER TABLE whatsapp_messages ADD COLUMN IF NOT EXISTS quoted_message_id text DEFAULT NULL;
