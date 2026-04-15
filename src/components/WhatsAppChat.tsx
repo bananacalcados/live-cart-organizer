@@ -16,6 +16,7 @@ import { uploadMediaToStorage } from "./MediaAttachmentPicker";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { toast } from "sonner";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -91,6 +92,7 @@ interface MetaTemplate {
 }
 
 export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
+  const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -357,12 +359,13 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     inputRef.current?.focus();
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 16 * 1024 * 1024) {
-      toast.error('Arquivo muito grande. Máximo 16MB.');
+    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+    if (file.size > getMaxSizeForType(file.type)) {
+      toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`);
       return;
     }
 
@@ -413,6 +416,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           media_url: mediaUrl,
           message_id: result.messageId || null,
           whatsapp_number_id: selectedNumberId || null,
+          sender_user_id: currentUserId || null,
         });
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         // Track that we sent a message for no-response timer
@@ -460,6 +464,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         status: 'sent',
         message_id: result.messageId || null,
         whatsapp_number_id: selectedNumberId || null,
+        sender_user_id: currentUserId || null,
       });
       // Deactivate any active AI session so AI doesn't respond while operator is chatting
       await supabase
@@ -599,6 +604,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           status: 'sent',
           message_id: result.messageId,
           whatsapp_number_id: selectedNumberId || null,
+          sender_user_id: currentUserId || null,
         });
         toast.success('Template enviado!');
         loadMessages();
@@ -649,6 +655,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               status: 'sent',
               media_type: 'audio',
               media_url: mediaUrl,
+              sender_user_id: currentUserId || null,
             });
             updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
           }

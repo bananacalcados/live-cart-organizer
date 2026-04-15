@@ -24,6 +24,7 @@ import { useSupportPhones } from "@/hooks/useSupportPhones";
 import { Message, Conversation, ChatFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { STAGES } from "@/types/order";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 import { InstagramReferralCard } from "@/components/chat/InstagramReferralCard";
@@ -125,6 +126,7 @@ interface ChatContact {
 
 export default function ChatPage() {
   const navigate = useNavigate();
+  const currentUserId = useCurrentUserId();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [stickyConversationKeys, setStickyConversationKeys] = useState<Set<string>>(new Set());
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
@@ -434,10 +436,11 @@ export default function ChatPage() {
   }, [messages]);
 
   // ── File select ──
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (file.size > 16 * 1024 * 1024) { toast.error('Arquivo muito grande. Máximo 16MB.'); return; }
+    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+    if (file.size > getMaxSizeForType(file.type)) { toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`); return; }
     setSelectedMedia({ file, type: getMediaType(file), previewUrl: URL.createObjectURL(file) });
     event.target.value = '';
   };
@@ -591,6 +594,7 @@ export default function ChatPage() {
           whatsapp_number_id: numberId,
           message_id: sendResult.messageId || null,
           channel: useMessenger ? messengerChannel : 'whatsapp',
+          sender_user_id: currentUserId || null,
         } as any);
         loadMessages(selectedPhone, false, selectedConvNumberId);
       }
@@ -625,6 +629,7 @@ export default function ChatPage() {
         whatsapp_number_id: numberId,
         message_id: sendResult.messageId || null,
         channel: useMessenger ? messengerChannel : 'whatsapp',
+        sender_user_id: currentUserId || null,
       } as any);
       loadMessages(selectedPhone, false, selectedConvNumberId);
     }
@@ -734,6 +739,7 @@ export default function ChatPage() {
           status: 'sent',
           message_id: result.messageId,
           whatsapp_number_id: numberId || null,
+          sender_user_id: currentUserId || null,
         });
         toast.success('Template enviado!');
         loadMessages(selectedPhone, false, selectedConvNumberId);

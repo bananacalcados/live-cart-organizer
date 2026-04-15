@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useZapi } from '@/hooks/useZapi';
+import { useCurrentUserId } from '@/hooks/useCurrentUserId';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +38,7 @@ interface SupportWhatsAppChatProps {
 }
 
 export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClose }: SupportWhatsAppChatProps) {
+  const currentUserId = useCurrentUserId();
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -99,7 +101,7 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
 
     const result = await sendMessage(phone, text);
     if (result.success) {
-      await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: text, direction: 'outgoing', status: 'sent' });
+      await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: text, direction: 'outgoing', status: 'sent', sender_user_id: currentUserId || null });
       setMessages(prev => prev.filter(m => m.id !== tempId));
     } else {
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
@@ -110,14 +112,15 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
     const file = event.target.files?.[0];
     if (!file) return;
     event.target.value = '';
-    if (file.size > 16 * 1024 * 1024) { toast.error('Máximo 16MB.'); return; }
+    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+    if (file.size > getMaxSizeForType(file.type)) { toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`); return; }
     const mediaType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document';
     toast.info('Enviando arquivo...');
     const url = await uploadMediaToStorage(file);
     if (url) {
       const result = await sendMedia(phone, url, mediaType as any);
       if (result.success) {
-        await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: `[${mediaType}]`, direction: 'outgoing', status: 'sent', media_type: mediaType, media_url: url });
+        await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: `[${mediaType}]`, direction: 'outgoing', status: 'sent', media_type: mediaType, media_url: url, sender_user_id: currentUserId || null });
         loadMessages();
       }
     }
@@ -144,7 +147,7 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
         if (url) {
           const result = await sendMedia(phone, url, 'audio');
           if (result.success) {
-            await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: '[audio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: url });
+            await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: '[audio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: url, sender_user_id: currentUserId || null });
             loadMessages();
           }
         }

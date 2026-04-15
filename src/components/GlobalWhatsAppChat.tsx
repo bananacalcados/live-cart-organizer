@@ -13,6 +13,7 @@ import { ChatView } from "./chat/ChatView";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "./chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useSupportPhones } from "@/hooks/useSupportPhones";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { toast } from "sonner";
 
 export function GlobalWhatsAppChat() {
@@ -41,6 +42,7 @@ export function GlobalWhatsAppChat() {
   const { numbers: metaNumbers, selectedNumberId, setSelectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
   const { enrichConversations, finishConversation } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
+  const currentUserId = useCurrentUserId();
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
@@ -194,6 +196,7 @@ export function GlobalWhatsAppChat() {
       await supabase.from('whatsapp_messages').insert({
         phone: selectedPhone, message: messageText, direction: 'outgoing', status: 'sent',
         whatsapp_number_id: selectedNumberId || null,
+        sender_user_id: currentUserId || null,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
     } catch (error) {
@@ -221,6 +224,7 @@ export function GlobalWhatsAppChat() {
       }
       await supabase.from('whatsapp_messages').insert({
         phone: selectedPhone, message: '[áudio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: audioUrl,
+        sender_user_id: currentUserId || null,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success('Áudio enviado!');

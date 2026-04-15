@@ -241,6 +241,7 @@ export type Database = {
           payment_link_sent: boolean | null
           phone: string
           source: string
+          tags: string[] | null
           temperature: string
           updated_at: string
           whatsapp_number_id: string | null
@@ -265,6 +266,7 @@ export type Database = {
           payment_link_sent?: boolean | null
           phone: string
           source?: string
+          tags?: string[] | null
           temperature?: string
           updated_at?: string
           whatsapp_number_id?: string | null
@@ -289,6 +291,7 @@ export type Database = {
           payment_link_sent?: boolean | null
           phone?: string
           source?: string
+          tags?: string[] | null
           temperature?: string
           updated_at?: string
           whatsapp_number_id?: string | null
@@ -9548,6 +9551,88 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_auto_replies: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          message: string
+          schedule_days: number[] | null
+          schedule_end: string | null
+          schedule_start: string | null
+          type: string
+          updated_at: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          message: string
+          schedule_days?: number[] | null
+          schedule_end?: string | null
+          schedule_start?: string | null
+          type: string
+          updated_at?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          message?: string
+          schedule_days?: number[] | null
+          schedule_end?: string | null
+          schedule_start?: string | null
+          type?: string
+          updated_at?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_auto_replies_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_auto_reply_log: {
+        Row: {
+          id: string
+          phone: string
+          sent_at: string | null
+          type: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          id?: string
+          phone: string
+          sent_at?: string | null
+          type: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          id?: string
+          phone?: string
+          sent_at?: string | null
+          type?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_auto_reply_log_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_group_snapshots: {
         Row: {
           group_id: string
@@ -9663,6 +9748,7 @@ export type Database = {
           phone: string
           referral: Json | null
           sender_name: string | null
+          sender_user_id: string | null
           status: string | null
           whatsapp_number_id: string | null
         }
@@ -9682,6 +9768,7 @@ export type Database = {
           phone: string
           referral?: Json | null
           sender_name?: string | null
+          sender_user_id?: string | null
           status?: string | null
           whatsapp_number_id?: string | null
         }
@@ -9701,6 +9788,7 @@ export type Database = {
           phone?: string
           referral?: Json | null
           sender_name?: string | null
+          sender_user_id?: string | null
           status?: string | null
           whatsapp_number_id?: string | null
         }
@@ -10050,6 +10138,20 @@ export type Database = {
       }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       generate_ean13_barcode: { Args: never; Returns: string }
+      get_attendant_metrics: {
+        Args: { p_end_date?: string; p_start_date?: string; p_user_id?: string }
+        Returns: {
+          active_conversations: number
+          avg_first_response_minutes: number
+          conversations_today: number
+          display_name: string
+          finished_conversations: number
+          total_conversations: number
+          total_messages_received: number
+          total_messages_sent: number
+          user_id: string
+        }[]
+      }
       get_conversation_counts: {
         Args: never
         Returns: {

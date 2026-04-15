@@ -12,6 +12,7 @@ import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 
 interface LeadWhatsAppDialogProps {
@@ -41,6 +42,7 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
   const [isSending, setIsSending] = useState(false);
   const [sendVia, setSendVia] = useState<'zapi' | 'meta'>('meta');
   const { numbers: metaNumbers, selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+  const currentUserId = useCurrentUserId();
 
   const cleanPhone = phone?.replace(/\D/g, '') || '';
   // Build phone variants: raw, with DDI 55, without DDI 55
@@ -111,6 +113,7 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
       await supabase.from('whatsapp_messages').insert({
         phone: sendPhone, message: text, direction: 'outgoing', status: 'sent',
         whatsapp_number_id: selectedNumberId || null,
+        sender_user_id: currentUserId || null,
       });
       loadMessages();
     } catch (err) {

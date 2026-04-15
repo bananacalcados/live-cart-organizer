@@ -17,6 +17,7 @@ import { Order } from "@/types/order";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { useTemplateStore, applyTemplateVariables } from "@/stores/templateStore";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 
 interface SendWhatsAppDialogProps {
   open: boolean;
@@ -28,6 +29,7 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
   const { sendMessage, isLoading } = useZapi();
   const { fetchNumbers, selectedNumberId } = useWhatsAppNumberStore();
   const { getTemplatesByStage, fetchTemplates, templates } = useTemplateStore();
+  const currentUserId = useCurrentUserId();
 
   useEffect(() => {
     if (open) {
@@ -90,6 +92,7 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
         direction: 'outgoing',
         status: 'sent',
         whatsapp_number_id: selectedNumberId || null,
+        sender_user_id: currentUserId || null,
       });
       onOpenChange(false);
     }
