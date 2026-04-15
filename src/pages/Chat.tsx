@@ -28,6 +28,8 @@ import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { STAGES } from "@/types/order";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 import { InstagramReferralCard } from "@/components/chat/InstagramReferralCard";
+import { QuotedMessagePreview, QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
+import { QuotedMessageBubble } from "@/components/chat/QuotedMessageBubble";
 import { POSFinishConversationDialog } from "@/components/pos/POSFinishConversationDialog";
 import { POSWhatsAppCheckoutDialog } from "@/components/pos/POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "@/components/pos/POSWhatsAppPixDialog";
