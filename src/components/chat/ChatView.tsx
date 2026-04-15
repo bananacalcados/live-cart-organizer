@@ -410,14 +410,22 @@ export function ChatView({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 )}
+                {(() => {
+                  const isAuto = msg.message?.startsWith('[AUTO] ');
+                  const displayMsg = isAuto ? msg.message.replace(/^\[AUTO\] /, '') : msg.message;
+                  return (
                 <div
                   className={cn(
                     "rounded-lg px-3 py-2 text-sm overflow-hidden",
                     isOutgoing
                       ? 'bg-[#dcf8c6] dark:bg-[#005c4b] text-foreground'
-                      : 'bg-white dark:bg-[#202c33] text-foreground'
+                      : 'bg-white dark:bg-[#202c33] text-foreground',
+                    isAuto && 'opacity-80 border border-dashed border-[#2a3942]'
                   )}
                 >
+                  {isAuto && (
+                    <p className="text-amber-400 text-[10px] mb-0.5">🤖 Automática</p>
+                  )}
                   <InstagramReferralCard referral={msg.referral} />
                   <WhatsAppMediaAttachment
                     mediaUrl={msg.media_url}
@@ -464,7 +472,7 @@ export function ChatView({
                       </div>
                     </div>
                   ) : (
-                    msg.message && <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{msg.message}</p>
+                    displayMsg && <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{displayMsg}</p>
                   )}
                   {msg.status === 'failed' && (msg as any).error_message && (
                     <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
