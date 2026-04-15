@@ -400,19 +400,38 @@ export function ChatView({
             const canDelete = isOutgoing && msg.message_id && onDeleteMessage && (msg.status === 'sent' || msg.status === 'delivered');
             const canEdit = isOutgoing && msg.message_id && onEditMessage && msg.media_type === 'text' && (msg.status === 'sent' || msg.status === 'delivered');
             const isEditing = editingMsgId === msg.id;
-            // Allow actions within 15 min of sending
             const msgAge = Date.now() - new Date(msg.created_at).getTime();
             const withinWindow = msgAge < 15 * 60 * 1000;
+
+            const quotedMsgId = (msg as any).quoted_message_id;
+            const quotedOriginal = quotedMsgId ? messages.find(m => m.message_id === quotedMsgId) : null;
 
             return (
             <div
               key={msg.id}
+              id={`msg-${msg.message_id}`}
               className={cn(
-                "flex group",
+                "flex group transition-colors duration-500",
                 isOutgoing ? 'justify-end' : 'justify-start'
               )}
+              onTouchStart={() => handleTouchStart(msg)}
+              onTouchEnd={handleTouchEnd}
+              onTouchMove={handleTouchEnd}
             >
               <div className={cn("relative max-w-[85%] sm:max-w-[75%]", isOutgoing && "flex items-start gap-1")}>
+                {/* Reply button (hover, desktop) */}
+                {onQuoteMessage && msg.message_id && (
+                  <button
+                    className={cn(
+                      "opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 mt-1 shrink-0",
+                      isOutgoing ? "order-first" : "order-last"
+                    )}
+                    onClick={() => handleReplyToMsg(msg)}
+                    title="Responder"
+                  >
+                    <Reply className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                )}
                 {/* Dropdown menu for outgoing messages */}
                 {isOutgoing && withinWindow && (canDelete || canEdit) && !isEditing && (
                   <DropdownMenu>
