@@ -87,9 +87,22 @@ export function ConversationList({
   supportFilterActive,
   onSupportFilterToggle,
   supportCount,
+  contactTagsMap = {},
+  selectedTagFilters = [],
+  onSelectedTagFiltersChange,
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
+
+  // Compute all unique tags from the map
+  const allUniqueTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    for (const tags of Object.values(contactTagsMap)) {
+      if (tags) for (const t of tags) tagSet.add(t);
+    }
+    return Array.from(tagSet).sort();
+  }, [contactTagsMap]);
+
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) return format(date, 'HH:mm', { locale: ptBR });
     if (isYesterday(date)) return 'Ontem';
