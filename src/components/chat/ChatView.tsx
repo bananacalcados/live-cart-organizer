@@ -472,8 +472,10 @@ export function ChatView({
             if (showSenderName) {
               if (isOutgoing) {
                 const isAuto = msg.message?.startsWith('[AUTO] ');
+                const msgSenderName = (msg as any).sender_name;
                 const suid = (msg as any).sender_user_id;
-                senderLabel = suid ? (profilesMap[suid] || 'Atendente') : (isAuto ? 'Auto' : 'Sistema');
+                // Prioritize sender_name (set by POS with seller name) over profilesMap lookup
+                senderLabel = msgSenderName || (suid ? (profilesMap[suid] || 'Atendente') : (isAuto ? 'Auto' : 'Sistema'));
               } else {
                 senderLabel = (msg as any).sender_name || conversation?.customerName || msg.phone || null;
               }
