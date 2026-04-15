@@ -1248,6 +1248,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               onEditMessage={handleEditMessage}
               isSending={isSending}
               customerInfoPanel={customerInfoPanel}
+              quotedMessage={quotedMessage}
+              onQuoteMessage={setQuotedMessage}
+              onCancelQuote={() => setQuotedMessage(null)}
             />
           </div>
         ) : (
