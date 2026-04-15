@@ -686,6 +686,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
         sender_user_id: currentUserId || null,
+        sender_name: selectedSellerName || null,
       } as any);
 
       await supabase
@@ -756,6 +757,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
         sender_user_id: currentUserId || null,
+        sender_name: selectedSellerName || null,
       } as any);
       if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
       setQuotedMessage(null);
@@ -820,6 +822,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
         sender_user_id: currentUserId || null,
+        sender_name: selectedSellerName || null,
       } as any);
       setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
