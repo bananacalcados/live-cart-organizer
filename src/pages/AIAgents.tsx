@@ -1,16 +1,75 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Users, Loader2, Send, Copy, Check, Save, Clock, AlertCircle } from "lucide-react";
+import { Bot, Users, Loader2, Send, Copy, Check, Save, Clock, ShieldCheck, ShieldOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+
+interface FilterSummary {
+  total_candidates?: number;
+  clientes_elegiveis?: number;
+  bloqueados_cooldown?: number;
+  bloqueados_atendimento_ativo?: number;
+  bloqueados_incoming?: number;
+  bloqueados_chat_aberto?: number;
+  bloqueados_compra_recente?: number;
+  total_filtrado?: number;
+}
+
+const FilterSummaryBlock = ({ summary }: { summary: FilterSummary }) => {
+  const total = summary.total_candidates || 0;
+  const eligible = summary.clientes_elegiveis || 0;
+  const eligiblePct = total > 0 ? Math.round((eligible / total) * 100) : 0;
+
+  return (
+    <div className="rounded-lg border bg-muted/30 p-4 space-y-3 mb-4">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-primary" />
+        <h3 className="text-sm font-semibold">Filtragem de Cooldown</h3>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground text-xs">Candidatos totais</p>
+          <p className="font-bold text-lg">{total}</p>
+        </div>
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground text-xs">Elegíveis</p>
+          <p className="font-bold text-lg text-primary">{eligible} <span className="text-xs font-normal text-muted-foreground">({eligiblePct}%)</span></p>
+        </div>
+        <div className="space-y-0.5">
+          <p className="text-muted-foreground text-xs">Total bloqueados</p>
+          <p className="font-bold text-lg text-destructive">{summary.total_filtrado || 0}</p>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-2 border-t">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground flex items-center gap-1">
+            <ShieldOff className="h-3 w-3" /> Cooldown disparo
+          </span>
+          <Badge variant="outline" className="text-xs">{summary.bloqueados_cooldown || 0}</Badge>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground flex items-center gap-1">
+            <ShieldOff className="h-3 w-3" /> Atendimento ativo
+          </span>
+          <Badge variant="outline" className="text-xs">{summary.bloqueados_atendimento_ativo || 0}</Badge>
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground flex items-center gap-1">
+            <ShieldOff className="h-3 w-3" /> Compra recente
+          </span>
+          <Badge variant="outline" className="text-xs">{summary.bloqueados_compra_recente || 0}</Badge>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const AIAgents = () => {
   const [activeAgent, setActiveAgent] = useState("customers");
@@ -18,6 +77,7 @@ const AIAgents = () => {
   const [response, setResponse] = useState("");
   const [meta, setMeta] = useState<any>(null);
   const [copied, setCopied] = useState(false);
+  const [filterSummary, setFilterSummary] = useState<FilterSummary | null>(null);
 
   // Novidades
   const [novidades, setNovidades] = useState("");
@@ -71,6 +131,9 @@ const AIAgents = () => {
           meta: input.meta,
           tokens_used: input.tokens,
         });
+        if (input.filter_summary) {
+          setFilterSummary(input.filter_summary);
+        }
       }
     }
   };
@@ -120,6 +183,7 @@ const AIAgents = () => {
     setIsLoading(true);
     setResponse("");
     setMeta(null);
+    setFilterSummary(null);
 
     try {
       const { data, error } = await supabase.functions.invoke("ai-agent-customers", {
@@ -131,7 +195,10 @@ const AIAgents = () => {
 
       setResponse(data.response);
       setMeta(data.meta);
-      toast.success(`Análise concluída — ${data.meta?.customers_analyzed || 0} clientes analisados`);
+      if (data.meta?.filter_summary) {
+        setFilterSummary(data.meta.filter_summary);
+      }
+      toast.success(`Análise concluída — ${data.meta?.customers_analyzed || 0} clientes elegíveis analisados`);
       loadLastExecution();
     } catch (err: any) {
       console.error("Agent error:", err);
@@ -154,7 +221,6 @@ const AIAgents = () => {
   return (
     <div className="min-h-screen bg-background p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-primary/10">
             <Bot className="h-6 w-6 text-primary" />
@@ -190,7 +256,6 @@ const AIAgents = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Auto-filled context (read-only) */}
                   <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                     <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                       <Clock className="h-3 w-3" /> Contexto automático
@@ -210,7 +275,6 @@ const AIAgents = () => {
                     </p>
                   </div>
 
-                  {/* Novidades — only manual input */}
                   <div className="space-y-2">
                     <Label htmlFor="novidades" className="flex items-center justify-between">
                       <span>Novidades em estoque</span>
@@ -265,7 +329,6 @@ const AIAgents = () => {
                     )}
                   </Button>
 
-                  {/* Last execution info */}
                   {lastExecution && (
                     <div className="space-y-2 pt-2 border-t">
                       <p className="text-xs text-muted-foreground font-medium">Última execução</p>
@@ -290,7 +353,7 @@ const AIAgents = () => {
                             </Badge>
                             {meta.tokens_used && (
                               <Badge variant="outline" className="text-xs">
-                                {(meta.tokens_used.input_tokens || 0) + (meta.tokens_used.output_tokens || 0)} tokens
+                                {(meta.tokens_used.input_tokens || meta.tokens_used.prompt_tokens || 0) + (meta.tokens_used.output_tokens || meta.tokens_used.completion_tokens || 0)} tokens
                               </Badge>
                             )}
                           </div>
@@ -328,11 +391,12 @@ const AIAgents = () => {
                   {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
                       <Loader2 className="h-8 w-8 animate-spin mb-4" />
-                      <p className="text-sm">Consultando base de dados e gerando análise...</p>
+                      <p className="text-sm">Filtrando base por cooldown e gerando análise...</p>
                       <p className="text-xs mt-1">Isso pode levar até 60 segundos</p>
                     </div>
                   ) : response ? (
                     <ScrollArea className="h-[600px] pr-4">
+                      {filterSummary && <FilterSummaryBlock summary={filterSummary} />}
                       <div className="prose prose-sm dark:prose-invert max-w-none">
                         <ReactMarkdown>{response}</ReactMarkdown>
                       </div>
