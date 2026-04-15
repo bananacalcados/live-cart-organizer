@@ -70,8 +70,10 @@ export function MediaAttachmentPicker({
     event.target.value = '';
     if (!rawFile) return;
 
-    if (rawFile.size > 16 * 1024 * 1024) {
-      toast.error('Arquivo muito grande. Máximo 16MB.');
+    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+    const maxSize = getMaxSizeForType(rawFile.type);
+    if (rawFile.size > maxSize) {
+      toast.error(`${getMediaTypeLabel(rawFile.type)} muito grande. O limite é ${getMaxSizeLabel(rawFile.type)}.`);
       return;
     }
 

@@ -110,7 +110,8 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
     const file = event.target.files?.[0];
     if (!file) return;
     event.target.value = '';
-    if (file.size > 16 * 1024 * 1024) { toast.error('Máximo 16MB.'); return; }
+    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+    if (file.size > getMaxSizeForType(file.type)) { toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`); return; }
     const mediaType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document';
     toast.info('Enviando arquivo...');
     const url = await uploadMediaToStorage(file);

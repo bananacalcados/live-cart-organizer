@@ -157,7 +157,8 @@ function BlockEditor({
     if (block.type === 'audio') {
       // Single audio
       const file = files[0];
-      if (file.size > 16 * 1024 * 1024) { toast.error("Arquivo muito grande (max 16MB)"); return; }
+      const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+      if (file.size > getMaxSizeForType(file.type)) { toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`); return; }
       setIsUploading(true);
       try {
         const ext = file.name.split('.').pop();
@@ -177,7 +178,8 @@ function BlockEditor({
       try {
         const newItems: MediaItem[] = [];
         for (const file of Array.from(files)) {
-          if (file.size > 16 * 1024 * 1024) { toast.error(`${file.name} muito grande`); continue; }
+          const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+          if (file.size > getMaxSizeForType(file.type)) { toast.error(`${file.name}: ${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`); continue; }
           const ext = file.name.split('.').pop();
           const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
           const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);

@@ -163,8 +163,9 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     if (!file) return;
     event.target.value = "";
 
-    if (file.size > 16 * 1024 * 1024) {
-      toast.error("Arquivo muito grande. Máximo 16MB.");
+    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+    if (file.size > getMaxSizeForType(file.type)) {
+      toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`);
       return;
     }
 
