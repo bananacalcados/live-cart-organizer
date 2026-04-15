@@ -693,6 +693,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           .is("first_reply_at", null);
       }
 
+      setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
     } catch (error) {
       console.error("Error sending:", error);
