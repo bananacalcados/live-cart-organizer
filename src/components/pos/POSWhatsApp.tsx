@@ -220,12 +220,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       if (data) {
         const nameMap: Record<string, string> = {};
         const photoMap: Record<string, string> = {};
+        const tagsMap: Record<string, string[]> = {};
         const phonesWithoutPhotos: string[] = [];
         for (const c of data as any[]) {
           if (c.custom_name) nameMap[c.phone] = c.custom_name;
           else if (c.display_name) nameMap[c.phone] = c.display_name;
           if (c.profile_pic_url) photoMap[c.phone] = c.profile_pic_url;
           else phonesWithoutPhotos.push(c.phone);
+          if (c.tags && Array.isArray(c.tags) && c.tags.length > 0) tagsMap[c.phone] = c.tags;
         }
         // Map group names from whatsapp_groups table
         if (groupsRes.data) {
