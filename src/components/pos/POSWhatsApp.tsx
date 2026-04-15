@@ -88,8 +88,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showSellerGate, setShowSellerGate] = useState(true);
   const sellerKey = `pos_whatsapp_seller_id_${storeId}`;
   const sellerNameKey = `pos_whatsapp_seller_name_${storeId}`;
+  const sellerLinkedKey = `pos_whatsapp_seller_linked_${storeId}`;
   const [selectedSellerId, setSelectedSellerId] = useState<string | null>(() => sessionStorage.getItem(sellerKey));
   const [selectedSellerName, setSelectedSellerName] = useState<string | null>(() => sessionStorage.getItem(sellerNameKey));
+  const [sellerLinkedUserId, setSellerLinkedUserId] = useState<string | null>(() => sessionStorage.getItem(sellerLinkedKey));
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [bulkFinishPhones, setBulkFinishPhones] = useState<string[]>([]);
   const [showBulkFinishDialog, setShowBulkFinishDialog] = useState(false);
@@ -135,8 +137,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   useEffect(() => {
     const savedId = sessionStorage.getItem(`pos_whatsapp_seller_id_${storeId}`);
     const savedName = sessionStorage.getItem(`pos_whatsapp_seller_name_${storeId}`);
+    const savedLinked = sessionStorage.getItem(`pos_whatsapp_seller_linked_${storeId}`);
     setSelectedSellerId(savedId);
     setSelectedSellerName(savedName);
+    setSellerLinkedUserId(savedLinked);
     setShowSellerGate(!savedId);
     setShowDashboard(!!savedId);
   }, [storeId]);
@@ -685,7 +689,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message_id: metaMessageId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
-        sender_user_id: currentUserId || null,
+        sender_user_id: sellerLinkedUserId || currentUserId || null,
         sender_name: selectedSellerName || null,
       } as any);
 
@@ -756,7 +760,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         whatsapp_number_id: sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
-        sender_user_id: currentUserId || null,
+        sender_user_id: sellerLinkedUserId || currentUserId || null,
         sender_name: selectedSellerName || null,
       } as any);
       if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
@@ -821,7 +825,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         whatsapp_number_id: sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
-        sender_user_id: currentUserId || null,
+        sender_user_id: sellerLinkedUserId || currentUserId || null,
         sender_name: selectedSellerName || null,
       } as any);
       setQuotedMessage(null);
@@ -1013,8 +1017,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             onClick={() => {
               setSelectedSellerId(null);
               setSelectedSellerName(null);
+              setSellerLinkedUserId(null);
               sessionStorage.removeItem(sellerKey);
               sessionStorage.removeItem(sellerNameKey);
+              sessionStorage.removeItem(sellerLinkedKey);
               setShowSellerGate(true);
               setShowDashboard(false);
             }}
@@ -1363,11 +1369,14 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       <POSWhatsAppSellerGate
         storeId={storeId}
         open={showSellerGate && !selectedSellerId}
-        onSellerSelected={(id, name) => {
+        onSellerSelected={(id, name, linkedUserId) => {
           setSelectedSellerId(id);
           setSelectedSellerName(name);
+          setSellerLinkedUserId(linkedUserId);
           sessionStorage.setItem(sellerKey, id);
           sessionStorage.setItem(sellerNameKey, name);
+          if (linkedUserId) sessionStorage.setItem(sellerLinkedKey, linkedUserId);
+          else sessionStorage.removeItem(sellerLinkedKey);
           setShowSellerGate(false);
           setShowDashboard(true);
           toast.success(`Vendedora: ${name}`);
