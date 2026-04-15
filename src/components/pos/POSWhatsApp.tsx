@@ -735,7 +735,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         audioMsgId = res.data?.messageId || null;
       } else {
         const { error } = await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: sendRoute.numberId },
+          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: sendRoute.numberId, quotedMessageId: quotedMessage?.message_id },
         });
         if (error) throw error;
       }
@@ -745,8 +745,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message_id: audioMsgId,
         whatsapp_number_id: sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
-      });
+        quoted_message_id: quotedMessage?.message_id || null,
+      } as any);
       if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
+      setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Áudio enviado!");
     } catch (error) {
