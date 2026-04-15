@@ -7930,6 +7930,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          linked_user_id: string | null
           name: string
           pin_code: string | null
           store_id: string | null
@@ -7940,6 +7941,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          linked_user_id?: string | null
           name: string
           pin_code?: string | null
           store_id?: string | null
@@ -7950,6 +7952,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          linked_user_id?: string | null
           name?: string
           pin_code?: string | null
           store_id?: string | null
