@@ -207,7 +207,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       let from = 0;
       const PAGE = 1000;
       while (true) {
-        const { data: page } = await supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url").range(from, from + PAGE - 1);
+        const { data: page } = await supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url, tags").range(from, from + PAGE - 1);
         if (!page || page.length === 0) break;
         allContactData = allContactData.concat(page);
         if (page.length < PAGE) break;
