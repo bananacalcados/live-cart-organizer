@@ -97,6 +97,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
+  // Quote/reply
+  const [quotedMessage, setQuotedMessage] = useState<QuotedMessageData | null>(null);
+
   // Store-specific WhatsApp number IDs
   const [storeNumberIds, setStoreNumberIds] = useState<string[]>([]);
   const [selectedSendNumberId, setSelectedSendNumberId] = useState<string | null>(null);
