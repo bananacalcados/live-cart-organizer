@@ -871,6 +871,10 @@ export default function ChatPage() {
               className="h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef]"
             />
           )}
+          {/* Auto-reply settings (admin/manager only) */}
+          {isAdmin && (
+            <AutoReplySettings whatsappNumberId={numberFilter !== 'all' ? numberFilter : (selectedNumberId || numbers[0]?.id || null)} />
+          )}
         </div>
       </div>
 
