@@ -7,12 +7,13 @@ import { Users } from 'lucide-react';
 interface Seller {
   id: string;
   name: string;
+  linked_user_id: string | null;
 }
 
 interface Props {
   storeId: string;
   open: boolean;
-  onSellerSelected: (sellerId: string, sellerName: string) => void;
+  onSellerSelected: (sellerId: string, sellerName: string, linkedUserId: string | null) => void;
   onSkip: () => void;
 }
 
@@ -21,7 +22,7 @@ export function POSWhatsAppSellerGate({ storeId, open, onSellerSelected, onSkip 
 
   useEffect(() => {
     if (!open || !storeId) return;
-    supabase.from('pos_sellers').select('id, name').eq('store_id', storeId).eq('is_active', true)
+    supabase.from('pos_sellers').select('id, name, linked_user_id').eq('store_id', storeId).eq('is_active', true)
       .then(({ data }) => { if (data) setSellers(data as Seller[]); });
   }, [open, storeId]);
 
@@ -41,7 +42,7 @@ export function POSWhatsAppSellerGate({ storeId, open, onSellerSelected, onSkip 
           {sellers.map(s => (
             <button
               key={s.id}
-              onClick={() => onSellerSelected(s.id, s.name)}
+              onClick={() => onSellerSelected(s.id, s.name, s.linked_user_id)}
               className="p-3 rounded-lg border-2 border-muted hover:border-[#00a884] hover:bg-[#00a884]/5 transition-all text-center"
             >
               <div className="h-9 w-9 mx-auto rounded-full bg-[#00a884]/20 flex items-center justify-center mb-1.5 text-[#00a884] font-bold text-sm">
