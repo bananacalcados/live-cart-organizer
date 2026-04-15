@@ -84,11 +84,11 @@ serve(async (req) => {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const { data: recentSales } = await supabase
       .from('pos_sales')
-      .select('total_amount')
+      .select('total')
       .gte('created_at', sevenDaysAgo.toISOString())
-      .eq('status', 'completed');
+      .neq('status', 'cancelled');
 
-    const revenueLastWeek = (recentSales || []).reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const revenueLastWeek = (recentSales || []).reduce((sum: number, s: any) => sum + (s.total || 0), 0);
     const custoFixoSemanal = 71279 / 4.4;
     let verba = Math.round(revenueLastWeek * 0.482 - custoFixoSemanal);
     verba = Math.max(500, Math.min(7000, verba));
