@@ -676,7 +676,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         whatsapp_number_id: sendRoute.numberId,
         message_id: metaMessageId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
-      });
+        quoted_message_id: quotedMessage?.message_id || null,
+      } as any);
 
       await supabase
         .from("automation_ai_sessions")
