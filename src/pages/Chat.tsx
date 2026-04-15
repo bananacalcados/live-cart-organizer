@@ -1204,10 +1204,49 @@ export default function ChatPage() {
                             const senderName = msg.direction === 'outgoing'
                               ? (msg as any).sender_user_id ? profilesMap[(msg as any).sender_user_id] || null : null
                               : null;
+                            // Quote lookup
+                            const quotedId = (msg as any).quoted_message_id;
+                            const quotedOriginal = quotedId ? messages.find(m => m.message_id === quotedId) : null;
+
+                            const scrollToMessage = (messageId: string) => {
+                              const el = document.getElementById(`msg-${messageId}`);
+                              if (el) {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                el.classList.add('bg-[#2a3942]/50');
+                                setTimeout(() => el.classList.remove('bg-[#2a3942]/50'), 2000);
+                              }
+                            };
+
+                            const handleReply = () => {
+                              setQuotedMessage({
+                                message_id: msg.message_id || '',
+                                message: msg.message || '',
+                                sender_name: msg.sender_name || undefined,
+                                direction: msg.direction,
+                                media_type: msg.media_type || undefined,
+                              });
+                              inputRef.current?.focus();
+                            };
+
                             return (
-                          <div className={cn("flex mb-0.5", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
+                          <div
+                            id={`msg-${msg.message_id || msg.id}`}
+                            className={cn("flex mb-0.5 group transition-colors duration-500", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}
+                            onTouchStart={() => {
+                              const timer = setTimeout(handleReply, 500);
+                              longPressTimerRef.current = timer;
+                            }}
+                            onTouchEnd={() => { if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current); }}
+                            onTouchMove={() => { if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current); }}
+                          >
                             {isAuto && (
                               <span className="text-amber-400 text-[10px] self-end mb-0.5 mr-1">🤖 Automática</span>
+                            )}
+                            {/* Reply button - left side for outgoing */}
+                            {msg.direction === 'outgoing' && (
+                              <button onClick={handleReply} className="self-center mr-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[#2a3942] rounded text-[#8696a0]" title="Responder">
+                                <ArrowLeft className="h-3.5 w-3.5" />
+                              </button>
                             )}
                             <div
                               className={cn(
@@ -1222,6 +1261,21 @@ export default function ChatPage() {
                                 borderTopLeftRadius: msg.direction === 'incoming' ? 0 : undefined,
                               }}
                             >
+                              {/* Quoted message bubble */}
+                              {quotedOriginal && (
+                                <QuotedMessageBubble
+                                  originalMessage={quotedOriginal.message}
+                                  originalDirection={quotedOriginal.direction}
+                                  originalSenderName={quotedOriginal.sender_name}
+                                  originalMediaType={quotedOriginal.media_type}
+                                  onClick={() => scrollToMessage(quotedOriginal.message_id || quotedOriginal.id)}
+                                />
+                              )}
+                              {quotedId && !quotedOriginal && (
+                                <div className="bg-black/10 rounded-lg p-2 mb-1 border-l-4 border-[#8696a0]">
+                                  <p className="text-[11px] text-[#8696a0] italic">Mensagem original não carregada</p>
+                                </div>
+                              )}
                               {/* Sender name for outgoing */}
                               {msg.direction === 'outgoing' && (
                                 <p className="text-emerald-400 text-[10px] font-medium mb-0.5">
@@ -1245,6 +1299,12 @@ export default function ChatPage() {
                                 {msg.direction === 'outgoing' && <StatusIcon status={msg.status || null} />}
                               </div>
                             </div>
+                            {/* Reply button - right side for incoming */}
+                            {msg.direction === 'incoming' && (
+                              <button onClick={handleReply} className="self-center ml-1 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[#2a3942] rounded text-[#8696a0]" title="Responder">
+                                <ArrowLeft className="h-3.5 w-3.5 rotate-180" />
+                              </button>
+                            )}
                           </div>
                             );
                           })()}
