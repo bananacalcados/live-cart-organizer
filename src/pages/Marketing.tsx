@@ -1650,10 +1650,15 @@ export default function Marketing() {
             {/* Catalog Landing Pages */}
             <CatalogLandingPageCreator />
 
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Landing Pages de Campanhas</CardTitle>
-                <CardDescription className="text-xs">Páginas criadas dentro de campanhas (rota /lp/:slug)</CardDescription>
+             <Card>
+              <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm">Landing Pages de Campanhas</CardTitle>
+                  <CardDescription className="text-xs">Páginas criadas dentro de campanhas (rota /lp/:slug)</CardDescription>
+                </div>
+                <Button size="sm" className="gap-1" onClick={() => setShowCreateLandingPage(true)}>
+                  <Plus className="h-3.5 w-3.5" />Criar Landing Page
+                </Button>
               </CardHeader>
               <CardContent className="space-y-2">
                 {landingPages.length === 0 ? (
