@@ -25,7 +25,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { phone, mediaUrl, mediaType, caption, filename, whatsapp_number_id } = body;
+    const { phone, mediaUrl, mediaType, caption, filename, whatsapp_number_id, quotedMessageId } = body;
 
     console.log('Received body keys:', Object.keys(body), 'whatsapp_number_id:', whatsapp_number_id);
 
@@ -118,6 +118,11 @@ serve(async (req) => {
           JSON.stringify({ error: 'Invalid media type' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
+    }
+
+    // Add quote support to any media type
+    if (quotedMessageId) {
+      payload.quotedMessageId = quotedMessageId;
     }
 
     const zapiUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}/${endpoint}`;

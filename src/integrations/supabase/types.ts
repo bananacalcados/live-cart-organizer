@@ -9746,6 +9746,7 @@ export type Database = {
           message: string
           message_id: string | null
           phone: string
+          quoted_message_id: string | null
           referral: Json | null
           sender_name: string | null
           sender_user_id: string | null
@@ -9766,6 +9767,7 @@ export type Database = {
           message: string
           message_id?: string | null
           phone: string
+          quoted_message_id?: string | null
           referral?: Json | null
           sender_name?: string | null
           sender_user_id?: string | null
@@ -9786,6 +9788,7 @@ export type Database = {
           message?: string
           message_id?: string | null
           phone?: string
+          quoted_message_id?: string | null
           referral?: Json | null
           sender_name?: string | null
           sender_user_id?: string | null

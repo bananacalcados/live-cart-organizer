@@ -68,7 +68,7 @@ export function useZapi() {
     }
   };
 
-  const sendMessage = async (phone: string, message: string, whatsappNumberId?: string): Promise<SendMessageResult> => {
+  const sendMessage = async (phone: string, message: string, whatsappNumberId?: string, quotedMessageId?: string): Promise<SendMessageResult> => {
     if (!phone) {
       toast.error('Número de WhatsApp não informado');
       return { success: false, error: 'Número não informado' };
@@ -77,7 +77,7 @@ export function useZapi() {
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('zapi-send-message', {
-        body: { phone, message, whatsapp_number_id: whatsappNumberId },
+        body: { phone, message, whatsapp_number_id: whatsappNumberId, quotedMessageId },
       });
       
       if (error) {
@@ -108,7 +108,8 @@ export function useZapi() {
     mediaUrl: string,
     mediaType: MediaType,
     caption?: string,
-    whatsappNumberId?: string
+    whatsappNumberId?: string,
+    quotedMessageId?: string
   ): Promise<SendMessageResult> => {
     if (!phone) {
       toast.error('Número de WhatsApp não informado');
@@ -118,7 +119,7 @@ export function useZapi() {
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('zapi-send-media', {
-        body: { phone, mediaUrl, mediaType, caption, whatsapp_number_id: whatsappNumberId },
+        body: { phone, mediaUrl, mediaType, caption, whatsapp_number_id: whatsappNumberId, quotedMessageId },
       });
       
       if (error) {

@@ -259,6 +259,9 @@ serve(async (req) => {
               console.log(`Ad referral detected for ${phone}:`, JSON.stringify(referralData));
             }
 
+            // Capture quoted message context (reply)
+            const quotedMessageId = msg.context?.message_id || null;
+
             const { error } = await supabase.from('whatsapp_messages').insert({
               phone,
               message: messageText,
@@ -271,6 +274,7 @@ serve(async (req) => {
               whatsapp_number_id: whatsappNumberDbId || null,
               sender_name: senderName,
               referral: referralData,
+              quoted_message_id: quotedMessageId,
             });
 
             if (error) {
