@@ -817,11 +817,19 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                       </span>
                     </div>
                   )}
+                  {(() => {
+                    const isAuto = msg.message?.startsWith('[AUTO] ');
+                    const displayMsg = isAuto ? msg.message.replace(/^\[AUTO\] /, '') : msg.message;
+                    return (
                   <div className={cn("flex", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
+                    {isAuto && (
+                      <span className="text-amber-400 text-[10px] self-end mb-0.5 mr-1">🤖 Automática</span>
+                    )}
                     <div
                       className={cn(
                         "max-w-[85%] rounded-lg px-3 py-2 text-sm shadow-sm relative",
-                        msg.direction === 'outgoing' ? 'bg-[#DCF8C6] text-gray-800' : 'bg-white text-gray-800'
+                        msg.direction === 'outgoing' ? 'bg-[#DCF8C6] text-gray-800' : 'bg-white text-gray-800',
+                        isAuto && 'opacity-80 border border-dashed border-gray-300'
                       )}
                       style={{
                         borderTopRightRadius: msg.direction === 'outgoing' ? 0 : undefined,
@@ -829,7 +837,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                       }}
                     >
                       <MessageMedia msg={msg} />
-                      {msg.message && <p className="whitespace-pre-wrap break-words pr-12">{msg.message}</p>}
+                      {displayMsg && <p className="whitespace-pre-wrap break-words pr-12">{displayMsg}</p>}
                       {msg.status === 'failed' && msg.error_message && (
                         <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[11px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
                           ⚠️ {msg.error_message}
@@ -849,6 +857,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                       </div>
                     </div>
                   </div>
+                    );
+                  })()}
                 </div>
               );
             })}

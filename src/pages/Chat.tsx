@@ -35,6 +35,8 @@ import { POSProductCatalogSender } from "@/components/pos/POSProductCatalogSende
 import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
 import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
+import { AutoReplySettings } from "@/components/chat/AutoReplySettings";
+import { AttendantMetrics } from "@/components/chat/AttendantMetrics";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import {
   Select,
@@ -194,6 +196,17 @@ export default function ChatPage() {
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
+  // Profiles cache for sender names
+  const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    supabase.from("profiles").select("user_id, display_name").then(({ data }) => {
+      if (data) {
+        const map: Record<string, string> = {};
+        data.forEach((p: any) => { if (p.user_id && p.display_name) map[p.user_id] = p.display_name; });
+        setProfilesMap(map);
+      }
+    });
+  }, []);
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
   const { crmMap, deleteWhatsApp } = useCrmPhoneLookup(conversationPhones);
@@ -858,6 +871,10 @@ export default function ChatPage() {
               className="h-8 text-xs bg-[#2a3942] border-[#3b4a54] text-[#e9edef]"
             />
           )}
+          {/* Auto-reply settings (admin/manager only) */}
+          {isAdmin && (
+            <AutoReplySettings whatsappNumberId={numberFilter !== 'all' ? numberFilter : (selectedNumberId || numbers[0]?.id || null)} />
+          )}
         </div>
       </div>
 
@@ -938,6 +955,9 @@ export default function ChatPage() {
                 Nova conversa
               </Button>
             </div>
+
+          {/* Attendant metrics */}
+          <AttendantMetrics isAdmin={isAdmin} />
 
           {/* Conversation list */}
           <div className="flex-1 overflow-y-auto">
@@ -1168,19 +1188,36 @@ export default function ChatPage() {
                               </span>
                             </div>
                           )}
+                          {(() => {
+                            const isAuto = msg.message?.startsWith('[AUTO] ');
+                            const displayMsg = isAuto ? msg.message.replace(/^\[AUTO\] /, '') : msg.message;
+                            const senderName = msg.direction === 'outgoing'
+                              ? (msg as any).sender_user_id ? profilesMap[(msg as any).sender_user_id] || null : null
+                              : null;
+                            return (
                           <div className={cn("flex mb-0.5", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
+                            {isAuto && (
+                              <span className="text-amber-400 text-[10px] self-end mb-0.5 mr-1">🤖 Automática</span>
+                            )}
                             <div
                               className={cn(
                                 "max-w-[65%] rounded-lg px-2.5 py-1.5 text-sm shadow-sm relative",
                                 msg.direction === 'outgoing'
                                   ? 'bg-[#005c4b] text-[#e9edef]'
-                                  : 'bg-[#202c33] text-[#e9edef]'
+                                  : 'bg-[#202c33] text-[#e9edef]',
+                                isAuto && 'opacity-80 border border-dashed border-[#2a3942]'
                               )}
                               style={{
                                 borderTopRightRadius: msg.direction === 'outgoing' ? 0 : undefined,
                                 borderTopLeftRadius: msg.direction === 'incoming' ? 0 : undefined,
                               }}
                             >
+                              {/* Sender name for outgoing */}
+                              {msg.direction === 'outgoing' && (
+                                <p className="text-emerald-400 text-[10px] font-medium mb-0.5">
+                                  {senderName || (isAuto ? 'Auto' : 'Sistema')}
+                                </p>
+                              )}
                               {/* WhatsApp number indicator */}
                               {msg.whatsapp_number_id && (() => {
                                 const num = numbers.find(n => n.id === msg.whatsapp_number_id);
@@ -1192,13 +1229,15 @@ export default function ChatPage() {
                               })()}
                               <InstagramReferralCard referral={msg.referral} />
                               <MessageMedia msg={msg} />
-                              {msg.message && <p className="whitespace-pre-wrap break-words pr-14 leading-[1.35]">{msg.message}</p>}
+                              {displayMsg && <p className="whitespace-pre-wrap break-words pr-14 leading-[1.35]">{displayMsg}</p>}
                               <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[11px] text-[#ffffff99]">
                                 <span>{isToday(new Date(msg.created_at)) ? format(new Date(msg.created_at), "HH:mm") : format(new Date(msg.created_at), "dd/MM HH:mm")}</span>
                                 {msg.direction === 'outgoing' && <StatusIcon status={msg.status || null} />}
                               </div>
                             </div>
                           </div>
+                            );
+                          })()}
                         </div>
                       );
                     })}

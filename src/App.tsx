@@ -9,6 +9,7 @@ import { Suspense, lazy } from "react";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import { TeamChat } from "./components/TeamChat";
+import { InstallPrompt } from "./components/InstallPrompt";
 
 // Lazy-loaded modules
 const Home = lazy(() => import("./pages/Home"));
@@ -55,6 +56,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <InstallPrompt />
         <BrowserRouter>
           <Suspense fallback={<LazyFallback />}>
             <Routes>

@@ -22,6 +22,7 @@ export interface Message {
   whatsapp_number_id?: string;
   sender_name?: string;
   message_id?: string;
+  sender_user_id?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   referral?: any;
 }
