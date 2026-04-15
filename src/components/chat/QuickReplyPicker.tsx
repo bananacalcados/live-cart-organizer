@@ -152,7 +152,7 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
         ) : (
           <>
             {replies.length > 3 && (
-              <div className="px-3 pt-2">
+              <div className="px-3 pt-2 sticky top-0 z-10 bg-popover">
                 <div className="relative">
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                   <Input
