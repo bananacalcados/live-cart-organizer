@@ -116,6 +116,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [importFilterDateFrom, setImportFilterDateFrom] = useState<Date | undefined>(undefined);
   const [importFilterDateTo, setImportFilterDateTo] = useState<Date | undefined>(undefined);
   const [isSyncingFromZapi, setIsSyncingFromZapi] = useState(false);
+  const [isFixingOrientation, setIsFixingOrientation] = useState(false);
   const { selectedNumberId } = useWhatsAppNumberStore();
 
   const fetchCampaign = useCallback(async () => {
