@@ -461,12 +461,14 @@ export function MassTemplateDispatcher() {
   const [uploadingHeaderFile, setUploadingHeaderFile] = useState(false);
   const headerUploadRef = useRef<HTMLInputElement>(null);
   const handleHeaderFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const raw = e.target.files?.[0];
+    if (!raw) return;
     setUploadingHeaderFile(true);
+    const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+    const file = await normalizeImageOrientation(raw);
     const ext = file.name.split('.').pop();
     const fileName = `template-header-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("chat-media").upload(fileName, file);
+    const { error } = await supabase.storage.from("chat-media").upload(fileName, file, { contentType: file.type });
     if (error) { toast.error("Erro ao enviar arquivo"); setUploadingHeaderFile(false); return; }
     const { data } = supabase.storage.from("chat-media").getPublicUrl(fileName);
     setHeaderMediaUrl(data.publicUrl);

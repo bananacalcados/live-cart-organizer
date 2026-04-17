@@ -396,15 +396,17 @@ export function MarketingCalendar() {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const raw = e.target.files?.[0];
+    if (!raw) return;
+    const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+    const file = await normalizeImageOrientation(raw);
     const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
     if (file.size > getMaxSizeForType(file.type)) { toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`); return; }
     setIsUploading(true);
     try {
       const ext = file.name.split('.').pop();
       const path = `calendar/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-      const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+      const { error } = await supabase.storage.from('marketing-attachments').upload(path, file, { contentType: file.type });
       if (error) throw error;
       const { data } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
       setEntryMediaUrl(data.publicUrl);
