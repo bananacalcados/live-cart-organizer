@@ -33,8 +33,22 @@ export async function fetchAndNormalizeImage(url: string): Promise<{
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Falha ao baixar mídia (${res.status})`);
 
-  const mimeType = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || "";
+  let mimeType = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || "";
   const bytes = new Uint8Array(await res.arrayBuffer());
+
+  // Fallback: alguns CDNs/Storage devolvem application/octet-stream para .JPG maiúsculo.
+  // Inferimos pelo sufixo da URL para garantir que entramos na rotina de autoOrient.
+  if (!mimeType || mimeType === "application/octet-stream") {
+    const ext = (url.split("?")[0].split(".").pop() || "").toLowerCase();
+    const extMap: Record<string, string> = {
+      jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+      webp: "image/webp", heic: "image/heic", heif: "image/heif",
+    };
+    if (extMap[ext]) {
+      mimeType = extMap[ext];
+      console.log(`[image-utils] mimeType inferido por extensão: ${mimeType}`);
+    }
+  }
 
   // Só normaliza JPEG/PNG/WebP/HEIC. Outros tipos passam direto.
   const isRasterImage =
