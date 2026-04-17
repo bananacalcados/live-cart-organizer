@@ -110,8 +110,12 @@ serve(async (req) => {
       };
     } else if (type === 'image' && mediaUrl) {
       endpoint = `${baseUrl}/send-image`;
-      const preparedImage = await prepareZApiImagePayload(mediaUrl);
-      body = { phone: groupId, image: preparedImage.image, caption: caption || message || '' };
+      // IMPORTANTE: enviamos a URL direta para a Z-API. Tentamos no passado converter
+      // para base64 inline para fazer autoOrient server-side, mas isso causava falhas
+      // silenciosas em grupos (payload muito grande -> Z-API responde 200 mas não entrega).
+      // A correção de orientação EXIF é feita no client (src/lib/imageOrientation.ts)
+      // antes do upload para o Storage.
+      body = { phone: groupId, image: mediaUrl, caption: caption || message || '' };
       if (mentionedPhones.length > 0) {
         body.mentioned = mentionedPhones;
       }
