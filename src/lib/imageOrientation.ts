@@ -14,9 +14,15 @@
 const MAX_DIMENSION = 1920; // limita dimensão para evitar arquivos enormes
 
 export async function normalizeImageOrientation(file: File): Promise<File> {
-  // Só processa imagens raster (JPEG/PNG/HEIC). SVG, GIF e não-imagens passam direto.
-  if (!file.type.startsWith('image/')) return file;
-  if (file.type === 'image/svg+xml' || file.type === 'image/gif') return file;
+  // Detecta tipo por MIME OU extensão — alguns navegadores deixam file.type vazio
+  // quando a extensão é .JPG (maiúscula) ou em compartilhamentos de apps mobile.
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const mime = (file.type || '').toLowerCase();
+  const isRasterByExt = ['jpg', 'jpeg', 'png', 'heic', 'heif', 'webp'].includes(ext);
+  const isRasterByMime = mime.startsWith('image/') && mime !== 'image/svg+xml' && mime !== 'image/gif';
+
+  if (!isRasterByExt && !isRasterByMime) return file;
+  if (mime === 'image/svg+xml' || mime === 'image/gif') return file;
 
   try {
     // createImageBitmap com imageOrientation:'from-image' aplica a rotação EXIF.
