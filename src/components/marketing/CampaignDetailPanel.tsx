@@ -767,6 +767,37 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           <Button variant="outline" size="sm" onClick={() => setShowBulkSettings(true)} className="gap-1">
             <Settings className="h-3.5 w-3.5" /> Configurar Grupos
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1"
+            disabled={isFixingOrientation}
+            onClick={async () => {
+              if (!confirm("Corrigir orientação EXIF de todas as imagens pendentes desta campanha? Isso vai regravar os arquivos no storage.")) return;
+              setIsFixingOrientation(true);
+              try {
+                const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fix-scheduled-image-orientation`, {
+                  method: 'POST',
+                  headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ campaign_id: campaignId, scope: 'pending' }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                  toast.success(`Imagens corrigidas: ${data.fixed} | Ignoradas: ${data.skipped} | Falhas: ${data.failed}`);
+                  fetchMessages();
+                } else {
+                  toast.error(data.error || 'Erro ao corrigir');
+                }
+              } catch (e: any) {
+                toast.error(e.message || 'Erro');
+              } finally {
+                setIsFixingOrientation(false);
+              }
+            }}
+          >
+            {isFixingOrientation ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Corrigir orientação
+          </Button>
           <Button size="sm" onClick={() => { setEditingMessage(null); setShowMessageForm(true); }} className="gap-1">
             <Plus className="h-3.5 w-3.5" /> Enviar Mensagem
           </Button>
