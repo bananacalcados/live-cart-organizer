@@ -154,6 +154,8 @@ function BlockEditor({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+
     if (block.type === 'audio') {
       // Single audio
       const file = files[0];
@@ -177,12 +179,14 @@ function BlockEditor({
       setIsUploading(true);
       try {
         const newItems: MediaItem[] = [];
-        for (const file of Array.from(files)) {
+        for (const rawFile of Array.from(files)) {
           const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+          // Normaliza EXIF para imagens (corrige fotos deitadas vindas de celulares)
+          const file = await normalizeImageOrientation(rawFile);
           if (file.size > getMaxSizeForType(file.type)) { toast.error(`${file.name}: ${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`); continue; }
           const ext = file.name.split('.').pop();
           const path = `group-messages/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-          const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+          const { error } = await supabase.storage.from('marketing-attachments').upload(path, file, { contentType: file.type });
           if (error) continue;
           const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
           newItems.push({ url: urlData.publicUrl, caption: '' });
