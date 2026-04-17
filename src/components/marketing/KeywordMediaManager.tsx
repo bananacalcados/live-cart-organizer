@@ -61,7 +61,9 @@ export default function KeywordMediaManager({ campaignId, keywords }: KeywordMed
     setLoading(false);
   };
 
-  const handleFileUpload = async (keyword: string, file: File) => {
+  const handleFileUpload = async (keyword: string, rawFile: File) => {
+    const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+    const file = await normalizeImageOrientation(rawFile);
     const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
     if (file.size > getMaxSizeForType(file.type)) {
       toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`);

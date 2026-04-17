@@ -282,13 +282,15 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
               accept="image/*"
               className="hidden"
               onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
+                const raw = e.target.files?.[0];
+                if (!raw) return;
                 setIsUploadingPhoto(true);
                 try {
+                  const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+                  const file = await normalizeImageOrientation(raw);
                   const ext = file.name.split('.').pop();
                   const path = `group-photos/${Date.now()}.${ext}`;
-                  const { error } = await supabase.storage.from('marketing-attachments').upload(path, file);
+                  const { error } = await supabase.storage.from('marketing-attachments').upload(path, file, { contentType: file.type });
                   if (error) throw error;
                   const { data: urlData } = supabase.storage.from('marketing-attachments').getPublicUrl(path);
                   setBulkPhotoUrl(urlData.publicUrl);
