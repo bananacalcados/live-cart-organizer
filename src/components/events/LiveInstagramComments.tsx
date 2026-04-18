@@ -48,6 +48,11 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   const [filter, setFilter] = useState<"all" | "orders" | "carts">("all");
   const [recentlyHighlighted, setRecentlyHighlighted] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
+  const cartByHandleRef = useRef<Map<string, CartCustomerMatch>>(new Map());
+
+  useEffect(() => {
+    cartByHandleRef.current = cartByHandle;
+  }, [cartByHandle]);
 
   const playBeep = useCallback(() => {
     if (!soundEnabled) return;
@@ -130,7 +135,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   useEffect(() => {
     if (!eventId) return;
     const channel = supabase
-      .channel(`live-comments-${eventId}`)
+      .channel(`live-comments-${eventId}-${Date.now()}`)
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
@@ -139,12 +144,12 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
       }, (payload) => {
         const newComment = payload.new as LiveComment;
         setComments(prev => {
-          if (prev.some(c => c.id === newComment.id)) return prev;
+          if (prev.some(c => c.id === newComment.id || c.comment_id === newComment.comment_id)) return prev;
           return [newComment, ...prev].slice(0, 150);
         });
 
         const handle = cleanHandle(newComment.username);
-        if (cartByHandle.has(handle)) {
+        if (cartByHandleRef.current.has(handle)) {
           playBeep();
           setRecentlyHighlighted(prev => new Set(prev).add(newComment.id));
           setTimeout(() => {
@@ -165,10 +170,20 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
         const updated = payload.new as LiveComment;
         setComments(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[LiveComments] Realtime status: ${status}`);
+      });
 
-    return () => { supabase.removeChannel(channel); };
-  }, [eventId, cartByHandle, playBeep]);
+    // Polling fallback a cada 15s — caso o realtime caia, garante que a UI atualiza sem F5
+    const pollInterval = setInterval(() => {
+      loadComments();
+    }, 15000);
+
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
+  }, [eventId, playBeep, loadComments]);
 
   useEffect(() => {
     if (!eventId) return;

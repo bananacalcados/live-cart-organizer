@@ -1,0 +1,1 @@
+ALTER TABLE public.live_comments REPLICA IDENTITY FULL;
