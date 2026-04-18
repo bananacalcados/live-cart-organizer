@@ -420,7 +420,7 @@ serve(async (req) => {
 
       // Small delay between chunks to avoid Meta rate limits
       if (i + CONCURRENCY < pendingRecipients.length) {
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY_MS));
       }
     }
 
