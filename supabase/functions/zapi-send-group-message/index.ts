@@ -64,6 +64,7 @@ serve(async (req) => {
     }
 
     if (!groupId) {
+      console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'no_groupId', timestamp: new Date().toISOString() }));
       return new Response(
         JSON.stringify({ error: 'groupId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
