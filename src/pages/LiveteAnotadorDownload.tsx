@@ -51,7 +51,7 @@ export default function LiveteAnotadorDownload() {
         <CardHeader>
           <CardTitle>Baixar a extensão</CardTitle>
           <CardDescription>
-            Versão 1.1.0 — Compatível com Chrome, Edge, Brave e outros navegadores Chromium.
+            Versão 1.2.0 — Compatível com Chrome, Edge, Brave e outros navegadores Chromium.
           </CardDescription>
         </CardHeader>
         <CardContent>
