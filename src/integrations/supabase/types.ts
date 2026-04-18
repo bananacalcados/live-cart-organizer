@@ -10557,8 +10557,7 @@ export type Database = {
         Returns: {
           claimed_id: string
           message_group_id: string
-          previous_locked_until: string
-          previous_status: string
+          was_recovery: boolean
         }[]
       }
       unaccent: { Args: { "": string }; Returns: string }
