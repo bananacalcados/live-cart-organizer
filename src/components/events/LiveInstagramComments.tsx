@@ -216,7 +216,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
           variant="ghost"
           size="icon"
           onClick={() => setSoundEnabled(!soundEnabled)}
-          className="text-card hover:bg-muted-foreground/20 h-8 w-8"
+          className="text-foreground hover:bg-muted h-8 w-8"
           title={soundEnabled ? "Desativar som" : "Ativar som"}
         >
           {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
@@ -278,7 +278,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                     ? "bg-orange-500/20 border-orange-400 shadow-lg shadow-orange-500/30 animate-pulse"
                     : hasCart
                     ? "bg-orange-500/10 border-orange-500/40"
-                    : "bg-muted-foreground/5 border-muted-foreground/15"
+                    : "bg-card border-border"
                 }`}
               >
                 <CardContent className="p-3">
@@ -287,7 +287,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                       <img
                         src={comment.profile_pic_url}
                         alt={comment.username}
-                        className="w-8 h-8 rounded-full object-cover border border-zinc-700"
+                        className="w-8 h-8 rounded-full object-cover border border-border"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                     ) : (
@@ -298,7 +298,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="font-bold text-sm text-pink-300">@{handle}</span>
+                        <span className="font-bold text-sm text-pink-500 dark:text-pink-300">@{handle}</span>
                         <span className="text-[10px] text-muted-foreground">{formatTime(comment.created_at)}</span>
                         <Badge variant="outline" className={`text-[9px] py-0 ${config.color}`}>
                           <Icon className="h-2.5 w-2.5 mr-0.5" />
@@ -306,7 +306,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                         </Badge>
                       </div>
 
-                      <p className="text-sm text-card mb-1 break-words">{comment.comment_text}</p>
+                      <p className="text-sm text-foreground mb-1 break-words">{comment.comment_text}</p>
 
                       {hasCart && cart && (
                         <div className="mt-2 flex items-center justify-between gap-2 p-2 rounded bg-orange-500/15 border border-orange-500/30">
