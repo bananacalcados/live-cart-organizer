@@ -74,6 +74,7 @@ serve(async (req) => {
     if (isLikelyGroupId(groupId)) {
       const pausedUntil = await getPausedGroupSendUntil(supabase);
       if (pausedUntil) {
+        console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'paused', timestamp: new Date().toISOString() }));
         return new Response(
           JSON.stringify({ error: 'Group sends temporarily paused', pausedUntil }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
