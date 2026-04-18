@@ -492,6 +492,20 @@ export default function PresenterDashboard() {
           </div>
         </TabsContent>
 
+        <TabsContent value="instagram">
+          <Card className="bg-muted-foreground/5 border-muted-foreground/15">
+            <CardContent className="p-4">
+              <LiveInstagramComments
+                eventId={eventId!}
+                onOpenOrder={(orderId) => {
+                  const order = orders.find(o => o.id === orderId);
+                  if (order) setChatOrder(order);
+                }}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="catalog">
           <div className="space-y-4">
             <Card className="bg-muted-foreground/5 border-muted-foreground/15">
