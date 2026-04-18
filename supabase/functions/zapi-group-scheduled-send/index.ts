@@ -73,40 +73,25 @@ serve(async (req) => {
       );
     }
 
-    // Atomically claim this batch before reading the full payload.
-    // This prevents the manual trigger and cron from sending the same groups simultaneously.
-    // Check lock in code (PostgREST schema cache may not know about locked_until yet)
-    if (existingMsg.locked_until && new Date(existingMsg.locked_until).getTime() > Date.now()) {
-      return new Response(
-        JSON.stringify({ error: 'Message is already being processed', status: existingMsg.status, lockedUntil: existingMsg.locked_until }),
-        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const lockUntil = new Date(Date.now() + 90_000).toISOString();
-    const nowForClaim = new Date().toISOString();
-    const { data: claimedRows, error: claimErr } = await supabase
-      .from('group_campaign_scheduled_messages')
-      .update({
-        status: 'sending',
-        locked_until: lockUntil,
-        last_execution_at: nowForClaim,
-      })
-      .eq('id', scheduledMessageId)
-      .eq('status', 'pending')
-      .or(`locked_until.is.null,locked_until.lt.${nowForClaim}`)
-      .select('id, message_group_id');
+    // Atomic claim via SQL function (avoids PostgREST .or() parser issue with timestamps)
+    const { data: claimResult, error: claimErr } = await supabase
+      .rpc('try_claim_scheduled_message', {
+        p_message_id: scheduledMessageId,
+        p_lock_duration_seconds: 90,
+      });
 
     if (claimErr) {
+      console.error('Claim RPC error:', claimErr);
       return new Response(
         JSON.stringify({ error: 'Failed to claim scheduled message', details: claimErr.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const claimedMsg = claimedRows?.[0] ?? null;
+    const claimedMsg = claimResult && claimResult.length > 0 ? claimResult[0] : null;
 
     if (!claimedMsg) {
+      // Couldn't claim — either already being processed or status changed
       if (existingMsg.status !== 'pending' && existingMsg.status !== 'sending') {
         return new Response(
           JSON.stringify({ error: 'Message already processed', status: existingMsg.status }),
@@ -115,15 +100,17 @@ serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ error: 'Message is already being processed', status: existingMsg.status, lockedUntil: existingMsg.locked_until }),
+        JSON.stringify({
+          error: 'Message is already being processed',
+          status: existingMsg.status,
+          lockedUntil: existingMsg.locked_until,
+        }),
         { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Increment execution_count for diagnostic of residual concurrency
-    await supabase.rpc('increment_execution_count', {
-      message_id: scheduledMessageId,
-    });
+    // Lock used for renewal in final update and for sibling blocks update below
+    const lockUntil = new Date(Date.now() + 90_000).toISOString();
 
     // Also mark sibling blocks as sending so cron cannot pick another block from the same grouped message.
     if (claimedMsg.message_group_id) {
