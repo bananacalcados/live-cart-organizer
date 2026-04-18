@@ -40,10 +40,8 @@ function runDiagnose() {
   console.log("[Livete] 🔍 === DIAGNÓSTICO ===");
   console.log("[Livete] URL:", location.href);
 
-  const input = document.querySelector(
-    'textarea[placeholder*="omentário" i], textarea[placeholder*="omment" i], input[placeholder*="omentário" i]'
-  );
-  console.log("[Livete] Input encontrado?", !!input, input?.placeholder);
+  const input = findCommentInput();
+  console.log("[Livete] Input encontrado?", !!input, input?.placeholder || input?.getAttribute("aria-label"));
 
   const list = findCommentList();
   if (!list) {
@@ -105,43 +103,76 @@ function stopCapture() {
   removeBanner();
 }
 
+// ─── Localiza o input de comentário (mais tolerante) ───
+function findCommentInput() {
+  // Tenta vários atributos: placeholder, aria-label, contenteditable
+  const selectors = [
+    'textarea[placeholder*="dicione" i]',
+    'textarea[placeholder*="omentário" i]',
+    'textarea[placeholder*="omment" i]',
+    'input[placeholder*="dicione" i]',
+    'input[placeholder*="omentário" i]',
+    'textarea[aria-label*="omentário" i]',
+    'textarea[aria-label*="omment" i]',
+    'div[contenteditable="true"][aria-label*="omentário" i]',
+    'div[contenteditable="true"][aria-label*="omment" i]',
+    'div[role="textbox"][aria-label*="omentário" i]',
+    'div[role="textbox"]',
+  ];
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    if (el) return el;
+  }
+  // Última tentativa: qualquer textarea visível na página
+  const tas = document.querySelectorAll("textarea");
+  for (const ta of tas) {
+    if (ta.offsetParent !== null) return ta;
+  }
+  return null;
+}
+
 // ─── Localiza o container da lista de comentários ───
 function findCommentList() {
   if (commentListEl && document.body.contains(commentListEl)) return commentListEl;
 
-  // Estratégia 1: ancora pelo textarea/input "Adicione um comentário"
-  const input = document.querySelector(
-    'textarea[placeholder*="omentário" i], textarea[placeholder*="omment" i], input[placeholder*="omentário" i]'
-  );
+  // Estratégia 1: ancora pelo input de comentário
+  const input = findCommentInput();
   if (input) {
-    // Sobe na árvore procurando um ancestral que tenha vários links de perfil (a[href^="/"])
     let el = input.parentElement;
-    for (let i = 0; i < 12 && el; i++) {
+    for (let i = 0; i < 15 && el; i++) {
       const userLinks = el.querySelectorAll('a[role="link"][href^="/"], a[href^="/"]');
       if (userLinks.length >= 2) {
         commentListEl = el;
-        console.log("[Livete] ✅ Lista de comentários localizada via input. Links:", userLinks.length);
+        console.log("[Livete] ✅ Lista localizada via input. Links:", userLinks.length);
         return el;
       }
       el = el.parentElement;
     }
   }
 
-  // Estratégia 2: fallback — procura ul/div com vários a[href^="/"] curtinhos (usernames)
-  const candidates = document.querySelectorAll('ul, div[class]');
+  // Estratégia 2: heurística — procura container com vários links curtos de username
+  const candidates = document.querySelectorAll('ul, div');
+  let best = null;
+  let bestScore = 0;
   for (const c of candidates) {
-    const links = c.querySelectorAll(':scope > * a[href^="/"]');
-    if (links.length >= 3 && links.length < 80) {
-      const allShort = Array.from(links).every(a => {
-        const h = a.getAttribute("href") || "";
-        return /^\/[A-Za-z0-9._]+\/?$/.test(h);
-      });
-      if (allShort) {
-        commentListEl = c;
-        console.log("[Livete] ✅ Lista localizada via heurística. Links:", links.length);
-        return c;
-      }
+    const links = c.querySelectorAll('a[href^="/"]');
+    if (links.length < 3 || links.length > 60) continue;
+    let score = 0;
+    for (const a of links) {
+      const h = a.getAttribute("href") || "";
+      if (/^\/[A-Za-z0-9._]{2,30}\/?$/.test(h)) score++;
     }
+    // Container precisa ter texto também (não só links)
+    const txtLen = (c.innerText || "").length;
+    if (score >= 3 && txtLen > 50 && txtLen < 5000 && score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  if (best) {
+    commentListEl = best;
+    console.log("[Livete] ✅ Lista localizada via heurística. Score:", bestScore);
+    return best;
   }
 
   return null;
