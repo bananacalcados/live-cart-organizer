@@ -245,13 +245,13 @@ export default function PresenterDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-foreground text-card flex">
+    <div className="min-h-screen bg-background text-foreground flex">
       {/* Main content */}
       <div className="flex-1 p-4 md:p-6 overflow-y-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/events")} className="text-card hover:bg-muted-foreground/20">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/events")} className="text-foreground hover:bg-muted">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
@@ -265,7 +265,7 @@ export default function PresenterDashboard() {
             variant="ghost"
             size="icon"
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="text-card hover:bg-muted-foreground/20"
+            className="text-foreground hover:bg-muted"
           >
             {soundEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
           </Button>
