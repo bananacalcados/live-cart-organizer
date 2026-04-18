@@ -523,7 +523,7 @@ export default function PresenterDashboard() {
       </div>
 
       {/* Live Instagram Comments Sidebar - always visible */}
-      <div className="w-80 lg:w-96 border-l border-border bg-card/50 flex flex-col h-screen sticky top-0 overflow-hidden">
+      <div className="w-80 lg:w-96 border-l border-border bg-muted/30 flex flex-col h-screen sticky top-0 overflow-hidden">
         <div className="flex-1 overflow-y-auto p-3">
           <LiveInstagramComments
             eventId={eventId!}
