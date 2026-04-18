@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Livete – Anotador de Live",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Captura comentários da live do Instagram e envia para o sistema Livete automaticamente.",
   "permissions": ["activeTab", "storage"],
   "action": {
