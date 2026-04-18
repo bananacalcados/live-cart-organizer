@@ -114,6 +114,7 @@ serve(async (req) => {
     } else if (type === 'poll') {
       const pollOptions = (reqBody as any).pollOptions;
       if (!pollOptions || !Array.isArray(pollOptions) || pollOptions.length < 2) {
+        console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'invalid_poll', timestamp: new Date().toISOString() }));
         return new Response(
           JSON.stringify({ error: 'Poll requires at least 2 options' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
