@@ -43,6 +43,7 @@ const EmailMarketing = lazy(() => import("./pages/EmailMarketing"));
 const LiveOrtopedicosLP = lazy(() => import("./pages/LiveOrtopedicosLP"));
 const LiveOrtopedicosAbrilLP = lazy(() => import("./pages/LiveOrtopedicosAbrilLP"));
 const PresenterDashboard = lazy(() => import("./pages/PresenterDashboard"));
+const LiveteAnotadorDownload = lazy(() => import("./pages/LiveteAnotadorDownload"));
 
 const queryClient = new QueryClient();
 
@@ -99,6 +100,7 @@ const App = () => (
               <Route path="/admin" element={<ProtectedRoute requiredModule="admin"><Admin /></ProtectedRoute>} />
               <Route path="/ai-agents" element={<ProtectedRoute requiredModule="admin"><AIAgents /></ProtectedRoute>} />
               <Route path="/presenter/:eventId" element={<ProtectedRoute requiredModule="events"><PresenterDashboard /></ProtectedRoute>} />
+              <Route path="/livete-anotador" element={<ProtectedRoute requiredModule="events"><LiveteAnotadorDownload /></ProtectedRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
 
