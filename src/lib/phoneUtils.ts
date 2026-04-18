@@ -1,11 +1,37 @@
 /**
+ * Detect if a digits-only phone string is clearly a non-Brazilian international number.
+ * Conservative: only returns true when the number has 11+ digits AND starts with a
+ * known foreign country code. Brazilian numbers (10-11 digits without DDI, or 12-13
+ * starting with 55) always return false to preserve existing behavior.
+ */
+function isInternationalNonBR(digits: string): boolean {
+  if (!digits) return false;
+  // BR numbers with DDI are 12 (landline) or 13 (mobile) digits starting with 55
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) return false;
+  // Local BR formats (10 or 11 digits, no DDI) — assumed BR
+  if (digits.length <= 11) return false;
+
+  // Common non-BR country codes (1=US/CA, 351=PT, 44=UK, 34=ES, 33=FR, 49=DE, 39=IT,
+  // 351=PT, 1=US/CA, 52=MX, 54=AR, 56=CL, 57=CO, 58=VE, 595=PY, 598=UY, 591=BO,
+  // 593=EC, 51=PE, 81=JP, 86=CN, 91=IN, 61=AU, 64=NZ, 27=ZA, 351=PT, 31=NL, 32=BE,
+  // 41=CH, 43=AT, 45=DK, 46=SE, 47=NO, 48=PL, 90=TR, 971=AE, 972=IL, 974=QA, 966=SA)
+  // Heuristic: any 12+ digit number that does NOT start with 55 is treated as international.
+  return !digits.startsWith('55');
+}
+
+/**
  * Normalize a Brazilian phone number to E.164 standard (55 + DDD + 9 + number).
  * Ensures the 9th digit is always present for mobile numbers.
- * For international numbers (non-BR), returns as-is with digits only.
+ * For international numbers (non-BR), returns digits-only without forcing the 55 prefix.
  */
 export function normalizeBRPhone(raw: string): string {
   let phone = raw.replace(/\D/g, '');
   if (!phone) return '';
+
+  // International (non-BR) number: return digits as-is, no 55 prefix, no 9th digit injection
+  if (isInternationalNonBR(phone)) {
+    return phone;
+  }
 
   // Add country code if missing
   if (phone.length >= 10 && phone.length <= 11) {

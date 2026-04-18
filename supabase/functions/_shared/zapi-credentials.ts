@@ -1,10 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 /**
- * Normalize a Brazilian phone number:
+ * Normalize a phone number for Z-API:
  * - Strip all non-digit characters
- * - Add country code 55 if missing
- * - Skip group IDs (contain @ or start with 120)
+ * - Skip group IDs (contain @ or '-' or start with '120')
+ * - Brazilian numbers (10-11 local digits, or 12-13 starting with 55): ensure '55' prefix
+ * - International non-BR numbers (12+ digits NOT starting with 55): return as-is, do NOT prepend '55'
  */
 export function normalizePhone(phone: string): string {
   if (!phone) return phone;
@@ -12,8 +13,24 @@ export function normalizePhone(phone: string): string {
   if (phone.includes('@') || phone.includes('-')) return phone;
   let digits = phone.replace(/\D/g, '');
   if (digits.startsWith('120')) return digits; // group
-  if (!digits.startsWith('55')) digits = '55' + digits;
-  return digits;
+
+  // BR with DDI already present (12 landline / 13 mobile starting with 55) — keep
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    return digits;
+  }
+
+  // Local BR format (10 or 11 digits, no DDI) — prepend 55
+  if (digits.length >= 10 && digits.length <= 11) {
+    return '55' + digits;
+  }
+
+  // International (12+ digits not starting with 55) — return as-is, NO 55 prefix
+  if (digits.length >= 12 && !digits.startsWith('55')) {
+    return digits;
+  }
+
+  // Fallback (shorter/unknown): keep previous behavior of prepending 55
+  return '55' + digits;
 }
 
 interface ZApiCredentials {
