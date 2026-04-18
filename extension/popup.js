@@ -62,6 +62,25 @@ $("btn-stop").addEventListener("click", async () => {
   updateUI(false);
 });
 
+$("btn-test").addEventListener("click", async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url?.includes("instagram.com")) {
+    setStatus("error", "❌ Abra a live do Instagram primeiro!");
+    return;
+  }
+  setStatus("inactive", "🔍 Testando... abra o Console (F12) na aba do IG.");
+  try {
+    const response = await chrome.tabs.sendMessage(tab.id, { action: "DIAGNOSE" });
+    if (response?.ok) {
+      setStatus("active", `✅ ${response.found} comentários detectados! Ex: "${response.sample || "—"}"`);
+    } else {
+      setStatus("error", `❌ ${response?.reason || "Não localizou a lista. Veja o Console (F12)."}`);
+    }
+  } catch (e) {
+    setStatus("error", "❌ Content script não carregou. Recarregue a página da live (F5) e tente de novo.");
+  }
+});
+
 function updateUI(running, stats) {
   $("btn-start").style.display = running ? "none" : "block";
   $("btn-stop").style.display = running ? "block" : "none";
