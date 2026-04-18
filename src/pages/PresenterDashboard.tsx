@@ -245,7 +245,7 @@ export default function PresenterDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex">
+    <div className="min-h-screen bg-muted/40 dark:bg-background text-foreground flex">
       {/* Main content */}
       <div className="flex-1 p-4 md:p-6 overflow-y-auto">
       {/* Header */}
@@ -279,39 +279,39 @@ export default function PresenterDashboard() {
 
       {/* Metrics Bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <Card className="bg-green-900/30 border-green-700/50">
+        <Card className="bg-green-600 border-green-700 dark:bg-green-900/30 dark:border-green-700/50 shadow-md">
           <CardContent className="p-4 flex items-center gap-3">
-            <DollarSign className="h-8 w-8 text-green-400" />
+            <DollarSign className="h-8 w-8 text-white dark:text-green-400" />
             <div>
-              <p className="text-xs text-green-300">Faturamento</p>
-              <p className="text-xl font-bold text-green-100">R$ {metrics.totalRevenue.toFixed(0)}</p>
+              <p className="text-xs font-semibold text-green-50 dark:text-green-300">Faturamento</p>
+              <p className="text-xl font-bold text-white dark:text-green-100">R$ {metrics.totalRevenue.toFixed(0)}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-blue-900/30 border-blue-700/50">
+        <Card className="bg-blue-600 border-blue-700 dark:bg-blue-900/30 dark:border-blue-700/50 shadow-md">
           <CardContent className="p-4 flex items-center gap-3">
-            <CheckCircle className="h-8 w-8 text-blue-400" />
+            <CheckCircle className="h-8 w-8 text-white dark:text-blue-400" />
             <div>
-              <p className="text-xs text-blue-300">Pedidos Pagos</p>
-              <p className="text-xl font-bold text-blue-100">{metrics.totalPaid}</p>
+              <p className="text-xs font-semibold text-blue-50 dark:text-blue-300">Pedidos Pagos</p>
+              <p className="text-xl font-bold text-white dark:text-blue-100">{metrics.totalPaid}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-purple-900/30 border-purple-700/50">
+        <Card className="bg-purple-600 border-purple-700 dark:bg-purple-900/30 dark:border-purple-700/50 shadow-md">
           <CardContent className="p-4 flex items-center gap-3">
-            <TrendingUp className="h-8 w-8 text-purple-400" />
+            <TrendingUp className="h-8 w-8 text-white dark:text-purple-400" />
             <div>
-              <p className="text-xs text-purple-300">Ticket Médio</p>
-              <p className="text-xl font-bold text-purple-100">R$ {metrics.avgTicket.toFixed(0)}</p>
+              <p className="text-xs font-semibold text-purple-50 dark:text-purple-300">Ticket Médio</p>
+              <p className="text-xl font-bold text-white dark:text-purple-100">R$ {metrics.avgTicket.toFixed(0)}</p>
             </div>
           </CardContent>
         </Card>
-        <Card className="bg-yellow-900/30 border-yellow-700/50">
+        <Card className="bg-amber-500 border-amber-600 dark:bg-yellow-900/30 dark:border-yellow-700/50 shadow-md">
           <CardContent className="p-4 flex items-center gap-3">
-            <Clock className="h-8 w-8 text-yellow-400" />
+            <Clock className="h-8 w-8 text-white dark:text-yellow-400" />
             <div>
-              <p className="text-xs text-yellow-300">Aguardando</p>
-              <p className="text-xl font-bold text-yellow-100">{metrics.pendingCount}</p>
+              <p className="text-xs font-semibold text-amber-50 dark:text-yellow-300">Aguardando</p>
+              <p className="text-xl font-bold text-white dark:text-yellow-100">{metrics.pendingCount}</p>
             </div>
           </CardContent>
         </Card>
