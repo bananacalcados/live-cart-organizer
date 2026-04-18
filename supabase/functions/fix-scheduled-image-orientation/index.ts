@@ -1,3 +1,11 @@
+// ⚠️ FUNÇÃO ATUALMENTE INOPERANTE.
+// Falha 100% das invocações com "Web Cache is not available in this context"
+// (ImageMagick WASM incompatível com o Deno Edge Runtime do Supabase).
+// Mantida no repo pendente de decisão de produto sobre o Caminho 2
+// (substituir por lib de imagem compatível) ou remoção definitiva.
+// NÃO invocar em produção — o erro é engolido pelo try/catch interno
+// e a função retorna HTTP 200 mesmo falhando.
+
 // Corrige a orientação EXIF de imagens já no storage que estão referenciadas em
 // mensagens agendadas para grupos VIP (status='pending'/'sending'). Para cada
 // media_url do tipo 'image', baixa, aplica autoOrient, regrava no bucket com novo
