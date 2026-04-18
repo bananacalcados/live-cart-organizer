@@ -20,7 +20,7 @@ let commentListEl = null;
 let scanCount = 0;
 
 // ─── Listener do popup ───
-chrome.runtime.onMessage.addListener((msg) => {
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action === "START_CAPTURE") {
     eventId = msg.eventId;
     sourcePC = msg.sourcePC;
@@ -29,7 +29,52 @@ chrome.runtime.onMessage.addListener((msg) => {
     startCapture();
   }
   if (msg.action === "STOP_CAPTURE") stopCapture();
+  if (msg.action === "DIAGNOSE") {
+    const result = runDiagnose();
+    sendResponse(result);
+    return true;
+  }
 });
+
+function runDiagnose() {
+  console.log("[Livete] 🔍 === DIAGNÓSTICO ===");
+  console.log("[Livete] URL:", location.href);
+
+  const input = document.querySelector(
+    'textarea[placeholder*="omentário" i], textarea[placeholder*="omment" i], input[placeholder*="omentário" i]'
+  );
+  console.log("[Livete] Input encontrado?", !!input, input?.placeholder);
+
+  const list = findCommentList();
+  if (!list) {
+    console.warn("[Livete] ❌ Lista de comentários NÃO localizada.");
+    return { ok: false, reason: "Lista de comentários não localizada. Você está na página da live?" };
+  }
+  console.log("[Livete] ✅ Container:", list);
+
+  const links = list.querySelectorAll('a[href^="/"]');
+  console.log("[Livete] Links no container:", links.length);
+
+  const samples = [];
+  for (const link of links) {
+    const href = link.getAttribute("href") || "";
+    const m = href.match(/^\/([A-Za-z0-9._]+)\/?$/);
+    if (!m) continue;
+    const username = m[1];
+    if (["explore", "reels", "direct", "stories", "p"].includes(username)) continue;
+    const row = link.closest("li") || link.parentElement?.parentElement || link.parentElement;
+    const txt = (row?.innerText || "").replace(/\s+/g, " ").trim();
+    if (txt) samples.push(`${username}: ${txt.slice(0, 80)}`);
+  }
+  console.log("[Livete] Amostras:", samples.slice(0, 10));
+
+  return {
+    ok: samples.length > 0,
+    found: samples.length,
+    sample: samples[0] || null,
+    reason: samples.length === 0 ? "Container achado mas sem comentários extraíveis. Veja Console." : null,
+  };
+}
 
 // Auto-start em refresh
 chrome.storage.local.get(["isRunning", "eventId", "pcName", "pcNumber"], (data) => {
