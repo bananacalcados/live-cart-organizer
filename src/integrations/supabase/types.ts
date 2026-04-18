@@ -10325,6 +10325,18 @@ export type Database = {
           whatsapp: string
         }[]
       }
+      get_dispatchable_scheduled_messages: {
+        Args: { p_limit?: number }
+        Returns: {
+          block_order: number
+          campaign_id: string
+          id: string
+          locked_until: string
+          message_group_id: string
+          scheduled_at: string
+          status: string
+        }[]
+      }
       get_inventory_summary: {
         Args: never
         Returns: {
@@ -10539,6 +10551,15 @@ export type Database = {
           p_whatsapp: string
         }
         Returns: undefined
+      }
+      try_claim_scheduled_message: {
+        Args: { p_lock_duration_seconds?: number; p_message_id: string }
+        Returns: {
+          claimed_id: string
+          message_group_id: string
+          previous_locked_until: string
+          previous_status: string
+        }[]
       }
       unaccent: { Args: { "": string }; Returns: string }
       update_lead_recovery: {
