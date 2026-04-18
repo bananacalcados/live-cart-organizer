@@ -15,6 +15,8 @@ import {
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
+import { LiveInstagramComments } from "@/components/events/LiveInstagramComments";
+import { Instagram } from "lucide-react";
 
 interface PresenterAlert {
   id: string;
@@ -318,6 +320,9 @@ export default function PresenterDashboard() {
         <TabsList className="mb-4 bg-muted-foreground/10">
           <TabsTrigger value="live" className="gap-1 data-[state=active]:bg-primary/20">
             <Bell className="h-4 w-4" /> Alertas & Pedidos
+          </TabsTrigger>
+          <TabsTrigger value="instagram" className="gap-1 data-[state=active]:bg-primary/20">
+            <Instagram className="h-4 w-4" /> Comentários IG
           </TabsTrigger>
           <TabsTrigger value="catalog" className="gap-1 data-[state=active]:bg-primary/20">
             <Package className="h-4 w-4" /> Catálogo da Live
