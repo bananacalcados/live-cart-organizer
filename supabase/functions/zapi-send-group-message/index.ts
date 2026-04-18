@@ -27,9 +27,25 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const reqStartTime = Date.now();
+  console.log(JSON.stringify({
+    tag: 'ZAPI_SEND_INVOKED',
+    timestamp: new Date().toISOString(),
+  }));
+
   try {
     const reqBody = await req.json();
     const { groupId, message, type = 'text', mediaUrl, caption, campaignId, groupDbId, mentionAll, whatsapp_number_id }: SendGroupRequest = reqBody;
+
+    console.log(JSON.stringify({
+      tag: 'ZAPI_SEND_BODY',
+      groupId: reqBody?.groupId,
+      type: reqBody?.type,
+      hasMediaUrl: !!reqBody?.mediaUrl,
+      hasMessage: !!reqBody?.message,
+      whatsappNumberId: reqBody?.whatsapp_number_id,
+      timestamp: new Date().toISOString(),
+    }));
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
