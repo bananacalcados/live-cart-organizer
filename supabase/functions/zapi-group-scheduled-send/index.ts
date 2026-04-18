@@ -120,10 +120,15 @@ serve(async (req) => {
       );
     }
 
+    // Increment execution_count for diagnostic of residual concurrency
+    await supabase.rpc('increment_execution_count', {
+      message_id: scheduledMessageId,
+    });
+
     // Also mark sibling blocks as sending so cron cannot pick another block from the same grouped message.
     if (claimedMsg.message_group_id) {
       await supabase.from('group_campaign_scheduled_messages')
-        .update({ status: 'sending' })
+        .update({ status: 'sending', locked_until: lockUntil })
         .eq('message_group_id', claimedMsg.message_group_id)
         .in('status', ['pending', 'grouped']);
     }
