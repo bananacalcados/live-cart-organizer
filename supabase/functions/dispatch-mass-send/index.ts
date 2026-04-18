@@ -6,9 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 30;
-const CONCURRENCY = 5;
+const BATCH_SIZE = 60;
+const CONCURRENCY = 8;
 const MAX_EXECUTION_MS = 25_000; // 25s safety margin
+const CHUNK_DELAY_MS = 600;
 
 interface VariableConfig {
   mode: string;
