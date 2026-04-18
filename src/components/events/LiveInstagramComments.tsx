@@ -309,10 +309,10 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                       <p className="text-sm text-foreground mb-1 break-words">{comment.comment_text}</p>
 
                       {hasCart && cart && (
-                        <div className="mt-2 flex items-center justify-between gap-2 p-2 rounded bg-orange-500/15 border border-orange-500/30">
+                        <div className="mt-2 flex items-center justify-between gap-2 p-2 rounded bg-orange-600 dark:bg-orange-500/15 border border-orange-700 dark:border-orange-500/30">
                           <div className="flex items-center gap-2 text-xs flex-1 min-w-0">
-                            <ShoppingCart className="h-3.5 w-3.5 text-orange-300 shrink-0" />
-                            <span className="text-orange-200 truncate">
+                            <ShoppingCart className="h-3.5 w-3.5 text-white dark:text-orange-300 shrink-0" />
+                            <span className="text-white dark:text-orange-200 truncate font-medium">
                               <strong>{cart.productCount} item(s)</strong> · R$ {cart.total.toFixed(2)}
                             </span>
                           </div>
@@ -320,7 +320,7 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 text-[10px] text-orange-200 hover:bg-orange-500/30 px-2 gap-1"
+                              className="h-6 text-[10px] text-white dark:text-orange-200 hover:bg-orange-700 dark:hover:bg-orange-500/30 px-2 gap-1 font-semibold"
                               onClick={() => onOpenOrder(cart.orderId)}
                             >
                               Ver pedido <ExternalLink className="h-3 w-3" />
