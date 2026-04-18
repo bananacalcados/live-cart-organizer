@@ -360,6 +360,14 @@ serve(async (req) => {
       console.log(`Batch done. ${updatedSentIds.length}/${allGroups.length} groups processed so far`);
     }
 
+    if (updatePayload.status === 'sending') {
+      // Renew the lock for the next cron invocation
+      updatePayload.locked_until = new Date(Date.now() + 90_000).toISOString();
+    } else {
+      // Release the lock when the message reaches a final state
+      updatePayload.locked_until = null;
+    }
+
     if (messageGroupId) {
       await supabase.from('group_campaign_scheduled_messages')
         .update(updatePayload)
