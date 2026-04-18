@@ -152,6 +152,7 @@ serve(async (req) => {
       endpoint = `${baseUrl}/send-document`;
       body = { phone: groupId, document: mediaUrl, fileName: caption || 'document' };
     } else {
+      console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'invalid_type', timestamp: new Date().toISOString() }));
       return new Response(
         JSON.stringify({ error: 'Invalid type or missing mediaUrl' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
