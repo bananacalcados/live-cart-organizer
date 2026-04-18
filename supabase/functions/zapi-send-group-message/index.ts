@@ -188,6 +188,7 @@ serve(async (req) => {
         }).eq('campaign_id', campaignId).eq('group_id', groupDbId);
       }
 
+      console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'zapi_http_error', httpStatus: res.status, timestamp: new Date().toISOString() }));
       return new Response(
         JSON.stringify({ error: 'Failed to send', details: data }),
         { status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
