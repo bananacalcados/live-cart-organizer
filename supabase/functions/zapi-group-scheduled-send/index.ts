@@ -84,11 +84,17 @@ serve(async (req) => {
     }
 
     const lockUntil = new Date(Date.now() + 90_000).toISOString();
+    const nowForClaim = new Date().toISOString();
     const { data: claimedRows, error: claimErr } = await supabase
       .from('group_campaign_scheduled_messages')
-      .update({ status: 'sending' })
+      .update({
+        status: 'sending',
+        locked_until: lockUntil,
+        last_execution_at: nowForClaim,
+      })
       .eq('id', scheduledMessageId)
-      .in('status', ['pending', 'sending'])
+      .eq('status', 'pending')
+      .or(`locked_until.is.null,locked_until.lt.${nowForClaim}`)
       .select('id, message_group_id');
 
     if (claimErr) {
@@ -114,10 +120,15 @@ serve(async (req) => {
       );
     }
 
+    // Increment execution_count for diagnostic of residual concurrency
+    await supabase.rpc('increment_execution_count', {
+      message_id: scheduledMessageId,
+    });
+
     // Also mark sibling blocks as sending so cron cannot pick another block from the same grouped message.
     if (claimedMsg.message_group_id) {
       await supabase.from('group_campaign_scheduled_messages')
-        .update({ status: 'sending' })
+        .update({ status: 'sending', locked_until: lockUntil })
         .eq('message_group_id', claimedMsg.message_group_id)
         .in('status', ['pending', 'grouped']);
     }
@@ -247,6 +258,20 @@ serve(async (req) => {
         break;
       }
 
+      // Re-fetch sent_group_ids for idempotency in case of continuation
+      const { data: freshMsg } = await supabase
+        .from('group_campaign_scheduled_messages')
+        .select('sent_group_ids')
+        .eq('id', scheduledMessageId)
+        .single();
+
+      const currentSentIds: string[] = freshMsg?.sent_group_ids || [];
+
+      if (currentSentIds.includes(group.id)) {
+        console.log(`Skipping group ${group.id}: already sent`);
+        continue;
+      }
+
       let groupSuccess = true;
       for (let blockIdx = 0; blockIdx < allBlocks.length; blockIdx++) {
         const block = allBlocks[blockIdx];
@@ -333,6 +358,14 @@ serve(async (req) => {
       // Keep as 'sending' — cron will pick it up again
       updatePayload.status = 'sending';
       console.log(`Batch done. ${updatedSentIds.length}/${allGroups.length} groups processed so far`);
+    }
+
+    if (updatePayload.status === 'sending') {
+      // Renew the lock for the next cron invocation
+      updatePayload.locked_until = new Date(Date.now() + 90_000).toISOString();
+    } else {
+      // Release the lock when the message reaches a final state
+      updatePayload.locked_until = null;
     }
 
     if (messageGroupId) {
