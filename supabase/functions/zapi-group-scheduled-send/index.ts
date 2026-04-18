@@ -84,11 +84,17 @@ serve(async (req) => {
     }
 
     const lockUntil = new Date(Date.now() + 90_000).toISOString();
+    const nowForClaim = new Date().toISOString();
     const { data: claimedRows, error: claimErr } = await supabase
       .from('group_campaign_scheduled_messages')
-      .update({ status: 'sending' })
+      .update({
+        status: 'sending',
+        locked_until: lockUntil,
+        last_execution_at: nowForClaim,
+      })
       .eq('id', scheduledMessageId)
-      .in('status', ['pending', 'sending'])
+      .eq('status', 'pending')
+      .or(`locked_until.is.null,locked_until.lt.${nowForClaim}`)
       .select('id, message_group_id');
 
     if (claimErr) {
