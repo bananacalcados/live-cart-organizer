@@ -56,6 +56,7 @@ serve(async (req) => {
       token = creds.token;
       clientToken = creds.clientToken;
     } catch (e) {
+      console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'creds_error', timestamp: new Date().toISOString() }));
       return new Response(
         JSON.stringify({ error: 'Z-API credentials not configured', details: e.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
