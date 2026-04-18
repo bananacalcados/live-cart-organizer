@@ -258,6 +258,20 @@ serve(async (req) => {
         break;
       }
 
+      // Re-fetch sent_group_ids for idempotency in case of continuation
+      const { data: freshMsg } = await supabase
+        .from('group_campaign_scheduled_messages')
+        .select('sent_group_ids')
+        .eq('id', scheduledMessageId)
+        .single();
+
+      const currentSentIds: string[] = freshMsg?.sent_group_ids || [];
+
+      if (currentSentIds.includes(group.id)) {
+        console.log(`Skipping group ${group.id}: already sent`);
+        continue;
+      }
+
       let groupSuccess = true;
       for (let blockIdx = 0; blockIdx < allBlocks.length; blockIdx++) {
         const block = allBlocks[blockIdx];
