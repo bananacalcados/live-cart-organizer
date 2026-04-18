@@ -15,8 +15,10 @@ const SPEED_DELAYS: Record<string, [number, number]> = {
 
 const INTER_BLOCK_DELAY = 1500;
 const BASE_MAX_GROUPS_PER_BATCH = 5;
-const MAX_FUNCTION_TIME_MS = 50000; // 50s safety margin (limit is 60s)
-const ESTIMATED_API_CALL_MS = 2000; // ~2s per API call
+// Margem de segurança: limite real é 60s, paramos antes para garantir flush do update
+const MAX_FUNCTION_TIME_MS = 45000;
+const TIME_GUARD_MS = 8000; // se faltar menos que isso, paramos antes do próximo grupo
+const ESTIMATED_API_CALL_MS = 3500; // Z-API real leva 2-5s
 
 
 serve(async (req) => {
@@ -109,6 +111,18 @@ serve(async (req) => {
       );
     }
 
+    if (claimedMsg.was_recovery) {
+      console.log(JSON.stringify({
+        tag: 'RECOVERED_ORPHANED_MESSAGE',
+        scheduledMessageId,
+        messageGroupId: claimedMsg.message_group_id,
+        timestamp: new Date().toISOString(),
+      }));
+    }
+
+    // Marca o início do tempo de execução LOGO APÓS o claim, para incluir queries de setup
+    const functionStartTime = Date.now();
+
     // Lock used for renewal in final update and for sibling blocks update below
     const lockUntil = new Date(Date.now() + 90_000).toISOString();
 
@@ -183,7 +197,7 @@ serve(async (req) => {
       // All groups already processed - finalize
       const totalSent = msg.sent_count || alreadySentGroupIds.length;
       await supabase.from('group_campaign_scheduled_messages')
-        .update({ status: 'sent', sent_at: new Date().toISOString(), sent_count: totalSent, failed_count: msg.failed_count || 0 })
+        .update({ status: 'sent', sent_at: new Date().toISOString(), sent_count: totalSent, failed_count: msg.failed_count || 0, locked_until: null })
         .eq('id', scheduledMessageId);
       return new Response(
         JSON.stringify({ success: true, complete: true, sentCount: totalSent, failedCount: 0, total: allGroups.length }),
@@ -211,16 +225,23 @@ serve(async (req) => {
       }
     }
 
-    // Dynamically calculate batch size based on block count to stay under timeout
+    // Dynamically calculate batch size considering ALL real delays (API calls, inter-block, inter-group)
     const blockCount = allBlocks.length;
-    const estimatedTimePerGroup = blockCount * (INTER_BLOCK_DELAY + ESTIMATED_API_CALL_MS);
+    const avgInterGroupDelay = (minDelay + maxDelay) / 2;
+    const timePerGroup =
+      (blockCount * ESTIMATED_API_CALL_MS) +           // chamadas Z-API (1 por bloco)
+      ((blockCount - 1) * INTER_BLOCK_DELAY) +         // delay entre blocos
+      avgInterGroupDelay;                              // delay até o próximo grupo
+
     const dynamicBatchSize = Math.max(
       1,
-      Math.min(BASE_MAX_GROUPS_PER_BATCH, Math.floor(MAX_FUNCTION_TIME_MS / estimatedTimePerGroup)),
+      Math.min(BASE_MAX_GROUPS_PER_BATCH, Math.floor(MAX_FUNCTION_TIME_MS / timePerGroup)),
     );
 
+    console.log(`Batch sizing: ${blockCount} blocks, ~${Math.round(timePerGroup / 1000)}s/group, batch=${dynamicBatchSize}`);
+
     const batch = pendingGroups.slice(0, dynamicBatchSize);
-    console.log(`Processing batch: ${batch.length} groups (${pendingGroups.length} remaining of ${allGroups.length} total, ${blockCount} blocks, ~${Math.round(estimatedTimePerGroup / 1000)}s/group)`);
+    console.log(`Processing batch: ${batch.length} groups (${pendingGroups.length} remaining of ${allGroups.length} total, ${blockCount} blocks)`);
 
     const replaceVars = (text: string, groupName: string): string => {
       let result = text;
@@ -238,197 +259,203 @@ serve(async (req) => {
     const newlySentIds: string[] = [];
     let pausedDuringRun: string | null = null;
 
-    for (const group of batch) {
-      pausedDuringRun = await getPausedGroupSendUntil(supabase);
-      if (pausedDuringRun) {
-        console.log(`Stopping batch early because group sends are paused until ${pausedDuringRun}`);
-        break;
-      }
+    try {
+      for (const group of batch) {
+        // Time guard: stop early if not enough time remains to flush state safely
+        const elapsed = Date.now() - functionStartTime;
+        const remaining = MAX_FUNCTION_TIME_MS - elapsed;
+        if (remaining < TIME_GUARD_MS) {
+          console.warn(`Time guard triggered: ${elapsed}ms elapsed, ${remaining}ms remaining. Stopping batch early to flush state.`);
+          break;
+        }
 
-      // Re-fetch sent_group_ids for idempotency in case of continuation
-      const { data: freshMsg } = await supabase
-        .from('group_campaign_scheduled_messages')
-        .select('sent_group_ids')
-        .eq('id', scheduledMessageId)
-        .single();
+        pausedDuringRun = await getPausedGroupSendUntil(supabase);
+        if (pausedDuringRun) {
+          console.log(`Stopping batch early because group sends are paused until ${pausedDuringRun}`);
+          break;
+        }
 
-      const currentSentIds: string[] = freshMsg?.sent_group_ids || [];
+        // Re-fetch sent_group_ids for idempotency in case of continuation
+        const { data: freshMsg } = await supabase
+          .from('group_campaign_scheduled_messages')
+          .select('sent_group_ids')
+          .eq('id', scheduledMessageId)
+          .single();
 
-      if (currentSentIds.includes(group.id)) {
-        console.log(`Skipping group ${group.id}: already sent`);
-        continue;
-      }
+        const currentSentIds: string[] = freshMsg?.sent_group_ids || [];
 
-      let groupSuccess = true;
-      for (let blockIdx = 0; blockIdx < allBlocks.length; blockIdx++) {
-        const block = allBlocks[blockIdx];
-        try {
-          const body: Record<string, unknown> = {
-            groupId: group.group_id,
-            mentionAll: block.mention_all || false,
-            whatsapp_number_id: resolvedNumberId,
-          };
+        if (currentSentIds.includes(group.id)) {
+          console.log(`Skipping group ${group.id}: already sent`);
+          continue;
+        }
 
-          const messageContent = block.message_content ? replaceVars(block.message_content, group.name) : '';
+        let groupSuccess = true;
+        for (let blockIdx = 0; blockIdx < allBlocks.length; blockIdx++) {
+          const block = allBlocks[blockIdx];
+          try {
+            const body: Record<string, unknown> = {
+              groupId: group.group_id,
+              mentionAll: block.mention_all || false,
+              whatsapp_number_id: resolvedNumberId,
+            };
 
-          if (block.message_type === 'poll' && block.poll_options) {
-            body.type = 'poll';
-            body.pollOptions = block.poll_options;
-            body.message = messageContent;
-            body.pollMaxOptions = block.poll_max_options ?? 1;
-          } else if (block.message_type !== 'text' && block.media_url) {
-            body.type = block.message_type;
-            body.mediaUrl = block.media_url;
-            body.caption = messageContent;
-            body.message = messageContent;
-          } else {
-            body.type = 'text';
-            body.message = messageContent;
-          }
+            const messageContent = block.message_content ? replaceVars(block.message_content, group.name) : '';
 
-          console.log(JSON.stringify({
-            tag: 'PRE_SEND',
-            scheduledMessageId,
-            groupInternalId: group.id,
-            groupZapiId: group.group_id,
-            groupName: group.name,
-            blockOrder: blockIdx,
-            timestamp: new Date().toISOString(),
-          }));
+            if (block.message_type === 'poll' && block.poll_options) {
+              body.type = 'poll';
+              body.pollOptions = block.poll_options;
+              body.message = messageContent;
+              body.pollMaxOptions = block.poll_max_options ?? 1;
+            } else if (block.message_type !== 'text' && block.media_url) {
+              body.type = block.message_type;
+              body.mediaUrl = block.media_url;
+              body.caption = messageContent;
+              body.message = messageContent;
+            } else {
+              body.type = 'text';
+              body.message = messageContent;
+            }
 
-          const sendRes = await fetch(`${supabaseUrl}/functions/v1/zapi-send-group-message`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body),
-          });
+            console.log(JSON.stringify({
+              tag: 'PRE_SEND',
+              scheduledMessageId,
+              groupInternalId: group.id,
+              groupZapiId: group.group_id,
+              groupName: group.name,
+              blockOrder: blockIdx,
+              timestamp: new Date().toISOString(),
+            }));
 
-          console.log(JSON.stringify({
-            tag: 'POST_SEND',
-            scheduledMessageId,
-            groupInternalId: group.id,
-            blockOrder: blockIdx,
-            httpStatus: sendRes.status,
-            httpOk: sendRes.ok,
-            timestamp: new Date().toISOString(),
-          }));
+            const sendRes = await fetch(`${supabaseUrl}/functions/v1/zapi-send-group-message`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${supabaseKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(body),
+            });
 
-          const sendData = await sendRes.json();
+            console.log(JSON.stringify({
+              tag: 'POST_SEND',
+              scheduledMessageId,
+              groupInternalId: group.id,
+              blockOrder: blockIdx,
+              httpStatus: sendRes.status,
+              httpOk: sendRes.ok,
+              timestamp: new Date().toISOString(),
+            }));
 
-          console.log(JSON.stringify({
-            tag: 'PARSED_RESPONSE',
-            scheduledMessageId,
-            groupInternalId: group.id,
-            blockOrder: blockIdx,
-            sendDataKeys: Object.keys(sendData || {}),
-            sendDataSuccess: sendData?.success,
-            sendDataError: sendData?.error,
-            sendDataInner: sendData?.data ? Object.keys(sendData.data) : null,
-            sendDataInnerError: sendData?.data?.error,
-            timestamp: new Date().toISOString(),
-          }));
+            const sendData = await sendRes.json();
 
-          if (!sendRes.ok || !sendData.success) {
+            console.log(JSON.stringify({
+              tag: 'PARSED_RESPONSE',
+              scheduledMessageId,
+              groupInternalId: group.id,
+              blockOrder: blockIdx,
+              sendDataKeys: Object.keys(sendData || {}),
+              sendDataSuccess: sendData?.success,
+              sendDataError: sendData?.error,
+              sendDataInner: sendData?.data ? Object.keys(sendData.data) : null,
+              sendDataInnerError: sendData?.data?.error,
+              timestamp: new Date().toISOString(),
+            }));
+
+            if (!sendRes.ok || !sendData.success) {
+              groupSuccess = false;
+            }
+          } catch (err) {
+            console.error(JSON.stringify({
+              tag: 'SEND_EXCEPTION',
+              scheduledMessageId,
+              groupInternalId: group.id,
+              blockOrder: blockIdx,
+              errorMessage: err instanceof Error ? err.message : String(err),
+              errorStack: err instanceof Error ? err.stack : null,
+              timestamp: new Date().toISOString(),
+            }));
             groupSuccess = false;
           }
-        } catch (err) {
-          console.error(JSON.stringify({
-            tag: 'SEND_EXCEPTION',
-            scheduledMessageId,
-            groupInternalId: group.id,
-            blockOrder: blockIdx,
-            errorMessage: err instanceof Error ? err.message : String(err),
-            errorStack: err instanceof Error ? err.stack : null,
-            timestamp: new Date().toISOString(),
-          }));
-          groupSuccess = false;
+
+          if (blockIdx < allBlocks.length - 1) {
+            await new Promise(r => setTimeout(r, INTER_BLOCK_DELAY));
+          }
         }
 
-        if (blockIdx < allBlocks.length - 1) {
-          await new Promise(r => setTimeout(r, INTER_BLOCK_DELAY));
+        if (groupSuccess) {
+          batchSentCount++;
+        } else {
+          batchFailedCount++;
+        }
+
+        console.log(JSON.stringify({
+          tag: 'GROUP_RESULT',
+          scheduledMessageId,
+          groupInternalId: group.id,
+          blockOrder: 'all_blocks_done',
+          groupSuccess,
+          willPushToSentIds: true,
+          timestamp: new Date().toISOString(),
+        }));
+
+        newlySentIds.push(group.id);
+
+        // Delay between groups (skip after last in batch)
+        if (group !== batch[batch.length - 1]) {
+          const delay = minDelay + Math.random() * (maxDelay - minDelay);
+          await new Promise(r => setTimeout(r, delay));
         }
       }
+    } catch (loopErr) {
+      console.error('Unexpected error in send loop:', loopErr);
+    } finally {
+      // Update progress — MUST run even if loop threw
+      const updatedSentIds = [...alreadySentGroupIds, ...newlySentIds];
+      const totalSent = (msg.sent_count || 0) + batchSentCount;
+      const totalFailed = (msg.failed_count || 0) + batchFailedCount;
+      const isComplete = updatedSentIds.length >= allGroups.length;
 
-      if (groupSuccess) {
-        batchSentCount++;
+      const updatePayload: Record<string, unknown> = {
+        sent_group_ids: updatedSentIds,
+        sent_count: totalSent,
+        failed_count: totalFailed,
+      };
+
+      if (pausedDuringRun) {
+        updatePayload.status = 'cancelled';
+        updatePayload.locked_until = null;
+      } else if (isComplete) {
+        updatePayload.status = totalFailed === allGroups.length ? 'failed' : 'sent';
+        updatePayload.sent_at = new Date().toISOString();
+        updatePayload.locked_until = null;
       } else {
-        batchFailedCount++;
+        // Keep as 'sending' — cron will pick it up again (RPC now accepts sending+expired-lock)
+        updatePayload.status = 'sending';
+        updatePayload.locked_until = new Date(Date.now() + 90_000).toISOString();
       }
 
-      console.log(JSON.stringify({
-        tag: 'GROUP_RESULT',
-        scheduledMessageId,
-        groupInternalId: group.id,
-        blockOrder: 'all_blocks_done',
-        groupSuccess,
-        willPushToSentIds: true,
-        timestamp: new Date().toISOString(),
-      }));
-
-      newlySentIds.push(group.id);
-
-      // Delay between groups (skip after last in batch)
-      if (group !== batch[batch.length - 1]) {
-        const delay = minDelay + Math.random() * (maxDelay - minDelay);
-        await new Promise(r => setTimeout(r, delay));
+      if (messageGroupId) {
+        await supabase.from('group_campaign_scheduled_messages')
+          .update(updatePayload)
+          .eq('message_group_id', messageGroupId);
+      } else {
+        await supabase.from('group_campaign_scheduled_messages')
+          .update(updatePayload)
+          .eq('id', scheduledMessageId);
       }
-    }
 
-    // Update progress
-    const updatedSentIds = [...alreadySentGroupIds, ...newlySentIds];
-    const totalSent = (msg.sent_count || 0) + batchSentCount;
-    const totalFailed = (msg.failed_count || 0) + batchFailedCount;
-    const isComplete = updatedSentIds.length >= allGroups.length;
-
-    const updatePayload: Record<string, unknown> = {
-      sent_group_ids: updatedSentIds,
-      sent_count: totalSent,
-      failed_count: totalFailed,
-    };
-
-    if (pausedDuringRun) {
-      updatePayload.status = 'cancelled';
-      console.log(`Batch cancelled after ${updatedSentIds.length}/${allGroups.length} groups`);
-    } else if (isComplete) {
-      updatePayload.status = totalFailed === allGroups.length ? 'failed' : 'sent';
-      updatePayload.sent_at = new Date().toISOString();
-      console.log(`Complete! ${totalSent} sent, ${totalFailed} failed out of ${allGroups.length}`);
-    } else {
-      // Keep as 'sending' — cron will pick it up again
-      updatePayload.status = 'sending';
-      console.log(`Batch done. ${updatedSentIds.length}/${allGroups.length} groups processed so far`);
-    }
-
-    if (updatePayload.status === 'sending') {
-      // Renew the lock for the next cron invocation
-      updatePayload.locked_until = new Date(Date.now() + 90_000).toISOString();
-    } else {
-      // Release the lock when the message reaches a final state
-      updatePayload.locked_until = null;
-    }
-
-    if (messageGroupId) {
-      await supabase.from('group_campaign_scheduled_messages')
-        .update(updatePayload)
-        .eq('message_group_id', messageGroupId);
-    } else {
-      await supabase.from('group_campaign_scheduled_messages')
-        .update(updatePayload)
-        .eq('id', scheduledMessageId);
+      console.log(`Final state: status=${updatePayload.status}, sent=${totalSent}/${allGroups.length}, processed_in_batch=${updatedSentIds.length - alreadySentGroupIds.length}`);
     }
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        complete: isComplete,
+      JSON.stringify({
+        success: true,
+        complete: (alreadySentGroupIds.length + newlySentIds.length) >= allGroups.length,
         batchSent: batchSentCount,
         batchFailed: batchFailedCount,
-        sentCount: totalSent, 
-        failedCount: totalFailed, 
+        sentCount: (msg.sent_count || 0) + batchSentCount,
+        failedCount: (msg.failed_count || 0) + batchFailedCount,
         total: allGroups.length,
-        processed: updatedSentIds.length,
+        processed: alreadySentGroupIds.length + newlySentIds.length,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
