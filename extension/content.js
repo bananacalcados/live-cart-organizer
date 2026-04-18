@@ -1,13 +1,19 @@
 /**
- * Livete Anotador — Content Script (v1.1)
- * Estratégia robusta: localiza o container da lista de comentários da Live
- * ancorando pelo input "Adicione um comentário" e faz polling a cada 1.5s.
+ * Livete Anotador — Content Script (v1.4)
+ * Estratégia: detecta diretamente as LINHAS de comentário em todo o DOM
+ * (sem depender de um container único). Cada linha = link de username + texto.
  */
 
 const SUPABASE_URL = "https://tqxhcyuxgqbzqwoidpie.supabase.co";
 const BATCH_INTERVAL_MS = 3000;
 const SCAN_INTERVAL_MS = 1500;
 const MAX_BATCH_SIZE = 20;
+
+const IG_RESERVED = new Set([
+  "explore", "reels", "direct", "stories", "p", "accounts", "about",
+  "developer", "legal", "privacy", "press", "api", "ads", "shop",
+  "your_activity", "tv", "fragment", "challenge", "session"
+]);
 
 let eventId = null;
 let sourcePC = null;
@@ -16,7 +22,6 @@ let batchTimer = null;
 let scanTimer = null;
 let seenHashes = new Set();
 let stats = { total: 0, sent: 0, orders: 0, dupes: 0 };
-let commentListEl = null;
 let scanCount = 0;
 
 // ─── Listener do popup ───
@@ -37,41 +42,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 function runDiagnose() {
-  console.log("[Livete] 🔍 === DIAGNÓSTICO ===");
+  console.log("[Livete] 🔍 === DIAGNÓSTICO v1.4 ===");
   console.log("[Livete] URL:", location.href);
 
-  const input = findCommentInput();
-  console.log("[Livete] Input encontrado?", !!input, input?.placeholder || input?.getAttribute("aria-label"));
+  const rows = findCommentRows();
+  console.log("[Livete] Linhas de comentário encontradas:", rows.length);
 
-  const list = findCommentList();
-  if (!list) {
-    console.warn("[Livete] ❌ Lista de comentários NÃO localizada.");
-    return { ok: false, reason: "Lista de comentários não localizada. Você está na página da live?" };
+  const samples = rows.slice(0, 10).map(r => `${r.username}: ${r.text.slice(0, 80)}`);
+  samples.forEach(s => console.log("  •", s));
+
+  if (rows.length === 0) {
+    return { ok: false, reason: "Nenhum comentário detectado. Confirme que está na página da Live com comentários visíveis." };
   }
-  console.log("[Livete] ✅ Container:", list);
-
-  const links = list.querySelectorAll('a[href^="/"]');
-  console.log("[Livete] Links no container:", links.length);
-
-  const samples = [];
-  for (const link of links) {
-    const href = link.getAttribute("href") || "";
-    const m = href.match(/^\/([A-Za-z0-9._]+)\/?$/);
-    if (!m) continue;
-    const username = m[1];
-    if (["explore", "reels", "direct", "stories", "p"].includes(username)) continue;
-    const row = link.closest("li") || link.parentElement?.parentElement || link.parentElement;
-    const txt = (row?.innerText || "").replace(/\s+/g, " ").trim();
-    if (txt) samples.push(`${username}: ${txt.slice(0, 80)}`);
-  }
-  console.log("[Livete] Amostras:", samples.slice(0, 10));
-
-  return {
-    ok: samples.length > 0,
-    found: samples.length,
-    sample: samples[0] || null,
-    reason: samples.length === 0 ? "Container achado mas sem comentários extraíveis. Veja Console." : null,
-  };
+  return { ok: true, found: rows.length, sample: samples[0] };
 }
 
 // Auto-start em refresh
@@ -88,154 +71,113 @@ function startCapture() {
   stopCapture();
   console.log("[Livete] 🟢 Captura iniciada — evento:", eventId);
   injectBanner("🟢 Livete capturando...");
-
   batchTimer = setInterval(flushBatch, BATCH_INTERVAL_MS);
   scanTimer = setInterval(scanComments, SCAN_INTERVAL_MS);
-  scanComments(); // primeira varredura imediata
+  scanComments();
 }
 
 function stopCapture() {
   if (batchTimer) { clearInterval(batchTimer); batchTimer = null; }
   if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
   flushBatch();
-  commentListEl = null;
   console.log("[Livete] ⏹ Captura parada.");
   removeBanner();
 }
 
-// ─── Localiza o input de comentário (mais tolerante) ───
-function findCommentInput() {
-  // Tenta vários atributos: placeholder, aria-label, contenteditable
-  const selectors = [
-    'textarea[placeholder*="dicione" i]',
-    'textarea[placeholder*="omentário" i]',
-    'textarea[placeholder*="omment" i]',
-    'input[placeholder*="dicione" i]',
-    'input[placeholder*="omentário" i]',
-    'textarea[aria-label*="omentário" i]',
-    'textarea[aria-label*="omment" i]',
-    'div[contenteditable="true"][aria-label*="omentário" i]',
-    'div[contenteditable="true"][aria-label*="omment" i]',
-    'div[role="textbox"][aria-label*="omentário" i]',
-    'div[role="textbox"]',
-  ];
-  for (const sel of selectors) {
-    const el = document.querySelector(sel);
-    if (el) return el;
-  }
-  // Última tentativa: qualquer textarea visível na página
-  const tas = document.querySelectorAll("textarea");
-  for (const ta of tas) {
-    if (ta.offsetParent !== null) return ta;
-  }
-  return null;
-}
+// ─── Detecta TODAS as linhas de comentário no DOM ───
+// Cada linha tem: link <a href="/username/"> + texto adjacente (o comentário)
+function findCommentRows() {
+  const rows = [];
+  const seenInScan = new Set();
 
-// ─── Localiza o container da lista de comentários ───
-function findCommentList() {
-  if (commentListEl && document.body.contains(commentListEl)) return commentListEl;
+  // Pega todos os links de perfil do IG
+  const allLinks = document.querySelectorAll('a[href^="/"]');
 
-  // Estratégia 1: ancora pelo input de comentário
-  const input = findCommentInput();
-  if (input) {
-    let el = input.parentElement;
-    for (let i = 0; i < 15 && el; i++) {
-      const userLinks = el.querySelectorAll('a[role="link"][href^="/"], a[href^="/"]');
-      if (userLinks.length >= 2) {
-        commentListEl = el;
-        console.log("[Livete] ✅ Lista localizada via input. Links:", userLinks.length);
-        return el;
+  for (const link of allLinks) {
+    const href = link.getAttribute("href") || "";
+    // Match /username/ ou /username (sem subpaths)
+    const m = href.match(/^\/([A-Za-z0-9._]{2,30})\/?$/);
+    if (!m) continue;
+
+    const username = m[1];
+    if (IG_RESERVED.has(username.toLowerCase())) continue;
+
+    // Pula se o link não estiver visível (offsetParent = null)
+    if (link.offsetParent === null) continue;
+
+    // O texto do link costuma ser o próprio username
+    const linkText = (link.innerText || link.textContent || "").trim();
+    if (!linkText) continue;
+
+    // Sobe até achar um ancestral que contenha texto ALÉM do username
+    // (esse texto é o comentário). Limita a 6 níveis pra não pegar demais.
+    let row = link.parentElement;
+    let commentText = "";
+    for (let depth = 0; depth < 6 && row; depth++) {
+      const fullText = (row.innerText || row.textContent || "").replace(/\s+/g, " ").trim();
+      if (!fullText) { row = row.parentElement; continue; }
+
+      // Remove o username do início (case insensitive)
+      let candidate = fullText;
+      const lowerFull = candidate.toLowerCase();
+      const lowerUser = username.toLowerCase();
+      if (lowerFull.startsWith(lowerUser)) {
+        candidate = candidate.slice(username.length).trim();
       }
-      el = el.parentElement;
+      // Remove "Verificado", separadores, espaços
+      candidate = candidate
+        .replace(/^(Verificado|Verified)\s*/i, "")
+        .replace(/^[·•\-:\s]+/, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      // Heurística: comentário válido tem 1+ chars, < 500, e não é só o username repetido
+      if (candidate && candidate.length >= 1 && candidate.length <= 500
+          && candidate.toLowerCase() !== lowerUser) {
+        commentText = candidate;
+        break;
+      }
+      row = row.parentElement;
     }
+
+    if (!commentText) continue;
+
+    // Dedup por scan (mesmo username pode aparecer várias vezes em diferentes nós)
+    const key = `${username}|${commentText}`;
+    if (seenInScan.has(key)) continue;
+    seenInScan.add(key);
+
+    const profilePic = row?.querySelector("img")?.src || null;
+    rows.push({ username, text: commentText, profilePic, row });
   }
 
-  // Estratégia 2: heurística — procura container com vários links curtos de username
-  const candidates = document.querySelectorAll('ul, div');
-  let best = null;
-  let bestScore = 0;
-  for (const c of candidates) {
-    const links = c.querySelectorAll('a[href^="/"]');
-    if (links.length < 3 || links.length > 60) continue;
-    let score = 0;
-    for (const a of links) {
-      const h = a.getAttribute("href") || "";
-      if (/^\/[A-Za-z0-9._]{2,30}\/?$/.test(h)) score++;
-    }
-    // Container precisa ter texto também (não só links)
-    const txtLen = (c.innerText || "").length;
-    if (score >= 3 && txtLen > 50 && txtLen < 5000 && score > bestScore) {
-      bestScore = score;
-      best = c;
-    }
-  }
-  if (best) {
-    commentListEl = best;
-    console.log("[Livete] ✅ Lista localizada via heurística. Score:", bestScore);
-    return best;
-  }
-
-  return null;
+  return rows;
 }
 
-// ─── Varre os comentários ───
 function scanComments() {
   scanCount++;
-  const list = findCommentList();
+  const rows = findCommentRows();
 
-  if (!list) {
+  if (rows.length === 0) {
     if (scanCount % 5 === 0) {
-      console.log("[Livete] ⏳ Procurando lista de comentários... (scan #" + scanCount + ")");
+      console.log(`[Livete] ⏳ Nenhum comentário detectado ainda... (scan #${scanCount})`);
     }
     return;
   }
 
-  // Pega todos os links de perfil dentro da lista
-  const links = list.querySelectorAll('a[href^="/"]');
   let foundThisScan = 0;
-
-  for (const link of links) {
-    const href = link.getAttribute("href") || "";
-    const match = href.match(/^\/([A-Za-z0-9._]+)\/?$/);
-    if (!match) continue;
-    const username = match[1];
-    if (username.length < 2 || ["explore", "reels", "direct", "stories", "p"].includes(username)) continue;
-
-    // O comentário fica no MESMO container do link. Sobe pra achar o "row"
-    let row = link.closest("li") || link.parentElement?.parentElement || link.parentElement;
-    if (!row) continue;
-
-    const fullText = (row.innerText || row.textContent || "").trim();
-    if (!fullText) continue;
-
-    // Remove o username do começo para isolar o comentário
-    let commentText = fullText;
-    if (commentText.toLowerCase().startsWith(username.toLowerCase())) {
-      commentText = commentText.slice(username.length).trim();
-    }
-    // Limpa "Verificado", "·", quebras
-    commentText = commentText
-      .replace(/^(Verificado|Verified)\s*/i, "")
-      .replace(/^[·•\-:\s]+/, "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    if (!commentText || commentText.length < 1 || commentText.length > 500) continue;
-    if (commentText.toLowerCase() === username.toLowerCase()) continue;
-
-    const profilePic = row.querySelector("img")?.src || null;
-    addComment(username, commentText, profilePic);
-    foundThisScan++;
+  for (const r of rows) {
+    if (addComment(r.username, r.text, r.profilePic)) foundThisScan++;
   }
 
-  if (scanCount % 10 === 0) {
-    console.log(`[Livete] 📊 Scan #${scanCount} — ${foundThisScan} novos | total: ${stats.total} | enviados: ${stats.sent}`);
+  if (foundThisScan > 0 || scanCount % 10 === 0) {
+    console.log(`[Livete] 📊 Scan #${scanCount} — ${rows.length} visíveis, ${foundThisScan} novos | total: ${stats.total} | enviados: ${stats.sent}`);
   }
 }
 
 function addComment(username, text, profilePic) {
   const hash = simpleHash(`${username}|${text}`);
-  if (seenHashes.has(hash)) return;
+  if (seenHashes.has(hash)) return false;
   seenHashes.add(hash);
 
   stats.total++;
@@ -252,6 +194,7 @@ function addComment(username, text, profilePic) {
   });
 
   if (pendingComments.length >= MAX_BATCH_SIZE) flushBatch();
+  return true;
 }
 
 async function flushBatch() {
