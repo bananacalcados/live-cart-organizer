@@ -230,23 +230,33 @@ async function validateMercadoPagoSignature(req: Request, body: string): Promise
 
 async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: string, supabaseKey: string) {
   const rawBody = await req.text();
-  
-  // Validate webhook signature
-  const isValid = await validateMercadoPagoSignature(req, rawBody);
-  if (!isValid) {
-    console.error("[mercadopago] Invalid webhook signature, rejecting");
-    return new Response(JSON.stringify({ ok: false, error: "invalid_signature" }), {
-      status: 401,
-      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-    });
+  const url = new URL(req.url);
+
+  // MercadoPago sends notifications in TWO formats:
+  // 1) IPN modern: JSON body { type: "payment", data: { id } }
+  // 2) IPN legacy: query string ?topic=payment&id=XXX (body may be empty)
+  let body: any = {};
+  try { if (rawBody) body = JSON.parse(rawBody); } catch { body = {}; }
+
+  const qsTopic = url.searchParams.get("topic") || url.searchParams.get("type");
+  const qsId = url.searchParams.get("id") || url.searchParams.get("data.id");
+
+  const notificationType = body.type || qsTopic;
+  const paymentId = body.data?.id || qsId;
+
+  console.log("MercadoPago webhook:", JSON.stringify({ body, qsTopic, qsId, notificationType, paymentId }).substring(0, 500));
+
+  // Validate webhook signature ONLY for JSON body (legacy topic format doesn't sign)
+  if (rawBody && body?.data?.id) {
+    const isValid = await validateMercadoPagoSignature(req, rawBody);
+    if (!isValid) {
+      console.error("[mercadopago] Invalid webhook signature, rejecting");
+      return new Response(JSON.stringify({ ok: false, error: "invalid_signature" }), {
+        status: 401,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
   }
-
-  const body = JSON.parse(rawBody);
-  console.log("MercadoPago webhook:", JSON.stringify(body).substring(0, 500));
-
-  // MercadoPago IPN sends { action, type, data: { id } }
-  const action = body.action || body.type;
-  const paymentId = body.data?.id;
 
   if (!paymentId) {
     console.log("No payment ID in MercadoPago webhook, skipping.");
@@ -255,9 +265,9 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     });
   }
 
-  // Only process payment updates
-  if (body.type !== "payment") {
-    console.log(`MercadoPago webhook type=${body.type}, not payment. Skipping.`);
+  // Only process payment notifications (ignore merchant_order, etc.)
+  if (notificationType && notificationType !== "payment") {
+    console.log(`MercadoPago webhook type=${notificationType}, not payment. Skipping.`);
     return new Response(JSON.stringify({ ok: true, skipped: true }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
