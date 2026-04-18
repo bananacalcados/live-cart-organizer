@@ -27,9 +27,25 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const reqStartTime = Date.now();
+  console.log(JSON.stringify({
+    tag: 'ZAPI_SEND_INVOKED',
+    timestamp: new Date().toISOString(),
+  }));
+
   try {
     const reqBody = await req.json();
     const { groupId, message, type = 'text', mediaUrl, caption, campaignId, groupDbId, mentionAll, whatsapp_number_id }: SendGroupRequest = reqBody;
+
+    console.log(JSON.stringify({
+      tag: 'ZAPI_SEND_BODY',
+      groupId: reqBody?.groupId,
+      type: reqBody?.type,
+      hasMediaUrl: !!reqBody?.mediaUrl,
+      hasMessage: !!reqBody?.message,
+      whatsappNumberId: reqBody?.whatsapp_number_id,
+      timestamp: new Date().toISOString(),
+    }));
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
@@ -40,6 +56,7 @@ serve(async (req) => {
       token = creds.token;
       clientToken = creds.clientToken;
     } catch (e) {
+      console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'creds_error', timestamp: new Date().toISOString() }));
       return new Response(
         JSON.stringify({ error: 'Z-API credentials not configured', details: e.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -47,6 +64,7 @@ serve(async (req) => {
     }
 
     if (!groupId) {
+      console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'no_groupId', timestamp: new Date().toISOString() }));
       return new Response(
         JSON.stringify({ error: 'groupId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -56,6 +74,7 @@ serve(async (req) => {
     if (isLikelyGroupId(groupId)) {
       const pausedUntil = await getPausedGroupSendUntil(supabase);
       if (pausedUntil) {
+        console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'paused', timestamp: new Date().toISOString() }));
         return new Response(
           JSON.stringify({ error: 'Group sends temporarily paused', pausedUntil }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -95,6 +114,7 @@ serve(async (req) => {
     } else if (type === 'poll') {
       const pollOptions = (reqBody as any).pollOptions;
       if (!pollOptions || !Array.isArray(pollOptions) || pollOptions.length < 2) {
+        console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'invalid_poll', timestamp: new Date().toISOString() }));
         return new Response(
           JSON.stringify({ error: 'Poll requires at least 2 options' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -132,6 +152,7 @@ serve(async (req) => {
       endpoint = `${baseUrl}/send-document`;
       body = { phone: groupId, document: mediaUrl, fileName: caption || 'document' };
     } else {
+      console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'invalid_type', timestamp: new Date().toISOString() }));
       return new Response(
         JSON.stringify({ error: 'Invalid type or missing mediaUrl' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -167,6 +188,7 @@ serve(async (req) => {
         }).eq('campaign_id', campaignId).eq('group_id', groupDbId);
       }
 
+      console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'zapi_http_error', httpStatus: res.status, timestamp: new Date().toISOString() }));
       return new Response(
         JSON.stringify({ error: 'Failed to send', details: data }),
         { status: res.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -182,12 +204,14 @@ serve(async (req) => {
       }).eq('campaign_id', campaignId).eq('group_id', groupDbId);
     }
 
+    console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'success', timestamp: new Date().toISOString() }));
     return new Response(
       JSON.stringify({ success: true, data }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error sending group message:', error);
+    console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'caught_exception', errorMessage: error instanceof Error ? error.message : String(error), timestamp: new Date().toISOString() }));
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
