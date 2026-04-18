@@ -204,12 +204,14 @@ serve(async (req) => {
       }).eq('campaign_id', campaignId).eq('group_id', groupDbId);
     }
 
+    console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'success', timestamp: new Date().toISOString() }));
     return new Response(
       JSON.stringify({ success: true, data }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error sending group message:', error);
+    console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'caught_exception', errorMessage: error instanceof Error ? error.message : String(error), timestamp: new Date().toISOString() }));
     return new Response(
       JSON.stringify({ error: 'Internal server error', details: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
