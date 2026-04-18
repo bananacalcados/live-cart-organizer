@@ -286,6 +286,16 @@ serve(async (req) => {
             body.message = messageContent;
           }
 
+          console.log(JSON.stringify({
+            tag: 'PRE_SEND',
+            scheduledMessageId,
+            groupInternalId: group.id,
+            groupZapiId: group.group_id,
+            groupName: group.name,
+            blockOrder: blockIdx,
+            timestamp: new Date().toISOString(),
+          }));
+
           const sendRes = await fetch(`${supabaseUrl}/functions/v1/zapi-send-group-message`, {
             method: 'POST',
             headers: {
@@ -295,11 +305,44 @@ serve(async (req) => {
             body: JSON.stringify(body),
           });
 
+          console.log(JSON.stringify({
+            tag: 'POST_SEND',
+            scheduledMessageId,
+            groupInternalId: group.id,
+            blockOrder: blockIdx,
+            httpStatus: sendRes.status,
+            httpOk: sendRes.ok,
+            timestamp: new Date().toISOString(),
+          }));
+
           const sendData = await sendRes.json();
+
+          console.log(JSON.stringify({
+            tag: 'PARSED_RESPONSE',
+            scheduledMessageId,
+            groupInternalId: group.id,
+            blockOrder: blockIdx,
+            sendDataKeys: Object.keys(sendData || {}),
+            sendDataSuccess: sendData?.success,
+            sendDataError: sendData?.error,
+            sendDataInner: sendData?.data ? Object.keys(sendData.data) : null,
+            sendDataInnerError: sendData?.data?.error,
+            timestamp: new Date().toISOString(),
+          }));
+
           if (!sendRes.ok || !sendData.success) {
             groupSuccess = false;
           }
-        } catch {
+        } catch (err) {
+          console.error(JSON.stringify({
+            tag: 'SEND_EXCEPTION',
+            scheduledMessageId,
+            groupInternalId: group.id,
+            blockOrder: blockIdx,
+            errorMessage: err instanceof Error ? err.message : String(err),
+            errorStack: err instanceof Error ? err.stack : null,
+            timestamp: new Date().toISOString(),
+          }));
           groupSuccess = false;
         }
 
@@ -313,6 +356,17 @@ serve(async (req) => {
       } else {
         batchFailedCount++;
       }
+
+      console.log(JSON.stringify({
+        tag: 'GROUP_RESULT',
+        scheduledMessageId,
+        groupInternalId: group.id,
+        blockOrder: 'all_blocks_done',
+        groupSuccess,
+        willPushToSentIds: true,
+        timestamp: new Date().toISOString(),
+      }));
+
       newlySentIds.push(group.id);
 
       // Delay between groups (skip after last in batch)
