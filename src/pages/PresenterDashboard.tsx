@@ -13,7 +13,6 @@ import {
   MessageCircle, CheckCheck, MessageSquareX, Send
 } from "lucide-react";
 import { ActiveProductBar } from "@/components/events/ActiveProductBar";
-import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { LiveInstagramComments } from "@/components/events/LiveInstagramComments";
 import { Instagram } from "lucide-react";
