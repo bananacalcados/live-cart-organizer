@@ -16,26 +16,13 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const now = new Date().toISOString();
-
-    // Pick up PENDING messages whose scheduled_at has passed
-    // AND SENDING messages that need continuation (batch processing)
-    // Skip messages that are currently locked (another invocation is processing them)
-    // For grouped blocks, only pick the first block (block_order = 0 or lowest)
+    // Fetch dispatchable messages via SQL function (avoids PostgREST issues with timestamps in .or())
+    // Returns: pending messages whose scheduled_at has passed + sending messages with expired locks
     const { data: pendingMessages, error: fetchErr } = await supabase
-      .from('group_campaign_scheduled_messages')
-      .select('id, scheduled_at, campaign_id, status, message_group_id, block_order, locked_until')
-      .or(
-        `and(status.eq.pending,scheduled_at.lte.${now}),` +
-        `and(status.eq.sending,or(locked_until.is.null,locked_until.lt.${now}))`
-      )
-      .neq('status', 'grouped') // skip grouped blocks
-      .order('block_order', { ascending: true })
-      .order('scheduled_at', { ascending: true })
-      .limit(20);
+      .rpc('get_dispatchable_scheduled_messages', { p_limit: 20 });
 
     if (fetchErr) {
-      console.error('Error fetching messages:', fetchErr);
+      console.error('Error fetching dispatchable messages:', fetchErr);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch', details: fetchErr.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
