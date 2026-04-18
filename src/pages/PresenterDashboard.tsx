@@ -17,6 +17,7 @@ import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { WhatsAppChat } from "@/components/WhatsAppChat";
 import { LiveInstagramComments } from "@/components/events/LiveInstagramComments";
 import { Instagram } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface PresenterAlert {
   id: string;
@@ -260,6 +261,7 @@ export default function PresenterDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <Button
             variant="ghost"
             size="icon"
@@ -521,9 +523,17 @@ export default function PresenterDashboard() {
       </Tabs>
       </div>
 
-      {/* Team Chat Sidebar - always visible */}
-      <div className="w-80 lg:w-96 border-l border-zinc-700 bg-zinc-900/50 flex flex-col min-h-screen">
-        <PresenterTeamChat eventId={eventId!} presenterMode={true} />
+      {/* Live Instagram Comments Sidebar - always visible */}
+      <div className="w-80 lg:w-96 border-l border-border bg-card/50 flex flex-col h-screen sticky top-0 overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-3">
+          <LiveInstagramComments
+            eventId={eventId!}
+            onOpenOrder={(orderId) => {
+              const order = orders.find(o => o.id === orderId);
+              if (order) setChatOrder(order);
+            }}
+          />
+        </div>
       </div>
 
       {/* WhatsApp Chat Dialog */}
