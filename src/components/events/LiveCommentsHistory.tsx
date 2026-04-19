@@ -79,6 +79,13 @@ export function LiveCommentsHistory({ eventId }: Props) {
   const [dmTargets, setDmTargets] = useState<UserGroup[]>([]);
   const [sending, setSending] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [orderPrefillHandle, setOrderPrefillHandle] = useState<string>("");
+
+  const openCreateOrder = (handle: string) => {
+    setOrderPrefillHandle(handle.replace(/^@/, ""));
+    setOrderDialogOpen(true);
+  };
 
   const loadAll = useCallback(async () => {
     if (!eventId) return;
