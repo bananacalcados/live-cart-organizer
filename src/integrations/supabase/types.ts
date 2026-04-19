@@ -5082,6 +5082,53 @@ export type Database = {
           },
         ]
       }
+      live_comment_dms: {
+        Row: {
+          comment_id: string
+          created_at: string
+          error_details: string | null
+          event_id: string | null
+          id: string
+          message: string
+          meta_message_id: string | null
+          sent_by: string | null
+          status: string
+          username: string
+        }
+        Insert: {
+          comment_id: string
+          created_at?: string
+          error_details?: string | null
+          event_id?: string | null
+          id?: string
+          message: string
+          meta_message_id?: string | null
+          sent_by?: string | null
+          status?: string
+          username: string
+        }
+        Update: {
+          comment_id?: string
+          created_at?: string
+          error_details?: string | null
+          event_id?: string | null
+          id?: string
+          message?: string
+          meta_message_id?: string | null
+          sent_by?: string | null
+          status?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_comment_dms_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       live_comments: {
         Row: {
           ai_classification: string | null

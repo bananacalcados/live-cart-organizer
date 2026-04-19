@@ -15,12 +15,13 @@ import { ActiveProductBar } from "@/components/events/ActiveProductBar";
 import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { EventStockAlerts } from "@/components/events/EventStockAlerts";
 import { EventCartsPanel } from "@/components/events/EventCartsPanel";
+import { LiveCommentsHistory } from "@/components/events/LiveCommentsHistory";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
-import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap } from "lucide-react";
+import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -207,6 +208,10 @@ const Index = () => {
                     Carrinhos
                   </TabsTrigger>
                 )}
+                <TabsTrigger value="ig-comments" className="gap-1">
+                  <Instagram className="h-3 w-3" />
+                  Comentários IG
+                </TabsTrigger>
               </TabsList>
             </div>
 
@@ -241,6 +246,10 @@ const Index = () => {
                 <EventCartsPanel catalogLeadPageId={currentEvent.catalog_lead_page_id} />
               </TabsContent>
             )}
+
+            <TabsContent value="ig-comments">
+              {currentEventId && <LiveCommentsHistory eventId={currentEventId} />}
+            </TabsContent>
           </Tabs>
         </main>
 
