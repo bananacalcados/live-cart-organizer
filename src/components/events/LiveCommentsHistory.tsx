@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/dialog";
 import {
   Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles,
-  Send, Search, Users, Filter, CheckCheck, AlertCircle, History,
+  Send, Search, Users, Filter, CheckCheck, AlertCircle, History, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { OrderDialogDb } from "@/components/OrderDialogDb";
 
 interface LiveComment {
   id: string;
@@ -78,6 +79,13 @@ export function LiveCommentsHistory({ eventId }: Props) {
   const [dmTargets, setDmTargets] = useState<UserGroup[]>([]);
   const [sending, setSending] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
+  const [orderPrefillHandle, setOrderPrefillHandle] = useState<string>("");
+
+  const openCreateOrder = (handle: string) => {
+    setOrderPrefillHandle(handle.replace(/^@/, ""));
+    setOrderDialogOpen(true);
+  };
 
   const loadAll = useCallback(async () => {
     if (!eventId) return;
@@ -464,11 +472,20 @@ export function LiveCommentsHistory({ eventId }: Props) {
                           {group.comments.slice(0, 3).map(c => {
                             const cfg = classificationConfig[c.ai_classification || "comment"] || classificationConfig.comment;
                             return (
-                              <div key={c.id} className="flex items-start gap-2 text-xs">
+                              <div key={c.id} className="flex items-start gap-2 text-xs group/comment">
                                 <Badge variant="outline" className={`${cfg.color} text-[9px] py-0 shrink-0`}>
                                   {cfg.label}
                                 </Badge>
-                                <span className="text-foreground break-words">{c.comment_text}</span>
+                                <span className="text-foreground break-words flex-1">{c.comment_text}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-5 px-1.5 text-[10px] gap-0.5 opacity-0 group-hover/comment:opacity-100 transition shrink-0"
+                                  onClick={() => openCreateOrder(group.handle)}
+                                  title={`Criar pedido para @${group.handle} a partir deste comentário`}
+                                >
+                                  <Plus className="h-2.5 w-2.5" /> Pedido
+                                </Button>
                               </div>
                             );
                           })}
@@ -479,14 +496,24 @@ export function LiveCommentsHistory({ eventId }: Props) {
                           )}
                         </div>
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs gap-1"
-                          onClick={() => openDmIndividual(group)}
-                        >
-                          <Instagram className="h-3 w-3" /> Enviar DM
-                        </Button>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={() => openCreateOrder(group.handle)}
+                          >
+                            <Plus className="h-3 w-3" /> Criar Pedido
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs gap-1"
+                            onClick={() => openDmIndividual(group)}
+                          >
+                            <Instagram className="h-3 w-3" /> Enviar DM
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -496,6 +523,17 @@ export function LiveCommentsHistory({ eventId }: Props) {
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {/* Modal Criar Pedido (mesmo modal padrão dos eventos) */}
+      <OrderDialogDb
+        open={orderDialogOpen}
+        onOpenChange={(o) => {
+          setOrderDialogOpen(o);
+          if (!o) setOrderPrefillHandle("");
+        }}
+        eventId={eventId}
+        prefillInstagram={orderPrefillHandle}
+      />
 
       {/* Modal DM */}
       <Dialog open={dmModalOpen} onOpenChange={setDmModalOpen}>

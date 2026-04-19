@@ -47,9 +47,10 @@ interface OrderDialogDbProps {
   onOpenChange: (open: boolean) => void;
   editingOrder?: DbOrder | null;
   eventId: string;
+  prefillInstagram?: string;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram }: OrderDialogDbProps) {
   const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, banCustomer, customers } = useCustomerStore();
   const { createOrder, updateOrder, findActiveOrderByCustomer, orders } = useDbOrderStore();
 
@@ -135,8 +136,11 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: Ord
       setIsDelivery((editingOrder as any).is_delivery || false);
     } else {
       resetForm();
+      if (prefillInstagram && open) {
+        setInstagramHandle(prefillInstagram.replace(/^@/, ""));
+      }
     }
-  }, [editingOrder, open]);
+  }, [editingOrder, open, prefillInstagram]);
 
   // Auto-fill whatsapp when existing customer is found
   useEffect(() => {
