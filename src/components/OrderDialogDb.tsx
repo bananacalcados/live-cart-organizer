@@ -47,9 +47,10 @@ interface OrderDialogDbProps {
   onOpenChange: (open: boolean) => void;
   editingOrder?: DbOrder | null;
   eventId: string;
+  prefillInstagram?: string;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram }: OrderDialogDbProps) {
   const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, banCustomer, customers } = useCustomerStore();
   const { createOrder, updateOrder, findActiveOrderByCustomer, orders } = useDbOrderStore();
 
