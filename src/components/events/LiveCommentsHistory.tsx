@@ -12,9 +12,10 @@ import {
 } from "@/components/ui/dialog";
 import {
   Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles,
-  Send, Search, Users, Filter, CheckCheck, AlertCircle, History,
+  Send, Search, Users, Filter, CheckCheck, AlertCircle, History, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
+import { OrderDialogDb } from "@/components/OrderDialogDb";
 
 interface LiveComment {
   id: string;
