@@ -136,8 +136,11 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       setIsDelivery((editingOrder as any).is_delivery || false);
     } else {
       resetForm();
+      if (prefillInstagram && open) {
+        setInstagramHandle(prefillInstagram.replace(/^@/, ""));
+      }
     }
-  }, [editingOrder, open]);
+  }, [editingOrder, open, prefillInstagram]);
 
   // Auto-fill whatsapp when existing customer is found
   useEffect(() => {
