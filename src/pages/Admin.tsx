@@ -14,6 +14,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ZApiInstanceManager } from "@/components/admin/ZApiInstanceManager";
+import { MetaInstanceManager } from "@/components/admin/MetaInstanceManager";
 import { AiKnowledgeBase } from "@/components/admin/AiKnowledgeBase";
 import { AiTestPanel } from "@/components/admin/AiTestPanel";
 import { SecretaryChat } from "@/components/admin/SecretaryChat";
@@ -214,6 +215,7 @@ export default function Admin() {
           <TabsList>
             <TabsTrigger value="users" className="gap-1.5"><Shield className="h-3.5 w-3.5" /> Usuários</TabsTrigger>
             <TabsTrigger value="zapi" className="gap-1.5"><Smartphone className="h-3.5 w-3.5" /> Instâncias Z-API</TabsTrigger>
+            <TabsTrigger value="meta" className="gap-1.5"><Smartphone className="h-3.5 w-3.5" /> Instâncias Meta</TabsTrigger>
             <TabsTrigger value="knowledge" className="gap-1.5"><Brain className="h-3.5 w-3.5" /> Livete IA</TabsTrigger>
             <TabsTrigger value="secretary" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Secretária IA</TabsTrigger>
             <TabsTrigger value="errors" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Erros IA</TabsTrigger>
@@ -401,6 +403,10 @@ export default function Admin() {
 
           <TabsContent value="zapi" className="mt-4">
             <ZApiInstanceManager />
+          </TabsContent>
+
+          <TabsContent value="meta" className="mt-4">
+            <MetaInstanceManager />
           </TabsContent>
 
           <TabsContent value="knowledge" className="mt-4 space-y-6">
