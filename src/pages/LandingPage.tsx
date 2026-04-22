@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2 } from "lucide-react";
 
 interface LandingPage {
@@ -22,6 +21,43 @@ interface LandingPage {
   is_active: boolean;
 }
 
+// Event date: Saturday 25/04/2026 at 15:00 Brasília time (UTC-3)
+const EVENT_TARGET_MS = Date.UTC(2026, 3, 25, 18, 0, 0); // 15h BRT = 18h UTC
+
+function formatPhone(value: string) {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 7) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
+function useCountdown(targetMs: number) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const diff = Math.max(0, targetMs - now);
+  const days = Math.floor(diff / 86400000);
+  const hours = Math.floor((diff % 86400000) / 3600000);
+  const minutes = Math.floor((diff % 3600000) / 60000);
+  const seconds = Math.floor((diff % 60000) / 1000);
+  return { days, hours, minutes, seconds, finished: diff === 0 };
+}
+
+function CountdownBox({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="flex flex-col items-center min-w-[60px]">
+      <div className="bg-black/70 backdrop-blur-sm border border-yellow-400/30 rounded-xl px-3 py-2 min-w-[60px] text-center">
+        <span className="text-2xl md:text-3xl font-black text-yellow-400 tabular-nums">
+          {String(value).padStart(2, "0")}
+        </span>
+      </div>
+      <span className="text-[10px] uppercase tracking-wider text-white/80 mt-1 font-semibold">{label}</span>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   const { slug } = useParams<{ slug: string }>();
   const [page, setPage] = useState<LandingPage | null>(null);
@@ -30,10 +66,11 @@ export default function LandingPage() {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  const countdown = useCountdown(EVENT_TARGET_MS);
+
   useEffect(() => {
     if (!slug) return;
     const load = async () => {
-      // Track view
       const { data, error } = await supabase
         .from('campaign_landing_pages')
         .select('*')
@@ -43,18 +80,30 @@ export default function LandingPage() {
       if (error || !data) { setLoading(false); return; }
       setPage(data as unknown as LandingPage);
       setLoading(false);
-      // Increment views
       await supabase.from('campaign_landing_pages').update({ views: (data.views || 0) + 1 } as any).eq('id', data.id);
     };
     load();
   }, [slug]);
+
+  // SEO
+  useEffect(() => {
+    if (!page) return;
+    document.title = `${page.title} | Banana Calçados`;
+    const desc = (page.description || '').slice(0, 155);
+    let meta = document.querySelector('meta[name="description"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute('name', 'description');
+      document.head.appendChild(meta);
+    }
+    meta.setAttribute('content', desc);
+  }, [page]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!page) return;
     setSubmitting(true);
     try {
-      // Save lead
       await supabase.from('campaign_leads').insert({
         campaign_id: page.campaign_id,
         name: formData.name || formData.nome || null,
@@ -64,9 +113,7 @@ export default function LandingPage() {
         source: 'landing_page',
         metadata: formData as any,
       });
-      // Increment submissions
       await supabase.from('campaign_landing_pages').update({ submissions: (page as any).submissions + 1 } as any).eq('id', page.id);
-      // Update campaign leads count
       try {
         await supabase.from('marketing_campaigns').update({ leads_captured: ((page as any).submissions || 0) + 1 } as any).eq('id', page.campaign_id);
       } catch {}
@@ -82,56 +129,107 @@ export default function LandingPage() {
     } finally { setSubmitting(false); }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><p className="text-muted-foreground">Carregando...</p></div>;
-  if (!page) return <div className="min-h-screen flex items-center justify-center bg-background"><p className="text-muted-foreground">Página não encontrada</p></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-black"><p className="text-white/60">Carregando...</p></div>;
+  if (!page) return <div className="min-h-screen flex items-center justify-center bg-black"><p className="text-white/60">Página não encontrada</p></div>;
 
   const fields = Array.isArray(page.form_fields) ? page.form_fields : [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background flex items-center justify-center p-4">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 relative bg-cover bg-center bg-no-repeat"
+      style={
+        page.hero_image_url
+          ? { backgroundImage: `url(${page.hero_image_url})` }
+          : { background: 'linear-gradient(135deg,#1a1a1a,#2a2a2a)' }
+      }
+    >
       <style>{page.custom_css || ''}</style>
-      <Card className="w-full max-w-md shadow-xl">
-        {page.hero_image_url && (
-          <div className="w-full h-48 overflow-hidden rounded-t-lg">
-            <img src={page.hero_image_url} alt={page.title} className="w-full h-full object-cover" />
-          </div>
-        )}
-        <CardContent className="pt-6 pb-8 px-6 space-y-4">
-          {submitted ? (
-            <div className="text-center space-y-3 py-8">
-              <CheckCircle2 className="h-12 w-12 mx-auto text-primary" />
-              <h2 className="text-xl font-bold">{page.thank_you_message}</h2>
-              {page.whatsapp_redirect && (
-                <p className="text-sm text-muted-foreground">Redirecionando para o WhatsApp...</p>
-              )}
-            </div>
-          ) : (
-            <>
-              <div className="text-center space-y-1">
-                <h1 className="text-2xl font-bold">{page.title}</h1>
-                {page.description && <p className="text-sm text-muted-foreground">{page.description}</p>}
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/85" />
+
+      <div className="relative w-full max-w-md z-10">
+        <div className="rounded-2xl overflow-hidden shadow-2xl border border-yellow-400/20 backdrop-blur-md bg-black/60">
+          <div className="px-6 pt-7 pb-6 space-y-5">
+            {submitted ? (
+              <div className="text-center space-y-3 py-10">
+                <CheckCircle2 className="h-14 w-14 mx-auto text-yellow-400" />
+                <h2 className="text-xl font-bold text-white">{page.thank_you_message}</h2>
+                {page.whatsapp_redirect && (
+                  <p className="text-sm text-white/70">Redirecionando para o WhatsApp...</p>
+                )}
               </div>
-              <form onSubmit={handleSubmit} className="space-y-3">
-                {fields.map(field => (
-                  <div key={field.name} className="space-y-1">
-                    <Label className="text-sm">{field.label}</Label>
-                    <Input
-                      type={field.type || 'text'}
-                      required={field.required}
-                      value={formData[field.name] || ''}
-                      onChange={e => setFormData(prev => ({ ...prev, [field.name]: e.target.value }))}
-                      placeholder={field.label}
-                    />
+            ) : (
+              <>
+                {/* Title */}
+                <div className="text-center space-y-2">
+                  <span className="inline-block px-3 py-1 rounded-full bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 text-[11px] uppercase tracking-widest font-bold">
+                    🔴 Ao Vivo Sábado · 15h
+                  </span>
+                  <h1 className="text-2xl md:text-3xl font-black text-white leading-tight">
+                    {page.title}
+                  </h1>
+                </div>
+
+                {/* Countdown */}
+                {!countdown.finished && (
+                  <div className="flex justify-center gap-2">
+                    <CountdownBox value={countdown.days} label="dias" />
+                    <CountdownBox value={countdown.hours} label="horas" />
+                    <CountdownBox value={countdown.minutes} label="min" />
+                    <CountdownBox value={countdown.seconds} label="seg" />
                   </div>
-                ))}
-                <Button type="submit" className="w-full" disabled={submitting}>
-                  {submitting ? 'Enviando...' : 'Participar'}
-                </Button>
-              </form>
-            </>
-          )}
-        </CardContent>
-      </Card>
+                )}
+                {countdown.finished && (
+                  <div className="text-center bg-red-500/20 border border-red-400/40 rounded-xl py-2 px-3">
+                    <p className="text-red-300 font-bold text-sm">🔴 ESTAMOS AO VIVO AGORA!</p>
+                  </div>
+                )}
+
+                {/* Description */}
+                {page.description && (
+                  <div className="text-sm text-white/85 whitespace-pre-line leading-relaxed text-center">
+                    {page.description}
+                  </div>
+                )}
+
+                {/* Form */}
+                <form onSubmit={handleSubmit} className="space-y-3 pt-1">
+                  {fields.map(field => {
+                    const isTel = field.type === 'tel';
+                    return (
+                      <div key={field.name} className="space-y-1">
+                        <Label className="text-xs text-white/80 uppercase tracking-wider font-semibold">{field.label}</Label>
+                        <Input
+                          type={field.type || 'text'}
+                          required={field.required}
+                          inputMode={isTel ? 'tel' : undefined}
+                          value={formData[field.name] || ''}
+                          onChange={e => {
+                            const v = isTel ? formatPhone(e.target.value) : e.target.value;
+                            setFormData(prev => ({ ...prev, [field.name]: v }));
+                          }}
+                          placeholder={field.label}
+                          className="bg-white/95 border-0 text-black placeholder:text-black/40 h-11"
+                        />
+                      </div>
+                    );
+                  })}
+                  <Button
+                    type="submit"
+                    className="w-full h-12 text-base font-bold bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-black shadow-lg"
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Enviando...' : 'QUERO PARTICIPAR 🔥'}
+                  </Button>
+                  <p className="text-[10px] text-center text-white/50">
+                    Seus dados são protegidos e usados apenas para contato comercial.
+                  </p>
+                </form>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
