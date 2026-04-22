@@ -1421,6 +1421,7 @@ export function MassTemplateDispatcher() {
                 { value: 'crm' as const, label: 'Clientes CRM', icon: Users },
                 { value: 'leads' as const, label: 'Leads Captados', icon: FileSpreadsheet },
                 { value: 'both' as const, label: 'Ambos', icon: Zap },
+                { value: 'ravena' as const, label: '🌸 Ravena', icon: Store },
               ].map(s => (
                 <Button
                   key={s.value}
