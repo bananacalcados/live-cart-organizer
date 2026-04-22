@@ -561,24 +561,6 @@ export function MassTemplateDispatcher() {
     const list: Recipient[] = [];
     const addedPhones = new Set<string>();
 
-    if (audienceSource === 'crm' || audienceSource === 'both') {
-      for (const c of crmCustomers) {
-        if (!c.phone) continue;
-        const phone = c.phone.replace(/\D/g, '');
-        if (!phone || phone.length < 8) continue;
-        if (rfmFilter !== 'all' && c.rfm_segment !== rfmFilter) continue;
-        if (stateFilter !== 'all' && c.state !== stateFilter) continue;
-        if (cityFilter !== 'all' && c.city !== cityFilter) continue;
-        if (dddFilter !== 'all' && c.ddd !== dddFilter) continue;
-        if (crmTagFilter !== 'all' && !(c.tags || []).includes(crmTagFilter)) continue;
-        if (regionFilter !== 'all' && c.region_type !== regionFilter) continue;
-
-        // Store/seller filters via mapping
-  // Filtered recipients
-  const filteredRecipients = useMemo((): Recipient[] => {
-    const list: Recipient[] = [];
-    const addedPhones = new Set<string>();
-
     // Ravena is ISOLATED — never mixes with Banana CRM/leads
     if (audienceSource === 'ravena') {
       for (const c of ravenaCustomers) {
