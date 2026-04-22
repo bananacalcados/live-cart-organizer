@@ -134,21 +134,43 @@ export default function LandingPage() {
 
   const fields = Array.isArray(page.form_fields) ? page.form_fields : [];
 
+  // Parse simple **bold** markdown
+  const renderRichText = (text: string) => {
+    const lines = text.split('\n');
+    return lines.map((line, lineIdx) => {
+      const parts = line.split(/(\*\*[^*]+\*\*)/g);
+      return (
+        <p key={lineIdx} className={line.trim() === '' ? 'h-2' : ''}>
+          {parts.map((part, i) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+              return (
+                <strong key={i} className="font-black text-yellow-300">
+                  {part.slice(2, -2)}
+                </strong>
+              );
+            }
+            return <span key={i}>{part}</span>;
+          })}
+        </p>
+      );
+    });
+  };
+
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-4 relative bg-cover bg-center bg-no-repeat"
+      className="min-h-screen flex items-center justify-center p-4 relative bg-cover bg-no-repeat"
       style={
         page.hero_image_url
-          ? { backgroundImage: `url(${page.hero_image_url})` }
+          ? { backgroundImage: `url(${page.hero_image_url})`, backgroundPosition: 'center 75%' }
           : { background: 'linear-gradient(135deg,#1a1a1a,#2a2a2a)' }
       }
     >
       <style>{page.custom_css || ''}</style>
       {/* Dark overlay for readability */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/85" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/85" />
 
       <div className="relative w-full max-w-md z-10">
-        <div className="rounded-2xl overflow-hidden shadow-2xl border border-yellow-400/20 backdrop-blur-md bg-black/60">
+        <div className="rounded-2xl overflow-hidden shadow-2xl border border-yellow-400/30 backdrop-blur-md bg-black/70">
           <div className="px-6 pt-7 pb-6 space-y-5">
             {submitted ? (
               <div className="text-center space-y-3 py-10">
@@ -185,10 +207,10 @@ export default function LandingPage() {
                   </div>
                 )}
 
-                {/* Description */}
+                {/* Description with bold highlights */}
                 {page.description && (
-                  <div className="text-sm text-white/85 whitespace-pre-line leading-relaxed text-center">
-                    {page.description}
+                  <div className="text-sm text-white/90 leading-relaxed text-center space-y-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3">
+                    {renderRichText(page.description)}
                   </div>
                 )}
 
