@@ -674,6 +674,25 @@ export function LiveCommentsHistory({ eventId }: Props) {
         prefillInstagram={orderPrefillHandle}
       />
 
+      {/* Modal Chat de DM */}
+      {chatTarget && (
+        <InstagramDMChat
+          open={chatOpen}
+          onOpenChange={(o) => {
+            setChatOpen(o);
+            if (!o) {
+              // refresh leituras pra apagar o badge
+              const handles = Array.from(new Set(comments.map(c => cleanHandle(c.username)).filter(Boolean)));
+              loadDmStatus(handles);
+            }
+          }}
+          username={chatTarget.handle}
+          eventId={eventId}
+          fallbackCommentId={chatTarget.commentId}
+          profilePicUrl={chatTarget.pic}
+        />
+      )}
+
       {/* Modal DM */}
       <Dialog open={dmModalOpen} onOpenChange={setDmModalOpen}>
         <DialogContent className="max-w-lg">
