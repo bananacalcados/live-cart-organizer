@@ -24,6 +24,7 @@ interface MetaInstance {
   is_default: boolean;
   phone_number_id: string | null;
   business_account_id: string | null;
+  access_token: string | null;
   created_at: string;
 }
 
@@ -41,13 +42,15 @@ export function MetaInstanceManager() {
   const [formPhone, setFormPhone] = useState("");
   const [formPhoneNumberId, setFormPhoneNumberId] = useState("");
   const [formWabaId, setFormWabaId] = useState("");
+  const [formAccessToken, setFormAccessToken] = useState("");
+  const [showFormToken, setShowFormToken] = useState(false);
   const [formIsActive, setFormIsActive] = useState(true);
 
   const fetchInstances = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers")
-      .select("id, label, phone_display, provider, is_active, is_default, phone_number_id, business_account_id, created_at")
+      .select("id, label, phone_display, provider, is_active, is_default, phone_number_id, business_account_id, access_token, created_at")
       .eq("provider", "meta")
       .order("created_at", { ascending: true });
 
@@ -68,6 +71,8 @@ export function MetaInstanceManager() {
     setFormPhone("");
     setFormPhoneNumberId("");
     setFormWabaId("");
+    setFormAccessToken("");
+    setShowFormToken(false);
     setFormIsActive(true);
     setEditingId(null);
   };
@@ -83,6 +88,8 @@ export function MetaInstanceManager() {
     setFormPhone(inst.phone_display);
     setFormPhoneNumberId(inst.phone_number_id || "");
     setFormWabaId(inst.business_account_id || "");
+    setFormAccessToken(inst.access_token || "");
+    setShowFormToken(false);
     setFormIsActive(inst.is_active);
     setDialogOpen(true);
   };
@@ -94,7 +101,7 @@ export function MetaInstanceManager() {
     }
     setSaving(true);
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       label: formLabel.trim(),
       phone_display: formPhone.trim(),
       provider: "meta" as const,
@@ -102,6 +109,14 @@ export function MetaInstanceManager() {
       phone_number_id: formPhoneNumberId.trim(),
       business_account_id: formWabaId.trim(),
     };
+
+    // Only update access_token if user typed something (don't wipe existing token on edit)
+    if (formAccessToken.trim()) {
+      payload.access_token = formAccessToken.trim();
+    } else if (!editingId) {
+      // On create, allow empty token (will need to be set later)
+      payload.access_token = null;
+    }
 
     let error;
     if (editingId) {
