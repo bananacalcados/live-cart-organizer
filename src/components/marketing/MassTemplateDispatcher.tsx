@@ -453,6 +453,22 @@ export function MassTemplateDispatcher() {
       // Get unique campaign tags
       const tags: string[] = [...new Set(allLeads.map((l: any) => l.campaign_tag).filter(Boolean))];
       setLeadCampaignTags(tags);
+
+      // Fetch Ravena customers (isolated base)
+      const allRavena: any[] = [];
+      let ravFrom = 0;
+      while (true) {
+        const { data: ravPage, error: ravErr } = await supabase
+          .from('ravena_customers' as any)
+          .select('id, name, phone, email, city, state, ddd, rfm_segment, region, total_orders, total_spent, avg_ticket, last_purchase_at, tags')
+          .order('total_spent', { ascending: false })
+          .range(ravFrom, ravFrom + 999);
+        if (ravErr || !ravPage || ravPage.length === 0) break;
+        allRavena.push(...ravPage);
+        if (ravPage.length < 1000) break;
+        ravFrom += 1000;
+      }
+      setRavenaCustomers(allRavena);
     } catch (err) { console.error(err); toast.error("Erro ao carregar audiência"); }
     finally { setIsLoadingAudience(false); }
   };
