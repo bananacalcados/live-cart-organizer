@@ -284,6 +284,24 @@ export function MetaInstanceManager() {
               <Input value={formWabaId} onChange={e => setFormWabaId(e.target.value)} placeholder="Ex: 3389632571189529" />
               <p className="text-xs text-muted-foreground">ID da Conta Business do WhatsApp (WABA)</p>
             </div>
+            <div className="space-y-1.5">
+              <Label>Access Token {editingId ? "" : "*"}</Label>
+              <div className="flex gap-1">
+                <Input
+                  type={showFormToken ? "text" : "password"}
+                  value={formAccessToken}
+                  onChange={e => setFormAccessToken(e.target.value)}
+                  placeholder={editingId ? "Deixe em branco para manter o atual" : "Cole o token gerado no Meta"}
+                  className="font-mono text-xs"
+                />
+                <Button type="button" variant="outline" size="icon" onClick={() => setShowFormToken(s => !s)}>
+                  {showFormToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Token de acesso (System User permanente recomendado, ou temporário 24h do API Setup)
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <Switch checked={formIsActive} onCheckedChange={setFormIsActive} />
               <Label>Instância ativa</Label>
