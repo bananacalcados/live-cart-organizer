@@ -123,15 +123,53 @@ export const savePosCustomer = async (
     return data;
   };
 
+  // CASO 1: edição explícita de cliente existente — atualiza somente esse ID, sem fallback
   if (existingCustomerId) {
     const updated = await updateById(existingCustomerId);
     if (updated) return updated;
+    // Se o ID veio mas não existe mais, NÃO faz fallback de match para evitar sequestro
+    throw new Error("Cliente não encontrado para atualização");
   }
 
-  const matchedCustomerId = await findExistingCustomerId(payload);
-  if (matchedCustomerId) {
-    const updated = await updateById(matchedCustomerId);
-    if (updated) return updated;
+  // CASO 2: cadastro novo — só faz match se TIVER pelo menos um identificador forte (cpf, whatsapp ou email)
+  // E o nome no payload bate (mesmas iniciais) com o cliente encontrado, evitando sobrescrever cadastros alheios
+  const hasStrongIdentifier = !!(payload.cpf || payload.whatsapp || payload.email);
+  if (hasStrongIdentifier) {
+    const matchedCustomerId = await findExistingCustomerId(payload);
+    if (matchedCustomerId) {
+      // Trava de segurança: confere se o nome do match é compatível com o nome digitado
+      const { data: matchedCustomer } = await supabase
+        .from("pos_customers")
+        .select("id, name")
+        .eq("id", matchedCustomerId)
+        .maybeSingle();
+
+      const normalizeName = (n: string | null | undefined) =>
+        (n || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+
+      const newName = normalizeName(payload.name);
+      const existingName = normalizeName(matchedCustomer?.name);
+
+      // Aceita match se: nomes idênticos OU primeiro nome igual OU um contém o outro
+      const firstNameNew = newName.split(" ")[0];
+      const firstNameOld = existingName.split(" ")[0];
+      const namesCompatible =
+        !existingName ||
+        newName === existingName ||
+        firstNameNew === firstNameOld ||
+        existingName.includes(newName) ||
+        newName.includes(existingName);
+
+      if (namesCompatible) {
+        const updated = await updateById(matchedCustomerId);
+        if (updated) return updated;
+      } else {
+        // Nome incompatível — não sobrescreve cadastro alheio. Cria novo.
+        console.warn(
+          `[savePosCustomer] Bloqueado sequestro: nome novo "${payload.name}" não bate com cadastro existente "${matchedCustomer?.name}" (id: ${matchedCustomerId}). Criando novo cliente.`,
+        );
+      }
+    }
   }
 
   const { data, error } = await supabase
