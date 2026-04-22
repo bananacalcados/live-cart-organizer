@@ -37,7 +37,9 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
   });
   const [form, setForm] = useState(initForm);
 
-  // Reset form and load previous numbers when existingCustomer changes
+  // Reset form sempre que o modal abrir OU quando o cliente alvo trocar
+  // Isso evita que dados de uma sessão anterior (ex.: cliente recém-editado)
+  // contaminem um novo cadastro feito logo em seguida.
   useEffect(() => {
     if (open) {
       setForm(initForm());
@@ -54,7 +56,11 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
       } else {
         setPreviousNumbers([]);
       }
+    } else {
+      // Ao fechar, limpa o estado para a próxima abertura nascer limpa
+      setPreviousNumbers([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existingCustomer?.id]);
 
   const update = (field: string, value: string | boolean) => setForm(f => ({ ...f, [field]: value }));
