@@ -46,7 +46,7 @@ interface Recipient {
   name: string;
   firstName: string;
   lastName: string;
-  source: 'crm' | 'lead';
+  source: 'crm' | 'lead' | 'ravena';
   segment?: string;
   city?: string;
   state?: string;
@@ -93,9 +93,10 @@ export function MassTemplateDispatcher() {
   const [variables, setVariables] = useState<Record<string, { mode: string; staticValue: string }>>({});
 
   // Audience
-  const [audienceSource, setAudienceSource] = useState<'crm' | 'leads' | 'both'>('crm');
+  const [audienceSource, setAudienceSource] = useState<'crm' | 'leads' | 'both' | 'ravena'>('crm');
   const [crmCustomers, setCrmCustomers] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
+  const [ravenaCustomers, setRavenaCustomers] = useState<any[]>([]);
   const [isLoadingAudience, setIsLoadingAudience] = useState(false);
 
   // CRM Filters (same as RFM tab)
@@ -452,6 +453,22 @@ export function MassTemplateDispatcher() {
       // Get unique campaign tags
       const tags: string[] = [...new Set(allLeads.map((l: any) => l.campaign_tag).filter(Boolean))];
       setLeadCampaignTags(tags);
+
+      // Fetch Ravena customers (isolated base)
+      const allRavena: any[] = [];
+      let ravFrom = 0;
+      while (true) {
+        const { data: ravPage, error: ravErr } = await supabase
+          .from('ravena_customers' as any)
+          .select('id, name, phone, email, city, state, ddd, rfm_segment, region, total_orders, total_spent, avg_ticket, last_purchase_at, tags')
+          .order('total_spent', { ascending: false })
+          .range(ravFrom, ravFrom + 999);
+        if (ravErr || !ravPage || ravPage.length === 0) break;
+        allRavena.push(...ravPage);
+        if (ravPage.length < 1000) break;
+        ravFrom += 1000;
+      }
+      setRavenaCustomers(allRavena);
     } catch (err) { console.error(err); toast.error("Erro ao carregar audiência"); }
     finally { setIsLoadingAudience(false); }
   };
@@ -544,8 +561,9 @@ export function MassTemplateDispatcher() {
     const list: Recipient[] = [];
     const addedPhones = new Set<string>();
 
-    if (audienceSource === 'crm' || audienceSource === 'both') {
-      for (const c of crmCustomers) {
+    // Ravena is ISOLATED — never mixes with Banana CRM/leads
+    if (audienceSource === 'ravena') {
+      for (const c of ravenaCustomers) {
         if (!c.phone) continue;
         const phone = c.phone.replace(/\D/g, '');
         if (!phone || phone.length < 8) continue;
@@ -554,64 +572,103 @@ export function MassTemplateDispatcher() {
         if (cityFilter !== 'all' && c.city !== cityFilter) continue;
         if (dddFilter !== 'all' && c.ddd !== dddFilter) continue;
         if (crmTagFilter !== 'all' && !(c.tags || []).includes(crmTagFilter)) continue;
-        if (regionFilter !== 'all' && c.region_type !== regionFilter) continue;
 
-        // Store/seller filters via mapping
-        const phoneSuffix = phone.slice(-8);
-        const mapping = customerStoreMap.get(phoneSuffix);
-        if (storeFilter !== 'all' && mapping?.store_id !== storeFilter) continue;
-        if (sellerFilter !== 'all' && mapping?.seller_id !== sellerFilter) continue;
-
-        // Date filters
         if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) continue;
         if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo) continue;
-
-        // Ticket filters
         if (ticketMin && (c.avg_ticket || 0) < parseFloat(ticketMin)) continue;
         if (ticketMax && (c.avg_ticket || 0) > parseFloat(ticketMax)) continue;
-
-        // Orders filters
         if (ordersMin && (c.total_orders || 0) < parseInt(ordersMin)) continue;
         if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
 
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
-          const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
-          if (!name.includes(q) && !phone.includes(q)) continue;
+          if (!(c.name || '').toLowerCase().includes(q) && !phone.includes(q)) continue;
         }
         if (addedPhones.has(phone)) continue;
         addedPhones.add(phone);
+        const fullName = (c.name || '').trim();
         list.push({
           phone,
-          name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || phone,
-          firstName: c.first_name || '',
-          lastName: c.last_name || '',
-          source: 'crm',
+          name: fullName || phone,
+          firstName: fullName.split(' ')[0] || '',
+          lastName: fullName.split(' ').slice(1).join(' '),
+          source: 'ravena',
           segment: c.rfm_segment || undefined,
           city: c.city || undefined,
           state: c.state || undefined,
           email: c.email || undefined,
         });
       }
-    }
+    } else {
+      if (audienceSource === 'crm' || audienceSource === 'both') {
+        for (const c of crmCustomers) {
+          if (!c.phone) continue;
+          const phone = c.phone.replace(/\D/g, '');
+          if (!phone || phone.length < 8) continue;
+          if (rfmFilter !== 'all' && c.rfm_segment !== rfmFilter) continue;
+          if (stateFilter !== 'all' && c.state !== stateFilter) continue;
+          if (cityFilter !== 'all' && c.city !== cityFilter) continue;
+          if (dddFilter !== 'all' && c.ddd !== dddFilter) continue;
+          if (crmTagFilter !== 'all' && !(c.tags || []).includes(crmTagFilter)) continue;
+          if (regionFilter !== 'all' && c.region_type !== regionFilter) continue;
 
-    if (audienceSource === 'leads' || audienceSource === 'both') {
-      for (const l of leads) {
-        if (!l.phone) continue;
-        const phone = l.phone.replace(/\D/g, '');
-        if (!phone || phone.length < 8) continue;
-        if (leadCampaignFilter !== 'all' && l.campaign_tag !== leadCampaignFilter) continue;
-        if (addedPhones.has(phone)) continue;
-        addedPhones.add(phone);
-        const leadName = l.name || phone;
-        const leadFirstName = leadName.split(' ')[0];
-        list.push({
-          phone,
-          name: leadName,
-          firstName: leadFirstName,
-          lastName: leadName.split(' ').slice(1).join(' '),
-          source: 'lead',
-        });
+          // Store/seller filters via mapping
+          const phoneSuffix = phone.slice(-8);
+          const mapping = customerStoreMap.get(phoneSuffix);
+          if (storeFilter !== 'all' && mapping?.store_id !== storeFilter) continue;
+          if (sellerFilter !== 'all' && mapping?.seller_id !== sellerFilter) continue;
+
+          // Date filters
+          if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) continue;
+          if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo) continue;
+
+          // Ticket filters
+          if (ticketMin && (c.avg_ticket || 0) < parseFloat(ticketMin)) continue;
+          if (ticketMax && (c.avg_ticket || 0) > parseFloat(ticketMax)) continue;
+
+          // Orders filters
+          if (ordersMin && (c.total_orders || 0) < parseInt(ordersMin)) continue;
+          if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
+
+          if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
+            if (!name.includes(q) && !phone.includes(q)) continue;
+          }
+          if (addedPhones.has(phone)) continue;
+          addedPhones.add(phone);
+          list.push({
+            phone,
+            name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || phone,
+            firstName: c.first_name || '',
+            lastName: c.last_name || '',
+            source: 'crm',
+            segment: c.rfm_segment || undefined,
+            city: c.city || undefined,
+            state: c.state || undefined,
+            email: c.email || undefined,
+          });
+        }
+      }
+
+      if (audienceSource === 'leads' || audienceSource === 'both') {
+        for (const l of leads) {
+          if (!l.phone) continue;
+          const phone = l.phone.replace(/\D/g, '');
+          if (!phone || phone.length < 8) continue;
+          if (leadCampaignFilter !== 'all' && l.campaign_tag !== leadCampaignFilter) continue;
+          if (addedPhones.has(phone)) continue;
+          addedPhones.add(phone);
+          const leadName = l.name || phone;
+          const leadFirstName = leadName.split(' ')[0];
+          list.push({
+            phone,
+            name: leadName,
+            firstName: leadFirstName,
+            lastName: leadName.split(' ').slice(1).join(' '),
+            source: 'lead',
+          });
+        }
       }
     }
 
@@ -627,7 +684,7 @@ export function MassTemplateDispatcher() {
     }
 
     return finalList;
-  }, [crmCustomers, leads, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, cooldownApplied, cooldownExcludedPhones]);
+  }, [crmCustomers, leads, ravenaCustomers, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, cooldownApplied, cooldownExcludedPhones]);
 
   // Unique filter options
   const uniqueSegments = useMemo(() => [...new Set(crmCustomers.map(c => c.rfm_segment).filter(Boolean))].sort(), [crmCustomers]);
@@ -1047,7 +1104,7 @@ export function MassTemplateDispatcher() {
 
     // Set audience source & filters
     if (data.audience_source) {
-      setAudienceSource(data.audience_source as 'crm' | 'leads' | 'both');
+      setAudienceSource(data.audience_source as 'crm' | 'leads' | 'both' | 'ravena');
     }
     if (data.audience_filters) {
       const f = data.audience_filters;
@@ -1364,6 +1421,7 @@ export function MassTemplateDispatcher() {
                 { value: 'crm' as const, label: 'Clientes CRM', icon: Users },
                 { value: 'leads' as const, label: 'Leads Captados', icon: FileSpreadsheet },
                 { value: 'both' as const, label: 'Ambos', icon: Zap },
+                { value: 'ravena' as const, label: '🌸 Ravena', icon: Store },
               ].map(s => (
                 <Button
                   key={s.value}
