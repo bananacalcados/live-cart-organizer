@@ -628,6 +628,30 @@ export function LiveCommentsHistory({ eventId }: Props) {
                           >
                             <Instagram className="h-3 w-3" /> Enviar DM
                           </Button>
+                          {(() => {
+                            const lastInc = lastIncomingByHandle.get(group.handle);
+                            const lastRead = lastReadByHandle.get(group.handle);
+                            const hasUnread = !!lastInc && (!lastRead || lastInc > lastRead);
+                            return (
+                              <Button
+                                variant={hasUnread ? "default" : "outline"}
+                                size="sm"
+                                className={`h-7 text-xs gap-1 relative ${
+                                  hasUnread
+                                    ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:opacity-90 ring-2 ring-pink-400/50 animate-pulse"
+                                    : ""
+                                }`}
+                                onClick={() => openChat(group)}
+                                title={hasUnread ? "Nova mensagem!" : "Abrir conversa"}
+                              >
+                                <MessageCircle className="h-3 w-3" />
+                                Abrir DM
+                                {hasUnread && (
+                                  <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 border-2 border-background" />
+                                )}
+                              </Button>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
