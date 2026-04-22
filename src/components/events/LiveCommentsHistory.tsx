@@ -83,9 +83,31 @@ export function LiveCommentsHistory({ eventId }: Props) {
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [orderPrefillHandle, setOrderPrefillHandle] = useState<string>("");
 
+  // Chat de DM aberto
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatTarget, setChatTarget] = useState<{ handle: string; commentId?: string; pic?: string | null } | null>(null);
+
+  // Vínculos handle -> ig_user_id (pra ouvir realtime e contar não lidas)
+  const [handleToIgId, setHandleToIgId] = useState<Map<string, string>>(new Map());
+  // Última mensagem incoming por handle (timestamp)
+  const [lastIncomingByHandle, setLastIncomingByHandle] = useState<Map<string, string>>(new Map());
+  // Última leitura do user logado por handle
+  const [lastReadByHandle, setLastReadByHandle] = useState<Map<string, string>>(new Map());
+
   const openCreateOrder = (handle: string) => {
     setOrderPrefillHandle(handle.replace(/^@/, ""));
     setOrderDialogOpen(true);
+  };
+
+  const openChat = (group: UserGroup) => {
+    setChatTarget({ handle: group.handle, commentId: group.latestCommentId, pic: group.profile_pic_url });
+    setChatOpen(true);
+    // marca como lido localmente já
+    setLastReadByHandle(prev => {
+      const next = new Map(prev);
+      next.set(group.handle, new Date().toISOString());
+      return next;
+    });
   };
 
   const loadAll = useCallback(async () => {
