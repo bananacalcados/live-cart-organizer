@@ -24,6 +24,7 @@ interface MetaInstance {
   is_default: boolean;
   phone_number_id: string | null;
   business_account_id: string | null;
+  access_token: string | null;
   created_at: string;
 }
 
@@ -41,13 +42,15 @@ export function MetaInstanceManager() {
   const [formPhone, setFormPhone] = useState("");
   const [formPhoneNumberId, setFormPhoneNumberId] = useState("");
   const [formWabaId, setFormWabaId] = useState("");
+  const [formAccessToken, setFormAccessToken] = useState("");
+  const [showFormToken, setShowFormToken] = useState(false);
   const [formIsActive, setFormIsActive] = useState(true);
 
   const fetchInstances = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers")
-      .select("id, label, phone_display, provider, is_active, is_default, phone_number_id, business_account_id, created_at")
+      .select("id, label, phone_display, provider, is_active, is_default, phone_number_id, business_account_id, access_token, created_at")
       .eq("provider", "meta")
       .order("created_at", { ascending: true });
 
@@ -68,6 +71,8 @@ export function MetaInstanceManager() {
     setFormPhone("");
     setFormPhoneNumberId("");
     setFormWabaId("");
+    setFormAccessToken("");
+    setShowFormToken(false);
     setFormIsActive(true);
     setEditingId(null);
   };
@@ -83,6 +88,8 @@ export function MetaInstanceManager() {
     setFormPhone(inst.phone_display);
     setFormPhoneNumberId(inst.phone_number_id || "");
     setFormWabaId(inst.business_account_id || "");
+    setFormAccessToken(inst.access_token || "");
+    setShowFormToken(false);
     setFormIsActive(inst.is_active);
     setDialogOpen(true);
   };
@@ -94,7 +101,7 @@ export function MetaInstanceManager() {
     }
     setSaving(true);
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       label: formLabel.trim(),
       phone_display: formPhone.trim(),
       provider: "meta" as const,
@@ -103,11 +110,19 @@ export function MetaInstanceManager() {
       business_account_id: formWabaId.trim(),
     };
 
+    // Only update access_token if user typed something (don't wipe existing token on edit)
+    if (formAccessToken.trim()) {
+      payload.access_token = formAccessToken.trim();
+    } else if (!editingId) {
+      // On create, allow empty token (will need to be set later)
+      payload.access_token = null;
+    }
+
     let error;
     if (editingId) {
-      ({ error } = await supabase.from("whatsapp_numbers").update(payload).eq("id", editingId));
+      ({ error } = await supabase.from("whatsapp_numbers").update(payload as never).eq("id", editingId));
     } else {
-      ({ error } = await supabase.from("whatsapp_numbers").insert({ ...payload, is_default: false }));
+      ({ error } = await supabase.from("whatsapp_numbers").insert({ ...payload, is_default: false } as never));
     }
 
     if (error) {
@@ -268,6 +283,24 @@ export function MetaInstanceManager() {
               <Label>WABA ID (Business Account ID) *</Label>
               <Input value={formWabaId} onChange={e => setFormWabaId(e.target.value)} placeholder="Ex: 3389632571189529" />
               <p className="text-xs text-muted-foreground">ID da Conta Business do WhatsApp (WABA)</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Access Token {editingId ? "" : "*"}</Label>
+              <div className="flex gap-1">
+                <Input
+                  type={showFormToken ? "text" : "password"}
+                  value={formAccessToken}
+                  onChange={e => setFormAccessToken(e.target.value)}
+                  placeholder={editingId ? "Deixe em branco para manter o atual" : "Cole o token gerado no Meta"}
+                  className="font-mono text-xs"
+                />
+                <Button type="button" variant="outline" size="icon" onClick={() => setShowFormToken(s => !s)}>
+                  {showFormToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Token de acesso (System User permanente recomendado, ou temporário 24h do API Setup)
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={formIsActive} onCheckedChange={setFormIsActive} />
