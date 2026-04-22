@@ -8637,6 +8637,87 @@ export type Database = {
         }
         Relationships: []
       }
+      ravena_customers: {
+        Row: {
+          avg_ticket: number | null
+          city: string | null
+          created_at: string
+          ddd: string | null
+          email: string | null
+          first_purchase_at: string | null
+          id: string
+          is_active: boolean
+          last_purchase_at: string | null
+          name: string | null
+          phone: string
+          region: string | null
+          rfm_f: number | null
+          rfm_m: number | null
+          rfm_r: number | null
+          rfm_segment: string | null
+          rfm_total: number | null
+          seller: string | null
+          state: string | null
+          store: string | null
+          tags: string[] | null
+          total_orders: number | null
+          total_spent: number | null
+          updated_at: string
+        }
+        Insert: {
+          avg_ticket?: number | null
+          city?: string | null
+          created_at?: string
+          ddd?: string | null
+          email?: string | null
+          first_purchase_at?: string | null
+          id?: string
+          is_active?: boolean
+          last_purchase_at?: string | null
+          name?: string | null
+          phone: string
+          region?: string | null
+          rfm_f?: number | null
+          rfm_m?: number | null
+          rfm_r?: number | null
+          rfm_segment?: string | null
+          rfm_total?: number | null
+          seller?: string | null
+          state?: string | null
+          store?: string | null
+          tags?: string[] | null
+          total_orders?: number | null
+          total_spent?: number | null
+          updated_at?: string
+        }
+        Update: {
+          avg_ticket?: number | null
+          city?: string | null
+          created_at?: string
+          ddd?: string | null
+          email?: string | null
+          first_purchase_at?: string | null
+          id?: string
+          is_active?: boolean
+          last_purchase_at?: string | null
+          name?: string | null
+          phone?: string
+          region?: string | null
+          rfm_f?: number | null
+          rfm_m?: number | null
+          rfm_r?: number | null
+          rfm_segment?: string | null
+          rfm_total?: number | null
+          seller?: string | null
+          state?: string | null
+          store?: string | null
+          tags?: string[] | null
+          total_orders?: number | null
+          total_spent?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       scheduled_messages: {
         Row: {
           created_at: string
