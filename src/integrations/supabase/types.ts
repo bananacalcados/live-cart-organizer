@@ -4508,6 +4508,54 @@ export type Database = {
           },
         ]
       }
+      instagram_dm_reads: {
+        Row: {
+          id: string
+          last_read_at: string
+          user_id: string
+          username: string
+        }
+        Insert: {
+          id?: string
+          last_read_at?: string
+          user_id: string
+          username: string
+        }
+        Update: {
+          id?: string
+          last_read_at?: string
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
+      instagram_user_links: {
+        Row: {
+          created_at: string
+          id: string
+          ig_user_id: string
+          last_seen_at: string
+          source: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ig_user_id: string
+          last_seen_at?: string
+          source?: string
+          username: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ig_user_id?: string
+          last_seen_at?: string
+          source?: string
+          username?: string
+        }
+        Relationships: []
+      }
       internal_cashback: {
         Row: {
           cashback_amount: number

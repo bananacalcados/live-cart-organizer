@@ -12,10 +12,11 @@ import {
 } from "@/components/ui/dialog";
 import {
   Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles,
-  Send, Search, Users, Filter, CheckCheck, AlertCircle, History, Plus,
+  Send, Search, Users, Filter, CheckCheck, AlertCircle, History, Plus, MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 
 interface LiveComment {
   id: string;
@@ -82,9 +83,31 @@ export function LiveCommentsHistory({ eventId }: Props) {
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [orderPrefillHandle, setOrderPrefillHandle] = useState<string>("");
 
+  // Chat de DM aberto
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatTarget, setChatTarget] = useState<{ handle: string; commentId?: string; pic?: string | null } | null>(null);
+
+  // Vínculos handle -> ig_user_id (pra ouvir realtime e contar não lidas)
+  const [handleToIgId, setHandleToIgId] = useState<Map<string, string>>(new Map());
+  // Última mensagem incoming por handle (timestamp)
+  const [lastIncomingByHandle, setLastIncomingByHandle] = useState<Map<string, string>>(new Map());
+  // Última leitura do user logado por handle
+  const [lastReadByHandle, setLastReadByHandle] = useState<Map<string, string>>(new Map());
+
   const openCreateOrder = (handle: string) => {
     setOrderPrefillHandle(handle.replace(/^@/, ""));
     setOrderDialogOpen(true);
+  };
+
+  const openChat = (group: UserGroup) => {
+    setChatTarget({ handle: group.handle, commentId: group.latestCommentId, pic: group.profile_pic_url });
+    setChatOpen(true);
+    // marca como lido localmente já
+    setLastReadByHandle(prev => {
+      const next = new Map(prev);
+      next.set(group.handle, new Date().toISOString());
+      return next;
+    });
   };
 
   const loadAll = useCallback(async () => {
@@ -168,6 +191,98 @@ export function LiveCommentsHistory({ eventId }: Props) {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [eventId]);
+
+  // Carregar vínculos username -> ig_user_id e leituras do user logado
+  const loadDmStatus = useCallback(async (handles: string[]) => {
+    if (handles.length === 0) return;
+    const lower = handles.map(h => h.toLowerCase());
+
+    // 1) Vínculos
+    const { data: links } = await supabase
+      .from("instagram_user_links")
+      .select("username, ig_user_id")
+      .in("username", lower);
+
+    const linkMap = new Map<string, string>();
+    const igIds: string[] = [];
+    (links || []).forEach((l: any) => {
+      linkMap.set(l.username.toLowerCase(), l.ig_user_id);
+      igIds.push(l.ig_user_id);
+    });
+    setHandleToIgId(linkMap);
+
+    // 2) Última mensagem incoming por handle (via phone = ig_user_id)
+    if (igIds.length > 0) {
+      const { data: msgs } = await supabase
+        .from("whatsapp_messages")
+        .select("phone, created_at")
+        .eq("channel", "instagram")
+        .eq("direction", "incoming")
+        .in("phone", igIds)
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      const lastInc = new Map<string, string>();
+      const igToHandle = new Map<string, string>();
+      linkMap.forEach((id, h) => igToHandle.set(id, h));
+      (msgs || []).forEach((m: any) => {
+        const h = igToHandle.get(m.phone);
+        if (!h) return;
+        const prev = lastInc.get(h);
+        if (!prev || m.created_at > prev) lastInc.set(h, m.created_at);
+      });
+      setLastIncomingByHandle(lastInc);
+    }
+
+    // 3) Leituras do user logado
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: reads } = await supabase
+        .from("instagram_dm_reads")
+        .select("username, last_read_at")
+        .eq("user_id", user.id)
+        .in("username", lower);
+      const readMap = new Map<string, string>();
+      (reads || []).forEach((r: any) => readMap.set(r.username.toLowerCase(), r.last_read_at));
+      setLastReadByHandle(readMap);
+    }
+  }, []);
+
+  // Quando os comentários atualizam, recarrega status DM dos handles visíveis
+  useEffect(() => {
+    const handles = Array.from(new Set(comments.map(c => cleanHandle(c.username)).filter(Boolean)));
+    if (handles.length > 0) loadDmStatus(handles);
+  }, [comments, loadDmStatus]);
+
+  // Realtime: novas mensagens incoming do Instagram
+  useEffect(() => {
+    if (handleToIgId.size === 0) return;
+    const igIds = Array.from(handleToIgId.values());
+    const igToHandle = new Map<string, string>();
+    handleToIgId.forEach((id, h) => igToHandle.set(id, h));
+
+    const ch = supabase
+      .channel(`ig-incoming-${eventId}-${Date.now()}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "whatsapp_messages",
+      }, (payload) => {
+        const m = payload.new as any;
+        if (m.channel !== "instagram" || m.direction !== "incoming") return;
+        const handle = igToHandle.get(m.phone);
+        if (!handle) return;
+
+        setLastIncomingByHandle(prev => {
+          const next = new Map(prev);
+          next.set(handle, m.created_at);
+          return next;
+        });
+        toast(`📩 @${handle} respondeu no Instagram`, { duration: 4000 });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [handleToIgId, eventId]);
 
   // Agrupa por usuário
   const userGroups = useMemo<UserGroup[]>(() => {
@@ -513,6 +628,30 @@ export function LiveCommentsHistory({ eventId }: Props) {
                           >
                             <Instagram className="h-3 w-3" /> Enviar DM
                           </Button>
+                          {(() => {
+                            const lastInc = lastIncomingByHandle.get(group.handle);
+                            const lastRead = lastReadByHandle.get(group.handle);
+                            const hasUnread = !!lastInc && (!lastRead || lastInc > lastRead);
+                            return (
+                              <Button
+                                variant={hasUnread ? "default" : "outline"}
+                                size="sm"
+                                className={`h-7 text-xs gap-1 relative ${
+                                  hasUnread
+                                    ? "bg-gradient-to-r from-pink-500 to-purple-600 text-white hover:opacity-90 ring-2 ring-pink-400/50 animate-pulse"
+                                    : ""
+                                }`}
+                                onClick={() => openChat(group)}
+                                title={hasUnread ? "Nova mensagem!" : "Abrir conversa"}
+                              >
+                                <MessageCircle className="h-3 w-3" />
+                                Abrir DM
+                                {hasUnread && (
+                                  <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 border-2 border-background" />
+                                )}
+                              </Button>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -534,6 +673,25 @@ export function LiveCommentsHistory({ eventId }: Props) {
         eventId={eventId}
         prefillInstagram={orderPrefillHandle}
       />
+
+      {/* Modal Chat de DM */}
+      {chatTarget && (
+        <InstagramDMChat
+          open={chatOpen}
+          onOpenChange={(o) => {
+            setChatOpen(o);
+            if (!o) {
+              // refresh leituras pra apagar o badge
+              const handles = Array.from(new Set(comments.map(c => cleanHandle(c.username)).filter(Boolean)));
+              loadDmStatus(handles);
+            }
+          }}
+          username={chatTarget.handle}
+          eventId={eventId}
+          fallbackCommentId={chatTarget.commentId}
+          profilePicUrl={chatTarget.pic}
+        />
+      )}
 
       {/* Modal DM */}
       <Dialog open={dmModalOpen} onOpenChange={setDmModalOpen}>
