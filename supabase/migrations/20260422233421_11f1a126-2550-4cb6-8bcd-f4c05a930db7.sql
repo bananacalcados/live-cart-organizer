@@ -1,0 +1,1 @@
+ALTER TABLE public.whatsapp_numbers ADD COLUMN IF NOT EXISTS ai_paused BOOLEAN NOT NULL DEFAULT false;

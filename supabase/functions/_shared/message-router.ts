@@ -87,12 +87,29 @@ export async function routeMessage(
   supabase: SupabaseClient,
   input: RouteInput
 ): Promise<RouteResult> {
-  const { phone, isGroup, referral } = input;
+  const { phone, isGroup, referral, whatsappNumberId } = input;
   const normalizedPhone = phone.replace(/\D/g, '');
 
   // 0. Groups → no agent routing (handled separately by group logic)
   if (isGroup) {
     return { agent: 'none', reason: 'group_message' };
+  }
+
+  // 0b. Check if the WhatsApp instance has AI globally paused (e.g. Ravena)
+  if (whatsappNumberId) {
+    try {
+      const { data: numberRow } = await supabase
+        .from('whatsapp_numbers')
+        .select('ai_paused, label')
+        .eq('id', whatsappNumberId)
+        .maybeSingle();
+      if (numberRow?.ai_paused) {
+        console.log(`[router] AI paused for whole instance ${numberRow.label} (${whatsappNumberId}), skipping all agents`);
+        return { agent: 'none', reason: 'instance_ai_paused' };
+      }
+    } catch (err) {
+      console.error('[router] Error checking instance ai_paused:', err);
+    }
   }
 
   // 1. Check if AI is paused for this phone (human assumed control)

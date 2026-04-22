@@ -10059,6 +10059,7 @@ export type Database = {
       whatsapp_numbers: {
         Row: {
           access_token: string | null
+          ai_paused: boolean
           business_account_id: string | null
           created_at: string
           id: string
@@ -10075,6 +10076,7 @@ export type Database = {
         }
         Insert: {
           access_token?: string | null
+          ai_paused?: boolean
           business_account_id?: string | null
           created_at?: string
           id?: string
@@ -10091,6 +10093,7 @@ export type Database = {
         }
         Update: {
           access_token?: string | null
+          ai_paused?: boolean
           business_account_id?: string | null
           created_at?: string
           id?: string
