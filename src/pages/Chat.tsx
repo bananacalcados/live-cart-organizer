@@ -38,6 +38,7 @@ import { TransferConversationDialog } from "@/components/chat/TransferConversati
 import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { AutoReplySettings } from "@/components/chat/AutoReplySettings";
+import { AiTransferBell } from "@/components/chat/AiTransferBell";
 import { AttendantMetrics } from "@/components/chat/AttendantMetrics";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import {
@@ -890,6 +891,13 @@ export default function ChatPage() {
           {isAdmin && (
             <AutoReplySettings whatsappNumberId={numberFilter !== 'all' ? numberFilter : (selectedNumberId || numbers[0]?.id || null)} />
           )}
+          {/* AI-transfer bell (all users) */}
+          <AiTransferBell
+            onSelectPhone={(phone) => {
+              setStatusFilter('ai_transferred');
+              setSelectedPhone(phone);
+            }}
+          />
         </div>
       </div>
 

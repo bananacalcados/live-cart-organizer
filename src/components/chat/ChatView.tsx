@@ -32,6 +32,7 @@ import { WhatsAppMediaAttachment } from "./WhatsAppMediaAttachment";
 import { InstagramReferralCard } from "./InstagramReferralCard";
 import { QuickReplyPicker } from "./QuickReplyPicker";
 import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
+import { AiTransferBanner } from "./AiTransferBanner";
 
 interface ChatViewProps {
   messages: Message[];
@@ -439,6 +440,11 @@ export function ChatView({
             </PopoverContent>
           </Popover>
         </div>
+      )}
+
+      {/* AI Transfer banner */}
+      {conversation && !conversation.isGroup && (
+        <AiTransferBanner phone={conversation.phone} />
       )}
 
       {/* Customer Info Panel */}

@@ -55,6 +55,7 @@ interface ConversationListProps {
 const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel: string }[] = [
   { value: 'all', label: 'Todas', shortLabel: 'Todas' },
   { value: 'not_started', label: 'Não Iniciadas', shortLabel: 'Novas' },
+  { value: 'ai_transferred', label: 'Transferidas pela IA', shortLabel: 'IA 🤖' },
   { value: 'awaiting_reply', label: 'Aguardando Resposta', shortLabel: 'Aguard.' },
   { value: 'awaiting_customer', label: 'Follow Up', shortLabel: 'Follow Up 🔄' },
   { value: 'dispatch', label: 'Disparos', shortLabel: 'Disparos 📢' },
@@ -140,6 +141,7 @@ export function ConversationList({
       if (statusFilter === 'archived') return c.isArchived;
       if (statusFilter === 'awaiting_payment') return c.isAwaitingPayment && !c.isArchived;
       if (statusFilter === 'finished') return c.isFinished && !c.isArchived;
+      if (statusFilter === 'ai_transferred') return c.isAiTransferred && !c.isFinished && !c.isArchived;
       if (c.isFinished || c.isArchived || c.isDispatchOnly) return false;
       return c.conversationStatus === statusFilter;
     })
@@ -170,6 +172,7 @@ export function ConversationList({
   const statusCounts: Record<ConversationStatusFilter, number> = {
     all: conversations.filter(c => !c.isArchived && !c.isFinished && !c.isDispatchOnly).length,
     not_started: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'not_started').length,
+    ai_transferred: conversations.filter(c => c.isAiTransferred && !c.isFinished && !c.isArchived).length,
     awaiting_reply: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_reply').length,
     awaiting_customer: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_customer').length,
     dispatch: conversations.filter(c => c.isDispatchOnly && !c.isArchived).length,
@@ -517,6 +520,11 @@ export function ConversationList({
                       {conv.lastMessage}
                     </p>
                      <div className="flex items-center gap-1 flex-shrink-0">
+                      {conv.isAiTransferred && (
+                        <Badge className="text-[8px] px-1 py-0 leading-tight bg-orange-500/20 text-orange-500 border-orange-400/40 hover:bg-orange-500/30">
+                          🤖 IA transferiu
+                        </Badge>
+                      )}
                       {conv.channel === 'instagram' && (
                         <Badge className="text-[8px] px-1 py-0 leading-tight bg-pink-500/20 text-pink-400 border-pink-400/30 hover:bg-pink-500/30">
                           📷 Instagram
