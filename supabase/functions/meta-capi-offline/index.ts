@@ -207,12 +207,12 @@ Deno.serve(async (req) => {
       customer = c;
     }
 
-    // 3) Busca dados da loja (pra context: city/state/zip)
+    // 3) Busca dados da loja (só nome — pos_stores não tem city/state/cep estruturados)
     let store: any = null;
     if (sale.store_id) {
       const { data: s } = await supabase
         .from("pos_stores")
-        .select("name, city, state, cep")
+        .select("name")
         .eq("id", sale.store_id)
         .maybeSingle();
       store = s;
