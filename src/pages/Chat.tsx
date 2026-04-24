@@ -617,6 +617,8 @@ export default function ChatPage() {
           sender_user_id: currentUserId || null,
           quoted_message_id: quotedMessage?.message_id || null,
         } as any);
+        // Mark AI handoff as picked up by human
+        resolveAiTransfer(selectedPhone);
         loadMessages(selectedPhone, false, selectedConvNumberId);
       }
       URL.revokeObjectURL(selectedMedia.previewUrl);
@@ -654,6 +656,8 @@ export default function ChatPage() {
         sender_user_id: currentUserId || null,
         quoted_message_id: quotedMessage?.message_id || null,
       } as any);
+      // Mark AI handoff as picked up by human
+      resolveAiTransfer(selectedPhone);
       loadMessages(selectedPhone, false, selectedConvNumberId);
     }
     setIsSending(false);
