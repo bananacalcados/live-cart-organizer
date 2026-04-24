@@ -148,6 +148,17 @@ export function useConversationEnrichment() {
           whatsapp_number_id: extras.whatsappNumberId ?? null,
         } as any).select('id').single();
 
+        // Capture Meta browser cookies (fbc/fbp) for better attribution match (EMQ).
+        // These must be sent in PLAIN TEXT (not hashed) per Meta CAPI spec.
+        const readCookie = (name: string): string | undefined => {
+          try {
+            const m = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]+)'));
+            return m ? decodeURIComponent(m[1]) : undefined;
+          } catch { return undefined; }
+        };
+        const fbc = readCookie('_fbc');
+        const fbp = readCookie('_fbp');
+
         // Fire Meta CAPI Purchase (non-blocking)
         supabase.functions.invoke('meta-capi-purchase', {
           body: {
@@ -156,6 +167,10 @@ export function useConversationEnrichment() {
             value: extras.saleValue,
             currency: extras.saleCurrency ?? 'BRL',
             trigger_id: extras.triggerId ?? null,
+            fbc,
+            fbp,
+            client_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+            action_source: 'chat',
           },
         }).catch(() => {});
       } catch (e) {
