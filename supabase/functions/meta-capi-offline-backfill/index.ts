@@ -133,14 +133,17 @@ Deno.serve(async (req) => {
     const storeIds = Array.from(new Set(pending.map((s) => s.store_id).filter(Boolean)));
 
     const customersMap = new Map<string, any>();
-    for (let i = 0; i < customerIds.length; i += 500) {
-      const chunk = customerIds.slice(i, i + 500);
-      const { data } = await supabase
+    for (let i = 0; i < customerIds.length; i += 300) {
+      const chunk = customerIds.slice(i, i + 300);
+      const { data, error: cerr } = await supabase
         .from("pos_customers")
         .select("id, name, email, whatsapp, cpf, city, state, cep, gender")
         .in("id", chunk);
+      if (cerr) console.error(`[backfill] customers chunk ${i} error:`, cerr.message);
+      console.log(`[backfill] customers chunk ${i}: requested ${chunk.length}, got ${(data || []).length}`);
       (data || []).forEach((c: any) => customersMap.set(c.id, c));
     }
+    console.log(`[backfill] total customers loaded: ${customersMap.size} of ${customerIds.length} requested`);
     const storesMap = new Map<string, any>();
     if (storeIds.length > 0) {
       const { data } = await supabase
