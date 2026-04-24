@@ -707,6 +707,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           .is("first_reply_at", null);
       }
 
+      // Mark AI handoff as picked up by human
+      resolveAiTransfer(selectedPhone);
+
       setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
     } catch (error) {
@@ -764,6 +767,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         sender_name: selectedSellerName || null,
       } as any);
       if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
+      resolveAiTransfer(selectedPhone);
       setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Áudio enviado!");
