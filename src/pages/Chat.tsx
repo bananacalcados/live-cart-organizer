@@ -1600,9 +1600,12 @@ export default function ChatPage() {
       <POSFinishConversationDialog
         open={showFinishDialog}
         onOpenChange={setShowFinishDialog}
-        onFinish={async (reason) => {
+        onFinish={async (reason, extras) => {
           if (selectedPhone) {
-            await finishConversation(selectedPhone, reason);
+            await finishConversation(selectedPhone, reason, undefined, {
+              ...extras,
+              whatsappNumberId: selectedConvNumberId || null,
+            });
             const conversationKey = selectedConvKey || `${selectedPhone}__${selectedConvNumberId || 'none'}`;
             setStickyConversationKeys(prev => {
               if (!prev.has(conversationKey)) return prev;
