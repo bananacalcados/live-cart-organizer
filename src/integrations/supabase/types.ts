@@ -10854,6 +10854,13 @@ export type Database = {
           status: string
         }[]
       }
+      get_meta_capi_vault_state: {
+        Args: never
+        Returns: {
+          id: string
+          value: string
+        }[]
+      }
       get_orders_by_customer: {
         Args: { p_customer_id: string }
         Returns: {
