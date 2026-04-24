@@ -25,8 +25,13 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const INTERNAL_SECRET = Deno.env.get("META_CAPI_INTERNAL_SECRET") || "";
   const auth = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
-  if (!SERVICE_ROLE_KEY || auth !== SERVICE_ROLE_KEY) {
+  const internalHeader = req.headers.get("x-internal-secret") || "";
+  const isAuthed =
+    (SERVICE_ROLE_KEY && auth === SERVICE_ROLE_KEY) ||
+    (INTERNAL_SECRET && internalHeader === INTERNAL_SECRET);
+  if (!isAuthed) {
     return new Response(JSON.stringify({ error: "unauthorized" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
