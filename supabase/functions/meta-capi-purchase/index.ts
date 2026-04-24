@@ -115,6 +115,7 @@ Deno.serve(async (req) => {
       currency = "BRL",
       trigger_id = null,
       event_id: eventIdFromClient,
+      test_event_code: testEventCodeFromClient,
       // Optional enrichment passed from client
       email: emailFromClient,
       full_name: fullNameFromClient,
@@ -138,7 +139,10 @@ Deno.serve(async (req) => {
     const TOKEN =
       Deno.env.get("META_CAPI_ACCESS_TOKEN") ??
       Deno.env.get("META_PAGE_ACCESS_TOKEN");
-    const TEST_CODE = Deno.env.get("META_TEST_EVENT_CODE");
+    const TEST_CODE =
+      (typeof testEventCodeFromClient === "string" && testEventCodeFromClient.trim())
+        ? testEventCodeFromClient.trim()
+        : Deno.env.get("META_TEST_EVENT_CODE");
 
     if (!PIXEL_ID || !TOKEN) {
       return new Response(
@@ -308,6 +312,7 @@ Deno.serve(async (req) => {
         ok: resp.ok,
         status: resp.status,
         event_id: eventId,
+        test_event_code_applied: !!TEST_CODE,
         enriched: {
           has_email: !!em,
           has_name: !!fn,
