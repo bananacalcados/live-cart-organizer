@@ -1388,9 +1388,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       <POSFinishConversationDialog
         open={showFinishDialog}
         onOpenChange={setShowFinishDialog}
-        onFinish={async (reason) => {
+        onFinish={async (reason, extras) => {
           if (selectedPhone) {
-            await finishConversation(selectedPhone, reason, selectedSellerId || undefined);
+            await finishConversation(selectedPhone, reason, selectedSellerId || undefined, {
+              ...extras,
+              whatsappNumberId: selectedConvNumberId || null,
+            });
             
             // Immediately update conversations state so UI reflects the change
             setConversations(prev => prev.map(c =>

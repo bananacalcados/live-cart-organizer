@@ -1717,7 +1717,10 @@ export type Database = {
           finished_by: string | null
           id: string
           phone: string
+          sale_currency: string | null
+          sale_value: number | null
           seller_id: string | null
+          trigger_id: string | null
         }
         Insert: {
           created_at?: string
@@ -1726,7 +1729,10 @@ export type Database = {
           finished_by?: string | null
           id?: string
           phone: string
+          sale_currency?: string | null
+          sale_value?: number | null
           seller_id?: string | null
+          trigger_id?: string | null
         }
         Update: {
           created_at?: string
@@ -1735,9 +1741,20 @@ export type Database = {
           finished_by?: string | null
           id?: string
           phone?: string
+          sale_currency?: string | null
+          sale_value?: number | null
           seller_id?: string | null
+          trigger_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chat_finished_conversations_trigger_id_fkey"
+            columns: ["trigger_id"]
+            isOneToOne: false
+            referencedRelation: "sales_triggers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chat_nps_surveys: {
         Row: {
@@ -8759,6 +8776,56 @@ export type Database = {
         }
         Relationships: []
       }
+      sales_triggers: {
+        Row: {
+          ad_campaign_id: string | null
+          color: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          keywords: string[]
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          ad_campaign_id?: string | null
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          ad_campaign_id?: string | null
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_triggers_ad_campaign_id_fkey"
+            columns: ["ad_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "ad_campaigns_ai"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduled_messages: {
         Row: {
           created_at: string
@@ -9699,6 +9766,109 @@ export type Database = {
           },
         ]
       }
+      trigger_conversions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          finish_reason: string | null
+          id: string
+          meta_capi_event_id: string | null
+          meta_capi_response: Json | null
+          meta_capi_sent_at: string | null
+          phone: string
+          sale_currency: string
+          sale_value: number
+          seller_id: string | null
+          trigger_id: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          finish_reason?: string | null
+          id?: string
+          meta_capi_event_id?: string | null
+          meta_capi_response?: Json | null
+          meta_capi_sent_at?: string | null
+          phone: string
+          sale_currency?: string
+          sale_value?: number
+          seller_id?: string | null
+          trigger_id?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          finish_reason?: string | null
+          id?: string
+          meta_capi_event_id?: string | null
+          meta_capi_response?: Json | null
+          meta_capi_sent_at?: string | null
+          phone?: string
+          sale_currency?: string
+          sale_value?: number
+          seller_id?: string | null
+          trigger_id?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trigger_conversions_trigger_id_fkey"
+            columns: ["trigger_id"]
+            isOneToOne: false
+            referencedRelation: "sales_triggers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trigger_messages: {
+        Row: {
+          content: string
+          created_at: string
+          delay_seconds: number
+          id: string
+          is_active: boolean
+          media_type: string | null
+          media_url: string | null
+          sort_order: number
+          trigger_id: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          delay_seconds?: number
+          id?: string
+          is_active?: boolean
+          media_type?: string | null
+          media_url?: string | null
+          sort_order?: number
+          trigger_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          delay_seconds?: number
+          id?: string
+          is_active?: boolean
+          media_type?: string | null
+          media_url?: string | null
+          sort_order?: number
+          trigger_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trigger_messages_trigger_id_fkey"
+            columns: ["trigger_id"]
+            isOneToOne: false
+            referencedRelation: "sales_triggers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_module_permissions: {
         Row: {
           created_at: string
@@ -10438,6 +10608,10 @@ export type Database = {
         }[]
       }
       check_order_paid: { Args: { p_order_id: string }; Returns: boolean }
+      copy_trigger_messages: {
+        Args: { p_source_trigger_id: string; p_target_trigger_id: string }
+        Returns: number
+      }
       dedup_outgoing_message: {
         Args: {
           p_cutoff_minutes?: number
