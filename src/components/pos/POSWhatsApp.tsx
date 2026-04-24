@@ -832,6 +832,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         sender_user_id: sellerLinkedUserId || currentUserId || null,
         sender_name: selectedSellerName || null,
       } as any);
+      resolveAiTransfer(selectedPhone);
       setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Mídia enviada!");
