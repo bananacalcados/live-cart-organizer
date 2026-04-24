@@ -111,7 +111,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [selectedSendNumberId, setSelectedSendNumberId] = useState<string | null>(null);
 
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
-  const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
