@@ -8672,6 +8672,7 @@ export type Database = {
           created_by: string | null
           id: string
           name: string
+          parent_id: string | null
           sort_order: number
           updated_at: string
         }
@@ -8681,6 +8682,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           name: string
+          parent_id?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -8690,10 +8692,19 @@ export type Database = {
           created_by?: string | null
           id?: string
           name?: string
+          parent_id?: string | null
           sort_order?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "quick_reply_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "quick_reply_folders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       ravena_customers: {
         Row: {
