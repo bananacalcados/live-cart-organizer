@@ -87,13 +87,19 @@ async function hashIfPresent(raw: string | null | undefined): Promise<string | u
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  // SEGURANÇA: exige Authorization Bearer (qualquer chamada não autenticada é rejeitada)
-  // Como verify_jwt = true por padrão, o Supabase já valida o JWT do header.
-  // Adicionalmente, exigimos que seja o SERVICE_ROLE_KEY (não aceita anon).
+  // SEGURANÇA: aceita Authorization Bearer com SERVICE_ROLE_KEY OU
+  // header X-Internal-Secret com META_CAPI_INTERNAL_SECRET (usado pela trigger do banco).
+  // Qualquer outra chamada é rejeitada.
   const authHeader = req.headers.get("Authorization") || "";
-  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
-  const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  if (!token || token !== SERVICE_ROLE_KEY) {
+  const bearerToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const internalSecretHeader = req.headers.get("X-Internal-Secret") || "";
+  const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const INTERNAL_SECRET = Deno.env.get("META_CAPI_INTERNAL_SECRET") || "";
+
+  const isServiceRole = SERVICE_ROLE_KEY && bearerToken === SERVICE_ROLE_KEY;
+  const isInternalCall = INTERNAL_SECRET && internalSecretHeader === INTERNAL_SECRET;
+
+  if (!isServiceRole && !isInternalCall) {
     return new Response(JSON.stringify({ error: "unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
