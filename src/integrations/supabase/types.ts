@@ -6207,6 +6207,54 @@ export type Database = {
           },
         ]
       }
+      meta_capi_offline_log: {
+        Row: {
+          created_at: string
+          dataset_id: string
+          error_message: string | null
+          event_id: string
+          event_name: string
+          http_status: number | null
+          id: string
+          meta_response: Json | null
+          payload_summary: Json | null
+          sale_id: string
+          sent_at: string | null
+          status: string
+          test_event_code: string | null
+        }
+        Insert: {
+          created_at?: string
+          dataset_id: string
+          error_message?: string | null
+          event_id: string
+          event_name?: string
+          http_status?: number | null
+          id?: string
+          meta_response?: Json | null
+          payload_summary?: Json | null
+          sale_id: string
+          sent_at?: string | null
+          status?: string
+          test_event_code?: string | null
+        }
+        Update: {
+          created_at?: string
+          dataset_id?: string
+          error_message?: string | null
+          event_id?: string
+          event_name?: string
+          http_status?: number | null
+          id?: string
+          meta_response?: Json | null
+          payload_summary?: Json | null
+          sale_id?: string
+          sent_at?: string | null
+          status?: string
+          test_event_code?: string | null
+        }
+        Relationships: []
+      }
       meta_message_queue: {
         Row: {
           attempts: number
