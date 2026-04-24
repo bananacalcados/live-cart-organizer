@@ -233,10 +233,17 @@ export function useConversationEnrichment() {
     return convs.map(conv => {
       const convKey = `${conv.phone}__${conv.whatsapp_number_id || 'none'}`;
       const msgs = phoneMessages.get(convKey) || phoneMessages.get(conv.phone) || [];
-      const status = computeStatus(msgs);
+      let status = computeStatus(msgs);
       const isFinished = finishedPhones.has(normalizePhoneKey(conv.phone));
       const isArchived = archivedPhones.has(conv.phone);
       const isAwaitingPayment = awaitingPaymentPhones.has(conv.phone);
+      const isAiTransferred = aiTransferredPhones.has(normalizePhoneKey(conv.phone));
+
+      // Force AI-transferred conversations into "Novas" so sellers spot them quickly
+      if (isAiTransferred && !isFinished && !isArchived) {
+        status = 'not_started';
+      }
+
       const instanceLabel = getInstanceLabel(conv.whatsapp_number_id);
       const base = conv.phone.replace(/\D/g, '').slice(-8);
       const allInstances = phoneBaseMap.get(base) || [];
@@ -251,13 +258,14 @@ export function useConversationEnrichment() {
         isFinished,
         isArchived,
         isAwaitingPayment,
+        isAiTransferred,
         isDispatchOnly: conv.isDispatchOnly || false,
         instanceLabel,
         hasOtherInstances,
         otherInstanceLabels,
       };
     });
-  }, [computeStatus, finishedPhones, archivedPhones, awaitingPaymentPhones, getInstanceLabel]);
+  }, [computeStatus, finishedPhones, archivedPhones, awaitingPaymentPhones, aiTransferredPhones, getInstanceLabel]);
 
   return {
     enrichConversations,
@@ -268,6 +276,8 @@ export function useConversationEnrichment() {
     finishedPhones,
     archivedPhones,
     awaitingPaymentPhones,
+    aiTransferredPhones,
+    resolveAiTransfer,
     loadFinished,
   };
 }
