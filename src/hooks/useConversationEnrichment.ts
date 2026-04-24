@@ -19,6 +19,7 @@ export function useConversationEnrichment() {
   const [finishedPhones, setFinishedPhones] = useState<Set<string>>(new Set());
   const [archivedPhones, setArchivedPhones] = useState<Set<string>>(new Set());
   const [awaitingPaymentPhones, setAwaitingPaymentPhones] = useState<Set<string>>(new Set());
+  const [aiTransferredPhones, setAiTransferredPhones] = useState<Set<string>>(new Set());
   const { numbers } = useWhatsAppNumberStore();
 
   const loadFinished = useCallback(async () => {
@@ -57,19 +58,52 @@ export function useConversationEnrichment() {
     }
   }, []);
 
+  // Conversations transferred by AI awaiting human pickup → must show in "Novas"
+  const loadAiTransferred = useCallback(async () => {
+    const { data } = await supabase
+      .from('chat_assignments')
+      .select('phone')
+      .eq('assigned_by', 'ai')
+      .eq('status', 'pending');
+    if (data) {
+      setAiTransferredPhones(
+        new Set((data as any[]).map(d => normalizePhoneKey(d.phone)).filter(Boolean))
+      );
+    }
+  }, []);
+
+  // Mark an AI-transferred conversation as picked up (when human sends a message)
+  const resolveAiTransfer = useCallback(async (phone: string) => {
+    const key = normalizePhoneKey(phone);
+    if (!key || !aiTransferredPhones.has(key)) return;
+    setAiTransferredPhones(prev => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+    await supabase
+      .from('chat_assignments')
+      .update({ status: 'resolved', resolved_at: new Date().toISOString() } as any)
+      .eq('phone', phone)
+      .eq('assigned_by', 'ai')
+      .eq('status', 'pending');
+  }, [aiTransferredPhones]);
+
   useEffect(() => {
     loadFinished();
     loadArchived();
     loadAwaitingPayment();
+    loadAiTransferred();
 
     const channel = supabase
       .channel('chat-enrichment-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_finished_conversations' }, () => loadFinished())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_archived_conversations' }, () => loadArchived())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_awaiting_payment' }, () => loadAwaitingPayment())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_assignments' }, () => loadAiTransferred())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [loadFinished, loadArchived, loadAwaitingPayment]);
+  }, [loadFinished, loadArchived, loadAwaitingPayment, loadAiTransferred]);
 
   const finishConversation = useCallback(async (
     phone: string,
