@@ -59,6 +59,8 @@ export interface Conversation {
   isAwaitingPayment?: boolean;
   /** Whether this conversation is dispatch-only (mass send, no reply yet) */
   isDispatchOnly?: boolean;
+  /** Whether IA transferred this conversation to a human (forces "Novas" tab) */
+  isAiTransferred?: boolean;
   /** Channel: whatsapp, instagram, messenger */
   channel?: string | null;
 }

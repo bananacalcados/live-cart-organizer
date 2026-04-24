@@ -19,6 +19,7 @@ export function useConversationEnrichment() {
   const [finishedPhones, setFinishedPhones] = useState<Set<string>>(new Set());
   const [archivedPhones, setArchivedPhones] = useState<Set<string>>(new Set());
   const [awaitingPaymentPhones, setAwaitingPaymentPhones] = useState<Set<string>>(new Set());
+  const [aiTransferredPhones, setAiTransferredPhones] = useState<Set<string>>(new Set());
   const { numbers } = useWhatsAppNumberStore();
 
   const loadFinished = useCallback(async () => {
@@ -57,19 +58,52 @@ export function useConversationEnrichment() {
     }
   }, []);
 
+  // Conversations transferred by AI awaiting human pickup → must show in "Novas"
+  const loadAiTransferred = useCallback(async () => {
+    const { data } = await supabase
+      .from('chat_assignments')
+      .select('phone')
+      .eq('assigned_by', 'ai')
+      .eq('status', 'pending');
+    if (data) {
+      setAiTransferredPhones(
+        new Set((data as any[]).map(d => normalizePhoneKey(d.phone)).filter(Boolean))
+      );
+    }
+  }, []);
+
+  // Mark an AI-transferred conversation as picked up (when human sends a message)
+  const resolveAiTransfer = useCallback(async (phone: string) => {
+    const key = normalizePhoneKey(phone);
+    if (!key || !aiTransferredPhones.has(key)) return;
+    setAiTransferredPhones(prev => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
+    await supabase
+      .from('chat_assignments')
+      .update({ status: 'resolved', resolved_at: new Date().toISOString() } as any)
+      .eq('phone', phone)
+      .eq('assigned_by', 'ai')
+      .eq('status', 'pending');
+  }, [aiTransferredPhones]);
+
   useEffect(() => {
     loadFinished();
     loadArchived();
     loadAwaitingPayment();
+    loadAiTransferred();
 
     const channel = supabase
       .channel('chat-enrichment-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_finished_conversations' }, () => loadFinished())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_archived_conversations' }, () => loadArchived())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_awaiting_payment' }, () => loadAwaitingPayment())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_assignments' }, () => loadAiTransferred())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [loadFinished, loadArchived, loadAwaitingPayment]);
+  }, [loadFinished, loadArchived, loadAwaitingPayment, loadAiTransferred]);
 
   const finishConversation = useCallback(async (
     phone: string,
@@ -199,10 +233,17 @@ export function useConversationEnrichment() {
     return convs.map(conv => {
       const convKey = `${conv.phone}__${conv.whatsapp_number_id || 'none'}`;
       const msgs = phoneMessages.get(convKey) || phoneMessages.get(conv.phone) || [];
-      const status = computeStatus(msgs);
+      let status = computeStatus(msgs);
       const isFinished = finishedPhones.has(normalizePhoneKey(conv.phone));
       const isArchived = archivedPhones.has(conv.phone);
       const isAwaitingPayment = awaitingPaymentPhones.has(conv.phone);
+      const isAiTransferred = aiTransferredPhones.has(normalizePhoneKey(conv.phone));
+
+      // Force AI-transferred conversations into "Novas" so sellers spot them quickly
+      if (isAiTransferred && !isFinished && !isArchived) {
+        status = 'not_started';
+      }
+
       const instanceLabel = getInstanceLabel(conv.whatsapp_number_id);
       const base = conv.phone.replace(/\D/g, '').slice(-8);
       const allInstances = phoneBaseMap.get(base) || [];
@@ -217,13 +258,14 @@ export function useConversationEnrichment() {
         isFinished,
         isArchived,
         isAwaitingPayment,
+        isAiTransferred,
         isDispatchOnly: conv.isDispatchOnly || false,
         instanceLabel,
         hasOtherInstances,
         otherInstanceLabels,
       };
     });
-  }, [computeStatus, finishedPhones, archivedPhones, awaitingPaymentPhones, getInstanceLabel]);
+  }, [computeStatus, finishedPhones, archivedPhones, awaitingPaymentPhones, aiTransferredPhones, getInstanceLabel]);
 
   return {
     enrichConversations,
@@ -234,6 +276,8 @@ export function useConversationEnrichment() {
     finishedPhones,
     archivedPhones,
     awaitingPaymentPhones,
+    aiTransferredPhones,
+    resolveAiTransfer,
     loadFinished,
   };
 }

@@ -111,7 +111,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [selectedSendNumberId, setSelectedSendNumberId] = useState<string | null>(null);
 
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
-  const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
@@ -707,6 +707,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           .is("first_reply_at", null);
       }
 
+      // Mark AI handoff as picked up by human
+      resolveAiTransfer(selectedPhone);
+
       setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
     } catch (error) {
@@ -764,6 +767,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         sender_name: selectedSellerName || null,
       } as any);
       if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
+      resolveAiTransfer(selectedPhone);
       setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Áudio enviado!");
@@ -828,6 +832,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         sender_user_id: sellerLinkedUserId || currentUserId || null,
         sender_name: selectedSellerName || null,
       } as any);
+      resolveAiTransfer(selectedPhone);
       setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
       toast.success("Mídia enviada!");

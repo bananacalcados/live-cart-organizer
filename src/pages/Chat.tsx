@@ -199,7 +199,7 @@ export default function ChatPage() {
   const { customers } = useCustomerStore();
   const { numbers, fetchNumbers, selectedNumberId, setSelectedNumberId } = useWhatsAppNumberStore();
   const { sendMessage: zapiSend, sendMedia: zapiSendMedia } = useZapi();
-  const { enrichConversations, finishConversation, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, finishedPhones, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
@@ -617,6 +617,8 @@ export default function ChatPage() {
           sender_user_id: currentUserId || null,
           quoted_message_id: quotedMessage?.message_id || null,
         } as any);
+        // Mark AI handoff as picked up by human
+        resolveAiTransfer(selectedPhone);
         loadMessages(selectedPhone, false, selectedConvNumberId);
       }
       URL.revokeObjectURL(selectedMedia.previewUrl);
@@ -654,6 +656,8 @@ export default function ChatPage() {
         sender_user_id: currentUserId || null,
         quoted_message_id: quotedMessage?.message_id || null,
       } as any);
+      // Mark AI handoff as picked up by human
+      resolveAiTransfer(selectedPhone);
       loadMessages(selectedPhone, false, selectedConvNumberId);
     }
     setIsSending(false);
