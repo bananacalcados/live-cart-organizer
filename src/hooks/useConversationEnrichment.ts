@@ -71,7 +71,12 @@ export function useConversationEnrichment() {
     return () => { supabase.removeChannel(channel); };
   }, [loadFinished, loadArchived, loadAwaitingPayment]);
 
-  const finishConversation = useCallback(async (phone: string, reason?: string, sellerId?: string) => {
+  const finishConversation = useCallback(async (
+    phone: string,
+    reason?: string,
+    sellerId?: string,
+    extras?: { saleValue?: number; saleCurrency?: string; triggerId?: string | null; whatsappNumberId?: string | null }
+  ) => {
     const phoneKey = normalizePhoneKey(phone);
     if (phoneKey) {
       setFinishedPhones(prev => new Set([...prev, phoneKey]));
@@ -82,6 +87,9 @@ export function useConversationEnrichment() {
       finished_at: new Date().toISOString(),
       finish_reason: reason || null,
       seller_id: sellerId || null,
+      sale_value: extras?.saleValue ?? null,
+      sale_currency: extras?.saleCurrency ?? 'BRL',
+      trigger_id: extras?.triggerId ?? null,
     } as any, { onConflict: 'phone' });
 
     if (error && phoneKey) {
@@ -91,6 +99,34 @@ export function useConversationEnrichment() {
         return next;
       });
       throw error;
+    }
+
+    // Track sale conversion + fire Meta CAPI when reason is 'compra' and value > 0
+    if (reason === 'compra' && extras?.saleValue && extras.saleValue > 0) {
+      try {
+        const { data: conv } = await supabase.from('trigger_conversions').insert({
+          trigger_id: extras.triggerId ?? null,
+          phone,
+          sale_value: extras.saleValue,
+          sale_currency: extras.saleCurrency ?? 'BRL',
+          finish_reason: reason,
+          seller_id: sellerId ?? null,
+          whatsapp_number_id: extras.whatsappNumberId ?? null,
+        } as any).select('id').single();
+
+        // Fire Meta CAPI Purchase (non-blocking)
+        supabase.functions.invoke('meta-capi-purchase', {
+          body: {
+            conversion_id: conv?.id,
+            phone,
+            value: extras.saleValue,
+            currency: extras.saleCurrency ?? 'BRL',
+            trigger_id: extras.triggerId ?? null,
+          },
+        }).catch(() => {});
+      } catch (e) {
+        console.warn('[finishConversation] failed to record conversion', e);
+      }
     }
   }, []);
 
