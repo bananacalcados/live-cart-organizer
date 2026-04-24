@@ -8609,6 +8609,7 @@ export type Database = {
           category: string | null
           created_at: string
           created_by: string | null
+          folder_id: string | null
           id: string
           message: string
           sort_order: number
@@ -8619,6 +8620,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by?: string | null
+          folder_id?: string | null
           id?: string
           message: string
           sort_order?: number
@@ -8629,10 +8631,49 @@ export type Database = {
           category?: string | null
           created_at?: string
           created_by?: string | null
+          folder_id?: string | null
           id?: string
           message?: string
           sort_order?: number
           title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_replies_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "quick_reply_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quick_reply_folders: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          sort_order?: number
           updated_at?: string
         }
         Relationships: []
