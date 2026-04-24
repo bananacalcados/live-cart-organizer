@@ -251,10 +251,10 @@ Deno.serve(async (req) => {
     const fn = first ? await hashIfPresent(normalizeName(first)) : undefined;
     const ln = last ? await hashIfPresent(normalizeName(last)) : undefined;
 
-    // Cidade/estado/cep: prefere o do cliente; fallback pro da loja
-    const cityRaw = customer?.city || store?.city || "";
-    const stateRaw = customer?.state || store?.state || "";
-    const zipRaw = customer?.cep || store?.cep || "";
+    // Cidade/estado/cep: só do cliente (pos_stores não tem campos estruturados)
+    const cityRaw = customer?.city || "";
+    const stateRaw = customer?.state || "";
+    const zipRaw = customer?.cep || "";
     const ct = cityRaw ? await hashIfPresent(normalizeCity(cityRaw)) : undefined;
     const st = stateRaw ? await hashIfPresent(normalizeState(stateRaw)) : undefined;
     const zp = zipRaw ? await hashIfPresent(normalizeZip(zipRaw)) : undefined;
