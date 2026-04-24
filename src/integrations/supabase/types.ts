@@ -10671,6 +10671,10 @@ export type Database = {
         Args: { p_source_trigger_id: string; p_target_trigger_id: string }
         Returns: number
       }
+      create_meta_capi_vault_secret: {
+        Args: { p_secret: string }
+        Returns: string
+      }
       dedup_outgoing_message: {
         Args: {
           p_cutoff_minutes?: number
@@ -10850,6 +10854,13 @@ export type Database = {
           status: string
         }[]
       }
+      get_meta_capi_vault_state: {
+        Args: never
+        Returns: {
+          id: string
+          value: string
+        }[]
+      }
       get_orders_by_customer: {
         Args: { p_customer_id: string }
         Returns: {
@@ -11022,6 +11033,10 @@ export type Database = {
           p_source_table: string
         }
         Returns: undefined
+      }
+      update_meta_capi_vault_secret: {
+        Args: { p_id: string; p_secret: string }
+        Returns: boolean
       }
       update_order_stage: {
         Args: { p_order_id: string; p_stage: string }

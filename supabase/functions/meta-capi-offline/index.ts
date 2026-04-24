@@ -207,12 +207,12 @@ Deno.serve(async (req) => {
       customer = c;
     }
 
-    // 3) Busca dados da loja (só nome — pos_stores não tem city/state/cep estruturados)
+    // 3) Busca dados da loja (pra context: city/state/zip)
     let store: any = null;
     if (sale.store_id) {
       const { data: s } = await supabase
         .from("pos_stores")
-        .select("name")
+        .select("name, city, state, cep")
         .eq("id", sale.store_id)
         .maybeSingle();
       store = s;
@@ -251,10 +251,10 @@ Deno.serve(async (req) => {
     const fn = first ? await hashIfPresent(normalizeName(first)) : undefined;
     const ln = last ? await hashIfPresent(normalizeName(last)) : undefined;
 
-    // Cidade/estado/cep: só do cliente (pos_stores não tem campos estruturados)
-    const cityRaw = customer?.city || "";
-    const stateRaw = customer?.state || "";
-    const zipRaw = customer?.cep || "";
+    // Cidade/estado/cep: prefere o do cliente; fallback pro da loja
+    const cityRaw = customer?.city || store?.city || "";
+    const stateRaw = customer?.state || store?.state || "";
+    const zipRaw = customer?.cep || store?.cep || "";
     const ct = cityRaw ? await hashIfPresent(normalizeCity(cityRaw)) : undefined;
     const st = stateRaw ? await hashIfPresent(normalizeState(stateRaw)) : undefined;
     const zp = zipRaw ? await hashIfPresent(normalizeZip(zipRaw)) : undefined;
