@@ -264,7 +264,8 @@ export default function Marketing() {
         const { data, error } = await supabase
           .from('zoppy_customers')
           .select('*')
-          .order('total_spent', { ascending: false })
+          .order('total_spent', { ascending: false, nullsFirst: false })
+          .order('id', { ascending: true }) // tie-breaker para paginação estável
           .range(from, from + batchSize - 1);
         if (error) throw error;
         if (data && data.length > 0) {
@@ -276,6 +277,13 @@ export default function Marketing() {
         }
         if (allCustomers.length >= 50000) keepFetching = false; // safety cap
       }
+      // Defesa extra: dedup por id caso ainda exista alguma duplicata residual
+      const seen = new Set<string>();
+      allCustomers = allCustomers.filter((c: any) => {
+        if (seen.has(c.id)) return false;
+        seen.add(c.id);
+        return true;
+      });
       setCustomers(allCustomers as ZoppyCustomer[]);
     } catch (err) { console.error(err); toast.error("Erro ao carregar clientes"); }
     finally { setIsLoading(false); }
