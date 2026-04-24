@@ -90,17 +90,25 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE_ROLE_KEY);
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    // 1) Vendas elegíveis
-    const { data: sales, error: salesErr } = await supabase
-      .from("pos_sales")
-      .select("id, total, status, created_at, paid_at, customer_id, store_id, customer_name, customer_phone")
-      .in("status", ["paid", "completed"])
-      .gte("created_at", cutoff)
-      .gt("total", 0)
-      .order("created_at", { ascending: true })
-      .limit(limit);
-    if (salesErr) throw new Error(`pos_sales query: ${salesErr.message}`);
-    const allSales = sales || [];
+    // 1) Vendas elegíveis — paginação manual em chunks de 1000 (limite PostgREST)
+    const allSales: any[] = [];
+    const PAGE = 1000;
+    for (let offset = 0; offset < limit; offset += PAGE) {
+      const upper = Math.min(offset + PAGE, limit) - 1;
+      const { data, error } = await supabase
+        .from("pos_sales")
+        .select("id, total, status, created_at, paid_at, customer_id, store_id, customer_name, customer_phone")
+        .in("status", ["paid", "completed"])
+        .gte("created_at", cutoff)
+        .gt("total", 0)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, upper);
+      if (error) throw new Error(`pos_sales query (offset ${offset}): ${error.message}`);
+      const chunk = data || [];
+      allSales.push(...chunk);
+      if (chunk.length < PAGE) break;
+    }
 
     // 2) Já enviados/pendentes
     const saleIds = allSales.map((s) => s.id);
