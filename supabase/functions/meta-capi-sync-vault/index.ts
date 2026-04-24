@@ -1,9 +1,5 @@
-// Edge function that reads META_CAPI_INTERNAL_SECRET from env and writes it to Vault.
-// Call this once after setting/rotating the secret to keep DB triggers in sync.
-//
-// Auth: requires the caller to send the same secret in X-Internal-Secret header
-// (proves they know the current value before allowing a sync).
-// Alternatively, if Vault is empty/placeholder, allows first-time sync from any authed admin.
+// Sync META_CAPI_INTERNAL_SECRET from edge env into DB Vault.
+// Call once after configuring/rotating the secret to keep DB triggers working.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -24,7 +20,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           error:
-            "META_CAPI_INTERNAL_SECRET não está configurado nas envs da Edge Function (ou tem menos de 8 chars).",
+            "META_CAPI_INTERNAL_SECRET não está configurado nas envs da Edge Function (mín 8 chars).",
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
@@ -34,39 +30,37 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const admin = createClient(supabaseUrl, serviceKey);
 
-    // Check current vault value
-    const { data: existing } = await admin
-      .schema("vault" as any)
-      .from("decrypted_secrets")
-      .select("id, decrypted_secret")
-      .eq("name", "meta_capi_internal_secret")
-      .maybeSingle();
+    // Read current vault state via RPC (avoids ts schema issues)
+    const { data: current, error: readErr } = await admin.rpc(
+      "get_meta_capi_vault_state",
+    );
+    if (readErr) throw readErr;
 
-    const currentVaultValue = existing?.decrypted_secret ?? null;
+    const row = (current as any)?.[0] ?? current;
+    const existingId: string | null = row?.id ?? null;
+    const currentValue: string | null = row?.value ?? null;
     const isPlaceholder =
-      !currentVaultValue ||
-      currentVaultValue === "PLACEHOLDER_REPLACE_ME" ||
-      currentVaultValue.length < 8;
+      !currentValue ||
+      currentValue === "PLACEHOLDER_REPLACE_ME" ||
+      currentValue.length < 8;
 
-    // Auth: if vault already has a real value, caller must provide it via header
-    // to authorize a rotation. If vault is empty/placeholder, allow sync (bootstrap).
+    // If vault already has a real secret, require caller to prove they know it
     if (!isPlaceholder) {
       const provided = req.headers.get("x-internal-secret");
-      if (provided !== currentVaultValue && provided !== envSecret) {
+      if (provided !== currentValue && provided !== envSecret) {
         return new Response(
           JSON.stringify({
             error:
-              "Vault já tem um secret configurado. Envie o valor atual em X-Internal-Secret para autorizar a rotação.",
+              "Vault já tem um secret válido. Envie o valor atual em X-Internal-Secret para autorizar a rotação.",
           }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
     }
 
-    // Upsert via SQL (vault.create_secret / vault.update_secret)
-    if (existing?.id) {
+    if (existingId) {
       const { error } = await admin.rpc("update_meta_capi_vault_secret", {
-        p_id: existing.id,
+        p_id: existingId,
         p_secret: envSecret,
       });
       if (error) throw error;
@@ -80,16 +74,17 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        action: existing?.id ? "updated" : "created",
+        action: existingId ? "updated" : "created",
         message:
           "Vault sincronizado com a env da Edge Function. Triggers do banco voltam a funcionar.",
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: String(err?.message ?? err) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
