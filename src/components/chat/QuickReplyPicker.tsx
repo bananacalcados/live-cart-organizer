@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Zap, Plus, Trash2, Pencil, X, Check, Search, Folder, FolderPlus, ChevronLeft } from "lucide-react";
+import { Zap, Plus, Trash2, Pencil, Search, Folder, FolderPlus, ChevronLeft, Check, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +34,7 @@ interface QuickReplyFolder {
   name: string;
   color: string;
   sort_order: number;
+  parent_id: string | null;
 }
 
 interface QuickReplyPickerProps {
@@ -53,13 +54,17 @@ const FOLDER_COLORS = [
 ];
 
 const NO_FOLDER_VALUE = "__none__";
+const NO_PARENT_VALUE = "__root__";
 
 export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
   const [open, setOpen] = useState(false);
   const [replies, setReplies] = useState<QuickReply[]>([]);
   const [folders, setFolders] = useState<QuickReplyFolder[]>([]);
   const [search, setSearch] = useState("");
-  const [activeFolderId, setActiveFolderId] = useState<string | null>(null); // null = todas; "__none__" = sem pasta
+  // null = todas; "__none__" = sem pasta; id = filtro por pasta (raiz ou sub)
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
+  // Quando o usuário clicou numa pasta-pai, ele "entrou" nela (mostra sub-pastas)
+  const [expandedRootId, setExpandedRootId] = useState<string | null>(null);
   const [view, setView] = useState<"list" | "folders" | "addReply" | "addFolder">("list");
 
   // form state - reply
@@ -72,6 +77,7 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [formFolderName, setFormFolderName] = useState("");
   const [formFolderColor, setFormFolderColor] = useState(FOLDER_COLORS[0].value);
+  const [formFolderParentId, setFormFolderParentId] = useState<string>(NO_PARENT_VALUE);
 
   const fetchAll = async () => {
     const [{ data: r }, { data: f }] = await Promise.all([
@@ -94,12 +100,48 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
     if (open) fetchAll();
   }, [open]);
 
+  const rootFolders = useMemo(
+    () => folders.filter((f) => !f.parent_id),
+    [folders]
+  );
+
+  const subFoldersByParent = useMemo(() => {
+    const map: Record<string, QuickReplyFolder[]> = {};
+    for (const f of folders) {
+      if (f.parent_id) {
+        if (!map[f.parent_id]) map[f.parent_id] = [];
+        map[f.parent_id].push(f);
+      }
+    }
+    return map;
+  }, [folders]);
+
+  // Conta replies por pasta — pasta-pai inclui replies das sub-pastas
+  const folderCounts = useMemo(() => {
+    const direct: Record<string, number> = {};
+    let none = 0;
+    for (const r of replies) {
+      if (r.folder_id) direct[r.folder_id] = (direct[r.folder_id] || 0) + 1;
+      else none++;
+    }
+    // Total agregado (pai + filhos)
+    const total: Record<string, number> = { ...direct };
+    for (const root of rootFolders) {
+      const subs = subFoldersByParent[root.id] || [];
+      total[root.id] = (direct[root.id] || 0) + subs.reduce((s, sub) => s + (direct[sub.id] || 0), 0);
+    }
+    return { direct, total, none };
+  }, [replies, rootFolders, subFoldersByParent]);
+
   const filtered = useMemo(() => {
     let list = replies;
     if (activeFolderId === NO_FOLDER_VALUE) {
       list = list.filter((r) => !r.folder_id);
     } else if (activeFolderId) {
-      list = list.filter((r) => r.folder_id === activeFolderId);
+      // Se for pasta-pai, inclui replies das sub-pastas
+      const subs = subFoldersByParent[activeFolderId] || [];
+      const ids = new Set([activeFolderId, ...subs.map((s) => s.id)]);
+      list = list.filter((r) => r.folder_id && ids.has(r.folder_id));
     }
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -108,17 +150,7 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
       );
     }
     return list;
-  }, [replies, activeFolderId, search]);
-
-  const folderCounts = useMemo(() => {
-    const map: Record<string, number> = {};
-    let none = 0;
-    for (const r of replies) {
-      if (r.folder_id) map[r.folder_id] = (map[r.folder_id] || 0) + 1;
-      else none++;
-    }
-    return { map, none };
-  }, [replies]);
+  }, [replies, activeFolderId, search, subFoldersByParent]);
 
   const handleSelect = (reply: QuickReply) => {
     onSelect(reply.message);
@@ -175,6 +207,7 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
     setEditingFolderId(null);
     setFormFolderName("");
     setFormFolderColor(FOLDER_COLORS[0].value);
+    setFormFolderParentId(NO_PARENT_VALUE);
     setView("addFolder");
   };
 
@@ -182,22 +215,34 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
     setEditingFolderId(folder.id);
     setFormFolderName(folder.name);
     setFormFolderColor(folder.color);
+    setFormFolderParentId(folder.parent_id || NO_PARENT_VALUE);
     setView("addFolder");
   };
 
   const handleSaveFolder = async () => {
     if (!formFolderName.trim()) return;
+    const parent_id = formFolderParentId === NO_PARENT_VALUE ? null : formFolderParentId;
+
+    // Bloqueio: pasta editada não pode virar sub se já tem sub-pastas
+    if (editingFolderId && parent_id) {
+      const hasChildren = (subFoldersByParent[editingFolderId] || []).length > 0;
+      if (hasChildren) {
+        toast.error("Esta pasta possui sub-pastas. Mova-as primeiro.");
+        return;
+      }
+    }
+
     if (editingFolderId) {
       const { error } = await supabase
         .from("quick_reply_folders")
-        .update({ name: formFolderName.trim(), color: formFolderColor })
+        .update({ name: formFolderName.trim(), color: formFolderColor, parent_id })
         .eq("id", editingFolderId);
       if (error) { toast.error("Erro ao salvar pasta"); return; }
       toast.success("Pasta atualizada");
     } else {
       const { error } = await supabase
         .from("quick_reply_folders")
-        .insert({ name: formFolderName.trim(), color: formFolderColor });
+        .insert({ name: formFolderName.trim(), color: formFolderColor, parent_id });
       if (error) { toast.error("Erro ao criar pasta"); return; }
       toast.success("Pasta criada");
     }
@@ -206,16 +251,23 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
   };
 
   const handleDeleteFolder = async (id: string) => {
-    if (!confirm("Remover esta pasta? As mensagens dentro dela ficarão sem pasta.")) return;
+    const subCount = (subFoldersByParent[id] || []).length;
+    const msg = subCount > 0
+      ? `Esta pasta possui ${subCount} sub-pasta(s) que também serão removidas. Continuar?`
+      : "Remover esta pasta? As mensagens dentro dela ficarão sem pasta.";
+    if (!confirm(msg)) return;
     await supabase.from("quick_reply_folders").delete().eq("id", id);
     if (activeFolderId === id) setActiveFolderId(null);
+    if (expandedRootId === id) setExpandedRootId(null);
     fetchAll();
     toast.success("Pasta removida");
   };
 
-  const activeFolder = activeFolderId && activeFolderId !== NO_FOLDER_VALUE
-    ? folders.find((f) => f.id === activeFolderId)
-    : null;
+  // Quando clicar numa pasta-pai, expande mostrando sub-pastas e filtra por ela
+  const handleClickRootFolder = (folderId: string) => {
+    setActiveFolderId(folderId);
+    setExpandedRootId(folderId);
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -277,13 +329,13 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
         {/* ===== VIEW: LIST ===== */}
         {view === "list" && (
           <>
-            {/* Folder chips */}
-            {(folders.length > 0 || folderCounts.none > 0) && (
+            {/* Folder chips - pastas raiz */}
+            {(rootFolders.length > 0 || folderCounts.none > 0) && (
               <div className="px-3 pt-2 pb-1 border-b">
                 <ScrollArea className="w-full">
                   <div className="flex gap-1.5 pb-1.5">
                     <button
-                      onClick={() => setActiveFolderId(null)}
+                      onClick={() => { setActiveFolderId(null); setExpandedRootId(null); }}
                       className={cn(
                         "shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
                         activeFolderId === null
@@ -295,7 +347,7 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
                     </button>
                     {folderCounts.none > 0 && (
                       <button
-                        onClick={() => setActiveFolderId(NO_FOLDER_VALUE)}
+                        onClick={() => { setActiveFolderId(NO_FOLDER_VALUE); setExpandedRootId(null); }}
                         className={cn(
                           "shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors",
                           activeFolderId === NO_FOLDER_VALUE
@@ -306,23 +358,62 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
                         Sem pasta ({folderCounts.none})
                       </button>
                     )}
-                    {folders.map((f) => (
+                    {rootFolders.map((f) => {
+                      const subCount = (subFoldersByParent[f.id] || []).length;
+                      const isActive = activeFolderId === f.id || expandedRootId === f.id;
+                      return (
+                        <button
+                          key={f.id}
+                          onClick={() => handleClickRootFolder(f.id)}
+                          className={cn(
+                            "shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors flex items-center gap-1.5",
+                            isActive
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-background hover:bg-accent border-border"
+                          )}
+                        >
+                          <span className={cn("h-2 w-2 rounded-full", f.color)} />
+                          {f.name} ({folderCounts.total[f.id] || 0})
+                          {subCount > 0 && <ChevronRight className="h-2.5 w-2.5 opacity-60" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+
+                {/* Sub-pastas da pasta-pai expandida */}
+                {expandedRootId && (subFoldersByParent[expandedRootId] || []).length > 0 && (
+                  <ScrollArea className="w-full">
+                    <div className="flex gap-1.5 pb-1.5 pl-3 border-l-2 border-muted ml-1">
                       <button
-                        key={f.id}
-                        onClick={() => setActiveFolderId(f.id)}
+                        onClick={() => setActiveFolderId(expandedRootId)}
                         className={cn(
-                          "shrink-0 px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors flex items-center gap-1.5",
-                          activeFolderId === f.id
-                            ? "bg-primary text-primary-foreground border-primary"
+                          "shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors",
+                          activeFolderId === expandedRootId
+                            ? "bg-secondary text-secondary-foreground border-secondary"
                             : "bg-background hover:bg-accent border-border"
                         )}
                       >
-                        <span className={cn("h-2 w-2 rounded-full", f.color)} />
-                        {f.name} ({folderCounts.map[f.id] || 0})
+                        Tudo ({folderCounts.total[expandedRootId] || 0})
                       </button>
-                    ))}
-                  </div>
-                </ScrollArea>
+                      {(subFoldersByParent[expandedRootId] || []).map((sub) => (
+                        <button
+                          key={sub.id}
+                          onClick={() => setActiveFolderId(sub.id)}
+                          className={cn(
+                            "shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors flex items-center gap-1",
+                            activeFolderId === sub.id
+                              ? "bg-secondary text-secondary-foreground border-secondary"
+                              : "bg-background hover:bg-accent border-border"
+                          )}
+                        >
+                          <span className={cn("h-1.5 w-1.5 rounded-full", sub.color)} />
+                          {sub.name} ({folderCounts.direct[sub.id] || 0})
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
               </div>
             )}
 
@@ -353,6 +444,7 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
                 <div className="p-1">
                   {filtered.map((reply) => {
                     const folder = reply.folder_id ? folders.find((f) => f.id === reply.folder_id) : null;
+                    const parent = folder?.parent_id ? folders.find((f) => f.id === folder.parent_id) : null;
                     return (
                       <div
                         key={reply.id}
@@ -364,7 +456,7 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
                             {folder && (
                               <span
                                 className={cn("h-1.5 w-1.5 rounded-full shrink-0", folder.color)}
-                                title={folder.name}
+                                title={parent ? `${parent.name} › ${folder.name}` : folder.name}
                               />
                             )}
                             <div className="text-xs font-medium truncate">{reply.title}</div>
@@ -424,14 +516,28 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_FOLDER_VALUE}>Sem pasta</SelectItem>
-                  {folders.map((f) => (
-                    <SelectItem key={f.id} value={f.id}>
-                      <span className="flex items-center gap-2">
-                        <span className={cn("h-2 w-2 rounded-full", f.color)} />
-                        {f.name}
-                      </span>
-                    </SelectItem>
-                  ))}
+                  {rootFolders.map((root) => {
+                    const subs = subFoldersByParent[root.id] || [];
+                    return (
+                      <div key={root.id}>
+                        <SelectItem value={root.id}>
+                          <span className="flex items-center gap-2">
+                            <span className={cn("h-2 w-2 rounded-full", root.color)} />
+                            {root.name}
+                          </span>
+                        </SelectItem>
+                        {subs.map((sub) => (
+                          <SelectItem key={sub.id} value={sub.id}>
+                            <span className="flex items-center gap-2 pl-3">
+                              <span className={cn("h-2 w-2 rounded-full", sub.color)} />
+                              <span className="text-muted-foreground">↳</span>
+                              {sub.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </div>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
@@ -467,36 +573,30 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
                 </div>
               ) : (
                 <div className="p-1">
-                  {folders.map((f) => (
-                    <div
-                      key={f.id}
-                      className="group flex items-center gap-2 rounded-md px-2 py-2 hover:bg-accent"
-                    >
-                      <span className={cn("h-3 w-3 rounded-full shrink-0", f.color)} />
-                      <span className="flex-1 text-xs font-medium truncate">{f.name}</span>
-                      <span className="text-[10px] text-muted-foreground shrink-0">
-                        {folderCounts.map[f.id] || 0} msg
-                      </span>
-                      <div className="hidden group-hover:flex gap-0.5 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => startEditFolder(f)}
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-destructive"
-                          onClick={() => handleDeleteFolder(f.id)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                  {rootFolders.map((root) => {
+                    const subs = subFoldersByParent[root.id] || [];
+                    return (
+                      <div key={root.id}>
+                        <FolderRow
+                          folder={root}
+                          count={folderCounts.total[root.id] || 0}
+                          onEdit={startEditFolder}
+                          onDelete={handleDeleteFolder}
+                        />
+                        {subs.map((sub) => (
+                          <div key={sub.id} className="pl-5">
+                            <FolderRow
+                              folder={sub}
+                              count={folderCounts.direct[sub.id] || 0}
+                              onEdit={startEditFolder}
+                              onDelete={handleDeleteFolder}
+                              isSub
+                            />
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </ScrollArea>
@@ -512,6 +612,30 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
               onChange={(e) => setFormFolderName(e.target.value)}
               className="h-8 text-xs"
             />
+            <div className="space-y-1">
+              <label className="text-[11px] text-muted-foreground">Pasta pai (opcional)</label>
+              <Select value={formFolderParentId} onValueChange={setFormFolderParentId}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_PARENT_VALUE}>Pasta raiz (sem pai)</SelectItem>
+                  {rootFolders
+                    .filter((f) => f.id !== editingFolderId)
+                    .map((f) => (
+                      <SelectItem key={f.id} value={f.id}>
+                        <span className="flex items-center gap-2">
+                          <span className={cn("h-2 w-2 rounded-full", f.color)} />
+                          {f.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">
+                Apenas 1 nível de aninhamento é permitido.
+              </p>
+            </div>
             <div className="space-y-1.5">
               <label className="text-[11px] text-muted-foreground">Cor</label>
               <div className="grid grid-cols-9 gap-1.5">
@@ -547,5 +671,44 @@ export function QuickReplyPicker({ onSelect }: QuickReplyPickerProps) {
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+interface FolderRowProps {
+  folder: QuickReplyFolder;
+  count: number;
+  onEdit: (folder: QuickReplyFolder) => void;
+  onDelete: (id: string) => void;
+  isSub?: boolean;
+}
+
+function FolderRow({ folder, count, onEdit, onDelete, isSub }: FolderRowProps) {
+  return (
+    <div className="group flex items-center gap-2 rounded-md px-2 py-2 hover:bg-accent">
+      {isSub && <span className="text-muted-foreground text-[10px]">↳</span>}
+      <span className={cn("h-3 w-3 rounded-full shrink-0", folder.color)} />
+      <span className="flex-1 text-xs font-medium truncate">{folder.name}</span>
+      <span className="text-[10px] text-muted-foreground shrink-0">
+        {count} msg
+      </span>
+      <div className="hidden group-hover:flex gap-0.5 shrink-0">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={() => onEdit(folder)}
+        >
+          <Pencil className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-destructive"
+          onClick={() => onDelete(folder.id)}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
   );
 }
