@@ -90,17 +90,25 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE_ROLE_KEY);
     const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    // 1) Vendas elegíveis
-    const { data: sales, error: salesErr } = await supabase
-      .from("pos_sales")
-      .select("id, total, status, created_at, paid_at, customer_id, store_id, customer_name, customer_phone")
-      .in("status", ["paid", "completed"])
-      .gte("created_at", cutoff)
-      .gt("total", 0)
-      .order("created_at", { ascending: true })
-      .limit(limit);
-    if (salesErr) throw new Error(`pos_sales query: ${salesErr.message}`);
-    const allSales = sales || [];
+    // 1) Vendas elegíveis — paginação manual em chunks de 1000 (limite PostgREST)
+    const allSales: any[] = [];
+    const PAGE = 1000;
+    for (let offset = 0; offset < limit; offset += PAGE) {
+      const upper = Math.min(offset + PAGE, limit) - 1;
+      const { data, error } = await supabase
+        .from("pos_sales")
+        .select("id, total, status, created_at, paid_at, customer_id, store_id, customer_name, customer_phone")
+        .in("status", ["paid", "completed"])
+        .gte("created_at", cutoff)
+        .gt("total", 0)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, upper);
+      if (error) throw new Error(`pos_sales query (offset ${offset}): ${error.message}`);
+      const chunk = data || [];
+      allSales.push(...chunk);
+      if (chunk.length < PAGE) break;
+    }
 
     // 2) Já enviados/pendentes
     const saleIds = allSales.map((s) => s.id);
@@ -125,14 +133,17 @@ Deno.serve(async (req) => {
     const storeIds = Array.from(new Set(pending.map((s) => s.store_id).filter(Boolean)));
 
     const customersMap = new Map<string, any>();
-    for (let i = 0; i < customerIds.length; i += 500) {
-      const chunk = customerIds.slice(i, i + 500);
-      const { data } = await supabase
+    for (let i = 0; i < customerIds.length; i += 300) {
+      const chunk = customerIds.slice(i, i + 300);
+      const { data, error: cerr } = await supabase
         .from("pos_customers")
         .select("id, name, email, whatsapp, cpf, city, state, cep, gender")
         .in("id", chunk);
+      if (cerr) console.error(`[backfill] customers chunk ${i} error:`, cerr.message);
+      console.log(`[backfill] customers chunk ${i}: requested ${chunk.length}, got ${(data || []).length}`);
       (data || []).forEach((c: any) => customersMap.set(c.id, c));
     }
+    console.log(`[backfill] total customers loaded: ${customersMap.size} of ${customerIds.length} requested`);
     const storesMap = new Map<string, any>();
     if (storeIds.length > 0) {
       const { data } = await supabase
