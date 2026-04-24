@@ -520,6 +520,11 @@ export function ConversationList({
                       {conv.lastMessage}
                     </p>
                      <div className="flex items-center gap-1 flex-shrink-0">
+                      {conv.isAiTransferred && (
+                        <Badge className="text-[8px] px-1 py-0 leading-tight bg-orange-500/20 text-orange-500 border-orange-400/40 hover:bg-orange-500/30">
+                          🤖 IA transferiu
+                        </Badge>
+                      )}
                       {conv.channel === 'instagram' && (
                         <Badge className="text-[8px] px-1 py-0 leading-tight bg-pink-500/20 text-pink-400 border-pink-400/30 hover:bg-pink-500/30">
                           📷 Instagram
