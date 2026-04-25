@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -241,7 +241,12 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
             body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: selectedNumberId },
           });
           if (error) return { success: false, error: error.message };
-          if (data?.success) return { success: true };
+          if (data?.success) {
+            return {
+              success: true,
+              messageId: data?.data?.messageId || data?.data?.zaapId || data?.data?.id,
+            };
+          }
           return { success: false, error: data?.error || 'Erro ao enviar' };
         } catch (err) {
           return { success: false, error: 'Erro de conexão' };
@@ -495,6 +500,30 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     }
   };
 
+  const handleDeleteMessage = async (msg: Message) => {
+    if (!phone) throw new Error('No phone selected');
+
+    if (msg.message_id) {
+      const res = await supabase.functions.invoke('zapi-delete-message', {
+        body: {
+          phone,
+          messageId: msg.message_id,
+          dbMessageId: msg.id,
+          whatsapp_number_id: (msg as any).whatsapp_number_id || selectedNumberId,
+        },
+      });
+
+      if (res.error || res.data?.error) {
+        console.warn('[events-chat/delete] external delete failed, removing locally:', res.error || res.data?.error);
+        await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+      }
+    } else {
+      await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+    }
+
+    await loadMessages();
+  };
+
   const getStageColorClass = (stageId: OrderStage) => {
     const colors: Record<OrderStage, string> = {
       incomplete_order: 'bg-[hsl(var(--stage-incomplete))]',
@@ -655,6 +684,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               status: 'sent',
               media_type: 'audio',
               media_url: mediaUrl,
+              message_id: result.messageId || null,
               sender_user_id: currentUserId || null,
             });
             updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
@@ -824,6 +854,31 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                   <div className={cn("flex", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
                     {isAuto && (
                       <span className="text-amber-400 text-[10px] self-end mb-0.5 mr-1">🤖 Automática</span>
+                    )}
+                    {msg.direction === 'outgoing' && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="mr-1 mt-1 h-7 w-7 shrink-0 rounded-full bg-black/5 opacity-60 transition-opacity hover:bg-black/15 hover:opacity-100">
+                            <MoreVertical className="h-4 w-4 text-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-36">
+                          <DropdownMenuItem
+                            onClick={async () => {
+                              if (!confirm('Apagar esta mensagem?')) return;
+                              try {
+                                await handleDeleteMessage(msg);
+                                toast.success('Mensagem apagada!');
+                              } catch {
+                                toast.error('Erro ao apagar mensagem');
+                              }
+                            }}
+                            className="gap-2 text-xs text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" /> Apagar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                     <div
                       className={cn(
