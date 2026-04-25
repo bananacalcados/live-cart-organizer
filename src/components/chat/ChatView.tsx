@@ -528,8 +528,8 @@ export function ChatView({
                   {isOutgoing && (canDelete || (canEdit && withinEditWindow)) && !isEditing && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 mt-1 shrink-0">
-                          <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                        <button className="opacity-60 hover:opacity-100 transition-opacity h-7 w-7 flex items-center justify-center rounded-full bg-black/5 hover:bg-black/15 dark:bg-white/10 dark:hover:bg-white/20 mt-1 shrink-0">
+                          <MoreVertical className="h-4 w-4 text-foreground" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-36">
