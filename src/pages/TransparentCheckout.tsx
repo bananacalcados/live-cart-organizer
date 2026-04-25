@@ -862,6 +862,7 @@ function StepPayment({
                  <PixPaymentForm
                    orderId={orderId}
                    amount={pixAmount}
+                   pixDiscountPercent={pixDiscountPercent}
                    form={form}
                    onPaymentConfirmed={onPaymentConfirmed}
                  />
