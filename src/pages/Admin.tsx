@@ -423,6 +423,10 @@ export default function Admin() {
           <TabsContent value="errors" className="mt-4">
             <AiErrorLogs />
           </TabsContent>
+
+          <TabsContent value="mercadopago" className="mt-4">
+            <MercadoPagoAccountsManager />
+          </TabsContent>
         </Tabs>
       </main>
     </div>
