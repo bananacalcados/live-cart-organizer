@@ -381,6 +381,20 @@ export function GlobalWhatsAppChat() {
           onNewMessageChange={setNewMessage}
           onSendMessage={handleSendMessage}
           onSendAudio={handleSendAudio}
+          onDeleteMessage={async (msg: any) => {
+            if (msg.message_id && selectedPhone) {
+              const res = await supabase.functions.invoke('zapi-delete-message', {
+                body: { phone: selectedPhone, messageId: msg.message_id, dbMessageId: msg.id, whatsapp_number_id: msg.whatsapp_number_id || selectedNumberId },
+              });
+              if (res.error || res.data?.error) {
+                // Fallback: remove only from local DB
+                await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+              }
+            } else {
+              await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+            }
+            loadMessages(selectedPhone!, selectedConvNumberId);
+          }}
           onBack={() => setSelectedPhone(null)}
           onFinish={async () => {
             if (selectedPhone) await finishConversation(selectedPhone);
