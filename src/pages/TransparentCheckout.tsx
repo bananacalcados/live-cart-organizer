@@ -259,6 +259,37 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
   );
 }
 
+// ── Step Banner (motivational) ──────────────────────────────────
+function StepBanner({ currentStep }: { currentStep: number }) {
+  const banners: Record<number, { title: string; body: string }> = {
+    1: {
+      title: "SEU PEDIDO ESTÁ MONTADO!",
+      body: "Preencha seus dados e clique em IR PARA ENTREGA — garanta seu pedido como os outros 37 mil clientes do Banana Calçados já fizeram.",
+    },
+    2: {
+      title: "AGORA FALTA POUCO PRA FINALIZAR!",
+      body: "Digite seu CEP e preencha os dados de envio pra conseguirmos te entregar direitinho! Nossa loja tem nota Máxima no Google e Mercado Livre. Preencha o endereço, selecione o frete e clique em IR PARA PAGAMENTO.",
+    },
+    3: {
+      title: "AGORA SIM! VOCÊ CHEGOU NA ÚLTIMA PARTE!",
+      body: "Basta escolher a forma de pagamento, e prontinho — em breve seu pedido estará na sua casa.",
+    },
+  };
+  const b = banners[currentStep];
+  if (!b) return null;
+  return (
+    <div className="mb-4 rounded-xl overflow-hidden border-2 border-primary/40 shadow-md">
+      <div className="bg-gradient-to-r from-primary via-primary to-accent px-4 py-3 sm:px-5 sm:py-4">
+        <p className="text-sm sm:text-base font-extrabold text-primary-foreground tracking-tight uppercase leading-tight">
+          {b.title}
+        </p>
+        <p className="text-xs sm:text-sm text-primary-foreground/95 mt-1 leading-snug">
+          {b.body}
+        </p>
+      </div>
+    </div>
+  );
+}
 // ── Order Summary Sidebar ───────────────────────────────────────
 function OrderSummary({ orderData, collapsed, onToggle }: { orderData: OrderData; collapsed?: boolean; onToggle?: () => void }) {
   const totalItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
