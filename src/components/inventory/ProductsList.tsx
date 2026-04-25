@@ -35,6 +35,7 @@ export function ProductsList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
 
   async function load() {
