@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -241,7 +241,12 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
             body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: selectedNumberId },
           });
           if (error) return { success: false, error: error.message };
-          if (data?.success) return { success: true };
+          if (data?.success) {
+            return {
+              success: true,
+              messageId: data?.data?.messageId || data?.data?.zaapId || data?.data?.id,
+            };
+          }
           return { success: false, error: data?.error || 'Erro ao enviar' };
         } catch (err) {
           return { success: false, error: 'Erro de conexão' };
@@ -493,6 +498,30 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleDeleteMessage = async (msg: Message) => {
+    if (!phone) throw new Error('No phone selected');
+
+    if (msg.message_id) {
+      const res = await supabase.functions.invoke('zapi-delete-message', {
+        body: {
+          phone,
+          messageId: msg.message_id,
+          dbMessageId: msg.id,
+          whatsapp_number_id: (msg as any).whatsapp_number_id || selectedNumberId,
+        },
+      });
+
+      if (res.error || res.data?.error) {
+        console.warn('[events-chat/delete] external delete failed, removing locally:', res.error || res.data?.error);
+        await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+      }
+    } else {
+      await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+    }
+
+    await loadMessages();
   };
 
   const getStageColorClass = (stageId: OrderStage) => {
