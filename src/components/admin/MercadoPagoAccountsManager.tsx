@@ -202,6 +202,7 @@ export function MercadoPagoAccountsManager() {
           </div>
         </div>
 
+        {loading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : accounts.length === 0 ? (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
