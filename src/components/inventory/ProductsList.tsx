@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
 import { toast } from "sonner";
@@ -105,6 +109,40 @@ export function ProductsList() {
     }
   }
 
+  async function updateShopify(masterId: string) {
+    setSendingTo(masterId);
+    try {
+      const { data, error } = await supabase.functions.invoke("update-master-product-shopify", {
+        body: { master_id: masterId },
+      });
+      if (error) throw error;
+      toast.success(data?.message || "Produto atualizado na Shopify");
+    } catch (err: any) {
+      toast.error("Erro ao atualizar Shopify: " + err.message);
+    } finally {
+      setSendingTo(null);
+    }
+  }
+
+  async function syncStock(masterId: string, target: "pos" | "shopify" | "both") {
+    setSendingTo(masterId);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-master-product-stock", {
+        body: { master_id: masterId, target },
+      });
+      if (error) throw error;
+      const r = data?.result || {};
+      const parts: string[] = [];
+      if (r.pos) parts.push(`PDV: ${r.pos.updated} atualizados em ${r.pos.stores} loja(s)`);
+      if (r.shopify) parts.push(`Shopify: ${r.shopify.updated || 0} variantes`);
+      toast.success("Estoque sincronizado — " + parts.join(" · "));
+    } catch (err: any) {
+      toast.error("Erro ao sincronizar estoque: " + err.message);
+    } finally {
+      setSendingTo(null);
+    }
+  }
+
   const filtered = items.filter((i) =>
     !search ||
     i.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -197,34 +235,76 @@ export function ProductsList() {
                       <Pencil className="h-3 w-3 mr-1" />
                       Editar
                     </Button>
-                    <Button
-                      size="sm"
-                      variant={p.tiny_product_id ? "secondary" : "outline"}
-                      className="flex-1 text-xs h-8"
-                      onClick={() => sendToPos(p.id)}
-                      disabled={sendingTo === p.id}
-                    >
-                      {sendingTo === p.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <StoreIcon className="h-3 w-3 mr-1" />
-                      )}
-                      {p.tiny_product_id ? "PDV ✓" : "PDV"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={p.shopify_product_id ? "secondary" : "outline"}
-                      className="flex-1 text-xs h-8"
-                      onClick={() => sendToShopify(p.id)}
-                      disabled={sendingTo === p.id}
-                    >
-                      {sendingTo === p.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <ShoppingBag className="h-3 w-3 mr-1" />
-                      )}
-                      {p.shopify_product_id ? "Shopify ✓" : "Shopify"}
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant={p.tiny_product_id ? "secondary" : "outline"}
+                          className="flex-1 text-xs h-8"
+                          disabled={sendingTo === p.id}
+                        >
+                          {sendingTo === p.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <StoreIcon className="h-3 w-3 mr-1" />
+                          )}
+                          {p.tiny_product_id ? "PDV ✓" : "PDV"}
+                          <ChevronDown className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel className="text-xs">PDV (todas as lojas)</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => sendToPos(p.id)}>
+                          <RefreshCw className="h-3 w-3 mr-2" />
+                          Atualizar dados (nome/preço)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => syncStock(p.id, "pos")}>
+                          <Boxes className="h-3 w-3 mr-2" />
+                          Sincronizar estoque
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant={p.shopify_product_id ? "secondary" : "outline"}
+                          className="flex-1 text-xs h-8"
+                          disabled={sendingTo === p.id}
+                        >
+                          {sendingTo === p.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <ShoppingBag className="h-3 w-3 mr-1" />
+                          )}
+                          {p.shopify_product_id ? "Shopify ✓" : "Shopify"}
+                          <ChevronDown className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel className="text-xs">Shopify</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {!p.shopify_product_id && (
+                          <DropdownMenuItem onClick={() => sendToShopify(p.id)}>
+                            <ShoppingBag className="h-3 w-3 mr-2" />
+                            Criar produto na Shopify
+                          </DropdownMenuItem>
+                        )}
+                        {p.shopify_product_id && (
+                          <>
+                            <DropdownMenuItem onClick={() => updateShopify(p.id)}>
+                              <RefreshCw className="h-3 w-3 mr-2" />
+                              Atualizar dados (nome/preço/imagens)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => syncStock(p.id, "shopify")}>
+                              <Boxes className="h-3 w-3 mr-2" />
+                              Sincronizar estoque
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </CardContent>
               </Card>

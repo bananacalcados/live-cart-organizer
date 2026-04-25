@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkOrderStock } from "../_shared/check-order-stock.ts";
 
 function maskCard(card: any) {
   if (!card) return card;
@@ -613,6 +614,30 @@ serve(async (req) => {
 
       orderSource = "pos_sales";
       console.log(`Using pos_sales fallback for sale ${params.orderId}, ${products.length} items`);
+    }
+
+    // ✅ Validar estoque antes de cobrar (evita oversell)
+    if (orderSource === "orders" && order) {
+      try {
+        const stockCheck = await checkOrderStock(supabase, order.products as any);
+        if (!stockCheck.ok) {
+          const list = stockCheck.issues.map((i) =>
+            `• ${i.title}${i.variant ? ` (${i.variant})` : ""}: pedido ${i.requested}, disponível ${i.available}`
+          ).join("\n");
+          console.warn(`[pagarme] Estoque insuficiente para order ${params.orderId}:`, stockCheck.issues);
+          return new Response(JSON.stringify({
+            error: "stock_unavailable",
+            message: `Alguns itens do pedido estão sem estoque:\n${list}`,
+            issues: stockCheck.issues,
+          }), {
+            status: 409,
+            headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+          });
+        }
+        console.log(`[pagarme] Estoque OK (${stockCheck.checked} verificados, ${stockCheck.skipped_unknown} ignorados)`);
+      } catch (stockErr) {
+        console.error("[pagarme] Erro na checagem de estoque (prosseguindo):", stockErr);
+      }
     }
 
     // Use the totalAmountCents from the frontend (includes interest calculation)
