@@ -434,7 +434,6 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       .limit(1);
     if (saleSearchErr) console.error("[mercadopago] sale search error:", saleSearchErr);
     sale = sales && sales.length > 0 ? sales[0] : null;
-    {
 
     if (sale) {
       orderId = sale.id;
@@ -460,8 +459,6 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       } else {
         console.log(`[mercadopago] pos_sale ${sale.id} marked as paid via webhook`);
         updated = true;
-
-        // Auto-create Tiny order
         await autoCreateTinyOrder(supabase, sale.id, supabaseUrl, supabaseKey);
       }
     } else {
