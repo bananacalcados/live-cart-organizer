@@ -282,25 +282,47 @@ serve(async (req) => {
       }
 
       // 2. Apply modifier rules to Frenet carrier quotes
+      // IMPORTANT:
+      //  - Rules WITH carrier_match: applied to every matching carrier (existing behavior).
+      //  - Rules WITHOUT carrier_match (global fixed_price): applied ONLY to the cheapest
+      //    carrier quote, so SEDEX/expressos não viram R$19,99 indevidamente.
+      const destState = cepToState(cepDigits);
+
+      // Identify the cheapest Frenet carrier quote (used for global rules)
+      const carrierQuotes = quotes.filter(q => q.type === 'carrier');
+      let cheapestCarrierId: string | null = null;
+      if (carrierQuotes.length > 0) {
+        const cheapest = carrierQuotes.reduce((acc, cur) => (cur.price < acc.price ? cur : acc));
+        cheapestCarrierId = cheapest.id;
+      }
+
       for (let i = 0; i < quotes.length; i++) {
         const q = quotes[i];
         if (q.type !== 'carrier') continue;
 
         const matchingRule = sortedRules.find((rule: any) => {
-          if (rule.carrier_match) {
-            const carrierLower = (q.carrier + ' ' + q.service).toLowerCase();
-            if (!carrierLower.includes(rule.carrier_match.toLowerCase())) return false;
-          }
+          // Region filter (applies to all rules)
           if (rule.region_states && rule.region_states.length > 0) {
-            const destState = cepToState(cepDigits);
             if (!destState || !rule.region_states.includes(destState)) return false;
           }
-          return true;
+
+          if (rule.carrier_match) {
+            // Targeted rule: match by carrier name/service
+            const carrierLower = (q.carrier + ' ' + q.service).toLowerCase();
+            if (!carrierLower.includes(rule.carrier_match.toLowerCase())) return false;
+            return true;
+          }
+
+          // Global rule (no carrier_match): only apply to the cheapest carrier
+          // and only for fixed_price rules (avoids global discounts hitting SEDEX).
+          if (rule.rule_type !== 'fixed_price') return false;
+          return q.id === cheapestCarrierId;
         });
 
         if (matchingRule) {
           if (matchingRule.rule_type === 'fixed_price' && matchingRule.fixed_price != null) {
-            q.price = matchingRule.fixed_price;
+            // Never make shipping more expensive than the real Frenet price.
+            q.price = Math.min(q.price, matchingRule.fixed_price);
           } else if (matchingRule.rule_type === 'discount_percentage' && matchingRule.discount_percentage != null) {
             q.price = Math.max(0, q.price * (1 - matchingRule.discount_percentage / 100));
           } else if (matchingRule.rule_type === 'discount_fixed' && matchingRule.discount_fixed != null) {
