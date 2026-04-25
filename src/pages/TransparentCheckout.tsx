@@ -259,6 +259,37 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
   );
 }
 
+// ── Step Banner (motivational) ──────────────────────────────────
+function StepBanner({ currentStep }: { currentStep: number }) {
+  const banners: Record<number, { title: string; body: string }> = {
+    1: {
+      title: "SEU PEDIDO ESTÁ MONTADO!",
+      body: "Preencha seus dados e clique em IR PARA ENTREGA — garanta seu pedido como os outros 37 mil clientes do Banana Calçados já fizeram.",
+    },
+    2: {
+      title: "AGORA FALTA POUCO PRA FINALIZAR!",
+      body: "Digite seu CEP e preencha os dados de envio pra conseguirmos te entregar direitinho! Nossa loja tem nota Máxima no Google e Mercado Livre. Preencha o endereço, selecione o frete e clique em IR PARA PAGAMENTO.",
+    },
+    3: {
+      title: "AGORA SIM! VOCÊ CHEGOU NA ÚLTIMA PARTE!",
+      body: "Basta escolher a forma de pagamento, e prontinho — em breve seu pedido estará na sua casa.",
+    },
+  };
+  const b = banners[currentStep];
+  if (!b) return null;
+  return (
+    <div className="mb-4 rounded-xl overflow-hidden border-2 border-primary/40 shadow-md">
+      <div className="bg-gradient-to-r from-primary via-primary to-accent px-4 py-3 sm:px-5 sm:py-4">
+        <p className="text-sm sm:text-base font-extrabold text-primary-foreground tracking-tight uppercase leading-tight">
+          {b.title}
+        </p>
+        <p className="text-xs sm:text-sm text-primary-foreground/95 mt-1 leading-snug">
+          {b.body}
+        </p>
+      </div>
+    </div>
+  );
+}
 // ── Order Summary Sidebar ───────────────────────────────────────
 function OrderSummary({ orderData, collapsed, onToggle }: { orderData: OrderData; collapsed?: boolean; onToggle?: () => void }) {
   const totalItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
@@ -276,14 +307,14 @@ function OrderSummary({ orderData, collapsed, onToggle }: { orderData: OrderData
           {orderData.products.map((product, index) => (
             <div key={index} className="flex items-center gap-3 p-2 bg-background/50 rounded-lg">
               {product.image && (
-                <img src={product.image} alt={product.title} className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
+                <img src={product.image} alt={product.title} className="w-20 h-20 sm:w-24 sm:h-24 rounded-md object-cover flex-shrink-0 border border-border" />
               )}
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-xs truncate">{product.title}</p>
-                {product.variant && <p className="text-[10px] text-muted-foreground">{product.variant}</p>}
-                <p className="text-[10px] text-muted-foreground">Qtd: {product.quantity}</p>
+                <p className="font-medium text-sm truncate">{product.title}</p>
+                {product.variant && <p className="text-xs text-muted-foreground">{product.variant}</p>}
+                <p className="text-xs text-muted-foreground">Qtd: {product.quantity}</p>
               </div>
-              <p className="font-semibold text-xs flex-shrink-0">R$ {(product.price * product.quantity).toFixed(2)}</p>
+              <p className="font-semibold text-sm flex-shrink-0">R$ {(product.price * product.quantity).toFixed(2)}</p>
             </div>
           ))}
           <div className="border-t pt-2 space-y-1">
@@ -1407,7 +1438,7 @@ export default function TransparentCheckout() {
     interest_free_installments: 6,
     monthly_interest_rate: 2.49,
   });
-  const [summaryCollapsed, setSummaryCollapsed] = useState(true);
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const paymentConfirmedRef = useRef(false);
 
   // 3-step state
@@ -1840,6 +1871,8 @@ export default function TransparentCheckout() {
         </div>
 
         <StepIndicator currentStep={currentStep} />
+
+        <StepBanner currentStep={currentStep} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main content */}
