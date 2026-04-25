@@ -19,9 +19,10 @@ import { AiKnowledgeBase } from "@/components/admin/AiKnowledgeBase";
 import { AiTestPanel } from "@/components/admin/AiTestPanel";
 import { SecretaryChat } from "@/components/admin/SecretaryChat";
 import { AiErrorLogs } from "@/components/admin/AiErrorLogs";
+import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccountsManager";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
-  LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone,
+  LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
 } from "lucide-react";
 
 const ALL_MODULES = [
@@ -219,6 +220,7 @@ export default function Admin() {
             <TabsTrigger value="knowledge" className="gap-1.5"><Brain className="h-3.5 w-3.5" /> Livete IA</TabsTrigger>
             <TabsTrigger value="secretary" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Secretária IA</TabsTrigger>
             <TabsTrigger value="errors" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Erros IA</TabsTrigger>
+            <TabsTrigger value="mercadopago" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Mercado Pago</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-6 mt-4">
@@ -420,6 +422,10 @@ export default function Admin() {
 
           <TabsContent value="errors" className="mt-4">
             <AiErrorLogs />
+          </TabsContent>
+
+          <TabsContent value="mercadopago" className="mt-4">
+            <MercadoPagoAccountsManager />
           </TabsContent>
         </Tabs>
       </main>

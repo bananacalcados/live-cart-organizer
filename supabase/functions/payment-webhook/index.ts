@@ -273,14 +273,17 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     });
   }
 
-  // Fetch real payment status from MercadoPago API
-  const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-  if (!accessToken) {
-    console.error("MERCADOPAGO_ACCESS_TOKEN not configured");
+  // Resolve a conta MP correta a partir do payment_id (suporte multi-conta)
+  const { getMpAccountByPaymentId } = await import("../_shared/mp-account.ts");
+  const mpAccount = await getMpAccountByPaymentId(supabase, String(paymentId));
+  if (!mpAccount) {
+    console.error("[mercadopago] No MP account resolved for payment", paymentId);
     return new Response(JSON.stringify({ ok: true, error: "no_token" }), {
       headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
+  const accessToken = mpAccount.access_token;
+  console.log(`[mercadopago] webhook using account: ${mpAccount.account_name} (${mpAccount.source})`);
 
   const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
