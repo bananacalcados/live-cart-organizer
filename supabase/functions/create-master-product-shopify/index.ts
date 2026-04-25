@@ -24,12 +24,12 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const SHOPIFY_DOMAIN = Deno.env.get("SHOPIFY_DOMAIN");
+    const SHOPIFY_DOMAIN = Deno.env.get("SHOPIFY_STORE_DOMAIN") || Deno.env.get("SHOPIFY_DOMAIN");
     const SHOPIFY_TOKEN = Deno.env.get("SHOPIFY_ACCESS_TOKEN");
 
     if (!SHOPIFY_DOMAIN || !SHOPIFY_TOKEN) {
       return new Response(
-        JSON.stringify({ error: "Credenciais Shopify não configuradas (SHOPIFY_DOMAIN e SHOPIFY_ACCESS_TOKEN)" }),
+        JSON.stringify({ error: "Credenciais Shopify não configuradas (SHOPIFY_STORE_DOMAIN e SHOPIFY_ACCESS_TOKEN)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
