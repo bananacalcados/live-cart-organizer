@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2 } from "lucide-react";
+import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
+import { ProductEditDialog } from "./ProductEditDialog";
 import { toast } from "sonner";
 
 interface Master {
