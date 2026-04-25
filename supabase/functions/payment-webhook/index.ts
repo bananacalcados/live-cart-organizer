@@ -313,12 +313,16 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   let updated = false;
   let orderId: string | null = null;
 
-  // Try orders first
-  const { data: order } = await supabase
+  // Try orders first — use .filter() with raw SQL-like syntax to avoid PostgREST cache quirks
+  console.log(`[mercadopago] Searching for order with mercadopago_payment_id=${mpIdStr}`);
+  const { data: orders, error: orderSearchErr } = await supabase
     .from("orders")
     .select("id, is_paid, store_id")
-    .eq("mercadopago_payment_id", mpIdStr)
-    .maybeSingle();
+    .filter("mercadopago_payment_id", "eq", mpIdStr)
+    .limit(1);
+  if (orderSearchErr) console.error("[mercadopago] order search error:", orderSearchErr);
+  console.log(`[mercadopago] Found ${orders?.length || 0} order(s)`);
+  const order = orders && orders.length > 0 ? orders[0] : null;
 
   if (order) {
     orderId = order.id;
