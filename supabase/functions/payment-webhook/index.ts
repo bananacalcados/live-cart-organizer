@@ -313,12 +313,16 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   let updated = false;
   let orderId: string | null = null;
 
-  // Try orders first
-  const { data: order } = await supabase
+  // Try orders first — use .filter() with raw SQL-like syntax to avoid PostgREST cache quirks
+  console.log(`[mercadopago] Searching for order with mercadopago_payment_id=${mpIdStr}`);
+  const { data: orders, error: orderSearchErr } = await supabase
     .from("orders")
     .select("id, is_paid, store_id")
-    .eq("mercadopago_payment_id", mpIdStr)
-    .maybeSingle();
+    .filter("mercadopago_payment_id", "eq", mpIdStr)
+    .limit(1);
+  if (orderSearchErr) console.error("[mercadopago] order search error:", orderSearchErr);
+  console.log(`[mercadopago] Found ${orders?.length || 0} order(s)`);
+  const order = orders && orders.length > 0 ? orders[0] : null;
 
   if (order) {
     orderId = order.id;
@@ -419,13 +423,17 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       // Auto-create Shopify order DISABLED — user wants manual control
       // await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
     }
-  } else {
-  // Try pos_sales
-    const { data: sale } = await supabase
+  }
+  let sale: any = null;
+  if (!order) {
+    // Try pos_sales — same .filter() approach
+    const { data: sales, error: saleSearchErr } = await supabase
       .from("pos_sales")
       .select("id, status, store_id, total, customer_name, customer_phone, payment_details")
-      .eq("mercadopago_payment_id", mpIdStr)
-      .maybeSingle();
+      .filter("mercadopago_payment_id", "eq", mpIdStr)
+      .limit(1);
+    if (saleSearchErr) console.error("[mercadopago] sale search error:", saleSearchErr);
+    sale = sales && sales.length > 0 ? sales[0] : null;
 
     if (sale) {
       orderId = sale.id;
@@ -451,8 +459,6 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       } else {
         console.log(`[mercadopago] pos_sale ${sale.id} marked as paid via webhook`);
         updated = true;
-
-        // Auto-create Tiny order
         await autoCreateTinyOrder(supabase, sale.id, supabaseUrl, supabaseKey);
       }
     } else {
