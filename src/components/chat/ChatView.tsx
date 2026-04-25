@@ -456,7 +456,8 @@ export function ChatView({
           {messages.map((msg, idx) => {
             const isOutgoing = msg.direction === 'outgoing';
             // Delete is always available for outgoing msgs (with fallback to local DB removal when Z-API can't)
-            const canDelete = isOutgoing && onDeleteMessage && (msg.status === 'sent' || msg.status === 'delivered' || msg.status === 'read' || !msg.status);
+            // Block only error/failed states; allow sent, delivered, read, played, pending, undefined, etc.
+            const canDelete = isOutgoing && !!onDeleteMessage && msg.status !== 'error' && msg.status !== 'failed';
             const canEdit = isOutgoing && msg.message_id && onEditMessage && msg.media_type === 'text' && (msg.status === 'sent' || msg.status === 'delivered');
             const isEditing = editingMsgId === msg.id;
             const msgAge = Date.now() - new Date(msg.created_at).getTime();
