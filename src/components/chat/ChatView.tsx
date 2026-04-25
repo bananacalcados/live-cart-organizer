@@ -525,7 +525,7 @@ export function ChatView({
                     </button>
                   )}
                   {/* Dropdown menu for outgoing messages */}
-                  {isOutgoing && withinWindow && (canDelete || canEdit) && !isEditing && (
+                  {isOutgoing && (canDelete || (canEdit && withinEditWindow)) && !isEditing && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 mt-1 shrink-0">
