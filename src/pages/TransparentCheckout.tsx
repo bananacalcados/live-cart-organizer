@@ -1198,7 +1198,31 @@ function CardPaymentForm({
         },
       });
 
-      if (error) throw new Error(typeof error === 'object' && error.message ? error.message : String(error));
+      if (error) {
+        // Tenta extrair mensagem detalhada (estoque insuficiente, etc.)
+        let detailedMsg = "";
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx && typeof ctx.json === "function") {
+            const body = await ctx.json();
+            if (body?.error === "stock_unavailable") {
+              detailedMsg = body.message || "Alguns itens estão sem estoque.";
+              sessionStorage.removeItem(`checkout_payment_${orderId}`);
+              processingRef.current = false;
+              setIsProcessing(false);
+              setPaymentError(detailedMsg);
+              toast.error(detailedMsg, { duration: 8000 });
+              return;
+            }
+            if (body?.message) detailedMsg = body.message;
+            else if (body?.error) detailedMsg = body.error;
+          }
+        } catch {}
+        if (!detailedMsg) {
+          detailedMsg = typeof error === 'object' && error.message ? error.message : String(error);
+        }
+        throw new Error(detailedMsg);
+      }
 
       if (data?.already_paid) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
