@@ -533,7 +533,7 @@ export function ChatView({
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-36">
-                        {canEdit && (
+                        {canEdit && withinEditWindow && (
                           <DropdownMenuItem
                             onClick={() => { setEditingMsgId(msg.id); setEditingText(msg.message || ''); }}
                             className="gap-2 text-xs"
