@@ -180,8 +180,28 @@ export function MercadoPagoAccountsManager() {
           <Plus className="h-4 w-4 mr-2" /> Nova Conta
         </Button>
       </CardHeader>
-      <CardContent>
-        {loading ? (
+      <CardContent className="space-y-4">
+        {/* Painel de Webhook URL — válida para todas as contas */}
+        <div className="rounded-md border bg-muted/30 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Webhook className="h-4 w-4" />
+            URL de Webhook (Notificações)
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Cadastre essa URL em cada conta do Mercado Pago em
+            {" "}
+            <strong>Suas Integrações → Webhooks → Configurar notificações → URL para Produção</strong>.
+            Marque o evento <strong>Pagamentos</strong>. A mesma URL serve para todas as contas — o sistema identifica
+            automaticamente qual conta processou cada pagamento.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input value={webhookUrl} readOnly className="font-mono text-xs" />
+            <Button size="sm" variant="outline" onClick={copyWebhook}>
+              <Copy className="h-3.5 w-3.5 mr-1" /> Copiar
+            </Button>
+          </div>
+        </div>
+
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : accounts.length === 0 ? (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
