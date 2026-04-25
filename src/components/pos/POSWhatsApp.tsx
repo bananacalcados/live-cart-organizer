@@ -846,12 +846,21 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   };
 
   const handleDeleteMessage = async (msg: any) => {
-    if (!msg.message_id || !selectedPhone) throw new Error('No message_id');
-    const res = await supabase.functions.invoke("zapi-delete-message", {
-      body: { phone: selectedPhone, messageId: msg.message_id, dbMessageId: msg.id, whatsapp_number_id: msg.whatsapp_number_id || selectedSendNumberId },
-    });
-    if (res.error) throw res.error;
-    if (res.data?.error) throw new Error(res.data.error);
+    if (!selectedPhone) throw new Error('No phone selected');
+    // If we have a Z-API message_id, try to delete from WhatsApp first
+    if (msg.message_id) {
+      const res = await supabase.functions.invoke("zapi-delete-message", {
+        body: { phone: selectedPhone, messageId: msg.message_id, dbMessageId: msg.id, whatsapp_number_id: msg.whatsapp_number_id || selectedSendNumberId },
+      });
+      // If Z-API delete failed (e.g., outside the 7min window), fall back to local-only removal
+      if (res.error || res.data?.error) {
+        console.warn('[delete] Z-API delete failed, removing locally:', res.error || res.data?.error);
+        await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+      }
+    } else {
+      // No external message_id (e.g., older audio sent before tracking) — remove only from local history
+      await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+    }
     loadMessages(selectedPhone, selectedConvNumberId);
   };
 
