@@ -194,15 +194,18 @@ serve(async (req) => {
 
     const pixData = mpPayment.point_of_interaction?.transaction_data;
 
-    // Save mercadopago_payment_id to orders or pos_sales
+    // Save mercadopago_payment_id + mp_account_id to orders or pos_sales
     const mpId = String(mpPayment.id);
+    const updatePayload: any = { mercadopago_payment_id: mpId };
+    if (mpAccount.account_id) updatePayload.mp_account_id = mpAccount.account_id;
+
     const { data: orderCheck } = await supabase.from("orders").select("id").eq("id", orderId).maybeSingle();
     if (orderCheck) {
-      await supabase.from("orders").update({ mercadopago_payment_id: mpId }).eq("id", orderId);
-      console.log(`[mercadopago] Vinculado mercadopago_payment_id=${mpId} ao pedido ${orderId}`);
+      await supabase.from("orders").update(updatePayload).eq("id", orderId);
+      console.log(`[mercadopago] Vinculado mp_id=${mpId} conta=${mpAccount.account_name} ao pedido ${orderId}`);
     } else {
-      await supabase.from("pos_sales").update({ mercadopago_payment_id: mpId } as any).eq("id", orderId);
-      console.log(`[mercadopago] Vinculado mercadopago_payment_id=${mpId} ao pedido ${orderId}`);
+      await supabase.from("pos_sales").update(updatePayload).eq("id", orderId);
+      console.log(`[mercadopago] Vinculado mp_id=${mpId} conta=${mpAccount.account_name} à venda ${orderId}`);
     }
 
     return new Response(
