@@ -25,11 +25,13 @@ serve(async (req) => {
   }
 
   try {
-    const { orderId, payer } = await req.json();
+    const { orderId, payer, pixDiscountPercent } = await req.json();
 
     if (!orderId) {
       throw new Error("orderId is required");
     }
+
+    const pixDiscountPct = Number(pixDiscountPercent) || 0;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
