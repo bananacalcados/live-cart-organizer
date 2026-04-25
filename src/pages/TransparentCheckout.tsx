@@ -447,6 +447,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
   const [loadingFreight, setLoadingFreight] = useState(false);
   const [selectedFreight, setSelectedFreight] = useState<string | null>(null);
   const [showAllFreight, setShowAllFreight] = useState(true);
+  const [editingAddress, setEditingAddress] = useState(false);
   const freightQuotedCep = useRef<string>("");
 
   const lookupCep = async (cepValue: string) => {
