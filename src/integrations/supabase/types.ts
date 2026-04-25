@@ -6197,6 +6197,7 @@ export type Database = {
         Row: {
           access_token: string
           app_number: string | null
+          cnpj: string | null
           created_at: string
           description: string | null
           id: string
@@ -6212,6 +6213,7 @@ export type Database = {
         Insert: {
           access_token: string
           app_number?: string | null
+          cnpj?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -6227,6 +6229,7 @@ export type Database = {
         Update: {
           access_token?: string
           app_number?: string | null
+          cnpj?: string | null
           created_at?: string
           description?: string | null
           id?: string
