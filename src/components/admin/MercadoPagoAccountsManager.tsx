@@ -151,6 +151,18 @@ export function MercadoPagoAccountsManager() {
 
   const maskToken = (t: string) => (t.length > 14 ? `${t.slice(0, 8)}…${t.slice(-4)}` : "•••");
 
+  const projectId = (import.meta as any).env?.VITE_SUPABASE_PROJECT_ID || "tqxhcyuxgqbzqwoidpie";
+  const webhookUrl = `https://${projectId}.supabase.co/functions/v1/payment-webhook`;
+
+  const copyWebhook = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      toast({ title: "URL copiada", description: "Cole no painel do Mercado Pago." });
+    } catch {
+      toast({ title: "Erro ao copiar", description: webhookUrl, variant: "destructive" });
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4">
