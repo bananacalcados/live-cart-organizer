@@ -220,6 +220,7 @@ export default function Admin() {
             <TabsTrigger value="knowledge" className="gap-1.5"><Brain className="h-3.5 w-3.5" /> Livete IA</TabsTrigger>
             <TabsTrigger value="secretary" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Secretária IA</TabsTrigger>
             <TabsTrigger value="errors" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Erros IA</TabsTrigger>
+            <TabsTrigger value="mercadopago" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Mercado Pago</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-6 mt-4">
