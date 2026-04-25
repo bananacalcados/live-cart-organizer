@@ -1,0 +1,1 @@
+ALTER TABLE public.mercadopago_accounts ADD COLUMN IF NOT EXISTS cnpj text;
