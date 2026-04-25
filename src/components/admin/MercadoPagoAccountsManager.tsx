@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, CheckCircle2, AlertTriangle, CreditCard } from "lucide-react";
+import { Plus, Pencil, Trash2, CheckCircle2, AlertTriangle, CreditCard, Copy, Webhook } from "lucide-react";
 
 interface MpAccount {
   id: string;
