@@ -818,10 +818,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         if (res.error) throw res.error;
         mediaMsgId = res.data?.messageId || null;
       } else {
-        const { error } = await supabase.functions.invoke("zapi-send-media", {
+        const { data: zRes, error } = await supabase.functions.invoke("zapi-send-media", {
           body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: sendRoute.numberId, quotedMessageId: quotedMessage?.message_id },
         });
         if (error) throw error;
+        mediaMsgId = zRes?.data?.messageId || zRes?.data?.zaapId || zRes?.data?.id || null;
       }
 
       await supabase.from("whatsapp_messages").insert({
