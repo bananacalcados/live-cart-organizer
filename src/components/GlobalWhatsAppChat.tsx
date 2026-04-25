@@ -223,7 +223,7 @@ export function GlobalWhatsAppChat() {
           body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: 'audio', whatsapp_number_id: selectedNumberId },
         });
         if (error) throw error;
-        audioMsgId = data?.data?.messageId || data?.data?.zaapId || data?.data?.id || null;
+        audioMsgId = data?.messageId || data?.data?.messageId || data?.data?.zaapId || data?.data?.id || null;
       }
       await supabase.from('whatsapp_messages').insert({
         phone: selectedPhone, message: '[áudio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: audioUrl,
