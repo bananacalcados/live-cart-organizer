@@ -235,11 +235,13 @@ export type Database = {
           last_ai_contact_at: string | null
           last_followup_at: string | null
           last_human_contact_at: string | null
+          live_campaign_id: string | null
           live_invite_sent: boolean | null
           name: string | null
           notes: string | null
           payment_link_sent: boolean | null
           phone: string
+          shoe_size: string | null
           source: string
           tags: string[] | null
           temperature: string
@@ -260,11 +262,13 @@ export type Database = {
           last_ai_contact_at?: string | null
           last_followup_at?: string | null
           last_human_contact_at?: string | null
+          live_campaign_id?: string | null
           live_invite_sent?: boolean | null
           name?: string | null
           notes?: string | null
           payment_link_sent?: boolean | null
           phone: string
+          shoe_size?: string | null
           source?: string
           tags?: string[] | null
           temperature?: string
@@ -285,11 +289,13 @@ export type Database = {
           last_ai_contact_at?: string | null
           last_followup_at?: string | null
           last_human_contact_at?: string | null
+          live_campaign_id?: string | null
           live_invite_sent?: boolean | null
           name?: string | null
           notes?: string | null
           payment_link_sent?: boolean | null
           phone?: string
+          shoe_size?: string | null
           source?: string
           tags?: string[] | null
           temperature?: string
@@ -309,6 +315,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_leads_live_campaign_id_fkey"
+            columns: ["live_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "live_campaigns"
             referencedColumns: ["id"]
           },
         ]
@@ -5189,6 +5202,164 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      live_campaign_dispatches: {
+        Row: {
+          attempts: number
+          campaign_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          lead_id: string | null
+          locked_until: string | null
+          message_id: string
+          phone: string
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          campaign_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          lead_id?: string | null
+          locked_until?: string | null
+          message_id: string
+          phone: string
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          campaign_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          lead_id?: string | null
+          locked_until?: string | null
+          message_id?: string
+          phone?: string
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_campaign_dispatches_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "live_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_campaign_dispatches_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "live_campaign_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      live_campaign_messages: {
+        Row: {
+          campaign_id: string
+          caption: string | null
+          content: string | null
+          created_at: string
+          delay_seconds: number
+          id: string
+          is_active: boolean
+          media_url: string | null
+          message_type: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          caption?: string | null
+          content?: string | null
+          created_at?: string
+          delay_seconds?: number
+          id?: string
+          is_active?: boolean
+          media_url?: string | null
+          message_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          caption?: string | null
+          content?: string | null
+          created_at?: string
+          delay_seconds?: number
+          id?: string
+          is_active?: boolean
+          media_url?: string | null
+          message_type?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_campaign_messages_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "live_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      live_campaigns: {
+        Row: {
+          ask_shoe_size: boolean
+          created_at: string
+          default_delay_seconds: number
+          id: string
+          is_active: boolean
+          jess_enabled: boolean
+          jess_prompt: string | null
+          name: string
+          slug: string
+          total_leads: number
+          trigger_phrase: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          ask_shoe_size?: boolean
+          created_at?: string
+          default_delay_seconds?: number
+          id?: string
+          is_active?: boolean
+          jess_enabled?: boolean
+          jess_prompt?: string | null
+          name: string
+          slug: string
+          total_leads?: number
+          trigger_phrase: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          ask_shoe_size?: boolean
+          created_at?: string
+          default_delay_seconds?: number
+          id?: string
+          is_active?: boolean
+          jess_enabled?: boolean
+          jess_prompt?: string | null
+          name?: string
+          slug?: string
+          total_leads?: number
+          trigger_phrase?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
       }
       live_chat_messages: {
         Row: {
