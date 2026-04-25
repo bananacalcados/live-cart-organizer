@@ -181,7 +181,7 @@ export function MercadoPagoAccountsManager() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nome</TableHead>
-                <TableHead>CNPJ</TableHead>
+                <TableHead>CPF/CNPJ</TableHead>
                 <TableHead>Token</TableHead>
                 <TableHead>Ambiente</TableHead>
                 <TableHead>Status</TableHead>
@@ -245,8 +245,15 @@ export function MercadoPagoAccountsManager() {
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: Loja Centro - CNPJ X" />
               </div>
               <div>
-                <Label>CNPJ</Label>
-                <Input value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} placeholder="00.000.000/0001-00" />
+                <Label>CPF ou CNPJ</Label>
+                <Input
+                  value={form.cnpj}
+                  onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
+                  placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Aceita conta pessoa física (CPF) ou jurídica (CNPJ).
+                </p>
               </div>
               <div>
                 <Label>Descrição</Label>
