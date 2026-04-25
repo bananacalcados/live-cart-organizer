@@ -462,6 +462,8 @@ export function ChatView({
             const msgAge = Date.now() - new Date(msg.created_at).getTime();
             // Edit window stays 15min (WhatsApp limit). Delete is always allowed (falls back to local removal).
             const withinEditWindow = msgAge < 15 * 60 * 1000;
+            // Delete-for-everyone WhatsApp window is ~7min. After that, only local removal works.
+            const withinWhatsAppDeleteWindow = !!msg.message_id && msgAge < 7 * 60 * 1000;
 
             const quotedMsgId = (msg as any).quoted_message_id;
             const quotedOriginal = quotedMsgId ? messages.find(m => m.message_id === quotedMsgId) : null;
@@ -544,20 +546,30 @@ export function ChatView({
                         {canDelete && (
                           <DropdownMenuItem
                             onClick={async () => {
-                              if (!confirm('Apagar esta mensagem?')) return;
+                              const confirmMsg = withinWhatsAppDeleteWindow
+                                ? 'Apagar para todos? A mensagem será removida também do WhatsApp do cliente.'
+                                : 'Esta mensagem só pode ser apagada do seu sistema (passou do prazo de ~7min do WhatsApp). O cliente continuará vendo no celular dele. Continuar?';
+                              if (!confirm(confirmMsg)) return;
                               setActionLoading(true);
                               try {
                                 await onDeleteMessage!(msg);
-                                toast.success('Mensagem apagada!');
                               } catch {
                                 toast.error('Erro ao apagar mensagem');
                               } finally {
                                 setActionLoading(false);
                               }
                             }}
-                            className="gap-2 text-xs text-destructive"
+                            className="gap-2 text-xs text-destructive flex-col items-start"
                           >
-                            <Trash2 className="h-3 w-3" /> Apagar
+                            <div className="flex items-center gap-2">
+                              <Trash2 className="h-3 w-3" />
+                              <span>{withinWhatsAppDeleteWindow ? 'Apagar para todos' : 'Apagar só pra mim'}</span>
+                            </div>
+                            {!withinWhatsAppDeleteWindow && (
+                              <span className="text-[10px] text-muted-foreground font-normal pl-5">
+                                Prazo de ~7min expirou
+                              </span>
+                            )}
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>

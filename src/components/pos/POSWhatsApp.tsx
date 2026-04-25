@@ -755,7 +755,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: sendRoute.numberId, quotedMessageId: quotedMessage?.message_id },
         });
         if (error) throw error;
-        audioMsgId = zRes?.data?.messageId || zRes?.data?.zaapId || zRes?.data?.id || null;
+        audioMsgId = zRes?.messageId || zRes?.data?.messageId || zRes?.data?.zaapId || zRes?.data?.id || null;
       }
 
       const { error: insertErr } = await supabase.from("whatsapp_messages").insert({
@@ -856,10 +856,20 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       if (res.error || res.data?.error) {
         console.warn('[delete] Z-API delete failed, removing locally:', res.error || res.data?.error);
         await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+        toast.warning('Apagada apenas no sistema', {
+          description: 'O WhatsApp não permitiu apagar para o cliente (passou de ~7min). A mensagem ainda aparece no celular dele.',
+        });
+      } else {
+        toast.success('Apagada para todos', {
+          description: 'A mensagem foi removida também do WhatsApp do cliente.',
+        });
       }
     } else {
       // No external message_id (e.g., older audio sent before tracking) — remove only from local history
       await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+      toast.warning('Apagada apenas no sistema', {
+        description: 'Esta mensagem não tem identificador do WhatsApp e não pode ser apagada no celular do cliente.',
+      });
     }
     loadMessages(selectedPhone, selectedConvNumberId);
   };
