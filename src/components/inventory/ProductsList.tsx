@@ -235,34 +235,76 @@ export function ProductsList() {
                       <Pencil className="h-3 w-3 mr-1" />
                       Editar
                     </Button>
-                    <Button
-                      size="sm"
-                      variant={p.tiny_product_id ? "secondary" : "outline"}
-                      className="flex-1 text-xs h-8"
-                      onClick={() => sendToPos(p.id)}
-                      disabled={sendingTo === p.id}
-                    >
-                      {sendingTo === p.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <StoreIcon className="h-3 w-3 mr-1" />
-                      )}
-                      {p.tiny_product_id ? "PDV ✓" : "PDV"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={p.shopify_product_id ? "secondary" : "outline"}
-                      className="flex-1 text-xs h-8"
-                      onClick={() => sendToShopify(p.id)}
-                      disabled={sendingTo === p.id}
-                    >
-                      {sendingTo === p.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <ShoppingBag className="h-3 w-3 mr-1" />
-                      )}
-                      {p.shopify_product_id ? "Shopify ✓" : "Shopify"}
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant={p.tiny_product_id ? "secondary" : "outline"}
+                          className="flex-1 text-xs h-8"
+                          disabled={sendingTo === p.id}
+                        >
+                          {sendingTo === p.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <StoreIcon className="h-3 w-3 mr-1" />
+                          )}
+                          {p.tiny_product_id ? "PDV ✓" : "PDV"}
+                          <ChevronDown className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel className="text-xs">PDV (todas as lojas)</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => sendToPos(p.id)}>
+                          <RefreshCw className="h-3 w-3 mr-2" />
+                          Atualizar dados (nome/preço)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => syncStock(p.id, "pos")}>
+                          <Boxes className="h-3 w-3 mr-2" />
+                          Sincronizar estoque
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant={p.shopify_product_id ? "secondary" : "outline"}
+                          className="flex-1 text-xs h-8"
+                          disabled={sendingTo === p.id}
+                        >
+                          {sendingTo === p.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <ShoppingBag className="h-3 w-3 mr-1" />
+                          )}
+                          {p.shopify_product_id ? "Shopify ✓" : "Shopify"}
+                          <ChevronDown className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel className="text-xs">Shopify</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {!p.shopify_product_id && (
+                          <DropdownMenuItem onClick={() => sendToShopify(p.id)}>
+                            <ShoppingBag className="h-3 w-3 mr-2" />
+                            Criar produto na Shopify
+                          </DropdownMenuItem>
+                        )}
+                        {p.shopify_product_id && (
+                          <>
+                            <DropdownMenuItem onClick={() => updateShopify(p.id)}>
+                              <RefreshCw className="h-3 w-3 mr-2" />
+                              Atualizar dados (nome/preço/imagens)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => syncStock(p.id, "shopify")}>
+                              <Boxes className="h-3 w-3 mr-2" />
+                              Sincronizar estoque
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </CardContent>
               </Card>
