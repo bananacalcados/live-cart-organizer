@@ -141,6 +141,26 @@ serve(async (req) => {
     const data = await response.json();
     console.log(`[zapi-send-media] Z-API response: ${response.status}`, JSON.stringify(data));
 
+    // Z-API may return the WhatsApp message id in various keys depending on media type.
+    // Normalize so the caller always receives `data.messageId` reliably.
+    const extractMsgId = (d: Record<string, unknown> | null | undefined): string | null => {
+      if (!d || typeof d !== 'object') return null;
+      const candidates = [
+        (d as Record<string, unknown>).messageId,
+        (d as Record<string, unknown>).zaapId,
+        (d as Record<string, unknown>).id,
+        (d as Record<string, unknown>).messageID,
+        (d as Record<string, unknown>).message_id,
+        (d as Record<string, unknown>).key && typeof (d as Record<string, unknown>).key === 'object'
+          ? ((d as Record<string, unknown>).key as Record<string, unknown>).id
+          : null,
+      ];
+      for (const c of candidates) {
+        if (typeof c === 'string' && c.length > 0) return c;
+      }
+      return null;
+    };
+
     // If URL-based image send failed or returned error, retry with base64
     if (mediaType === 'image' && !mediaUrl.startsWith('data:') && (!response.ok || data?.error || !data?.zaapId)) {
       console.log('[zapi-send-media] URL-based image failed, retrying with base64 download...');
