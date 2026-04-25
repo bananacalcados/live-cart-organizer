@@ -276,14 +276,14 @@ function OrderSummary({ orderData, collapsed, onToggle }: { orderData: OrderData
           {orderData.products.map((product, index) => (
             <div key={index} className="flex items-center gap-3 p-2 bg-background/50 rounded-lg">
               {product.image && (
-                <img src={product.image} alt={product.title} className="w-12 h-12 rounded-md object-cover flex-shrink-0" />
+                <img src={product.image} alt={product.title} className="w-20 h-20 sm:w-24 sm:h-24 rounded-md object-cover flex-shrink-0 border border-border" />
               )}
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-xs truncate">{product.title}</p>
-                {product.variant && <p className="text-[10px] text-muted-foreground">{product.variant}</p>}
-                <p className="text-[10px] text-muted-foreground">Qtd: {product.quantity}</p>
+                <p className="font-medium text-sm truncate">{product.title}</p>
+                {product.variant && <p className="text-xs text-muted-foreground">{product.variant}</p>}
+                <p className="text-xs text-muted-foreground">Qtd: {product.quantity}</p>
               </div>
-              <p className="font-semibold text-xs flex-shrink-0">R$ {(product.price * product.quantity).toFixed(2)}</p>
+              <p className="font-semibold text-sm flex-shrink-0">R$ {(product.price * product.quantity).toFixed(2)}</p>
             </div>
           ))}
           <div className="border-t pt-2 space-y-1">
