@@ -211,19 +211,23 @@ export function GlobalWhatsAppChat() {
     if (!selectedPhone) return;
     setIsSending(true);
     try {
+      let audioMsgId: string | null = null;
       if (sendVia === 'meta' && selectedNumberId) {
-        const { error } = await supabase.functions.invoke('meta-whatsapp-send', {
+        const { data, error } = await supabase.functions.invoke('meta-whatsapp-send', {
           body: { phone: selectedPhone, message: '[áudio]', whatsapp_number_id: selectedNumberId, media_url: audioUrl, media_type: 'audio' },
         });
         if (error) throw error;
+        audioMsgId = data?.messageId || null;
       } else {
-        const { error } = await supabase.functions.invoke('zapi-send-media', {
+        const { data, error } = await supabase.functions.invoke('zapi-send-media', {
           body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: 'audio', whatsapp_number_id: selectedNumberId },
         });
         if (error) throw error;
+        audioMsgId = data?.data?.messageId || data?.data?.zaapId || data?.data?.id || null;
       }
       await supabase.from('whatsapp_messages').insert({
         phone: selectedPhone, message: '[áudio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: audioUrl,
+        message_id: audioMsgId,
         sender_user_id: currentUserId || null,
       });
       loadMessages(selectedPhone, selectedConvNumberId);
