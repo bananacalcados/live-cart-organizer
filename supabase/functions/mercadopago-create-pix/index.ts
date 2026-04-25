@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getActiveMpAccount } from "../_shared/mp-account.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -33,11 +34,14 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
 
-    if (!accessToken) {
-      throw new Error("MERCADOPAGO_ACCESS_TOKEN is not configured");
+    // Resolve qual conta MP usar (ativa no banco, ou env como fallback)
+    const mpAccount = await getActiveMpAccount(supabase);
+    if (!mpAccount) {
+      throw new Error("Nenhuma conta Mercado Pago ativa configurada (cadastre em Admin → Mercado Pago)");
     }
+    const accessToken = mpAccount.access_token;
+    console.log(`[mp-pix] Usando conta: ${mpAccount.account_name} (source=${mpAccount.source})`);
 
     // Fetch order — try CRM orders first, then pos_sales
     let products: Array<{ price: number; quantity: number; title: string }> = [];
@@ -190,15 +194,18 @@ serve(async (req) => {
 
     const pixData = mpPayment.point_of_interaction?.transaction_data;
 
-    // Save mercadopago_payment_id to orders or pos_sales
+    // Save mercadopago_payment_id + mp_account_id to orders or pos_sales
     const mpId = String(mpPayment.id);
+    const updatePayload: any = { mercadopago_payment_id: mpId };
+    if (mpAccount.account_id) updatePayload.mp_account_id = mpAccount.account_id;
+
     const { data: orderCheck } = await supabase.from("orders").select("id").eq("id", orderId).maybeSingle();
     if (orderCheck) {
-      await supabase.from("orders").update({ mercadopago_payment_id: mpId }).eq("id", orderId);
-      console.log(`[mercadopago] Vinculado mercadopago_payment_id=${mpId} ao pedido ${orderId}`);
+      await supabase.from("orders").update(updatePayload).eq("id", orderId);
+      console.log(`[mercadopago] Vinculado mp_id=${mpId} conta=${mpAccount.account_name} ao pedido ${orderId}`);
     } else {
-      await supabase.from("pos_sales").update({ mercadopago_payment_id: mpId } as any).eq("id", orderId);
-      console.log(`[mercadopago] Vinculado mercadopago_payment_id=${mpId} ao pedido ${orderId}`);
+      await supabase.from("pos_sales").update(updatePayload).eq("id", orderId);
+      console.log(`[mercadopago] Vinculado mp_id=${mpId} conta=${mpAccount.account_name} à venda ${orderId}`);
     }
 
     return new Response(
