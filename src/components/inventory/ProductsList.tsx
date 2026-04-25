@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenuLabel, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
 import { toast } from "sonner";
