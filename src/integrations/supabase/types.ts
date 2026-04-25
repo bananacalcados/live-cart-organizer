@@ -7781,7 +7781,7 @@ export type Database = {
           stock: number
           store_id: string
           synced_at: string
-          tiny_id: number
+          tiny_id: number | null
           updated_at: string
           variant: string
         }
@@ -7801,7 +7801,7 @@ export type Database = {
           stock?: number
           store_id: string
           synced_at?: string
-          tiny_id: number
+          tiny_id?: number | null
           updated_at?: string
           variant?: string
         }
@@ -7821,7 +7821,7 @@ export type Database = {
           stock?: number
           store_id?: string
           synced_at?: string
-          tiny_id?: number
+          tiny_id?: number | null
           updated_at?: string
           variant?: string
         }
@@ -11709,7 +11709,7 @@ export type Database = {
           stock: number
           store_id: string
           synced_at: string
-          tiny_id: number
+          tiny_id: number | null
           updated_at: string
           variant: string
         }[]

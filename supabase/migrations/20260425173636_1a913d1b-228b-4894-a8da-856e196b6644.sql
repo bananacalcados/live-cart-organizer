@@ -1,0 +1,1 @@
+ALTER TABLE public.pos_products ALTER COLUMN tiny_id DROP NOT NULL;
