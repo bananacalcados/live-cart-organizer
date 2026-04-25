@@ -227,6 +227,30 @@ export async function routeMessage(
     return { agent: 'none', reason: 'operator_cooldown' };
   }
 
+  // 4b. Mass-dispatch reply gate — if the most recent outgoing message to this
+  // contact (last 48h) was a mass dispatch (broadcast/campanha), the customer's
+  // reply is likely a short reaction to the broadcast and Bia gets confused
+  // ("ué", "obrigado", "para", "ok", emojis…). Hand off to a human.
+  try {
+    const massCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data: lastOutgoing } = await supabase
+      .from('whatsapp_messages')
+      .select('is_mass_dispatch, created_at')
+      .in('phone', phoneVariants)
+      .eq('direction', 'outgoing')
+      .gt('created_at', massCutoff)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (lastOutgoing?.is_mass_dispatch) {
+      console.log(`[router] Last outgoing was mass dispatch for ${phone}, skipping AI (human handoff)`);
+      return { agent: 'none', reason: 'mass_dispatch_reply' };
+    }
+  } catch (err) {
+    console.error('[router] Error checking mass-dispatch gate:', err);
+  }
+
   // 5. Check concierge mode — production (all phones) or test (single phone)
   let conciergeTestMode = false;
   let conciergeProductionMode = false;
