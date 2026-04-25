@@ -186,8 +186,9 @@ serve(async (req) => {
             console.log(`[zapi-send-media] Base64 retry response: ${retryResp.status}`, JSON.stringify(retryData));
 
             if (retryResp.ok && !retryData?.error) {
+              const retryMsgId = extractMsgId(retryData);
               return new Response(
-                JSON.stringify({ success: true, data: retryData, method: 'base64-retry' }),
+                JSON.stringify({ success: true, data: retryData, messageId: retryMsgId, method: 'base64-retry' }),
                 { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
               );
             }
@@ -206,9 +207,10 @@ serve(async (req) => {
       );
     }
 
-    console.log('[zapi-send-media] Media sent successfully:', data);
+    const messageId = extractMsgId(data);
+    console.log('[zapi-send-media] Media sent successfully. messageId:', messageId);
     return new Response(
-      JSON.stringify({ success: true, data }),
+      JSON.stringify({ success: true, data, messageId }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
