@@ -153,9 +153,7 @@ serve(async (req) => {
 
     // If approved, mark order as paid and create Shopify order
     if (status === "approved" && orderId) {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabase = createClient(supabaseUrl, supabaseKey);
+      const supabase = supabaseForToken;
 
       // Try orders first
       const { data: existingOrder } = await supabase
