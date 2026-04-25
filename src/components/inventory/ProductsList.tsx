@@ -109,6 +109,40 @@ export function ProductsList() {
     }
   }
 
+  async function updateShopify(masterId: string) {
+    setSendingTo(masterId);
+    try {
+      const { data, error } = await supabase.functions.invoke("update-master-product-shopify", {
+        body: { master_id: masterId },
+      });
+      if (error) throw error;
+      toast.success(data?.message || "Produto atualizado na Shopify");
+    } catch (err: any) {
+      toast.error("Erro ao atualizar Shopify: " + err.message);
+    } finally {
+      setSendingTo(null);
+    }
+  }
+
+  async function syncStock(masterId: string, target: "pos" | "shopify" | "both") {
+    setSendingTo(masterId);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-master-product-stock", {
+        body: { master_id: masterId, target },
+      });
+      if (error) throw error;
+      const r = data?.result || {};
+      const parts: string[] = [];
+      if (r.pos) parts.push(`PDV: ${r.pos.updated} atualizados em ${r.pos.stores} loja(s)`);
+      if (r.shopify) parts.push(`Shopify: ${r.shopify.updated || 0} variantes`);
+      toast.success("Estoque sincronizado — " + parts.join(" · "));
+    } catch (err: any) {
+      toast.error("Erro ao sincronizar estoque: " + err.message);
+    } finally {
+      setSendingTo(null);
+    }
+  }
+
   const filtered = items.filter((i) =>
     !search ||
     i.name.toLowerCase().includes(search.toLowerCase()) ||
