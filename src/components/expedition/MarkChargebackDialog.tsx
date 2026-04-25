@@ -60,11 +60,27 @@ export function MarkChargebackDialog({ prefill, trigger, onCreated }: Props) {
     }
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
-    const { error } = await supabase.from('chargebacks').insert({
-      ...form,
-      amount: form.amount || null,
-      created_by: user?.id,
-    });
+    const payload = {
+      source: form.source,
+      source_order_id: form.source_order_id || null,
+      source_order_name: form.source_order_name || null,
+      customer_name: form.customer_name!,
+      customer_email: form.customer_email || null,
+      customer_phone: form.customer_phone || null,
+      customer_cpf: form.customer_cpf || null,
+      address_cep: form.address_cep || null,
+      address_number: form.address_number || null,
+      address_street: form.address_street || null,
+      address_neighborhood: form.address_neighborhood || null,
+      address_city: form.address_city || null,
+      address_state: form.address_state || null,
+      address_complement: form.address_complement || null,
+      amount: form.amount && form.amount > 0 ? form.amount : null,
+      chargeback_date: form.chargeback_date || null,
+      reason: form.reason || null,
+      created_by: user?.id || null,
+    };
+    const { error } = await supabase.from('chargebacks').insert(payload);
     setLoading(false);
     if (error) return toast.error(error.message);
     toast.success('Chargeback registrado! Cliente marcado para verificação.');
