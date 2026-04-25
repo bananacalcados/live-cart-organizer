@@ -34,11 +34,14 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
 
-    if (!accessToken) {
-      throw new Error("MERCADOPAGO_ACCESS_TOKEN is not configured");
+    // Resolve qual conta MP usar (ativa no banco, ou env como fallback)
+    const mpAccount = await getActiveMpAccount(supabase);
+    if (!mpAccount) {
+      throw new Error("Nenhuma conta Mercado Pago ativa configurada (cadastre em Admin → Mercado Pago)");
     }
+    const accessToken = mpAccount.access_token;
+    console.log(`[mp-pix] Usando conta: ${mpAccount.account_name} (source=${mpAccount.source})`);
 
     // Fetch order — try CRM orders first, then pos_sales
     let products: Array<{ price: number; quantity: number; title: string }> = [];
