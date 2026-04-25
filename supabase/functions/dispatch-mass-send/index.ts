@@ -6,10 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH_SIZE = 60;
-const CONCURRENCY = 8;
+const BATCH_SIZE = 120;
+const CONCURRENCY = 20;
 const MAX_EXECUTION_MS = 25_000; // 25s safety margin
-const CHUNK_DELAY_MS = 600;
+const CHUNK_DELAY_MS = 150;
 
 interface VariableConfig {
   mode: string;
@@ -132,10 +132,12 @@ function buildRenderedMessage(
   return parts.join('\n\n');
 }
 
-async function getRecipientCounts(supabase: ReturnType<typeof createClient>, dispatchId: string) {
+async function getRecipientCounts(supabase: any, dispatchId: string) {
+  // "sent" includes anything that successfully left our server: sent | delivered | read
+  // This prevents the count from going DOWN when Meta webhook updates statuses.
   const [{ count: sentCount }, { count: failedCount }, { count: pendingCount }] = await Promise.all([
     supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-      .eq('dispatch_id', dispatchId).eq('status', 'sent'),
+      .eq('dispatch_id', dispatchId).in('status', ['sent', 'delivered', 'read']),
     supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
       .eq('dispatch_id', dispatchId).eq('status', 'failed'),
     supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })

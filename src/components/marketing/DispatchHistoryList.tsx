@@ -291,6 +291,56 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     loadHistory();
   }, [loadHistory]);
 
+  // Realtime subscription: update sent_count/status live as dispatch_history rows change
+  useEffect(() => {
+    const channel = supabase
+      .channel('dispatch-history-live')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'dispatch_history' },
+        (payload: any) => {
+          const updated = payload.new;
+          if (!updated?.id) return;
+          setDispatches(prev => prev.map(d =>
+            d.id === updated.id
+              ? {
+                  ...d,
+                  sent_count: updated.sent_count ?? d.sent_count,
+                  failed_count: updated.failed_count ?? d.failed_count,
+                  status: updated.status ?? d.status,
+                  completed_at: updated.completed_at ?? d.completed_at,
+                  stats: d.stats
+                    ? { ...d.stats, dispatched: updated.sent_count ?? d.stats.dispatched }
+                    : d.stats,
+                }
+              : d
+          ));
+          setSelectedDispatch(prev =>
+            prev && prev.id === updated.id
+              ? {
+                  ...prev,
+                  sent_count: updated.sent_count ?? prev.sent_count,
+                  failed_count: updated.failed_count ?? prev.failed_count,
+                  status: updated.status ?? prev.status,
+                  completed_at: updated.completed_at ?? prev.completed_at,
+                }
+              : prev
+          );
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // Auto-refresh while any dispatch is actively sending (fallback if realtime drops)
+  useEffect(() => {
+    const hasActive = dispatches.some(d => d.status === 'sending');
+    if (!hasActive) return;
+    const interval = setInterval(() => { loadHistory(); }, 5000);
+    return () => clearInterval(interval);
+  }, [dispatches, loadHistory]);
+
   const openDetail = async (dispatch: DispatchRecord) => {
     setSelectedDispatch(dispatch);
     setIsLoadingDetail(true);

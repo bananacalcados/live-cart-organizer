@@ -16,7 +16,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Find scheduled dispatches that are due
+    // 1. Find scheduled dispatches that are due
     const { data: dueDispatches, error } = await supabase
       .from('dispatch_history')
       .select('id')
@@ -31,28 +31,21 @@ serve(async (req) => {
       });
     }
 
-    if (!dueDispatches || dueDispatches.length === 0) {
-      return new Response(JSON.stringify({ success: true, message: 'No scheduled dispatches due' }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     const triggered: string[] = [];
+    const resumed: string[] = [];
 
-    for (const dispatch of dueDispatches) {
-      // Update status to 'sending'
+    for (const dispatch of (dueDispatches || [])) {
       const { error: updateErr } = await supabase
         .from('dispatch_history')
         .update({ status: 'sending', started_at: new Date().toISOString() })
         .eq('id', dispatch.id)
-        .eq('status', 'scheduled'); // Prevent race conditions
+        .eq('status', 'scheduled');
 
       if (updateErr) {
         console.error(`Failed to update dispatch ${dispatch.id}:`, updateErr);
         continue;
       }
 
-      // Trigger internal dispatch processor
       fetch(`${supabaseUrl}/functions/v1/dispatch-mass-send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
@@ -62,7 +55,28 @@ serve(async (req) => {
       triggered.push(dispatch.id);
     }
 
-    return new Response(JSON.stringify({ success: true, triggered }), {
+    // 2. RECOVERY: Find "sending" dispatches stuck (no activity for >45s, processing_batch=false)
+    // These are orphaned chains that died mid-processing.
+    const staleThreshold = new Date(Date.now() - 45_000).toISOString();
+    const { data: staleDispatches } = await supabase
+      .from('dispatch_history')
+      .select('id, started_at, processing_batch')
+      .eq('status', 'sending')
+      .eq('processing_batch', false)
+      .lt('started_at', staleThreshold)
+      .limit(5);
+
+    for (const stale of (staleDispatches || [])) {
+      console.log(`[recovery] Resuming orphaned dispatch ${stale.id} (last started_at: ${stale.started_at})`);
+      fetch(`${supabaseUrl}/functions/v1/dispatch-mass-send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
+        body: JSON.stringify({ dispatchId: stale.id }),
+      }).catch(err => console.error(`Failed to resume dispatch ${stale.id}:`, err));
+      resumed.push(stale.id);
+    }
+
+    return new Response(JSON.stringify({ success: true, triggered, resumed }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
