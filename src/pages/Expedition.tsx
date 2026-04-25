@@ -315,8 +315,30 @@ export default function Expedition() {
               <span className="hidden md:inline font-medium">Suporte</span>
             </button>
             <button
-              onClick={() => setActiveStep('returns')}
+              onClick={() => setActiveStep('online_exchanges')}
               className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ml-auto ${
+                activeStep === 'online_exchanges'
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`}
+            >
+              <ArrowLeftRight className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden md:inline font-medium">Trocas Online</span>
+            </button>
+            <button
+              onClick={() => setActiveStep('chargebacks')}
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
+                activeStep === 'chargebacks'
+                  ? 'bg-destructive text-destructive-foreground shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`}
+            >
+              <ShieldAlert className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden md:inline font-medium">Chargebacks</span>
+            </button>
+            <button
+              onClick={() => setActiveStep('returns')}
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
                 activeStep === 'returns'
                   ? 'bg-destructive text-destructive-foreground shadow-md'
                   : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -434,6 +456,8 @@ export default function Expedition() {
             {activeStep === 'returns' && (
               <ExpeditionReturns onRefresh={fetchOrders} />
             )}
+            {activeStep === 'online_exchanges' && <OnlineExchanges />}
+            {activeStep === 'chargebacks' && <ChargebacksDashboard />}
 
             {/* Next Step Button (show on workflow steps, not support/returns) */}
             {STEPS.some(s => s.id === activeStep) && activeStep !== 'manifest' && (
