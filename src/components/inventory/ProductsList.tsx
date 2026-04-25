@@ -151,11 +151,22 @@ export function ProductsList() {
               <Card key={p.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold truncate">{p.name}</div>
+                    <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setEditingId(p.id)}>
+                      <div className="font-semibold truncate hover:text-primary transition-colors">{p.name}</div>
                       <div className="text-xs text-muted-foreground font-mono">SKU: {p.sku_root}</div>
                     </div>
-                    {!p.is_active && <Badge variant="secondary">Inativo</Badge>}
+                    <div className="flex items-center gap-1">
+                      {!p.is_active && <Badge variant="secondary">Inativo</Badge>}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        onClick={() => setEditingId(p.id)}
+                        title="Editar produto"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
                   <div className="flex flex-wrap gap-1">
                     {p.brand && <Badge variant="outline" className="text-[10px]">{p.brand}</Badge>}
@@ -179,6 +190,15 @@ export function ProductsList() {
                   <div className="flex gap-1 pt-2 border-t">
                     <Button
                       size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs h-8"
+                      onClick={() => setEditingId(p.id)}
+                    >
+                      <Pencil className="h-3 w-3 mr-1" />
+                      Editar
+                    </Button>
+                    <Button
+                      size="sm"
                       variant={p.tiny_product_id ? "secondary" : "outline"}
                       className="flex-1 text-xs h-8"
                       onClick={() => sendToPos(p.id)}
@@ -189,7 +209,7 @@ export function ProductsList() {
                       ) : (
                         <StoreIcon className="h-3 w-3 mr-1" />
                       )}
-                      {p.tiny_product_id ? "PDV ✓" : "Enviar PDV"}
+                      {p.tiny_product_id ? "PDV ✓" : "PDV"}
                     </Button>
                     <Button
                       size="sm"
