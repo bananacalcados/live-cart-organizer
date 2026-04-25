@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getActiveMpAccount } from "../_shared/mp-account.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,8 +17,11 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const mpToken = Deno.env.get('MERCADOPAGO_ACCESS_TOKEN');
-    if (!mpToken) throw new Error('MERCADOPAGO_ACCESS_TOKEN not configured');
+
+    const mpAccount = await getActiveMpAccount(supabase);
+    if (!mpAccount) throw new Error('No active Mercado Pago account configured');
+    const mpToken = mpAccount.access_token;
+    console.log(`[mercadopago-create-boleto] Using account: ${mpAccount.account_name} (${mpAccount.source})`);
 
     // Load order to get total
     const { data: order } = await supabase
