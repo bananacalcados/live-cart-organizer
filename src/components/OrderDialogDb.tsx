@@ -76,6 +76,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [couponCode, setCouponCode] = useState("");
   const [customShippingCost, setCustomShippingCost] = useState<string>("");
   const [paidExternally, setPaidExternally] = useState(false);
+  const [maxInstallmentsOverride, setMaxInstallmentsOverride] = useState<string>("");
 
   // Pickup & delivery
   const [isPickup, setIsPickup] = useState(false);

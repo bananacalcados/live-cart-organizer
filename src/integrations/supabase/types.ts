@@ -6536,6 +6536,7 @@ export type Database = {
           is_pickup: boolean | null
           last_customer_message_at: string | null
           last_sent_message_at: string | null
+          max_installments_override: number | null
           mercadopago_payment_id: string | null
           mp_account_id: string | null
           notes: string | null
@@ -6577,6 +6578,7 @@ export type Database = {
           is_pickup?: boolean | null
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
+          max_installments_override?: number | null
           mercadopago_payment_id?: string | null
           mp_account_id?: string | null
           notes?: string | null
@@ -6618,6 +6620,7 @@ export type Database = {
           is_pickup?: boolean | null
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
+          max_installments_override?: number | null
           mercadopago_payment_id?: string | null
           mp_account_id?: string | null
           notes?: string | null
