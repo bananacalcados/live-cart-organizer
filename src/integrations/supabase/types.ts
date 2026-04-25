@@ -1512,6 +1512,87 @@ export type Database = {
           },
         ]
       }
+      chargebacks: {
+        Row: {
+          address_cep: string | null
+          address_city: string | null
+          address_complement: string | null
+          address_key: string | null
+          address_neighborhood: string | null
+          address_number: string | null
+          address_state: string | null
+          address_street: string | null
+          amount: number | null
+          chargeback_date: string | null
+          contact_notes: string | null
+          created_at: string
+          created_by: string | null
+          customer_cpf: string | null
+          customer_email: string | null
+          customer_name: string
+          customer_phone: string | null
+          id: string
+          reason: string | null
+          source: string
+          source_order_id: string | null
+          source_order_name: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address_cep?: string | null
+          address_city?: string | null
+          address_complement?: string | null
+          address_key?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          amount?: number | null
+          chargeback_date?: string | null
+          contact_notes?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name: string
+          customer_phone?: string | null
+          id?: string
+          reason?: string | null
+          source: string
+          source_order_id?: string | null
+          source_order_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address_cep?: string | null
+          address_city?: string | null
+          address_complement?: string | null
+          address_key?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          amount?: number | null
+          chargeback_date?: string | null
+          contact_notes?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string
+          customer_phone?: string | null
+          id?: string
+          reason?: string | null
+          source?: string
+          source_order_id?: string | null
+          source_order_name?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_archived_conversations: {
         Row: {
           archived_at: string
@@ -6303,6 +6384,81 @@ export type Database = {
         }
         Relationships: []
       }
+      online_exchanges: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          customer_cpf: string | null
+          customer_email: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          inspected_at: string | null
+          notes: string | null
+          product_name: string | null
+          product_sku: string | null
+          product_variant: string | null
+          quantity: number
+          reason_category: string
+          reason_detail: string | null
+          received_at: string | null
+          shopify_order_id: string | null
+          shopify_order_name: string
+          shopify_order_number: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          inspected_at?: string | null
+          notes?: string | null
+          product_name?: string | null
+          product_sku?: string | null
+          product_variant?: string | null
+          quantity?: number
+          reason_category: string
+          reason_detail?: string | null
+          received_at?: string | null
+          shopify_order_id?: string | null
+          shopify_order_name: string
+          shopify_order_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          inspected_at?: string | null
+          notes?: string | null
+          product_name?: string | null
+          product_sku?: string | null
+          product_variant?: string | null
+          quantity?: number
+          reason_category?: string
+          reason_detail?: string | null
+          received_at?: string | null
+          shopify_order_id?: string | null
+          shopify_order_name?: string
+          shopify_order_number?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           ai_paused: boolean | null
@@ -10659,6 +10815,17 @@ export type Database = {
     }
     Functions: {
       calculate_rfm_scores: { Args: never; Returns: Json }
+      check_chargeback_risk: {
+        Args: {
+          p_address_cep?: string
+          p_address_number?: string
+          p_customer_cpf?: string
+          p_customer_email?: string
+          p_customer_name: string
+          p_customer_phone?: string
+        }
+        Returns: Json
+      }
       check_order_ai_paused: {
         Args: { p_phone: string }
         Returns: {
@@ -10953,6 +11120,10 @@ export type Database = {
           records_deleted: number
           records_merged: number
         }[]
+      }
+      normalize_address_key: {
+        Args: { p_cep: string; p_number: string }
+        Returns: string
       }
       reopen_finished_conversation: {
         Args: { p_phone: string }
