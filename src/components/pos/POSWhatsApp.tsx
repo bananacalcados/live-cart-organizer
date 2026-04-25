@@ -755,7 +755,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: sendRoute.numberId, quotedMessageId: quotedMessage?.message_id },
         });
         if (error) throw error;
-        audioMsgId = zRes?.data?.messageId || zRes?.data?.zaapId || zRes?.data?.id || null;
+        audioMsgId = zRes?.messageId || zRes?.data?.messageId || zRes?.data?.zaapId || zRes?.data?.id || null;
       }
 
       const { error: insertErr } = await supabase.from("whatsapp_messages").insert({
