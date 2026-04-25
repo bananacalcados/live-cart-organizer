@@ -462,6 +462,8 @@ export function ChatView({
             const msgAge = Date.now() - new Date(msg.created_at).getTime();
             // Edit window stays 15min (WhatsApp limit). Delete is always allowed (falls back to local removal).
             const withinEditWindow = msgAge < 15 * 60 * 1000;
+            // Delete-for-everyone WhatsApp window is ~7min. After that, only local removal works.
+            const withinWhatsAppDeleteWindow = !!msg.message_id && msgAge < 7 * 60 * 1000;
 
             const quotedMsgId = (msg as any).quoted_message_id;
             const quotedOriginal = quotedMsgId ? messages.find(m => m.message_id === quotedMsgId) : null;
