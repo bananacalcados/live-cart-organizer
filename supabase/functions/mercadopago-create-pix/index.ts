@@ -101,6 +101,28 @@ serve(async (req) => {
       console.log(`Using pos_sales fallback for PIX, sale ${orderId}, ${products.length} items, shipping: ${shippingAmount}`);
     }
 
+    // ✅ Validar estoque antes de gerar pagamento (evita oversell)
+    try {
+      const stockCheck = await checkOrderStock(supabase, products as any);
+      if (!stockCheck.ok) {
+        const list = stockCheck.issues.map((i) =>
+          `• ${i.title}${i.variant ? ` (${i.variant})` : ""}: pedido ${i.requested}, disponível ${i.available}`
+        ).join("\n");
+        console.warn(`[mp-pix] Estoque insuficiente para order ${orderId}:`, stockCheck.issues);
+        return new Response(JSON.stringify({
+          error: "stock_unavailable",
+          message: `Alguns itens do pedido estão sem estoque:\n${list}`,
+          issues: stockCheck.issues,
+        }), {
+          status: 409,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+        });
+      }
+      console.log(`[mp-pix] Estoque OK (${stockCheck.checked} verificados, ${stockCheck.skipped_unknown} ignorados)`);
+    } catch (stockErr) {
+      console.error("[mp-pix] Erro na checagem de estoque (prosseguindo):", stockErr);
+    }
+
     // Calculate total with discount + shipping
     const subtotal = products.reduce((sum: number, p) => sum + p.price * p.quantity, 0);
 
