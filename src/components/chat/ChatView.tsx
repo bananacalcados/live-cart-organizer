@@ -455,11 +455,13 @@ export function ChatView({
         <div className="p-3 w-full max-w-full overflow-hidden">
           {messages.map((msg, idx) => {
             const isOutgoing = msg.direction === 'outgoing';
-            const canDelete = isOutgoing && msg.message_id && onDeleteMessage && (msg.status === 'sent' || msg.status === 'delivered');
+            // Delete is always available for outgoing msgs (with fallback to local DB removal when Z-API can't)
+            const canDelete = isOutgoing && onDeleteMessage && (msg.status === 'sent' || msg.status === 'delivered' || msg.status === 'read' || !msg.status);
             const canEdit = isOutgoing && msg.message_id && onEditMessage && msg.media_type === 'text' && (msg.status === 'sent' || msg.status === 'delivered');
             const isEditing = editingMsgId === msg.id;
             const msgAge = Date.now() - new Date(msg.created_at).getTime();
-            const withinWindow = msgAge < 15 * 60 * 1000;
+            // Edit window stays 15min (WhatsApp limit). Delete is always allowed (falls back to local removal).
+            const withinEditWindow = msgAge < 15 * 60 * 1000;
 
             const quotedMsgId = (msg as any).quoted_message_id;
             const quotedOriginal = quotedMsgId ? messages.find(m => m.message_id === quotedMsgId) : null;
@@ -523,7 +525,7 @@ export function ChatView({
                     </button>
                   )}
                   {/* Dropdown menu for outgoing messages */}
-                  {isOutgoing && withinWindow && (canDelete || canEdit) && !isEditing && (
+                  {isOutgoing && (canDelete || (canEdit && withinEditWindow)) && !isEditing && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 flex items-center justify-center rounded-full hover:bg-black/10 dark:hover:bg-white/10 mt-1 shrink-0">
@@ -531,7 +533,7 @@ export function ChatView({
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-36">
-                        {canEdit && (
+                        {canEdit && withinEditWindow && (
                           <DropdownMenuItem
                             onClick={() => { setEditingMsgId(msg.id); setEditingText(msg.message || ''); }}
                             className="gap-2 text-xs"
