@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, CheckCircle2, AlertTriangle, CreditCard } from "lucide-react";
+import { Plus, Pencil, Trash2, CheckCircle2, AlertTriangle, CreditCard, Copy, Webhook } from "lucide-react";
 
 interface MpAccount {
   id: string;
@@ -151,6 +151,18 @@ export function MercadoPagoAccountsManager() {
 
   const maskToken = (t: string) => (t.length > 14 ? `${t.slice(0, 8)}…${t.slice(-4)}` : "•••");
 
+  const projectId = (import.meta as any).env?.VITE_SUPABASE_PROJECT_ID || "tqxhcyuxgqbzqwoidpie";
+  const webhookUrl = `https://${projectId}.supabase.co/functions/v1/payment-webhook`;
+
+  const copyWebhook = async () => {
+    try {
+      await navigator.clipboard.writeText(webhookUrl);
+      toast({ title: "URL copiada", description: "Cole no painel do Mercado Pago." });
+    } catch {
+      toast({ title: "Erro ao copiar", description: webhookUrl, variant: "destructive" });
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4">
@@ -168,7 +180,28 @@ export function MercadoPagoAccountsManager() {
           <Plus className="h-4 w-4 mr-2" /> Nova Conta
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        {/* Painel de Webhook URL — válida para todas as contas */}
+        <div className="rounded-md border bg-muted/30 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Webhook className="h-4 w-4" />
+            URL de Webhook (Notificações)
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Cadastre essa URL em cada conta do Mercado Pago em
+            {" "}
+            <strong>Suas Integrações → Webhooks → Configurar notificações → URL para Produção</strong>.
+            Marque o evento <strong>Pagamentos</strong>. A mesma URL serve para todas as contas — o sistema identifica
+            automaticamente qual conta processou cada pagamento.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input value={webhookUrl} readOnly className="font-mono text-xs" />
+            <Button size="sm" variant="outline" onClick={copyWebhook}>
+              <Copy className="h-3.5 w-3.5 mr-1" /> Copiar
+            </Button>
+          </div>
+        </div>
+
         {loading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : accounts.length === 0 ? (
