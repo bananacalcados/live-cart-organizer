@@ -1407,7 +1407,7 @@ export default function TransparentCheckout() {
     interest_free_installments: 6,
     monthly_interest_rate: 2.49,
   });
-  const [summaryCollapsed, setSummaryCollapsed] = useState(true);
+  const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const paymentConfirmedRef = useRef(false);
 
   // 3-step state
