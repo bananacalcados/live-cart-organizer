@@ -423,13 +423,18 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       // Auto-create Shopify order DISABLED — user wants manual control
       // await autoCreateShopifyOrder(supabase, order.id, "orders", supabaseUrl, supabaseKey);
     }
-  } else {
-  // Try pos_sales
-    const { data: sale } = await supabase
+  }
+  let sale: any = null;
+  if (!order) {
+    // Try pos_sales — same .filter() approach
+    const { data: sales, error: saleSearchErr } = await supabase
       .from("pos_sales")
       .select("id, status, store_id, total, customer_name, customer_phone, payment_details")
-      .eq("mercadopago_payment_id", mpIdStr)
-      .maybeSingle();
+      .filter("mercadopago_payment_id", "eq", mpIdStr)
+      .limit(1);
+    if (saleSearchErr) console.error("[mercadopago] sale search error:", saleSearchErr);
+    sale = sales && sales.length > 0 ? sales[0] : null;
+    {
 
     if (sale) {
       orderId = sale.id;
