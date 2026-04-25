@@ -455,11 +455,13 @@ export function ChatView({
         <div className="p-3 w-full max-w-full overflow-hidden">
           {messages.map((msg, idx) => {
             const isOutgoing = msg.direction === 'outgoing';
-            const canDelete = isOutgoing && msg.message_id && onDeleteMessage && (msg.status === 'sent' || msg.status === 'delivered');
+            // Delete is always available for outgoing msgs (with fallback to local DB removal when Z-API can't)
+            const canDelete = isOutgoing && onDeleteMessage && (msg.status === 'sent' || msg.status === 'delivered' || msg.status === 'read' || !msg.status);
             const canEdit = isOutgoing && msg.message_id && onEditMessage && msg.media_type === 'text' && (msg.status === 'sent' || msg.status === 'delivered');
             const isEditing = editingMsgId === msg.id;
             const msgAge = Date.now() - new Date(msg.created_at).getTime();
-            const withinWindow = msgAge < 15 * 60 * 1000;
+            // Edit window stays 15min (WhatsApp limit). Delete is always allowed (falls back to local removal).
+            const withinEditWindow = msgAge < 15 * 60 * 1000;
 
             const quotedMsgId = (msg as any).quoted_message_id;
             const quotedOriginal = quotedMsgId ? messages.find(m => m.message_id === quotedMsgId) : null;
