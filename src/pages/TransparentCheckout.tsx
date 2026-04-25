@@ -862,6 +862,7 @@ function StepPayment({
                  <PixPaymentForm
                    orderId={orderId}
                    amount={pixAmount}
+                   pixDiscountPercent={pixDiscountPercent}
                    form={form}
                    onPaymentConfirmed={onPaymentConfirmed}
                  />
@@ -889,7 +890,7 @@ function StepPayment({
 }
 
 // ── PIX Payment Form (step 3) ───────────────────────────────────
-function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId: string; amount: number; form: CustomerFormData; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void }) {
+function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPaymentConfirmed }: { orderId: string; amount: number; pixDiscountPercent?: number; form: CustomerFormData; onPaymentConfirmed: (info?: { platform: string; method: string; customerData?: any }) => void }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
@@ -953,6 +954,7 @@ function PixPaymentForm({ orderId, amount, form, onPaymentConfirmed }: { orderId
       const response = await supabase.functions.invoke("mercadopago-create-pix", {
         body: {
           orderId,
+          pixDiscountPercent,
           payer: {
             firstName: nameParts[0] || "",
             lastName: nameParts.slice(1).join(" ") || "",

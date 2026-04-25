@@ -25,11 +25,13 @@ serve(async (req) => {
   }
 
   try {
-    const { orderId, payer } = await req.json();
+    const { orderId, payer, pixDiscountPercent } = await req.json();
 
     if (!orderId) {
       throw new Error("orderId is required");
     }
+
+    const pixDiscountPct = Number(pixDiscountPercent) || 0;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -107,7 +109,14 @@ serve(async (req) => {
         ? subtotal * (discountValue / 100)
         : discountValue;
     }
-    const totalAmount = Math.round(Math.max(0, subtotal - discountAmount + shippingAmount) * 100) / 100;
+    let totalAmount = Math.round(Math.max(0, subtotal - discountAmount + shippingAmount) * 100) / 100;
+
+    // Apply PIX-specific discount (e.g. "5% OFF no PIX") so cobrança casa com o exibido no checkout
+    if (pixDiscountPct > 0) {
+      const pixDiscount = Math.round(totalAmount * (pixDiscountPct / 100) * 100) / 100;
+      totalAmount = Math.round((totalAmount - pixDiscount) * 100) / 100;
+      console.log(`[mp-pix] Aplicado desconto PIX ${pixDiscountPct}% (-R$ ${pixDiscount.toFixed(2)}) → total R$ ${totalAmount.toFixed(2)}`);
+    }
 
     // Use payer data from request, or fallback to customer data
     const payerEmail = payer?.email || 
