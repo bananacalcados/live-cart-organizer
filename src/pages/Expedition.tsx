@@ -10,7 +10,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon, MessageCircle, Clock, SearchCheck } from 'lucide-react';
+import { RefreshCw, Package, Truck, Loader2, CheckCircle2, AlertTriangle, Search, ScanBarcode, RotateCcw, Users, ClipboardList, PackageCheck, Receipt, Tag, ShieldCheck, FileBarChart, CalendarIcon, HeadphonesIcon, MessageCircle, Clock, SearchCheck, ArrowLeftRight, ShieldAlert } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { ExpeditionOrdersList } from '@/components/expedition/ExpeditionOrdersList';
@@ -21,6 +21,8 @@ import { ExpeditionDispatch } from '@/components/expedition/ExpeditionDispatch';
 import { ExpeditionReturns } from '@/components/expedition/ExpeditionReturns';
 import { SupportDashboard } from '@/components/expedition/SupportDashboard';
 import { ExpeditionWhatsApp } from '@/components/expedition/ExpeditionWhatsApp';
+import { OnlineExchanges } from '@/components/expedition/OnlineExchanges';
+import { ChargebacksDashboard } from '@/components/expedition/ChargebacksDashboard';
 
 const STEPS = [
   { id: 'orders', label: 'Pedidos', icon: Package, description: 'Sincronizar e visualizar' },
