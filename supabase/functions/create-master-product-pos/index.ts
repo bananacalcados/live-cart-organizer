@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { master_id, store_id } = await req.json();
+    const { master_id, store_id, all_stores } = await req.json();
     if (!master_id) {
       return new Response(JSON.stringify({ error: "master_id required" }), {
         status: 400,
@@ -42,99 +42,115 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Resolve store
-    let targetStoreId = store_id;
-    if (!targetStoreId) {
+    // Resolve target stores: default = ALL active stores (PDV needs product everywhere)
+    let targetStoreIds: string[] = [];
+    if (store_id) {
+      targetStoreIds = [store_id];
+    } else {
       const { data: stores } = await supabase
         .from("pos_stores")
-        .select("id, tiny_token")
-        .not("tiny_token", "is", null)
-        .limit(1);
-      targetStoreId = stores?.[0]?.id;
-    }
-    if (!targetStoreId) {
-      return new Response(JSON.stringify({ error: "Nenhuma loja com Tiny configurado" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { data: store } = await supabase
-      .from("pos_stores")
-      .select("tiny_token, name")
-      .eq("id", targetStoreId)
-      .single();
-
-    const tinyToken = store?.tiny_token || Deno.env.get("TINY_ERP_TOKEN");
-    if (!tinyToken) {
-      return new Response(JSON.stringify({ error: "Token Tiny não disponível" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Cria produtos no PDV (pos_products) — um por variante
-    const insertedIds: string[] = [];
-    for (const v of variants) {
-      const cost = v.cost_price_override ?? master.cost_price;
-      const sale = v.sale_price_override ?? master.sale_price;
-      const skuName = `${master.name} - ${v.color} ${v.size}`;
-
-      const { data: existing } = await supabase
-        .from("pos_products")
         .select("id")
-        .eq("store_id", targetStoreId)
-        .eq("barcode", v.gtin)
-        .maybeSingle();
-
-      if (existing) {
-        await supabase
-          .from("pos_products")
-          .update({
-            name: skuName,
-            sku: v.sku,
-            cost_price: cost,
-            price: sale,
-            stock: v.initial_stock || 0,
-            is_active: true,
-          })
-          .eq("id", existing.id);
-        insertedIds.push(existing.id);
-      } else {
-        const { data: newP, error: insErr } = await supabase
-          .from("pos_products")
-          .insert({
-            store_id: targetStoreId,
-            name: skuName,
-            sku: v.sku,
-            barcode: v.gtin,
-            cost_price: cost,
-            price: sale,
-            stock: v.initial_stock || 0,
-            is_active: true,
-          })
-          .select("id")
-          .single();
-        if (insErr) {
-          console.error("Insert pos_products error:", insErr);
-          continue;
-        }
-        if (newP) insertedIds.push(newP.id);
-      }
+        .order("name");
+      targetStoreIds = (stores || []).map((s: any) => s.id);
     }
 
-    // Marca o master como enviado
+    if (targetStoreIds.length === 0) {
+      return new Response(JSON.stringify({ error: "Nenhuma loja PDV cadastrada" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const perStoreResults: Array<{ store_id: string; store_name: string; inserted: number; updated: number; errors: number }> = [];
+    let totalInserted = 0;
+
+    for (const targetStoreId of targetStoreIds) {
+      const { data: store } = await supabase
+        .from("pos_stores")
+        .select("id, name")
+        .eq("id", targetStoreId)
+        .single();
+
+      let inserted = 0;
+      let updated = 0;
+      let errors = 0;
+
+      for (const v of variants) {
+        const cost = v.cost_price_override ?? master.cost_price;
+        const sale = v.sale_price_override ?? master.sale_price;
+        const skuName = `${master.name} - ${v.color || ''} ${v.size || ''}`.trim().replace(/\s+/g, ' ');
+
+        // Lookup existing by barcode in this store
+        const { data: existing } = await supabase
+          .from("pos_products")
+          .select("id")
+          .eq("store_id", targetStoreId)
+          .eq("barcode", v.gtin)
+          .maybeSingle();
+
+        if (existing) {
+          const { error: upErr } = await supabase
+            .from("pos_products")
+            .update({
+              name: skuName,
+              sku: v.sku,
+              cost_price: cost,
+              price: sale,
+              is_active: true,
+            })
+            .eq("id", existing.id);
+          if (upErr) {
+            console.error(`[${store?.name}] update error:`, upErr);
+            errors++;
+          } else {
+            updated++;
+          }
+        } else {
+          const { error: insErr } = await supabase
+            .from("pos_products")
+            .insert({
+              store_id: targetStoreId,
+              name: skuName,
+              sku: v.sku,
+              barcode: v.gtin,
+              cost_price: cost,
+              price: sale,
+              stock: 0, // estoque real virá do Tiny / balanço
+              is_active: true,
+            });
+          if (insErr) {
+            console.error(`[${store?.name}] insert error:`, insErr);
+            errors++;
+          } else {
+            inserted++;
+            totalInserted++;
+          }
+        }
+      }
+
+      perStoreResults.push({
+        store_id: targetStoreId,
+        store_name: store?.name || targetStoreId,
+        inserted,
+        updated,
+        errors,
+      });
+    }
+
+    // Marca o master como enviado (mantém marker antigo por compatibilidade)
     await supabase
       .from("products_master")
-      .update({ tiny_product_id: `pdv-${targetStoreId}` })
+      .update({ tiny_product_id: `pdv-all-${targetStoreIds.length}` })
       .eq("id", master_id);
+
+    const totalUpdated = perStoreResults.reduce((s, r) => s + r.updated, 0);
+    const totalVariants = variants.length;
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `${insertedIds.length} variações enviadas para ${store?.name}`,
-        store_id: targetStoreId,
-        product_ids: insertedIds,
+        message: `${totalVariants} variações sincronizadas em ${perStoreResults.length} loja(s) (${totalInserted} novas, ${totalUpdated} atualizadas)`,
+        stores: perStoreResults,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
