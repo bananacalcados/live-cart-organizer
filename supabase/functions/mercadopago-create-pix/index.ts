@@ -101,26 +101,15 @@ serve(async (req) => {
       console.log(`Using pos_sales fallback for PIX, sale ${orderId}, ${products.length} items, shipping: ${shippingAmount}`);
     }
 
-    // ✅ Validar estoque antes de gerar pagamento (evita oversell)
+    // ℹ️ Checagem de estoque apenas informativa (não bloqueia o pagamento).
+    // A validação de estoque acontece no momento da criação do pedido (módulo Eventos).
     try {
       const stockCheck = await checkOrderStock(supabase, products as any);
       if (!stockCheck.ok) {
-        const list = stockCheck.issues.map((i) =>
-          `• ${i.title}${i.variant ? ` (${i.variant})` : ""}: pedido ${i.requested}, disponível ${i.available}`
-        ).join("\n");
-        console.warn(`[mp-pix] Estoque insuficiente para order ${orderId}:`, stockCheck.issues);
-        return new Response(JSON.stringify({
-          error: "stock_unavailable",
-          message: `Alguns itens do pedido estão sem estoque:\n${list}`,
-          issues: stockCheck.issues,
-        }), {
-          status: 409,
-          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-        });
+        console.warn(`[mp-pix] Aviso: estoque insuficiente no banco para order ${orderId} (não bloqueado):`, stockCheck.issues);
       }
-      console.log(`[mp-pix] Estoque OK (${stockCheck.checked} verificados, ${stockCheck.skipped_unknown} ignorados)`);
     } catch (stockErr) {
-      console.error("[mp-pix] Erro na checagem de estoque (prosseguindo):", stockErr);
+      console.error("[mp-pix] Erro na checagem de estoque (ignorado):", stockErr);
     }
 
     // Calculate total with discount + shipping
