@@ -965,13 +965,41 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
         },
       });
       const data = response.data;
-      if (response.error) throw new Error(typeof response.error === 'object' && response.error.message ? response.error.message : String(response.error));
+      if (response.error) {
+        // Tenta extrair mensagem detalhada (estoque insuficiente, CPF, etc.)
+        let detailedMsg = "";
+        try {
+          const ctx: any = (response.error as any).context;
+          if (ctx && typeof ctx.json === "function") {
+            const body = await ctx.json();
+            if (body?.error === "stock_unavailable") {
+              detailedMsg = body.message || "Alguns itens estão sem estoque.";
+            } else if (body?.message) {
+              detailedMsg = body.message;
+            } else if (body?.error) {
+              detailedMsg = body.error;
+            }
+          }
+        } catch {}
+        if (!detailedMsg) {
+          detailedMsg = typeof response.error === 'object' && response.error.message
+            ? response.error.message
+            : String(response.error);
+        }
+        throw new Error(detailedMsg);
+      }
       if (!data?.qrCode) throw new Error("QR Code não retornado");
       setPixData(data);
       if (data.paymentId) setPixPaymentId(String(data.paymentId));
     } catch (error) {
       const msg = error instanceof Error ? error.message : "Erro desconhecido";
-      toast.error(msg.includes("CPF") ? "CPF inválido." : "Erro ao gerar PIX.");
+      if (msg.toLowerCase().includes("estoque") || msg.toLowerCase().includes("sem estoque")) {
+        toast.error(msg, { duration: 8000 });
+      } else if (msg.includes("CPF")) {
+        toast.error("CPF inválido.");
+      } else {
+        toast.error("Erro ao gerar PIX.");
+      }
     } finally {
       setIsGenerating(false);
     }
