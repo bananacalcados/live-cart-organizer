@@ -6193,6 +6193,54 @@ export type Database = {
           },
         ]
       }
+      mercadopago_accounts: {
+        Row: {
+          access_token: string
+          app_number: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          is_sandbox: boolean
+          mp_user_id: string | null
+          name: string
+          notes: string | null
+          public_key: string | null
+          updated_at: string
+          webhook_secret: string | null
+        }
+        Insert: {
+          access_token: string
+          app_number?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_sandbox?: boolean
+          mp_user_id?: string | null
+          name: string
+          notes?: string | null
+          public_key?: string | null
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Update: {
+          access_token?: string
+          app_number?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_sandbox?: boolean
+          mp_user_id?: string | null
+          name?: string
+          notes?: string | null
+          public_key?: string | null
+          updated_at?: string
+          webhook_secret?: string | null
+        }
+        Relationships: []
+      }
       message_templates: {
         Row: {
           created_at: string
@@ -6486,6 +6534,7 @@ export type Database = {
           last_customer_message_at: string | null
           last_sent_message_at: string | null
           mercadopago_payment_id: string | null
+          mp_account_id: string | null
           notes: string | null
           pagarme_order_id: string | null
           paid_at: string | null
@@ -6526,6 +6575,7 @@ export type Database = {
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
           mercadopago_payment_id?: string | null
+          mp_account_id?: string | null
           notes?: string | null
           pagarme_order_id?: string | null
           paid_at?: string | null
@@ -6566,6 +6616,7 @@ export type Database = {
           last_customer_message_at?: string | null
           last_sent_message_at?: string | null
           mercadopago_payment_id?: string | null
+          mp_account_id?: string | null
           notes?: string | null
           pagarme_order_id?: string | null
           paid_at?: string | null
@@ -6593,6 +6644,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_mp_account_id_fkey"
+            columns: ["mp_account_id"]
+            isOneToOne: false
+            referencedRelation: "mercadopago_accounts"
             referencedColumns: ["id"]
           },
           {
@@ -7930,6 +7988,7 @@ export type Database = {
           invoice_number: string | null
           invoice_pdf_url: string | null
           mercadopago_payment_id: string | null
+          mp_account_id: string | null
           nfce_key: string | null
           nfce_number: string | null
           nfce_pdf_url: string | null
@@ -7978,6 +8037,7 @@ export type Database = {
           invoice_number?: string | null
           invoice_pdf_url?: string | null
           mercadopago_payment_id?: string | null
+          mp_account_id?: string | null
           nfce_key?: string | null
           nfce_number?: string | null
           nfce_pdf_url?: string | null
@@ -8026,6 +8086,7 @@ export type Database = {
           invoice_number?: string | null
           invoice_pdf_url?: string | null
           mercadopago_payment_id?: string | null
+          mp_account_id?: string | null
           nfce_key?: string | null
           nfce_number?: string | null
           nfce_pdf_url?: string | null
@@ -8068,6 +8129,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "pos_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sales_mp_account_id_fkey"
+            columns: ["mp_account_id"]
+            isOneToOne: false
+            referencedRelation: "mercadopago_accounts"
             referencedColumns: ["id"]
           },
           {
@@ -11289,6 +11357,17 @@ export type Database = {
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       generate_ean13_barcode: { Args: never; Returns: string }
       generate_ean13_internal: { Args: never; Returns: string }
+      get_active_mp_account: {
+        Args: never
+        Returns: {
+          access_token: string
+          id: string
+          is_sandbox: boolean
+          mp_user_id: string
+          name: string
+          public_key: string
+        }[]
+      }
       get_attendant_metrics: {
         Args: { p_end_date?: string; p_start_date?: string; p_user_id?: string }
         Returns: {
@@ -11461,6 +11540,34 @@ export type Database = {
           value: string
         }[]
       }
+      get_mp_token_by_payment_id: {
+        Args: { p_payment_id: string }
+        Returns: {
+          access_token: string
+          account_id: string
+          account_name: string
+          is_sandbox: boolean
+          source_type: string
+        }[]
+      }
+      get_mp_token_for_order: {
+        Args: { p_order_id: string }
+        Returns: {
+          access_token: string
+          account_id: string
+          account_name: string
+          is_sandbox: boolean
+        }[]
+      }
+      get_mp_token_for_sale: {
+        Args: { p_sale_id: string }
+        Returns: {
+          access_token: string
+          account_id: string
+          account_name: string
+          is_sandbox: boolean
+        }[]
+      }
       get_orders_by_customer: {
         Args: { p_customer_id: string }
         Returns: {
@@ -11609,6 +11716,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      set_active_mp_account: {
+        Args: { p_account_id: string }
+        Returns: boolean
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
