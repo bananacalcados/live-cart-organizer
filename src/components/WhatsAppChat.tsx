@@ -684,6 +684,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               status: 'sent',
               media_type: 'audio',
               media_url: mediaUrl,
+              message_id: result.messageId || null,
               sender_user_id: currentUserId || null,
             });
             updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
@@ -853,6 +854,31 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                   <div className={cn("flex", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
                     {isAuto && (
                       <span className="text-amber-400 text-[10px] self-end mb-0.5 mr-1">🤖 Automática</span>
+                    )}
+                    {msg.direction === 'outgoing' && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="mr-1 mt-1 h-7 w-7 shrink-0 rounded-full bg-black/5 opacity-60 transition-opacity hover:bg-black/15 hover:opacity-100">
+                            <MoreVertical className="h-4 w-4 text-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-36">
+                          <DropdownMenuItem
+                            onClick={async () => {
+                              if (!confirm('Apagar esta mensagem?')) return;
+                              try {
+                                await handleDeleteMessage(msg);
+                                toast.success('Mensagem apagada!');
+                              } catch {
+                                toast.error('Erro ao apagar mensagem');
+                              }
+                            }}
+                            className="gap-2 text-xs text-destructive"
+                          >
+                            <Trash2 className="h-3 w-3" /> Apagar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                     <div
                       className={cn(
