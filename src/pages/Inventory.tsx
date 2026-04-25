@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { InventoryVerification } from "@/components/inventory/InventoryVerification";
 import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
+import { ProductsList } from "@/components/inventory/ProductsList";
+import { NfeImporter } from "@/components/inventory/NfeImporter";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -166,7 +168,7 @@ export default function Inventory() {
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"stock" | "capture">("stock");
+  const [inventoryMode, setInventoryMode] = useState<"stock" | "capture" | "products" | "nfe">("stock");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
@@ -1089,6 +1091,22 @@ export default function Inventory() {
               >
                 <ShoppingBag className="h-3 w-3" /> Captação
               </Button>
+              <Button
+                variant={inventoryMode === "products" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("products")}
+                className="text-xs h-7 gap-1"
+              >
+                <Package className="h-3 w-3" /> Produtos
+              </Button>
+              <Button
+                variant={inventoryMode === "nfe" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("nfe")}
+                className="text-xs h-7 gap-1"
+              >
+                <FileText className="h-3 w-3" /> NF-e Entrada
+              </Button>
             </div>
           )}
           {stores.length > 0 && (
@@ -1120,6 +1138,10 @@ export default function Inventory() {
           </div>
         ) : inventoryMode === "capture" ? (
           <ProductCaptureTab storeId={selectedStoreId} storeName={selectedStore?.name || ""} />
+        ) : inventoryMode === "products" ? (
+          <ProductsList />
+        ) : inventoryMode === "nfe" ? (
+          <NfeImporter />
         ) : !activeCount ? (
           <div className="max-w-lg mx-auto space-y-6">
             <Card>
