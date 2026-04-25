@@ -238,6 +238,13 @@ export function ProductsList() {
         onOpenChange={setShowForm}
         onCreated={() => load()}
       />
+
+      <ProductEditDialog
+        masterId={editingId}
+        open={!!editingId}
+        onOpenChange={(v) => !v && setEditingId(null)}
+        onSaved={() => load()}
+      />
     </div>
   );
 }
