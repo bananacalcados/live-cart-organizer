@@ -447,6 +447,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
   const [loadingFreight, setLoadingFreight] = useState(false);
   const [selectedFreight, setSelectedFreight] = useState<string | null>(null);
   const [showAllFreight, setShowAllFreight] = useState(true);
+  const [editingAddress, setEditingAddress] = useState(false);
   const freightQuotedCep = useRef<string>("");
 
   const lookupCep = async (cepValue: string) => {
@@ -598,13 +599,26 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
       {/* Address fields — appear after CEP lookup */}
       {addressLoaded && (
         <div className="animate-in slide-in-from-top-3 duration-300 space-y-3">
-          {/* Auto-filled address summary */}
+          {/* Auto-filled address summary — collapsible to allow editing */}
           <div className="p-3 bg-secondary/40 rounded-lg space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Endereço encontrado</p>
-            <p className="text-sm font-medium">{form.address || "—"}</p>
-            <p className="text-sm text-muted-foreground">
-              {form.neighborhood}{form.neighborhood && form.city ? " — " : ""}{form.city}{form.state ? ` / ${form.state}` : ""}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Endereço encontrado</p>
+              <button
+                type="button"
+                onClick={() => setEditingAddress((v) => !v)}
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                {editingAddress ? "Ocultar" : "Editar"}
+              </button>
+            </div>
+            {!editingAddress && (
+              <>
+                <p className="text-sm font-medium">{form.address || "—"}</p>
+                <p className="text-sm text-muted-foreground">
+                  {form.neighborhood}{form.neighborhood && form.city ? " — " : ""}{form.city}{form.state ? ` / ${form.state}` : ""}
+                </p>
+              </>
+            )}
           </div>
 
           {/* Editable: number + complement */}
@@ -630,34 +644,30 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
             </div>
           </div>
 
-          {/* Editable fallback: if ViaCEP didn't return street/neighborhood */}
-          {(!form.address.trim() || !form.neighborhood.trim()) && (
+          {/* Always-editable address fields (manual edit toggle OR CEP fallback) */}
+          {(editingAddress || !form.address.trim() || !form.neighborhood.trim() || !form.city.trim() || !form.state.trim()) && (
             <div className="space-y-3 border-t pt-3">
-              <p className="text-xs text-amber-600 font-medium">⚠️ CEP não retornou todos os dados. Preencha manualmente:</p>
-              {!form.address.trim() && (
-                <div>
-                  <Label className="text-sm">Rua *</Label>
-                  <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Nome da rua" />
-                </div>
+              {!editingAddress && (
+                <p className="text-xs text-amber-600 font-medium">⚠️ CEP não retornou todos os dados. Preencha manualmente:</p>
               )}
-              {!form.neighborhood.trim() && (
-                <div>
-                  <Label className="text-sm">Bairro *</Label>
-                  <Input value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} placeholder="Bairro" />
-                </div>
-              )}
-              {!form.city.trim() && (
+              <div>
+                <Label className="text-sm">Rua *</Label>
+                <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Nome da rua" className="h-11" />
+              </div>
+              <div>
+                <Label className="text-sm">Bairro *</Label>
+                <Input value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} placeholder="Bairro" className="h-11" />
+              </div>
+              <div className="grid grid-cols-[1fr_80px] gap-3">
                 <div>
                   <Label className="text-sm">Cidade *</Label>
-                  <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Cidade" />
+                  <Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Cidade" className="h-11" />
                 </div>
-              )}
-              {!form.state.trim() && (
                 <div>
                   <Label className="text-sm">UF *</Label>
-                  <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })} maxLength={2} placeholder="SP" />
+                  <Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value.toUpperCase().slice(0, 2) })} maxLength={2} placeholder="SP" className="h-11" />
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
