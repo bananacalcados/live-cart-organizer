@@ -244,7 +244,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           if (data?.success) {
             return {
               success: true,
-              messageId: data?.data?.messageId || data?.data?.zaapId || data?.data?.id,
+              messageId: data?.messageId || data?.data?.messageId || data?.data?.zaapId || data?.data?.id,
             };
           }
           return { success: false, error: data?.error || 'Erro ao enviar' };
