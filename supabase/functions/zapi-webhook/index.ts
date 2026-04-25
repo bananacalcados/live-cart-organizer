@@ -474,6 +474,32 @@ serve(async (req) => {
           }
           // ========== [FIM] Captura de lead de anúncio WhatsApp ==========
 
+          // ========== [LIVE CAMPAIGN TRIGGER] ==========
+          // Detecta frase-chave de campanha de Live e dispara sequência de mídias
+          try {
+            if (messageText) {
+              const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+              const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+              // fire-and-forget pra não atrasar o webhook
+              fetch(`${supabaseUrl}/functions/v1/live-campaign-trigger`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${serviceKey}`,
+                },
+                body: JSON.stringify({
+                  phone,
+                  message: messageText,
+                  sender_name: senderName || null,
+                  whatsapp_number_id: whatsappNumberId,
+                }),
+              }).catch((err) => console.error('[LIVE-CAMPAIGN] trigger error:', err));
+            }
+          } catch (liveErr) {
+            console.error('[LIVE-CAMPAIGN] erro não-crítico:', liveErr);
+          }
+          // ========== [FIM] Live campaign trigger ==========
+
           // ========== [ORGANIC LEAD CAPTURE] ==========
           // Save any non-customer incoming contact as an organic lead
           try {
