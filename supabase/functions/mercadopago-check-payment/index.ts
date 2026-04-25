@@ -120,10 +120,22 @@ serve(async (req) => {
       });
     }
 
-    const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-    if (!accessToken) {
-      throw new Error("MERCADOPAGO_ACCESS_TOKEN is not configured");
+    // Resolve qual conta MP usar: prioriza pelo paymentId (cobre pedidos antigos),
+    // depois pelo orderId (orders ou pos_sales), e por fim cai no env legado.
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseForToken = createClient(supabaseUrl, supabaseKey);
+
+    let mpAccount = await getMpAccountByPaymentId(supabaseForToken, String(paymentId));
+    if ((!mpAccount || !mpAccount.access_token) && orderId) {
+      mpAccount = await getMpAccountForOrder(supabaseForToken, orderId)
+        || await getMpAccountForSale(supabaseForToken, orderId);
     }
+    if (!mpAccount || !mpAccount.access_token) {
+      throw new Error("Nenhuma conta Mercado Pago disponível para verificar este pagamento");
+    }
+    const accessToken = mpAccount.access_token;
+    console.log(`[mercadopago-check-payment] using account: ${mpAccount.account_name} (source=${mpAccount.source}, sandbox=${mpAccount.is_sandbox})`);
 
     // Check payment status at Mercado Pago
     const mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
