@@ -5227,6 +5227,7 @@ export type Database = {
           scheduled_at: string
           sent_at: string | null
           status: string
+          whatsapp_number_id: string | null
         }
         Insert: {
           attempts?: number
@@ -5241,6 +5242,7 @@ export type Database = {
           scheduled_at?: string
           sent_at?: string | null
           status?: string
+          whatsapp_number_id?: string | null
         }
         Update: {
           attempts?: number
@@ -5255,6 +5257,7 @@ export type Database = {
           scheduled_at?: string
           sent_at?: string | null
           status?: string
+          whatsapp_number_id?: string | null
         }
         Relationships: [
           {
@@ -5269,6 +5272,13 @@ export type Database = {
             columns: ["message_id"]
             isOneToOne: false
             referencedRelation: "live_campaign_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_campaign_dispatches_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
         ]
