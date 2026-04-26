@@ -1643,7 +1643,24 @@ export default function TransparentCheckout() {
 
   const handleStep1Next = async () => {
     const saved = await saveRegistration(1);
-    if (saved) setCurrentStep(2);
+    if (saved) {
+      // Step 1 done: PII collected (name, cpf, email, phone) — fire AddPaymentInfo
+      if (orderData) {
+        const numItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
+        fireAddPaymentInfo({
+          orderId: orderData.id.startsWith("live-") ? undefined : orderData.id,
+          value: orderData.totalAmount,
+          numItems,
+          customer: {
+            fullName: customerForm.fullName,
+            email: customerForm.email,
+            phone: customerForm.whatsapp,
+            cpf: customerForm.cpf,
+          },
+        });
+      }
+      setCurrentStep(2);
+    }
   };
 
   const handleStep2Next = async () => {
@@ -1674,6 +1691,25 @@ export default function TransparentCheckout() {
         toast.error("Erro ao salvar endereço. Tente novamente.");
         return;
       }
+    }
+
+    // Step 2 done: shipping address collected — fire AddShippingInfo
+    if (orderData) {
+      const numItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
+      fireAddShippingInfo({
+        orderId: orderData.id.startsWith("live-") ? undefined : orderData.id,
+        value: orderData.totalAmount,
+        numItems,
+        customer: {
+          fullName: customerForm.fullName,
+          email: customerForm.email,
+          phone: customerForm.whatsapp,
+          cpf: customerForm.cpf,
+          city: customerForm.city,
+          state: customerForm.state,
+          zip: customerForm.cep,
+        },
+      });
     }
     setCurrentStep(3);
   };
