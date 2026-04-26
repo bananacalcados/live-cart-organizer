@@ -309,6 +309,30 @@ serve(async (req) => {
                 }
               }
 
+              // ========== [LIVE CAMPAIGN TRIGGER] ==========
+              // Detecta frase-chave de campanha de Live e dispara sequência de mídias
+              try {
+                if (messageText) {
+                  // fire-and-forget pra não atrasar o webhook
+                  fetch(`${supabaseUrl}/functions/v1/live-campaign-trigger`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${supabaseKey}`,
+                    },
+                    body: JSON.stringify({
+                      phone,
+                      message: messageText,
+                      sender_name: senderName || null,
+                      whatsapp_number_id: whatsappNumberDbId,
+                    }),
+                  }).catch((err) => console.error('[LIVE-CAMPAIGN] trigger error:', err));
+                }
+              } catch (liveErr) {
+                console.error('[LIVE-CAMPAIGN] erro não-crítico:', liveErr);
+              }
+              // ========== [FIM] Live campaign trigger ==========
+
               // Check for pending automation flow continuation (button reply OR any text reply)
               let automationFlowHandled = false;
               {
