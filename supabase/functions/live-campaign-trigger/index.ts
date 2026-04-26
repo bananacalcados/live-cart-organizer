@@ -139,10 +139,10 @@ Deno.serve(async (req) => {
       .update({ total_leads: (dispatchCount ?? 0) + 1 })
       .eq("id", matched.id);
 
-    // Busca mensagens da sequência (ativas, ordenadas)
+    // Busca mensagens completas da sequência (ativas, ordenadas)
     const { data: messages } = await supabase
       .from("live_campaign_messages")
-      .select("id, sort_order, delay_seconds")
+      .select("id, sort_order, delay_seconds, message_type, content, media_url, caption")
       .eq("campaign_id", matched.id)
       .eq("is_active", true)
       .order("sort_order", { ascending: true });
@@ -154,30 +154,143 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Agenda os envios cumulativamente
-    let cumulativeSeconds = 0;
-    const now = Date.now();
-    const dispatches = messages.map((m) => {
-      cumulativeSeconds += m.delay_seconds || 8;
-      return {
-        campaign_id: matched.id,
-        message_id: m.id,
-        lead_id: leadId,
-        phone,
-        scheduled_at: new Date(now + cumulativeSeconds * 1000).toISOString(),
-        status: "pending",
-      };
-    });
+    // Cria registros de dispatch já como "sent" (auditoria) — envio direto, sem cron
+    const nowIso = new Date().toISOString();
+    const dispatchRows = messages.map((m) => ({
+      campaign_id: matched.id,
+      message_id: m.id,
+      lead_id: leadId,
+      phone,
+      scheduled_at: nowIso,
+      status: "pending" as const,
+    }));
+    const { data: insertedDispatches } = await supabase
+      .from("live_campaign_dispatches")
+      .insert(dispatchRows)
+      .select("id, message_id");
 
-    const { error: dispErr } = await supabase.from("live_campaign_dispatches").insert(dispatches);
-    if (dispErr) throw dispErr;
+    const dispatchIdByMessage = new Map<string, string>();
+    (insertedDispatches || []).forEach((d) => dispatchIdByMessage.set(d.message_id, d.id));
+
+    // Função de envio sequencial em background (não bloqueia a resposta do webhook)
+    const sendSequence = async () => {
+      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      const whatsappNumberId = matched.whatsapp_number_id ?? undefined;
+
+      for (let i = 0; i < messages.length; i++) {
+        const m = messages[i];
+        const dispatchId = dispatchIdByMessage.get(m.id);
+
+        // Delay antes de cada mensagem (exceto a primeira sai imediata)
+        if (i > 0) {
+          const delaySec = m.delay_seconds || 2;
+          await sleep(delaySec * 1000);
+        }
+
+        try {
+          let result: { success: boolean; error?: string } = { success: false };
+
+          if (m.message_type === "text") {
+            const r = await fetch(`${SUPABASE_URL}/functions/v1/zapi-send-message`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${SERVICE_KEY}`,
+              },
+              body: JSON.stringify({
+                phone,
+                message: m.content || "",
+                whatsapp_number_id: whatsappNumberId,
+              }),
+            });
+            const j = await r.json().catch(() => ({}));
+            result = { success: r.ok && j?.success !== false, error: j?.error };
+          } else {
+            const r = await fetch(`${SUPABASE_URL}/functions/v1/zapi-send-media`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${SERVICE_KEY}`,
+              },
+              body: JSON.stringify({
+                phone,
+                mediaUrl: m.media_url,
+                mediaType: m.message_type,
+                caption: m.caption || "",
+                whatsapp_number_id: whatsappNumberId,
+              }),
+            });
+            const j = await r.json().catch(() => ({}));
+            result = { success: r.ok && j?.success !== false, error: j?.error };
+          }
+
+          if (dispatchId) {
+            await supabase
+              .from("live_campaign_dispatches")
+              .update(
+                result.success
+                  ? { status: "sent", sent_at: new Date().toISOString() }
+                  : { status: "failed", error_message: result.error || "send_failed" }
+              )
+              .eq("id", dispatchId);
+          }
+
+          if (!result.success) {
+            console.error(`[live-trigger] falha envio msg ${m.id}:`, result.error);
+          }
+        } catch (sendErr) {
+          const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+          console.error(`[live-trigger] exceção envio msg ${m.id}:`, errMsg);
+          if (dispatchId) {
+            await supabase
+              .from("live_campaign_dispatches")
+              .update({ status: "failed", error_message: errMsg })
+              .eq("id", dispatchId);
+          }
+        }
+      }
+
+      // Após o último envio, ativa Modo Jess se habilitado
+      if (matched.jess_enabled) {
+        try {
+          const phoneDigits = phone.replace(/\D/g, "");
+          const { data: existing } = await supabase
+            .from("automation_ai_sessions")
+            .select("id")
+            .eq("phone", phoneDigits)
+            .eq("is_active", true)
+            .maybeSingle();
+          if (!existing) {
+            await supabase.from("automation_ai_sessions").insert({
+              phone: phoneDigits,
+              live_campaign_id: matched.id,
+              is_active: true,
+            });
+            console.log(`[live-trigger] Modo Jess ativado para ${phone}`);
+          }
+        } catch (jessErr) {
+          console.error("[live-trigger] erro ativando Jess:", jessErr);
+        }
+      }
+    };
+
+    // Dispara em background — webhook responde imediatamente
+    // @ts-ignore - EdgeRuntime existe no runtime do Supabase
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(sendSequence());
+    } else {
+      // Fallback: deixa rodar sem await (não bloqueia)
+      sendSequence().catch((e) => console.error("[live-trigger] background error:", e));
+    }
 
     return new Response(
       JSON.stringify({
         matched: true,
         campaign: matched.slug,
         lead_id: leadId,
-        dispatched: dispatches.length,
+        dispatched: messages.length,
+        mode: "direct_send",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
