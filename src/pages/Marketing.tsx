@@ -1919,8 +1919,12 @@ export default function Marketing() {
               );
             })()}
             <CatalogLeadPageCreator />
-            <LiveCampaignsManager />
             <WhatsAppAdKeywords />
+          </TabsContent>
+
+          {/* ── CAMPANHAS LIVE ── */}
+          <TabsContent value="live_campaigns" className="space-y-4">
+            <LiveCampaignsManager />
           </TabsContent>
 
           {/* ── GRUPOS VIP ── */}
