@@ -270,110 +270,126 @@ Deno.serve(async (req) => {
           await sleep(delaySec * 1000);
         }
 
-        try {
-          let result: { success: boolean; error?: string; messageId?: string | null } = { success: false };
+        // Retry com backoff: tenta até 3x antes de marcar como failed
+        const MAX_ATTEMPTS = 3;
+        let attempt = 0;
+        let result: { success: boolean; error?: string; messageId?: string | null; status?: number } = { success: false };
 
-          if (m.message_type === "text") {
-            const endpoint = provider === "meta" ? "meta-whatsapp-send" : "zapi-send-message";
-            const r = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${SERVICE_KEY}`,
-              },
-              body: JSON.stringify({
-                phone,
-                message: m.content || "",
-                whatsapp_number_id: whatsappNumberId,
-              }),
-            });
-            const j = await r.json().catch(() => ({}));
-            result = {
-              success: r.ok && j?.success !== false,
-              error: j?.error || j?.details,
-              messageId: j?.messageId || j?.data?.messageId || j?.data?.id || null,
-            };
-          } else {
-            const endpoint = provider === "meta" ? "meta-whatsapp-send" : "zapi-send-media";
-            const r = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${SERVICE_KEY}`,
-              },
-              body: JSON.stringify(
-                provider === "meta"
-                  ? {
-                      phone,
-                      type: m.message_type,
-                      mediaUrl: m.media_url,
-                      caption: m.caption || "",
-                      message: m.content || "",
-                      whatsapp_number_id: whatsappNumberId,
-                    }
-                  : {
-                      phone,
-                      mediaUrl: m.media_url,
-                      mediaType: m.message_type,
-                      caption: m.caption || "",
-                      whatsapp_number_id: whatsappNumberId,
-                    }
-              ),
-            });
-            const j = await r.json().catch(() => ({}));
-            result = {
-              success: r.ok && j?.success !== false,
-              error: j?.error || j?.details,
-              messageId: j?.messageId || j?.data?.messageId || j?.data?.id || null,
-            };
-          }
-
-          if (dispatchId) {
-            await supabase
-              .from("live_campaign_dispatches")
-              .update(
-                result.success
-                  ? { status: "sent", sent_at: new Date().toISOString() }
-                  : { status: "failed", error_message: result.error || "send_failed" }
-              )
-              .eq("id", dispatchId);
-          }
-
-          if (provider === "meta" && result.success) {
-            const displayMessage =
-              m.message_type === "text"
-                ? m.content || ""
-                : m.caption || m.content || `[${m.message_type}]`;
-
-            const { error: logError } = await supabase.from("whatsapp_messages").insert({
-              phone,
-              message: displayMessage,
-              direction: "outgoing",
-              message_id: result.messageId || null,
-              status: "sent",
-              media_type: m.message_type === "text" ? null : m.message_type,
-              media_url: m.message_type === "text" ? null : m.media_url,
-              is_group: false,
-              whatsapp_number_id: whatsappNumberId || null,
-            });
-
-            if (logError) {
-              console.error(`[live-trigger] erro salvando histórico Meta msg ${m.id}:`, logError);
+        while (attempt < MAX_ATTEMPTS) {
+          attempt++;
+          try {
+            if (m.message_type === "text") {
+              const endpoint = provider === "meta" ? "meta-whatsapp-send" : "zapi-send-message";
+              const r = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${SERVICE_KEY}`,
+                },
+                body: JSON.stringify({
+                  phone,
+                  message: m.content || "",
+                  whatsapp_number_id: whatsappNumberId,
+                }),
+              });
+              const j = await r.json().catch(() => ({}));
+              const errDetail = typeof j?.error === "string"
+                ? j.error
+                : JSON.stringify(j?.error || j?.details || j || {}).slice(0, 300);
+              result = {
+                success: r.ok && j?.success !== false && !j?.error,
+                error: r.ok && !j?.error ? undefined : `[${r.status}] ${errDetail}`,
+                messageId: j?.messageId || j?.data?.messageId || j?.data?.id || null,
+                status: r.status,
+              };
+            } else {
+              const endpoint = provider === "meta" ? "meta-whatsapp-send" : "zapi-send-media";
+              const r = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${SERVICE_KEY}`,
+                },
+                body: JSON.stringify(
+                  provider === "meta"
+                    ? {
+                        phone,
+                        type: m.message_type,
+                        mediaUrl: m.media_url,
+                        caption: m.caption || "",
+                        message: m.content || "",
+                        whatsapp_number_id: whatsappNumberId,
+                      }
+                    : {
+                        phone,
+                        mediaUrl: m.media_url,
+                        mediaType: m.message_type,
+                        caption: m.caption || "",
+                        whatsapp_number_id: whatsappNumberId,
+                      }
+                ),
+              });
+              const j = await r.json().catch(() => ({}));
+              const errDetail = typeof j?.error === "string"
+                ? j.error
+                : JSON.stringify(j?.error || j?.details || j || {}).slice(0, 300);
+              result = {
+                success: r.ok && j?.success !== false && !j?.error,
+                error: r.ok && !j?.error ? undefined : `[${r.status}] ${errDetail}`,
+                messageId: j?.messageId || j?.data?.messageId || j?.data?.id || null,
+                status: r.status,
+              };
             }
+          } catch (sendErr) {
+            const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+            result = { success: false, error: `network: ${errMsg}` };
           }
 
-          if (!result.success) {
-            console.error(`[live-trigger] falha envio msg ${m.id}:`, result.error);
+          if (result.success) break;
+
+          console.warn(`[live-trigger] tentativa ${attempt}/${MAX_ATTEMPTS} falhou msg=${m.id} type=${m.message_type} phone=${phone} err=${result.error}`);
+          if (attempt < MAX_ATTEMPTS) {
+            // Backoff: 2s, 5s
+            await sleep(attempt === 1 ? 2000 : 5000);
           }
-        } catch (sendErr) {
-          const errMsg = sendErr instanceof Error ? sendErr.message : String(sendErr);
-          console.error(`[live-trigger] exceção envio msg ${m.id}:`, errMsg);
-          if (dispatchId) {
-            await supabase
-              .from("live_campaign_dispatches")
-              .update({ status: "failed", error_message: errMsg })
-              .eq("id", dispatchId);
+        }
+
+        if (dispatchId) {
+          await supabase
+            .from("live_campaign_dispatches")
+            .update(
+              result.success
+                ? { status: "sent", sent_at: new Date().toISOString(), attempts: attempt }
+                : { status: "failed", error_message: (result.error || "send_failed").slice(0, 500), attempts: attempt }
+            )
+            .eq("id", dispatchId);
+        }
+
+        if (provider === "meta" && result.success) {
+          const displayMessage =
+            m.message_type === "text"
+              ? m.content || ""
+              : m.caption || m.content || `[${m.message_type}]`;
+
+          const { error: logError } = await supabase.from("whatsapp_messages").insert({
+            phone,
+            message: displayMessage,
+            direction: "outgoing",
+            message_id: result.messageId || null,
+            status: "sent",
+            media_type: m.message_type === "text" ? null : m.message_type,
+            media_url: m.message_type === "text" ? null : m.media_url,
+            is_group: false,
+            whatsapp_number_id: whatsappNumberId || null,
+          });
+
+          if (logError) {
+            console.error(`[live-trigger] erro salvando histórico Meta msg ${m.id}:`, logError);
           }
+        }
+
+        if (!result.success) {
+          console.error(`[live-trigger] FALHA DEFINITIVA msg=${m.id} type=${m.message_type} phone=${phone} após ${attempt} tentativas:`, result.error);
         }
       }
 

@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
 
         const whatsappNumberId = camp?.whatsapp_number_id ?? undefined;
 
-        let result: { success: boolean; error?: string } = { success: false };
+        let result: { success: boolean; error?: string; status?: number } = { success: false };
 
         if (msg.message_type === "text") {
           const r = await fetch(`${SUPABASE_URL}/functions/v1/zapi-send-message`, {
@@ -86,7 +86,8 @@ Deno.serve(async (req) => {
             }),
           });
           const j = await r.json().catch(() => ({}));
-          result = { success: r.ok && j?.success !== false, error: j?.error };
+          const errDetail = typeof j?.error === "string" ? j.error : JSON.stringify(j?.error || j?.details || j || {}).slice(0, 400);
+          result = { success: r.ok && j?.success !== false && !j?.error, error: r.ok && !j?.error ? undefined : `[${r.status}] ${errDetail}`, status: r.status };
         } else {
           // mídia (audio | video | image | document)
           const r = await fetch(`${SUPABASE_URL}/functions/v1/zapi-send-media`, {
@@ -104,7 +105,11 @@ Deno.serve(async (req) => {
             }),
           });
           const j = await r.json().catch(() => ({}));
-          result = { success: r.ok && j?.success !== false, error: j?.error };
+          const errDetail = typeof j?.error === "string" ? j.error : JSON.stringify(j?.error || j?.details || j || {}).slice(0, 400);
+          result = { success: r.ok && j?.success !== false && !j?.error, error: r.ok && !j?.error ? undefined : `[${r.status}] ${errDetail}`, status: r.status };
+          if (!result.success) {
+            console.error(`[live-dispatch] media send failed phone=${d.phone} type=${msg.message_type} status=${r.status} body=${errDetail}`);
+          }
         }
 
         if (result.success) {
