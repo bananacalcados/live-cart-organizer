@@ -685,6 +685,7 @@ export type Database = {
           flow_id: string | null
           id: string
           is_active: boolean
+          live_campaign_id: string | null
           max_messages: number | null
           messages_sent: number | null
           phone: string
@@ -698,6 +699,7 @@ export type Database = {
           flow_id?: string | null
           id?: string
           is_active?: boolean
+          live_campaign_id?: string | null
           max_messages?: number | null
           messages_sent?: number | null
           phone: string
@@ -711,6 +713,7 @@ export type Database = {
           flow_id?: string | null
           id?: string
           is_active?: boolean
+          live_campaign_id?: string | null
           max_messages?: number | null
           messages_sent?: number | null
           phone?: string
@@ -724,6 +727,13 @@ export type Database = {
             columns: ["flow_id"]
             isOneToOne: false
             referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_ai_sessions_live_campaign_id_fkey"
+            columns: ["live_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "live_campaigns"
             referencedColumns: ["id"]
           },
         ]
