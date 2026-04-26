@@ -133,7 +133,11 @@ Deno.serve(async (req) => {
     }
 
     // Atualiza contador da campanha
-    await supabase.rpc("increment_execution_count", { message_id: matched.id }).catch(() => {});
+    try {
+      await supabase.rpc("increment_execution_count", { message_id: matched.id });
+    } catch (rpcErr) {
+      console.error("[live-trigger] increment_execution_count error (não-crítico):", rpcErr);
+    }
     await supabase
       .from("live_campaigns")
       .update({ total_leads: (dispatchCount ?? 0) + 1 })
