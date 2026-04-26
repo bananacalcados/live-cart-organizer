@@ -1468,6 +1468,92 @@ export async function executeAdsToolCall(
       }
     }
 
+    // ─── SAVE SHOE SIZE (Live Campaign) ───
+    case 'save_shoe_size': {
+      const rawSize = String(args.size ?? '').trim();
+      const cleaned = rawSize.replace(/\D/g, '');
+      const sizeNum = parseInt(cleaned, 10);
+      if (!sizeNum || sizeNum < 30 || sizeNum > 46) {
+        return {
+          success: false,
+          error: `Numeração inválida: "${rawSize}". Aceito entre 30 e 46.`,
+        };
+      }
+      const sizeStr = String(sizeNum);
+      const tag = `numeracao_${sizeStr}`;
+
+      try {
+        // Normaliza phone para casamento flexível (mesma lógica do tag_or_register_contact)
+        let normalizedPhone = phone.replace(/\D/g, '');
+        if (!normalizedPhone.startsWith('55') && normalizedPhone.length <= 11) {
+          normalizedPhone = '55' + normalizedPhone;
+        }
+        const last8 = normalizedPhone.slice(-8);
+
+        // Busca lead vinculado à live_campaign atual (preferencialmente)
+        let targetLeadId: string | null = ctx.leadId || null;
+        if (!targetLeadId) {
+          let q = supabase
+            .from('ad_leads')
+            .select('id, tags')
+            .filter('phone', 'ilike', `%${last8}`)
+            .order('created_at', { ascending: false })
+            .limit(1);
+          if (ctx.liveCampaignId) {
+            q = q.eq('live_campaign_id', ctx.liveCampaignId);
+          }
+          const { data: leadRow } = await q.maybeSingle();
+          targetLeadId = leadRow?.id || null;
+        }
+
+        if (targetLeadId) {
+          // Lê tags atuais e adiciona a tag de numeração (sem duplicar)
+          const { data: existing } = await supabase
+            .from('ad_leads')
+            .select('tags')
+            .eq('id', targetLeadId)
+            .maybeSingle();
+          const currentTags: string[] = Array.isArray(existing?.tags) ? existing!.tags : [];
+          const newTags = currentTags.includes(tag) ? currentTags : [...currentTags, tag];
+
+          await supabase
+            .from('ad_leads')
+            .update({
+              shoe_size: sizeStr,
+              tags: newTags,
+              temperature: 'hot',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', targetLeadId);
+        } else {
+          // Sem lead — cria um básico amarrado à campanha
+          await supabase.from('ad_leads').insert({
+            phone: normalizedPhone,
+            shoe_size: sizeStr,
+            tags: [tag],
+            live_campaign_id: ctx.liveCampaignId || null,
+            channel: 'zapi',
+            source: 'live_campaign',
+            temperature: 'hot',
+          });
+        }
+
+        console.log(`[save_shoe_size] Numeração ${sizeStr} salva para ${phone} (live_campaign=${ctx.liveCampaignId || 'n/a'})`);
+
+        return {
+          success: true,
+          data: {
+            size: sizeStr,
+            tag,
+            message: `Numeração ${sizeStr} cadastrada com sucesso! Pronto, você está oficialmente na lista da Live 🎉`,
+          },
+        };
+      } catch (err) {
+        console.error('[save_shoe_size] Error:', err);
+        return { success: false, error: 'Erro ao salvar numeração' };
+      }
+    }
+
     default:
       return { success: false, error: `Tool desconhecida: ${toolName}` };
   }
