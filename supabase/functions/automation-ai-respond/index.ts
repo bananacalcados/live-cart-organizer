@@ -76,7 +76,26 @@ serve(async (req) => {
     }
 
     // Append anti-repetition instruction to whatever prompt the flow provides
-    const basePrompt = prompt || 'Você é um assistente da Banana Calçados. Responda de forma simpática, curta e objetiva em português brasileiro.';
+    // Live campaign overrides the base prompt with its own guard-rail prompt
+    const liveGuardRail = liveCampaign ? `
+
+VOCÊ É A JESS, ASSISTENTE DA BANANA CALÇADOS, ATENDENDO UMA CLIENTE QUE ACABOU DE SE INSCREVER NA CAMPANHA "${liveCampaign.name}".
+${liveCampaign.jess_prompt ? `\nCONTEXTO DA LIVE:\n${liveCampaign.jess_prompt}\n` : ''}
+OBJETIVO PRIORITÁRIO: ${liveCampaign.ask_shoe_size ? "Capturar a NUMERAÇÃO do calçado da cliente (entre 30 e 46) usando a tool 'save_shoe_size'. Sem isso o cadastro fica incompleto." : "Confirmar o interesse e responder dúvidas sobre a Live."}
+
+REGRAS DE GUARD-RAIL (INTELIGENTE POR CONTEXTO):
+1. Sua PRIMEIRA pergunta deve ser pela numeração do calçado (caso ainda não tenha). Seja direta e calorosa: "Pra te avisar certinho, qual a numeração que você usa? 👟"
+2. Se a cliente fizer perguntas sobre a LIVE (data, hora, produtos, descontos, frete) → RESPONDA normalmente usando o contexto da campanha, depois retorne para a pergunta da numeração.
+3. Se a cliente sair completamente do assunto (pedir foto de produto não relacionado, falar de outro pedido, mandar áudio aleatório) → seja FIRME mas educada: "Entendi! Antes a gente finaliza seu cadastro. Qual sua numeração? 😊"
+4. Se a cliente já informou a numeração → use IMEDIATAMENTE a tool 'save_shoe_size'. Não pergunte de novo.
+5. Após salvar a numeração → confirme o cadastro, reforce que ela receberá o aviso quando a Live começar e encerre de forma calorosa. Não fique fazendo mais perguntas.
+6. NUNCA invente data/hora/produtos da Live. Se não souber, diga "vou confirmar e te aviso".
+7. Tom: direto, acolhedor, sem rodeios. Sem emojis demais.
+` : '';
+
+    const basePrompt = liveCampaign
+      ? `Você é a Jess, assistente da Banana Calçados na campanha "${liveCampaign.name}".${liveGuardRail}`
+      : (prompt || 'Você é um assistente da Banana Calçados. Responda de forma simpática, curta e objetiva em português brasileiro.');
     const antiRepetition = `
 
 REGRA CRÍTICA SOBRE REPETIÇÃO:
