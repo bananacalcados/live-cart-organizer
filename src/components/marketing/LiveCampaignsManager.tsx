@@ -229,7 +229,7 @@ export default function LiveCampaignsManager() {
               Frases-chave que disparam automaticamente uma sequência de mensagens (texto, áudio, vídeo) e cadastram a cliente como lead da campanha.
             </CardDescription>
           </div>
-          <Button onClick={() => { setEditing(null); setForm({ name: "", trigger_phrase: "", is_active: true, default_delay_seconds: 8, ask_shoe_size: true, jess_enabled: false }); setShowCreateDialog(true); }}>
+          <Button onClick={() => { setEditing(null); setForm({ name: "", trigger_phrase: "", is_active: true, default_delay_seconds: 8, ask_shoe_size: true, jess_enabled: true, jess_prompt: "" }); setShowCreateDialog(true); }}>
             <Plus className="h-4 w-4 mr-2" /> Nova Campanha
           </Button>
         </div>
