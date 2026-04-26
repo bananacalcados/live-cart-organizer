@@ -219,6 +219,9 @@ Deno.serve(async (req) => {
 
     // Cria registros de dispatch já como "sent" (auditoria) — envio direto, sem cron
     const nowIso = new Date().toISOString();
+    // Resolve o número que será usado para o envio JÁ AQUI, para persistir no dispatch
+    // Prioridade: whatsapp_number_id da campanha → instância que recebeu o webhook (origem)
+    const resolvedNumberId = matched.whatsapp_number_id ?? whatsapp_number_id ?? null;
     const dispatchRows = messages.map((m) => ({
       campaign_id: matched.id,
       message_id: m.id,
@@ -226,6 +229,7 @@ Deno.serve(async (req) => {
       phone,
       scheduled_at: nowIso,
       status: "pending" as const,
+      whatsapp_number_id: resolvedNumberId,
     }));
     const { data: insertedDispatches } = await supabase
       .from("live_campaign_dispatches")
