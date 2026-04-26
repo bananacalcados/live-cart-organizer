@@ -6774,6 +6774,7 @@ export type Database = {
           last_sent_message_at: string | null
           max_installments_override: number | null
           mercadopago_payment_id: string | null
+          meta_capi_purchase_sent_at: string | null
           mp_account_id: string | null
           notes: string | null
           pagarme_order_id: string | null
@@ -6816,6 +6817,7 @@ export type Database = {
           last_sent_message_at?: string | null
           max_installments_override?: number | null
           mercadopago_payment_id?: string | null
+          meta_capi_purchase_sent_at?: string | null
           mp_account_id?: string | null
           notes?: string | null
           pagarme_order_id?: string | null
@@ -6858,6 +6860,7 @@ export type Database = {
           last_sent_message_at?: string | null
           max_installments_override?: number | null
           mercadopago_payment_id?: string | null
+          meta_capi_purchase_sent_at?: string | null
           mp_account_id?: string | null
           notes?: string | null
           pagarme_order_id?: string | null
