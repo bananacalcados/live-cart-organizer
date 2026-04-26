@@ -1724,9 +1724,12 @@ export default function TransparentCheckout() {
       const livePayload = safeParseLiveCheckoutPayload(searchParams.get("live"));
 
       if (orderData) {
-        trackPixelEvent("Purchase", {
-          value: orderData.totalAmount, currency: "BRL",
-          content_type: "product", num_items: orderData.products.reduce((s, p) => s + p.quantity, 0),
+        // Browser Purchase — server CAPI Purchase is fired by the DB trigger when stage='paid'
+        // Both share the same deterministic event_id (`purchase_order_<orderId>`) for dedupe.
+        firePurchaseBrowser({
+          orderId: orderData.id.startsWith("live-") ? undefined : orderData.id,
+          value: orderData.totalAmount,
+          numItems: orderData.products.reduce((s, p) => s + p.quantity, 0),
         });
       }
 
