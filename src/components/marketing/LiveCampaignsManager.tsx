@@ -67,7 +67,8 @@ export default function LiveCampaignsManager() {
     is_active: true,
     default_delay_seconds: 8,
     ask_shoe_size: true,
-    jess_enabled: false, // Fase 2: ainda não está pronta
+    jess_enabled: true,
+    jess_prompt: "",
   });
 
   useEffect(() => { loadCampaigns(); }, []);
