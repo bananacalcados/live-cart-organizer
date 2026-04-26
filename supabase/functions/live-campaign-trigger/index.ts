@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
           tags: newTags,
           name: sender_name ?? undefined,
           channel: "zapi",
-          source: "live_campaign",
+          source: "live",
           updated_at: new Date().toISOString(),
         })
         .eq("id", leadId);
@@ -119,8 +119,8 @@ Deno.serve(async (req) => {
           live_campaign_id: matched.id,
           tags: [tagToAdd],
           channel: "zapi",
-          source: "live_campaign",
-          temperature: "warm",
+          source: "live",
+          temperature: "morno",
           collected_data: {
             campaign_slug: matched.slug,
             campaign_name: matched.name,
