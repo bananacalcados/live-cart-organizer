@@ -2,6 +2,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
+import {
+  fireInitiateCheckout,
+  fireAddPaymentInfo,
+  fireAddShippingInfo,
+  firePurchaseBrowser,
+} from "@/lib/checkoutMetaEvents";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, Clock, Trophy, User, MapPin, Wallet, ChevronRight, Truck } from "lucide-react";
 import { toast } from "sonner";
