@@ -455,9 +455,10 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("[live-trigger] erro:", msg);
-    return new Response(JSON.stringify({ matched: false, error: msg }), {
+    const msg = err instanceof Error ? err.message : (typeof err === "string" ? err : JSON.stringify(err));
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[live-trigger] erro:", msg, stack ? `\nstack: ${stack}` : "", "\nraw:", err);
+    return new Response(JSON.stringify({ matched: false, error: msg, stack }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
