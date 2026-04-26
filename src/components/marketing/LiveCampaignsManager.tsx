@@ -22,6 +22,7 @@ type Campaign = {
   default_delay_seconds: number;
   ask_shoe_size: boolean;
   jess_enabled: boolean;
+  jess_prompt: string | null;
   total_leads: number;
   whatsapp_number_id: string | null;
 };
