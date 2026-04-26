@@ -359,19 +359,74 @@ Deno.serve(async (req) => {
       if (matched.jess_enabled) {
         try {
           const phoneDigits = phone.replace(/\D/g, "");
-          const { data: existing } = await supabase
-            .from("automation_ai_sessions")
-            .select("id")
-            .eq("phone", phoneDigits)
-            .eq("is_active", true)
-            .maybeSingle();
-          if (!existing) {
-            await supabase.from("automation_ai_sessions").insert({
+          const sessionWhatsappNumberId = whatsappNumberId ?? null;
+          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+          await supabase.from("automation_ai_sessions").upsert({
+            phone: phoneDigits,
+            live_campaign_id: matched.id,
+            whatsapp_number_id: sessionWhatsappNumberId,
+            is_active: true,
+            messages_sent: 0,
+            max_messages: 5,
+            expires_at: expiresAt,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "phone" });
+
+          console.log(`[live-trigger] Modo Jess ativado para ${phone} (number=${sessionWhatsappNumberId ?? "none"})`);
+
+          const aiRes = await fetch(`${SUPABASE_URL}/functions/v1/automation-ai-respond`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${SERVICE_KEY}`,
+            },
+            body: JSON.stringify({
               phone: phoneDigits,
-              live_campaign_id: matched.id,
-              is_active: true,
+              whatsappNumberId: sessionWhatsappNumberId,
+              liveCampaignId: matched.id,
+            }),
+          });
+
+          const aiData = await aiRes.json().catch(() => ({}));
+          if (!aiRes.ok || !aiData?.reply) {
+            throw new Error(aiData?.error || aiData?.details || "jess_initial_reply_failed");
+          }
+
+          const aiReply = String(aiData.reply).trim();
+          if (aiReply) {
+            const sendEndpoint = provider === "meta" ? "meta-whatsapp-send" : "zapi-send-message";
+            const sendPayload = provider === "meta"
+              ? { phone, message: aiReply, whatsappNumberId: sessionWhatsappNumberId }
+              : { phone, message: aiReply, whatsapp_number_id: sessionWhatsappNumberId };
+
+            const sendRes = await fetch(`${SUPABASE_URL}/functions/v1/${sendEndpoint}`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${SERVICE_KEY}`,
+              },
+              body: JSON.stringify(sendPayload),
             });
-            console.log(`[live-trigger] Modo Jess ativado para ${phone}`);
+
+            const sendData = await sendRes.json().catch(() => ({}));
+            if (!sendRes.ok) {
+              throw new Error(sendData?.error || sendData?.details || "jess_send_failed");
+            }
+
+            await supabase.from("whatsapp_messages").insert({
+              phone,
+              message: `[IA] ${aiReply}`,
+              direction: "outgoing",
+              status: "sent",
+              message_id: sendData?.messageId || sendData?.data?.messageId || sendData?.data?.id || null,
+              whatsapp_number_id: sessionWhatsappNumberId,
+            });
+
+            await supabase
+              .from("automation_ai_sessions")
+              .update({ messages_sent: 1, updated_at: new Date().toISOString() })
+              .eq("phone", phoneDigits);
           }
         } catch (jessErr) {
           console.error("[live-trigger] erro ativando Jess:", jessErr);
