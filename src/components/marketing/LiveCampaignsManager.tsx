@@ -96,7 +96,8 @@ export default function LiveCampaignsManager() {
       is_active: form.is_active ?? true,
       default_delay_seconds: form.default_delay_seconds ?? 8,
       ask_shoe_size: form.ask_shoe_size ?? true,
-      jess_enabled: form.jess_enabled ?? false,
+      jess_enabled: form.jess_enabled ?? true,
+      jess_prompt: form.jess_prompt ?? null,
       slug,
     };
     if (editing) {
