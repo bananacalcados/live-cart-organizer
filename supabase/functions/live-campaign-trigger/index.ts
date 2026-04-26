@@ -60,12 +60,14 @@ Deno.serve(async (req) => {
 
     console.log(`[live-trigger] Frase "${matched.trigger_phrase}" detectada para ${phone} (campanha ${matched.name})`);
 
-    // Anti-duplicação: se já existem despachos pendentes/feitos para esse phone+campaign, ignora
+    // Anti-duplicação: ignora apenas se já houver despacho pendente/enviado.
+    // Falhas antigas não devem bloquear um novo teste.
     const { count: dispatchCount } = await supabase
       .from("live_campaign_dispatches")
       .select("id", { count: "exact", head: true })
       .eq("campaign_id", matched.id)
-      .eq("phone", phone);
+      .eq("phone", phone)
+      .in("status", ["pending", "sent"]);
 
     if ((dispatchCount ?? 0) > 0) {
       console.log(`[live-trigger] Lead ${phone} já tem despachos para esta campanha, ignorando`);
@@ -181,7 +183,25 @@ Deno.serve(async (req) => {
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
       // Fallback: se a campanha não tiver número configurado, usa o número que recebeu a mensagem
       const whatsappNumberId = matched.whatsapp_number_id ?? whatsapp_number_id ?? undefined;
-      console.log(`[live-trigger] Usando whatsapp_number_id=${whatsappNumberId} (campanha=${matched.whatsapp_number_id}, webhook=${whatsapp_number_id})`);
+      let provider: "zapi" | "meta" = "zapi";
+
+      if (whatsappNumberId) {
+        const { data: numberData, error: numberErr } = await supabase
+          .from("whatsapp_numbers")
+          .select("provider")
+          .eq("id", whatsappNumberId)
+          .maybeSingle();
+
+        if (numberErr) {
+          console.error("[live-trigger] erro resolvendo provider do número:", numberErr);
+        } else if (numberData?.provider === "meta") {
+          provider = "meta";
+        }
+      }
+
+      console.log(
+        `[live-trigger] Usando whatsapp_number_id=${whatsappNumberId} provider=${provider} (campanha=${matched.whatsapp_number_id}, webhook=${whatsapp_number_id})`
+      );
 
       for (let i = 0; i < messages.length; i++) {
         const m = messages[i];
@@ -197,7 +217,8 @@ Deno.serve(async (req) => {
           let result: { success: boolean; error?: string } = { success: false };
 
           if (m.message_type === "text") {
-            const r = await fetch(`${SUPABASE_URL}/functions/v1/zapi-send-message`, {
+            const endpoint = provider === "meta" ? "meta-whatsapp-send" : "zapi-send-message";
+            const r = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -210,24 +231,36 @@ Deno.serve(async (req) => {
               }),
             });
             const j = await r.json().catch(() => ({}));
-            result = { success: r.ok && j?.success !== false, error: j?.error };
+            result = { success: r.ok && j?.success !== false, error: j?.error || j?.details };
           } else {
-            const r = await fetch(`${SUPABASE_URL}/functions/v1/zapi-send-media`, {
+            const endpoint = provider === "meta" ? "meta-whatsapp-send" : "zapi-send-media";
+            const r = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${SERVICE_KEY}`,
               },
-              body: JSON.stringify({
-                phone,
-                mediaUrl: m.media_url,
-                mediaType: m.message_type,
-                caption: m.caption || "",
-                whatsapp_number_id: whatsappNumberId,
-              }),
+              body: JSON.stringify(
+                provider === "meta"
+                  ? {
+                      phone,
+                      type: m.message_type,
+                      mediaUrl: m.media_url,
+                      caption: m.caption || "",
+                      message: m.content || "",
+                      whatsapp_number_id: whatsappNumberId,
+                    }
+                  : {
+                      phone,
+                      mediaUrl: m.media_url,
+                      mediaType: m.message_type,
+                      caption: m.caption || "",
+                      whatsapp_number_id: whatsappNumberId,
+                    }
+              ),
             });
             const j = await r.json().catch(() => ({}));
-            result = { success: r.ok && j?.success !== false, error: j?.error };
+            result = { success: r.ok && j?.success !== false, error: j?.error || j?.details };
           }
 
           if (dispatchId) {
