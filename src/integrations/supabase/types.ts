@@ -6520,6 +6520,51 @@ export type Database = {
           },
         ]
       }
+      meta_capi_lead_events: {
+        Row: {
+          campaign_id: string | null
+          campaign_slug: string | null
+          created_at: string
+          error_message: string | null
+          event_id: string
+          event_name: string
+          id: string
+          meta_response: Json | null
+          phone: string
+          pixel_id: string | null
+          sent_at: string | null
+          status: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          campaign_slug?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_id: string
+          event_name: string
+          id?: string
+          meta_response?: Json | null
+          phone: string
+          pixel_id?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Update: {
+          campaign_id?: string | null
+          campaign_slug?: string | null
+          created_at?: string
+          error_message?: string | null
+          event_id?: string
+          event_name?: string
+          id?: string
+          meta_response?: Json | null
+          phone?: string
+          pixel_id?: string | null
+          sent_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       meta_capi_offline_log: {
         Row: {
           created_at: string

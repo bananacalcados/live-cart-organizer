@@ -180,6 +180,28 @@ Deno.serve(async (req) => {
       .update({ total_leads: (dispatchCount ?? 0) + 1 })
       .eq("id", matched.id);
 
+    // Dispara evento Meta CAPI 'Lead' (fire-and-forget, não bloqueia)
+    try {
+      EdgeRuntime.waitUntil(
+        supabase.functions.invoke("meta-capi-lead", {
+          body: {
+            phone,
+            event_name: "Lead",
+            campaign_id: matched.id,
+            campaign_slug: matched.slug,
+            campaign_name: matched.name,
+            full_name: sender_name || null,
+          },
+        }).then((r) => {
+          console.log(`[live-trigger] meta-capi Lead dispatched for ${phone}`, r?.data?.event_id);
+        }).catch((e) => {
+          console.error("[live-trigger] meta-capi Lead error (non-critical):", e?.message || e);
+        })
+      );
+    } catch (capiErr) {
+      console.error("[live-trigger] capi invoke wrap error:", capiErr);
+    }
+
     // Busca mensagens completas da sequência (ativas, ordenadas)
     const { data: messages } = await supabase
       .from("live_campaign_messages")
