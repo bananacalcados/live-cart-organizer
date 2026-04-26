@@ -181,6 +181,20 @@ export const automationExtraTools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "save_shoe_size",
+      description: "Salvar a numeração do calçado da cliente para a campanha de Live ATIVA. Use SEMPRE que a cliente informar seu número/numeração (ex: 'meu número é 36', 'calço 37', '38'). Aceita números entre 30 e 46. Esta ferramenta grava na ficha do lead E adiciona a tag 'numeracao_XX' para segmentação posterior. Após salvar, a cliente está oficialmente cadastrada na campanha.",
+      parameters: {
+        type: "object",
+        properties: {
+          size: { type: "string", description: "Numeração do calçado, apenas o número (ex: '36', '37', '38')." },
+        },
+        required: ["size"],
+      },
+    },
+  },
 ];
 
 const PRODUCT_TYPE_KEYWORDS = ['tenis', 'mocassim', 'sandalia', 'papete', 'tamanco', 'sapato', 'bota', 'chinelo'];
