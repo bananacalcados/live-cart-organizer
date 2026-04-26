@@ -1456,11 +1456,23 @@ export default function TransparentCheckout() {
   });
   const [registrationId, setRegistrationId] = useState<string | null>(null);
 
-  // Init Meta Pixel
+  // Init Meta Pixel (browser only — full InitiateCheckout fires after order loads)
   useEffect(() => {
     initMetaPixel();
-    trackPixelEvent("InitiateCheckout");
   }, []);
+
+  // Fire InitiateCheckout (browser + CAPI) once the order data is available
+  const initiateCheckoutFiredRef = useRef(false);
+  useEffect(() => {
+    if (!orderData || initiateCheckoutFiredRef.current) return;
+    initiateCheckoutFiredRef.current = true;
+    const numItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
+    fireInitiateCheckout({
+      orderId: orderData.id.startsWith("live-") ? undefined : orderData.id,
+      value: orderData.totalAmount,
+      numItems,
+    });
+  }, [orderData]);
 
   useEffect(() => {
     const liveParam = searchParams.get("live");
