@@ -581,6 +581,42 @@ export default function ChatPage() {
     return ch === 'instagram' || ch === 'messenger';
   };
 
+  // ── Validate that we're sending from the right instance ──
+  // BO Angela 25/04: Matthews respondeu pela Ravena, mas a cliente conversava pelo Centro.
+  // Cliente nunca viu a confirmação. Esta trava bloqueia esse erro.
+  const validateInstanceMatchesClient = async (phone: string, intendedNumberId: string | null): Promise<boolean> => {
+    if (!intendedNumberId) return true; // sem instância escolhida, deixa passar (não há como saber)
+    if (isInstagramOrMessenger()) return true; // IG/Messenger não sofre desse problema
+
+    // Busca a última mensagem incoming do cliente (últimas 48h)
+    const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+      .from('whatsapp_messages')
+      .select('whatsapp_number_id')
+      .eq('phone', phone)
+      .eq('direction', 'incoming')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error || !data || data.length === 0) return true; // sem incoming recente, deixa passar
+    const clientLastNumberId = (data[0] as any).whatsapp_number_id;
+    if (!clientLastNumberId) return true;
+    if (clientLastNumberId === intendedNumberId) return true;
+
+    // Bloqueia: instância diferente da que o cliente está usando
+    const clientInst = numbers.find(n => n.id === clientLastNumberId);
+    const chosenInst = numbers.find(n => n.id === intendedNumberId);
+    toast.error(
+      `🚫 Resposta bloqueada — instância errada\n\n` +
+      `Cliente conversa pela: ${clientInst?.label || 'desconhecida'}\n` +
+      `Você está enviando pela: ${chosenInst?.label || 'desconhecida'}\n\n` +
+      `Selecione a conversa correta na lista (filtre por "${clientInst?.label}").`,
+      { duration: 8000 }
+    );
+    return false;
+  };
+
   // ── Send message ──
   const handleSend = async () => {
     if (isSending || isUploading || !selectedPhone) return;
@@ -588,6 +624,10 @@ export default function ChatPage() {
     const useMessenger = isInstagramOrMessenger();
     const messengerChannel = (getSelectedChannel() as 'instagram' | 'messenger') || 'instagram';
     const numberId = getActiveNumberId();
+
+    // Trava de instância: garante que estamos respondendo pela mesma instância em que o cliente fala
+    const instanceOk = await validateInstanceMatchesClient(selectedPhone, numberId);
+    if (!instanceOk) return;
 
     if (selectedMedia) {
       setIsUploading(true);
