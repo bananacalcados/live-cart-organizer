@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
           tags: newTags,
           name: sender_name ?? undefined,
           channel: "zapi",
-          source: "live_campaign",
+          source: "live",
           updated_at: new Date().toISOString(),
         })
         .eq("id", leadId);
@@ -119,8 +119,8 @@ Deno.serve(async (req) => {
           live_campaign_id: matched.id,
           tags: [tagToAdd],
           channel: "zapi",
-          source: "live_campaign",
-          temperature: "warm",
+          source: "live",
+          temperature: "morno",
           collected_data: {
             campaign_slug: matched.slug,
             campaign_name: matched.name,
@@ -455,9 +455,10 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("[live-trigger] erro:", msg);
-    return new Response(JSON.stringify({ matched: false, error: msg }), {
+    const msg = err instanceof Error ? err.message : (typeof err === "string" ? err : JSON.stringify(err));
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[live-trigger] erro:", msg, stack ? `\nstack: ${stack}` : "", "\nraw:", err);
+    return new Response(JSON.stringify({ matched: false, error: msg, stack }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
