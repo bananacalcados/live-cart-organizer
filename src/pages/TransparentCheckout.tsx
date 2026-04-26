@@ -2,6 +2,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
+import {
+  fireInitiateCheckout,
+  fireAddPaymentInfo,
+  fireAddShippingInfo,
+  firePurchaseBrowser,
+} from "@/lib/checkoutMetaEvents";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, Clock, Trophy, User, MapPin, Wallet, ChevronRight, Truck } from "lucide-react";
 import { toast } from "sonner";
@@ -1450,11 +1456,23 @@ export default function TransparentCheckout() {
   });
   const [registrationId, setRegistrationId] = useState<string | null>(null);
 
-  // Init Meta Pixel
+  // Init Meta Pixel (browser only — full InitiateCheckout fires after order loads)
   useEffect(() => {
     initMetaPixel();
-    trackPixelEvent("InitiateCheckout");
   }, []);
+
+  // Fire InitiateCheckout (browser + CAPI) once the order data is available
+  const initiateCheckoutFiredRef = useRef(false);
+  useEffect(() => {
+    if (!orderData || initiateCheckoutFiredRef.current) return;
+    initiateCheckoutFiredRef.current = true;
+    const numItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
+    fireInitiateCheckout({
+      orderId: orderData.id.startsWith("live-") ? undefined : orderData.id,
+      value: orderData.totalAmount,
+      numItems,
+    });
+  }, [orderData]);
 
   useEffect(() => {
     const liveParam = searchParams.get("live");
@@ -1625,7 +1643,24 @@ export default function TransparentCheckout() {
 
   const handleStep1Next = async () => {
     const saved = await saveRegistration(1);
-    if (saved) setCurrentStep(2);
+    if (saved) {
+      // Step 1 done: PII collected (name, cpf, email, phone) — fire AddPaymentInfo
+      if (orderData) {
+        const numItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
+        fireAddPaymentInfo({
+          orderId: orderData.id.startsWith("live-") ? undefined : orderData.id,
+          value: orderData.totalAmount,
+          numItems,
+          customer: {
+            fullName: customerForm.fullName,
+            email: customerForm.email,
+            phone: customerForm.whatsapp,
+            cpf: customerForm.cpf,
+          },
+        });
+      }
+      setCurrentStep(2);
+    }
   };
 
   const handleStep2Next = async () => {
@@ -1657,6 +1692,25 @@ export default function TransparentCheckout() {
         return;
       }
     }
+
+    // Step 2 done: shipping address collected — fire AddShippingInfo
+    if (orderData) {
+      const numItems = orderData.products.reduce((s, p) => s + p.quantity, 0);
+      fireAddShippingInfo({
+        orderId: orderData.id.startsWith("live-") ? undefined : orderData.id,
+        value: orderData.totalAmount,
+        numItems,
+        customer: {
+          fullName: customerForm.fullName,
+          email: customerForm.email,
+          phone: customerForm.whatsapp,
+          cpf: customerForm.cpf,
+          city: customerForm.city,
+          state: customerForm.state,
+          zip: customerForm.cep,
+        },
+      });
+    }
     setCurrentStep(3);
   };
 
@@ -1670,9 +1724,12 @@ export default function TransparentCheckout() {
       const livePayload = safeParseLiveCheckoutPayload(searchParams.get("live"));
 
       if (orderData) {
-        trackPixelEvent("Purchase", {
-          value: orderData.totalAmount, currency: "BRL",
-          content_type: "product", num_items: orderData.products.reduce((s, p) => s + p.quantity, 0),
+        // Browser Purchase — server CAPI Purchase is fired by the DB trigger when stage='paid'
+        // Both share the same deterministic event_id (`purchase_order_<orderId>`) for dedupe.
+        firePurchaseBrowser({
+          orderId: orderData.id.startsWith("live-") ? undefined : orderData.id,
+          value: orderData.totalAmount,
+          numItems: orderData.products.reduce((s, p) => s + p.quantity, 0),
         });
       }
 
