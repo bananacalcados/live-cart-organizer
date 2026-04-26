@@ -32,19 +32,22 @@ serve(async (req) => {
     let useJessAgent = false;
     let jessCampaignName: string | null = null;
     let resolvedFlowId = flowId || null;
+    let liveCampaignId: string | null = liveCampaignIdInput || null;
+    let liveCampaign: { id: string; name: string; slug: string; ask_shoe_size: boolean; jess_prompt: string | null } | null = null;
 
-    // If no flowId passed, try to get it from the active session
-    if (!resolvedFlowId && phone) {
+    // If no flowId/liveCampaignId passed, try to get from active session
+    if (!resolvedFlowId && !liveCampaignId && phone) {
       const normalizedForSession = phone.replace(/\D/g, '');
       const { data: session } = await supabase
         .from('automation_ai_sessions')
-        .select('flow_id')
+        .select('flow_id, live_campaign_id')
         .eq('phone', normalizedForSession)
         .eq('is_active', true)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       resolvedFlowId = session?.flow_id || null;
+      liveCampaignId = session?.live_campaign_id || null;
     }
 
     if (resolvedFlowId) {
@@ -55,6 +58,21 @@ serve(async (req) => {
         .maybeSingle();
       useJessAgent = flow?.use_jess_agent === true;
       jessCampaignName = flow?.jess_campaign_name || null;
+    }
+
+    // Live campaign overrides: when a live_campaign_id is present,
+    // we always activate Jess and inject the campaign-specific guard-rail prompt
+    if (liveCampaignId) {
+      const { data: lc } = await supabase
+        .from('live_campaigns')
+        .select('id, name, slug, ask_shoe_size, jess_prompt, jess_enabled')
+        .eq('id', liveCampaignId)
+        .maybeSingle();
+      if (lc?.jess_enabled !== false) {
+        liveCampaign = lc;
+        useJessAgent = true;
+        jessCampaignName = lc?.name || jessCampaignName;
+      }
     }
 
     // Append anti-repetition instruction to whatever prompt the flow provides
