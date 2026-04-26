@@ -1,0 +1,1 @@
+UPDATE automation_ai_sessions SET is_active = true, live_campaign_id = '46aa8492-ab85-4ca9-8be3-74a8a8cc27a4', updated_at = now() WHERE phone = '5533991955003';
