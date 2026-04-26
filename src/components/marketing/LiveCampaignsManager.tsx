@@ -22,6 +22,7 @@ type Campaign = {
   default_delay_seconds: number;
   ask_shoe_size: boolean;
   jess_enabled: boolean;
+  jess_prompt: string | null;
   total_leads: number;
   whatsapp_number_id: string | null;
 };
@@ -66,7 +67,8 @@ export default function LiveCampaignsManager() {
     is_active: true,
     default_delay_seconds: 8,
     ask_shoe_size: true,
-    jess_enabled: false, // Fase 2: ainda não está pronta
+    jess_enabled: true,
+    jess_prompt: "",
   });
 
   useEffect(() => { loadCampaigns(); }, []);
@@ -94,7 +96,8 @@ export default function LiveCampaignsManager() {
       is_active: form.is_active ?? true,
       default_delay_seconds: form.default_delay_seconds ?? 8,
       ask_shoe_size: form.ask_shoe_size ?? true,
-      jess_enabled: form.jess_enabled ?? false,
+      jess_enabled: form.jess_enabled ?? true,
+      jess_prompt: form.jess_prompt ?? null,
       slug,
     };
     if (editing) {
@@ -108,7 +111,7 @@ export default function LiveCampaignsManager() {
     }
     setShowCreateDialog(false);
     setEditing(null);
-    setForm({ name: "", trigger_phrase: "", is_active: true, default_delay_seconds: 8, ask_shoe_size: true, jess_enabled: false });
+    setForm({ name: "", trigger_phrase: "", is_active: true, default_delay_seconds: 8, ask_shoe_size: true, jess_enabled: true, jess_prompt: "" });
     loadCampaigns();
   }
 
@@ -226,7 +229,7 @@ export default function LiveCampaignsManager() {
               Frases-chave que disparam automaticamente uma sequência de mensagens (texto, áudio, vídeo) e cadastram a cliente como lead da campanha.
             </CardDescription>
           </div>
-          <Button onClick={() => { setEditing(null); setForm({ name: "", trigger_phrase: "", is_active: true, default_delay_seconds: 8, ask_shoe_size: true, jess_enabled: false }); setShowCreateDialog(true); }}>
+          <Button onClick={() => { setEditing(null); setForm({ name: "", trigger_phrase: "", is_active: true, default_delay_seconds: 8, ask_shoe_size: true, jess_enabled: true, jess_prompt: "" }); setShowCreateDialog(true); }}>
             <Plus className="h-4 w-4 mr-2" /> Nova Campanha
           </Button>
         </div>
@@ -311,17 +314,29 @@ export default function LiveCampaignsManager() {
             <div className="flex items-center justify-between border rounded p-3">
               <div>
                 <p className="text-sm font-medium">Pedir numeração no fim</p>
-                <p className="text-xs text-muted-foreground">Será ativado quando o agente Jess assumir (Fase 2).</p>
+                <p className="text-xs text-muted-foreground">A Jess vai perguntar a numeração da cliente após a sequência de mídias.</p>
               </div>
               <Switch checked={form.ask_shoe_size ?? true} onCheckedChange={(v) => setForm({ ...form, ask_shoe_size: v })} />
             </div>
-            <div className="flex items-center justify-between border rounded p-3 opacity-60">
+            <div className="flex items-center justify-between border rounded p-3">
               <div>
                 <p className="text-sm font-medium">Modo Jess (IA)</p>
-                <p className="text-xs text-muted-foreground">Disponível na Fase 2. Por enquanto desativado.</p>
+                <p className="text-xs text-muted-foreground">Após enviar todas as mídias, a Jess assume a conversa para capturar a numeração e responder dúvidas sobre a Live.</p>
               </div>
-              <Switch checked={false} disabled />
+              <Switch checked={form.jess_enabled ?? true} onCheckedChange={(v) => setForm({ ...form, jess_enabled: v })} />
             </div>
+            {form.jess_enabled && (
+              <div>
+                <Label>Contexto da Live para a Jess (opcional)</Label>
+                <Textarea
+                  rows={6}
+                  value={form.jess_prompt || ""}
+                  onChange={(e) => setForm({ ...form, jess_prompt: e.target.value })}
+                  placeholder={"Ex: A Live acontece sábado dia 10/05 às 20h no Instagram @bananacalcados.\nTeremos descontos de até 60% em sandálias e tênis.\nFrete grátis para Governador Valadares e R$15 para o restante de MG."}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Esse texto é injetado no prompt da Jess para que ela responda dúvidas reais sobre a Live (data, produtos, frete, descontos). Se em branco, ela só foca em capturar a numeração.</p>
+              </div>
+            )}
             <div className="flex items-center justify-between border rounded p-3">
               <div>
                 <p className="text-sm font-medium">Campanha ativa</p>

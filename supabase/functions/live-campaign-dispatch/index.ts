@@ -113,6 +113,47 @@ Deno.serve(async (req) => {
             .update({ status: "sent", sent_at: new Date().toISOString(), locked_until: null })
             .eq("id", d.id);
           sent++;
+
+          // Se este foi o ÚLTIMO despacho pendente desta campanha para este telefone,
+          // ativa o "Modo Jess" criando uma sessão de IA vinculada à live_campaign.
+          try {
+            const { count: stillPending } = await supabase
+              .from("live_campaign_dispatches")
+              .select("id", { count: "exact", head: true })
+              .eq("campaign_id", d.campaign_id)
+              .eq("phone", d.phone)
+              .eq("status", "pending");
+
+            if ((stillPending ?? 0) === 0) {
+              const { data: lc } = await supabase
+                .from("live_campaigns")
+                .select("jess_enabled")
+                .eq("id", d.campaign_id)
+                .maybeSingle();
+
+              if (lc?.jess_enabled) {
+                const phoneDigits = d.phone.replace(/\D/g, "");
+                // Não duplicar sessão ativa
+                const { data: existingSession } = await supabase
+                  .from("automation_ai_sessions")
+                  .select("id")
+                  .eq("phone", phoneDigits)
+                  .eq("is_active", true)
+                  .maybeSingle();
+
+                if (!existingSession) {
+                  await supabase.from("automation_ai_sessions").insert({
+                    phone: phoneDigits,
+                    live_campaign_id: d.campaign_id,
+                    is_active: true,
+                  });
+                  console.log(`[live-dispatch] Modo Jess ativado para ${d.phone} (campaign=${d.campaign_id})`);
+                }
+              }
+            }
+          } catch (jessErr) {
+            console.error("[live-dispatch] erro ativando Jess:", jessErr);
+          }
         } else {
           // Falha: marca como failed se já tentou 3x, senão volta a pending
           const willGiveUp = (d.attempts || 0) + 1 >= 3;
