@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     // Pega despachos pendentes prontos pra enviar (ou expirados de lock)
     const { data: ready, error: selErr } = await supabase
       .from("live_campaign_dispatches")
-      .select("id, campaign_id, message_id, phone, lead_id, attempts")
+      .select("id, campaign_id, message_id, phone, lead_id, attempts, whatsapp_number_id")
       .eq("status", "pending")
       .lte("scheduled_at", now.toISOString())
       .or(`locked_until.is.null,locked_until.lt.${now.toISOString()}`)
@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       if (!claimed) continue;
 
       try {
-        // Carrega a mensagem e a campanha (pra obter número)
+        // Carrega a mensagem e a campanha (pra obter número de fallback)
         const [{ data: msg }, { data: camp }] = await Promise.all([
           supabase
             .from("live_campaign_messages")
@@ -68,7 +68,8 @@ Deno.serve(async (req) => {
 
         if (!msg) throw new Error("message_not_found");
 
-        const whatsappNumberId = camp?.whatsapp_number_id ?? undefined;
+        // Prioridade: número do despacho (origem da trigger) → da campanha
+        const whatsappNumberId = d.whatsapp_number_id ?? camp?.whatsapp_number_id ?? undefined;
 
         let result: { success: boolean; error?: string; status?: number } = { success: false };
 
