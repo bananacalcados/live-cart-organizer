@@ -145,7 +145,8 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (!existingLp) {
-        await supabase.from("lp_leads").insert({
+        const lpWhatsappNumberId = matched.whatsapp_number_id ?? whatsapp_number_id ?? null;
+        const { error: lpInsertError } = await supabase.from("lp_leads").insert({
           phone,
           name: sender_name || null,
           campaign_tag: tagToAdd,
@@ -154,10 +155,12 @@ Deno.serve(async (req) => {
             campaign_slug: matched.slug,
             campaign_name: matched.name,
             trigger_phrase: matched.trigger_phrase,
-            whatsapp_number_id: whatsappNumberId,
+            whatsapp_number_id: lpWhatsappNumberId,
             captured_at: new Date().toISOString(),
           },
         });
+
+        if (lpInsertError) throw lpInsertError;
         console.log(`[live-trigger] lp_leads criado para ${phone} (tag=${tagToAdd})`);
       } else {
         console.log(`[live-trigger] lp_leads já existia para ${phone} (tag=${tagToAdd})`);
