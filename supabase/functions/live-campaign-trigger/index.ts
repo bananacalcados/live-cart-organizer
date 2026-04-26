@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
         }
 
         try {
-          let result: { success: boolean; error?: string } = { success: false };
+          let result: { success: boolean; error?: string; messageId?: string | null } = { success: false };
 
           if (m.message_type === "text") {
             const endpoint = provider === "meta" ? "meta-whatsapp-send" : "zapi-send-message";
@@ -231,7 +231,11 @@ Deno.serve(async (req) => {
               }),
             });
             const j = await r.json().catch(() => ({}));
-            result = { success: r.ok && j?.success !== false, error: j?.error || j?.details };
+            result = {
+              success: r.ok && j?.success !== false,
+              error: j?.error || j?.details,
+              messageId: j?.messageId || j?.data?.messageId || j?.data?.id || null,
+            };
           } else {
             const endpoint = provider === "meta" ? "meta-whatsapp-send" : "zapi-send-media";
             const r = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
@@ -260,7 +264,11 @@ Deno.serve(async (req) => {
               ),
             });
             const j = await r.json().catch(() => ({}));
-            result = { success: r.ok && j?.success !== false, error: j?.error || j?.details };
+            result = {
+              success: r.ok && j?.success !== false,
+              error: j?.error || j?.details,
+              messageId: j?.messageId || j?.data?.messageId || j?.data?.id || null,
+            };
           }
 
           if (dispatchId) {
@@ -272,6 +280,29 @@ Deno.serve(async (req) => {
                   : { status: "failed", error_message: result.error || "send_failed" }
               )
               .eq("id", dispatchId);
+          }
+
+          if (provider === "meta" && result.success) {
+            const displayMessage =
+              m.message_type === "text"
+                ? m.content || ""
+                : m.caption || m.content || `[${m.message_type}]`;
+
+            const { error: logError } = await supabase.from("whatsapp_messages").insert({
+              phone,
+              message: displayMessage,
+              direction: "outgoing",
+              message_id: result.messageId || null,
+              status: "sent",
+              media_type: m.message_type === "text" ? null : m.message_type,
+              media_url: m.message_type === "text" ? null : m.media_url,
+              is_group: false,
+              whatsapp_number_id: whatsappNumberId || null,
+            });
+
+            if (logError) {
+              console.error(`[live-trigger] erro salvando histórico Meta msg ${m.id}:`, logError);
+            }
           }
 
           if (!result.success) {
