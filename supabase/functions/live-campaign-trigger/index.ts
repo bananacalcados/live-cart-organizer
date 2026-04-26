@@ -134,6 +134,38 @@ Deno.serve(async (req) => {
       leadId = newLead.id;
     }
 
+    // Espelha em lp_leads para aparecer na aba "Leads" do módulo Marketing
+    try {
+      const { data: existingLp } = await supabase
+        .from("lp_leads")
+        .select("id")
+        .eq("campaign_tag", tagToAdd)
+        .filter("phone", "ilike", `%${phoneSuffix}`)
+        .limit(1)
+        .maybeSingle();
+
+      if (!existingLp) {
+        await supabase.from("lp_leads").insert({
+          phone,
+          name: sender_name || null,
+          campaign_tag: tagToAdd,
+          source: "live_campaign",
+          metadata: {
+            campaign_slug: matched.slug,
+            campaign_name: matched.name,
+            trigger_phrase: matched.trigger_phrase,
+            whatsapp_number_id: whatsappNumberId,
+            captured_at: new Date().toISOString(),
+          },
+        });
+        console.log(`[live-trigger] lp_leads criado para ${phone} (tag=${tagToAdd})`);
+      } else {
+        console.log(`[live-trigger] lp_leads já existia para ${phone} (tag=${tagToAdd})`);
+      }
+    } catch (lpErr) {
+      console.error("[live-trigger] Falha ao espelhar em lp_leads:", lpErr);
+    }
+
     // Atualiza contador da campanha
     try {
       await supabase.rpc("increment_execution_count", { message_id: matched.id });
