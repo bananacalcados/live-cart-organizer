@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Play, GripVertical, Upload, Radio, Users, Volume2, Video as VideoIcon, FileText, Image as ImageIcon } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { InlineAudioRecorder } from "./InlineAudioRecorder";
 
 type Campaign = {
   id: string;
@@ -400,12 +401,12 @@ export default function LiveCampaignsManager() {
                     />
                   ) : (
                     <>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                         <Input
                           placeholder="URL da mídia (ou faça upload →)"
                           value={m.media_url || ""}
                           onChange={(e) => updateMessage(idx, { media_url: e.target.value })}
-                          className="flex-1"
+                          className="flex-1 min-w-[200px]"
                         />
                         <label className="cursor-pointer">
                           <input
@@ -423,6 +424,9 @@ export default function LiveCampaignsManager() {
                             <span><Upload className="h-4 w-4 mr-1" />Upload</span>
                           </Button>
                         </label>
+                        {m.message_type === "audio" && (
+                          <InlineAudioRecorder onUpload={(file) => uploadMedia(idx, file)} />
+                        )}
                       </div>
                       {(m.message_type === "image" || m.message_type === "video" || m.message_type === "document") && (
                         <Input
