@@ -127,9 +127,30 @@ Deno.serve(async (req) => {
             if ((stillPending ?? 0) === 0) {
               const { data: lc } = await supabase
                 .from("live_campaigns")
-                .select("jess_enabled")
+                .select("jess_enabled, slug, name")
                 .eq("id", d.campaign_id)
                 .maybeSingle();
+
+              // Dispara CompleteRegistration ao finalizar a sequência
+              try {
+                EdgeRuntime.waitUntil(
+                  supabase.functions.invoke("meta-capi-lead", {
+                    body: {
+                      phone: d.phone,
+                      event_name: "CompleteRegistration",
+                      campaign_id: d.campaign_id,
+                      campaign_slug: lc?.slug ?? null,
+                      campaign_name: lc?.name ?? null,
+                    },
+                  }).then((r) => {
+                    console.log(`[live-dispatch] meta-capi CompleteRegistration sent for ${d.phone}`, r?.data?.event_id);
+                  }).catch((e) => {
+                    console.error("[live-dispatch] meta-capi CR error (non-critical):", e?.message || e);
+                  })
+                );
+              } catch (capiErr) {
+                console.error("[live-dispatch] capi invoke wrap error:", capiErr);
+              }
 
               if (lc?.jess_enabled) {
                 const phoneDigits = d.phone.replace(/\D/g, "");
@@ -152,7 +173,7 @@ Deno.serve(async (req) => {
               }
             }
           } catch (jessErr) {
-            console.error("[live-dispatch] erro ativando Jess:", jessErr);
+            console.error("[live-dispatch] erro ativando Jess/CAPI:", jessErr);
           }
         } else {
           // Falha: marca como failed se já tentou 3x, senão volta a pending
