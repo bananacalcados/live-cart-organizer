@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, Play, GripVertical, Upload, Radio, Users, Volume2, Video as VideoIcon, FileText, Image as ImageIcon } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { InlineAudioRecorder } from "./InlineAudioRecorder";
 
 type Campaign = {
   id: string;
