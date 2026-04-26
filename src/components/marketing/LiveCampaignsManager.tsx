@@ -111,7 +111,7 @@ export default function LiveCampaignsManager() {
     }
     setShowCreateDialog(false);
     setEditing(null);
-    setForm({ name: "", trigger_phrase: "", is_active: true, default_delay_seconds: 8, ask_shoe_size: true, jess_enabled: false });
+    setForm({ name: "", trigger_phrase: "", is_active: true, default_delay_seconds: 8, ask_shoe_size: true, jess_enabled: true, jess_prompt: "" });
     loadCampaigns();
   }
 
