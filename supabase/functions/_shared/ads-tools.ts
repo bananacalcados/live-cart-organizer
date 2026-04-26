@@ -328,6 +328,7 @@ interface AdsToolContext {
   collectedData: Record<string, any>;
   whatsappNumberId?: string | null;
   channel?: string;
+  liveCampaignId?: string | null;
 }
 
 async function createAiAssistanceRequest(
