@@ -179,7 +179,9 @@ Deno.serve(async (req) => {
     // Função de envio sequencial em background (não bloqueia a resposta do webhook)
     const sendSequence = async () => {
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-      const whatsappNumberId = matched.whatsapp_number_id ?? undefined;
+      // Fallback: se a campanha não tiver número configurado, usa o número que recebeu a mensagem
+      const whatsappNumberId = matched.whatsapp_number_id ?? whatsapp_number_id ?? undefined;
+      console.log(`[live-trigger] Usando whatsapp_number_id=${whatsappNumberId} (campanha=${matched.whatsapp_number_id}, webhook=${whatsapp_number_id})`);
 
       for (let i = 0; i < messages.length; i++) {
         const m = messages[i];
