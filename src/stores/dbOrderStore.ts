@@ -3,6 +3,7 @@ import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { DbOrder, DbOrderProduct, DbCustomer, DiscountType } from '@/types/database';
 import { OrderStage, isOrderComplete } from '@/types/order';
+import { isPaidOrderStage, paidOrderStages } from '@/lib/orderPaymentStages';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
 import { fetchDbOrderById, mapDbOrder, mergeDbOrder } from './dbOrderRealtime';
@@ -339,7 +340,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     }
 
     // Post-paid stages should keep payment flags
-    const postPaidStages = ['awaiting_shipping', 'awaiting_mototaxi', 'awaiting_pickup', 'completed'];
+    const postPaidStages = paidOrderStages.filter((stage) => stage !== 'paid');
     
     // If moving away from paid manually to a pre-paid stage, clear payment flags
     if (newStage !== 'paid' && !postPaidStages.includes(newStage) && order.is_paid && order.stage === 'paid') {
@@ -652,7 +653,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
   },
 
   upsertOrderRealtime: (order) => {
-    const normalizedOrder = order.is_paid && order.stage === 'awaiting_payment'
+    const normalizedOrder = order.is_paid && !isPaidOrderStage(order.stage)
       ? { ...order, stage: 'paid' }
       : order;
 
