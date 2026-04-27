@@ -1,5 +1,6 @@
 import { STAGES, OrderStage } from "@/types/order";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
+import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { cn } from "@/lib/utils";
 import { AlertCircle } from "lucide-react";
 
@@ -14,7 +15,7 @@ export function StageNavigation({ selectedStage, onSelectStage }: StageNavigatio
   const getCountByStage = (stage: OrderStage) => 
     orders.filter((o) => o.stage === stage).length;
 
-  const unpaidCount = orders.filter((o) => !o.is_paid).length;
+  const unpaidCount = orders.filter((o) => !isOrderMarkedPaid(o)).length;
 
   return (
     <div className="sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40">

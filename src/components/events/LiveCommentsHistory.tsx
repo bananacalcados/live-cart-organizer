@@ -17,6 +17,7 @@ import {
 import { toast } from "sonner";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
+import { paidOrderStages } from "@/lib/orderPaymentStages";
 
 interface LiveComment {
   id: string;
@@ -127,7 +128,7 @@ export function LiveCommentsHistory({ eventId }: Props) {
       .from("orders")
       .select("customer_id, is_paid, stage")
       .eq("event_id", eventId)
-      .or("is_paid.eq.true,stage.in.(paid,shipped,delivered,completed,concluido,pago)");
+      .or(`is_paid.eq.true,stage.in.(${paidOrderStages.join(",")})`);
 
     const buyerHandles = new Set<string>();
     if (paidOrders && paidOrders.length > 0) {

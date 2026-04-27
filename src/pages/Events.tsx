@@ -35,6 +35,7 @@ import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { useEventStore } from "@/stores/eventStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
+import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -91,12 +92,12 @@ const Events = () => {
           .eq('event_id', event.id);
         
         const orders = data || [];
-        const paidOrders = orders.filter((o) => o.is_paid || o.paid_externally);
+        const paidOrders = orders.filter((o) => isOrderMarkedPaid(o));
         
         stats.push({
           eventId: event.id,
           totalOrders: orders.length,
-          unpaidOrders: orders.filter((o) => !o.is_paid && !o.paid_externally).length,
+          unpaidOrders: orders.filter((o) => !isOrderMarkedPaid(o)).length,
           paidOrders: paidOrders.length,
           missingShopify: -1, // -1 = loading
         });

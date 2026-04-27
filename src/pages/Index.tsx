@@ -21,6 +21,7 @@ import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
+import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,7 +93,7 @@ const Index = () => {
   const filteredOrders = orders.filter((o) => {
     // Stage/unpaid filter
     if (selectedStage === "unpaid") {
-      if (o.is_paid) return false;
+      if (isOrderMarkedPaid(o)) return false;
     } else if (selectedStage !== "all") {
       if (o.stage !== selectedStage) return false;
     }
