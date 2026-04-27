@@ -3,7 +3,7 @@ import { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { DbOrder, DbOrderProduct, DbCustomer, DiscountType } from '@/types/database';
 import { OrderStage, isOrderComplete } from '@/types/order';
-import { isPaidOrderStage, paidOrderStages } from '@/lib/orderPaymentStages';
+import { isOrderMarkedPaid, isPaidOrderStage, paidOrderStages } from '@/lib/orderPaymentStages';
 import { toast } from 'sonner';
 import { Json } from '@/integrations/supabase/types';
 import { fetchDbOrderById, mapDbOrder, mergeDbOrder } from './dbOrderRealtime';
@@ -613,16 +613,16 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     return get().orders.find(
       (o) => o.event_id === eventId && 
              o.customer_id === customerId && 
-             !o.is_paid
+             !isOrderMarkedPaid(o)
     );
   },
 
   getUnpaidOrdersCount: (eventId) => {
     const orders = get().orders;
     if (eventId) {
-      return orders.filter((o) => o.event_id === eventId && !o.is_paid).length;
+      return orders.filter((o) => o.event_id === eventId && !isOrderMarkedPaid(o)).length;
     }
-    return orders.filter((o) => !o.is_paid).length;
+    return orders.filter((o) => !isOrderMarkedPaid(o)).length;
   },
 
   regenerateCartLink: async (orderId) => {
