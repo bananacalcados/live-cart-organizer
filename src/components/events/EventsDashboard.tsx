@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DbOrderProduct, DiscountType } from "@/types/database";
+import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import {
   DollarSign, TrendingUp, Package, ShoppingCart, Receipt,
   CheckCircle, AlertCircle, BarChart3, Calendar as CalendarIcon
@@ -125,7 +126,7 @@ export function EventsDashboard() {
 
   const metrics = useMemo(() => {
     const total = orders.length;
-    const paid = orders.filter((o) => o.is_paid || o.paid_externally);
+    const paid = orders.filter((o) => isOrderMarkedPaid(o));
     const paidCount = paid.length;
     const unpaidCount = total - paidCount;
 
@@ -146,7 +147,7 @@ export function EventsDashboard() {
       const val = calculateOrderValue(o);
       byEvent[o.event_id].total += val;
       byEvent[o.event_id].orders += 1;
-      if (o.is_paid || o.paid_externally) byEvent[o.event_id].received += val;
+        if (isOrderMarkedPaid(o)) byEvent[o.event_id].received += val;
     }
     const chartData = Object.values(byEvent).sort((a, b) => b.total - a.total);
 
