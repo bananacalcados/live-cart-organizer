@@ -343,7 +343,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     const postPaidStages = paidOrderStages.filter((stage) => stage !== 'paid');
     
     // If moving away from paid manually to a pre-paid stage, clear payment flags
-    if (newStage !== 'paid' && !postPaidStages.includes(newStage) && order.is_paid && order.stage === 'paid') {
+    if (newStage !== 'paid' && !isPaidOrderStage(newStage) && order.is_paid && order.stage === 'paid') {
       updates.is_paid = false;
       updates.paid_at = null;
       stateUpdates.is_paid = false;
