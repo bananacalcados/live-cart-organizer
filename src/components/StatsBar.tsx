@@ -1,5 +1,6 @@
 import { Package, DollarSign, TrendingUp, AlertCircle, CheckCircle, Receipt } from "lucide-react";
 import { DbOrder } from "@/types/database";
+import { isPaidOrderStage } from "@/lib/orderPaymentStages";
 
 interface StatsBarProps {
   orders: DbOrder[];
@@ -22,9 +23,7 @@ const calculateOrderValue = (order: DbOrder) => {
 export function StatsBar({ orders }: StatsBarProps) {
   const totalOrders = orders.length;
   
-  const paidOrders = orders.filter(
-    (o) => o.stage === "paid" || o.stage === "shipped" || o.stage === "awaiting_shipment" || o.stage === "store_pickup" || o.stage === "awaiting_mototaxi" || o.stage === "completed"
-  );
+  const paidOrders = orders.filter((o) => o.is_paid || o.paid_externally || isPaidOrderStage(o.stage));
   const paidOrdersCount = paidOrders.length;
   const unpaidOrdersCount = totalOrders - paidOrdersCount;
   
