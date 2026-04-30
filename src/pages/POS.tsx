@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
   ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3, SearchX,
-  Menu, X, Package, Globe, Lock, Loader2, CreditCard, Flame, Truck
+  Menu, X, Package, Globe, Lock, Loader2, CreditCard, Flame, Truck, Users
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,10 +30,11 @@ import { POSSellerDashboard } from "@/components/pos/POSSellerDashboard";
 import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineSales } from "@/components/pos/POSOnlineSales";
 import { POSCheckoutMonitor } from "@/components/pos/POSCheckoutMonitor";
+import { POSCustomer360 } from "@/components/pos/POSCustomer360";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "seller-dashboard";
+type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "seller-dashboard" | "customers";
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
 const CONFIG_PIN = "1530";
@@ -46,6 +47,7 @@ const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badg
   { id: "shipments", label: "Envios", icon: Truck, priority: true, badge: true },
   { id: "pickups", label: "Retiradas", icon: Package, priority: true, badge: true },
   { id: "cash", label: "Caixa", icon: DollarSign, priority: true },
+  { id: "customers", label: "Clientes", icon: Users },
   { id: "returns", label: "Trocas", icon: RotateCcw },
   { id: "requests", label: "Solicitações", icon: ArrowRightLeft, badge: true },
   { id: "chat", label: "Chat", icon: MessageSquare },
@@ -267,6 +269,7 @@ export default function POS() {
         {section === "slowmoving" && <POSSlowMovingProducts storeId={selectedStore} />}
         {section === "shipments" && <POSShipments storeId={selectedStore} />}
         {section === "seller-dashboard" && <POSSellerDashboard storeId={selectedStore} />}
+        {section === "customers" && <POSCustomer360 storeId={selectedStore} />}
       </div>
 
       {/* Config PIN Dialog */}
