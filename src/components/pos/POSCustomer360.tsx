@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Search, User, Phone, FileText, Copy, Gift, ShoppingBag, Loader2, CalendarClock, Store as StoreIcon, Sparkles, Star, TrendingUp } from "lucide-react";
+import { Search, User, Phone, FileText, Copy, Gift, ShoppingBag, Loader2, CalendarClock, Store as StoreIcon, Sparkles, Star, TrendingUp, Wallet, AlertCircle } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import { buildPhoneVariations, normalizeBRPhone } from "@/lib/phoneUtils";
 
@@ -57,6 +58,10 @@ interface SaleRow {
   store_id: string;
   seller_id: string | null;
   invoice_number: string | null;
+  crediario_status?: string | null;
+  crediario_due_date?: string | null;
+  crediario_paid_at?: string | null;
+  crediario_paid_amount?: number | null;
   pos_sale_items?: { product_name: string; size: string | null; quantity: number; unit_price: number }[];
 }
 
@@ -165,7 +170,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
 
       const salesPromise = supabase
         .from("pos_sales")
-        .select("id, created_at, total, discount, status, payment_method, store_id, seller_id, invoice_number, pos_sale_items(product_name, size, quantity, unit_price)")
+        .select("id, created_at, total, discount, status, payment_method, store_id, seller_id, invoice_number, crediario_status, crediario_due_date, crediario_paid_at, crediario_paid_amount, pos_sale_items(product_name, size, quantity, unit_price)")
         .eq("customer_id", c.id)
         .order("created_at", { ascending: false })
         .limit(50);
@@ -278,6 +283,36 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
     ? npsRespondida.reduce((a, n) => a + (n.score || 0), 0) / npsRespondida.length
     : null;
 
+  // Crediário (open installments)
+  const crediario = useMemo(() => {
+    const open = sales.filter(s => s.crediario_status && !["paid", "pago"].includes((s.crediario_status || "").toLowerCase()) && (s.payment_method || "").toLowerCase().includes("credi"));
+    const overdue = open.filter(s => s.crediario_due_date && new Date(s.crediario_due_date) < new Date());
+    const totalOpen = open.reduce((a, s) => a + Number(s.total || 0) - Number(s.crediario_paid_amount || 0), 0);
+    const paid = sales.filter(s => (s.payment_method || "").toLowerCase().includes("credi") && s.crediario_paid_at);
+    return { open, overdue, totalOpen, paid };
+  }, [sales]);
+
+  // Monthly evolution chart data (last 12 months)
+  const monthlyEvolution = useMemo(() => {
+    const map: Record<string, { month: string; total: number; count: number }> = {};
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+      map[key] = { month: label, total: 0, count: 0 };
+    }
+    sales.forEach(s => {
+      const d = new Date(s.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (map[key] && !["cancelled", "canceled"].includes(s.status)) {
+        map[key].total += Number(s.total || 0);
+        map[key].count += 1;
+      }
+    });
+    return Object.values(map);
+  }, [sales]);
+
   return (
     <div className="flex-1 flex flex-col bg-pos-black text-pos-white overflow-hidden">
       {/* Header / Search */}
@@ -293,7 +328,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             placeholder="Buscar por Nome, CPF, WhatsApp ou Email…"
-            className="bg-pos-white/5 border-pos-white/15 text-pos-white placeholder:text-pos-white/40"
+            className="bg-white text-pos-black border-pos-yellow/40 placeholder:text-pos-black/40 focus-visible:ring-pos-yellow"
           />
           <Button onClick={() => handleSearch()} disabled={searching} className="bg-pos-yellow text-pos-black hover:bg-pos-yellow/90">
             {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
@@ -394,6 +429,12 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
                   </TabsTrigger>
                   <TabsTrigger value="history" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
                     <ShoppingBag className="h-3 w-3 mr-1" /> Compras ({sales.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="evolution" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
+                    <TrendingUp className="h-3 w-3 mr-1" /> Evolução
+                  </TabsTrigger>
+                  <TabsTrigger value="crediario" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
+                    <Wallet className="h-3 w-3 mr-1" /> Crediário {crediario.open.length > 0 && <span className="ml-1 bg-red-500/30 text-red-300 px-1.5 rounded-full text-[10px]">{crediario.open.length}</span>}
                   </TabsTrigger>
                   <TabsTrigger value="loyalty" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
                     Fidelidade
@@ -576,7 +617,120 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
                   ))}
                 </TabsContent>
 
-                {/* LOYALTY */}
+                {/* EVOLUTION */}
+                <TabsContent value="evolution" className="space-y-3">
+                  <Card className="p-4 bg-pos-white/5 border-pos-white/10">
+                    <h4 className="text-sm font-bold text-pos-white mb-3 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-pos-yellow" /> Evolução de Compras (12 meses)
+                    </h4>
+                    {sales.length === 0 ? (
+                      <p className="text-xs text-pos-white/50 text-center py-8">Sem histórico para exibir.</p>
+                    ) : (
+                      <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={monthlyEvolution} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(0,0%,20%)" />
+                            <XAxis dataKey="month" stroke="hsl(0,0%,60%)" fontSize={10} />
+                            <YAxis stroke="hsl(0,0%,60%)" fontSize={10} tickFormatter={(v) => `R$${v}`} />
+                            <RTooltip
+                              contentStyle={{ backgroundColor: "hsl(0,0%,8%)", border: "1px solid hsl(48,100%,50%)", borderRadius: 8, color: "white" }}
+                              formatter={(v: any) => fmtMoney(Number(v))}
+                            />
+                            <Line type="monotone" dataKey="total" stroke="hsl(48,100%,50%)" strokeWidth={2} dot={{ fill: "hsl(48,100%,50%)", r: 3 }} activeDot={{ r: 5 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </Card>
+                  <Card className="p-3 bg-pos-white/5 border-pos-white/10">
+                    <p className="text-[10px] uppercase text-pos-white/50 mb-2">Resumo dos últimos 12 meses</p>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <p className="text-xs text-pos-white/60">Faturado</p>
+                        <p className="text-sm font-bold text-pos-yellow">{fmtMoney(monthlyEvolution.reduce((a, m) => a + m.total, 0))}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-pos-white/60">Compras</p>
+                        <p className="text-sm font-bold text-pos-white">{monthlyEvolution.reduce((a, m) => a + m.count, 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-pos-white/60">Meses Ativos</p>
+                        <p className="text-sm font-bold text-pos-white">{monthlyEvolution.filter(m => m.count > 0).length}</p>
+                      </div>
+                    </div>
+                  </Card>
+                </TabsContent>
+
+                {/* CREDIÁRIO */}
+                <TabsContent value="crediario" className="space-y-2">
+                  {crediario.open.length === 0 && crediario.paid.length === 0 ? (
+                    <Card className="p-6 text-center bg-pos-white/5 border-pos-white/10 text-pos-white/50">
+                      Cliente nunca comprou no crediário.
+                    </Card>
+                  ) : (
+                    <>
+                      {crediario.open.length > 0 && (
+                        <Card className="p-4 bg-gradient-to-br from-red-500/10 to-pos-white/5 border-red-500/30">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-sm font-bold text-pos-white flex items-center gap-2">
+                              <AlertCircle className="h-4 w-4 text-red-400" /> Pendências em Aberto
+                            </h4>
+                            <Badge className="bg-red-500/30 text-red-300 border-0">{crediario.open.length}</Badge>
+                          </div>
+                          <p className="text-2xl font-bold text-red-400">{fmtMoney(crediario.totalOpen)}</p>
+                          {crediario.overdue.length > 0 && (
+                            <p className="text-xs text-amber-400 mt-1">⚠️ {crediario.overdue.length} parcela(s) vencida(s)</p>
+                          )}
+                        </Card>
+                      )}
+                      {crediario.open.map(s => {
+                        const isOverdue = s.crediario_due_date && new Date(s.crediario_due_date) < new Date();
+                        const remaining = Number(s.total || 0) - Number(s.crediario_paid_amount || 0);
+                        return (
+                          <Card key={s.id} className={`p-3 border ${isOverdue ? "bg-red-500/10 border-red-500/30" : "bg-pos-white/5 border-pos-white/10"}`}>
+                            <div className="flex items-start justify-between gap-2 flex-wrap">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-pos-white">{fmtDateTime(s.created_at)}</p>
+                                <p className="text-xs text-pos-white/60 mt-0.5">
+                                  {stores[s.store_id] || "Loja"} {s.invoice_number ? `· NF ${s.invoice_number}` : ""}
+                                </p>
+                                {s.crediario_due_date && (
+                                  <p className={`text-xs mt-1 flex items-center gap-1 ${isOverdue ? "text-red-400" : "text-pos-white/70"}`}>
+                                    <CalendarClock className="h-3 w-3" /> Vence em {fmtDate(s.crediario_due_date)} {isOverdue && "(vencido)"}
+                                  </p>
+                                )}
+                                <Badge variant="outline" className="mt-1 text-[10px] border-pos-white/20 text-pos-white/70">{s.crediario_status}</Badge>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-base font-bold text-red-400">{fmtMoney(remaining)}</p>
+                                {Number(s.crediario_paid_amount || 0) > 0 && (
+                                  <p className="text-[10px] text-pos-white/50">Pago: {fmtMoney(Number(s.crediario_paid_amount))}</p>
+                                )}
+                                <p className="text-[10px] text-pos-white/40">Total: {fmtMoney(Number(s.total))}</p>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
+                      {crediario.paid.length > 0 && (
+                        <details className="mt-3">
+                          <summary className="text-xs text-pos-white/50 cursor-pointer hover:text-pos-white/70">
+                            Ver {crediario.paid.length} crediário(s) quitado(s)
+                          </summary>
+                          <div className="space-y-1 mt-2">
+                            {crediario.paid.map(s => (
+                              <div key={s.id} className="text-xs p-2 bg-emerald-500/5 border border-emerald-500/20 rounded flex justify-between text-pos-white/70">
+                                <span>{fmtDate(s.created_at)} · {fmtMoney(Number(s.total))}</span>
+                                <span className="text-emerald-400">Quitado em {s.crediario_paid_at ? fmtDate(s.crediario_paid_at) : "—"}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                    </>
+                  )}
+                </TabsContent>
+
                 <TabsContent value="loyalty">
                   {!loyalty ? (
                     <Card className="p-6 text-center bg-pos-white/5 border-pos-white/10 text-pos-white/50">
