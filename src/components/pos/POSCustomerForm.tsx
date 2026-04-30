@@ -291,7 +291,20 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
           </div>
         </ScrollArea>
 
-        <div className="p-4 border-t border-pos-orange/20 flex items-center justify-end gap-2">
+        <div className="p-4 border-t border-pos-orange/20 flex items-center justify-end gap-2 flex-wrap">
+          {existingCustomer?.id && (
+            <Button
+              variant="outline"
+              className="border-pos-yellow/40 text-pos-yellow hover:bg-pos-yellow/10 gap-2"
+              onClick={() => {
+                const q = existingCustomer.cpf || existingCustomer.whatsapp || existingCustomer.name || "";
+                window.dispatchEvent(new CustomEvent("pos:open-customer-360", { detail: { query: q } }));
+                onOpenChange(false);
+              }}
+            >
+              <UserSearch className="h-4 w-4" /> Ver Perfil 360°
+            </Button>
+          )}
           <Button variant="ghost" className="text-pos-white/70 hover:text-pos-orange" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={handleSave} disabled={saving}>
             <Save className="h-4 w-4" /> {saving ? 'Salvando...' : 'Salvar Cliente'}
