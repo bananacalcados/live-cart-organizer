@@ -149,11 +149,12 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
     setCashbacks([]);
     setSales([]);
     setLoyalty(null);
+    setNpsList([]);
+    setAiInsights(null);
     try {
       const phoneVariations = c.whatsapp ? buildPhoneVariations(c.whatsapp) : [];
       const last8 = c.whatsapp ? c.whatsapp.replace(/\D/g, "").slice(-8) : null;
 
-      // Cashbacks — match by phone variations (last 8 covers 9th-digit cases)
       const cashbackPromise = last8
         ? supabase
             .from("internal_cashback")
@@ -162,7 +163,6 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             .order("expires_at", { ascending: true })
         : Promise.resolve({ data: [], error: null } as any);
 
-      // Sales — by customer_id
       const salesPromise = supabase
         .from("pos_sales")
         .select("id, created_at, total, discount, status, payment_method, store_id, seller_id, invoice_number, pos_sale_items(product_name, size, quantity, unit_price)")
@@ -170,7 +170,6 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
         .order("created_at", { ascending: false })
         .limit(50);
 
-      // Loyalty — by phone variations
       const loyaltyPromise = phoneVariations.length
         ? supabase
             .from("customer_loyalty_points")
@@ -178,13 +177,23 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             .in("customer_phone", phoneVariations)
         : Promise.resolve({ data: [], error: null } as any);
 
-      // Sellers map
+      // NPS — by phone variations
+      const npsPromise = phoneVariations.length
+        ? supabase
+            .from("chat_nps_surveys")
+            .select("id, score, feedback, sent_at, responded_at")
+            .in("phone", phoneVariations)
+            .order("sent_at", { ascending: false })
+            .limit(20)
+        : Promise.resolve({ data: [], error: null } as any);
+
       const sellersPromise = supabase.from("pos_sellers").select("id, name");
 
-      const [cb, sl, ly, sel] = await Promise.all([cashbackPromise, salesPromise, loyaltyPromise, sellersPromise]);
+      const [cb, sl, ly, np, sel] = await Promise.all([cashbackPromise, salesPromise, loyaltyPromise, npsPromise, sellersPromise]);
 
       setCashbacks((cb.data as CashbackRow[]) || []);
       setSales((sl.data as SaleRow[]) || []);
+      setNpsList((np.data as NpsRow[]) || []);
       const lyData = (ly.data as any[]) || [];
       if (lyData.length) {
         const total = lyData.reduce((acc, r) => acc + (r.total_points || 0), 0);
@@ -199,6 +208,31 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
       toast.error("Erro ao carregar perfil: " + e.message);
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  const generateInsights = async () => {
+    if (!selected) return;
+    setAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-customer-360-insights", {
+        body: {
+          customer: {
+            name: selected.name,
+            city: selected.city,
+          },
+          sales,
+          cashbacks,
+        },
+      });
+      if (error) throw error;
+      if (data?.error === "rate_limited") { toast.error("Limite de IA atingido. Tente em alguns segundos."); return; }
+      if (data?.error === "credits_exhausted") { toast.error("Créditos de IA esgotados. Adicione créditos na Lovable AI."); return; }
+      setAiInsights(data?.insights || null);
+    } catch (e: any) {
+      toast.error("Erro IA: " + (e?.message || ""));
+    } finally {
+      setAiLoading(false);
     }
   };
 
