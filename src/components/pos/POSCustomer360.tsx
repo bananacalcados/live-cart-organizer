@@ -64,8 +64,8 @@ const fmtMoney = (v: number) => v.toLocaleString("pt-BR", { style: "currency", c
 const fmtDate = (d: string) => new Date(d).toLocaleDateString("pt-BR");
 const fmtDateTime = (d: string) => new Date(d).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
-export function POSCustomer360({ storeId }: Props) {
-  const [query, setQuery] = useState("");
+export function POSCustomer360({ storeId, initialQuery }: Props) {
+  const [query, setQuery] = useState(initialQuery || "");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<CustomerRow[]>([]);
   const [selected, setSelected] = useState<CustomerRow | null>(null);
@@ -73,9 +73,14 @@ export function POSCustomer360({ storeId }: Props) {
   const [cashbacks, setCashbacks] = useState<CashbackRow[]>([]);
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [loyalty, setLoyalty] = useState<{ total_points: number; lifetime_points: number; expires_at: string } | null>(null);
+  const [npsList, setNpsList] = useState<NpsRow[]>([]);
   const [stores, setStores] = useState<Record<string, string>>({});
   const [sellers, setSellers] = useState<Record<string, string>>({});
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // AI insights state
+  const [aiInsights, setAiInsights] = useState<AiInsights | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Load store map once
   useEffect(() => {
