@@ -6,12 +6,24 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Search, User, Phone, FileText, Copy, Gift, ShoppingBag, Loader2, CalendarClock, Store as StoreIcon } from "lucide-react";
+import { Search, User, Phone, FileText, Copy, Gift, ShoppingBag, Loader2, CalendarClock, Store as StoreIcon, Sparkles, Star, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { buildPhoneVariations, normalizeBRPhone } from "@/lib/phoneUtils";
 
 interface Props {
   storeId: string;
+  initialQuery?: string;
+}
+
+interface NpsRow { id: string; score: number | null; feedback: string | null; sent_at: string; responded_at: string | null }
+interface AiInsights {
+  resumo?: string;
+  tamanho_preferido?: string;
+  categorias_favoritas?: string[];
+  ticket_medio_perfil?: string;
+  frequencia?: string;
+  proxima_acao?: string;
+  alertas?: string[];
 }
 
 interface CustomerRow {
@@ -52,8 +64,8 @@ const fmtMoney = (v: number) => v.toLocaleString("pt-BR", { style: "currency", c
 const fmtDate = (d: string) => new Date(d).toLocaleDateString("pt-BR");
 const fmtDateTime = (d: string) => new Date(d).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
-export function POSCustomer360({ storeId }: Props) {
-  const [query, setQuery] = useState("");
+export function POSCustomer360({ storeId, initialQuery }: Props) {
+  const [query, setQuery] = useState(initialQuery || "");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<CustomerRow[]>([]);
   const [selected, setSelected] = useState<CustomerRow | null>(null);
@@ -61,9 +73,14 @@ export function POSCustomer360({ storeId }: Props) {
   const [cashbacks, setCashbacks] = useState<CashbackRow[]>([]);
   const [sales, setSales] = useState<SaleRow[]>([]);
   const [loyalty, setLoyalty] = useState<{ total_points: number; lifetime_points: number; expires_at: string } | null>(null);
+  const [npsList, setNpsList] = useState<NpsRow[]>([]);
   const [stores, setStores] = useState<Record<string, string>>({});
   const [sellers, setSellers] = useState<Record<string, string>>({});
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // AI insights state
+  const [aiInsights, setAiInsights] = useState<AiInsights | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Load store map once
   useEffect(() => {
@@ -74,8 +91,17 @@ export function POSCustomer360({ storeId }: Props) {
     });
   }, []);
 
-  const handleSearch = async () => {
-    const q = query.trim();
+  // Auto-search when initialQuery is provided (deep-link from customer form)
+  useEffect(() => {
+    if (initialQuery && initialQuery.trim().length >= 3) {
+      setQuery(initialQuery);
+      setTimeout(() => { handleSearch(initialQuery); }, 50);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
+
+  const handleSearch = async (override?: string) => {
+    const q = (override ?? query).trim();
     if (q.length < 3) {
       toast.error("Digite ao menos 3 caracteres");
       return;
@@ -123,11 +149,12 @@ export function POSCustomer360({ storeId }: Props) {
     setCashbacks([]);
     setSales([]);
     setLoyalty(null);
+    setNpsList([]);
+    setAiInsights(null);
     try {
       const phoneVariations = c.whatsapp ? buildPhoneVariations(c.whatsapp) : [];
       const last8 = c.whatsapp ? c.whatsapp.replace(/\D/g, "").slice(-8) : null;
 
-      // Cashbacks — match by phone variations (last 8 covers 9th-digit cases)
       const cashbackPromise = last8
         ? supabase
             .from("internal_cashback")
@@ -136,7 +163,6 @@ export function POSCustomer360({ storeId }: Props) {
             .order("expires_at", { ascending: true })
         : Promise.resolve({ data: [], error: null } as any);
 
-      // Sales — by customer_id
       const salesPromise = supabase
         .from("pos_sales")
         .select("id, created_at, total, discount, status, payment_method, store_id, seller_id, invoice_number, pos_sale_items(product_name, size, quantity, unit_price)")
@@ -144,7 +170,6 @@ export function POSCustomer360({ storeId }: Props) {
         .order("created_at", { ascending: false })
         .limit(50);
 
-      // Loyalty — by phone variations
       const loyaltyPromise = phoneVariations.length
         ? supabase
             .from("customer_loyalty_points")
@@ -152,13 +177,23 @@ export function POSCustomer360({ storeId }: Props) {
             .in("customer_phone", phoneVariations)
         : Promise.resolve({ data: [], error: null } as any);
 
-      // Sellers map
+      // NPS — by phone variations
+      const npsPromise = phoneVariations.length
+        ? supabase
+            .from("chat_nps_surveys")
+            .select("id, score, feedback, sent_at, responded_at")
+            .in("phone", phoneVariations)
+            .order("sent_at", { ascending: false })
+            .limit(20)
+        : Promise.resolve({ data: [], error: null } as any);
+
       const sellersPromise = supabase.from("pos_sellers").select("id, name");
 
-      const [cb, sl, ly, sel] = await Promise.all([cashbackPromise, salesPromise, loyaltyPromise, sellersPromise]);
+      const [cb, sl, ly, np, sel] = await Promise.all([cashbackPromise, salesPromise, loyaltyPromise, npsPromise, sellersPromise]);
 
       setCashbacks((cb.data as CashbackRow[]) || []);
       setSales((sl.data as SaleRow[]) || []);
+      setNpsList((np.data as NpsRow[]) || []);
       const lyData = (ly.data as any[]) || [];
       if (lyData.length) {
         const total = lyData.reduce((acc, r) => acc + (r.total_points || 0), 0);
@@ -173,6 +208,31 @@ export function POSCustomer360({ storeId }: Props) {
       toast.error("Erro ao carregar perfil: " + e.message);
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  const generateInsights = async () => {
+    if (!selected) return;
+    setAiLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-customer-360-insights", {
+        body: {
+          customer: {
+            name: selected.name,
+            city: selected.city,
+          },
+          sales,
+          cashbacks,
+        },
+      });
+      if (error) throw error;
+      if (data?.error === "rate_limited") { toast.error("Limite de IA atingido. Tente em alguns segundos."); return; }
+      if (data?.error === "credits_exhausted") { toast.error("Créditos de IA esgotados. Adicione créditos na Lovable AI."); return; }
+      setAiInsights(data?.insights || null);
+    } catch (e: any) {
+      toast.error("Erro IA: " + (e?.message || ""));
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -194,6 +254,30 @@ export function POSCustomer360({ storeId }: Props) {
   const activeCashbacks = cashbacks.filter(c => !c.is_used && new Date(c.expires_at) > new Date());
   const expiredOrUsedCashbacks = cashbacks.filter(c => c.is_used || new Date(c.expires_at) <= new Date());
 
+  // Computed insights from history (offline, no AI)
+  const computedInsights = useMemo(() => {
+    const sizeCount: Record<string, number> = {};
+    const productCount: Record<string, number> = {};
+    const paymentCount: Record<string, number> = {};
+    sales.forEach(s => {
+      if (s.payment_method) paymentCount[s.payment_method] = (paymentCount[s.payment_method] || 0) + 1;
+      (s.pos_sale_items || []).forEach(it => {
+        if (it.size) sizeCount[it.size] = (sizeCount[it.size] || 0) + (it.quantity || 1);
+        const firstWord = (it.product_name || "").split(" ")[0];
+        if (firstWord) productCount[firstWord] = (productCount[firstWord] || 0) + (it.quantity || 1);
+      });
+    });
+    const topSizes = Object.entries(sizeCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const topProducts = Object.entries(productCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const topPayment = Object.entries(paymentCount).sort((a, b) => b[1] - a[1])[0];
+    return { topSizes, topProducts, topPayment };
+  }, [sales]);
+
+  const npsRespondida = npsList.filter(n => n.responded_at && n.score !== null);
+  const npsAvg = npsRespondida.length
+    ? npsRespondida.reduce((a, n) => a + (n.score || 0), 0) / npsRespondida.length
+    : null;
+
   return (
     <div className="flex-1 flex flex-col bg-pos-black text-pos-white overflow-hidden">
       {/* Header / Search */}
@@ -211,7 +295,7 @@ export function POSCustomer360({ storeId }: Props) {
             placeholder="Buscar por Nome, CPF, WhatsApp ou Email…"
             className="bg-pos-white/5 border-pos-white/15 text-pos-white placeholder:text-pos-white/40"
           />
-          <Button onClick={handleSearch} disabled={searching} className="bg-pos-yellow text-pos-black hover:bg-pos-yellow/90">
+          <Button onClick={() => handleSearch()} disabled={searching} className="bg-pos-yellow text-pos-black hover:bg-pos-yellow/90">
             {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           </Button>
         </div>
@@ -300,8 +384,11 @@ export function POSCustomer360({ storeId }: Props) {
             {loadingDetail ? (
               <div className="flex items-center justify-center py-12 text-pos-white/50"><Loader2 className="h-6 w-6 animate-spin mr-2" />Carregando perfil…</div>
             ) : (
-              <Tabs defaultValue="cashback" className="w-full">
-                <TabsList className="bg-pos-white/5 border border-pos-white/10">
+              <Tabs defaultValue="insights" className="w-full">
+                <TabsList className="bg-pos-white/5 border border-pos-white/10 flex-wrap h-auto">
+                  <TabsTrigger value="insights" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
+                    <Sparkles className="h-3 w-3 mr-1" /> Insights
+                  </TabsTrigger>
                   <TabsTrigger value="cashback" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
                     <Gift className="h-3 w-3 mr-1" /> Cashback ({activeCashbacks.length})
                   </TabsTrigger>
@@ -311,7 +398,90 @@ export function POSCustomer360({ storeId }: Props) {
                   <TabsTrigger value="loyalty" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
                     Fidelidade
                   </TabsTrigger>
+                  <TabsTrigger value="nps" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
+                    <Star className="h-3 w-3 mr-1" /> NPS {npsRespondida.length > 0 && `(${npsRespondida.length})`}
+                  </TabsTrigger>
                 </TabsList>
+
+                {/* INSIGHTS */}
+                <TabsContent value="insights" className="space-y-3">
+                  <Card className="p-4 bg-pos-white/5 border-pos-white/10">
+                    <h4 className="text-sm font-bold text-pos-white mb-3 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-pos-yellow" /> Preferências (do histórico)
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-[10px] uppercase text-pos-white/50">Tamanhos mais comprados</p>
+                        {computedInsights.topSizes.length === 0 ? (
+                          <p className="text-xs text-pos-white/40 mt-1">Sem dados</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {computedInsights.topSizes.map(([s, n]) => (
+                              <Badge key={s} className="bg-pos-yellow/20 text-pos-yellow border-0">{s} <span className="ml-1 opacity-60">×{n}</span></Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-pos-white/50">Produtos favoritos</p>
+                        {computedInsights.topProducts.length === 0 ? (
+                          <p className="text-xs text-pos-white/40 mt-1">Sem dados</p>
+                        ) : (
+                          <ul className="text-xs text-pos-white/80 mt-1 space-y-0.5">
+                            {computedInsights.topProducts.map(([p, n]) => (
+                              <li key={p}>• {p} <span className="text-pos-white/40">×{n}</span></li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-pos-white/50">Pagamento preferido</p>
+                        <p className="text-sm text-pos-white mt-1">{computedInsights.topPayment ? computedInsights.topPayment[0] : "—"}</p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-4 bg-gradient-to-br from-pos-yellow/10 to-pos-white/5 border-pos-yellow/30">
+                    <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                      <h4 className="text-sm font-bold text-pos-white flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-pos-yellow" /> Análise IA (Bia)
+                      </h4>
+                      <Button size="sm" onClick={generateInsights} disabled={aiLoading || sales.length === 0} className="bg-pos-yellow text-pos-black hover:bg-pos-yellow/90">
+                        {aiLoading ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Analisando…</> : <><Sparkles className="h-3 w-3 mr-1" /> {aiInsights ? "Gerar Novamente" : "Gerar Análise"}</>}
+                      </Button>
+                    </div>
+                    {!aiInsights && !aiLoading && (
+                      <p className="text-xs text-pos-white/50">Clique em "Gerar Análise" para uma leitura rápida do cliente com sugestão da próxima ação.</p>
+                    )}
+                    {aiInsights && (
+                      <div className="space-y-2 text-sm">
+                        {aiInsights.resumo && <p className="text-pos-white"><span className="text-pos-yellow font-bold">Resumo:</span> {aiInsights.resumo}</p>}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {aiInsights.tamanho_preferido && <p><span className="text-pos-white/50">Tamanho:</span> <span className="text-pos-white">{aiInsights.tamanho_preferido}</span></p>}
+                          {aiInsights.frequencia && <p><span className="text-pos-white/50">Frequência:</span> <span className="text-pos-white">{aiInsights.frequencia}</span></p>}
+                          {aiInsights.ticket_medio_perfil && <p><span className="text-pos-white/50">Ticket:</span> <span className="text-pos-white">{aiInsights.ticket_medio_perfil}</span></p>}
+                        </div>
+                        {aiInsights.categorias_favoritas?.length ? (
+                          <p className="text-xs"><span className="text-pos-white/50">Categorias:</span> <span className="text-pos-white">{aiInsights.categorias_favoritas.join(", ")}</span></p>
+                        ) : null}
+                        {aiInsights.proxima_acao && (
+                          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2 mt-2">
+                            <p className="text-[10px] uppercase text-emerald-400">Próxima ação</p>
+                            <p className="text-sm text-pos-white">{aiInsights.proxima_acao}</p>
+                          </div>
+                        )}
+                        {aiInsights.alertas?.length ? (
+                          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">
+                            <p className="text-[10px] uppercase text-amber-400">Alertas</p>
+                            <ul className="text-xs text-pos-white space-y-0.5 mt-1">
+                              {aiInsights.alertas.map((a, i) => <li key={i}>• {a}</li>)}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </Card>
+                </TabsContent>
 
                 {/* CASHBACK */}
                 <TabsContent value="cashback" className="space-y-2">
@@ -430,6 +600,56 @@ export function POSCustomer360({ storeId }: Props) {
                         </p>
                       )}
                     </Card>
+                  )}
+                </TabsContent>
+
+                {/* NPS */}
+                <TabsContent value="nps" className="space-y-2">
+                  {npsList.length === 0 ? (
+                    <Card className="p-6 text-center bg-pos-white/5 border-pos-white/10 text-pos-white/50">
+                      Cliente nunca recebeu pesquisa NPS.
+                    </Card>
+                  ) : (
+                    <>
+                      {npsAvg !== null && (
+                        <Card className="p-4 bg-gradient-to-br from-pos-yellow/10 to-pos-white/5 border-pos-yellow/30">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-[10px] uppercase text-pos-white/50">NPS Médio</p>
+                              <p className="text-2xl font-bold text-pos-yellow">{npsAvg.toFixed(1)} <span className="text-sm text-pos-white/50">/ 10</span></p>
+                            </div>
+                            <Badge className={
+                              npsAvg >= 9 ? "bg-emerald-500/20 text-emerald-400 border-0" :
+                              npsAvg >= 7 ? "bg-amber-500/20 text-amber-400 border-0" :
+                              "bg-red-500/20 text-red-400 border-0"
+                            }>
+                              {npsAvg >= 9 ? "Promotor" : npsAvg >= 7 ? "Neutro" : "Detrator"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-pos-white/50 mt-2">{npsRespondida.length} pesquisa(s) respondida(s) de {npsList.length} enviada(s)</p>
+                        </Card>
+                      )}
+                      {npsList.map(n => (
+                        <Card key={n.id} className="p-3 bg-pos-white/5 border-pos-white/10">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-pos-white/50">{fmtDateTime(n.sent_at)}</p>
+                              {n.feedback && <p className="text-sm text-pos-white mt-1">"{n.feedback}"</p>}
+                              {!n.responded_at && <p className="text-xs text-pos-white/40 mt-1 italic">Não respondida</p>}
+                            </div>
+                            {n.score !== null && (
+                              <Badge className={
+                                n.score >= 9 ? "bg-emerald-500/20 text-emerald-400 border-0" :
+                                n.score >= 7 ? "bg-amber-500/20 text-amber-400 border-0" :
+                                "bg-red-500/20 text-red-400 border-0"
+                              }>
+                                {n.score}/10
+                              </Badge>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </>
                   )}
                 </TabsContent>
               </Tabs>
