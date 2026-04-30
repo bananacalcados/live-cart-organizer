@@ -254,6 +254,30 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
   const activeCashbacks = cashbacks.filter(c => !c.is_used && new Date(c.expires_at) > new Date());
   const expiredOrUsedCashbacks = cashbacks.filter(c => c.is_used || new Date(c.expires_at) <= new Date());
 
+  // Computed insights from history (offline, no AI)
+  const computedInsights = useMemo(() => {
+    const sizeCount: Record<string, number> = {};
+    const productCount: Record<string, number> = {};
+    const paymentCount: Record<string, number> = {};
+    sales.forEach(s => {
+      if (s.payment_method) paymentCount[s.payment_method] = (paymentCount[s.payment_method] || 0) + 1;
+      (s.pos_sale_items || []).forEach(it => {
+        if (it.size) sizeCount[it.size] = (sizeCount[it.size] || 0) + (it.quantity || 1);
+        const firstWord = (it.product_name || "").split(" ")[0];
+        if (firstWord) productCount[firstWord] = (productCount[firstWord] || 0) + (it.quantity || 1);
+      });
+    });
+    const topSizes = Object.entries(sizeCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const topProducts = Object.entries(productCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const topPayment = Object.entries(paymentCount).sort((a, b) => b[1] - a[1])[0];
+    return { topSizes, topProducts, topPayment };
+  }, [sales]);
+
+  const npsRespondida = npsList.filter(n => n.responded_at && n.score !== null);
+  const npsAvg = npsRespondida.length
+    ? npsRespondida.reduce((a, n) => a + (n.score || 0), 0) / npsRespondida.length
+    : null;
+
   return (
     <div className="flex-1 flex flex-col bg-pos-black text-pos-white overflow-hidden">
       {/* Header / Search */}
