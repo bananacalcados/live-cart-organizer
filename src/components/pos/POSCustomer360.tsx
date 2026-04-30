@@ -430,6 +430,12 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
                   <TabsTrigger value="history" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
                     <ShoppingBag className="h-3 w-3 mr-1" /> Compras ({sales.length})
                   </TabsTrigger>
+                  <TabsTrigger value="evolution" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
+                    <TrendingUp className="h-3 w-3 mr-1" /> Evolução
+                  </TabsTrigger>
+                  <TabsTrigger value="crediario" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
+                    <Wallet className="h-3 w-3 mr-1" /> Crediário {crediario.open.length > 0 && <span className="ml-1 bg-red-500/30 text-red-300 px-1.5 rounded-full text-[10px]">{crediario.open.length}</span>}
+                  </TabsTrigger>
                   <TabsTrigger value="loyalty" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
                     Fidelidade
                   </TabsTrigger>
