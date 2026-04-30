@@ -602,6 +602,56 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
                     </Card>
                   )}
                 </TabsContent>
+
+                {/* NPS */}
+                <TabsContent value="nps" className="space-y-2">
+                  {npsList.length === 0 ? (
+                    <Card className="p-6 text-center bg-pos-white/5 border-pos-white/10 text-pos-white/50">
+                      Cliente nunca recebeu pesquisa NPS.
+                    </Card>
+                  ) : (
+                    <>
+                      {npsAvg !== null && (
+                        <Card className="p-4 bg-gradient-to-br from-pos-yellow/10 to-pos-white/5 border-pos-yellow/30">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-[10px] uppercase text-pos-white/50">NPS Médio</p>
+                              <p className="text-2xl font-bold text-pos-yellow">{npsAvg.toFixed(1)} <span className="text-sm text-pos-white/50">/ 10</span></p>
+                            </div>
+                            <Badge className={
+                              npsAvg >= 9 ? "bg-emerald-500/20 text-emerald-400 border-0" :
+                              npsAvg >= 7 ? "bg-amber-500/20 text-amber-400 border-0" :
+                              "bg-red-500/20 text-red-400 border-0"
+                            }>
+                              {npsAvg >= 9 ? "Promotor" : npsAvg >= 7 ? "Neutro" : "Detrator"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-pos-white/50 mt-2">{npsRespondida.length} pesquisa(s) respondida(s) de {npsList.length} enviada(s)</p>
+                        </Card>
+                      )}
+                      {npsList.map(n => (
+                        <Card key={n.id} className="p-3 bg-pos-white/5 border-pos-white/10">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs text-pos-white/50">{fmtDateTime(n.sent_at)}</p>
+                              {n.feedback && <p className="text-sm text-pos-white mt-1">"{n.feedback}"</p>}
+                              {!n.responded_at && <p className="text-xs text-pos-white/40 mt-1 italic">Não respondida</p>}
+                            </div>
+                            {n.score !== null && (
+                              <Badge className={
+                                n.score >= 9 ? "bg-emerald-500/20 text-emerald-400 border-0" :
+                                n.score >= 7 ? "bg-amber-500/20 text-amber-400 border-0" :
+                                "bg-red-500/20 text-red-400 border-0"
+                              }>
+                                {n.score}/10
+                              </Badge>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </>
+                  )}
+                </TabsContent>
               </Tabs>
             )}
           </div>
