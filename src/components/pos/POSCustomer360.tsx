@@ -170,7 +170,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
 
       const salesPromise = supabase
         .from("pos_sales")
-        .select("id, created_at, total, discount, status, payment_method, store_id, seller_id, invoice_number, pos_sale_items(product_name, size, quantity, unit_price)")
+        .select("id, created_at, total, discount, status, payment_method, store_id, seller_id, invoice_number, crediario_status, crediario_due_date, crediario_paid_at, crediario_paid_amount, pos_sale_items(product_name, size, quantity, unit_price)")
         .eq("customer_id", c.id)
         .order("created_at", { ascending: false })
         .limit(50);
