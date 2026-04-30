@@ -100,8 +100,8 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery]);
 
-  const handleSearch = async () => {
-    const q = query.trim();
+  const handleSearch = async (override?: string) => {
+    const q = (override ?? query).trim();
     if (q.length < 3) {
       toast.error("Digite ao menos 3 caracteres");
       return;
