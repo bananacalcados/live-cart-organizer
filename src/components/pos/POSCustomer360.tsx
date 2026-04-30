@@ -6,12 +6,24 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Search, User, Phone, FileText, Copy, Gift, ShoppingBag, Loader2, CalendarClock, Store as StoreIcon } from "lucide-react";
+import { Search, User, Phone, FileText, Copy, Gift, ShoppingBag, Loader2, CalendarClock, Store as StoreIcon, Sparkles, Star, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { buildPhoneVariations, normalizeBRPhone } from "@/lib/phoneUtils";
 
 interface Props {
   storeId: string;
+  initialQuery?: string;
+}
+
+interface NpsRow { id: string; score: number | null; feedback: string | null; sent_at: string; responded_at: string | null }
+interface AiInsights {
+  resumo?: string;
+  tamanho_preferido?: string;
+  categorias_favoritas?: string[];
+  ticket_medio_perfil?: string;
+  frequencia?: string;
+  proxima_acao?: string;
+  alertas?: string[];
 }
 
 interface CustomerRow {
