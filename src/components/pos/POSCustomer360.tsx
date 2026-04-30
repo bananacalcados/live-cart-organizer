@@ -384,8 +384,11 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             {loadingDetail ? (
               <div className="flex items-center justify-center py-12 text-pos-white/50"><Loader2 className="h-6 w-6 animate-spin mr-2" />Carregando perfil…</div>
             ) : (
-              <Tabs defaultValue="cashback" className="w-full">
-                <TabsList className="bg-pos-white/5 border border-pos-white/10">
+              <Tabs defaultValue="insights" className="w-full">
+                <TabsList className="bg-pos-white/5 border border-pos-white/10 flex-wrap h-auto">
+                  <TabsTrigger value="insights" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
+                    <Sparkles className="h-3 w-3 mr-1" /> Insights
+                  </TabsTrigger>
                   <TabsTrigger value="cashback" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
                     <Gift className="h-3 w-3 mr-1" /> Cashback ({activeCashbacks.length})
                   </TabsTrigger>
@@ -395,7 +398,90 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
                   <TabsTrigger value="loyalty" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
                     Fidelidade
                   </TabsTrigger>
+                  <TabsTrigger value="nps" className="data-[state=active]:bg-pos-yellow data-[state=active]:text-pos-black">
+                    <Star className="h-3 w-3 mr-1" /> NPS {npsRespondida.length > 0 && `(${npsRespondida.length})`}
+                  </TabsTrigger>
                 </TabsList>
+
+                {/* INSIGHTS */}
+                <TabsContent value="insights" className="space-y-3">
+                  <Card className="p-4 bg-pos-white/5 border-pos-white/10">
+                    <h4 className="text-sm font-bold text-pos-white mb-3 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-pos-yellow" /> Preferências (do histórico)
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-[10px] uppercase text-pos-white/50">Tamanhos mais comprados</p>
+                        {computedInsights.topSizes.length === 0 ? (
+                          <p className="text-xs text-pos-white/40 mt-1">Sem dados</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {computedInsights.topSizes.map(([s, n]) => (
+                              <Badge key={s} className="bg-pos-yellow/20 text-pos-yellow border-0">{s} <span className="ml-1 opacity-60">×{n}</span></Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-pos-white/50">Produtos favoritos</p>
+                        {computedInsights.topProducts.length === 0 ? (
+                          <p className="text-xs text-pos-white/40 mt-1">Sem dados</p>
+                        ) : (
+                          <ul className="text-xs text-pos-white/80 mt-1 space-y-0.5">
+                            {computedInsights.topProducts.map(([p, n]) => (
+                              <li key={p}>• {p} <span className="text-pos-white/40">×{n}</span></li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase text-pos-white/50">Pagamento preferido</p>
+                        <p className="text-sm text-pos-white mt-1">{computedInsights.topPayment ? computedInsights.topPayment[0] : "—"}</p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-4 bg-gradient-to-br from-pos-yellow/10 to-pos-white/5 border-pos-yellow/30">
+                    <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                      <h4 className="text-sm font-bold text-pos-white flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-pos-yellow" /> Análise IA (Bia)
+                      </h4>
+                      <Button size="sm" onClick={generateInsights} disabled={aiLoading || sales.length === 0} className="bg-pos-yellow text-pos-black hover:bg-pos-yellow/90">
+                        {aiLoading ? <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Analisando…</> : <><Sparkles className="h-3 w-3 mr-1" /> {aiInsights ? "Gerar Novamente" : "Gerar Análise"}</>}
+                      </Button>
+                    </div>
+                    {!aiInsights && !aiLoading && (
+                      <p className="text-xs text-pos-white/50">Clique em "Gerar Análise" para uma leitura rápida do cliente com sugestão da próxima ação.</p>
+                    )}
+                    {aiInsights && (
+                      <div className="space-y-2 text-sm">
+                        {aiInsights.resumo && <p className="text-pos-white"><span className="text-pos-yellow font-bold">Resumo:</span> {aiInsights.resumo}</p>}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {aiInsights.tamanho_preferido && <p><span className="text-pos-white/50">Tamanho:</span> <span className="text-pos-white">{aiInsights.tamanho_preferido}</span></p>}
+                          {aiInsights.frequencia && <p><span className="text-pos-white/50">Frequência:</span> <span className="text-pos-white">{aiInsights.frequencia}</span></p>}
+                          {aiInsights.ticket_medio_perfil && <p><span className="text-pos-white/50">Ticket:</span> <span className="text-pos-white">{aiInsights.ticket_medio_perfil}</span></p>}
+                        </div>
+                        {aiInsights.categorias_favoritas?.length ? (
+                          <p className="text-xs"><span className="text-pos-white/50">Categorias:</span> <span className="text-pos-white">{aiInsights.categorias_favoritas.join(", ")}</span></p>
+                        ) : null}
+                        {aiInsights.proxima_acao && (
+                          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2 mt-2">
+                            <p className="text-[10px] uppercase text-emerald-400">Próxima ação</p>
+                            <p className="text-sm text-pos-white">{aiInsights.proxima_acao}</p>
+                          </div>
+                        )}
+                        {aiInsights.alertas?.length ? (
+                          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">
+                            <p className="text-[10px] uppercase text-amber-400">Alertas</p>
+                            <ul className="text-xs text-pos-white space-y-0.5 mt-1">
+                              {aiInsights.alertas.map((a, i) => <li key={i}>• {a}</li>)}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </Card>
+                </TabsContent>
 
                 {/* CASHBACK */}
                 <TabsContent value="cashback" className="space-y-2">
