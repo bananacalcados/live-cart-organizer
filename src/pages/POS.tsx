@@ -283,7 +283,7 @@ export default function POS() {
         {section === "slowmoving" && <POSSlowMovingProducts storeId={selectedStore} />}
         {section === "shipments" && <POSShipments storeId={selectedStore} />}
         {section === "seller-dashboard" && <POSSellerDashboard storeId={selectedStore} />}
-        {section === "customers" && <POSCustomer360 storeId={selectedStore} />}
+        {section === "customers" && <POSCustomer360 storeId={selectedStore} initialQuery={customer360Query} />}
       </div>
 
       {/* Config PIN Dialog */}
