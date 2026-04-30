@@ -283,6 +283,36 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
     ? npsRespondida.reduce((a, n) => a + (n.score || 0), 0) / npsRespondida.length
     : null;
 
+  // Crediário (open installments)
+  const crediario = useMemo(() => {
+    const open = sales.filter(s => s.crediario_status && !["paid", "pago"].includes((s.crediario_status || "").toLowerCase()) && (s.payment_method || "").toLowerCase().includes("credi"));
+    const overdue = open.filter(s => s.crediario_due_date && new Date(s.crediario_due_date) < new Date());
+    const totalOpen = open.reduce((a, s) => a + Number(s.total || 0) - Number(s.crediario_paid_amount || 0), 0);
+    const paid = sales.filter(s => (s.payment_method || "").toLowerCase().includes("credi") && s.crediario_paid_at);
+    return { open, overdue, totalOpen, paid };
+  }, [sales]);
+
+  // Monthly evolution chart data (last 12 months)
+  const monthlyEvolution = useMemo(() => {
+    const map: Record<string, { month: string; total: number; count: number }> = {};
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const label = d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
+      map[key] = { month: label, total: 0, count: 0 };
+    }
+    sales.forEach(s => {
+      const d = new Date(s.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (map[key] && !["cancelled", "canceled"].includes(s.status)) {
+        map[key].total += Number(s.total || 0);
+        map[key].count += 1;
+      }
+    });
+    return Object.values(map);
+  }, [sales]);
+
   return (
     <div className="flex-1 flex flex-col bg-pos-black text-pos-white overflow-hidden">
       {/* Header / Search */}
