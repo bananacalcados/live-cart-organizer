@@ -68,6 +68,20 @@ export default function POS() {
   const [pendingRequests, setPendingRequests] = useState(0);
   const [pendingStockChecks, setPendingStockChecks] = useState(0);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [customer360Query, setCustomer360Query] = useState<string | undefined>(undefined);
+
+  // Listener for "Ver Perfil 360°" event from customer form
+  useEffect(() => {
+    const handler = (e: any) => {
+      const q = e?.detail?.query;
+      if (q) {
+        setCustomer360Query(q);
+        setSection("customers");
+      }
+    };
+    window.addEventListener("pos:open-customer-360", handler);
+    return () => window.removeEventListener("pos:open-customer-360", handler);
+  }, []);
 
   // Config PIN gate
   const [configAuthenticated, setConfigAuthenticated] = useState(false);
