@@ -58,6 +58,10 @@ interface SaleRow {
   store_id: string;
   seller_id: string | null;
   invoice_number: string | null;
+  crediario_status?: string | null;
+  crediario_due_date?: string | null;
+  crediario_paid_at?: string | null;
+  crediario_paid_amount?: number | null;
   pos_sale_items?: { product_name: string; size: string | null; quantity: number; unit_price: number }[];
 }
 
