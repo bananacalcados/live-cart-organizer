@@ -237,7 +237,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             placeholder="Buscar por Nome, CPF, WhatsApp ou Email…"
             className="bg-pos-white/5 border-pos-white/15 text-pos-white placeholder:text-pos-white/40"
           />
-          <Button onClick={handleSearch} disabled={searching} className="bg-pos-yellow text-pos-black hover:bg-pos-yellow/90">
+          <Button onClick={() => handleSearch()} disabled={searching} className="bg-pos-yellow text-pos-black hover:bg-pos-yellow/90">
             {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           </Button>
         </div>
