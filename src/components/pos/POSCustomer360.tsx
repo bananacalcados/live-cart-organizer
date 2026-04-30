@@ -91,6 +91,15 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
     });
   }, []);
 
+  // Auto-search when initialQuery is provided (deep-link from customer form)
+  useEffect(() => {
+    if (initialQuery && initialQuery.trim().length >= 3) {
+      setQuery(initialQuery);
+      setTimeout(() => { handleSearch(initialQuery); }, 50);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
+
   const handleSearch = async () => {
     const q = query.trim();
     if (q.length < 3) {
