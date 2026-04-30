@@ -617,7 +617,120 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
                   ))}
                 </TabsContent>
 
-                {/* LOYALTY */}
+                {/* EVOLUTION */}
+                <TabsContent value="evolution" className="space-y-3">
+                  <Card className="p-4 bg-pos-white/5 border-pos-white/10">
+                    <h4 className="text-sm font-bold text-pos-white mb-3 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-pos-yellow" /> Evolução de Compras (12 meses)
+                    </h4>
+                    {sales.length === 0 ? (
+                      <p className="text-xs text-pos-white/50 text-center py-8">Sem histórico para exibir.</p>
+                    ) : (
+                      <div className="h-64 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={monthlyEvolution} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(0,0%,20%)" />
+                            <XAxis dataKey="month" stroke="hsl(0,0%,60%)" fontSize={10} />
+                            <YAxis stroke="hsl(0,0%,60%)" fontSize={10} tickFormatter={(v) => `R$${v}`} />
+                            <RTooltip
+                              contentStyle={{ backgroundColor: "hsl(0,0%,8%)", border: "1px solid hsl(48,100%,50%)", borderRadius: 8, color: "white" }}
+                              formatter={(v: any) => fmtMoney(Number(v))}
+                            />
+                            <Line type="monotone" dataKey="total" stroke="hsl(48,100%,50%)" strokeWidth={2} dot={{ fill: "hsl(48,100%,50%)", r: 3 }} activeDot={{ r: 5 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </Card>
+                  <Card className="p-3 bg-pos-white/5 border-pos-white/10">
+                    <p className="text-[10px] uppercase text-pos-white/50 mb-2">Resumo dos últimos 12 meses</p>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <p className="text-xs text-pos-white/60">Faturado</p>
+                        <p className="text-sm font-bold text-pos-yellow">{fmtMoney(monthlyEvolution.reduce((a, m) => a + m.total, 0))}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-pos-white/60">Compras</p>
+                        <p className="text-sm font-bold text-pos-white">{monthlyEvolution.reduce((a, m) => a + m.count, 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-pos-white/60">Meses Ativos</p>
+                        <p className="text-sm font-bold text-pos-white">{monthlyEvolution.filter(m => m.count > 0).length}</p>
+                      </div>
+                    </div>
+                  </Card>
+                </TabsContent>
+
+                {/* CREDIÁRIO */}
+                <TabsContent value="crediario" className="space-y-2">
+                  {crediario.open.length === 0 && crediario.paid.length === 0 ? (
+                    <Card className="p-6 text-center bg-pos-white/5 border-pos-white/10 text-pos-white/50">
+                      Cliente nunca comprou no crediário.
+                    </Card>
+                  ) : (
+                    <>
+                      {crediario.open.length > 0 && (
+                        <Card className="p-4 bg-gradient-to-br from-red-500/10 to-pos-white/5 border-red-500/30">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-sm font-bold text-pos-white flex items-center gap-2">
+                              <AlertCircle className="h-4 w-4 text-red-400" /> Pendências em Aberto
+                            </h4>
+                            <Badge className="bg-red-500/30 text-red-300 border-0">{crediario.open.length}</Badge>
+                          </div>
+                          <p className="text-2xl font-bold text-red-400">{fmtMoney(crediario.totalOpen)}</p>
+                          {crediario.overdue.length > 0 && (
+                            <p className="text-xs text-amber-400 mt-1">⚠️ {crediario.overdue.length} parcela(s) vencida(s)</p>
+                          )}
+                        </Card>
+                      )}
+                      {crediario.open.map(s => {
+                        const isOverdue = s.crediario_due_date && new Date(s.crediario_due_date) < new Date();
+                        const remaining = Number(s.total || 0) - Number(s.crediario_paid_amount || 0);
+                        return (
+                          <Card key={s.id} className={`p-3 border ${isOverdue ? "bg-red-500/10 border-red-500/30" : "bg-pos-white/5 border-pos-white/10"}`}>
+                            <div className="flex items-start justify-between gap-2 flex-wrap">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-pos-white">{fmtDateTime(s.created_at)}</p>
+                                <p className="text-xs text-pos-white/60 mt-0.5">
+                                  {stores[s.store_id] || "Loja"} {s.invoice_number ? `· NF ${s.invoice_number}` : ""}
+                                </p>
+                                {s.crediario_due_date && (
+                                  <p className={`text-xs mt-1 flex items-center gap-1 ${isOverdue ? "text-red-400" : "text-pos-white/70"}`}>
+                                    <CalendarClock className="h-3 w-3" /> Vence em {fmtDate(s.crediario_due_date)} {isOverdue && "(vencido)"}
+                                  </p>
+                                )}
+                                <Badge variant="outline" className="mt-1 text-[10px] border-pos-white/20 text-pos-white/70">{s.crediario_status}</Badge>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-base font-bold text-red-400">{fmtMoney(remaining)}</p>
+                                {Number(s.crediario_paid_amount || 0) > 0 && (
+                                  <p className="text-[10px] text-pos-white/50">Pago: {fmtMoney(Number(s.crediario_paid_amount))}</p>
+                                )}
+                                <p className="text-[10px] text-pos-white/40">Total: {fmtMoney(Number(s.total))}</p>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
+                      {crediario.paid.length > 0 && (
+                        <details className="mt-3">
+                          <summary className="text-xs text-pos-white/50 cursor-pointer hover:text-pos-white/70">
+                            Ver {crediario.paid.length} crediário(s) quitado(s)
+                          </summary>
+                          <div className="space-y-1 mt-2">
+                            {crediario.paid.map(s => (
+                              <div key={s.id} className="text-xs p-2 bg-emerald-500/5 border border-emerald-500/20 rounded flex justify-between text-pos-white/70">
+                                <span>{fmtDate(s.created_at)} · {fmtMoney(Number(s.total))}</span>
+                                <span className="text-emerald-400">Quitado em {s.crediario_paid_at ? fmtDate(s.crediario_paid_at) : "—"}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                    </>
+                  )}
+                </TabsContent>
+
                 <TabsContent value="loyalty">
                   {!loyalty ? (
                     <Card className="p-6 text-center bg-pos-white/5 border-pos-white/10 text-pos-white/50">
