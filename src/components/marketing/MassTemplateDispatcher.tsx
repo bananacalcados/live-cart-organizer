@@ -1062,17 +1062,31 @@ export function MassTemplateDispatcher() {
         insertData.scheduled_at = new Date(scheduledDate).toISOString();
       }
 
-      const { data: dispatchData, error: dispErr } = await supabase
-        .from('dispatch_history')
-        .insert(insertData as any)
-        .select('id')
-        .single();
+      let dispatchId: string;
+      if (editDispatchId) {
+        // UPDATE existing dispatch
+        const { error: updErr } = await supabase
+          .from('dispatch_history')
+          .update(insertData as any)
+          .eq('id', editDispatchId);
+        if (updErr) throw updErr;
+        dispatchId = editDispatchId;
 
-      if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
+        // Replace recipients (delete old, insert new)
+        await supabase.from('dispatch_recipients').delete().eq('dispatch_id', dispatchId);
+      } else {
+        const { data: dispatchData, error: dispErr } = await supabase
+          .from('dispatch_history')
+          .insert(insertData as any)
+          .select('id')
+          .single();
+        if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
+        dispatchId = dispatchData.id;
+      }
 
       // Save recipients
       const recipientRows = allPhones.map(p => ({
-        dispatch_id: dispatchData.id,
+        dispatch_id: dispatchId,
         phone: p,
         recipient_name: recipientMap.get(p)?.name || null,
         status: 'pending',
@@ -1081,12 +1095,15 @@ export function MassTemplateDispatcher() {
         await supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 500));
       }
 
-      if (mode === 'schedule') {
+      if (editDispatchId) {
+        toast.success("✅ Disparo atualizado com sucesso");
+      } else if (mode === 'schedule') {
         toast.success(`📅 Disparo agendado para ${new Date(scheduledDate).toLocaleString('pt-BR')}`);
       } else {
         toast.success("⏸️ Disparo salvo como pausado — dispare quando quiser pelo histórico");
       }
 
+      setEditDispatchId(null);
       setScheduleMode('none');
       setScheduledDate('');
       setHistoryKey(k => k + 1);
