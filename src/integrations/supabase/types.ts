@@ -4728,6 +4728,39 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_audit_runs: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          per_store: Json | null
+          started_at: string
+          status: string
+          totals: Json | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          per_store?: Json | null
+          started_at?: string
+          status?: string
+          totals?: Json | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          per_store?: Json | null
+          started_at?: string
+          status?: string
+          totals?: Json | null
+        }
+        Relationships: []
+      }
       inventory_barcode_aliases: {
         Row: {
           created_at: string
