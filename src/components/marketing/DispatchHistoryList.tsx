@@ -707,12 +707,23 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                         </div>
 
                         <div className="flex items-center gap-2 text-xs shrink-0">
+                          {onDuplicate && (d.status === 'scheduled' || d.status === 'scheduled_paused') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 gap-1 text-xs"
+                              onClick={(e) => handleDuplicate(d, e, true)}
+                              title="Editar disparo (template, variáveis, audiência)"
+                            >
+                              <Pencil className="h-3 w-3" />Editar
+                            </Button>
+                          )}
                           {onDuplicate && (
                             <Button
                               variant="outline"
                               size="sm"
                               className="h-7 px-2 gap-1 text-xs"
-                              onClick={(e) => handleDuplicate(d, e)}
+                              onClick={(e) => handleDuplicate(d, e, false)}
                               title="Duplicar disparo"
                             >
                               <Copy className="h-3 w-3" />Duplicar
