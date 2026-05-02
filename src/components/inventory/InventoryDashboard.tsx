@@ -43,6 +43,7 @@ export function InventoryDashboard() {
   const [run, setRun] = useState<RunRow | null>(null);
   const [loadingRun, setLoadingRun] = useState(true);
   const [triggering, setTriggering] = useState(false);
+  const [syncingIncremental, setSyncingIncremental] = useState(false);
 
   // ---- Snapshot ao vivo do banco (pos_products) ----
   const loadSnapshot = useCallback(async () => {
