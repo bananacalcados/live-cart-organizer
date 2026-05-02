@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import {
   Loader2, RefreshCw, Play, Package, DollarSign, TrendingUp, Boxes,
-  AlertTriangle, CheckCircle2, Clock, Store as StoreIcon,
+  AlertTriangle, CheckCircle2, Clock, Store as StoreIcon, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,7 @@ export function InventoryDashboard() {
   const [run, setRun] = useState<RunRow | null>(null);
   const [loadingRun, setLoadingRun] = useState(true);
   const [triggering, setTriggering] = useState(false);
+  const [syncingIncremental, setSyncingIncremental] = useState(false);
 
   // ---- Snapshot ao vivo do banco (pos_products) ----
   const loadSnapshot = useCallback(async () => {
@@ -157,6 +158,23 @@ export function InventoryDashboard() {
     }
   };
 
+  const handleIncrementalSync = async () => {
+    setSyncingIncremental(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("inventory-incremental-sync", {
+        body: { days: 2 },
+      });
+      if (error) throw error;
+      toast.success("Sync incremental disparado! Atualiza apenas SKUs movimentados nos últimos 2 dias (~5min).");
+      console.log("incremental response", data);
+      setTimeout(() => loadSnapshot(), 5000);
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setSyncingIncremental(false);
+    }
+  };
+
   // ---- Cálculo de % verificado ----
   const perStore = (run?.per_store as any[]) || [];
 
@@ -227,6 +245,20 @@ export function InventoryDashboard() {
             Atualizar
           </Button>
           <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleIncrementalSync}
+            disabled={syncingIncremental}
+            title="Sincroniza apenas SKUs movimentados nos últimos 2 dias. Rápido (~5min)."
+          >
+            {syncingIncremental ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4 mr-1" />
+            )}
+            Sync Incremental
+          </Button>
+          <Button
             onClick={handleTriggerAudit}
             disabled={triggering || run?.status === "running"}
             size="sm"
@@ -236,7 +268,7 @@ export function InventoryDashboard() {
             ) : (
               <Play className="h-4 w-4 mr-1" />
             )}
-            {run?.status === "running" ? "Em andamento..." : "Disparar Auditoria v2"}
+            {run?.status === "running" ? "Em andamento..." : "Auditoria Completa"}
           </Button>
         </div>
       </div>
