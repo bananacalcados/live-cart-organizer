@@ -393,6 +393,8 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const stage: 1 | 2 | null = body.stage === 1 || body.stage === 2 ? body.stage : null;
     const storeIds: string[] | null = Array.isArray(body.store_ids) ? body.store_ids : null;
+    // Default: NÃO criar produtos novos, apenas atualizar existentes (pedido do usuário)
+    const updateOnly: boolean = body.update_only !== false;
 
     const { data: run, error } = await supabase
       .from('inventory_audit_runs')
@@ -402,13 +404,14 @@ serve(async (req) => {
     if (error) throw error;
 
     // @ts-ignore — EdgeRuntime
-    EdgeRuntime.waitUntil(runAudit(run.id, supabase, { stage, storeIds }));
+    EdgeRuntime.waitUntil(runAudit(run.id, supabase, { stage, storeIds, updateOnly }));
 
     return new Response(
       JSON.stringify({
         run_id: run.id,
         status: 'running',
-        message: `Auditoria v2 iniciada (stage=${stage ?? 'all'}). Use GET ?run_id=${run.id} para acompanhar.`,
+        update_only: updateOnly,
+        message: `Auditoria v2 iniciada (stage=${stage ?? 'all'}, update_only=${updateOnly}). Use GET ?run_id=${run.id} para acompanhar.`,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
