@@ -10,6 +10,7 @@ import { InventoryVerification } from "@/components/inventory/InventoryVerificat
 import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
+import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -168,7 +169,7 @@ export default function Inventory() {
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"stock" | "capture" | "products" | "nfe">("stock");
+  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "stock" | "capture" | "products" | "nfe">("dashboard");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
@@ -1073,40 +1074,52 @@ export default function Inventory() {
           <Package className="h-5 w-5 text-primary" />
           <h1 className="text-lg font-bold">Controle de Estoque</h1>
           <div className="flex-1" />
-          {stores.length > 0 && selectedStoreId && (
+          {stores.length > 0 && (
             <div className="flex gap-1 bg-muted rounded-lg p-0.5">
               <Button
-                variant={inventoryMode === "stock" ? "default" : "ghost"}
+                variant={inventoryMode === "dashboard" ? "default" : "ghost"}
                 size="sm"
-                onClick={() => setInventoryMode("stock")}
+                onClick={() => setInventoryMode("dashboard")}
                 className="text-xs h-7 gap-1"
               >
-                <ClipboardList className="h-3 w-3" /> Balanço
+                <BarChart3 className="h-3 w-3" /> Dashboard
               </Button>
-              <Button
-                variant={inventoryMode === "capture" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setInventoryMode("capture")}
-                className="text-xs h-7 gap-1"
-              >
-                <ShoppingBag className="h-3 w-3" /> Captação
-              </Button>
-              <Button
-                variant={inventoryMode === "products" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setInventoryMode("products")}
-                className="text-xs h-7 gap-1"
-              >
-                <Package className="h-3 w-3" /> Produtos
-              </Button>
-              <Button
-                variant={inventoryMode === "nfe" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setInventoryMode("nfe")}
-                className="text-xs h-7 gap-1"
-              >
-                <FileText className="h-3 w-3" /> NF-e Entrada
-              </Button>
+              {selectedStoreId && (
+                <>
+                  <Button
+                    variant={inventoryMode === "stock" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setInventoryMode("stock")}
+                    className="text-xs h-7 gap-1"
+                  >
+                    <ClipboardList className="h-3 w-3" /> Balanço
+                  </Button>
+                  <Button
+                    variant={inventoryMode === "capture" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setInventoryMode("capture")}
+                    className="text-xs h-7 gap-1"
+                  >
+                    <ShoppingBag className="h-3 w-3" /> Captação
+                  </Button>
+                  <Button
+                    variant={inventoryMode === "products" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setInventoryMode("products")}
+                    className="text-xs h-7 gap-1"
+                  >
+                    <Package className="h-3 w-3" /> Produtos
+                  </Button>
+                  <Button
+                    variant={inventoryMode === "nfe" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setInventoryMode("nfe")}
+                    className="text-xs h-7 gap-1"
+                  >
+                    <FileText className="h-3 w-3" /> NF-e Entrada
+                  </Button>
+                </>
+              )}
             </div>
           )}
           {stores.length > 0 && (
@@ -1130,6 +1143,8 @@ export default function Inventory() {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
+        ) : inventoryMode === "dashboard" ? (
+          <InventoryDashboard />
         ) : !selectedStoreId ? (
           <div className="text-center py-20">
             <Store className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />

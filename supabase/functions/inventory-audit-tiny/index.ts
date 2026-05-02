@@ -56,7 +56,7 @@ async function updateRunProgress(supabase: any, runId: string, patch: Record<str
 }
 
 // =================== STAGE 1: Catálogo + custo + preço ===================
-async function syncCatalog(supabase: any, store: StoreCfg, runId: string, perStoreState: any) {
+async function syncCatalog(supabase: any, store: StoreCfg, runId: string, perStoreState: any, updateOnly = false) {
   const stats = {
     store_id: store.id,
     store_name: store.name,
@@ -147,7 +147,7 @@ async function syncCatalog(supabase: any, store: StoreCfg, runId: string, perSto
               updated_at: new Date().toISOString(),
             },
           });
-        } else {
+        } else if (!updateOnly) {
           toInsert.push({
             store_id: store.id,
             tiny_id: r.tiny_id,
@@ -303,7 +303,7 @@ async function syncStock(supabase: any, store: StoreCfg, runId: string, perStore
 async function runAudit(
   runId: string,
   supabase: any,
-  opts: { stage?: 1 | 2 | null; storeIds?: string[] | null },
+  opts: { stage?: 1 | 2 | null; storeIds?: string[] | null; updateOnly?: boolean },
 ) {
   try {
     let q = supabase.from('pos_stores').select('id, name, tiny_token, tiny_deposit_name').not('tiny_token', 'is', null);
@@ -313,11 +313,9 @@ async function runAudit(
 
     const perStoreState: Record<string, any> = {};
 
-    // Stage 1 sequencial por loja (Tiny rate-limit é por token, então paralelizar entre tokens diferentes seria seguro,
-    // mas pra simplicidade rodamos sequencial)
     if (!opts.stage || opts.stage === 1) {
       for (const s of stores) {
-        await syncCatalog(supabase, s, runId, perStoreState);
+        await syncCatalog(supabase, s, runId, perStoreState, opts.updateOnly === true);
       }
     }
 
@@ -395,6 +393,8 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const stage: 1 | 2 | null = body.stage === 1 || body.stage === 2 ? body.stage : null;
     const storeIds: string[] | null = Array.isArray(body.store_ids) ? body.store_ids : null;
+    // Default: NÃO criar produtos novos, apenas atualizar existentes (pedido do usuário)
+    const updateOnly: boolean = body.update_only !== false;
 
     const { data: run, error } = await supabase
       .from('inventory_audit_runs')
@@ -404,13 +404,14 @@ serve(async (req) => {
     if (error) throw error;
 
     // @ts-ignore — EdgeRuntime
-    EdgeRuntime.waitUntil(runAudit(run.id, supabase, { stage, storeIds }));
+    EdgeRuntime.waitUntil(runAudit(run.id, supabase, { stage, storeIds, updateOnly }));
 
     return new Response(
       JSON.stringify({
         run_id: run.id,
         status: 'running',
-        message: `Auditoria v2 iniciada (stage=${stage ?? 'all'}). Use GET ?run_id=${run.id} para acompanhar.`,
+        update_only: updateOnly,
+        message: `Auditoria v2 iniciada (stage=${stage ?? 'all'}, update_only=${updateOnly}). Use GET ?run_id=${run.id} para acompanhar.`,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
