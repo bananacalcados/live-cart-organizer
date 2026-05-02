@@ -1098,6 +1098,10 @@ export function MassTemplateDispatcher() {
 
   // Handle duplicate from history
   const handleDuplicate = useCallback((data: DuplicateDispatchData) => {
+    // Track edit mode (update existing dispatch instead of creating a new one)
+    setEditDispatchId(data.edit_dispatch_id || null);
+    setCampaignName(data.campaign_name || "");
+
     // Set WhatsApp number
     if (data.whatsapp_number_id) {
       setSelectedNumber(data.whatsapp_number_id);
