@@ -56,7 +56,7 @@ async function updateRunProgress(supabase: any, runId: string, patch: Record<str
 }
 
 // =================== STAGE 1: Catálogo + custo + preço ===================
-async function syncCatalog(supabase: any, store: StoreCfg, runId: string, perStoreState: any) {
+async function syncCatalog(supabase: any, store: StoreCfg, runId: string, perStoreState: any, updateOnly = false) {
   const stats = {
     store_id: store.id,
     store_name: store.name,
