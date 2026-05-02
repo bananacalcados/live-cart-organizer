@@ -10,6 +10,7 @@ import { InventoryVerification } from "@/components/inventory/InventoryVerificat
 import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
+import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
