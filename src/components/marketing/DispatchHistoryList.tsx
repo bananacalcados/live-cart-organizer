@@ -71,6 +71,9 @@ export interface DuplicateDispatchData {
   template_components: any;
   has_dynamic_vars: boolean;
   recipients: { phone: string; name: string | null }[];
+  // When set, the dispatcher should UPDATE this existing dispatch instead of creating a new one
+  edit_dispatch_id?: string | null;
+  campaign_name?: string | null;
 }
 
 interface DispatchHistoryListProps {
