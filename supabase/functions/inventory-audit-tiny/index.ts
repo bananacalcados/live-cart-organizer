@@ -1,6 +1,6 @@
-// Auditoria do estoque real nas 3 contas Tiny
-// Pagina produtos.pesquisa.php em cada conta, agrega quantidade, custo e venda totais
-// Throttle 2.2s entre chamadas para respeitar rate limit Tiny (~30 req/min)
+// Auditoria do estoque real nas 3 contas Tiny — modo BACKGROUND
+// POST sem body: dispara nova auditoria, retorna run_id imediatamente
+// GET ?run_id=...: consulta status/resultado
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -11,18 +11,8 @@ const corsHeaders = {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
-
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  );
-
+async function runAudit(runId: string, supabase: any, maxPages: number) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const maxPagesPerStore: number = body.max_pages ?? 200; // safety cap
-
     const { data: stores } = await supabase
       .from('pos_stores')
       .select('id, name, tiny_token')
@@ -35,15 +25,15 @@ serve(async (req) => {
     for (const store of stores) {
       const token = store.tiny_token;
       let page = 1;
-      let pairs = 0;        // soma de estoque (apenas > 0)
-      let costTotal = 0;    // SUM(stock * preco_custo)
-      let saleTotal = 0;    // SUM(stock * preco)
-      let skuCount = 0;     // SKUs com estoque > 0
-      let skuAll = 0;       // total de SKUs retornados
-      let withoutCost = 0;  // SKUs com estoque > 0 mas sem custo
+      let pairs = 0;
+      let costTotal = 0;
+      let saleTotal = 0;
+      let skuCount = 0;
+      let skuAll = 0;
+      let withoutCost = 0;
       let lastError: string | null = null;
 
-      while (page <= maxPagesPerStore) {
+      while (page <= maxPages) {
         const resp = await fetch('https://api.tiny.com.br/api2/produtos.pesquisa.php', {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -51,8 +41,7 @@ serve(async (req) => {
         });
         const data = await resp.json().catch(() => ({}));
 
-        const status = data?.retorno?.status;
-        if (status === 'Erro') {
+        if (data?.retorno?.status === 'Erro') {
           lastError = JSON.stringify(data?.retorno?.erros || data?.retorno);
           break;
         }
@@ -80,8 +69,27 @@ serve(async (req) => {
         if (page >= totalPages) break;
         page += 1;
 
-        // throttle: ~30 req/min = 1 req a cada 2s. Usamos 2.2s pra margem.
-        await sleep(2200);
+        // Atualiza progresso periodicamente
+        if (page % 10 === 0) {
+          await supabase
+            .from('inventory_audit_runs')
+            .update({
+              per_store: [
+                ...perStore,
+                {
+                  store_id: store.id, store_name: store.name,
+                  pages_scanned: page, in_progress: true,
+                  skus_total: skuAll, skus_with_stock: skuCount,
+                  pairs_in_stock: pairs,
+                  cost_total: Number(costTotal.toFixed(2)),
+                  sale_total: Number(saleTotal.toFixed(2)),
+                },
+              ],
+            })
+            .eq('id', runId);
+        }
+
+        await sleep(2200); // throttle Tiny rate limit
       }
 
       perStore.push({
@@ -98,6 +106,11 @@ serve(async (req) => {
         skus_with_stock_but_no_cost: withoutCost,
         last_error: lastError,
       });
+
+      await supabase
+        .from('inventory_audit_runs')
+        .update({ per_store: perStore })
+        .eq('id', runId);
     }
 
     const totals = perStore.reduce(
@@ -111,16 +124,83 @@ serve(async (req) => {
       { pairs_in_stock: 0, cost_total: 0, sale_total: 0, skus_with_stock: 0, skus_total: 0 }
     );
 
-    return new Response(
-      JSON.stringify({
+    await supabase
+      .from('inventory_audit_runs')
+      .update({
+        status: 'done',
         per_store: perStore,
         totals: {
           ...totals,
           cost_total: Number(totals.cost_total.toFixed(2)),
           sale_total: Number(totals.sale_total.toFixed(2)),
         },
-        note: 'Dados extraídos via produtos.pesquisa.php (API v2 Tiny). Tiny replica produto entre contas, então o total empresa pode ter sobreposição se o mesmo SKU aparecer em mais de uma conta com estoque positivo.',
-      }),
+        finished_at: new Date().toISOString(),
+      })
+      .eq('id', runId);
+  } catch (e: any) {
+    await supabase
+      .from('inventory_audit_runs')
+      .update({
+        status: 'error',
+        error_message: e.message,
+        finished_at: new Date().toISOString(),
+      })
+      .eq('id', runId);
+  }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+
+  try {
+    const url = new URL(req.url);
+
+    // GET: consulta status
+    if (req.method === 'GET') {
+      const runId = url.searchParams.get('run_id');
+      if (!runId) {
+        // Retorna a última run
+        const { data } = await supabase
+          .from('inventory_audit_runs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return new Response(JSON.stringify(data || {}), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      const { data } = await supabase
+        .from('inventory_audit_runs')
+        .select('*')
+        .eq('id', runId)
+        .maybeSingle();
+      return new Response(JSON.stringify(data || {}), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // POST: dispara nova auditoria
+    const body = await req.json().catch(() => ({}));
+    const maxPages: number = body.max_pages ?? 200;
+
+    const { data: run, error } = await supabase
+      .from('inventory_audit_runs')
+      .insert({ status: 'running' })
+      .select('id')
+      .single();
+    if (error) throw error;
+
+    // @ts-ignore — EdgeRuntime
+    EdgeRuntime.waitUntil(runAudit(run.id, supabase, maxPages));
+
+    return new Response(
+      JSON.stringify({ run_id: run.id, status: 'running', message: 'Auditoria iniciada em background. Use GET ?run_id=... para acompanhar.' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (e: any) {
