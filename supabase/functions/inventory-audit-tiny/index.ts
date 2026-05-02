@@ -303,7 +303,7 @@ async function syncStock(supabase: any, store: StoreCfg, runId: string, perStore
 async function runAudit(
   runId: string,
   supabase: any,
-  opts: { stage?: 1 | 2 | null; storeIds?: string[] | null },
+  opts: { stage?: 1 | 2 | null; storeIds?: string[] | null; updateOnly?: boolean },
 ) {
   try {
     let q = supabase.from('pos_stores').select('id, name, tiny_token, tiny_deposit_name').not('tiny_token', 'is', null);
@@ -313,11 +313,9 @@ async function runAudit(
 
     const perStoreState: Record<string, any> = {};
 
-    // Stage 1 sequencial por loja (Tiny rate-limit é por token, então paralelizar entre tokens diferentes seria seguro,
-    // mas pra simplicidade rodamos sequencial)
     if (!opts.stage || opts.stage === 1) {
       for (const s of stores) {
-        await syncCatalog(supabase, s, runId, perStoreState);
+        await syncCatalog(supabase, s, runId, perStoreState, opts.updateOnly === true);
       }
     }
 
