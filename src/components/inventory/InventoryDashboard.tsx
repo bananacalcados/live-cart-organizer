@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import {
   Loader2, RefreshCw, Play, Package, DollarSign, TrendingUp, Boxes,
-  AlertTriangle, CheckCircle2, Clock, Store as StoreIcon,
+  AlertTriangle, CheckCircle2, Clock, Store as StoreIcon, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
