@@ -169,23 +169,26 @@ export function InventoryDashboard() {
     seen: s.skus_seen ?? 0,
   }));
 
-  // Estágio 2: stock_skus_processed / total de SKUs daquela loja (snapshot)
+  const snapshotByStore = new Map(snapshot.map((item) => [item.store_id, item]));
   const totalSkusFromSnapshot = snapshot.reduce((a, b) => a + b.skus, 0);
-  const stockProcessedTotal = perStore.reduce(
-    (a, b) => a + (Number(b.stock_skus_processed) || 0),
+  const stockProcessedTotal = perStore.reduce((total, store) => {
+    const stage = Number(store.stage ?? 1);
+    const storeSkus = snapshotByStore.get(store.store_id)?.skus ?? 0;
+    const processed = Math.min(Number(store.stock_skus_processed) || 0, storeSkus);
+    return total + (stage >= 2 || store.stock_finished ? processed : 0);
+  }, 0);
+
+  const catalogStoreCount = snapshot.length;
+  const catalogFinishedCount = perStore.reduce(
+    (count, store) => count + (store.catalog_finished ? 1 : 0),
     0,
   );
-  const stage2Pct = totalSkusFromSnapshot > 0
-    ? Math.min(100, (stockProcessedTotal / totalSkusFromSnapshot) * 100)
-    : 0;
+  const catalogPct = catalogStoreCount > 0 ? (catalogFinishedCount / catalogStoreCount) * 100 : 0;
+  const stage2Pct = totalSkusFromSnapshot > 0 ? Math.min(100, (stockProcessedTotal / totalSkusFromSnapshot) * 100) : 0;
 
-  // % combinado: peso 30% stage1 (pages cap em 100) + 70% stage2
-  const stage1AvgSeen = perStore.length > 0
-    ? Math.min(100, (perStore.reduce((a, b) => a + (b.skus_seen ?? 0), 0) / Math.max(1, totalSkusFromSnapshot)) * 100)
-    : 0;
   const overallPct = run?.status === "done"
     ? 100
-    : Math.round(stage1AvgSeen * 0.3 + stage2Pct * 0.7);
+    : Math.round((catalogPct + stage2Pct) / 2);
 
   // Totais consolidados (ao vivo, do banco)
   const totals = snapshot.reduce(
@@ -303,9 +306,9 @@ export function InventoryDashboard() {
                   <span className="text-sm font-bold">{overallPct}%</span>
                 </div>
                 <Progress value={overallPct} className="h-3" />
-                <p className="text-xs text-muted-foreground mt-1">
-                  {fmtNum(stockProcessedTotal)} de {fmtNum(totalSkusFromSnapshot)} SKUs processados no Estágio 2 (estoque).
-                </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Catálogo {Math.round(catalogPct)}% • Estoque {Math.round(stage2Pct)}% • {fmtNum(stockProcessedTotal)} de {fmtNum(totalSkusFromSnapshot)} SKUs processados no estágio 2.
+                  </p>
               </div>
 
               {run.error_message && (
@@ -337,6 +340,12 @@ export function InventoryDashboard() {
                         <Metric label="SKUs atualizados" value={fmtNum(s.skus_updated ?? 0)} />
                         <Metric label="Estoque processado" value={fmtNum(s.stock_skus_processed ?? 0)} />
                       </div>
+                      {(s.last_progress_at || s.last_error) && (
+                        <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+                          {s.last_progress_at && <span>Último avanço: {new Date(s.last_progress_at).toLocaleString("pt-BR")}</span>}
+                          {s.last_error && <span>Último aviso: {s.last_error}</span>}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
