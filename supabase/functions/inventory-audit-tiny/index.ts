@@ -354,8 +354,7 @@ async function syncStockChunk(
   if (batch.length === 0) {
     stats.finished = true;
     stats.stock_finished = true;
-    perStoreState[store.id] = stats;
-    await updateRunProgress(supabase, runId, perStoreState);
+    await checkpointRunProgress(supabase, runId, perStoreState, store.id, stats);
     return { done: true, stats };
   }
 
@@ -408,6 +407,10 @@ async function syncStockChunk(
       if (cost <= 0) stats.skus_with_stock_no_cost += 1;
     }
 
+    stats.cost_total_in_stock = Number(stats.cost_total_in_stock.toFixed(2));
+    stats.sale_total_in_stock = Number(stats.sale_total_in_stock.toFixed(2));
+    await checkpointRunProgress(supabase, runId, perStoreState, store.id, stats);
+
     await sleep(2100);
   }
 
@@ -416,8 +419,7 @@ async function syncStockChunk(
   stats.stock_finished = done;
   stats.cost_total_in_stock = Number(stats.cost_total_in_stock.toFixed(2));
   stats.sale_total_in_stock = Number(stats.sale_total_in_stock.toFixed(2));
-  perStoreState[store.id] = stats;
-  await updateRunProgress(supabase, runId, perStoreState);
+  await checkpointRunProgress(supabase, runId, perStoreState, store.id, stats);
 
   return { done, stats };
 }
