@@ -147,7 +147,7 @@ async function syncCatalog(supabase: any, store: StoreCfg, runId: string, perSto
               updated_at: new Date().toISOString(),
             },
           });
-        } else {
+        } else if (!updateOnly) {
           toInsert.push({
             store_id: store.id,
             tiny_id: r.tiny_id,
