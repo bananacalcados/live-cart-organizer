@@ -471,24 +471,28 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     loadHistory();
   };
 
-  const handleDuplicate = async (dispatch: DispatchRecord, e: React.MouseEvent) => {
+  const fetchDispatchRecipients = async (dispatchId: string) => {
+    let recs: { phone: string; recipient_name: string | null }[] = [];
+    let dupPage = 0;
+    while (true) {
+      const { data: batch } = await supabase
+        .from('dispatch_recipients')
+        .select('phone, recipient_name')
+        .eq('dispatch_id', dispatchId)
+        .range(dupPage * 1000, (dupPage + 1) * 1000 - 1);
+      if (!batch || batch.length === 0) break;
+      recs = recs.concat(batch);
+      if (batch.length < 1000) break;
+      dupPage++;
+    }
+    return recs;
+  };
+
+  const handleDuplicate = async (dispatch: DispatchRecord, e: React.MouseEvent, editMode = false) => {
     e.stopPropagation();
     if (!onDuplicate) return;
     try {
-      // Fetch ALL recipients from this dispatch (paginated)
-      let recs: { phone: string; recipient_name: string | null }[] = [];
-      let dupPage = 0;
-      while (true) {
-        const { data: batch } = await supabase
-          .from('dispatch_recipients')
-          .select('phone, recipient_name')
-          .eq('dispatch_id', dispatch.id)
-          .range(dupPage * 1000, (dupPage + 1) * 1000 - 1);
-        if (!batch || batch.length === 0) break;
-        recs = recs.concat(batch);
-        if (batch.length < 1000) break;
-        dupPage++;
-      }
+      const recs = await fetchDispatchRecipients(dispatch.id);
 
       const d = dispatch as any;
       onDuplicate({
@@ -503,10 +507,14 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
         template_components: d.template_components || null,
         has_dynamic_vars: d.has_dynamic_vars || false,
         recipients: (recs || []).map((r: any) => ({ phone: r.phone, name: r.recipient_name })),
+        edit_dispatch_id: editMode ? dispatch.id : null,
+        campaign_name: d.campaign_name || null,
       });
-      toast.success("Disparo duplicado — edite as configurações e dispare quando quiser");
+      toast.success(editMode
+        ? "Disparo carregado para edição — altere e salve novamente"
+        : "Disparo duplicado — edite as configurações e dispare quando quiser");
     } catch {
-      toast.error("Erro ao duplicar disparo");
+      toast.error(editMode ? "Erro ao carregar disparo para edição" : "Erro ao duplicar disparo");
     }
   };
 
