@@ -245,6 +245,20 @@ export function InventoryDashboard() {
             Atualizar
           </Button>
           <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleIncrementalSync}
+            disabled={syncingIncremental}
+            title="Sincroniza apenas SKUs movimentados nos últimos 2 dias. Rápido (~5min)."
+          >
+            {syncingIncremental ? (
+              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+            ) : (
+              <Zap className="h-4 w-4 mr-1" />
+            )}
+            Sync Incremental
+          </Button>
+          <Button
             onClick={handleTriggerAudit}
             disabled={triggering || run?.status === "running"}
             size="sm"
@@ -254,7 +268,7 @@ export function InventoryDashboard() {
             ) : (
               <Play className="h-4 w-4 mr-1" />
             )}
-            {run?.status === "running" ? "Em andamento..." : "Disparar Auditoria v2"}
+            {run?.status === "running" ? "Em andamento..." : "Auditoria Completa"}
           </Button>
         </div>
       </div>
