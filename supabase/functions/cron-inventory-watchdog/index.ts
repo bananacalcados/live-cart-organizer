@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const STALL_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes without heartbeat = stalled
+const AUDIT_STALL_THRESHOLD_MS = 4 * 60 * 1000;
 
 /**
  * Watchdog cron: checks for stalled inventory verification/correction
@@ -33,76 +34,96 @@ serve(async (req) => {
       .select('id, status, store_id, last_batch_at')
       .in('status', ['verifying', 'correcting']);
 
-    if (!stalledCounts || stalledCounts.length === 0) {
-      return new Response(JSON.stringify({ success: true, message: 'No active counts', actions }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const edgeRuntime = (globalThis as typeof globalThis & {
+      EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+    }).EdgeRuntime;
 
-    for (const count of stalledCounts) {
+    for (const count of stalledCounts || []) {
       const lastBatch = count.last_batch_at ? new Date(count.last_batch_at).getTime() : 0;
       const elapsed = now - lastBatch;
 
       if (elapsed < STALL_THRESHOLD_MS) {
-        // Still running, skip
         actions.push(`count=${count.id} status=${count.status} last_batch=${Math.round(elapsed / 1000)}s ago — OK`);
         continue;
       }
 
-      // Stalled! Re-trigger the appropriate function
       if (count.status === 'verifying') {
         console.log(`[watchdog] Re-triggering verify for count ${count.id} (stalled ${Math.round(elapsed / 1000)}s)`);
-        
         const invokePromise = fetch(`${supabaseUrl}/functions/v1/inventory-verify-and-correct`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${anonKey}`,
           },
-          body: JSON.stringify({
-            count_id: count.id,
-            store_id: count.store_id,
-            batch_size: 8,
-            also_correct: false,
-          }),
+          body: JSON.stringify({ count_id: count.id, store_id: count.store_id, batch_size: 8, also_correct: false }),
         }).then(async (r) => {
           const body = await r.text();
           console.log(`[watchdog] Re-triggered verify response: ${r.status} ${body.substring(0, 200)}`);
         }).catch(e => console.error('[watchdog] Re-trigger verify failed:', e));
-
-        const edgeRuntime = (globalThis as typeof globalThis & {
-          EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
-        }).EdgeRuntime;
         if (edgeRuntime?.waitUntil) edgeRuntime.waitUntil(invokePromise);
-
         actions.push(`count=${count.id} STALLED verify — re-triggered (${Math.round(elapsed / 1000)}s)`);
       }
 
       if (count.status === 'correcting') {
         console.log(`[watchdog] Re-triggering correction for count ${count.id} (stalled ${Math.round(elapsed / 1000)}s)`);
-        
         const invokePromise = fetch(`${supabaseUrl}/functions/v1/inventory-correct-stock`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${anonKey}`,
           },
-          body: JSON.stringify({
-            count_id: count.id,
-            batch_size: 10,
-          }),
+          body: JSON.stringify({ count_id: count.id, batch_size: 10 }),
         }).then(async (r) => {
           const body = await r.text();
           console.log(`[watchdog] Re-triggered correction response: ${r.status} ${body.substring(0, 200)}`);
         }).catch(e => console.error('[watchdog] Re-trigger correction failed:', e));
-
-        const edgeRuntime = (globalThis as typeof globalThis & {
-          EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
-        }).EdgeRuntime;
         if (edgeRuntime?.waitUntil) edgeRuntime.waitUntil(invokePromise);
-
         actions.push(`count=${count.id} STALLED correction — re-triggered (${Math.round(elapsed / 1000)}s)`);
       }
+    }
+
+    const { data: auditRuns } = await supabase
+      .from('inventory_audit_runs')
+      .select('id, status, per_store, created_at')
+      .eq('status', 'running')
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    for (const run of auditRuns || []) {
+      const perStore = Array.isArray(run.per_store) ? run.per_store : [];
+      const unfinishedStores = perStore.filter((store: any) => store && !store.finished);
+      if (unfinishedStores.length === 0) continue;
+
+      const latestHeartbeat = unfinishedStores.reduce((latest: number, store: any) => {
+        const candidates = [store?.last_progress_at, store?.stage2_started_at, run.created_at]
+          .filter(Boolean)
+          .map((value) => new Date(value).getTime())
+          .filter((value) => Number.isFinite(value));
+        const storeLatest = candidates.length ? Math.max(...candidates) : 0;
+        return Math.max(latest, storeLatest);
+      }, 0);
+
+      const elapsed = now - latestHeartbeat;
+      if (elapsed < AUDIT_STALL_THRESHOLD_MS) {
+        actions.push(`audit=${run.id} running heartbeat=${Math.round(elapsed / 1000)}s ago — OK`);
+        continue;
+      }
+
+      console.log(`[watchdog] Re-triggering inventory audit ${run.id} (stalled ${Math.round(elapsed / 1000)}s)`);
+      const invokePromise = fetch(`${supabaseUrl}/functions/v1/inventory-audit-tiny`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${anonKey}`,
+        },
+        body: JSON.stringify({ run_id: run.id, update_only: true }),
+      }).then(async (r) => {
+        const body = await r.text();
+        console.log(`[watchdog] Re-triggered audit response: ${r.status} ${body.substring(0, 200)}`);
+      }).catch(e => console.error('[watchdog] Re-trigger audit failed:', e));
+
+      if (edgeRuntime?.waitUntil) edgeRuntime.waitUntil(invokePromise);
+      actions.push(`audit=${run.id} STALLED — re-triggered (${Math.round(elapsed / 1000)}s)`);
     }
 
     console.log(`[watchdog] Actions: ${JSON.stringify(actions)}`);
