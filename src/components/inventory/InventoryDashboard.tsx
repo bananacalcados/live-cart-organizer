@@ -188,7 +188,9 @@ export function InventoryDashboard() {
 
   const overallPct = run?.status === "done"
     ? 100
-    : Math.round((catalogPct + stage2Pct) / 2);
+    : catalogPct < 100
+      ? Math.round((catalogPct + stage2Pct) / 2)
+      : Math.round(stage2Pct);
 
   // Totais consolidados (ao vivo, do banco)
   const totals = snapshot.reduce(
