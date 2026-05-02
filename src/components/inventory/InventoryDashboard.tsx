@@ -158,6 +158,23 @@ export function InventoryDashboard() {
     }
   };
 
+  const handleIncrementalSync = async () => {
+    setSyncingIncremental(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("inventory-incremental-sync", {
+        body: { days: 2 },
+      });
+      if (error) throw error;
+      toast.success("Sync incremental disparado! Atualiza apenas SKUs movimentados nos últimos 2 dias (~5min).");
+      console.log("incremental response", data);
+      setTimeout(() => loadSnapshot(), 5000);
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setSyncingIncremental(false);
+    }
+  };
+
   // ---- Cálculo de % verificado ----
   const perStore = (run?.per_store as any[]) || [];
 
