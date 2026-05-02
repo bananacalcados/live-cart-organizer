@@ -498,10 +498,27 @@ async function processNextChunk(supabase: any, options: AuditOptions) {
   }
 
   if (options.stage !== 1) {
-    const nextStockStore = stores.find((store) => !stockDone(perStoreState[store.id]));
-    if (nextStockStore) {
-      const result = await syncStockChunk(supabase, nextStockStore, options.runId, perStoreState);
-      if (!result.done || stores.some((store) => !stockDone(perStoreState[store.id]))) {
+    // PARALELIZAÇÃO: cada loja tem token Tiny próprio (rate limit independente).
+    // Processamos um chunk de cada loja pendente em paralelo no mesmo invoke.
+    const pendingStores = stores.filter((store) => !stockDone(perStoreState[store.id]));
+    if (pendingStores.length > 0) {
+      await Promise.all(
+        pendingStores.map((store) =>
+          syncStockChunk(supabase, store, options.runId, perStoreState).catch(async (err: any) => {
+            const prev = perStoreState[store.id] || {};
+            perStoreState[store.id] = {
+              ...prev,
+              store_id: store.id,
+              store_name: store.name,
+              stage: 2,
+              last_error: `parallel: ${err.message}`,
+              last_progress_at: new Date().toISOString(),
+            };
+            await updateRunProgress(supabase, options.runId, perStoreState);
+          }),
+        ),
+      );
+      if (stores.some((store) => !stockDone(perStoreState[store.id]))) {
         await enqueueContinuation(options);
         return;
       }
