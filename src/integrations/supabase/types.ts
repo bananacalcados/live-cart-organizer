@@ -4999,6 +4999,45 @@ export type Database = {
           },
         ]
       }
+      inventory_incremental_runs: {
+        Row: {
+          created_at: string
+          days_window: number
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          per_store: Json
+          progress: Json
+          since_date: string | null
+          status: string
+          totals: Json
+        }
+        Insert: {
+          created_at?: string
+          days_window?: number
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          per_store?: Json
+          progress?: Json
+          since_date?: string | null
+          status?: string
+          totals?: Json
+        }
+        Update: {
+          created_at?: string
+          days_window?: number
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          per_store?: Json
+          progress?: Json
+          since_date?: string | null
+          status?: string
+          totals?: Json
+        }
+        Relationships: []
+      }
       inventory_unresolved_barcodes: {
         Row: {
           barcode: string
