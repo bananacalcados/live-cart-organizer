@@ -217,9 +217,7 @@ async function syncCatalogChunk(
           toUpdate.push({
             id: existingId,
             patch: {
-              sku: row.sku,
               name: row.name,
-              variant: row.variant,
               category: row.category,
               price: row.price,
               cost_price: row.cost_price,
