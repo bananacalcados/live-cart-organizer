@@ -42,19 +42,39 @@ type RunRow = {
 };
 
 async function tinyPost(url: string, body: string, attempt = 0): Promise<any> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("tiny_timeout"), 20000);
 
-  const data = await response.json().catch(() => ({}));
-  if (data?.retorno?.codigo_erro === "6" && attempt < 4) {
-    await sleep(15000 + attempt * 5000);
-    return tinyPost(url, body, attempt + 1);
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      signal: controller.signal,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (data?.retorno?.codigo_erro === "6" && attempt < 4) {
+      await sleep(15000 + attempt * 5000);
+      return tinyPost(url, body, attempt + 1);
+    }
+
+    if (!response.ok && attempt < 2) {
+      await sleep(4000 + attempt * 2000);
+      return tinyPost(url, body, attempt + 1);
+    }
+
+    return data;
+  } catch (error: any) {
+    const isAbort = error?.name === "AbortError" || String(error?.message || "").includes("tiny_timeout");
+    if ((isAbort || attempt < 2) && attempt < 3) {
+      await sleep(4000 + attempt * 2000);
+      return tinyPost(url, body, attempt + 1);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return data;
 }
 
 function mapPerStore(perStore: any[] | null | undefined) {
@@ -78,6 +98,20 @@ async function updateRunProgress(supabase: any, runId: string, perStoreState: Re
     .from("inventory_audit_runs")
     .update({ per_store: Object.values(perStoreState) })
     .eq("id", runId);
+}
+
+async function checkpointRunProgress(
+  supabase: any,
+  runId: string,
+  perStoreState: Record<string, any>,
+  storeId: string,
+  stats: Record<string, any>,
+) {
+  perStoreState[storeId] = {
+    ...stats,
+    last_progress_at: new Date().toISOString(),
+  };
+  await updateRunProgress(supabase, runId, perStoreState);
 }
 
 async function enqueueContinuation(options: AuditOptions) {
@@ -320,8 +354,7 @@ async function syncStockChunk(
   if (batch.length === 0) {
     stats.finished = true;
     stats.stock_finished = true;
-    perStoreState[store.id] = stats;
-    await updateRunProgress(supabase, runId, perStoreState);
+    await checkpointRunProgress(supabase, runId, perStoreState, store.id, stats);
     return { done: true, stats };
   }
 
@@ -374,6 +407,10 @@ async function syncStockChunk(
       if (cost <= 0) stats.skus_with_stock_no_cost += 1;
     }
 
+    stats.cost_total_in_stock = Number(stats.cost_total_in_stock.toFixed(2));
+    stats.sale_total_in_stock = Number(stats.sale_total_in_stock.toFixed(2));
+    await checkpointRunProgress(supabase, runId, perStoreState, store.id, stats);
+
     await sleep(2100);
   }
 
@@ -382,8 +419,7 @@ async function syncStockChunk(
   stats.stock_finished = done;
   stats.cost_total_in_stock = Number(stats.cost_total_in_stock.toFixed(2));
   stats.sale_total_in_stock = Number(stats.sale_total_in_stock.toFixed(2));
-  perStoreState[store.id] = stats;
-  await updateRunProgress(supabase, runId, perStoreState);
+  await checkpointRunProgress(supabase, runId, perStoreState, store.id, stats);
 
   return { done, stats };
 }
