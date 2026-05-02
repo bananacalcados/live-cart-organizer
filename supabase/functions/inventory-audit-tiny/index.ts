@@ -297,6 +297,8 @@ async function syncCatalogChunk(
     }
 
     stats.pages_scanned = page;
+    await checkpointRunProgress(supabase, runId, perStoreState, store.id, stats);
+
     if (page >= totalPages) {
       done = true;
       break;
@@ -307,8 +309,7 @@ async function syncCatalogChunk(
 
   stats.finished = done;
   stats.catalog_finished = done;
-  perStoreState[store.id] = stats;
-  await updateRunProgress(supabase, runId, perStoreState);
+  await checkpointRunProgress(supabase, runId, perStoreState, store.id, stats);
 
   return { done, stats };
 }
