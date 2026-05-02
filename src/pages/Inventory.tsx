@@ -1143,6 +1143,8 @@ export default function Inventory() {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
+        ) : inventoryMode === "dashboard" ? (
+          <InventoryDashboard />
         ) : !selectedStoreId ? (
           <div className="text-center py-20">
             <Store className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
