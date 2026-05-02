@@ -3,7 +3,7 @@ import {
   Send, Search, Users, Filter, Loader2, CheckCircle, TestTube,
   ChevronDown, ChevronUp, Phone, MapPin, Crown, FileSpreadsheet,
   AlertTriangle, Eye, Zap, RefreshCw, Image, Paperclip, Store,
-  Calendar, ShoppingBag, Bookmark, Trash2, Save, X, Clock, Ban
+  Calendar, ShoppingBag, Bookmark, Trash2, Save, X, Clock, Ban, Pencil
 } from "lucide-react";
 import { DispatchHistoryList, DuplicateDispatchData } from "./DispatchHistoryList";
 import { Button } from "@/components/ui/button";
@@ -148,6 +148,7 @@ export function MassTemplateDispatcher() {
   const [scheduleMode, setScheduleMode] = useState<'none' | 'schedule' | 'paused'>('none');
   const [scheduledDate, setScheduledDate] = useState("");
   const [campaignName, setCampaignName] = useState("");
+  const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
 
   // Cooldown filter
   const [cooldownDays, setCooldownDays] = useState<string>("");
@@ -1061,17 +1062,31 @@ export function MassTemplateDispatcher() {
         insertData.scheduled_at = new Date(scheduledDate).toISOString();
       }
 
-      const { data: dispatchData, error: dispErr } = await supabase
-        .from('dispatch_history')
-        .insert(insertData as any)
-        .select('id')
-        .single();
+      let dispatchId: string;
+      if (editDispatchId) {
+        // UPDATE existing dispatch
+        const { error: updErr } = await supabase
+          .from('dispatch_history')
+          .update(insertData as any)
+          .eq('id', editDispatchId);
+        if (updErr) throw updErr;
+        dispatchId = editDispatchId;
 
-      if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
+        // Replace recipients (delete old, insert new)
+        await supabase.from('dispatch_recipients').delete().eq('dispatch_id', dispatchId);
+      } else {
+        const { data: dispatchData, error: dispErr } = await supabase
+          .from('dispatch_history')
+          .insert(insertData as any)
+          .select('id')
+          .single();
+        if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
+        dispatchId = dispatchData.id;
+      }
 
       // Save recipients
       const recipientRows = allPhones.map(p => ({
-        dispatch_id: dispatchData.id,
+        dispatch_id: dispatchId,
         phone: p,
         recipient_name: recipientMap.get(p)?.name || null,
         status: 'pending',
@@ -1080,12 +1095,15 @@ export function MassTemplateDispatcher() {
         await supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 500));
       }
 
-      if (mode === 'schedule') {
+      if (editDispatchId) {
+        toast.success("✅ Disparo atualizado com sucesso");
+      } else if (mode === 'schedule') {
         toast.success(`📅 Disparo agendado para ${new Date(scheduledDate).toLocaleString('pt-BR')}`);
       } else {
         toast.success("⏸️ Disparo salvo como pausado — dispare quando quiser pelo histórico");
       }
 
+      setEditDispatchId(null);
       setScheduleMode('none');
       setScheduledDate('');
       setHistoryKey(k => k + 1);
@@ -1097,6 +1115,10 @@ export function MassTemplateDispatcher() {
 
   // Handle duplicate from history
   const handleDuplicate = useCallback((data: DuplicateDispatchData) => {
+    // Track edit mode (update existing dispatch instead of creating a new one)
+    setEditDispatchId(data.edit_dispatch_id || null);
+    setCampaignName(data.campaign_name || "");
+
     // Set WhatsApp number
     if (data.whatsapp_number_id) {
       setSelectedNumber(data.whatsapp_number_id);
@@ -1737,7 +1759,20 @@ export function MassTemplateDispatcher() {
             {/* Action bar */}
             <div className="flex items-center justify-between pt-2">
               <div className="text-xs text-muted-foreground">
-                {selectedCount > 0 && (
+                {editDispatchId && (
+                  <span className="flex items-center gap-2 text-amber-600 font-medium">
+                    <Pencil className="h-3 w-3" />
+                    Editando disparo existente
+                    <button
+                      type="button"
+                      className="underline hover:text-amber-700"
+                      onClick={() => { setEditDispatchId(null); toast.info("Edição cancelada"); }}
+                    >
+                      cancelar
+                    </button>
+                  </span>
+                )}
+                {!editDispatchId && selectedCount > 0 && (
                   <span className="flex items-center gap-1">
                     <CheckCircle className="h-3 w-3 text-emerald-500" />
                     {selectedCount} destinatários selecionados
@@ -1752,7 +1787,7 @@ export function MassTemplateDispatcher() {
                   onClick={() => setScheduleMode('paused')}
                 >
                   <Save className="h-3.5 w-3.5" />
-                  Salvar Pausado
+                  {editDispatchId ? "Salvar Alterações" : "Salvar Pausado"}
                 </Button>
                 <Button
                   variant="outline"
