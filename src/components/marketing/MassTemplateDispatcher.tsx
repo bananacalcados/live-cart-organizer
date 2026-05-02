@@ -148,6 +148,7 @@ export function MassTemplateDispatcher() {
   const [scheduleMode, setScheduleMode] = useState<'none' | 'schedule' | 'paused'>('none');
   const [scheduledDate, setScheduledDate] = useState("");
   const [campaignName, setCampaignName] = useState("");
+  const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
 
   // Cooldown filter
   const [cooldownDays, setCooldownDays] = useState<string>("");
