@@ -888,7 +888,7 @@ function FilterSelect({
   );
 }
 
-function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function KpiCard({ icon, label, value, hint }: { icon: React.ReactNode; label: string; value: string; hint?: string }) {
   return (
     <Card>
       <CardContent className="pt-4 pb-3">
@@ -896,6 +896,7 @@ function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string;
           <span>{label}</span>{icon}
         </div>
         <div className="text-lg font-bold">{value}</div>
+        {hint && <div className="text-[10px] text-muted-foreground mt-1 leading-tight">{hint}</div>}
       </CardContent>
     </Card>
   );
