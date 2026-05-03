@@ -680,7 +680,7 @@ export function InventoryAnalytics() {
                           {r.classe}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[300px] truncate">{r.label}</TableCell>
+                      <TableCell className="min-w-[180px] whitespace-normal break-words">{r.label}</TableCell>
                       <TableCell className="text-right">{fmtNum(r.qty)}</TableCell>
                       <TableCell className="text-right">{fmtMoney(r.revenue)}</TableCell>
                       <TableCell className="text-right">{r.pct.toFixed(1)}%</TableCell>
@@ -743,7 +743,7 @@ export function InventoryAnalytics() {
                         { label: `${cov.toFixed(0)}d`, variant: "outline" as const };
                       return (
                         <TableRow key={r.key}>
-                          <TableCell className="max-w-[260px] truncate">{r.label}</TableCell>
+                          <TableCell className="min-w-[180px] whitespace-normal break-words">{r.label}</TableCell>
                           <TableCell className="font-mono text-xs">{r.sku}</TableCell>
                           <TableCell>{r.brand}</TableCell>
                           <TableCell>{r.size || "—"}</TableCell>
@@ -798,7 +798,7 @@ export function InventoryAnalytics() {
                 <TableBody>
                   {stagnantRows.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell className="max-w-[260px] truncate">{p.name}</TableCell>
+                      <TableCell className="min-w-[180px] whitespace-normal break-words">{p.name}</TableCell>
                       <TableCell className="font-mono text-xs">{p.sku}</TableCell>
                       <TableCell>{p.brand}</TableCell>
                       <TableCell>{p.size || "—"}</TableCell>
@@ -843,7 +843,7 @@ export function InventoryAnalytics() {
                 <TableBody>
                   {aggregatedRows.slice(0, 500).map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell className="max-w-[280px] truncate">{p.name}</TableCell>
+                      <TableCell className="min-w-[180px] whitespace-normal break-words">{p.name}</TableCell>
                       <TableCell className="font-mono text-xs">{p.sku}</TableCell>
                       <TableCell>{p.brand}</TableCell>
                       <TableCell>{p.category || "—"}</TableCell>
