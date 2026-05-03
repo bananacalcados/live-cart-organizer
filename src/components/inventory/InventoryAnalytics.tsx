@@ -350,6 +350,85 @@ export function InventoryAnalytics() {
       .slice(0, 200);
   }, [filtered, sales]);
 
+  // Cobertura de estoque em dias (estoque / vendas-por-dia no período)
+  const coverageRows = useMemo(() => {
+    type Row = {
+      key: string;
+      label: string;
+      sku: string;
+      brand: string;
+      category: string;
+      size: string;
+      color: string;
+      stock: number;
+      soldQty: number;
+      avgDaily: number;
+      coverageDays: number | null; // null = sem venda
+      cost: number;
+      sale: number;
+    };
+    const map = new Map<string, Row>();
+    for (const p of filtered) {
+      const isParents = scopeFilter === "parents";
+      const key = isParents
+        ? `${p.store_id}::${p.parent_key}`
+        : (p.sku && String(p.sku)) || String(p.tiny_id);
+      const sk = (p.sku && String(p.sku)) || String(p.tiny_id);
+      const sales_ = sales.get(sk) || { qty: 0, revenue: 0 };
+      const label = isParents
+        ? p.name.split(" - ")[0]
+        : `${p.name}${p.size ? ` · ${p.size}` : ""}${p.color ? ` · ${p.color}` : ""}`;
+
+      const cur = map.get(key);
+      if (cur) {
+        cur.stock += p.stock;
+        cur.soldQty += sales_.qty;
+        cur.cost += p.stock * p.cost_price;
+        cur.sale += p.stock * p.price;
+      } else {
+        map.set(key, {
+          key, label,
+          sku: p.sku || "",
+          brand: p.brand,
+          category: p.category || "",
+          size: p.size || "",
+          color: p.color || "",
+          stock: p.stock,
+          soldQty: sales_.qty,
+          avgDaily: 0,
+          coverageDays: null,
+          cost: p.stock * p.cost_price,
+          sale: p.stock * p.price,
+        });
+      }
+    }
+    const rows = Array.from(map.values());
+    for (const r of rows) {
+      r.avgDaily = r.soldQty / Math.max(1, periodDays);
+      r.coverageDays = r.avgDaily > 0 ? r.stock / r.avgDaily : null;
+    }
+    // Ordena por menor cobertura (com vendas) primeiro, depois sem venda
+    rows.sort((a, b) => {
+      const ax = a.coverageDays ?? Number.POSITIVE_INFINITY;
+      const bx = b.coverageDays ?? Number.POSITIVE_INFINITY;
+      return ax - bx;
+    });
+    return rows;
+  }, [filtered, sales, periodDays, scopeFilter]);
+
+  const coverageBuckets = useMemo(() => {
+    const b = { critical: 0, low: 0, healthy: 0, excess: 0, noSales: 0 };
+    for (const r of coverageRows) {
+      if (r.stock <= 0) continue;
+      if (r.coverageDays === null) b.noSales += 1;
+      else if (r.coverageDays < 15) b.critical += 1;
+      else if (r.coverageDays < 30) b.low += 1;
+      else if (r.coverageDays <= 90) b.healthy += 1;
+      else b.excess += 1;
+    }
+    return b;
+  }, [coverageRows]);
+
   // Resumos por dimensão
   const byDim = (dim: keyof EnrichedProduct) => {
     const map = new Map<string, { qty: number; cost: number; sale: number; skus: number }>();
