@@ -602,17 +602,47 @@ export function InventoryAnalytics() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard icon={<Package className="h-4 w-4" />} label="SKUs filtrados" value={fmtNum(kpis.skus)} />
         <KpiCard icon={<Boxes className="h-4 w-4" />} label="Qtd em estoque" value={fmtNum(kpis.qty)} />
-        <KpiCard icon={<DollarSign className="h-4 w-4" />} label="Custo de estoque" value={fmtMoney(kpis.cost)} />
+        <KpiCard
+          icon={<DollarSign className="h-4 w-4" />}
+          label="Custo de estoque"
+          value={fmtMoney(kpis.cost)}
+          hint={kpis.skusWithoutCost > 0
+            ? `${fmtNum(kpis.skusWithoutCost)} SKUs sem custo · estimado total ${fmtMoney(kpis.costEstimated)}`
+            : undefined}
+        />
         <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Valor de revenda" value={fmtMoney(kpis.sale)} />
-        <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Margem potencial" value={fmtMoney(kpis.margin)} />
+        <KpiCard
+          icon={<TrendingUp className="h-4 w-4" />}
+          label="Markup observado"
+          value={kpis.observedMarkup > 0 ? `${kpis.observedMarkup.toFixed(2)}x` : "—"}
+          hint={kpis.observedMarkup > 0
+            ? `Margem: ${fmtMoney(kpis.margin)}`
+            : "Cadastre custos para calcular"}
+        />
         <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Pares parados" value={fmtNum(kpis.stagnant)} />
       </div>
+
+      {kpis.skusWithoutCost > 0 && (
+        <Card className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20">
+          <CardContent className="py-3 text-sm flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
+            <div>
+              <strong>{fmtNum(kpis.skusWithoutCost)} SKUs com estoque estão sem preço de custo</strong> ({fmtNum(kpis.qtyWithoutCost)} pares).
+              O custo de estoque mostrado ({fmtMoney(kpis.cost)}) ignora esses itens.
+              Vá na aba <strong>"Sem custo"</strong> para cadastrar — ao salvar no produto pai, todos os filhos recebem o mesmo valor.
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Abas de análise */}
       <Tabs defaultValue="abc">
         <TabsList className="flex w-full overflow-x-auto justify-start">
           <TabsTrigger value="abc">Curva ABC</TabsTrigger>
           <TabsTrigger value="coverage">Cobertura (dias)</TabsTrigger>
+          <TabsTrigger value="nocost">
+            Sem custo {kpis.skusWithoutCost > 0 && <Badge variant="destructive" className="ml-1 h-4 px-1 text-[10px]">{kpis.skusWithoutCost}</Badge>}
+          </TabsTrigger>
           <TabsTrigger value="brand">Por marca</TabsTrigger>
           <TabsTrigger value="category">Por categoria</TabsTrigger>
           <TabsTrigger value="size">Por tamanho</TabsTrigger>
