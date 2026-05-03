@@ -647,6 +647,76 @@ export function InventoryAnalytics() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="coverage">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Calendar className="h-4 w-4" /> Cobertura de estoque ({periodDays} dias) — {scopeFilter === "parents" ? "Produto Pai" : "Produto Filho"}
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Cobertura = estoque atual ÷ média diária de vendas no período. Ex.: 12 unidades vendendo 1/dia = 12 dias.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Crítico (<15d)" value={fmtNum(coverageBuckets.critical)} />
+                <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Baixo (15-30d)" value={fmtNum(coverageBuckets.low)} />
+                <KpiCard icon={<Boxes className="h-4 w-4" />} label="Saudável (30-90d)" value={fmtNum(coverageBuckets.healthy)} />
+                <KpiCard icon={<Layers className="h-4 w-4" />} label="Excesso (>90d)" value={fmtNum(coverageBuckets.excess)} />
+                <KpiCard icon={<X className="h-4 w-4" />} label="Sem venda" value={fmtNum(coverageBuckets.noSales)} />
+              </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Produto</TableHead>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Marca</TableHead>
+                      <TableHead>Tam</TableHead>
+                      <TableHead>Cor</TableHead>
+                      <TableHead className="text-right">Estoque</TableHead>
+                      <TableHead className="text-right">Vendas ({periodDays}d)</TableHead>
+                      <TableHead className="text-right">Média/dia</TableHead>
+                      <TableHead className="text-right">Cobertura</TableHead>
+                      <TableHead className="text-right">Custo Estoque</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {coverageRows.slice(0, 500).map((r) => {
+                      const cov = r.coverageDays;
+                      const badge =
+                        cov === null ? { label: "Sem venda", variant: "outline" as const } :
+                        cov < 15 ? { label: `${cov.toFixed(1)}d`, variant: "destructive" as const } :
+                        cov < 30 ? { label: `${cov.toFixed(1)}d`, variant: "secondary" as const } :
+                        cov <= 90 ? { label: `${cov.toFixed(0)}d`, variant: "default" as const } :
+                        { label: `${cov.toFixed(0)}d`, variant: "outline" as const };
+                      return (
+                        <TableRow key={r.key}>
+                          <TableCell className="max-w-[260px] truncate">{r.label}</TableCell>
+                          <TableCell className="font-mono text-xs">{r.sku}</TableCell>
+                          <TableCell>{r.brand}</TableCell>
+                          <TableCell>{r.size || "—"}</TableCell>
+                          <TableCell>{r.color || "—"}</TableCell>
+                          <TableCell className="text-right">{fmtNum(r.stock)}</TableCell>
+                          <TableCell className="text-right">{fmtNum(r.soldQty)}</TableCell>
+                          <TableCell className="text-right">{r.avgDaily.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">
+                            <Badge variant={badge.variant}>{badge.label}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right">{fmtMoney(r.cost)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                {coverageRows.length > 500 && (
+                  <p className="text-xs text-muted-foreground mt-2">Exibindo top 500 (menor cobertura) de {fmtNum(coverageRows.length)}.</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="brand"><DimTable rows={byBrand} label="Marca" /></TabsContent>
         <TabsContent value="category"><DimTable rows={byCategory} label="Categoria" /></TabsContent>
         <TabsContent value="size"><DimTable rows={bySize} label="Tamanho" /></TabsContent>
