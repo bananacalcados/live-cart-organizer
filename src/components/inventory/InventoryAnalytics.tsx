@@ -768,6 +768,21 @@ export function InventoryAnalytics() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="nocost">
+          <NoCostEditor
+            products={products}
+            filtered={filtered}
+            scope={scopeFilter}
+            stores={stores}
+            onUpdated={(updates) => {
+              setProducts((prev) => prev.map((p) => {
+                const v = updates.get(p.id);
+                return v !== undefined ? { ...p, cost_price: v } : p;
+              }));
+            }}
+          />
+        </TabsContent>
+
         <TabsContent value="brand"><DimTable rows={byBrand} label="Marca" /></TabsContent>
         <TabsContent value="category"><DimTable rows={byCategory} label="Categoria" /></TabsContent>
         <TabsContent value="size"><DimTable rows={bySize} label="Tamanho" /></TabsContent>
