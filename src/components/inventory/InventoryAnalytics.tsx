@@ -589,8 +589,9 @@ export function InventoryAnalytics() {
 
       {/* Abas de análise */}
       <Tabs defaultValue="abc">
-        <TabsList>
+        <TabsList className="flex w-full overflow-x-auto justify-start">
           <TabsTrigger value="abc">Curva ABC</TabsTrigger>
+          <TabsTrigger value="coverage">Cobertura (dias)</TabsTrigger>
           <TabsTrigger value="brand">Por marca</TabsTrigger>
           <TabsTrigger value="category">Por categoria</TabsTrigger>
           <TabsTrigger value="size">Por tamanho</TabsTrigger>
