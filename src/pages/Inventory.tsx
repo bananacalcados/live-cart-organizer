@@ -1076,7 +1076,7 @@ export default function Inventory() {
           <h1 className="text-lg font-bold">Controle de Estoque</h1>
           <div className="flex-1" />
           {stores.length > 0 && (
-            <div className="flex gap-1 bg-muted rounded-lg p-0.5">
+            <div className="flex gap-1 bg-muted rounded-lg p-0.5 overflow-x-auto max-w-full">
               <Button
                 variant={inventoryMode === "dashboard" ? "default" : "ghost"}
                 size="sm"
