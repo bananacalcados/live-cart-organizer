@@ -266,21 +266,42 @@ export function InventoryAnalytics() {
   // KPIs
   const kpis = useMemo(() => {
     let qty = 0, cost = 0, sale = 0;
-    let stagnant = 0; // sem venda no período
+    let stagnant = 0;
+    let qtyWithoutCost = 0;
+    let skusWithoutCost = 0;
+    let saleOfWithoutCost = 0;
     for (const p of filtered) {
       qty += p.stock;
-      cost += p.stock * p.cost_price;
+      const hasCost = p.cost_price > 0;
+      if (hasCost) {
+        cost += p.stock * p.cost_price;
+      } else if (p.stock > 0) {
+        qtyWithoutCost += p.stock;
+        skusWithoutCost += 1;
+        saleOfWithoutCost += p.stock * p.price;
+      }
       sale += p.stock * p.price;
       const key = (p.sku && String(p.sku)) || (p.tiny_id && String(p.tiny_id)) || "";
       if (p.stock > 0 && (!sales.get(key) || sales.get(key)!.qty === 0)) {
         stagnant += p.stock;
       }
     }
+    // Custo estimado: completa os produtos sem custo usando markup médio observado
+    // markup médio = sale / cost (apenas dos que têm custo)
+    const observedCostRatio = cost > 0 && (sale - saleOfWithoutCost) > 0
+      ? cost / (sale - saleOfWithoutCost)
+      : 0;
+    const estimatedExtraCost = observedCostRatio > 0 ? saleOfWithoutCost * observedCostRatio : 0;
     return {
       skus: filtered.length,
       qty, cost, sale,
       margin: sale - cost,
       stagnant,
+      qtyWithoutCost,
+      skusWithoutCost,
+      saleOfWithoutCost,
+      costEstimated: cost + estimatedExtraCost,
+      observedMarkup: cost > 0 ? (sale - saleOfWithoutCost) / cost : 0,
     };
   }, [filtered, sales]);
 
