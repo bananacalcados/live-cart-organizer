@@ -266,21 +266,42 @@ export function InventoryAnalytics() {
   // KPIs
   const kpis = useMemo(() => {
     let qty = 0, cost = 0, sale = 0;
-    let stagnant = 0; // sem venda no período
+    let stagnant = 0;
+    let qtyWithoutCost = 0;
+    let skusWithoutCost = 0;
+    let saleOfWithoutCost = 0;
     for (const p of filtered) {
       qty += p.stock;
-      cost += p.stock * p.cost_price;
+      const hasCost = p.cost_price > 0;
+      if (hasCost) {
+        cost += p.stock * p.cost_price;
+      } else if (p.stock > 0) {
+        qtyWithoutCost += p.stock;
+        skusWithoutCost += 1;
+        saleOfWithoutCost += p.stock * p.price;
+      }
       sale += p.stock * p.price;
       const key = (p.sku && String(p.sku)) || (p.tiny_id && String(p.tiny_id)) || "";
       if (p.stock > 0 && (!sales.get(key) || sales.get(key)!.qty === 0)) {
         stagnant += p.stock;
       }
     }
+    // Custo estimado: completa os produtos sem custo usando markup médio observado
+    // markup médio = sale / cost (apenas dos que têm custo)
+    const observedCostRatio = cost > 0 && (sale - saleOfWithoutCost) > 0
+      ? cost / (sale - saleOfWithoutCost)
+      : 0;
+    const estimatedExtraCost = observedCostRatio > 0 ? saleOfWithoutCost * observedCostRatio : 0;
     return {
       skus: filtered.length,
       qty, cost, sale,
       margin: sale - cost,
       stagnant,
+      qtyWithoutCost,
+      skusWithoutCost,
+      saleOfWithoutCost,
+      costEstimated: cost + estimatedExtraCost,
+      observedMarkup: cost > 0 ? (sale - saleOfWithoutCost) / cost : 0,
     };
   }, [filtered, sales]);
 
@@ -581,17 +602,47 @@ export function InventoryAnalytics() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <KpiCard icon={<Package className="h-4 w-4" />} label="SKUs filtrados" value={fmtNum(kpis.skus)} />
         <KpiCard icon={<Boxes className="h-4 w-4" />} label="Qtd em estoque" value={fmtNum(kpis.qty)} />
-        <KpiCard icon={<DollarSign className="h-4 w-4" />} label="Custo de estoque" value={fmtMoney(kpis.cost)} />
+        <KpiCard
+          icon={<DollarSign className="h-4 w-4" />}
+          label="Custo de estoque"
+          value={fmtMoney(kpis.cost)}
+          hint={kpis.skusWithoutCost > 0
+            ? `${fmtNum(kpis.skusWithoutCost)} SKUs sem custo · estimado total ${fmtMoney(kpis.costEstimated)}`
+            : undefined}
+        />
         <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Valor de revenda" value={fmtMoney(kpis.sale)} />
-        <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Margem potencial" value={fmtMoney(kpis.margin)} />
+        <KpiCard
+          icon={<TrendingUp className="h-4 w-4" />}
+          label="Markup observado"
+          value={kpis.observedMarkup > 0 ? `${kpis.observedMarkup.toFixed(2)}x` : "—"}
+          hint={kpis.observedMarkup > 0
+            ? `Margem: ${fmtMoney(kpis.margin)}`
+            : "Cadastre custos para calcular"}
+        />
         <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Pares parados" value={fmtNum(kpis.stagnant)} />
       </div>
+
+      {kpis.skusWithoutCost > 0 && (
+        <Card className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20">
+          <CardContent className="py-3 text-sm flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
+            <div>
+              <strong>{fmtNum(kpis.skusWithoutCost)} SKUs com estoque estão sem preço de custo</strong> ({fmtNum(kpis.qtyWithoutCost)} pares).
+              O custo de estoque mostrado ({fmtMoney(kpis.cost)}) ignora esses itens.
+              Vá na aba <strong>"Sem custo"</strong> para cadastrar — ao salvar no produto pai, todos os filhos recebem o mesmo valor.
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Abas de análise */}
       <Tabs defaultValue="abc">
         <TabsList className="flex w-full overflow-x-auto justify-start">
           <TabsTrigger value="abc">Curva ABC</TabsTrigger>
           <TabsTrigger value="coverage">Cobertura (dias)</TabsTrigger>
+          <TabsTrigger value="nocost">
+            Sem custo {kpis.skusWithoutCost > 0 && <Badge variant="destructive" className="ml-1 h-4 px-1 text-[10px]">{kpis.skusWithoutCost}</Badge>}
+          </TabsTrigger>
           <TabsTrigger value="brand">Por marca</TabsTrigger>
           <TabsTrigger value="category">Por categoria</TabsTrigger>
           <TabsTrigger value="size">Por tamanho</TabsTrigger>
@@ -629,7 +680,7 @@ export function InventoryAnalytics() {
                           {r.classe}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[300px] truncate">{r.label}</TableCell>
+                      <TableCell className="min-w-[180px] whitespace-normal break-words">{r.label}</TableCell>
                       <TableCell className="text-right">{fmtNum(r.qty)}</TableCell>
                       <TableCell className="text-right">{fmtMoney(r.revenue)}</TableCell>
                       <TableCell className="text-right">{r.pct.toFixed(1)}%</TableCell>
@@ -692,7 +743,7 @@ export function InventoryAnalytics() {
                         { label: `${cov.toFixed(0)}d`, variant: "outline" as const };
                       return (
                         <TableRow key={r.key}>
-                          <TableCell className="max-w-[260px] truncate">{r.label}</TableCell>
+                          <TableCell className="min-w-[180px] whitespace-normal break-words">{r.label}</TableCell>
                           <TableCell className="font-mono text-xs">{r.sku}</TableCell>
                           <TableCell>{r.brand}</TableCell>
                           <TableCell>{r.size || "—"}</TableCell>
@@ -715,6 +766,21 @@ export function InventoryAnalytics() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="nocost">
+          <NoCostEditor
+            products={products}
+            filtered={filtered}
+            scope={scopeFilter}
+            stores={stores}
+            onUpdated={(updates) => {
+              setProducts((prev) => prev.map((p) => {
+                const v = updates.get(p.id);
+                return v !== undefined ? { ...p, cost_price: v } : p;
+              }));
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="brand"><DimTable rows={byBrand} label="Marca" /></TabsContent>
@@ -747,7 +813,7 @@ export function InventoryAnalytics() {
                 <TableBody>
                   {stagnantRows.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell className="max-w-[260px] truncate">{p.name}</TableCell>
+                      <TableCell className="min-w-[180px] whitespace-normal break-words">{p.name}</TableCell>
                       <TableCell className="font-mono text-xs">{p.sku}</TableCell>
                       <TableCell>{p.brand}</TableCell>
                       <TableCell>{p.size || "—"}</TableCell>
@@ -792,7 +858,7 @@ export function InventoryAnalytics() {
                 <TableBody>
                   {aggregatedRows.slice(0, 500).map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell className="max-w-[280px] truncate">{p.name}</TableCell>
+                      <TableCell className="min-w-[180px] whitespace-normal break-words">{p.name}</TableCell>
                       <TableCell className="font-mono text-xs">{p.sku}</TableCell>
                       <TableCell>{p.brand}</TableCell>
                       <TableCell>{p.category || "—"}</TableCell>
@@ -837,7 +903,7 @@ function FilterSelect({
   );
 }
 
-function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function KpiCard({ icon, label, value, hint }: { icon: React.ReactNode; label: string; value: string; hint?: string }) {
   return (
     <Card>
       <CardContent className="pt-4 pb-3">
@@ -845,6 +911,7 @@ function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string;
           <span>{label}</span>{icon}
         </div>
         <div className="text-lg font-bold">{value}</div>
+        {hint && <div className="text-[10px] text-muted-foreground mt-1 leading-tight">{hint}</div>}
       </CardContent>
     </Card>
   );
@@ -880,6 +947,206 @@ function DimTable({ rows, label }: { rows: any[]; label: string }) {
             ))}
           </TableBody>
         </Table>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------- NoCostEditor ----------
+type NoCostRow = {
+  key: string; // parent_key (escopo pai) ou id (escopo filho)
+  label: string;
+  sku: string;
+  brand: string;
+  category: string;
+  size: string;
+  color: string;
+  price: number;
+  stock: number;
+  totalSale: number;
+  ids: string[]; // ids dos pos_products afetados ao salvar
+  variantsCount: number;
+};
+
+function NoCostEditor({
+  products, filtered, scope, stores, onUpdated,
+}: {
+  products: EnrichedProduct[];
+  filtered: EnrichedProduct[];
+  scope: "variants" | "parents";
+  stores: { id: string; name: string }[];
+  onUpdated: (updates: Map<string, number>) => void;
+}) {
+  const [editing, setEditing] = useState<Map<string, string>>(new Map());
+  const [saving, setSaving] = useState<Set<string>>(new Set());
+  const [scopeLocal, setScopeLocal] = useState<"parents" | "variants">("parents");
+
+  const rows = useMemo<NoCostRow[]>(() => {
+    // Considera todos os produtos do recorte filtrado que NÃO têm custo e têm estoque > 0
+    const noCost = filtered.filter((p) => (!p.cost_price || p.cost_price <= 0) && p.stock > 0);
+    if (scopeLocal === "variants") {
+      return noCost.map((p) => ({
+        key: p.id,
+        label: p.name,
+        sku: p.sku || "",
+        brand: p.brand,
+        category: p.category || "",
+        size: p.size || "",
+        color: p.color || "",
+        price: p.price,
+        stock: p.stock,
+        totalSale: p.stock * p.price,
+        ids: [p.id],
+        variantsCount: 1,
+      })).sort((a, b) => b.totalSale - a.totalSale);
+    }
+    // Modo "parents": agrupa por parent_key — inclui TODOS os filhos do pai
+    // (não só os sem custo) pra que a edição realmente cascate.
+    const parentMap = new Map<string, EnrichedProduct[]>();
+    const targetKeys = new Set(noCost.map((p) => p.parent_key));
+    for (const p of products) {
+      if (!targetKeys.has(p.parent_key)) continue;
+      const arr = parentMap.get(p.parent_key) || [];
+      arr.push(p);
+      parentMap.set(p.parent_key, arr);
+    }
+    const out: NoCostRow[] = [];
+    for (const [k, list] of parentMap.entries()) {
+      const sample = list[0];
+      const totalStock = list.reduce((a, b) => a + b.stock, 0);
+      const avgPrice = list.reduce((a, b) => a + b.price, 0) / list.length;
+      const sizes = Array.from(new Set(list.map((x) => x.size).filter(Boolean) as string[]));
+      const colors = Array.from(new Set(list.map((x) => x.color).filter(Boolean) as string[]));
+      out.push({
+        key: k,
+        label: sample.name.split(" - ")[0],
+        sku: sample.sku?.split("-")[0] || sample.sku || "",
+        brand: sample.brand,
+        category: sample.category || "",
+        size: sizes.length > 1 ? `${sizes.length} tam.` : sizes[0] || "",
+        color: colors.length > 1 ? `${colors.length} cores` : colors[0] || "",
+        price: avgPrice,
+        stock: totalStock,
+        totalSale: totalStock * avgPrice,
+        ids: list.map((x) => x.id),
+        variantsCount: list.length,
+      });
+    }
+    return out.sort((a, b) => b.totalSale - a.totalSale);
+  }, [filtered, products, scopeLocal]);
+
+  async function handleSave(row: NoCostRow) {
+    const raw = editing.get(row.key) || "";
+    const value = parseFloat(raw.replace(",", "."));
+    if (!isFinite(value) || value <= 0) {
+      toast.error("Informe um valor de custo maior que zero.");
+      return;
+    }
+    setSaving((s) => new Set(s).add(row.key));
+    const { error } = await supabase
+      .from("pos_products")
+      .update({ cost_price: value })
+      .in("id", row.ids);
+    setSaving((s) => { const n = new Set(s); n.delete(row.key); return n; });
+    if (error) { toast.error("Erro ao salvar: " + error.message); return; }
+    toast.success(`Custo salvo em ${row.ids.length} variante(s).`);
+    const updates = new Map<string, number>();
+    row.ids.forEach((id) => updates.set(id, value));
+    onUpdated(updates);
+    setEditing((m) => { const n = new Map(m); n.delete(row.key); return n; });
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          Produtos sem preço de custo — {fmtNum(rows.length)} {scopeLocal === "parents" ? "produtos pai" : "variações"}
+        </CardTitle>
+        <p className="text-xs text-muted-foreground">
+          No modo <strong>Produto Pai</strong>, ao salvar o custo, todos os filhos (variações de tamanho/cor) recebem o mesmo valor.
+          O custo de estoque no dashboard é recalculado automaticamente.
+        </p>
+        <div className="flex gap-2 pt-1">
+          <Button size="sm" variant={scopeLocal === "parents" ? "default" : "outline"} onClick={() => setScopeLocal("parents")}>
+            Produto Pai
+          </Button>
+          <Button size="sm" variant={scopeLocal === "variants" ? "default" : "outline"} onClick={() => setScopeLocal("variants")}>
+            Variações (filhos)
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="min-w-[180px]">Produto</TableHead>
+              <TableHead>SKU</TableHead>
+              <TableHead>Marca</TableHead>
+              {scopeLocal === "variants" && <TableHead>Tam</TableHead>}
+              {scopeLocal === "variants" && <TableHead>Cor</TableHead>}
+              {scopeLocal === "parents" && <TableHead>Variações</TableHead>}
+              <TableHead className="text-right">Estoque</TableHead>
+              <TableHead className="text-right">Preço venda</TableHead>
+              <TableHead className="text-right min-w-[180px]">Custo (novo)</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.slice(0, 500).map((r) => {
+              const isSaving = saving.has(r.key);
+              const val = editing.get(r.key) ?? "";
+              return (
+                <TableRow key={r.key}>
+                  <TableCell className="min-w-[180px] whitespace-normal break-words font-medium">{r.label}</TableCell>
+                  <TableCell className="font-mono text-xs">{r.sku}</TableCell>
+                  <TableCell>{r.brand}</TableCell>
+                  {scopeLocal === "variants" && <TableCell>{r.size || "—"}</TableCell>}
+                  {scopeLocal === "variants" && <TableCell>{r.color || "—"}</TableCell>}
+                  {scopeLocal === "parents" && (
+                    <TableCell className="text-xs text-muted-foreground">
+                      {r.variantsCount} {r.size && `· ${r.size}`} {r.color && `· ${r.color}`}
+                    </TableCell>
+                  )}
+                  <TableCell className="text-right">{fmtNum(r.stock)}</TableCell>
+                  <TableCell className="text-right">{fmtMoney(r.price)}</TableCell>
+                  <TableCell className="text-right">
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      placeholder="0,00"
+                      value={val}
+                      onChange={(e) => setEditing((m) => new Map(m).set(r.key, e.target.value))}
+                      className="h-8 w-28 ml-auto text-right"
+                      disabled={isSaving}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      size="sm"
+                      onClick={() => handleSave(r)}
+                      disabled={isSaving || !val}
+                    >
+                      {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : "Salvar"}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+        {rows.length === 0 && (
+          <p className="text-sm text-muted-foreground py-4">
+            Nenhum produto sem custo no recorte atual. 🎉
+          </p>
+        )}
+        {rows.length > 500 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            Exibindo top 500 (maior valor de venda em estoque) de {fmtNum(rows.length)}. Use filtros para refinar.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
