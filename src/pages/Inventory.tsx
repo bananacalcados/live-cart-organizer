@@ -11,6 +11,7 @@ import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
 import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
+import { InventoryAnalytics } from "@/components/inventory/InventoryAnalytics";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -169,7 +170,7 @@ export default function Inventory() {
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "stock" | "capture" | "products" | "nfe">("dashboard");
+  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "analytics" | "stock" | "capture" | "products" | "nfe">("dashboard");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
@@ -1084,6 +1085,14 @@ export default function Inventory() {
               >
                 <BarChart3 className="h-3 w-3" /> Dashboard
               </Button>
+              <Button
+                variant={inventoryMode === "analytics" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("analytics")}
+                className="text-xs h-7 gap-1"
+              >
+                <Search className="h-3 w-3" /> Análise
+              </Button>
               {selectedStoreId && (
                 <>
                   <Button
@@ -1145,6 +1154,8 @@ export default function Inventory() {
           </div>
         ) : inventoryMode === "dashboard" ? (
           <InventoryDashboard />
+        ) : inventoryMode === "analytics" ? (
+          <InventoryAnalytics />
         ) : !selectedStoreId ? (
           <div className="text-center py-20">
             <Store className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
