@@ -1164,58 +1164,152 @@ function StepEditorDialog({
               </div>
             )}
 
-            {/* ── SEND TEXT (rich) ── */}
-            {actionType === "send_text" && (
-              <div className="space-y-3">
-                <div className="space-y-1 relative">
-                  <Label className="text-xs">Mensagem</Label>
-                  <Textarea
-                    value={config.message || ""}
-                    onChange={e => setConfig({ ...config, message: e.target.value })}
-                    placeholder="Olá! Obrigado pelo cadastro 😊"
-                    rows={4}
-                  />
-                  <div className="flex items-center gap-1 mt-1">
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowEmoji(!showEmoji)}>
-                      <Smile className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => fileInputRef.current?.click()}>
-                      <Paperclip className="h-4 w-4" />
-                    </Button>
-                    <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" className="hidden" onChange={handleMediaUpload} />
-                  </div>
-                  {showEmoji && (
-                    <div className="absolute z-50 bottom-12">
-                      <EmojiPicker
-                        onEmojiClick={(emoji) => {
-                          setConfig({ ...config, message: (config.message || "") + emoji.emoji });
-                          setShowEmoji(false);
-                        }}
-                        width={300}
-                        height={350}
-                      />
+            {/* ── SEND TEXT (rich, multi-block + interactive buttons) ── */}
+            {actionType === "send_text" && (() => {
+              // Migrate legacy single-message format into blocks[] on first edit
+              const blocks: any[] = Array.isArray(config.blocks) && config.blocks.length > 0
+                ? config.blocks
+                : [
+                    ...(config.message ? [{ type: "text", message: config.message }] : []),
+                    ...(config.mediaUrl ? [{ type: config.mediaType || "document", mediaUrl: config.mediaUrl, mediaType: config.mediaType }] : []),
+                  ];
+              const interactiveButtons: string[] = config.interactiveButtons || [];
+
+              const updateBlock = (idx: number, patch: any) => {
+                const next = blocks.map((b, i) => i === idx ? { ...b, ...patch } : b);
+                setConfig({ ...config, blocks: next, message: undefined, mediaUrl: undefined, mediaType: undefined });
+              };
+              const removeBlock = (idx: number) => {
+                const next = blocks.filter((_, i) => i !== idx);
+                setConfig({ ...config, blocks: next, message: undefined, mediaUrl: undefined, mediaType: undefined });
+              };
+              const addBlock = (type: string) => {
+                const next = [...blocks, type === "text" ? { type: "text", message: "" } : { type, mediaUrl: "", mediaType: type }];
+                setConfig({ ...config, blocks: next, message: undefined, mediaUrl: undefined, mediaType: undefined });
+              };
+              const moveBlock = (idx: number, dir: -1 | 1) => {
+                const ni = idx + dir;
+                if (ni < 0 || ni >= blocks.length) return;
+                const next = [...blocks];
+                [next[idx], next[ni]] = [next[ni], next[idx]];
+                setConfig({ ...config, blocks: next, message: undefined, mediaUrl: undefined, mediaType: undefined });
+              };
+              const uploadForBlock = async (idx: number, file: File) => {
+                const ext = file.name.split('.').pop();
+                const fileName = `automation-media-${Date.now()}.${ext}`;
+                const { error } = await supabase.storage.from("chat-media").upload(fileName, file);
+                if (error) { toast.error("Erro ao enviar arquivo"); return; }
+                const { data } = supabase.storage.from("chat-media").getPublicUrl(fileName);
+                const mt = file.type.startsWith("image") ? "image" : file.type.startsWith("video") ? "video" : file.type.startsWith("audio") ? "audio" : "document";
+                updateBlock(idx, { mediaUrl: data.publicUrl, mediaType: mt, type: mt });
+                toast.success("Anexo carregado");
+              };
+
+              const setBtns = (btns: string[]) => setConfig({ ...config, interactiveButtons: btns });
+
+              return (
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" /> Blocos de mensagem</Label>
+                    {blocks.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground italic">Nenhum bloco. Adicione abaixo.</p>
+                    )}
+                    {blocks.map((blk, idx) => (
+                      <div key={idx} className="border border-border rounded-lg p-2 bg-muted/30 space-y-2 relative">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className="text-[10px]">
+                            {blk.type === "text" ? "💬 Texto" : blk.type === "image" ? "🖼️ Imagem" : blk.type === "video" ? "🎬 Vídeo" : blk.type === "audio" ? "🎵 Áudio" : "📎 Documento"} · #{idx + 1}
+                          </Badge>
+                          <div className="flex items-center gap-0.5">
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveBlock(idx, -1)} disabled={idx === 0}><ChevronUp className="h-3 w-3" /></Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveBlock(idx, 1)} disabled={idx === blocks.length - 1}><ChevronDown className="h-3 w-3" /></Button>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeBlock(idx)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+                          </div>
+                        </div>
+
+                        {(blk.type === "text" || blk.message !== undefined) && (
+                          <Textarea
+                            value={blk.message || ""}
+                            onChange={e => updateBlock(idx, { message: e.target.value })}
+                            placeholder={blk.type === "text" ? "Digite a mensagem..." : "Legenda (opcional)"}
+                            rows={3}
+                            className="text-xs"
+                          />
+                        )}
+
+                        {blk.type !== "text" && (
+                          <div className="space-y-1">
+                            {blk.mediaUrl ? (
+                              <div className="flex items-center gap-2 p-2 bg-background rounded text-xs">
+                                <Paperclip className="h-3.5 w-3.5" />
+                                <span className="truncate flex-1">{blk.mediaUrl.split('/').pop()}</span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => updateBlock(idx, { mediaUrl: "" })}>
+                                  <Trash2 className="h-3 w-3 text-destructive" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <label className="flex items-center justify-center gap-2 p-3 border border-dashed border-border rounded text-xs cursor-pointer hover:bg-background">
+                                <Paperclip className="h-3.5 w-3.5" /> Selecionar arquivo
+                                <input type="file" className="hidden" accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadForBlock(idx, f); }} />
+                              </label>
+                            )}
+                            <Textarea
+                              value={blk.message || ""}
+                              onChange={e => updateBlock(idx, { message: e.target.value })}
+                              placeholder="Legenda (opcional)"
+                              rows={2}
+                              className="text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    <div className="flex flex-wrap gap-1">
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => addBlock("text")}><Plus className="h-3 w-3 mr-1" />Texto</Button>
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => addBlock("image")}><Image className="h-3 w-3 mr-1" />Imagem</Button>
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => addBlock("video")}><PlayCircle className="h-3 w-3 mr-1" />Vídeo</Button>
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => addBlock("document")}><FileText className="h-3 w-3 mr-1" />PDF/Doc</Button>
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => addBlock("audio")}><Mic className="h-3 w-3 mr-1" />Áudio</Button>
                     </div>
-                  )}
-                </div>
-
-                {/* Audio recorder */}
-                <AudioRecorder onRecorded={(url) => setConfig({ ...config, mediaUrl: url, mediaType: "audio" })} />
-
-                {config.mediaUrl && (
-                  <div className="flex items-center gap-2 p-2 bg-muted rounded-lg text-xs">
-                    <Paperclip className="h-3.5 w-3.5" />
-                    <span className="truncate flex-1">{config.mediaType}: {config.mediaUrl.split('/').pop()}</span>
-                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setConfig({ ...config, mediaUrl: undefined, mediaType: undefined })}>
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
                   </div>
-                )}
 
-                <p className="text-[10px] text-muted-foreground">
-                  Variáveis: {"{{nome}}"}, {"{{telefone}}"}, {"{{email}}"}
-                </p>
-              </div>
-            )}
+                  {/* Interactive buttons */}
+                  <div className="space-y-2 p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20">
+                    <Label className="text-xs font-semibold flex items-center gap-1.5">
+                      <GitBranch className="h-3.5 w-3.5 text-blue-500" />
+                      Botões de resposta rápida (Meta interactive — máx 3)
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground">
+                      Quando definidos, o último bloco de TEXTO é enviado como mensagem interactive com estes botões. Cada botão habilita uma saída de bifurcação no fluxo.
+                    </p>
+                    {[0, 1, 2].map(i => (
+                      <div key={i} className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[10px] w-12 justify-center">btn-{i}</Badge>
+                        <Input
+                          value={interactiveButtons[i] || ""}
+                          onChange={e => {
+                            const next = [...interactiveButtons];
+                            next[i] = e.target.value.slice(0, 20);
+                            // trim trailing empties
+                            while (next.length > 0 && !next[next.length - 1]) next.pop();
+                            setBtns(next);
+                          }}
+                          placeholder={`Texto botão ${i + 1} (até 20 chars)`}
+                          maxLength={20}
+                          className="h-8 text-xs"
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-[10px] text-muted-foreground">
+                    Variáveis: {"{{nome}}"}, {"{{telefone}}"}, {"{{email}}"}
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* ── WAIT FOR REPLY (with bifurcation) ── */}
             {actionType === "wait_for_reply" && (
