@@ -68,6 +68,13 @@ serve(async (req) => {
       const step = steps[i];
       const config = step.action_config as Record<string, unknown> || {};
 
+      // Stop if we reached a step that is a branch target of ANOTHER step (not the current entry point).
+      // It must only be reached via its branch, never via sequential flow.
+      if (i !== startFromStep && branchTargetIds.has(step.id)) {
+        console.log(`[continue-flow] Stopping at step ${i} (${step.id}) — it's a branch target of another step`);
+        break;
+      }
+
       // Apply delay
       if (step.delay_seconds > 0) {
         await new Promise(r => setTimeout(r, step.delay_seconds * 1000));
