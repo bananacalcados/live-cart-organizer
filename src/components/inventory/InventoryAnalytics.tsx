@@ -846,7 +846,7 @@ export function InventoryAnalytics() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {coverageRows.slice(0, 500).map((r) => {
+                    {filteredCoverageRows.slice(0, 500).map((r) => {
                       const cov = r.coverageDays;
                       const badge =
                         cov === null ? { label: "Sem venda", variant: "outline" as const } :
