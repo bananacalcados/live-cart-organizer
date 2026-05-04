@@ -2301,6 +2301,17 @@ function FlowEditor({
     ];
     const edges: Edge[] = [];
 
+    // Collect all step IDs that are referenced as a branch target from ANY step,
+    // so we don't also add a sequential edge to them.
+    const branchTargetIds = new Set<string>();
+    steps.forEach((s) => {
+      const cfg = (s.action_config || {}) as any;
+      const branches = cfg.buttonBranches || {};
+      Object.values(branches).forEach((targetId) => {
+        if (typeof targetId === "string") branchTargetIds.add(targetId);
+      });
+    });
+
     steps.forEach((step, idx) => {
       const nodeId = `step-${step.id}`;
       const cfg = (step.action_config || {}) as any;
@@ -2334,52 +2345,47 @@ function FlowEditor({
         draggable: true,
       });
 
-      // Build edges: if previous step has button branches, connect via sourceHandle
+      // 1) Emit branch edges declared on THIS step's buttonBranches
+      const branches = cfg.buttonBranches || {};
+      for (const [handleId, targetStepId] of Object.entries(branches)) {
+        if (typeof targetStepId !== "string") continue;
+        if (!steps.some(s => s.id === targetStepId)) continue;
+        edges.push({
+          id: `e-branch-${step.id}-${handleId}`,
+          source: nodeId,
+          sourceHandle: handleId,
+          target: `step-${targetStepId}`,
+          animated: true,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          label: handleId === 'btn-timeout' ? '⏳ Sem resposta' : `↩️ ${(cfg.quickReplyButtons || [])[parseInt(handleId.replace('btn-', ''))] || '?'}`,
+          style: { stroke: handleId === 'btn-timeout' ? "hsl(30, 90%, 50%)" : "hsl(217, 91%, 60%)", strokeWidth: 2 },
+        });
+      }
+
+      // 2) Emit sequential edge from previous node ONLY if:
+      //    - this step is not the target of any branch, AND
+      //    - the previous step does not have button branches (those nodes only flow via branches)
       const prevStep = idx > 0 ? steps[idx - 1] : null;
       const prevNodeId = idx === 0 ? "trigger" : `step-${prevStep!.id}`;
       const prevCfg = prevStep ? (prevStep.action_config || {}) as any : null;
-      const prevHasButtons = prevCfg && prevCfg.quickReplyButtons && prevCfg.quickReplyButtons.length > 0;
+      const prevHasButtons = !!(prevCfg && prevCfg.quickReplyButtons && prevCfg.quickReplyButtons.length > 0);
 
-      if (prevHasButtons) {
-        // Check if this step is connected via a specific button branch
-        const prevBranches = prevCfg.buttonBranches || {};
-        let connectedViaButton = false;
-        for (const [handleId, targetStepId] of Object.entries(prevBranches)) {
-          if (targetStepId === step.id) {
-            edges.push({
-              id: `e-${idx}-${handleId}`,
-              source: prevNodeId,
-              sourceHandle: handleId,
-              target: nodeId,
-              animated: true,
-              markerEnd: { type: MarkerType.ArrowClosed },
-              label: handleId.startsWith('btn-timeout') ? '⏳ Sem resposta' : `↩️ ${prevCfg.quickReplyButtons[parseInt(handleId.replace('btn-', ''))] || '?'}`,
-              style: { stroke: handleId.startsWith('btn-timeout') ? "hsl(30, 90%, 50%)" : "hsl(217, 91%, 60%)", strokeWidth: 2 },
-            });
-            connectedViaButton = true;
-          }
-        }
-        // If not connected via any button, use default edge
-        if (!connectedViaButton) {
-          edges.push({
-            id: `e-${idx}`,
-            source: prevNodeId,
-            target: nodeId,
-            animated: true,
-            markerEnd: { type: MarkerType.ArrowClosed },
-            style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
-          });
-        }
-      } else {
-        edges.push({
-          id: `e-${idx}`,
-          source: prevNodeId,
-          target: nodeId,
-          animated: true,
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
-        });
+      if (branchTargetIds.has(step.id)) {
+        // Already wired via a branch — skip sequential
+        return;
       }
+      if (prevHasButtons) {
+        // Don't auto-chain after a template-with-buttons step; user must explicitly route
+        return;
+      }
+      edges.push({
+        id: `e-${idx}`,
+        source: prevNodeId,
+        target: nodeId,
+        animated: true,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
+      });
     });
     return { nodes, edges };
   }, [steps, triggerType, triggerConfig]);
