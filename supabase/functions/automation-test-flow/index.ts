@@ -340,32 +340,57 @@ serve(async (req) => {
 
       // Send text message
       if (step.action_type === 'send_text') {
-        const message = replaceVars(config.message || '');
-        if (!message && !config.mediaUrl) {
-          results.push({ step: i + 1, type: 'send_text', status: 'error', detail: 'Mensagem vazia' });
+        const rawBlocks: any[] = Array.isArray(config.blocks) && config.blocks.length > 0
+          ? config.blocks
+          : [
+              ...(config.message ? [{ type: 'text', message: config.message }] : []),
+              ...(config.mediaUrl ? [{ type: config.mediaType || 'document', mediaUrl: config.mediaUrl, mediaType: config.mediaType }] : []),
+            ];
+        const interactiveButtons: string[] = config.interactiveButtons || [];
+        if (rawBlocks.length === 0 && interactiveButtons.length === 0) {
+          results.push({ step: i + 1, type: 'send_text', status: 'error', detail: 'Sem blocos' });
           continue;
         }
 
+        let lastTextIdxForInteractive = -1;
+        if (interactiveButtons.length > 0) {
+          for (let bi = rawBlocks.length - 1; bi >= 0; bi--) {
+            if (rawBlocks[bi].type === 'text' || rawBlocks[bi].message) { lastTextIdxForInteractive = bi; break; }
+          }
+        }
+
         try {
-          // Use Meta send for test
-          const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              phone: formattedPhone,
-              message,
-              mediaUrl: config.mediaUrl,
-              mediaType: config.mediaType,
-            }),
-          });
-          const sendData = await sendRes.json();
-          if (sendRes.ok) {
-            results.push({ step: i + 1, type: 'send_text', status: 'sent', detail: message.slice(0, 50) });
-          } else {
-            results.push({ step: i + 1, type: 'send_text', status: 'error', detail: sendData.error || JSON.stringify(sendData) });
+          for (let bi = 0; bi < rawBlocks.length; bi++) {
+            const blk = rawBlocks[bi];
+            const isInteractive = interactiveButtons.length > 0 && bi === lastTextIdxForInteractive;
+            const payload: any = isInteractive
+              ? {
+                  phone: formattedPhone,
+                  type: 'interactive',
+                  interactiveData: {
+                    body: replaceVars(blk.message || '') || '👇',
+                    buttons: interactiveButtons.slice(0, 3).map((title: string, idx: number) => ({ id: `btn-${idx}`, title })),
+                  },
+                }
+              : {
+                  phone: formattedPhone,
+                  message: replaceVars(blk.message || ''),
+                  mediaUrl: blk.mediaUrl,
+                  mediaType: blk.mediaType || (blk.type && blk.type !== 'text' ? blk.type : undefined),
+                  type: blk.mediaUrl ? (blk.type || blk.mediaType || 'document') : 'text',
+                };
+            const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const sendData = await sendRes.json();
+            if (sendRes.ok) {
+              results.push({ step: i + 1, type: 'send_text', status: 'sent', detail: `bloco ${bi + 1}/${rawBlocks.length}` });
+            } else {
+              results.push({ step: i + 1, type: 'send_text', status: 'error', detail: sendData.error || JSON.stringify(sendData) });
+            }
+            if (bi < rawBlocks.length - 1) await new Promise(r => setTimeout(r, 800));
           }
         } catch (e) {
           results.push({ step: i + 1, type: 'send_text', status: 'error', detail: e instanceof Error ? e.message : 'Unknown' });
