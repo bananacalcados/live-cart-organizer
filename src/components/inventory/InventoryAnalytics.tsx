@@ -384,6 +384,7 @@ export function InventoryAnalytics() {
       classe: "A" | "B" | "C";
       pct: number;
       cumPct: number;
+      _countedSkus: Set<string>;
     };
     const map = new Map<string, Row>();
     for (const p of filtered) {
