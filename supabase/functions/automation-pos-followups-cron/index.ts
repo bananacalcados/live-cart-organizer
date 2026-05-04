@@ -5,6 +5,9 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Cron simplificado: apenas dispara follow-ups agendados.
+// A lógica de cancelamento por recompra acontece no momento da venda (automation-trigger-pos-sale),
+// que cancela tudo que estiver pendente para o mesmo CPF (ou sufixo de telefone) antes de criar nova régua.
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -16,7 +19,7 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
     const { data: due } = await supabase
       .from("automation_pos_followups")
-      .select("id, sale_id, flow_id, step_id, customer_phone, customer_phone_suffix, payload, scheduled_at")
+      .select("id, sale_id, flow_id, step_id, customer_phone, payload")
       .lte("scheduled_at", now)
       .is("sent_at", null)
       .is("cancelled_at", null)
@@ -29,41 +32,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    let processed = 0, cancelled = 0, sent = 0;
+    let sent = 0, errors = 0;
 
     for (const f of due) {
-      // Regra de re-compra: se houve nova venda física concluída para este cliente após o agendamento → cancela
-      const sinceISO = new Date(new Date(f.scheduled_at).getTime() - 365 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: original } = await supabase
-        .from("pos_sales")
-        .select("created_at")
-        .eq("id", f.sale_id)
-        .maybeSingle();
-      const baseTime = original?.created_at || sinceISO;
-
-      const { data: newer } = await supabase
-        .from("pos_sales")
-        .select("id, customer_phone, customer_id")
-        .gt("created_at", baseTime)
-        .eq("status", "completed")
-        .limit(50);
-
-      const matched = (newer || []).some((s: any) => {
-        const sp = (s.customer_phone || "").replace(/\D/g, "").slice(-8);
-        return sp && sp === f.customer_phone_suffix;
-      });
-
-      if (matched) {
-        await supabase
-          .from("automation_pos_followups")
-          .update({ cancelled_at: new Date().toISOString(), cancel_reason: "customer_repurchased" })
-          .eq("id", f.id);
-        cancelled++;
-        processed++;
-        continue;
-      }
-
-      // Envia
       const payload = (f.payload || {}) as any;
       const cfg = payload.action_config || {};
       const action = payload.action_type;
@@ -110,11 +81,11 @@ Deno.serve(async (req) => {
         await supabase.from("automation_pos_followups").update({
           cancelled_at: new Date().toISOString(), cancel_reason: "error: " + (e.message || "unknown"),
         }).eq("id", f.id);
+        errors++;
       }
-      processed++;
     }
 
-    return new Response(JSON.stringify({ ok: true, processed, sent, cancelled }), {
+    return new Response(JSON.stringify({ ok: true, processed: due.length, sent, errors }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {
