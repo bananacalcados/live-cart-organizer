@@ -766,12 +766,22 @@ export function InventoryAnalytics() {
         <TabsContent value="coverage">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Calendar className="h-4 w-4" /> Cobertura de estoque ({periodDays} dias) — {scopeFilter === "parents" ? "Produto Pai" : "Produto Filho"}
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Cobertura = estoque atual ÷ média diária de vendas no período. Ex.: 12 unidades vendendo 1/dia = 12 dias.
-              </p>
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4" /> Cobertura de estoque ({periodDays} dias) — {coverageScope === "parents" ? "Produto Pai" : "Produto Filho"}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Cobertura = estoque atual ÷ média diária de vendas no período. Ex.: 12 unidades vendendo 1/dia = 12 dias.
+                  </p>
+                </div>
+                <Tabs value={coverageScope} onValueChange={(v) => setCoverageScope(v as any)}>
+                  <TabsList>
+                    <TabsTrigger value="variants">Filho</TabsTrigger>
+                    <TabsTrigger value="parents">Pai</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
