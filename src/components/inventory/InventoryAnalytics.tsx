@@ -516,6 +516,22 @@ export function InventoryAnalytics() {
     return b;
   }, [coverageRows]);
 
+  const filteredCoverageRows = useMemo(() => {
+    if (coverageBucket === "all") return coverageRows;
+    return coverageRows.filter((r) => {
+      if (r.stock <= 0) return false;
+      const cov = r.coverageDays;
+      switch (coverageBucket) {
+        case "noSales": return cov === null;
+        case "critical": return cov !== null && cov < 15;
+        case "low": return cov !== null && cov >= 15 && cov < 30;
+        case "healthy": return cov !== null && cov >= 30 && cov <= 90;
+        case "excess": return cov !== null && cov > 90;
+        default: return true;
+      }
+    });
+  }, [coverageRows, coverageBucket]);
+
   // Resumos por dimensão
   const byDim = (dim: keyof EnrichedProduct) => {
     const map = new Map<string, { qty: number; cost: number; sale: number; skus: number }>();
