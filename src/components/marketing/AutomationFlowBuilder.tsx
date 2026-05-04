@@ -2615,6 +2615,9 @@ function FlowEditor({
                     </div>
                   </div>
                 )}
+                {triggerType === "pos_sale_completed" && (
+                  <PosSaleTriggerConfig triggerConfig={triggerConfig} onChange={setTriggerConfig} />
+                )}
                 {triggerType === "yampi_abandoned_cart" && (
                   <div className="space-y-2 p-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
                     <p className="text-[10px] text-red-700 dark:text-red-300">
