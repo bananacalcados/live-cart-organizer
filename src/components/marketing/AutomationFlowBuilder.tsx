@@ -257,7 +257,7 @@ function ActionNode({ data }: { data: any }) {
       {hasButtonBranches ? (
         <div className="mt-2 space-y-1.5 border-t border-border/50 pt-2">
           <p className="text-[10px] text-muted-foreground flex items-center gap-1"><GitBranch className="h-2.5 w-2.5" />Caminhos por botão:</p>
-          {quickReplyButtons.map((btnText, i) => (
+          {branchButtons.map((btnText, i) => (
             <div key={i} className="relative flex items-center justify-between gap-1 pr-2">
               <Badge variant="outline" className="text-[9px]">↩️ {btnText}</Badge>
               <Handle
@@ -269,16 +269,18 @@ function ActionNode({ data }: { data: any }) {
               />
             </div>
           ))}
-          <div className="relative flex items-center justify-between gap-1 pr-2">
-            <Badge variant="secondary" className="text-[9px]">⏳ Sem resposta</Badge>
-            <Handle
-              type="source"
-              position={Position.Right}
-              id="btn-timeout"
-              className="!bg-orange-500 !w-3 !h-3 !border-2 !border-orange-300"
-              style={{ top: "50%" }}
-            />
-          </div>
+          {isTemplate && (
+            <div className="relative flex items-center justify-between gap-1 pr-2">
+              <Badge variant="secondary" className="text-[9px]">⏳ Sem resposta</Badge>
+              <Handle
+                type="source"
+                position={Position.Right}
+                id="btn-timeout"
+                className="!bg-orange-500 !w-3 !h-3 !border-2 !border-orange-300"
+                style={{ top: "50%" }}
+              />
+            </div>
+          )}
         </div>
       ) : (
         <Handle type="source" position={Position.Bottom} className="!bg-primary !w-3 !h-3 !border-2 !border-primary/50" />
