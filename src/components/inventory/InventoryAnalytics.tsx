@@ -468,18 +468,23 @@ export function InventoryAnalytics() {
     for (const p of filtered) {
       const isParents = coverageScope === "parents";
       const key = isParents
-        ? `${p.store_id}::${p.parent_key}`
-        : (p.sku && String(p.sku)) || String(p.tiny_id);
+        ? (storeFilter !== "all" ? `${p.store_id}::${p.parent_key}` : p.parent_key)
+        : (storeFilter !== "all"
+            ? `${p.store_id}::${(p.sku && String(p.sku)) || String(p.tiny_id)}`
+            : (p.sku && String(p.sku)) || String(p.tiny_id));
       const sk = (p.sku && String(p.sku)) || String(p.tiny_id);
       const sales_ = sales.get(sk) || { qty: 0, revenue: 0 };
       const label = isParents
         ? p.name.split(" - ")[0]
         : `${p.name}${p.size ? ` · ${p.size}` : ""}${p.color ? ` · ${p.color}` : ""}`;
 
-      const cur = map.get(key);
+      const cur = map.get(key) as any;
       if (cur) {
         cur.stock += p.stock;
-        cur.soldQty += sales_.qty;
+        if (!cur._countedSkus.has(sk)) {
+          cur.soldQty += sales_.qty;
+          cur._countedSkus.add(sk);
+        }
         cur.cost += p.stock * p.cost_price;
         cur.sale += p.stock * p.price;
       } else {
@@ -496,7 +501,8 @@ export function InventoryAnalytics() {
           coverageDays: null,
           cost: p.stock * p.cost_price,
           sale: p.stock * p.price,
-        });
+          _countedSkus: new Set([sk]),
+        } as any);
       }
     }
     const rows = Array.from(map.values());
