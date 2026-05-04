@@ -2778,8 +2778,10 @@ function FlowEditor({
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         step={editingStep}
+        allSteps={steps}
         onSave={handleStepSave}
       />
+
 
       {/* Test Flow Dialog */}
       <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
