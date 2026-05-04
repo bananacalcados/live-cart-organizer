@@ -873,8 +873,8 @@ export function InventoryAnalytics() {
                     })}
                   </TableBody>
                 </Table>
-                {coverageRows.length > 500 && (
-                  <p className="text-xs text-muted-foreground mt-2">Exibindo top 500 (menor cobertura) de {fmtNum(coverageRows.length)}.</p>
+                {filteredCoverageRows.length > 500 && (
+                  <p className="text-xs text-muted-foreground mt-2">Exibindo top 500 (menor cobertura) de {fmtNum(filteredCoverageRows.length)}.</p>
                 )}
               </div>
             </CardContent>
