@@ -315,7 +315,8 @@ export function InventoryAnalytics() {
     if (scopeFilter === "variants") return filtered;
     const map = new Map<string, EnrichedProduct & { variants: number }>();
     for (const p of filtered) {
-      const k = `${p.store_id}::${p.parent_key}`;
+      // Consolida entre lojas quando não há filtro de loja específico
+      const k = storeFilter !== "all" ? `${p.store_id}::${p.parent_key}` : p.parent_key;
       const cur = map.get(k);
       if (cur) {
         cur.stock += p.stock;
