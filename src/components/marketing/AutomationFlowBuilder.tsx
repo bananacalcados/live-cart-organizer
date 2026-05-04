@@ -2363,7 +2363,7 @@ function FlowEditor({
           target: `step-${targetStepId}`,
           animated: true,
           markerEnd: { type: MarkerType.ArrowClosed },
-          label: handleId === 'btn-timeout' ? '⏳ Sem resposta' : `↩️ ${(cfg.quickReplyButtons || [])[parseInt(handleId.replace('btn-', ''))] || '?'}`,
+          label: handleId === 'btn-timeout' ? '⏳ Sem resposta' : `↩️ ${(cfg.quickReplyButtons || cfg.interactiveButtons || [])[parseInt(handleId.replace('btn-', ''))] || '?'}`,
           style: { stroke: handleId === 'btn-timeout' ? "hsl(30, 90%, 50%)" : "hsl(217, 91%, 60%)", strokeWidth: 2 },
         });
       }
