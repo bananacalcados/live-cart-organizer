@@ -250,31 +250,30 @@ function ActionNode({ data }: { data: any }) {
       )}
       {isTag && data.tags && <div className="flex flex-wrap gap-1 mt-1">{data.tags.map((t: string) => <Badge key={t} variant="secondary" className="text-[9px] px-1 py-0">{t}</Badge>)}</div>}
       
-      {/* Button branches: show each quick reply as a labeled output handle */}
+      {/* Button branches: show each quick reply as a labeled output handle on the RIGHT side aligned with its row */}
       {hasButtonBranches ? (
-        <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+        <div className="mt-2 space-y-1.5 border-t border-border/50 pt-2">
           <p className="text-[10px] text-muted-foreground flex items-center gap-1"><GitBranch className="h-2.5 w-2.5" />Caminhos por botão:</p>
           {quickReplyButtons.map((btnText, i) => (
-            <div key={i} className="relative flex items-center gap-1">
+            <div key={i} className="relative flex items-center justify-between gap-1 pr-2">
               <Badge variant="outline" className="text-[9px]">↩️ {btnText}</Badge>
               <Handle
                 type="source"
-                position={Position.Bottom}
+                position={Position.Right}
                 id={`btn-${i}`}
-                className="!bg-blue-500 !w-2.5 !h-2.5 !border-2 !border-blue-300"
-                style={{ left: `${((i + 1) / (quickReplyButtons.length + 1)) * 100}%` }}
+                className="!bg-blue-500 !w-3 !h-3 !border-2 !border-blue-300"
+                style={{ top: "50%" }}
               />
             </div>
           ))}
-          {/* Default/fallback handle for "no button click" */}
-          <div className="relative flex items-center gap-1">
+          <div className="relative flex items-center justify-between gap-1 pr-2">
             <Badge variant="secondary" className="text-[9px]">⏳ Sem resposta</Badge>
             <Handle
               type="source"
-              position={Position.Bottom}
+              position={Position.Right}
               id="btn-timeout"
-              className="!bg-orange-500 !w-2.5 !h-2.5 !border-2 !border-orange-300"
-              style={{ left: `${(quickReplyButtons.length + 1) / (quickReplyButtons.length + 2) * 100}%` }}
+              className="!bg-orange-500 !w-3 !h-3 !border-2 !border-orange-300"
+              style={{ top: "50%" }}
             />
           </div>
         </div>
@@ -2302,6 +2301,17 @@ function FlowEditor({
     ];
     const edges: Edge[] = [];
 
+    // Collect all step IDs that are referenced as a branch target from ANY step,
+    // so we don't also add a sequential edge to them.
+    const branchTargetIds = new Set<string>();
+    steps.forEach((s) => {
+      const cfg = (s.action_config || {}) as any;
+      const branches = cfg.buttonBranches || {};
+      Object.values(branches).forEach((targetId) => {
+        if (typeof targetId === "string") branchTargetIds.add(targetId);
+      });
+    });
+
     steps.forEach((step, idx) => {
       const nodeId = `step-${step.id}`;
       const cfg = (step.action_config || {}) as any;
@@ -2335,52 +2345,47 @@ function FlowEditor({
         draggable: true,
       });
 
-      // Build edges: if previous step has button branches, connect via sourceHandle
+      // 1) Emit branch edges declared on THIS step's buttonBranches
+      const branches = cfg.buttonBranches || {};
+      for (const [handleId, targetStepId] of Object.entries(branches)) {
+        if (typeof targetStepId !== "string") continue;
+        if (!steps.some(s => s.id === targetStepId)) continue;
+        edges.push({
+          id: `e-branch-${step.id}-${handleId}`,
+          source: nodeId,
+          sourceHandle: handleId,
+          target: `step-${targetStepId}`,
+          animated: true,
+          markerEnd: { type: MarkerType.ArrowClosed },
+          label: handleId === 'btn-timeout' ? '⏳ Sem resposta' : `↩️ ${(cfg.quickReplyButtons || [])[parseInt(handleId.replace('btn-', ''))] || '?'}`,
+          style: { stroke: handleId === 'btn-timeout' ? "hsl(30, 90%, 50%)" : "hsl(217, 91%, 60%)", strokeWidth: 2 },
+        });
+      }
+
+      // 2) Emit sequential edge from previous node ONLY if:
+      //    - this step is not the target of any branch, AND
+      //    - the previous step does not have button branches (those nodes only flow via branches)
       const prevStep = idx > 0 ? steps[idx - 1] : null;
       const prevNodeId = idx === 0 ? "trigger" : `step-${prevStep!.id}`;
       const prevCfg = prevStep ? (prevStep.action_config || {}) as any : null;
-      const prevHasButtons = prevCfg && prevCfg.quickReplyButtons && prevCfg.quickReplyButtons.length > 0;
+      const prevHasButtons = !!(prevCfg && prevCfg.quickReplyButtons && prevCfg.quickReplyButtons.length > 0);
 
-      if (prevHasButtons) {
-        // Check if this step is connected via a specific button branch
-        const prevBranches = prevCfg.buttonBranches || {};
-        let connectedViaButton = false;
-        for (const [handleId, targetStepId] of Object.entries(prevBranches)) {
-          if (targetStepId === step.id) {
-            edges.push({
-              id: `e-${idx}-${handleId}`,
-              source: prevNodeId,
-              sourceHandle: handleId,
-              target: nodeId,
-              animated: true,
-              markerEnd: { type: MarkerType.ArrowClosed },
-              label: handleId.startsWith('btn-timeout') ? '⏳ Sem resposta' : `↩️ ${prevCfg.quickReplyButtons[parseInt(handleId.replace('btn-', ''))] || '?'}`,
-              style: { stroke: handleId.startsWith('btn-timeout') ? "hsl(30, 90%, 50%)" : "hsl(217, 91%, 60%)", strokeWidth: 2 },
-            });
-            connectedViaButton = true;
-          }
-        }
-        // If not connected via any button, use default edge
-        if (!connectedViaButton) {
-          edges.push({
-            id: `e-${idx}`,
-            source: prevNodeId,
-            target: nodeId,
-            animated: true,
-            markerEnd: { type: MarkerType.ArrowClosed },
-            style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
-          });
-        }
-      } else {
-        edges.push({
-          id: `e-${idx}`,
-          source: prevNodeId,
-          target: nodeId,
-          animated: true,
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
-        });
+      if (branchTargetIds.has(step.id)) {
+        // Already wired via a branch — skip sequential
+        return;
       }
+      if (prevHasButtons) {
+        // Don't auto-chain after a template-with-buttons step; user must explicitly route
+        return;
+      }
+      edges.push({
+        id: `e-${idx}`,
+        source: prevNodeId,
+        target: nodeId,
+        animated: true,
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
+      });
     });
     return { nodes, edges };
   }, [steps, triggerType, triggerConfig]);
