@@ -74,6 +74,67 @@ function parseBrand(name: string): string {
   return tokens[0] || "—";
 }
 
+// Conjuntos para detectar inversão tamanho⇄cor (pente fino)
+const SIZE_TOKENS = new Set([
+  "PP", "P", "M", "G", "GG", "XG", "XGG", "XS", "S", "L", "XL", "XXL",
+  "ÚNICO", "UNICO", "U", "UN",
+]);
+const COLOR_KEYWORDS = [
+  "PRETO", "BRANCO", "BEGE", "NUDE", "MARROM", "CARAMELO", "AZUL", "VERDE",
+  "VERMELH", "ROSA", "ROXO", "LILAS", "LILÁS", "AMAREL", "CINZA", "PRATA",
+  "DOURAD", "OURO", "BRONZE", "COBRE", "OFF", "OFFWHITE", "OFF-WHITE",
+  "MOSTARDA", "VINHO", "TURQUESA", "TIFFANY", "PINK", "FUCSIA", "FÚCSIA",
+  "GRAFITE", "TERRACOTA", "AREIA", "TAUPE", "MUSGO", "OLIVA", "JEANS",
+  "MARINHO", "CELESTE", "CORAL", "SALMÃO", "SALMAO", "LARANJA", "CHUMBO",
+  "CHAMPAGNE", "CHAMPANHE", "RUBI", "ESMERALDA", "PEROLA", "PÉROLA",
+  "ESTAMPAD", "ANIMAL", "ONÇA", "ONCA", "FLORAL", "MULTICOR", "TRANSPARENTE",
+  "MESCLA", "GLITTER", "METALIZ", "FOSCO", "BRILH",
+];
+
+function looksLikeSize(v: string): boolean {
+  if (!v) return false;
+  const t = v.trim().toUpperCase();
+  if (!t) return false;
+  // Numérico puro (34, 38), faixa (33/34), decimal
+  if (/^\d{1,2}([.,/-]\d{1,2})?$/.test(t)) return true;
+  if (SIZE_TOKENS.has(t)) return true;
+  return false;
+}
+
+function looksLikeColor(v: string): boolean {
+  if (!v) return false;
+  const t = v.trim().toUpperCase();
+  if (!t) return false;
+  if (looksLikeSize(t)) return false;
+  // Tem letras (não é só dígito) e não é um token de tamanho
+  if (/[A-ZÀ-Ú]/.test(t)) {
+    if (COLOR_KEYWORDS.some((k) => t.includes(k))) return true;
+    // Heurística: 3+ letras sem números → provavelmente cor
+    if (/^[A-ZÀ-Ú\s/-]{3,}$/.test(t)) return true;
+  }
+  return false;
+}
+
+/** Detecta e corrige inversão tamanho⇄cor vinda do Tiny. */
+function fixSizeColor(size: string | null, color: string | null): { size: string | null; color: string | null; swapped: boolean } {
+  const s = (size || "").trim();
+  const c = (color || "").trim();
+  if (!s && !c) return { size: null, color: null, swapped: false };
+  // Caso clássico: size parece cor E color parece tamanho → inverter
+  if (s && c && looksLikeColor(s) && looksLikeSize(c)) {
+    return { size: c, color: s, swapped: true };
+  }
+  // size sozinho, mas é cor → mover para color
+  if (s && !c && looksLikeColor(s) && !looksLikeSize(s)) {
+    return { size: null, color: s, swapped: true };
+  }
+  // color sozinho, mas é tamanho → mover para size
+  if (!s && c && looksLikeSize(c)) {
+    return { size: c, color: null, swapped: true };
+  }
+  return { size: s || null, color: c || null, swapped: false };
+}
+
 function parentKey(p: RawProduct): string {
   // Tenta agrupar por SKU root (parte antes do tamanho/cor) ou pelo nome sem variação
   const baseName = p.name.split(" - ")[0]?.trim() || p.name;
@@ -100,6 +161,7 @@ export function InventoryAnalytics() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [stockFilter, setStockFilter] = useState<"all" | "with" | "without">("with");
   const [scopeFilter, setScopeFilter] = useState<"variants" | "parents">("variants");
+  const [coverageScope, setCoverageScope] = useState<"variants" | "parents">("variants");
 
   // Vendas / Curva ABC
   const [periodDays, setPeriodDays] = useState<number>(90);
@@ -143,8 +205,11 @@ export function InventoryAnalytics() {
       if (!data || data.length === 0) break;
       for (const r of data as any[]) {
         const raw = r as RawProduct;
+        const fixed = fixSizeColor(raw.size, raw.color);
         all.push({
           ...raw,
+          size: fixed.size,
+          color: fixed.color,
           stock: Number(raw.stock || 0),
           cost_price: Number(raw.cost_price || 0),
           price: Number(raw.price || 0),
@@ -390,7 +455,7 @@ export function InventoryAnalytics() {
     };
     const map = new Map<string, Row>();
     for (const p of filtered) {
-      const isParents = scopeFilter === "parents";
+      const isParents = coverageScope === "parents";
       const key = isParents
         ? `${p.store_id}::${p.parent_key}`
         : (p.sku && String(p.sku)) || String(p.tiny_id);
@@ -435,7 +500,7 @@ export function InventoryAnalytics() {
       return ax - bx;
     });
     return rows;
-  }, [filtered, sales, periodDays, scopeFilter]);
+  }, [filtered, sales, periodDays, coverageScope]);
 
   const coverageBuckets = useMemo(() => {
     const b = { critical: 0, low: 0, healthy: 0, excess: 0, noSales: 0 };
@@ -701,12 +766,22 @@ export function InventoryAnalytics() {
         <TabsContent value="coverage">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Calendar className="h-4 w-4" /> Cobertura de estoque ({periodDays} dias) — {scopeFilter === "parents" ? "Produto Pai" : "Produto Filho"}
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                Cobertura = estoque atual ÷ média diária de vendas no período. Ex.: 12 unidades vendendo 1/dia = 12 dias.
-              </p>
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calendar className="h-4 w-4" /> Cobertura de estoque ({periodDays} dias) — {coverageScope === "parents" ? "Produto Pai" : "Produto Filho"}
+                  </CardTitle>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Cobertura = estoque atual ÷ média diária de vendas no período. Ex.: 12 unidades vendendo 1/dia = 12 dias.
+                  </p>
+                </div>
+                <Tabs value={coverageScope} onValueChange={(v) => setCoverageScope(v as any)}>
+                  <TabsList>
+                    <TabsTrigger value="variants">Filho</TabsTrigger>
+                    <TabsTrigger value="parents">Pai</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
@@ -721,10 +796,10 @@ export function InventoryAnalytics() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Produto</TableHead>
-                      <TableHead>SKU</TableHead>
+                      {coverageScope === "variants" && <TableHead>SKU</TableHead>}
                       <TableHead>Marca</TableHead>
-                      <TableHead>Tam</TableHead>
-                      <TableHead>Cor</TableHead>
+                      {coverageScope === "variants" && <TableHead>Tam</TableHead>}
+                      {coverageScope === "variants" && <TableHead>Cor</TableHead>}
                       <TableHead className="text-right">Estoque</TableHead>
                       <TableHead className="text-right">Vendas ({periodDays}d)</TableHead>
                       <TableHead className="text-right">Média/dia</TableHead>
@@ -744,10 +819,10 @@ export function InventoryAnalytics() {
                       return (
                         <TableRow key={r.key}>
                           <TableCell className="min-w-[180px] whitespace-normal break-words">{r.label}</TableCell>
-                          <TableCell className="font-mono text-xs">{r.sku}</TableCell>
+                          {coverageScope === "variants" && <TableCell className="font-mono text-xs">{r.sku}</TableCell>}
                           <TableCell>{r.brand}</TableCell>
-                          <TableCell>{r.size || "—"}</TableCell>
-                          <TableCell>{r.color || "—"}</TableCell>
+                          {coverageScope === "variants" && <TableCell>{r.size || "—"}</TableCell>}
+                          {coverageScope === "variants" && <TableCell>{r.color || "—"}</TableCell>}
                           <TableCell className="text-right">{fmtNum(r.stock)}</TableCell>
                           <TableCell className="text-right">{fmtNum(r.soldQty)}</TableCell>
                           <TableCell className="text-right">{r.avgDaily.toFixed(2)}</TableCell>
