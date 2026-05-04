@@ -934,6 +934,7 @@ export type Database = {
           cancel_reason: string | null
           cancelled_at: string | null
           created_at: string
+          customer_cpf: string | null
           customer_phone: string
           customer_phone_suffix: string | null
           flow_id: string
@@ -949,6 +950,7 @@ export type Database = {
           cancel_reason?: string | null
           cancelled_at?: string | null
           created_at?: string
+          customer_cpf?: string | null
           customer_phone: string
           customer_phone_suffix?: string | null
           flow_id: string
@@ -964,6 +966,7 @@ export type Database = {
           cancel_reason?: string | null
           cancelled_at?: string | null
           created_at?: string
+          customer_cpf?: string | null
           customer_phone?: string
           customer_phone_suffix?: string | null
           flow_id?: string
