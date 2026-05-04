@@ -414,26 +414,38 @@ serve(async (req) => {
         }
 
         if (step.action_type === 'send_text') {
-          const message = replaceVars((config.message as string) || '');
-          if (!message && !config.mediaUrl) { skipped++; break; }
+          const rawBlocks: any[] = Array.isArray(config.blocks) && (config.blocks as any[]).length > 0
+            ? (config.blocks as any[])
+            : [
+                ...((config.message as string) ? [{ type: 'text', message: config.message }] : []),
+                ...(config.mediaUrl ? [{ type: (config.mediaType as string) || 'document', mediaUrl: config.mediaUrl, mediaType: config.mediaType }] : []),
+              ];
+          if (rawBlocks.length === 0) { skipped++; break; }
 
           try {
-            const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-              method: 'POST',
-              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                phone: recipient.phone,
-                message,
-                mediaUrl: config.mediaUrl,
-                mediaType: config.mediaType,
-                whatsappNumberId: (config.whatsappNumberId as string) || defaultNumberId,
-              }),
-            });
-            if (sendRes.ok) {
+            let anyOk = false;
+            for (let bi = 0; bi < rawBlocks.length; bi++) {
+              const blk = rawBlocks[bi];
+              const blkType = blk.type || (blk.mediaUrl ? (blk.mediaType || 'document') : 'text');
+              const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  phone: recipient.phone,
+                  message: replaceVars(blk.message || ''),
+                  mediaUrl: blk.mediaUrl,
+                  mediaType: blk.mediaType || (blkType !== 'text' ? blkType : undefined),
+                  type: blk.mediaUrl ? blkType : 'text',
+                  whatsappNumberId: (config.whatsappNumberId as string) || defaultNumberId,
+                }),
+              });
+              if (sendRes.ok) anyOk = true;
+              if (bi < rawBlocks.length - 1) await new Promise(r => setTimeout(r, 800));
+            }
+            if (anyOk) {
               sent++;
               await supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' });
-            }
-            else failed++;
+            } else failed++;
           } catch {
             failed++;
           }
