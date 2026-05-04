@@ -796,10 +796,10 @@ export function InventoryAnalytics() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Produto</TableHead>
-                      <TableHead>SKU</TableHead>
+                      {coverageScope === "variants" && <TableHead>SKU</TableHead>}
                       <TableHead>Marca</TableHead>
-                      <TableHead>Tam</TableHead>
-                      <TableHead>Cor</TableHead>
+                      {coverageScope === "variants" && <TableHead>Tam</TableHead>}
+                      {coverageScope === "variants" && <TableHead>Cor</TableHead>}
                       <TableHead className="text-right">Estoque</TableHead>
                       <TableHead className="text-right">Vendas ({periodDays}d)</TableHead>
                       <TableHead className="text-right">Média/dia</TableHead>
