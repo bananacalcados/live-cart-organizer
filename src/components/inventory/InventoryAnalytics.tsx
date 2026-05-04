@@ -401,8 +401,12 @@ export function InventoryAnalytics() {
 
       const cur = map.get(key);
       if (cur) {
-        cur.qty += sales_.qty;
-        cur.revenue += sales_.revenue;
+        // Vendas (sales map) são globais por SKU — só contar uma vez por SKU dentro do grupo
+        if (!cur._countedSkus.has(sk)) {
+          cur.qty += sales_.qty;
+          cur.revenue += sales_.revenue;
+          cur._countedSkus.add(sk);
+        }
         cur.stock += p.stock;
         cur.cost += p.stock * p.cost_price;
       } else {
@@ -413,7 +417,8 @@ export function InventoryAnalytics() {
           stock: p.stock,
           cost: p.stock * p.cost_price,
           classe: "C", pct: 0, cumPct: 0,
-        });
+          _countedSkus: new Set([sk]),
+        } as any);
       }
     }
     const rows = Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
