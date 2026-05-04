@@ -786,12 +786,33 @@ export function InventoryAnalytics() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Crítico (<15d)" value={fmtNum(coverageBuckets.critical)} />
-                <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Baixo (15-30d)" value={fmtNum(coverageBuckets.low)} />
-                <KpiCard icon={<Boxes className="h-4 w-4" />} label="Saudável (30-90d)" value={fmtNum(coverageBuckets.healthy)} />
-                <KpiCard icon={<Layers className="h-4 w-4" />} label="Excesso (>90d)" value={fmtNum(coverageBuckets.excess)} />
-                <KpiCard icon={<X className="h-4 w-4" />} label="Sem venda" value={fmtNum(coverageBuckets.noSales)} />
+                <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Crítico (<15d)" value={fmtNum(coverageBuckets.critical)}
+                  active={coverageBucket === "critical"}
+                  onClick={() => setCoverageBucket(coverageBucket === "critical" ? "all" : "critical")} />
+                <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Baixo (15-30d)" value={fmtNum(coverageBuckets.low)}
+                  active={coverageBucket === "low"}
+                  onClick={() => setCoverageBucket(coverageBucket === "low" ? "all" : "low")} />
+                <KpiCard icon={<Boxes className="h-4 w-4" />} label="Saudável (30-90d)" value={fmtNum(coverageBuckets.healthy)}
+                  active={coverageBucket === "healthy"}
+                  onClick={() => setCoverageBucket(coverageBucket === "healthy" ? "all" : "healthy")} />
+                <KpiCard icon={<Layers className="h-4 w-4" />} label="Excesso (>90d)" value={fmtNum(coverageBuckets.excess)}
+                  active={coverageBucket === "excess"}
+                  onClick={() => setCoverageBucket(coverageBucket === "excess" ? "all" : "excess")} />
+                <KpiCard icon={<X className="h-4 w-4" />} label="Sem venda" value={fmtNum(coverageBuckets.noSales)}
+                  active={coverageBucket === "noSales"}
+                  onClick={() => setCoverageBucket(coverageBucket === "noSales" ? "all" : "noSales")} />
               </div>
+              {coverageBucket !== "all" && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>Filtrando por: <strong className="text-foreground">{({
+                    critical: "Crítico (<15d)", low: "Baixo (15-30d)", healthy: "Saudável (30-90d)",
+                    excess: "Excesso (>90d)", noSales: "Sem venda",
+                  } as any)[coverageBucket]}</strong></span>
+                  <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => setCoverageBucket("all")}>
+                    <X className="h-3 w-3 mr-1" /> Limpar
+                  </Button>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
