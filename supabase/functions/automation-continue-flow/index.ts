@@ -181,22 +181,19 @@ serve(async (req) => {
 
       if (step.action_type === 'send_text') {
         const message = replaceVars((config.message as string) || '');
-        if (!message) continue;
+        const mediaUrl = config.mediaUrl as string | undefined;
+        const mediaType = config.mediaType as string | undefined;
+        if (!message && !mediaUrl) continue;
 
         await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, message, whatsappNumberId: sendNumberId }),
-        });
-
-        await supabase.from('whatsapp_messages').insert({
-          phone, message, direction: 'outgoing', status: 'sent',
-          whatsapp_number_id: sendNumberId,
+          body: JSON.stringify({ phone, message, mediaUrl, mediaType, whatsappNumberId: sendNumberId }),
         });
 
         await supabase.from('automation_executions').insert({
           flow_id: flowId, step_id: step.id, status: 'success',
-          result: { phone, action: 'send_text', continued: true },
+          result: { phone, action: 'send_text', mediaType: mediaType || null, continued: true },
         });
       }
 
