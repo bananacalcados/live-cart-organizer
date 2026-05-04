@@ -74,6 +74,67 @@ function parseBrand(name: string): string {
   return tokens[0] || "—";
 }
 
+// Conjuntos para detectar inversão tamanho⇄cor (pente fino)
+const SIZE_TOKENS = new Set([
+  "PP", "P", "M", "G", "GG", "XG", "XGG", "XS", "S", "L", "XL", "XXL",
+  "ÚNICO", "UNICO", "U", "UN",
+]);
+const COLOR_KEYWORDS = [
+  "PRETO", "BRANCO", "BEGE", "NUDE", "MARROM", "CARAMELO", "AZUL", "VERDE",
+  "VERMELH", "ROSA", "ROXO", "LILAS", "LILÁS", "AMAREL", "CINZA", "PRATA",
+  "DOURAD", "OURO", "BRONZE", "COBRE", "OFF", "OFFWHITE", "OFF-WHITE",
+  "MOSTARDA", "VINHO", "TURQUESA", "TIFFANY", "PINK", "FUCSIA", "FÚCSIA",
+  "GRAFITE", "TERRACOTA", "AREIA", "TAUPE", "MUSGO", "OLIVA", "JEANS",
+  "MARINHO", "CELESTE", "CORAL", "SALMÃO", "SALMAO", "LARANJA", "CHUMBO",
+  "CHAMPAGNE", "CHAMPANHE", "RUBI", "ESMERALDA", "PEROLA", "PÉROLA",
+  "ESTAMPAD", "ANIMAL", "ONÇA", "ONCA", "FLORAL", "MULTICOR", "TRANSPARENTE",
+  "MESCLA", "GLITTER", "METALIZ", "FOSCO", "BRILH",
+];
+
+function looksLikeSize(v: string): boolean {
+  if (!v) return false;
+  const t = v.trim().toUpperCase();
+  if (!t) return false;
+  // Numérico puro (34, 38), faixa (33/34), decimal
+  if (/^\d{1,2}([.,/-]\d{1,2})?$/.test(t)) return true;
+  if (SIZE_TOKENS.has(t)) return true;
+  return false;
+}
+
+function looksLikeColor(v: string): boolean {
+  if (!v) return false;
+  const t = v.trim().toUpperCase();
+  if (!t) return false;
+  if (looksLikeSize(t)) return false;
+  // Tem letras (não é só dígito) e não é um token de tamanho
+  if (/[A-ZÀ-Ú]/.test(t)) {
+    if (COLOR_KEYWORDS.some((k) => t.includes(k))) return true;
+    // Heurística: 3+ letras sem números → provavelmente cor
+    if (/^[A-ZÀ-Ú\s/-]{3,}$/.test(t)) return true;
+  }
+  return false;
+}
+
+/** Detecta e corrige inversão tamanho⇄cor vinda do Tiny. */
+function fixSizeColor(size: string | null, color: string | null): { size: string | null; color: string | null; swapped: boolean } {
+  const s = (size || "").trim();
+  const c = (color || "").trim();
+  if (!s && !c) return { size: null, color: null, swapped: false };
+  // Caso clássico: size parece cor E color parece tamanho → inverter
+  if (s && c && looksLikeColor(s) && looksLikeSize(c)) {
+    return { size: c, color: s, swapped: true };
+  }
+  // size sozinho, mas é cor → mover para color
+  if (s && !c && looksLikeColor(s) && !looksLikeSize(s)) {
+    return { size: null, color: s, swapped: true };
+  }
+  // color sozinho, mas é tamanho → mover para size
+  if (!s && c && looksLikeSize(c)) {
+    return { size: c, color: null, swapped: true };
+  }
+  return { size: s || null, color: c || null, swapped: false };
+}
+
 function parentKey(p: RawProduct): string {
   // Tenta agrupar por SKU root (parte antes do tamanho/cor) ou pelo nome sem variação
   const baseName = p.name.split(" - ")[0]?.trim() || p.name;
