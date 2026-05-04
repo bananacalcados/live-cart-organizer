@@ -502,11 +502,13 @@ function StepEditorDialog({
   open,
   onOpenChange,
   step,
+  allSteps = [],
   onSave,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   step: AutomationStep | null;
+  allSteps?: AutomationStep[];
   onSave: (actionType: string, config: any, delaySecs: number) => void;
 }) {
   const [actionType, setActionType] = useState("send_template");
@@ -1088,20 +1090,64 @@ function StepEditorDialog({
                             Você pode configurar caminhos diferentes no fluxo para cada botão clicado. 
                             Conecte as setas no canvas para definir os caminhos.
                           </p>
-                          <div className="space-y-1">
-                            {quickReplies.map((btn: any, i: number) => (
-                              <div key={i} className="flex items-center gap-2 p-2 bg-card rounded border border-border">
-                                <Badge variant="outline" className="text-[9px]">↩️ {btn.text}</Badge>
-                                <span className="text-[10px] text-muted-foreground flex-1">→ Saída {i + 1}</span>
-                              </div>
-                            ))}
+                          <div className="space-y-2">
+                            {quickReplies.map((btn: any, i: number) => {
+                              const handleId = `btn-${i}`;
+                              const branches = config.buttonBranches || {};
+                              const currentTarget = branches[handleId] || "";
+                              const otherSteps = (allSteps || []).filter(s => s.id !== step?.id);
+                              return (
+                                <div key={i} className="flex items-center gap-2 p-2 bg-card rounded border border-border">
+                                  <Badge variant="outline" className="text-[10px] whitespace-nowrap">↩️ {btn.text}</Badge>
+                                  <span className="text-[10px] text-muted-foreground">→</span>
+                                  <Select
+                                    value={currentTarget || "__none__"}
+                                    onValueChange={v => {
+                                      const next = { ...(config.buttonBranches || {}) };
+                                      if (v === "__none__") delete next[handleId];
+                                      else next[handleId] = v;
+                                      setConfig({ ...config, buttonBranches: next });
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="Próxima etapa..." /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none__">— Continuar fluxo padrão —</SelectItem>
+                                      {otherSteps.map((s, idx) => {
+                                        const c = (s.action_config || {}) as any;
+                                        const label = c.templateName || c.message?.slice(0, 30) || c.tags?.join(",") || s.action_type;
+                                        return <SelectItem key={s.id} value={s.id}>#{idx + 1} {s.action_type} · {label}</SelectItem>;
+                                      })}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              );
+                            })}
                             <div className="flex items-center gap-2 p-2 bg-card rounded border border-orange-200 dark:border-orange-800">
-                              <Badge variant="secondary" className="text-[9px]">⏳ Sem resposta</Badge>
-                              <span className="text-[10px] text-muted-foreground flex-1">→ Timeout</span>
+                              <Badge variant="secondary" className="text-[10px] whitespace-nowrap">⏳ Sem resposta</Badge>
+                              <span className="text-[10px] text-muted-foreground">→</span>
+                              <Select
+                                value={(config.buttonBranches || {})["btn-timeout"] || "__none__"}
+                                onValueChange={v => {
+                                  const next = { ...(config.buttonBranches || {}) };
+                                  if (v === "__none__") delete next["btn-timeout"];
+                                  else next["btn-timeout"] = v;
+                                  setConfig({ ...config, buttonBranches: next });
+                                }}
+                              >
+                                <SelectTrigger className="h-7 text-xs flex-1"><SelectValue placeholder="Etapa de timeout..." /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="__none__">— Encerrar fluxo —</SelectItem>
+                                  {(allSteps || []).filter(s => s.id !== step?.id).map((s, idx) => {
+                                    const c = (s.action_config || {}) as any;
+                                    const label = c.templateName || c.message?.slice(0, 30) || c.tags?.join(",") || s.action_type;
+                                    return <SelectItem key={s.id} value={s.id}>#{idx + 1} {s.action_type} · {label}</SelectItem>;
+                                  })}
+                                </SelectContent>
+                              </Select>
                             </div>
                           </div>
                           <p className="text-[10px] text-blue-600 dark:text-blue-400">
-                            💡 Após salvar, arraste as setas de cada botão para a ação desejada no canvas.
+                            💡 Selecione a próxima etapa para cada botão. Crie as etapas antes (ex: "Mensagem Livre" com PDF) e depois associe-as aqui.
                           </p>
                         </div>
                       );
@@ -2778,8 +2824,10 @@ function FlowEditor({
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         step={editingStep}
+        allSteps={steps}
         onSave={handleStepSave}
       />
+
 
       {/* Test Flow Dialog */}
       <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
