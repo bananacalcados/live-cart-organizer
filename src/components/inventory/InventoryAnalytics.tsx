@@ -387,9 +387,12 @@ export function InventoryAnalytics() {
     };
     const map = new Map<string, Row>();
     for (const p of filtered) {
+      // Consolida entre lojas quando não há filtro de loja específico
       const key = scopeFilter === "parents"
-        ? `${p.store_id}::${p.parent_key}`
-        : (p.sku && String(p.sku)) || String(p.tiny_id);
+        ? (storeFilter !== "all" ? `${p.store_id}::${p.parent_key}` : p.parent_key)
+        : (storeFilter !== "all"
+            ? `${p.store_id}::${(p.sku && String(p.sku)) || String(p.tiny_id)}`
+            : (p.sku && String(p.sku)) || String(p.tiny_id));
       const label = scopeFilter === "parents"
         ? p.name.split(" - ")[0]
         : `${p.name}${p.size ? ` · ${p.size}` : ""}${p.color ? ` · ${p.color}` : ""}`;
