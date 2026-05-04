@@ -38,6 +38,17 @@ serve(async (req) => {
       });
     }
 
+    // Collect all step IDs that are referenced as a branch target from ANY step.
+    // These steps must ONLY be reached via an explicit branch — never via sequential flow.
+    const branchTargetIds = new Set<string>();
+    for (const s of steps) {
+      const cfg = (s.action_config || {}) as any;
+      const branches = cfg.buttonBranches || {};
+      for (const v of Object.values(branches)) {
+        if (typeof v === 'string') branchTargetIds.add(v);
+      }
+    }
+
     const rd = (recipientData || {}) as Record<string, string>;
     const firstName = rd.firstName || rd.name?.split(' ')[0] || 'Cliente';
 
