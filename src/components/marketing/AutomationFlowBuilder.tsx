@@ -2344,6 +2344,7 @@ function FlowEditor({
           hasDeadline: cfg.hasDeadline,
           deadline: cfg.deadline,
           quickReplyButtons: cfg.quickReplyButtons || [],
+          interactiveButtons: cfg.interactiveButtons || [],
           buttonBranches: cfg.buttonBranches || {},
           onDelete: () => deleteStep(step.id),
         },
