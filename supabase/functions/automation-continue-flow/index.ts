@@ -180,21 +180,86 @@ serve(async (req) => {
       }
 
       if (step.action_type === 'send_text') {
-        const message = replaceVars((config.message as string) || '');
-        const mediaUrl = config.mediaUrl as string | undefined;
-        const mediaType = config.mediaType as string | undefined;
-        if (!message && !mediaUrl) continue;
+        // Build block list (backwards-compatible: legacy single message + mediaUrl as 1 or 2 blocks)
+        const rawBlocks: any[] = Array.isArray(config.blocks) && (config.blocks as any[]).length > 0
+          ? (config.blocks as any[])
+          : [
+              ...((config.message as string) ? [{ type: 'text', message: config.message }] : []),
+              ...(config.mediaUrl ? [{ type: (config.mediaType as string) || 'document', mediaUrl: config.mediaUrl, mediaType: config.mediaType }] : []),
+            ];
+        const interactiveButtons = (config.interactiveButtons as string[]) || [];
+        const hasButtons = interactiveButtons.length > 0;
 
-        await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, message, mediaUrl, mediaType, whatsappNumberId: sendNumberId }),
-        });
+        if (rawBlocks.length === 0 && !hasButtons) continue;
+
+        // If buttons present, last text block becomes interactive body
+        let lastTextIdxForInteractive = -1;
+        if (hasButtons) {
+          for (let bi = rawBlocks.length - 1; bi >= 0; bi--) {
+            if (rawBlocks[bi].type === 'text' || rawBlocks[bi].message) { lastTextIdxForInteractive = bi; break; }
+          }
+        }
+
+        for (let bi = 0; bi < rawBlocks.length; bi++) {
+          const blk = rawBlocks[bi];
+          const isLastInteractive = hasButtons && bi === lastTextIdxForInteractive;
+          if (isLastInteractive) {
+            const bodyText = replaceVars(blk.message || '') || '👇';
+            await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                phone, type: 'interactive',
+                whatsappNumberId: sendNumberId,
+                interactiveData: {
+                  body: bodyText,
+                  buttons: interactiveButtons.slice(0, 3).map((title, idx) => ({ id: `btn-${idx}`, title })),
+                },
+              }),
+            });
+          } else {
+            const blkType = blk.type || (blk.mediaUrl ? (blk.mediaType || 'document') : 'text');
+            const blkMessage = replaceVars(blk.message || '');
+            await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                phone,
+                message: blkMessage,
+                mediaUrl: blk.mediaUrl,
+                mediaType: blk.mediaType || (blkType !== 'text' ? blkType : undefined),
+                type: blk.mediaUrl ? blkType : 'text',
+                whatsappNumberId: sendNumberId,
+              }),
+            });
+          }
+          if (bi < rawBlocks.length - 1) await new Promise(r => setTimeout(r, 800));
+        }
 
         await supabase.from('automation_executions').insert({
           flow_id: flowId, step_id: step.id, status: 'success',
-          result: { phone, action: 'send_text', mediaType: mediaType || null, continued: true },
+          result: { phone, action: 'send_text', blocks: rawBlocks.length, hasButtons, continued: true },
         });
+
+        // If buttons present and branches configured, register pending reply and stop
+        if (hasButtons && config.buttonBranches && Object.keys(config.buttonBranches as object).length > 0) {
+          const textBranches: Record<string, string> = {};
+          const branches = config.buttonBranches as Record<string, string>;
+          for (const [handleId, targetStepId] of Object.entries(branches)) {
+            const idx = parseInt(handleId.replace('btn-', ''));
+            if (!isNaN(idx) && interactiveButtons[idx]) {
+              textBranches[interactiveButtons[idx].toLowerCase()] = targetStepId;
+            }
+          }
+          await supabase.from('automation_pending_replies').insert({
+            phone, flow_id: flowId, pending_step_index: i,
+            step_id: step.id, button_branches: textBranches,
+            whatsapp_number_id: sendNumberId || null,
+            recipient_data: recipientData || {},
+          });
+          console.log(`[continue-flow] send_text+buttons created pending reply at step ${i}`);
+          break;
+        }
       }
 
       if (step.action_type === 'add_tag') {
