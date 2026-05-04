@@ -2374,7 +2374,7 @@ function FlowEditor({
       const prevStep = idx > 0 ? steps[idx - 1] : null;
       const prevNodeId = idx === 0 ? "trigger" : `step-${prevStep!.id}`;
       const prevCfg = prevStep ? (prevStep.action_config || {}) as any : null;
-      const prevHasButtons = !!(prevCfg && prevCfg.quickReplyButtons && prevCfg.quickReplyButtons.length > 0);
+      const prevHasButtons = !!(prevCfg && ((prevCfg.quickReplyButtons && prevCfg.quickReplyButtons.length > 0) || (prevCfg.interactiveButtons && prevCfg.interactiveButtons.length > 0)));
 
       if (branchTargetIds.has(step.id)) {
         // Already wired via a branch — skip sequential
