@@ -87,6 +87,7 @@ const TRIGGER_TYPES = [
   { value: "stage_change", label: "Mudança de Estágio", icon: RefreshCw, description: "Quando o pedido muda de etapa" },
   { value: "payment_confirmed", label: "Pagamento Confirmado", icon: CreditCard, description: "Quando o pagamento é confirmado" },
   { value: "shopify_purchase", label: "Compra Shopify", icon: ShoppingCart, description: "Quando alguém finaliza uma compra na Shopify" },
+  { value: "pos_sale_completed", label: "Venda Loja Física (POS)", icon: ShoppingBag, description: "Quando uma venda é concluída na loja física (cashback, reativação)" },
   { value: "yampi_abandoned_cart", label: "Carrinho Abandonado (Yampi)", icon: Package, description: "Quando um carrinho é abandonado na Yampi" },
 ];
 
