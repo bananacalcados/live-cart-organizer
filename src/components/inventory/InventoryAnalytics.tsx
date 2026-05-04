@@ -315,7 +315,8 @@ export function InventoryAnalytics() {
     if (scopeFilter === "variants") return filtered;
     const map = new Map<string, EnrichedProduct & { variants: number }>();
     for (const p of filtered) {
-      const k = `${p.store_id}::${p.parent_key}`;
+      // Consolida entre lojas quando não há filtro de loja específico
+      const k = storeFilter !== "all" ? `${p.store_id}::${p.parent_key}` : p.parent_key;
       const cur = map.get(k);
       if (cur) {
         cur.stock += p.stock;
@@ -383,12 +384,16 @@ export function InventoryAnalytics() {
       classe: "A" | "B" | "C";
       pct: number;
       cumPct: number;
+      _countedSkus: Set<string>;
     };
     const map = new Map<string, Row>();
     for (const p of filtered) {
+      // Consolida entre lojas quando não há filtro de loja específico
       const key = scopeFilter === "parents"
-        ? `${p.store_id}::${p.parent_key}`
-        : (p.sku && String(p.sku)) || String(p.tiny_id);
+        ? (storeFilter !== "all" ? `${p.store_id}::${p.parent_key}` : p.parent_key)
+        : (storeFilter !== "all"
+            ? `${p.store_id}::${(p.sku && String(p.sku)) || String(p.tiny_id)}`
+            : (p.sku && String(p.sku)) || String(p.tiny_id));
       const label = scopeFilter === "parents"
         ? p.name.split(" - ")[0]
         : `${p.name}${p.size ? ` · ${p.size}` : ""}${p.color ? ` · ${p.color}` : ""}`;
@@ -397,8 +402,12 @@ export function InventoryAnalytics() {
 
       const cur = map.get(key);
       if (cur) {
-        cur.qty += sales_.qty;
-        cur.revenue += sales_.revenue;
+        // Vendas (sales map) são globais por SKU — só contar uma vez por SKU dentro do grupo
+        if (!cur._countedSkus.has(sk)) {
+          cur.qty += sales_.qty;
+          cur.revenue += sales_.revenue;
+          cur._countedSkus.add(sk);
+        }
         cur.stock += p.stock;
         cur.cost += p.stock * p.cost_price;
       } else {
@@ -409,7 +418,8 @@ export function InventoryAnalytics() {
           stock: p.stock,
           cost: p.stock * p.cost_price,
           classe: "C", pct: 0, cumPct: 0,
-        });
+          _countedSkus: new Set([sk]),
+        } as any);
       }
     }
     const rows = Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
@@ -458,18 +468,23 @@ export function InventoryAnalytics() {
     for (const p of filtered) {
       const isParents = coverageScope === "parents";
       const key = isParents
-        ? `${p.store_id}::${p.parent_key}`
-        : (p.sku && String(p.sku)) || String(p.tiny_id);
+        ? (storeFilter !== "all" ? `${p.store_id}::${p.parent_key}` : p.parent_key)
+        : (storeFilter !== "all"
+            ? `${p.store_id}::${(p.sku && String(p.sku)) || String(p.tiny_id)}`
+            : (p.sku && String(p.sku)) || String(p.tiny_id));
       const sk = (p.sku && String(p.sku)) || String(p.tiny_id);
       const sales_ = sales.get(sk) || { qty: 0, revenue: 0 };
       const label = isParents
         ? p.name.split(" - ")[0]
         : `${p.name}${p.size ? ` · ${p.size}` : ""}${p.color ? ` · ${p.color}` : ""}`;
 
-      const cur = map.get(key);
+      const cur = map.get(key) as any;
       if (cur) {
         cur.stock += p.stock;
-        cur.soldQty += sales_.qty;
+        if (!cur._countedSkus.has(sk)) {
+          cur.soldQty += sales_.qty;
+          cur._countedSkus.add(sk);
+        }
         cur.cost += p.stock * p.cost_price;
         cur.sale += p.stock * p.price;
       } else {
@@ -486,7 +501,8 @@ export function InventoryAnalytics() {
           coverageDays: null,
           cost: p.stock * p.cost_price,
           sale: p.stock * p.price,
-        });
+          _countedSkus: new Set([sk]),
+        } as any);
       }
     }
     const rows = Array.from(map.values());
@@ -501,7 +517,7 @@ export function InventoryAnalytics() {
       return ax - bx;
     });
     return rows;
-  }, [filtered, sales, periodDays, coverageScope]);
+  }, [filtered, sales, periodDays, coverageScope, storeFilter]);
 
   const coverageBuckets = useMemo(() => {
     const b = { critical: 0, low: 0, healthy: 0, excess: 0, noSales: 0 };
