@@ -232,6 +232,16 @@ serve(async (req) => {
 
     const CONCURRENCY = 10;
 
+    // Steps that are branch-targets must only be reached via explicit branch (button click), never sequentially.
+    const branchTargetIds = new Set<string>();
+    for (const s of steps) {
+      const cfg = (s.action_config || {}) as any;
+      const branches = cfg.buttonBranches || {};
+      for (const v of Object.values(branches)) {
+        if (typeof v === 'string') branchTargetIds.add(v);
+      }
+    }
+
     async function processRecipient(recipient: typeof batch[0]): Promise<void> {
       const firstName = recipient.name.split(' ')[0];
 
@@ -253,6 +263,12 @@ serve(async (req) => {
         const step = steps[i];
         const config = step.action_config as Record<string, unknown> || {};
         const sendNumberId = (config.whatsappNumberId as string) || defaultNumberId;
+
+        // Skip steps that are reachable only via branches (must wait for client click)
+        if (i > 0 && branchTargetIds.has(step.id)) {
+          console.log(`[dispatch] Stopping at step ${i} (${step.id}) — branch target only`);
+          break;
+        }
 
         if (step.action_type === 'delay') continue;
         if (step.action_type === 'wait_for_reply') {
