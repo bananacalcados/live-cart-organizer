@@ -77,9 +77,25 @@ serve(async (req) => {
         .replace(/\{\{cupom\}\}/g, 'TESTE10');
     }
 
+    // Steps that are branch-targets must only be reached via explicit branch (button click), never sequentially.
+    const branchTargetIds = new Set<string>();
+    for (const s of steps) {
+      const cfg = (s.action_config || {}) as any;
+      const branches = cfg.buttonBranches || {};
+      for (const v of Object.values(branches)) {
+        if (typeof v === 'string') branchTargetIds.add(v);
+      }
+    }
+
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i];
       const config = step.action_config || {};
+
+      // Skip steps that are reachable only via branches (must wait for client click)
+      if (i > 0 && branchTargetIds.has(step.id)) {
+        results.push({ step: i + 1, type: step.action_type, status: 'skipped', detail: 'Aguardando clique em botão (branch)' });
+        break;
+      }
 
       // Skip delays entirely in test mode
       if (step.action_type === 'delay') {

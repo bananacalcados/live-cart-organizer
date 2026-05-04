@@ -38,6 +38,17 @@ serve(async (req) => {
       });
     }
 
+    // Collect all step IDs that are referenced as a branch target from ANY step.
+    // These steps must ONLY be reached via an explicit branch — never via sequential flow.
+    const branchTargetIds = new Set<string>();
+    for (const s of steps) {
+      const cfg = (s.action_config || {}) as any;
+      const branches = cfg.buttonBranches || {};
+      for (const v of Object.values(branches)) {
+        if (typeof v === 'string') branchTargetIds.add(v);
+      }
+    }
+
     const rd = (recipientData || {}) as Record<string, string>;
     const firstName = rd.firstName || rd.name?.split(' ')[0] || 'Cliente';
 
@@ -56,6 +67,13 @@ serve(async (req) => {
     for (let i = startFromStep; i < steps.length; i++) {
       const step = steps[i];
       const config = step.action_config as Record<string, unknown> || {};
+
+      // Stop if we reached a step that is a branch target of ANOTHER step (not the current entry point).
+      // It must only be reached via its branch, never via sequential flow.
+      if (i !== startFromStep && branchTargetIds.has(step.id)) {
+        console.log(`[continue-flow] Stopping at step ${i} (${step.id}) — it's a branch target of another step`);
+        break;
+      }
 
       // Apply delay
       if (step.delay_seconds > 0) {
@@ -163,22 +181,19 @@ serve(async (req) => {
 
       if (step.action_type === 'send_text') {
         const message = replaceVars((config.message as string) || '');
-        if (!message) continue;
+        const mediaUrl = config.mediaUrl as string | undefined;
+        const mediaType = config.mediaType as string | undefined;
+        if (!message && !mediaUrl) continue;
 
         await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, message, whatsappNumberId: sendNumberId }),
-        });
-
-        await supabase.from('whatsapp_messages').insert({
-          phone, message, direction: 'outgoing', status: 'sent',
-          whatsapp_number_id: sendNumberId,
+          body: JSON.stringify({ phone, message, mediaUrl, mediaType, whatsappNumberId: sendNumberId }),
         });
 
         await supabase.from('automation_executions').insert({
           flow_id: flowId, step_id: step.id, status: 'success',
-          result: { phone, action: 'send_text', continued: true },
+          result: { phone, action: 'send_text', mediaType: mediaType || null, continued: true },
         });
       }
 
