@@ -161,6 +161,7 @@ export function InventoryAnalytics() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [stockFilter, setStockFilter] = useState<"all" | "with" | "without">("with");
   const [scopeFilter, setScopeFilter] = useState<"variants" | "parents">("variants");
+  const [coverageScope, setCoverageScope] = useState<"variants" | "parents">("variants");
 
   // Vendas / Curva ABC
   const [periodDays, setPeriodDays] = useState<number>(90);
