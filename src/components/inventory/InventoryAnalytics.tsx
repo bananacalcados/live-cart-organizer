@@ -978,9 +978,16 @@ function FilterSelect({
   );
 }
 
-function KpiCard({ icon, label, value, hint }: { icon: React.ReactNode; label: string; value: string; hint?: string }) {
+function KpiCard({ icon, label, value, hint, onClick, active }: { icon: React.ReactNode; label: string; value: string; hint?: string; onClick?: () => void; active?: boolean }) {
+  const clickable = !!onClick;
   return (
-    <Card>
+    <Card
+      onClick={onClick}
+      className={cn(
+        clickable && "cursor-pointer hover:bg-accent/40 transition-colors",
+        active && "ring-2 ring-primary border-primary",
+      )}
+    >
       <CardContent className="pt-4 pb-3">
         <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
           <span>{label}</span>{icon}
