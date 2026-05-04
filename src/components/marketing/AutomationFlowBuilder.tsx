@@ -250,31 +250,30 @@ function ActionNode({ data }: { data: any }) {
       )}
       {isTag && data.tags && <div className="flex flex-wrap gap-1 mt-1">{data.tags.map((t: string) => <Badge key={t} variant="secondary" className="text-[9px] px-1 py-0">{t}</Badge>)}</div>}
       
-      {/* Button branches: show each quick reply as a labeled output handle */}
+      {/* Button branches: show each quick reply as a labeled output handle on the RIGHT side aligned with its row */}
       {hasButtonBranches ? (
-        <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
+        <div className="mt-2 space-y-1.5 border-t border-border/50 pt-2">
           <p className="text-[10px] text-muted-foreground flex items-center gap-1"><GitBranch className="h-2.5 w-2.5" />Caminhos por botão:</p>
           {quickReplyButtons.map((btnText, i) => (
-            <div key={i} className="relative flex items-center gap-1">
+            <div key={i} className="relative flex items-center justify-between gap-1 pr-2">
               <Badge variant="outline" className="text-[9px]">↩️ {btnText}</Badge>
               <Handle
                 type="source"
-                position={Position.Bottom}
+                position={Position.Right}
                 id={`btn-${i}`}
-                className="!bg-blue-500 !w-2.5 !h-2.5 !border-2 !border-blue-300"
-                style={{ left: `${((i + 1) / (quickReplyButtons.length + 1)) * 100}%` }}
+                className="!bg-blue-500 !w-3 !h-3 !border-2 !border-blue-300"
+                style={{ top: "50%" }}
               />
             </div>
           ))}
-          {/* Default/fallback handle for "no button click" */}
-          <div className="relative flex items-center gap-1">
+          <div className="relative flex items-center justify-between gap-1 pr-2">
             <Badge variant="secondary" className="text-[9px]">⏳ Sem resposta</Badge>
             <Handle
               type="source"
-              position={Position.Bottom}
+              position={Position.Right}
               id="btn-timeout"
-              className="!bg-orange-500 !w-2.5 !h-2.5 !border-2 !border-orange-300"
-              style={{ left: `${(quickReplyButtons.length + 1) / (quickReplyButtons.length + 2) * 100}%` }}
+              className="!bg-orange-500 !w-3 !h-3 !border-2 !border-orange-300"
+              style={{ top: "50%" }}
             />
           </div>
         </div>
