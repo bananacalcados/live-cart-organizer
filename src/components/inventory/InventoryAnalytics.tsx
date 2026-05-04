@@ -162,6 +162,7 @@ export function InventoryAnalytics() {
   const [stockFilter, setStockFilter] = useState<"all" | "with" | "without">("with");
   const [scopeFilter, setScopeFilter] = useState<"variants" | "parents">("variants");
   const [coverageScope, setCoverageScope] = useState<"variants" | "parents">("variants");
+  const [coverageBucket, setCoverageBucket] = useState<"all" | "critical" | "low" | "healthy" | "excess" | "noSales">("all");
 
   // Vendas / Curva ABC
   const [periodDays, setPeriodDays] = useState<number>(90);
@@ -515,6 +516,22 @@ export function InventoryAnalytics() {
     return b;
   }, [coverageRows]);
 
+  const filteredCoverageRows = useMemo(() => {
+    if (coverageBucket === "all") return coverageRows;
+    return coverageRows.filter((r) => {
+      if (r.stock <= 0) return false;
+      const cov = r.coverageDays;
+      switch (coverageBucket) {
+        case "noSales": return cov === null;
+        case "critical": return cov !== null && cov < 15;
+        case "low": return cov !== null && cov >= 15 && cov < 30;
+        case "healthy": return cov !== null && cov >= 30 && cov <= 90;
+        case "excess": return cov !== null && cov > 90;
+        default: return true;
+      }
+    });
+  }, [coverageRows, coverageBucket]);
+
   // Resumos por dimensão
   const byDim = (dim: keyof EnrichedProduct) => {
     const map = new Map<string, { qty: number; cost: number; sale: number; skus: number }>();
@@ -785,12 +802,33 @@ export function InventoryAnalytics() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Crítico (<15d)" value={fmtNum(coverageBuckets.critical)} />
-                <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Baixo (15-30d)" value={fmtNum(coverageBuckets.low)} />
-                <KpiCard icon={<Boxes className="h-4 w-4" />} label="Saudável (30-90d)" value={fmtNum(coverageBuckets.healthy)} />
-                <KpiCard icon={<Layers className="h-4 w-4" />} label="Excesso (>90d)" value={fmtNum(coverageBuckets.excess)} />
-                <KpiCard icon={<X className="h-4 w-4" />} label="Sem venda" value={fmtNum(coverageBuckets.noSales)} />
+                <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Crítico (<15d)" value={fmtNum(coverageBuckets.critical)}
+                  active={coverageBucket === "critical"}
+                  onClick={() => setCoverageBucket(coverageBucket === "critical" ? "all" : "critical")} />
+                <KpiCard icon={<AlertTriangle className="h-4 w-4" />} label="Baixo (15-30d)" value={fmtNum(coverageBuckets.low)}
+                  active={coverageBucket === "low"}
+                  onClick={() => setCoverageBucket(coverageBucket === "low" ? "all" : "low")} />
+                <KpiCard icon={<Boxes className="h-4 w-4" />} label="Saudável (30-90d)" value={fmtNum(coverageBuckets.healthy)}
+                  active={coverageBucket === "healthy"}
+                  onClick={() => setCoverageBucket(coverageBucket === "healthy" ? "all" : "healthy")} />
+                <KpiCard icon={<Layers className="h-4 w-4" />} label="Excesso (>90d)" value={fmtNum(coverageBuckets.excess)}
+                  active={coverageBucket === "excess"}
+                  onClick={() => setCoverageBucket(coverageBucket === "excess" ? "all" : "excess")} />
+                <KpiCard icon={<X className="h-4 w-4" />} label="Sem venda" value={fmtNum(coverageBuckets.noSales)}
+                  active={coverageBucket === "noSales"}
+                  onClick={() => setCoverageBucket(coverageBucket === "noSales" ? "all" : "noSales")} />
               </div>
+              {coverageBucket !== "all" && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>Filtrando por: <strong className="text-foreground">{({
+                    critical: "Crítico (<15d)", low: "Baixo (15-30d)", healthy: "Saudável (30-90d)",
+                    excess: "Excesso (>90d)", noSales: "Sem venda",
+                  } as any)[coverageBucket]}</strong></span>
+                  <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => setCoverageBucket("all")}>
+                    <X className="h-3 w-3 mr-1" /> Limpar
+                  </Button>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -808,7 +846,7 @@ export function InventoryAnalytics() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {coverageRows.slice(0, 500).map((r) => {
+                    {filteredCoverageRows.slice(0, 500).map((r) => {
                       const cov = r.coverageDays;
                       const badge =
                         cov === null ? { label: "Sem venda", variant: "outline" as const } :
@@ -835,8 +873,8 @@ export function InventoryAnalytics() {
                     })}
                   </TableBody>
                 </Table>
-                {coverageRows.length > 500 && (
-                  <p className="text-xs text-muted-foreground mt-2">Exibindo top 500 (menor cobertura) de {fmtNum(coverageRows.length)}.</p>
+                {filteredCoverageRows.length > 500 && (
+                  <p className="text-xs text-muted-foreground mt-2">Exibindo top 500 (menor cobertura) de {fmtNum(filteredCoverageRows.length)}.</p>
                 )}
               </div>
             </CardContent>
@@ -978,9 +1016,16 @@ function FilterSelect({
   );
 }
 
-function KpiCard({ icon, label, value, hint }: { icon: React.ReactNode; label: string; value: string; hint?: string }) {
+function KpiCard({ icon, label, value, hint, onClick, active }: { icon: React.ReactNode; label: string; value: string; hint?: string; onClick?: () => void; active?: boolean }) {
+  const clickable = !!onClick;
   return (
-    <Card>
+    <Card
+      onClick={onClick}
+      className={cn(
+        clickable && "cursor-pointer hover:bg-accent/40 transition-colors",
+        active && "ring-2 ring-primary border-primary",
+      )}
+    >
       <CardContent className="pt-4 pb-3">
         <div className="flex items-center justify-between text-muted-foreground text-xs mb-1">
           <span>{label}</span>{icon}
