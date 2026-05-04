@@ -819,10 +819,9 @@ export function InventoryAnalytics() {
                       return (
                         <TableRow key={r.key}>
                           <TableCell className="min-w-[180px] whitespace-normal break-words">{r.label}</TableCell>
-                          <TableCell className="font-mono text-xs">{r.sku}</TableCell>
+                          {coverageScope === "variants" && <TableCell className="font-mono text-xs">{r.sku}</TableCell>}
                           <TableCell>{r.brand}</TableCell>
-                          <TableCell>{r.size || "—"}</TableCell>
-                          <TableCell>{r.color || "—"}</TableCell>
+                          {coverageScope === "variants" && <TableCell>{r.size || "—"}</TableCell>}
                           <TableCell className="text-right">{fmtNum(r.stock)}</TableCell>
                           <TableCell className="text-right">{fmtNum(r.soldQty)}</TableCell>
                           <TableCell className="text-right">{r.avgDaily.toFixed(2)}</TableCell>
