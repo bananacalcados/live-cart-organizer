@@ -929,6 +929,76 @@ export type Database = {
           },
         ]
       }
+      automation_pos_followups: {
+        Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          created_at: string
+          customer_phone: string
+          customer_phone_suffix: string | null
+          flow_id: string
+          id: string
+          payload: Json
+          sale_id: string
+          scheduled_at: string
+          sent_at: string | null
+          step_id: string | null
+          step_index: number
+        }
+        Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          customer_phone: string
+          customer_phone_suffix?: string | null
+          flow_id: string
+          id?: string
+          payload?: Json
+          sale_id: string
+          scheduled_at: string
+          sent_at?: string | null
+          step_id?: string | null
+          step_index: number
+        }
+        Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          created_at?: string
+          customer_phone?: string
+          customer_phone_suffix?: string | null
+          flow_id?: string
+          id?: string
+          payload?: Json
+          sale_id?: string
+          scheduled_at?: string
+          sent_at?: string | null
+          step_id?: string | null
+          step_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_pos_followups_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_pos_followups_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_pos_followups_step_id_fkey"
+            columns: ["step_id"]
+            isOneToOne: false
+            referencedRelation: "automation_steps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_steps: {
         Row: {
           action_config: Json

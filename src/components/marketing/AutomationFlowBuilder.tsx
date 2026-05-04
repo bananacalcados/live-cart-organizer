@@ -87,6 +87,7 @@ const TRIGGER_TYPES = [
   { value: "stage_change", label: "Mudança de Estágio", icon: RefreshCw, description: "Quando o pedido muda de etapa" },
   { value: "payment_confirmed", label: "Pagamento Confirmado", icon: CreditCard, description: "Quando o pagamento é confirmado" },
   { value: "shopify_purchase", label: "Compra Shopify", icon: ShoppingCart, description: "Quando alguém finaliza uma compra na Shopify" },
+  { value: "pos_sale_completed", label: "Venda Loja Física (POS)", icon: ShoppingBag, description: "Quando uma venda é concluída na loja física (cashback, reativação)" },
   { value: "yampi_abandoned_cart", label: "Carrinho Abandonado (Yampi)", icon: Package, description: "Quando um carrinho é abandonado na Yampi" },
 ];
 
@@ -114,6 +115,15 @@ const CUSTOMER_VARIABLES = [
   { value: "{{numero_pedido}}", label: "Número do Pedido" },
   { value: "{{codigo_rastreio}}", label: "Código de Rastreio" },
   { value: "{{transportadora}}", label: "Transportadora" },
+  { value: "{{nome_cliente}}", label: "🛍️ POS: Nome do Cliente" },
+  { value: "{{primeiro_nome}}", label: "🛍️ POS: Primeiro Nome" },
+  { value: "{{nome_vendedora}}", label: "🛍️ POS: Nome da Vendedora" },
+  { value: "{{loja}}", label: "🛍️ POS: Loja" },
+  { value: "{{valor_compra}}", label: "🛍️ POS: Valor da Compra" },
+  { value: "{{valor_cashback}}", label: "🛍️ POS: Valor do Cashback" },
+  { value: "{{codigo_cashback}}", label: "🛍️ POS: Código do Cashback" },
+  { value: "{{compra_minima}}", label: "🛍️ POS: Compra Mínima Cashback" },
+  { value: "{{validade_cashback}}", label: "🛍️ POS: Validade do Cashback" },
 ];
 
 // Dynamic field options (pulled from lead/customer data at send time)
