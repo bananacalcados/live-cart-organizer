@@ -502,11 +502,13 @@ function StepEditorDialog({
   open,
   onOpenChange,
   step,
+  allSteps = [],
   onSave,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   step: AutomationStep | null;
+  allSteps?: AutomationStep[];
   onSave: (actionType: string, config: any, delaySecs: number) => void;
 }) {
   const [actionType, setActionType] = useState("send_template");
