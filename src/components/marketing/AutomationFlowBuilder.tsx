@@ -177,8 +177,11 @@ function ActionNode({ data }: { data: any }) {
   const isTag = data.actionType === "add_tag";
   const isCrossSell = data.actionType === "ai_crosssell";
   const isTemplate = data.actionType === "send_template";
+  const isSendText = data.actionType === "send_text";
   const quickReplyButtons: string[] = data.quickReplyButtons || [];
-  const hasButtonBranches = isTemplate && quickReplyButtons.length > 0;
+  const interactiveButtons: string[] = data.interactiveButtons || [];
+  const branchButtons: string[] = isTemplate ? quickReplyButtons : (isSendText ? interactiveButtons : []);
+  const hasButtonBranches = branchButtons.length > 0;
 
   let borderClass = "border-border";
   let bgClass = "bg-card";
