@@ -2098,6 +2098,77 @@ function AutomationInstanceSelector({ triggerConfig, onChange }: { triggerConfig
   );
 }
 
+function PosSaleTriggerConfig({ triggerConfig, onChange }: { triggerConfig: any; onChange: (c: any) => void }) {
+  const [stores, setStores] = useState<Array<{ id: string; name: string }>>([]);
+  const [sellers, setSellers] = useState<Array<{ id: string; name: string; store_id: string | null }>>([]);
+  const selectedStoreId: string = triggerConfig.store_id || "all";
+  const selectedSellerId: string = triggerConfig.seller_id || "all";
+  const minTotal: number = Number(triggerConfig.min_total || 0);
+
+  useEffect(() => {
+    (async () => {
+      const { data: s } = await supabase.from("pos_stores").select("id, name").order("name");
+      setStores((s as any) || []);
+      const { data: sl } = await supabase.from("pos_sellers").select("id, name, store_id").order("name");
+      setSellers((sl as any) || []);
+    })();
+  }, []);
+
+  const filteredSellers = selectedStoreId === "all"
+    ? sellers
+    : sellers.filter(s => s.store_id === selectedStoreId);
+
+  return (
+    <div className="space-y-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+      <p className="text-[10px] text-amber-700 dark:text-amber-300">
+        <ShoppingBag className="h-3 w-3 inline mr-1" />
+        Disparado quando uma venda física é concluída. Filtre por loja para usar a instância Meta vinculada.
+      </p>
+      <div className="space-y-1">
+        <Label className="text-xs">Loja</Label>
+        <Select
+          value={selectedStoreId}
+          onValueChange={v => onChange({ ...triggerConfig, store_id: v === "all" ? null : v, seller_id: null })}
+        >
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas as lojas</SelectItem>
+            {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground">
+          Crie um fluxo separado por loja para usar instância Meta dedicada (ex: Centro, Pérola).
+        </p>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Vendedora (opcional)</Label>
+        <Select
+          value={selectedSellerId}
+          onValueChange={v => onChange({ ...triggerConfig, seller_id: v === "all" ? null : v })}
+        >
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            {filteredSellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Ticket mínimo (R$, opcional)</Label>
+        <Input
+          type="number"
+          min={0}
+          step={1}
+          value={minTotal || ""}
+          onChange={e => onChange({ ...triggerConfig, min_total: parseFloat(e.target.value) || 0 })}
+          placeholder="Ex: 100"
+          className="h-8 text-xs"
+        />
+      </div>
+    </div>
+  );
+}
+
 // ─── Flow Editor ──────────────────────────────────
 
 function FlowEditor({
