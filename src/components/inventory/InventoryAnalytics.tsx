@@ -500,7 +500,7 @@ export function InventoryAnalytics() {
       return ax - bx;
     });
     return rows;
-  }, [filtered, sales, periodDays, scopeFilter]);
+  }, [filtered, sales, periodDays, coverageScope]);
 
   const coverageBuckets = useMemo(() => {
     const b = { critical: 0, low: 0, healthy: 0, excess: 0, noSales: 0 };
