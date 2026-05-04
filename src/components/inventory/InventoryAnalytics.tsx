@@ -455,7 +455,7 @@ export function InventoryAnalytics() {
     };
     const map = new Map<string, Row>();
     for (const p of filtered) {
-      const isParents = scopeFilter === "parents";
+      const isParents = coverageScope === "parents";
       const key = isParents
         ? `${p.store_id}::${p.parent_key}`
         : (p.sku && String(p.sku)) || String(p.tiny_id);
