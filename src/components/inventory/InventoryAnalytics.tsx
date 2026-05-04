@@ -204,8 +204,11 @@ export function InventoryAnalytics() {
       if (!data || data.length === 0) break;
       for (const r of data as any[]) {
         const raw = r as RawProduct;
+        const fixed = fixSizeColor(raw.size, raw.color);
         all.push({
           ...raw,
+          size: fixed.size,
+          color: fixed.color,
           stock: Number(raw.stock || 0),
           cost_price: Number(raw.cost_price || 0),
           price: Number(raw.price || 0),
