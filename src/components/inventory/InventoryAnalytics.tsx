@@ -822,6 +822,7 @@ export function InventoryAnalytics() {
                           {coverageScope === "variants" && <TableCell className="font-mono text-xs">{r.sku}</TableCell>}
                           <TableCell>{r.brand}</TableCell>
                           {coverageScope === "variants" && <TableCell>{r.size || "—"}</TableCell>}
+                          {coverageScope === "variants" && <TableCell>{r.color || "—"}</TableCell>}
                           <TableCell className="text-right">{fmtNum(r.stock)}</TableCell>
                           <TableCell className="text-right">{fmtNum(r.soldQty)}</TableCell>
                           <TableCell className="text-right">{r.avgDaily.toFixed(2)}</TableCell>
