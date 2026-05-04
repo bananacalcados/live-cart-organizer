@@ -16,6 +16,10 @@ function normalizePhoneBR(raw: string) {
   if (p.length === 12) p = p.slice(0, 4) + "9" + p.slice(4);
   return p;
 }
+function cleanCpf(raw: string | null | undefined) {
+  const d = String(raw || "").replace(/\D/g, "");
+  return d.length === 11 ? d : null;
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -27,7 +31,6 @@ Deno.serve(async (req) => {
     const { sale_id } = await req.json();
     if (!sale_id) return new Response(JSON.stringify({ error: "sale_id required" }), { status: 400, headers: corsHeaders });
 
-    // Carrega venda + relacionados
     const { data: sale, error: saleErr } = await supabase
       .from("pos_sales")
       .select("id, store_id, seller_id, customer_id, total, customer_name, customer_phone, created_at")
@@ -37,7 +40,7 @@ Deno.serve(async (req) => {
 
     const [{ data: customer }, { data: seller }, { data: store }] = await Promise.all([
       sale.customer_id
-        ? supabase.from("pos_customers").select("name, whatsapp").eq("id", sale.customer_id).maybeSingle()
+        ? supabase.from("pos_customers").select("name, whatsapp, cpf").eq("id", sale.customer_id).maybeSingle()
         : Promise.resolve({ data: null }),
       sale.seller_id
         ? supabase.from("pos_sellers").select("name").eq("id", sale.seller_id).maybeSingle()
@@ -51,13 +54,13 @@ Deno.serve(async (req) => {
     if (!rawPhone) return new Response(JSON.stringify({ ok: true, message: "no phone" }), { headers: corsHeaders });
     const phone = normalizePhoneBR(rawPhone);
     const phoneSuffix = phone.replace(/\D/g, "").slice(-8);
+    const cpf = cleanCpf(customer?.cpf);
 
     const customerName = customer?.name || sale.customer_name || "Cliente";
     const firstName = customerName.split(" ")[0] || "Cliente";
     const sellerName = seller?.name || "nossa equipe";
     const storeName = store?.name || "";
 
-    // Cashback mais recente desse cliente (criado nas últimas 24h ~ vinculado à venda)
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: cb } = await supabase
       .from("internal_cashback")
@@ -92,7 +95,6 @@ Deno.serve(async (req) => {
       return out;
     }
 
-    // Busca flows ativos
     const { data: flows } = await supabase
       .from("automation_flows")
       .select("id, name, trigger_config, steps:automation_steps(*)")
@@ -104,26 +106,33 @@ Deno.serve(async (req) => {
     }
 
     const results: any[] = [];
+    let totalCancelled = 0;
 
     for (const flow of flows) {
-      // Filtros opcionais (loja, vendedora, ticket mínimo)
       const cfg = (flow.trigger_config || {}) as any;
       if (cfg.store_id && cfg.store_id !== sale.store_id) continue;
       if (cfg.seller_id && cfg.seller_id !== sale.seller_id) continue;
       if (cfg.min_total && Number(sale.total) < Number(cfg.min_total)) continue;
 
-      // Cancela follow-ups pendentes anteriores deste cliente para este flow (recompra reinicia)
-      await supabase
+      // Cancela follow-ups pendentes anteriores deste cliente — prioriza CPF, fallback no sufixo do telefone
+      let cancelQuery = supabase
         .from("automation_pos_followups")
         .update({ cancelled_at: new Date().toISOString(), cancel_reason: "new_purchase_restart" })
         .eq("flow_id", flow.id)
-        .eq("customer_phone_suffix", phoneSuffix)
         .is("sent_at", null)
         .is("cancelled_at", null);
 
-      const steps = (flow.steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
+      if (cpf) {
+        cancelQuery = cancelQuery.eq("customer_cpf", cpf);
+      } else {
+        cancelQuery = cancelQuery.eq("customer_phone_suffix", phoneSuffix);
+      }
+      const { data: cancelledRows } = await cancelQuery.select("id");
+      const cancelledCount = cancelledRows?.length || 0;
+      totalCancelled += cancelledCount;
 
-      let cumulativeDelay = 0; // segundos
+      const steps = (flow.steps || []).sort((a: any, b: any) => a.step_order - b.step_order);
+      let cumulativeDelay = 0;
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
         const sCfg = (step.action_config || {}) as any;
@@ -135,7 +144,6 @@ Deno.serve(async (req) => {
         }
 
         if (cumulativeDelay <= 5) {
-          // Executa imediatamente
           await executeStep(supabase, step, phone, replaceVars, flow.id);
         } else {
           const scheduledAt = new Date(Date.now() + cumulativeDelay * 1000).toISOString();
@@ -145,17 +153,20 @@ Deno.serve(async (req) => {
             step_id: step.id,
             step_index: i,
             customer_phone: phone,
+            customer_phone_suffix: phoneSuffix,
+            customer_cpf: cpf,
             scheduled_at: scheduledAt,
             payload: { vars, action_type: step.action_type, action_config: sCfg },
           });
         }
       }
-      results.push({ flow_id: flow.id, flow_name: flow.name });
+      results.push({ flow_id: flow.id, flow_name: flow.name, cancelled_previous: cancelledCount });
     }
 
-    return new Response(JSON.stringify({ ok: true, flows_executed: results.length, results }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({
+      ok: true, flows_executed: results.length, cancelled_previous: totalCancelled,
+      identified_by: cpf ? "cpf" : "phone_suffix", results,
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err: any) {
     console.error("automation-trigger-pos-sale error:", err);
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: corsHeaders });
@@ -195,7 +206,6 @@ async function executeStep(supabase: any, step: any, phone: string, replaceVars:
       result: { trigger: "pos_sale_completed", phone, message: message.slice(0, 80) },
     });
   } else if (step.action_type === "add_tag") {
-    // log apenas
     await supabase.from("automation_executions").insert({
       flow_id: flowId, step_id: step.id, status: "sent",
       result: { trigger: "pos_sale_completed", phone, tag: cfg.tags },
