@@ -115,6 +115,15 @@ const CUSTOMER_VARIABLES = [
   { value: "{{numero_pedido}}", label: "Número do Pedido" },
   { value: "{{codigo_rastreio}}", label: "Código de Rastreio" },
   { value: "{{transportadora}}", label: "Transportadora" },
+  { value: "{{nome_cliente}}", label: "🛍️ POS: Nome do Cliente" },
+  { value: "{{primeiro_nome}}", label: "🛍️ POS: Primeiro Nome" },
+  { value: "{{nome_vendedora}}", label: "🛍️ POS: Nome da Vendedora" },
+  { value: "{{loja}}", label: "🛍️ POS: Loja" },
+  { value: "{{valor_compra}}", label: "🛍️ POS: Valor da Compra" },
+  { value: "{{valor_cashback}}", label: "🛍️ POS: Valor do Cashback" },
+  { value: "{{codigo_cashback}}", label: "🛍️ POS: Código do Cashback" },
+  { value: "{{compra_minima}}", label: "🛍️ POS: Compra Mínima Cashback" },
+  { value: "{{validade_cashback}}", label: "🛍️ POS: Validade do Cashback" },
 ];
 
 // Dynamic field options (pulled from lead/customer data at send time)
