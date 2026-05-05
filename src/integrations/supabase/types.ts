@@ -738,6 +738,68 @@ export type Database = {
           },
         ]
       }
+      automation_dispatch_jobs: {
+        Row: {
+          batch_size: number
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          current_offset: number
+          error_message: string | null
+          failed: number
+          flow_id: string
+          heartbeat_at: string
+          id: string
+          sent: number
+          skipped: number
+          started_at: string
+          status: string
+          total_audience: number
+        }
+        Insert: {
+          batch_size?: number
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_offset?: number
+          error_message?: string | null
+          failed?: number
+          flow_id: string
+          heartbeat_at?: string
+          id?: string
+          sent?: number
+          skipped?: number
+          started_at?: string
+          status?: string
+          total_audience?: number
+        }
+        Update: {
+          batch_size?: number
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          current_offset?: number
+          error_message?: string | null
+          failed?: number
+          flow_id?: string
+          heartbeat_at?: string
+          id?: string
+          sent?: number
+          skipped?: number
+          started_at?: string
+          status?: string
+          total_audience?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_dispatch_jobs_flow_id_fkey"
+            columns: ["flow_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_dispatch_sent: {
         Row: {
           flow_id: string
