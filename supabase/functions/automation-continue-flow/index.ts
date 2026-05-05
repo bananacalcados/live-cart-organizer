@@ -169,7 +169,7 @@ serve(async (req) => {
             }
           }
           await supabase.from('automation_pending_replies').insert({
-            phone, flow_id: flowId, pending_step_index: i,
+            phone, flow_id: flowId, pending_step_index: i + 1,
             step_id: step.id, button_branches: textBranches,
             whatsapp_number_id: sendNumberId || null,
             recipient_data: recipientData || {},
@@ -252,7 +252,7 @@ serve(async (req) => {
             }
           }
           await supabase.from('automation_pending_replies').insert({
-            phone, flow_id: flowId, pending_step_index: i,
+            phone, flow_id: flowId, pending_step_index: i + 1,
             step_id: step.id, button_branches: textBranches,
             whatsapp_number_id: sendNumberId || null,
             recipient_data: recipientData || {},

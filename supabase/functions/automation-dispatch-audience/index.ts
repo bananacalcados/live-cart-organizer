@@ -392,7 +392,7 @@ serve(async (req) => {
                 await supabase.from('automation_pending_replies').insert({
                   phone: recipient.phone,
                   flow_id: flowId,
-                  pending_step_index: i,
+                  pending_step_index: i + 1,
                   step_id: step.id,
                   button_branches: textBranches,
                   whatsapp_number_id: sendNumberId || null,
