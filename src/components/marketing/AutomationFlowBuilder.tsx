@@ -160,6 +160,7 @@ function TriggerNode({ data }: { data: any }) {
           {data.audience_states?.length > 0 && ` · ${data.audience_states.join(",")}`}
           {data.audience_campaigns?.length > 0 && ` · ${data.audience_campaigns.length} camp.`}
           {data.audience_rfm_preset_keys?.length > 0 && ` · 🔖 ${data.audience_rfm_preset_keys.length} filtro(s)`}
+          {data.audience_cooldown_days > 0 && ` · ⏱ cooldown ${data.audience_cooldown_days}d`}
         </p>
       )}
       {!isMassAudience && data.campaign_id && <p className="text-[10px] opacity-70 mt-1">Campanha: {data.campaign_id}</p>}
@@ -2075,6 +2076,28 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
           )}
         </div>
       )}
+
+      {/* ── COOLDOWN FILTER ── */}
+      <div className="space-y-1.5 p-2 rounded-lg bg-card border border-border">
+        <div className="flex items-center gap-1.5">
+          <Filter className="h-3 w-3 text-cyan-500" />
+          <Label className="text-[11px] font-medium">Cooldown — Excluir contatos recentes</Label>
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          Não enviar para quem já recebeu qualquer mensagem nossa nos últimos N dias. Use 0 para desativar.
+        </p>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            max={365}
+            className="h-8 text-xs w-24"
+            value={triggerConfig.audience_cooldown_days ?? 0}
+            onChange={e => onChange({ ...triggerConfig, audience_cooldown_days: Math.max(0, parseInt(e.target.value) || 0) })}
+          />
+          <span className="text-[11px] text-muted-foreground">dias</span>
+        </div>
+      </div>
 
       <p className="text-[10px] text-muted-foreground">
         💡 As variáveis dinâmicas (Primeiro Nome, etc.) serão preenchidas com dados reais de cada destinatário no momento do disparo.
