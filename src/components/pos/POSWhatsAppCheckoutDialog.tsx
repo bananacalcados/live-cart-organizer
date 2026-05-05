@@ -155,6 +155,9 @@ export function POSWhatsAppCheckoutDialog({
           discount_value: discountValue,
           shipping_amount: shippingAmount,
           free_shipping: freeShipping,
+          coupon_code: couponApplied?.code || null,
+          coupon_type: couponApplied?.type || null,
+          coupon_discount: couponDiscount,
           items_detail: cart.map(c => ({
             title: c.title, variant: c.variantLabel, unit_price: c.price, quantity: c.quantity,
           })),
