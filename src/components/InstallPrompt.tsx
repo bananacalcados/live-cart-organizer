@@ -13,6 +13,11 @@ export function InstallPrompt() {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
+    // Hide on transparent checkout routes (public payment links)
+    const path = window.location.pathname;
+    const isCheckoutRoute = /^\/(checkout|checkout-loja|pay|pagar|r\/)/i.test(path);
+    if (isCheckoutRoute) return;
+
     // Check if dismissed recently
     const dismissed = localStorage.getItem("pwa-install-dismissed");
     if (dismissed) {
