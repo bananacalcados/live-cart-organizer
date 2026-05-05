@@ -3168,29 +3168,25 @@ function FlowEditor({
           )}
 
           <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => { if (!dispatching) setDispatchDialogOpen(false); }} disabled={dispatching}>Fechar</Button>
+            <Button variant="outline" onClick={() => setDispatchDialogOpen(false)}>Fechar</Button>
             {dispatching && !dispatchPaused && (
-              <Button
-                onClick={handlePauseDispatch}
-                variant="destructive"
-                className="gap-1"
-              >
+              <Button onClick={handlePauseDispatch} variant="destructive" className="gap-1">
                 <StopCircle className="h-3.5 w-3.5" />
                 Pausar
               </Button>
             )}
             <Button
-              onClick={runDispatch}
-              disabled={dispatching || audienceCount === 0 || loadingAudienceCount || (dispatchResult?.done === true)}
+              onClick={dispatchPaused ? handleResumeDispatch : runDispatch}
+              disabled={(dispatching && !dispatchPaused) || audienceCount === 0 || loadingAudienceCount || (dispatchResult?.done === true)}
               className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              {dispatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-              {dispatching
-                ? "Disparando..."
-                : dispatchResult?.done
-                  ? "Concluído"
-                  : dispatchResult?.paused
-                    ? "Retomar Disparo"
+              {dispatching && !dispatchPaused ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              {dispatchResult?.done
+                ? "Concluído"
+                : dispatchPaused
+                  ? "Retomar Disparo"
+                  : dispatching
+                    ? "Disparando..."
                     : `Confirmar Disparo${audienceCount ? ` (${audienceCount.toLocaleString("pt-BR")})` : ""}`}
             </Button>
           </DialogFooter>
