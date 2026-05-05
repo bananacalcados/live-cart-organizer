@@ -160,6 +160,7 @@ function TriggerNode({ data }: { data: any }) {
           {data.audience_states?.length > 0 && ` · ${data.audience_states.join(",")}`}
           {data.audience_campaigns?.length > 0 && ` · ${data.audience_campaigns.length} camp.`}
           {data.audience_rfm_preset_keys?.length > 0 && ` · 🔖 ${data.audience_rfm_preset_keys.length} filtro(s)`}
+          {data.audience_cooldown_days > 0 && ` · ⏱ cooldown ${data.audience_cooldown_days}d`}
         </p>
       )}
       {!isMassAudience && data.campaign_id && <p className="text-[10px] opacity-70 mt-1">Campanha: {data.campaign_id}</p>}
