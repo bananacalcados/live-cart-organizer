@@ -134,8 +134,6 @@ export function POSWhatsAppCheckoutDialog({
       setValidatingCoupon(false);
     }
   };
-  const shippingAmount = freeShipping ? 0 : (parseFloat(shippingValue) || 0);
-  const orderTotal = Math.max(0, cartSubtotal - discountAmount) + shippingAmount;
 
   const handleGenerate = async () => {
     if (cart.length === 0) { toast.error("Adicione produtos"); return; }
