@@ -282,6 +282,15 @@ serve(async (req) => {
             } else {
               console.log(`Saved incoming message from ${phone} (${senderName || 'unknown'})`);
 
+              // Detect referral signals (coupon code or pending friend phone match) - fire & forget
+              try {
+                fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/referral-detect-incoming`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ from_phone: phone, message_text: messageText }),
+                }).catch(() => {});
+              } catch (_) { /* ignore */ }
+
                // Reopen any finished conversation when customer sends a new message
               // Uses suffix matching to handle phone format variations (with/without 9th digit)
               const { data: reopenCount } = await supabase.rpc('reopen_finished_conversation', { p_phone: phone });

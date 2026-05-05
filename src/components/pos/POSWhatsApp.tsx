@@ -1426,18 +1426,21 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               c.phone === selectedPhone ? { ...c, isFinished: true } : c
             ));
             
-            // Auto-send NPS when reason is 'compra'
+            // Auto-send Review+Referral link when reason is 'compra'
             if (reason === 'compra') {
               const conv = conversations.find(c => c.phone === selectedPhone);
-              supabase.functions.invoke('chat-send-nps', {
+              const cashbackVal = (extras as any)?.cashback_value || (extras as any)?.cashback || 0;
+              supabase.functions.invoke('review-send-link', {
                 body: {
                   phone: selectedPhone,
-                  sellerId: selectedSellerId || null,
-                  storeId,
-                  whatsappNumberId: conv?.whatsapp_number_id || null,
+                  customer_name: (conv as any)?.contact_name || (conv as any)?.name || null,
+                  store_id: storeId,
+                  store_phone: (conv as any)?.whatsapp_number_phone || null,
+                  cashback_value: cashbackVal,
+                  whatsapp_number_id: conv?.whatsapp_number_id || null,
                 },
               }).then(res => {
-                if (res.data?.success) toast.success('NPS enviado ao cliente');
+                if ((res.data as any)?.success) toast.success('Link de avaliação enviado 💛');
               }).catch(() => {});
             }
 
