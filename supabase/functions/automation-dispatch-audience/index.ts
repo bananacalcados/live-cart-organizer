@@ -615,12 +615,22 @@ serve(async (req) => {
         // Re-check status before self-chaining (could be paused mid-batch)
         const { data: latest } = await supabase.from('automation_dispatch_jobs').select('status').eq('id', jobId).single();
         if (latest?.status === 'running') {
-          // Fire-and-forget next batch
-          fetch(`${supabaseUrl}/functions/v1/automation-dispatch-audience`, {
+          // Self-chain next batch — use EdgeRuntime.waitUntil so the worker
+          // doesn't die before the request is dispatched.
+          const chainPromise = fetch(`${supabaseUrl}/functions/v1/automation-dispatch-audience`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({ jobId }),
-          }).catch(err => console.error('[dispatch] self-chain failed', err));
+          }).then(r => { console.log('[dispatch] self-chain dispatched, status', r.status); })
+            .catch(err => console.error('[dispatch] self-chain failed', err));
+          // @ts-ignore — EdgeRuntime is provided by Supabase Edge Functions runtime
+          if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+            // @ts-ignore
+            EdgeRuntime.waitUntil(chainPromise);
+          } else {
+            // Fallback: await briefly so the request leaves before we return
+            await Promise.race([chainPromise, new Promise(r => setTimeout(r, 1500))]);
+          }
         }
       }
     }
