@@ -120,12 +120,31 @@ serve(async (req) => {
     const selectedGenders = (triggerConfig.audience_genders as string[]) || [];
     const whatsappInstances = (triggerConfig.whatsapp_instances as string[]) || [];
     const presetKeys = (triggerConfig.audience_rfm_preset_keys as string[]) || [];
+    const cooldownDays = Math.max(0, parseInt(String(triggerConfig.audience_cooldown_days ?? 0)) || 0);
 
     // Fetch already-sent phones for this flow to avoid duplicates
     const alreadySentRows = await fetchAllRows(supabase, 'automation_dispatch_sent', 'phone', { flow_id: [flowId] });
     const seenPhones = new Set<string>(alreadySentRows.map((r: any) => r.phone));
     const alreadySentCount = seenPhones.size;
     console.log(`[dispatch] Already sent to ${alreadySentCount} phones for this flow`);
+
+    // Cooldown filter: exclude phones that received any outgoing message in the last N days
+    if (cooldownDays > 0) {
+      const sinceIso = new Date(Date.now() - cooldownDays * 24 * 60 * 60 * 1000).toISOString();
+      const { data: recentMsgs, error: cdErr } = await supabase
+        .from('whatsapp_messages')
+        .select('phone')
+        .eq('direction', 'outgoing')
+        .gte('created_at', sinceIso)
+        .limit(50000);
+      if (cdErr) console.error('[dispatch] cooldown query error', cdErr);
+      let cooldownAdded = 0;
+      for (const r of recentMsgs || []) {
+        const p = normalizePhone((r as any).phone || '');
+        if (p && !seenPhones.has(p)) { seenPhones.add(p); cooldownAdded++; }
+      }
+      console.log(`[dispatch] Cooldown ${cooldownDays}d excluded ${cooldownAdded} phones with recent outgoing messages`);
+    }
 
     let rfmData: any[] = [];
     let leadsData: any[] = [];
