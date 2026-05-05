@@ -321,6 +321,27 @@ export function POSWhatsAppCheckoutDialog({
                   </div>
                 </ScrollArea>
 
+                {/* Coupon */}
+                <div className="border-t pt-2 space-y-1">
+                  <Label className="text-[10px]">Cupom (INDICA / Cashback)</Label>
+                  {couponApplied ? (
+                    <div className="flex items-center justify-between gap-1 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold text-emerald-600 truncate">{couponApplied.code}</p>
+                        <p className="text-[9px] text-muted-foreground truncate">-{fmt(couponApplied.discount)} · {couponApplied.label}</p>
+                      </div>
+                      <button onClick={() => { setCouponApplied(null); setCouponCode(""); }} className="text-destructive shrink-0"><X className="h-3 w-3" /></button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Input value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} placeholder="INDICA-XXXX" className="h-7 text-xs uppercase" />
+                      <Button size="sm" variant="secondary" className="h-7 px-2 text-[10px]" onClick={handleApplyCoupon} disabled={validatingCoupon || !couponCode.trim()}>
+                        {validatingCoupon ? <Loader2 className="h-3 w-3 animate-spin" /> : "Aplicar"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
                 {/* Discount & Shipping */}
                 <div className="space-y-2 border-t pt-2">
                   <div className="flex gap-1">
