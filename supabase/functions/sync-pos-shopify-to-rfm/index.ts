@@ -82,6 +82,7 @@ serve(async (req) => {
     let mergedByCpf = 0;
     let mergedByPhone = 0;
     let tinyOnlineCount = 0;
+    let existingRfm: any[] = [];
 
     // ── 1. Sync POS completed sales with CPF-first rematching ──
     if (mode === 'pos' || mode === 'all') {
@@ -126,7 +127,6 @@ serve(async (req) => {
         }
 
         // 1d. Load existing RFM matrix indexes for CPF and phone matching
-        let existingRfm: any[] = [];
         let rfmFrom = 0;
         while (true) {
           const { data: rfmChunk } = await supabase
