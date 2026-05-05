@@ -82,6 +82,7 @@ serve(async (req) => {
     let mergedByCpf = 0;
     let mergedByPhone = 0;
     let tinyOnlineCount = 0;
+    let existingRfm: any[] = [];
 
     // ── 1. Sync POS completed sales with CPF-first rematching ──
     if (mode === 'pos' || mode === 'all') {
