@@ -44,6 +44,7 @@ const LiveOrtopedicosLP = lazy(() => import("./pages/LiveOrtopedicosLP"));
 const LiveOrtopedicosAbrilLP = lazy(() => import("./pages/LiveOrtopedicosAbrilLP"));
 const PresenterDashboard = lazy(() => import("./pages/PresenterDashboard"));
 const LiveteAnotadorDownload = lazy(() => import("./pages/LiveteAnotadorDownload"));
+const ReviewReferralPage = lazy(() => import("./pages/ReviewReferralPage"));
 
 const queryClient = new QueryClient();
 
@@ -83,6 +84,7 @@ const App = () => (
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />
               <Route path="/live-ortopedicos" element={<LiveOrtopedicosLP />} />
               <Route path="/live-ortopedicos-abril" element={<LiveOrtopedicosAbrilLP />} />
+              <Route path="/r/:token" element={<ReviewReferralPage />} />
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
