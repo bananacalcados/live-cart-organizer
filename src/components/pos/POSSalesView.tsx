@@ -111,6 +111,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [cashReceived, setCashReceived] = useState("");
   const [discount, setDiscount] = useState("");
   const [discountType, setDiscountType] = useState<"value" | "percent">("value");
+  const [couponCode, setCouponCode] = useState("");
+  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; label: string; type: string } | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [receiptDone, setReceiptDone] = useState(false);
   const [currentRegisterId, setCurrentRegisterId] = useState<string | null>(null);
 
@@ -130,7 +133,28 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const discountValue = discountType === "percent"
     ? subtotal * (parsedDiscount / 100)
     : parsedDiscount;
-  const totalWithDiscount = Math.max(0, subtotal - discountValue);
+  const couponDiscount = couponApplied ? Math.min(subtotal, couponApplied.discount) : 0;
+  const totalDiscount = Math.min(subtotal, discountValue + couponDiscount);
+  const totalWithDiscount = Math.max(0, subtotal - totalDiscount);
+
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
+    setValidatingCoupon(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-validate-coupon", {
+        body: { coupon_code: code, subtotal },
+      });
+      if (error) throw error;
+      if (!data?.valid) { toast.error(data?.error || "Cupom inválido"); return; }
+      setCouponApplied({ code: data.coupon_code, discount: data.discount, label: data.label, type: data.type });
+      toast.success(`Cupom: -R$ ${Number(data.discount).toFixed(2)}`);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao validar cupom");
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
 
   // Check if cash register is open
   useEffect(() => {
@@ -682,7 +706,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           })),
           payment_method_id: useMultiPayment ? 'multi' : selectedPayment,
           payment_method_name: paymentMethodName,
-          discount: discountValue > 0 ? discountValue : undefined,
+          discount: totalDiscount > 0 ? totalDiscount : undefined,
+          coupon_code: couponApplied?.code || undefined,
+          coupon_type: couponApplied?.type || undefined,
         }),
       });
       const data = await resp.json();
@@ -694,6 +720,22 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         }
         setSaleResult(data);
         setStep("invoice");
+
+        // Redeem coupon (referral or internal cashback) on successful sale
+        if (couponApplied) {
+          try {
+            const saleId = data?.sale_id || data?.id || null;
+            if (couponApplied.type === 'referral') {
+              await supabase.functions.invoke('referral-validate-coupon', {
+                body: { coupon_code: couponApplied.code, redeem: true, sale_id: saleId, friend_phone: selectedCustomer?.whatsapp || null },
+              });
+            } else if (couponApplied.type === 'cashback') {
+              await supabase.from('internal_cashback')
+                .update({ is_used: true, used_at: new Date().toISOString(), used_sale_id: saleId } as any)
+                .eq('coupon_code', couponApplied.code);
+            }
+          } catch (e) { console.error('coupon redeem error', e); }
+        }
 
         // Update cash register with sale amounts
         try {
@@ -1387,6 +1429,32 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   ))}
                 </div>
               )}
+
+              {/* Coupon input (referral INDICA-* or cashback CASH-*) */}
+              <div className="rounded-lg border border-pos-white/10 bg-pos-white/5 px-3 py-2.5 space-y-2">
+                <p className="text-xs font-semibold text-pos-white/80">Aplicar Cupom</p>
+                {couponApplied ? (
+                  <div className="flex items-center justify-between gap-2 rounded bg-emerald-500/10 border border-emerald-500/30 px-2 py-1.5">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-emerald-300 truncate">{couponApplied.code}</p>
+                      <p className="text-[10px] text-pos-white/60 truncate">-R$ {couponApplied.discount.toFixed(2)} · {couponApplied.label}</p>
+                    </div>
+                    <button onClick={() => { setCouponApplied(null); setCouponCode(""); }} className="text-red-400 text-xs px-2">Remover</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      placeholder="INDICA-XXXX ou cashback"
+                      className="h-8 text-xs uppercase bg-pos-white/5 border-pos-white/10 text-pos-white"
+                    />
+                    <Button size="sm" className="h-8 px-3 text-xs" onClick={handleApplyCoupon} disabled={validatingCoupon || !couponCode.trim()}>
+                      {validatingCoupon ? "..." : "Aplicar"}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

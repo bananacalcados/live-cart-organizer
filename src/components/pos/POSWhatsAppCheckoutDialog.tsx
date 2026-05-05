@@ -50,6 +50,9 @@ export function POSWhatsAppCheckoutDialog({
   const [shippingValue, setShippingValue] = useState("");
   const [freeShipping, setFreeShipping] = useState(false);
   const [sending, setSending] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; label: string; type: string } | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -103,13 +106,34 @@ export function POSWhatsAppCheckoutDialog({
   const removeFromCart = (id: string) => setCart(prev => prev.filter(c => c.id !== id));
 
   const cartSubtotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
-  const discountAmount = (() => {
+  const manualDiscount = (() => {
     const val = parseFloat(discountValue);
     if (!val || val <= 0) return 0;
     return discountType === "percent" ? Math.min(cartSubtotal, cartSubtotal * (val / 100)) : Math.min(cartSubtotal, val);
   })();
+  const couponDiscount = couponApplied ? Math.min(cartSubtotal, couponApplied.discount) : 0;
+  const discountAmount = Math.min(cartSubtotal, manualDiscount + couponDiscount);
   const shippingAmount = freeShipping ? 0 : (parseFloat(shippingValue) || 0);
   const orderTotal = Math.max(0, cartSubtotal - discountAmount) + shippingAmount;
+
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
+    setValidatingCoupon(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-validate-coupon", {
+        body: { coupon_code: code, subtotal: cartSubtotal },
+      });
+      if (error) throw error;
+      if (!data?.valid) { toast.error(data?.error || "Cupom inválido"); return; }
+      setCouponApplied({ code: data.coupon_code, discount: data.discount, label: data.label, type: data.type });
+      toast.success(`Cupom aplicado: -R$ ${Number(data.discount).toFixed(2)}`);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao validar cupom");
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (cart.length === 0) { toast.error("Adicione produtos"); return; }
@@ -131,6 +155,9 @@ export function POSWhatsAppCheckoutDialog({
           discount_value: discountValue,
           shipping_amount: shippingAmount,
           free_shipping: freeShipping,
+          coupon_code: couponApplied?.code || null,
+          coupon_type: couponApplied?.type || null,
+          coupon_discount: couponDiscount,
           items_detail: cart.map(c => ({
             title: c.title, variant: c.variantLabel, unit_price: c.price, quantity: c.quantity,
           })),
@@ -194,6 +221,8 @@ export function POSWhatsAppCheckoutDialog({
       setCart([]);
       setGeneratedLink("");
       setDiscountValue("");
+      setCouponApplied(null);
+      setCouponCode("");
       setShippingValue("");
     } catch {
       toast.error("Erro ao enviar");
@@ -293,6 +322,27 @@ export function POSWhatsAppCheckoutDialog({
                     ))}
                   </div>
                 </ScrollArea>
+
+                {/* Coupon */}
+                <div className="border-t pt-2 space-y-1">
+                  <Label className="text-[10px]">Cupom (INDICA / Cashback)</Label>
+                  {couponApplied ? (
+                    <div className="flex items-center justify-between gap-1 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold text-emerald-600 truncate">{couponApplied.code}</p>
+                        <p className="text-[9px] text-muted-foreground truncate">-{fmt(couponApplied.discount)} · {couponApplied.label}</p>
+                      </div>
+                      <button onClick={() => { setCouponApplied(null); setCouponCode(""); }} className="text-destructive shrink-0"><X className="h-3 w-3" /></button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-1">
+                      <Input value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} placeholder="INDICA-XXXX" className="h-7 text-xs uppercase" />
+                      <Button size="sm" variant="secondary" className="h-7 px-2 text-[10px]" onClick={handleApplyCoupon} disabled={validatingCoupon || !couponCode.trim()}>
+                        {validatingCoupon ? <Loader2 className="h-3 w-3 animate-spin" /> : "Aplicar"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
                 {/* Discount & Shipping */}
                 <div className="space-y-2 border-t pt-2">
