@@ -111,6 +111,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [cashReceived, setCashReceived] = useState("");
   const [discount, setDiscount] = useState("");
   const [discountType, setDiscountType] = useState<"value" | "percent">("value");
+  const [couponCode, setCouponCode] = useState("");
+  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; label: string; type: string } | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [receiptDone, setReceiptDone] = useState(false);
   const [currentRegisterId, setCurrentRegisterId] = useState<string | null>(null);
 
