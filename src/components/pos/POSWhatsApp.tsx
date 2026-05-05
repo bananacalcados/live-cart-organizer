@@ -1433,9 +1433,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               supabase.functions.invoke('review-send-link', {
                 body: {
                   phone: selectedPhone,
-                  customer_name: conv?.contact_name || conv?.name || null,
+                  customer_name: (conv as any)?.contact_name || (conv as any)?.name || null,
                   store_id: storeId,
-                  store_phone: conv?.whatsapp_number_phone || null,
+                  store_phone: (conv as any)?.whatsapp_number_phone || null,
                   cashback_value: cashbackVal,
                   whatsapp_number_id: conv?.whatsapp_number_id || null,
                 },
