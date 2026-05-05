@@ -398,6 +398,7 @@ serve(async (req) => {
                   whatsapp_number_id: sendNumberId || null,
                   recipient_data: { name: recipient.name, firstName, email: recipient.email, city: recipient.city, state: recipient.state },
                 });
+                console.log(`[dispatch] Created pending reply for template buttons at step ${i}, next=${i + 1}, phone=${recipient.phone}`);
               }
             } else {
               failed++;

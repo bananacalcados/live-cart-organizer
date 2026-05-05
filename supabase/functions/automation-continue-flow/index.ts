@@ -174,7 +174,7 @@ serve(async (req) => {
             whatsapp_number_id: sendNumberId || null,
             recipient_data: recipientData || {},
           });
-          console.log(`[continue-flow] Created pending reply for button branches at step ${i}`);
+          console.log(`[continue-flow] Created pending reply for button branches at step ${i}, next=${i + 1}`);
           break;
         }
       }
@@ -257,7 +257,7 @@ serve(async (req) => {
             whatsapp_number_id: sendNumberId || null,
             recipient_data: recipientData || {},
           });
-          console.log(`[continue-flow] send_text+buttons created pending reply at step ${i}`);
+          console.log(`[continue-flow] send_text+buttons created pending reply at step ${i}, next=${i + 1}`);
           break;
         }
       }
