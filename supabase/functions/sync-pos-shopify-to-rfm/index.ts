@@ -127,7 +127,6 @@ serve(async (req) => {
         }
 
         // 1d. Load existing RFM matrix indexes for CPF and phone matching
-        let existingRfm: any[] = [];
         let rfmFrom = 0;
         while (true) {
           const { data: rfmChunk } = await supabase
