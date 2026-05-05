@@ -128,32 +128,72 @@ serve(async (req) => {
     const alreadySentCount = seenPhones.size;
     console.log(`[dispatch] Already sent to ${alreadySentCount} phones for this flow`);
 
-    // Cooldown filter: exclude phones that received any outgoing message in the last N days
+    // Cooldown filter: exclude phones that received MASS DISPATCHES (broadcasts or other automations) in the last N days.
+    // Only mass dispatches count — not 1:1 chat replies or transactional outgoing messages.
     if (cooldownDays > 0) {
       const sinceIso = new Date(Date.now() - cooldownDays * 24 * 60 * 60 * 1000).toISOString();
       const pageSize = 1000;
-      let from = 0;
-      let totalRows = 0;
       let cooldownAdded = 0;
-      while (true) {
-        const { data: recentMsgs, error: cdErr } = await supabase
-          .from('whatsapp_messages')
-          .select('phone')
-          .eq('direction', 'outgoing')
-          .gte('created_at', sinceIso)
-          .range(from, from + pageSize - 1);
-        if (cdErr) { console.error('[dispatch] cooldown query error', cdErr); break; }
-        if (!recentMsgs || recentMsgs.length === 0) break;
-        totalRows += recentMsgs.length;
-        for (const r of recentMsgs) {
-          const p = normalizePhone((r as any).phone || '');
-          if (p && !seenPhones.has(p)) { seenPhones.add(p); cooldownAdded++; }
+      let totalRows = 0;
+
+      // 1) Broadcast dispatches → dispatch_recipients joined to dispatch_history by started_at >= sinceIso
+      try {
+        // Fetch dispatch_history ids in window
+        const { data: recentDispatches } = await supabase
+          .from('dispatch_history')
+          .select('id')
+          .gte('started_at', sinceIso);
+        const dispatchIds = (recentDispatches || []).map((d: any) => d.id);
+        if (dispatchIds.length > 0) {
+          // Page through recipients in chunks of dispatch ids (IN clause) to keep query small
+          const idChunks: string[][] = [];
+          for (let i = 0; i < dispatchIds.length; i += 50) idChunks.push(dispatchIds.slice(i, i + 50));
+          for (const chunk of idChunks) {
+            let from = 0;
+            while (true) {
+              const { data: recs, error } = await supabase
+                .from('dispatch_recipients')
+                .select('phone')
+                .in('dispatch_id', chunk)
+                .range(from, from + pageSize - 1);
+              if (error) { console.error('[dispatch] cooldown dispatch_recipients error', error); break; }
+              if (!recs || recs.length === 0) break;
+              totalRows += recs.length;
+              for (const r of recs) {
+                const p = normalizePhone((r as any).phone || '');
+                if (p && !seenPhones.has(p)) { seenPhones.add(p); cooldownAdded++; }
+              }
+              if (recs.length < pageSize) break;
+              from += pageSize;
+              if (from > 500000) break;
+            }
+          }
         }
-        if (recentMsgs.length < pageSize) break;
-        from += pageSize;
-        if (from > 500000) break; // safety cap
-      }
-      console.log(`[dispatch] Cooldown ${cooldownDays}d scanned ${totalRows} outgoing rows, excluded ${cooldownAdded} unique phones`);
+      } catch (e) { console.error('[dispatch] cooldown broadcast scan failed', e); }
+
+      // 2) Other automation mass dispatches → automation_dispatch_sent in window
+      try {
+        let from = 0;
+        while (true) {
+          const { data: rows, error } = await supabase
+            .from('automation_dispatch_sent')
+            .select('phone')
+            .gte('sent_at', sinceIso)
+            .range(from, from + pageSize - 1);
+          if (error) { console.error('[dispatch] cooldown automation_dispatch_sent error', error); break; }
+          if (!rows || rows.length === 0) break;
+          totalRows += rows.length;
+          for (const r of rows) {
+            const p = normalizePhone((r as any).phone || '');
+            if (p && !seenPhones.has(p)) { seenPhones.add(p); cooldownAdded++; }
+          }
+          if (rows.length < pageSize) break;
+          from += pageSize;
+          if (from > 500000) break;
+        }
+      } catch (e) { console.error('[dispatch] cooldown automation scan failed', e); }
+
+      console.log(`[dispatch] Cooldown ${cooldownDays}d scanned ${totalRows} mass-dispatch rows, excluded ${cooldownAdded} unique phones`);
     }
 
     let rfmData: any[] = [];
