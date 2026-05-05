@@ -133,11 +133,28 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const discountValue = discountType === "percent"
     ? subtotal * (parsedDiscount / 100)
     : parsedDiscount;
-  const totalWithDiscount = Math.max(0, subtotal - discountValue);
+  const couponDiscount = couponApplied ? Math.min(subtotal, couponApplied.discount) : 0;
+  const totalDiscount = Math.min(subtotal, discountValue + couponDiscount);
+  const totalWithDiscount = Math.max(0, subtotal - totalDiscount);
 
-  // Check if cash register is open
-  useEffect(() => {
-    checkCashRegister();
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
+    setValidatingCoupon(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-validate-coupon", {
+        body: { coupon_code: code, subtotal },
+      });
+      if (error) throw error;
+      if (!data?.valid) { toast.error(data?.error || "Cupom inválido"); return; }
+      setCouponApplied({ code: data.coupon_code, discount: data.discount, label: data.label, type: data.type });
+      toast.success(`Cupom: -R$ ${Number(data.discount).toFixed(2)}`);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao validar cupom");
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
   }, [storeId]);
 
   const checkCashRegister = async () => {
