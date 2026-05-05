@@ -50,6 +50,9 @@ export function POSWhatsAppCheckoutDialog({
   const [shippingValue, setShippingValue] = useState("");
   const [freeShipping, setFreeShipping] = useState(false);
   const [sending, setSending] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; label: string; type: string } | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
