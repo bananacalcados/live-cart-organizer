@@ -2375,6 +2375,53 @@ function FlowEditor({
   const [alreadySentCount, setAlreadySentCount] = useState<number>(0);
   const [loadingAudienceCount, setLoadingAudienceCount] = useState(false);
   const pauseRef = useRef(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+
+  // Detect running/paused job on dialog open
+  useEffect(() => {
+    if (!dispatchDialogOpen) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("automation_dispatch_jobs")
+        .select("*")
+        .eq("flow_id", flow.id)
+        .in("status", ["running", "paused", "queued"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      setActiveJobId(data.id);
+      setDispatching(data.status === "running" || data.status === "queued");
+      setDispatchPaused(data.status === "paused");
+      setDispatchResult({
+        sent: data.sent, failed: data.failed, skipped: data.skipped,
+        totalAudience: data.total_audience, done: data.status === "done",
+        processing: data.status === "running", paused: data.status === "paused",
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [dispatchDialogOpen, flow.id]);
+
+  useEffect(() => {
+    if (!activeJobId) return;
+    const ch = supabase
+      .channel(`auto-job-${activeJobId}`)
+      .on("postgres_changes" as any, { event: "UPDATE", schema: "public", table: "automation_dispatch_jobs", filter: `id=eq.${activeJobId}` }, (payload: any) => {
+        const j = payload.new;
+        setDispatchResult({
+          sent: j.sent, failed: j.failed, skipped: j.skipped,
+          totalAudience: j.total_audience, done: j.status === "done",
+          processing: j.status === "running", paused: j.status === "paused",
+          error: j.status === "error" ? j.error_message : undefined,
+        });
+        if (j.status === "done") { setDispatching(false); setDispatchPaused(false); toast.success(`Disparo concluído! ${j.sent} enviadas`); }
+        if (j.status === "paused") { setDispatching(false); setDispatchPaused(true); }
+        if (j.status === "error") { setDispatching(false); }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [activeJobId]);
 
   useEffect(() => { fetchSteps(); }, [flow.id]);
 
