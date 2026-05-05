@@ -324,7 +324,38 @@ serve(async (req) => {
     let failed = 0;
     let skipped = 0;
 
-    const CONCURRENCY = 10;
+    const CONCURRENCY = 20;
+    const CHUNK_DELAY_MS = 150;
+
+    // Pre-fetch Meta credentials ONCE (avoid per-recipient sub-edge-function calls that hit rate limits)
+    const credCache = new Map<string, { phoneNumberId: string; accessToken: string } | null>();
+    async function getCreds(numberId: string | null) {
+      const key = numberId || '__default__';
+      if (credCache.has(key)) return credCache.get(key)!;
+      let creds: { phoneNumberId: string; accessToken: string } | null = null;
+      if (numberId) {
+        const { data } = await supabase
+          .from('whatsapp_numbers')
+          .select('phone_number_id, access_token')
+          .eq('id', numberId)
+          .eq('is_active', true)
+          .maybeSingle();
+        if (data) creds = { phoneNumberId: (data as any).phone_number_id, accessToken: (data as any).access_token };
+      }
+      if (!creds) {
+        const { data } = await supabase
+          .from('whatsapp_numbers')
+          .select('id, phone_number_id, access_token')
+          .eq('is_default', true)
+          .eq('is_active', true)
+          .maybeSingle();
+        if (data) creds = { phoneNumberId: (data as any).phone_number_id, accessToken: (data as any).access_token };
+      }
+      credCache.set(key, creds);
+      return creds;
+    }
+    // Warm default credentials
+    await getCreds(defaultNumberId);
 
     // Steps that are branch-targets must only be reached via explicit branch (button click), never sequentially.
     const branchTargetIds = new Set<string>();
