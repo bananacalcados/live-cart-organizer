@@ -324,7 +324,38 @@ serve(async (req) => {
     let failed = 0;
     let skipped = 0;
 
-    const CONCURRENCY = 10;
+    const CONCURRENCY = 20;
+    const CHUNK_DELAY_MS = 150;
+
+    // Pre-fetch Meta credentials ONCE (avoid per-recipient sub-edge-function calls that hit rate limits)
+    const credCache = new Map<string, { phoneNumberId: string; accessToken: string } | null>();
+    async function getCreds(numberId: string | null) {
+      const key = numberId || '__default__';
+      if (credCache.has(key)) return credCache.get(key)!;
+      let creds: { phoneNumberId: string; accessToken: string } | null = null;
+      if (numberId) {
+        const { data } = await supabase
+          .from('whatsapp_numbers')
+          .select('phone_number_id, access_token')
+          .eq('id', numberId)
+          .eq('is_active', true)
+          .maybeSingle();
+        if (data) creds = { phoneNumberId: (data as any).phone_number_id, accessToken: (data as any).access_token };
+      }
+      if (!creds) {
+        const { data } = await supabase
+          .from('whatsapp_numbers')
+          .select('id, phone_number_id, access_token')
+          .eq('is_default', true)
+          .eq('is_active', true)
+          .maybeSingle();
+        if (data) creds = { phoneNumberId: (data as any).phone_number_id, accessToken: (data as any).access_token };
+      }
+      credCache.set(key, creds);
+      return creds;
+    }
+    // Warm default credentials
+    await getCreds(defaultNumberId);
 
     // Steps that are branch-targets must only be reached via explicit branch (button click), never sequentially.
     const branchTargetIds = new Set<string>();
@@ -453,22 +484,58 @@ serve(async (req) => {
           }
 
           try {
-            const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send-template`, {
+            const creds = await getCreds(sendNumberId);
+            if (!creds || !creds.accessToken || !creds.phoneNumberId) {
+              failed++;
+              break;
+            }
+            let formattedPhone = recipient.phone.replace(/\D/g, '');
+            if (!formattedPhone.startsWith('55')) formattedPhone = '55' + formattedPhone;
+
+            const templateBody: Record<string, unknown> = {
+              messaging_product: 'whatsapp',
+              to: formattedPhone,
+              type: 'template',
+              template: {
+                name: templateName,
+                language: { code: (config.language as string) || 'pt_BR' },
+              },
+            };
+            if (components.length > 0) {
+              (templateBody.template as Record<string, unknown>).components = components;
+            }
+
+            const sendRes = await fetch(`https://graph.facebook.com/v21.0/${creds.phoneNumberId}/messages`, {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                phone: recipient.phone,
-                templateName,
-                language: (config.language as string) || 'pt_BR',
-                whatsappNumberId: sendNumberId,
-                components: components.length > 0 ? components : undefined,
-                renderedMessage: renderedMessage || undefined,
-              }),
+              headers: {
+                'Authorization': `Bearer ${creds.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(templateBody),
             });
+            const sendData = await sendRes.json().catch(() => ({}));
 
             if (sendRes.ok) {
               sent++;
-              await supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' });
+              const messageId = (sendData as any)?.messages?.[0]?.id || null;
+              // Fire-and-forget: persist sent marker + chat message + auto-close
+              supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' }).then(() => {});
+              supabase.from('whatsapp_messages').insert({
+                phone: formattedPhone,
+                message: renderedMessage || `[Template: ${templateName}]`,
+                direction: 'outgoing',
+                message_id: messageId,
+                status: 'sent',
+                media_type: 'text',
+                whatsapp_number_id: sendNumberId || null,
+                is_mass_dispatch: true,
+              }).then(() => {});
+              supabase.from('chat_finished_conversations').upsert({
+                phone: formattedPhone,
+                finished_at: new Date().toISOString(),
+                finish_reason: 'disparo_msg',
+              } as any, { onConflict: 'phone' }).then(() => {});
+
               if (config.quickReplyButtons && (config.quickReplyButtons as string[]).length > 0 && config.buttonBranches) {
                 const textBranches: Record<string, string> = {};
                 const qrButtons = config.quickReplyButtons as string[];
@@ -492,17 +559,16 @@ serve(async (req) => {
                   whatsapp_number_id: sendNumberId || null,
                   recipient_data: { name: recipient.name, firstName, email: recipient.email, city: recipient.city, state: recipient.state },
                 });
-                console.log(`[dispatch] Created pending reply for template buttons at step ${i}, next=${i + 1}, phone=${recipient.phone}`);
               }
             } else {
               failed++;
               if (failed <= 3) {
-                const errData = await sendRes.json().catch(() => ({}));
-                console.error(`[dispatch] Failed for ${recipient.phone}:`, errData);
+                console.error(`[dispatch] Meta API failed for ${recipient.phone}:`, (sendData as any)?.error?.message || sendData);
               }
             }
           } catch (e) {
             failed++;
+            if (failed <= 3) console.error('[dispatch] send error', e);
           }
 
           break;
@@ -564,7 +630,7 @@ serve(async (req) => {
       console.log(`[dispatch] Chunk done: ${i + chunk.length}/${batch.length}, sent=${sent}, failed=${failed}`);
       // Throttle: wait 2s between chunks to respect Meta API rate limits
       if (i + CONCURRENCY < batch.length) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY_MS));
       }
     }
 
@@ -615,20 +681,35 @@ serve(async (req) => {
         // Re-check status before self-chaining (could be paused mid-batch)
         const { data: latest } = await supabase.from('automation_dispatch_jobs').select('status').eq('id', jobId).single();
         if (latest?.status === 'running') {
-          // Self-chain next batch — use EdgeRuntime.waitUntil so the worker
-          // doesn't die before the request is dispatched.
-          const chainPromise = fetch(`${supabaseUrl}/functions/v1/automation-dispatch-audience`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId }),
-          }).then(r => { console.log('[dispatch] self-chain dispatched, status', r.status); })
-            .catch(err => console.error('[dispatch] self-chain failed', err));
+          // Self-chain next batch with retry on rate-limit. The cron-automation-timeouts
+          // is also a safety net that resumes stale jobs after 90s without heartbeat.
+          const chainOnce = async (attempt: number): Promise<void> => {
+            try {
+              const r = await fetch(`${supabaseUrl}/functions/v1/automation-dispatch-audience`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jobId }),
+              });
+              console.log(`[dispatch] self-chain attempt ${attempt} status`, r.status);
+              if (r.status === 429 && attempt < 3) {
+                await new Promise(res => setTimeout(res, 13000));
+                return chainOnce(attempt + 1);
+              }
+            } catch (err: any) {
+              const msg = String(err?.message || err);
+              if (/rate.?limit|429/i.test(msg) && attempt < 3) {
+                await new Promise(res => setTimeout(res, 13000));
+                return chainOnce(attempt + 1);
+              }
+              console.error('[dispatch] self-chain failed', err);
+            }
+          };
+          const chainPromise = chainOnce(1);
           // @ts-ignore — EdgeRuntime is provided by Supabase Edge Functions runtime
           if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
             // @ts-ignore
             EdgeRuntime.waitUntil(chainPromise);
           } else {
-            // Fallback: await briefly so the request leaves before we return
             await Promise.race([chainPromise, new Promise(r => setTimeout(r, 1500))]);
           }
         }
