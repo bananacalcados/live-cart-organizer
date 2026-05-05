@@ -221,6 +221,8 @@ export function POSWhatsAppCheckoutDialog({
       setCart([]);
       setGeneratedLink("");
       setDiscountValue("");
+      setCouponApplied(null);
+      setCouponCode("");
       setShippingValue("");
     } catch {
       toast.error("Erro ao enviar");
