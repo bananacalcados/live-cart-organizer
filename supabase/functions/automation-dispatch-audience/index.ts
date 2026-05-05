@@ -630,7 +630,7 @@ serve(async (req) => {
       console.log(`[dispatch] Chunk done: ${i + chunk.length}/${batch.length}, sent=${sent}, failed=${failed}`);
       // Throttle: wait 2s between chunks to respect Meta API rate limits
       if (i + CONCURRENCY < batch.length) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, CHUNK_DELAY_MS));
       }
     }
 
