@@ -367,6 +367,15 @@ serve(async (req) => {
 
           if (error) {
             console.error('Error saving incoming message:', error);
+          } else {
+            // Detect referral signals (coupon code or pending friend phone) - fire & forget
+            try {
+              fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/referral-detect-incoming`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ from_phone: phone, message_text: displayMessage }),
+              }).catch(() => {});
+            } catch (_) { /* ignore */ }
           }
         } else {
           return new Response(JSON.stringify({ success: true, dedup: true }), {
