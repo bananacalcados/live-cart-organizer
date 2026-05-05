@@ -484,22 +484,58 @@ serve(async (req) => {
           }
 
           try {
-            const sendRes = await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send-template`, {
+            const creds = await getCreds(sendNumberId);
+            if (!creds || !creds.accessToken || !creds.phoneNumberId) {
+              failed++;
+              break;
+            }
+            let formattedPhone = recipient.phone.replace(/\D/g, '');
+            if (!formattedPhone.startsWith('55')) formattedPhone = '55' + formattedPhone;
+
+            const templateBody: Record<string, unknown> = {
+              messaging_product: 'whatsapp',
+              to: formattedPhone,
+              type: 'template',
+              template: {
+                name: templateName,
+                language: { code: (config.language as string) || 'pt_BR' },
+              },
+            };
+            if (components.length > 0) {
+              (templateBody.template as Record<string, unknown>).components = components;
+            }
+
+            const sendRes = await fetch(`https://graph.facebook.com/v21.0/${creds.phoneNumberId}/messages`, {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                phone: recipient.phone,
-                templateName,
-                language: (config.language as string) || 'pt_BR',
-                whatsappNumberId: sendNumberId,
-                components: components.length > 0 ? components : undefined,
-                renderedMessage: renderedMessage || undefined,
-              }),
+              headers: {
+                'Authorization': `Bearer ${creds.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(templateBody),
             });
+            const sendData = await sendRes.json().catch(() => ({}));
 
             if (sendRes.ok) {
               sent++;
-              await supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' });
+              const messageId = (sendData as any)?.messages?.[0]?.id || null;
+              // Fire-and-forget: persist sent marker + chat message + auto-close
+              supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' }).then(() => {});
+              supabase.from('whatsapp_messages').insert({
+                phone: formattedPhone,
+                message: renderedMessage || `[Template: ${templateName}]`,
+                direction: 'outgoing',
+                message_id: messageId,
+                status: 'sent',
+                media_type: 'text',
+                whatsapp_number_id: sendNumberId || null,
+                is_mass_dispatch: true,
+              }).then(() => {});
+              supabase.from('chat_finished_conversations').upsert({
+                phone: formattedPhone,
+                finished_at: new Date().toISOString(),
+                finish_reason: 'disparo_msg',
+              } as any, { onConflict: 'phone' }).then(() => {});
+
               if (config.quickReplyButtons && (config.quickReplyButtons as string[]).length > 0 && config.buttonBranches) {
                 const textBranches: Record<string, string> = {};
                 const qrButtons = config.quickReplyButtons as string[];
@@ -523,17 +559,16 @@ serve(async (req) => {
                   whatsapp_number_id: sendNumberId || null,
                   recipient_data: { name: recipient.name, firstName, email: recipient.email, city: recipient.city, state: recipient.state },
                 });
-                console.log(`[dispatch] Created pending reply for template buttons at step ${i}, next=${i + 1}, phone=${recipient.phone}`);
               }
             } else {
               failed++;
               if (failed <= 3) {
-                const errData = await sendRes.json().catch(() => ({}));
-                console.error(`[dispatch] Failed for ${recipient.phone}:`, errData);
+                console.error(`[dispatch] Meta API failed for ${recipient.phone}:`, (sendData as any)?.error?.message || sendData);
               }
             }
           } catch (e) {
             failed++;
+            if (failed <= 3) console.error('[dispatch] send error', e);
           }
 
           break;
