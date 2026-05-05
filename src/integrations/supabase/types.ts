@@ -9877,6 +9877,140 @@ export type Database = {
         }
         Relationships: []
       }
+      referrals: {
+        Row: {
+          coupon_code: string
+          coupon_expires_at: string
+          coupon_redeemed_at: string | null
+          coupon_value: number
+          created_at: string
+          friend_contacted_at: string | null
+          friend_name: string
+          friend_phone: string
+          id: string
+          message_sent_at: string | null
+          redeemed_in_sale_id: string | null
+          review_token_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          coupon_code: string
+          coupon_expires_at?: string
+          coupon_redeemed_at?: string | null
+          coupon_value?: number
+          created_at?: string
+          friend_contacted_at?: string | null
+          friend_name: string
+          friend_phone: string
+          id?: string
+          message_sent_at?: string | null
+          redeemed_in_sale_id?: string | null
+          review_token_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          coupon_code?: string
+          coupon_expires_at?: string
+          coupon_redeemed_at?: string | null
+          coupon_value?: number
+          created_at?: string
+          friend_contacted_at?: string | null
+          friend_name?: string
+          friend_phone?: string
+          id?: string
+          message_sent_at?: string | null
+          redeemed_in_sale_id?: string | null
+          review_token_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_review_token_id_fkey"
+            columns: ["review_token_id"]
+            isOneToOne: false
+            referencedRelation: "review_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      review_tokens: {
+        Row: {
+          cashback_doubled: boolean
+          cashback_doubled_at: string | null
+          cashback_value: number | null
+          created_at: string
+          customer_name: string | null
+          customer_phone: string
+          customer_zoppy_id: string | null
+          expires_at: string
+          id: string
+          improvement_suggestion: string | null
+          nps_score: number | null
+          review_comment: string | null
+          review_submitted_at: string | null
+          store_id: string | null
+          store_phone: string | null
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          cashback_doubled?: boolean
+          cashback_doubled_at?: string | null
+          cashback_value?: number | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone: string
+          customer_zoppy_id?: string | null
+          expires_at?: string
+          id?: string
+          improvement_suggestion?: string | null
+          nps_score?: number | null
+          review_comment?: string | null
+          review_submitted_at?: string | null
+          store_id?: string | null
+          store_phone?: string | null
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          cashback_doubled?: boolean
+          cashback_doubled_at?: string | null
+          cashback_value?: number | null
+          created_at?: string
+          customer_name?: string | null
+          customer_phone?: string
+          customer_zoppy_id?: string | null
+          expires_at?: string
+          id?: string
+          improvement_suggestion?: string | null
+          nps_score?: number | null
+          review_comment?: string | null
+          review_submitted_at?: string | null
+          store_id?: string | null
+          store_phone?: string | null
+          token?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "review_tokens_customer_zoppy_id_fkey"
+            columns: ["customer_zoppy_id"]
+            isOneToOne: false
+            referencedRelation: "zoppy_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "review_tokens_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_triggers: {
         Row: {
           ad_campaign_id: string | null
