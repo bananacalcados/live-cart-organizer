@@ -2708,91 +2708,48 @@ function FlowEditor({
   const runDispatch = async () => {
     setDispatching(true);
     setDispatchPaused(false);
-    pauseRef.current = false;
-    setDispatchResult(null);
-    let totalSent = 0;
-    let totalFailed = 0;
-    let totalSkipped = 0;
-    let currentOffset = 0;
-    let totalAudience = audienceCount || 0;
-    const BATCH_SIZE = 2000;
-    const MAX_RETRIES = 3;
+    setDispatchResult({ sent: 0, failed: 0, skipped: 0, totalAudience: audienceCount || 0, processing: true, done: false });
 
     try {
-      let done = false;
-      while (!done) {
-        // Check pause
-        if (pauseRef.current) {
-          setDispatchResult(prev => ({ ...prev, paused: true, processing: false }));
-          toast.info(`Disparo pausado. ${totalSent} enviadas até agora.`);
-          setDispatching(false);
-          return;
-        }
+      // 1) Create job in DB (server-side state — survives tab close)
+      const { data: jobRow, error: jobErr } = await supabase
+        .from("automation_dispatch_jobs")
+        .insert({
+          flow_id: flow.id,
+          status: "running",
+          total_audience: audienceCount || 0,
+          batch_size: 2000,
+        })
+        .select()
+        .single();
+      if (jobErr || !jobRow) throw new Error(jobErr?.message || "Erro ao criar job");
+      setActiveJobId(jobRow.id);
 
-        let retries = 0;
-        let batchSuccess = false;
-        while (retries < MAX_RETRIES && !batchSuccess) {
-          try {
-            const res = await supabase.functions.invoke("automation-dispatch-audience", {
-              body: { flowId: flow.id, offset: currentOffset, batchSize: BATCH_SIZE },
-            });
-            if (res.error) throw new Error(res.error.message);
-            const d = res.data;
-            if (!d?.success) throw new Error(d?.error || "Erro no disparo");
+      // 2) Kick off first batch (fire-and-forget — server self-chains via heartbeat + cron recovery)
+      supabase.functions.invoke("automation-dispatch-audience", {
+        body: { jobId: jobRow.id },
+      }).catch(err => console.error("[dispatch] kick failed", err));
 
-            totalSent += d.sent || 0;
-            totalFailed += d.failed || 0;
-            totalSkipped += d.skipped || 0;
-            totalAudience = d.totalAudience || totalAudience;
-            done = d.done;
-            currentOffset = d.nextOffset ?? totalAudience;
-            batchSuccess = true;
-
-            setDispatchResult({
-              sent: totalSent,
-              failed: totalFailed,
-              skipped: totalSkipped,
-              totalAudience,
-              done,
-              processing: !done,
-              paused: false,
-            });
-          } catch (batchErr: any) {
-            retries++;
-            console.warn(`[dispatch] Batch retry ${retries}/${MAX_RETRIES}:`, batchErr.message);
-            if (retries >= MAX_RETRIES) {
-              // Even on error, don't stop — skip this offset and move forward
-              console.error(`[dispatch] Max retries hit, advancing offset from ${currentOffset}`);
-              currentOffset += BATCH_SIZE;
-              if (currentOffset >= totalAudience) done = true;
-              batchSuccess = true; // break inner loop
-            } else {
-              await new Promise(r => setTimeout(r, 2000)); // wait 2s before retry
-            }
-          }
-        }
-      }
-
-      toast.success(`Disparo concluído! ${totalSent} mensagen(s) enviada(s)`);
+      toast.success("Disparo iniciado. Você pode fechar a aba — continua rodando no servidor.");
     } catch (err: any) {
       toast.error(err.message || "Erro ao disparar");
-      setDispatchResult({
-        sent: totalSent,
-        failed: totalFailed,
-        skipped: totalSkipped,
-        totalAudience,
-        error: err.message,
-        done: false,
-      });
-    } finally {
       setDispatching(false);
-      setDispatchPaused(false);
+      setDispatchResult(prev => ({ ...prev, error: err.message, done: false }));
     }
   };
 
-  const handlePauseDispatch = () => {
-    pauseRef.current = true;
+  const handlePauseDispatch = async () => {
+    if (!activeJobId) return;
+    await supabase.from("automation_dispatch_jobs").update({ status: "paused" }).eq("id", activeJobId);
     setDispatchPaused(true);
+  };
+
+  const handleResumeDispatch = async () => {
+    if (!activeJobId) return;
+    await supabase.from("automation_dispatch_jobs").update({ status: "running", heartbeat_at: new Date().toISOString() }).eq("id", activeJobId);
+    setDispatchPaused(false);
+    setDispatching(true);
+    supabase.functions.invoke("automation-dispatch-audience", { body: { jobId: activeJobId } }).catch(() => {});
   };
 
   const saveFlow = async () => {
