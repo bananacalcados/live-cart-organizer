@@ -106,11 +106,34 @@ export function POSWhatsAppCheckoutDialog({
   const removeFromCart = (id: string) => setCart(prev => prev.filter(c => c.id !== id));
 
   const cartSubtotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
-  const discountAmount = (() => {
+  const manualDiscount = (() => {
     const val = parseFloat(discountValue);
     if (!val || val <= 0) return 0;
     return discountType === "percent" ? Math.min(cartSubtotal, cartSubtotal * (val / 100)) : Math.min(cartSubtotal, val);
   })();
+  const couponDiscount = couponApplied ? Math.min(cartSubtotal, couponApplied.discount) : 0;
+  const discountAmount = Math.min(cartSubtotal, manualDiscount + couponDiscount);
+  const shippingAmount = freeShipping ? 0 : (parseFloat(shippingValue) || 0);
+  const orderTotal = Math.max(0, cartSubtotal - discountAmount) + shippingAmount;
+
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
+    setValidatingCoupon(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-validate-coupon", {
+        body: { coupon_code: code, subtotal: cartSubtotal },
+      });
+      if (error) throw error;
+      if (!data?.valid) { toast.error(data?.error || "Cupom inválido"); return; }
+      setCouponApplied({ code: data.coupon_code, discount: data.discount, label: data.label, type: data.type });
+      toast.success(`Cupom aplicado: -R$ ${Number(data.discount).toFixed(2)}`);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao validar cupom");
+    } finally {
+      setValidatingCoupon(false);
+    }
+  };
   const shippingAmount = freeShipping ? 0 : (parseFloat(shippingValue) || 0);
   const orderTotal = Math.max(0, cartSubtotal - discountAmount) + shippingAmount;
 
