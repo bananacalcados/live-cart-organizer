@@ -2081,10 +2081,10 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
       <div className="space-y-1.5 p-2 rounded-lg bg-card border border-border">
         <div className="flex items-center gap-1.5">
           <Filter className="h-3 w-3 text-cyan-500" />
-          <Label className="text-[11px] font-medium">Cooldown — Excluir contatos recentes</Label>
+          <Label className="text-[11px] font-medium">Cooldown — Excluir contatos de disparos em massa recentes</Label>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          Não enviar para quem já recebeu qualquer mensagem nossa nos últimos N dias. Use 0 para desativar.
+          Não enviar para quem já recebeu um disparo em massa (broadcast ou outra automação) nos últimos N dias. Conversas 1:1 não contam. Use 0 para desativar.
         </p>
         <div className="flex items-center gap-2">
           <Input
