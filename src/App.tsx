@@ -84,6 +84,7 @@ const App = () => (
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />
               <Route path="/live-ortopedicos" element={<LiveOrtopedicosLP />} />
               <Route path="/live-ortopedicos-abril" element={<LiveOrtopedicosAbrilLP />} />
+              <Route path="/r/:token" element={<ReviewReferralPage />} />
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
