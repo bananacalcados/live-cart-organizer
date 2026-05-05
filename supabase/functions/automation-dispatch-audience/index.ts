@@ -592,6 +592,39 @@ serve(async (req) => {
 
     console.log(`[dispatch] Batch done: offset=${offset}, sent=${sent}, failed=${failed}, next=${nextOffset}, done=${done}, ${Date.now() - startTime}ms`);
 
+    // Update job progress and self-chain next batch (fire-and-forget) so it survives tab close
+    if (jobId) {
+      const newSent = (job?.sent || 0) + sent;
+      const newFailed = (job?.failed || 0) + failed;
+      const newSkipped = (job?.skipped || 0) + skipped;
+      const updates: any = {
+        current_offset: nextOffset,
+        sent: newSent,
+        failed: newFailed,
+        skipped: newSkipped,
+        total_audience: totalAudience,
+        heartbeat_at: new Date().toISOString(),
+      };
+      if (done) {
+        updates.status = 'done';
+        updates.completed_at = new Date().toISOString();
+      }
+      await supabase.from('automation_dispatch_jobs').update(updates).eq('id', jobId);
+
+      if (!done) {
+        // Re-check status before self-chaining (could be paused mid-batch)
+        const { data: latest } = await supabase.from('automation_dispatch_jobs').select('status').eq('id', jobId).single();
+        if (latest?.status === 'running') {
+          // Fire-and-forget next batch
+          fetch(`${supabaseUrl}/functions/v1/automation-dispatch-audience`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId }),
+          }).catch(err => console.error('[dispatch] self-chain failed', err));
+        }
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
       totalAudience,
@@ -600,6 +633,7 @@ serve(async (req) => {
       skipped,
       nextOffset: done ? null : nextOffset,
       done,
+      jobId: jobId || null,
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
