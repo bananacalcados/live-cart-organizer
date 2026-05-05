@@ -47,7 +47,7 @@ serve(async (req) => {
         // If just doubled, notify via WhatsApp template (best-effort)
         if (doubled && tok.customer_phone) {
           try {
-            await supabase.functions.invoke('meta-whatsapp-send-text', {
+            await supabase.functions.invoke('meta-whatsapp-send', {
               body: {
                 phone: tok.customer_phone,
                 message: `🎉 Parabéns! Você indicou 3 amigos e *seu cashback foi DOBRADO* para *R$ ${Number(tok.cashback_value).toFixed(2).replace('.', ',')}*. Use na sua próxima compra no Banana Calçados.`,
