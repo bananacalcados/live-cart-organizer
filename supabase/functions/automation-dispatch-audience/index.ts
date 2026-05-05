@@ -681,20 +681,35 @@ serve(async (req) => {
         // Re-check status before self-chaining (could be paused mid-batch)
         const { data: latest } = await supabase.from('automation_dispatch_jobs').select('status').eq('id', jobId).single();
         if (latest?.status === 'running') {
-          // Self-chain next batch — use EdgeRuntime.waitUntil so the worker
-          // doesn't die before the request is dispatched.
-          const chainPromise = fetch(`${supabaseUrl}/functions/v1/automation-dispatch-audience`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ jobId }),
-          }).then(r => { console.log('[dispatch] self-chain dispatched, status', r.status); })
-            .catch(err => console.error('[dispatch] self-chain failed', err));
+          // Self-chain next batch with retry on rate-limit. The cron-automation-timeouts
+          // is also a safety net that resumes stale jobs after 90s without heartbeat.
+          const chainOnce = async (attempt: number): Promise<void> => {
+            try {
+              const r = await fetch(`${supabaseUrl}/functions/v1/automation-dispatch-audience`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jobId }),
+              });
+              console.log(`[dispatch] self-chain attempt ${attempt} status`, r.status);
+              if (r.status === 429 && attempt < 3) {
+                await new Promise(res => setTimeout(res, 13000));
+                return chainOnce(attempt + 1);
+              }
+            } catch (err: any) {
+              const msg = String(err?.message || err);
+              if (/rate.?limit|429/i.test(msg) && attempt < 3) {
+                await new Promise(res => setTimeout(res, 13000));
+                return chainOnce(attempt + 1);
+              }
+              console.error('[dispatch] self-chain failed', err);
+            }
+          };
+          const chainPromise = chainOnce(1);
           // @ts-ignore — EdgeRuntime is provided by Supabase Edge Functions runtime
           if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
             // @ts-ignore
             EdgeRuntime.waitUntil(chainPromise);
           } else {
-            // Fallback: await briefly so the request leaves before we return
             await Promise.race([chainPromise, new Promise(r => setTimeout(r, 1500))]);
           }
         }
