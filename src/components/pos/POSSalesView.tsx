@@ -1429,6 +1429,32 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   ))}
                 </div>
               )}
+
+              {/* Coupon input (referral INDICA-* or cashback CASH-*) */}
+              <div className="rounded-lg border border-pos-white/10 bg-pos-white/5 px-3 py-2.5 space-y-2">
+                <p className="text-xs font-semibold text-pos-white/80">Aplicar Cupom</p>
+                {couponApplied ? (
+                  <div className="flex items-center justify-between gap-2 rounded bg-emerald-500/10 border border-emerald-500/30 px-2 py-1.5">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-emerald-300 truncate">{couponApplied.code}</p>
+                      <p className="text-[10px] text-pos-white/60 truncate">-R$ {couponApplied.discount.toFixed(2)} · {couponApplied.label}</p>
+                    </div>
+                    <button onClick={() => { setCouponApplied(null); setCouponCode(""); }} className="text-red-400 text-xs px-2">Remover</button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <Input
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      placeholder="INDICA-XXXX ou cashback"
+                      className="h-8 text-xs uppercase bg-pos-white/5 border-pos-white/10 text-pos-white"
+                    />
+                    <Button size="sm" className="h-8 px-3 text-xs" onClick={handleApplyCoupon} disabled={validatingCoupon || !couponCode.trim()}>
+                      {validatingCoupon ? "..." : "Aplicar"}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
