@@ -721,6 +721,22 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         setSaleResult(data);
         setStep("invoice");
 
+        // Redeem coupon (referral or internal cashback) on successful sale
+        if (couponApplied) {
+          try {
+            const saleId = data?.sale_id || data?.id || null;
+            if (couponApplied.type === 'referral') {
+              await supabase.functions.invoke('referral-validate-coupon', {
+                body: { coupon_code: couponApplied.code, redeem: true, sale_id: saleId, friend_phone: selectedCustomer?.whatsapp || null },
+              });
+            } else if (couponApplied.type === 'cashback') {
+              await supabase.from('internal_cashback')
+                .update({ is_used: true, used_at: new Date().toISOString(), used_sale_id: saleId } as any)
+                .eq('coupon_code', couponApplied.code);
+            }
+          } catch (e) { console.error('coupon redeem error', e); }
+        }
+
         // Update cash register with sale amounts
         try {
           const { data: openRegister } = await supabase
