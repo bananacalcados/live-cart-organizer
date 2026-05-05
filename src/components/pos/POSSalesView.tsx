@@ -706,7 +706,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           })),
           payment_method_id: useMultiPayment ? 'multi' : selectedPayment,
           payment_method_name: paymentMethodName,
-          discount: discountValue > 0 ? discountValue : undefined,
+          discount: totalDiscount > 0 ? totalDiscount : undefined,
+          coupon_code: couponApplied?.code || undefined,
+          coupon_type: couponApplied?.type || undefined,
         }),
       });
       const data = await resp.json();
