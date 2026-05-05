@@ -155,6 +155,10 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       setValidatingCoupon(false);
     }
   };
+
+  // Check if cash register is open
+  useEffect(() => {
+    checkCashRegister();
   }, [storeId]);
 
   const checkCashRegister = async () => {
