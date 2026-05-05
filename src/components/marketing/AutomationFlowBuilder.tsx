@@ -2375,6 +2375,53 @@ function FlowEditor({
   const [alreadySentCount, setAlreadySentCount] = useState<number>(0);
   const [loadingAudienceCount, setLoadingAudienceCount] = useState(false);
   const pauseRef = useRef(false);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+
+  // Detect running/paused job on dialog open
+  useEffect(() => {
+    if (!dispatchDialogOpen) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("automation_dispatch_jobs")
+        .select("*")
+        .eq("flow_id", flow.id)
+        .in("status", ["running", "paused", "queued"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      setActiveJobId(data.id);
+      setDispatching(data.status === "running" || data.status === "queued");
+      setDispatchPaused(data.status === "paused");
+      setDispatchResult({
+        sent: data.sent, failed: data.failed, skipped: data.skipped,
+        totalAudience: data.total_audience, done: data.status === "done",
+        processing: data.status === "running", paused: data.status === "paused",
+      });
+    })();
+    return () => { cancelled = true; };
+  }, [dispatchDialogOpen, flow.id]);
+
+  useEffect(() => {
+    if (!activeJobId) return;
+    const ch = supabase
+      .channel(`auto-job-${activeJobId}`)
+      .on("postgres_changes" as any, { event: "UPDATE", schema: "public", table: "automation_dispatch_jobs", filter: `id=eq.${activeJobId}` }, (payload: any) => {
+        const j = payload.new;
+        setDispatchResult({
+          sent: j.sent, failed: j.failed, skipped: j.skipped,
+          totalAudience: j.total_audience, done: j.status === "done",
+          processing: j.status === "running", paused: j.status === "paused",
+          error: j.status === "error" ? j.error_message : undefined,
+        });
+        if (j.status === "done") { setDispatching(false); setDispatchPaused(false); toast.success(`Disparo concluído! ${j.sent} enviadas`); }
+        if (j.status === "paused") { setDispatching(false); setDispatchPaused(true); }
+        if (j.status === "error") { setDispatching(false); }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [activeJobId]);
 
   useEffect(() => { fetchSteps(); }, [flow.id]);
 
@@ -2661,91 +2708,48 @@ function FlowEditor({
   const runDispatch = async () => {
     setDispatching(true);
     setDispatchPaused(false);
-    pauseRef.current = false;
-    setDispatchResult(null);
-    let totalSent = 0;
-    let totalFailed = 0;
-    let totalSkipped = 0;
-    let currentOffset = 0;
-    let totalAudience = audienceCount || 0;
-    const BATCH_SIZE = 2000;
-    const MAX_RETRIES = 3;
+    setDispatchResult({ sent: 0, failed: 0, skipped: 0, totalAudience: audienceCount || 0, processing: true, done: false });
 
     try {
-      let done = false;
-      while (!done) {
-        // Check pause
-        if (pauseRef.current) {
-          setDispatchResult(prev => ({ ...prev, paused: true, processing: false }));
-          toast.info(`Disparo pausado. ${totalSent} enviadas até agora.`);
-          setDispatching(false);
-          return;
-        }
+      // 1) Create job in DB (server-side state — survives tab close)
+      const { data: jobRow, error: jobErr } = await supabase
+        .from("automation_dispatch_jobs")
+        .insert({
+          flow_id: flow.id,
+          status: "running",
+          total_audience: audienceCount || 0,
+          batch_size: 2000,
+        })
+        .select()
+        .single();
+      if (jobErr || !jobRow) throw new Error(jobErr?.message || "Erro ao criar job");
+      setActiveJobId(jobRow.id);
 
-        let retries = 0;
-        let batchSuccess = false;
-        while (retries < MAX_RETRIES && !batchSuccess) {
-          try {
-            const res = await supabase.functions.invoke("automation-dispatch-audience", {
-              body: { flowId: flow.id, offset: currentOffset, batchSize: BATCH_SIZE },
-            });
-            if (res.error) throw new Error(res.error.message);
-            const d = res.data;
-            if (!d?.success) throw new Error(d?.error || "Erro no disparo");
+      // 2) Kick off first batch (fire-and-forget — server self-chains via heartbeat + cron recovery)
+      supabase.functions.invoke("automation-dispatch-audience", {
+        body: { jobId: jobRow.id },
+      }).catch(err => console.error("[dispatch] kick failed", err));
 
-            totalSent += d.sent || 0;
-            totalFailed += d.failed || 0;
-            totalSkipped += d.skipped || 0;
-            totalAudience = d.totalAudience || totalAudience;
-            done = d.done;
-            currentOffset = d.nextOffset ?? totalAudience;
-            batchSuccess = true;
-
-            setDispatchResult({
-              sent: totalSent,
-              failed: totalFailed,
-              skipped: totalSkipped,
-              totalAudience,
-              done,
-              processing: !done,
-              paused: false,
-            });
-          } catch (batchErr: any) {
-            retries++;
-            console.warn(`[dispatch] Batch retry ${retries}/${MAX_RETRIES}:`, batchErr.message);
-            if (retries >= MAX_RETRIES) {
-              // Even on error, don't stop — skip this offset and move forward
-              console.error(`[dispatch] Max retries hit, advancing offset from ${currentOffset}`);
-              currentOffset += BATCH_SIZE;
-              if (currentOffset >= totalAudience) done = true;
-              batchSuccess = true; // break inner loop
-            } else {
-              await new Promise(r => setTimeout(r, 2000)); // wait 2s before retry
-            }
-          }
-        }
-      }
-
-      toast.success(`Disparo concluído! ${totalSent} mensagen(s) enviada(s)`);
+      toast.success("Disparo iniciado. Você pode fechar a aba — continua rodando no servidor.");
     } catch (err: any) {
       toast.error(err.message || "Erro ao disparar");
-      setDispatchResult({
-        sent: totalSent,
-        failed: totalFailed,
-        skipped: totalSkipped,
-        totalAudience,
-        error: err.message,
-        done: false,
-      });
-    } finally {
       setDispatching(false);
-      setDispatchPaused(false);
+      setDispatchResult(prev => ({ ...prev, error: err.message, done: false }));
     }
   };
 
-  const handlePauseDispatch = () => {
-    pauseRef.current = true;
+  const handlePauseDispatch = async () => {
+    if (!activeJobId) return;
+    await supabase.from("automation_dispatch_jobs").update({ status: "paused" }).eq("id", activeJobId);
     setDispatchPaused(true);
+  };
+
+  const handleResumeDispatch = async () => {
+    if (!activeJobId) return;
+    await supabase.from("automation_dispatch_jobs").update({ status: "running", heartbeat_at: new Date().toISOString() }).eq("id", activeJobId);
+    setDispatchPaused(false);
+    setDispatching(true);
+    supabase.functions.invoke("automation-dispatch-audience", { body: { jobId: activeJobId } }).catch(() => {});
   };
 
   const saveFlow = async () => {
@@ -3164,29 +3168,25 @@ function FlowEditor({
           )}
 
           <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => { if (!dispatching) setDispatchDialogOpen(false); }} disabled={dispatching}>Fechar</Button>
+            <Button variant="outline" onClick={() => setDispatchDialogOpen(false)}>Fechar</Button>
             {dispatching && !dispatchPaused && (
-              <Button
-                onClick={handlePauseDispatch}
-                variant="destructive"
-                className="gap-1"
-              >
+              <Button onClick={handlePauseDispatch} variant="destructive" className="gap-1">
                 <StopCircle className="h-3.5 w-3.5" />
                 Pausar
               </Button>
             )}
             <Button
-              onClick={runDispatch}
-              disabled={dispatching || audienceCount === 0 || loadingAudienceCount || (dispatchResult?.done === true)}
+              onClick={dispatchPaused ? handleResumeDispatch : runDispatch}
+              disabled={(dispatching && !dispatchPaused) || audienceCount === 0 || loadingAudienceCount || (dispatchResult?.done === true)}
               className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white"
             >
-              {dispatching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-              {dispatching
-                ? "Disparando..."
-                : dispatchResult?.done
-                  ? "Concluído"
-                  : dispatchResult?.paused
-                    ? "Retomar Disparo"
+              {dispatching && !dispatchPaused ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              {dispatchResult?.done
+                ? "Concluído"
+                : dispatchPaused
+                  ? "Retomar Disparo"
+                  : dispatching
+                    ? "Disparando..."
                     : `Confirmar Disparo${audienceCount ? ` (${audienceCount.toLocaleString("pt-BR")})` : ""}`}
             </Button>
           </DialogFooter>

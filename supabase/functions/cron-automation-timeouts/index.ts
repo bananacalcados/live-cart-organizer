@@ -16,6 +16,25 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // ──── RECOVERY: resume stale automation dispatch jobs (no heartbeat in >90s)
+    try {
+      const staleThreshold = new Date(Date.now() - 90_000).toISOString();
+      const { data: staleJobs } = await supabase
+        .from('automation_dispatch_jobs')
+        .select('id')
+        .eq('status', 'running')
+        .lt('heartbeat_at', staleThreshold)
+        .limit(10);
+      for (const j of (staleJobs || [])) {
+        console.log(`[recovery] Resuming stale automation dispatch job ${j.id}`);
+        fetch(`${supabaseUrl}/functions/v1/automation-dispatch-audience`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId: j.id }),
+        }).catch(err => console.error('[recovery] failed to kick job', j.id, err));
+      }
+    } catch (e) { console.error('[recovery] error scanning stale jobs', e); }
+
     // Find all expired pending replies that are still active
     const { data: expired } = await supabase
       .from('automation_pending_replies')
