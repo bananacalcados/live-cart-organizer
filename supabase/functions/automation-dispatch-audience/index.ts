@@ -131,19 +131,29 @@ serve(async (req) => {
     // Cooldown filter: exclude phones that received any outgoing message in the last N days
     if (cooldownDays > 0) {
       const sinceIso = new Date(Date.now() - cooldownDays * 24 * 60 * 60 * 1000).toISOString();
-      const { data: recentMsgs, error: cdErr } = await supabase
-        .from('whatsapp_messages')
-        .select('phone')
-        .eq('direction', 'outgoing')
-        .gte('created_at', sinceIso)
-        .limit(50000);
-      if (cdErr) console.error('[dispatch] cooldown query error', cdErr);
+      const pageSize = 1000;
+      let from = 0;
+      let totalRows = 0;
       let cooldownAdded = 0;
-      for (const r of recentMsgs || []) {
-        const p = normalizePhone((r as any).phone || '');
-        if (p && !seenPhones.has(p)) { seenPhones.add(p); cooldownAdded++; }
+      while (true) {
+        const { data: recentMsgs, error: cdErr } = await supabase
+          .from('whatsapp_messages')
+          .select('phone')
+          .eq('direction', 'outgoing')
+          .gte('created_at', sinceIso)
+          .range(from, from + pageSize - 1);
+        if (cdErr) { console.error('[dispatch] cooldown query error', cdErr); break; }
+        if (!recentMsgs || recentMsgs.length === 0) break;
+        totalRows += recentMsgs.length;
+        for (const r of recentMsgs) {
+          const p = normalizePhone((r as any).phone || '');
+          if (p && !seenPhones.has(p)) { seenPhones.add(p); cooldownAdded++; }
+        }
+        if (recentMsgs.length < pageSize) break;
+        from += pageSize;
+        if (from > 500000) break; // safety cap
       }
-      console.log(`[dispatch] Cooldown ${cooldownDays}d excluded ${cooldownAdded} phones with recent outgoing messages`);
+      console.log(`[dispatch] Cooldown ${cooldownDays}d scanned ${totalRows} outgoing rows, excluded ${cooldownAdded} unique phones`);
     }
 
     let rfmData: any[] = [];
