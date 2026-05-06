@@ -34,6 +34,7 @@ interface PickupOrder {
   payment_method: string | null;
   payment_details: any;
   seller_id: string | null;
+  revenue_attribution: string | null;
   created_at: string;
   items: PickupItem[];
 }
