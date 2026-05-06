@@ -366,6 +366,11 @@ export function ChatView({
 
   const formatPreviewTime = formatRecordingTime;
 
+  const [pendingMediaFile, setPendingMediaFile] = useState<File | null>(null);
+  const [pendingMediaPreviewUrl, setPendingMediaPreviewUrl] = useState<string | null>(null);
+  const [pendingMediaCaption, setPendingMediaCaption] = useState("");
+  const [sendingMedia, setSendingMedia] = useState(false);
+
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !onSendMedia) return;
@@ -377,16 +382,38 @@ export function ChatView({
       return;
     }
 
-    const mediaType = file.type.startsWith('image/') ? 'image'
-      : file.type.startsWith('video/') ? 'video'
-      : file.type.startsWith('audio/') ? 'audio' : 'document';
-
-    toast.info('Enviando arquivo...');
-    const url = await uploadMediaToStorage(file);
-    if (url) {
-      onSendMedia(url, mediaType);
-    }
+    setPendingMediaFile(file);
+    setPendingMediaPreviewUrl(URL.createObjectURL(file));
+    setPendingMediaCaption("");
   }, [onSendMedia]);
+
+  const cancelPendingMedia = useCallback(() => {
+    if (pendingMediaPreviewUrl) URL.revokeObjectURL(pendingMediaPreviewUrl);
+    setPendingMediaPreviewUrl(null);
+    setPendingMediaFile(null);
+    setPendingMediaCaption("");
+  }, [pendingMediaPreviewUrl]);
+
+  const confirmSendPendingMedia = useCallback(async () => {
+    if (!pendingMediaFile || !onSendMedia) return;
+    const file = pendingMediaFile;
+    const caption = pendingMediaCaption.trim();
+    setSendingMedia(true);
+    try {
+      const mediaType = file.type.startsWith('image/') ? 'image'
+        : file.type.startsWith('video/') ? 'video'
+        : file.type.startsWith('audio/') ? 'audio' : 'document';
+      const url = await uploadMediaToStorage(file);
+      if (url) {
+        onSendMedia(url, mediaType, caption || undefined);
+        cancelPendingMedia();
+      } else {
+        toast.error('Erro ao enviar arquivo');
+      }
+    } finally {
+      setSendingMedia(false);
+    }
+  }, [pendingMediaFile, pendingMediaCaption, onSendMedia, cancelPendingMedia]);
 
   // Helper to check if sender changed from previous message
   const isSenderChange = useCallback((msg: Message, prevMsg: Message | null): boolean => {
