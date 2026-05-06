@@ -371,16 +371,20 @@ export function POSPickupOrders({ storeId }: Props) {
               <p className="text-sm mt-1">Pedidos enviados do módulo Eventos aparecerão aqui</p>
             </div>
           ) : (
-            orders.map((order) => {
+            orders
+              .filter(o => originFilter === "all"
+                || (originFilter === "site" ? o.revenue_attribution === "site_pickup_only" : o.revenue_attribution !== "site_pickup_only"))
+              .map((order) => {
               const details = order.payment_details || {};
               const instagram = details.customer_instagram || "";
               const whatsapp = details.customer_whatsapp || "";
+              const isSite = order.revenue_attribution === "site_pickup_only";
               const createdAt = new Date(order.created_at).toLocaleString("pt-BR", {
                 day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
               });
 
               return (
-                <div key={order.id} className="rounded-xl border border-pos-orange/20 bg-pos-white/5 p-4 space-y-3">
+                <div key={order.id} className={`rounded-xl border p-4 space-y-3 ${isSite ? "border-blue-400/40 bg-blue-500/5" : "border-pos-orange/20 bg-pos-white/5"}`}>
                   {/* Customer info */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -392,6 +396,11 @@ export function POSPickupOrders({ storeId }: Props) {
                       )}
                       {!instagram && (
                         <span className="text-sm text-pos-white/60">Cliente da Live</span>
+                      )}
+                      {isSite ? (
+                        <Badge className="bg-blue-500/20 text-blue-300 border-blue-400/40 text-[10px]">🌐 Site</Badge>
+                      ) : (
+                        <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-400/40 text-[10px]">🏬 Loja</Badge>
                       )}
                     </div>
                     <span className="text-xs text-pos-white/40">{createdAt}</span>
