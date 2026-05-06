@@ -19,10 +19,11 @@ interface LandingPage {
   whatsapp_redirect: string | null;
   custom_css: string | null;
   is_active: boolean;
+  event_date: string | null;
 }
 
-// Event date: Saturday 25/04/2026 at 15:00 Brasília time (UTC-3)
-const EVENT_TARGET_MS = Date.UTC(2026, 3, 25, 18, 0, 0); // 15h BRT = 18h UTC
+// Default fallback event date: Saturday 25/04/2026 at 15:00 BRT (UTC-3)
+const DEFAULT_EVENT_TARGET_MS = Date.UTC(2026, 3, 25, 18, 0, 0);
 
 function formatPhone(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
