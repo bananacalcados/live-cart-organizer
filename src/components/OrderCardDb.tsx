@@ -10,6 +10,7 @@ import { ptBR } from "date-fns/locale";
 import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
 import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
 import { SendToPOSDialog } from "./SendToPOSDialog";
+import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { Order } from "@/types/order";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
