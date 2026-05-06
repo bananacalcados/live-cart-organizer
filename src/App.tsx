@@ -45,6 +45,7 @@ const LiveOrtopedicosAbrilLP = lazy(() => import("./pages/LiveOrtopedicosAbrilLP
 const PresenterDashboard = lazy(() => import("./pages/PresenterDashboard"));
 const LiveteAnotadorDownload = lazy(() => import("./pages/LiveteAnotadorDownload"));
 const ReviewReferralPage = lazy(() => import("./pages/ReviewReferralPage"));
+const TinyFiscalImport = lazy(() => import("./pages/admin/TinyFiscalImport"));
 
 const queryClient = new QueryClient();
 
