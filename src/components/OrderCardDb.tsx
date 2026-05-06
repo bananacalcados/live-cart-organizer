@@ -931,6 +931,13 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         onOpenChange={setShowPOSDialog}
         order={order}
       />
+
+      <CustomerFichaDialog
+        open={showFichaDialog}
+        onOpenChange={setShowFichaDialog}
+        order={order}
+      />
+
     </div>
   );
 }
