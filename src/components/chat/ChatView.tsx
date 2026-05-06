@@ -934,6 +934,44 @@ export function ChatView({
           onScheduled={() => onNewMessageChange("")}
         />
       )}
+
+      <Dialog open={!!pendingMediaPreviewUrl} onOpenChange={(o) => { if (!o && !sendingMedia) cancelPendingMedia(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar envio</DialogTitle>
+          </DialogHeader>
+          {pendingMediaFile && pendingMediaPreviewUrl && (
+            <div className="space-y-3">
+              {pendingMediaFile.type.startsWith('image/') ? (
+                <img src={pendingMediaPreviewUrl} alt="Preview" className="max-h-80 w-full object-contain rounded border" />
+              ) : pendingMediaFile.type.startsWith('video/') ? (
+                <video src={pendingMediaPreviewUrl} controls className="max-h-80 w-full rounded border" />
+              ) : pendingMediaFile.type.startsWith('audio/') ? (
+                <audio src={pendingMediaPreviewUrl} controls className="w-full" />
+              ) : (
+                <div className="p-4 border rounded text-sm text-muted-foreground">
+                  📎 {pendingMediaFile.name} ({(pendingMediaFile.size / 1024).toFixed(0)} KB)
+                </div>
+              )}
+              <Textarea
+                placeholder="Adicionar uma legenda (opcional)..."
+                value={pendingMediaCaption}
+                onChange={(e) => setPendingMediaCaption(e.target.value)}
+                rows={2}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelPendingMedia} disabled={sendingMedia}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmSendPendingMedia} disabled={sendingMedia} className="bg-stage-paid hover:bg-stage-paid/90">
+              <Send className="h-4 w-4 mr-2" />
+              {sendingMedia ? 'Enviando...' : 'Enviar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
