@@ -747,13 +747,54 @@ export function ChatView({
 
       {/* Input */}
       <div className="p-2 border-t bg-[#f0f0f0] dark:bg-[#202c33] flex items-center gap-2 flex-shrink-0">
-        {isRecording ? (
+        {audioPreviewUrl ? (
+          <>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={discardAudioPreview}
+              className="h-10 w-10 text-destructive"
+              disabled={sendingAudio}
+              title="Descartar áudio"
+            >
+              <Trash2 className="h-5 w-5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={toggleAudioPreviewPlay}
+              className="h-10 w-10"
+              title={audioPreviewPlaying ? "Pausar" : "Ouvir"}
+            >
+              {audioPreviewPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            </Button>
+            <audio
+              ref={audioPreviewRef}
+              src={audioPreviewUrl}
+              onEnded={() => setAudioPreviewPlaying(false)}
+              className="hidden"
+            />
+            <div className="flex-1 text-xs text-muted-foreground">
+              Áudio pronto — ouça antes de enviar
+            </div>
+            <Button
+              size="icon"
+              onClick={sendAudioPreview}
+              disabled={sendingAudio}
+              className="h-10 w-10 bg-stage-paid hover:bg-stage-paid/90"
+              title="Enviar áudio"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </>
+        ) : isRecording ? (
           <>
             <Button
               size="icon"
               variant="ghost"
               onClick={cancelRecording}
               className="h-10 w-10 text-destructive"
+              title="Cancelar gravação"
             >
               <X className="h-5 w-5" />
             </Button>
@@ -768,8 +809,9 @@ export function ChatView({
               size="icon"
               onClick={stopRecording}
               className="h-10 w-10 bg-stage-paid hover:bg-stage-paid/90"
+              title="Parar e ouvir"
             >
-              <Send className="h-4 w-4" />
+              <Square className="h-4 w-4" />
             </Button>
           </>
         ) : (
