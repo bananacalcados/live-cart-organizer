@@ -19,10 +19,11 @@ interface LandingPage {
   whatsapp_redirect: string | null;
   custom_css: string | null;
   is_active: boolean;
+  event_date: string | null;
 }
 
-// Event date: Saturday 25/04/2026 at 15:00 Brasília time (UTC-3)
-const EVENT_TARGET_MS = Date.UTC(2026, 3, 25, 18, 0, 0); // 15h BRT = 18h UTC
+// Default fallback event date: Saturday 25/04/2026 at 15:00 BRT (UTC-3)
+const DEFAULT_EVENT_TARGET_MS = Date.UTC(2026, 3, 25, 18, 0, 0);
 
 function formatPhone(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 11);
@@ -66,7 +67,25 @@ export default function LandingPage() {
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  const countdown = useCountdown(EVENT_TARGET_MS);
+  const eventTargetMs = useMemo(() => {
+    if (page?.event_date) {
+      const t = new Date(page.event_date).getTime();
+      if (!isNaN(t)) return t;
+    }
+    return DEFAULT_EVENT_TARGET_MS;
+  }, [page?.event_date]);
+  const countdown = useCountdown(eventTargetMs);
+
+  const eventBadge = useMemo(() => {
+    const d = new Date(eventTargetMs);
+    const dias = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+    const dia = dias[d.getDay()];
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `🔴 Ao Vivo ${dia} ${dd}/${mm} · ${hh}h${min !== '00' ? min : ''}`;
+  }, [eventTargetMs]);
 
   useEffect(() => {
     if (!slug) return;
@@ -185,7 +204,7 @@ export default function LandingPage() {
                 {/* Title */}
                 <div className="text-center space-y-2">
                   <span className="inline-block px-3 py-1 rounded-full bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 text-[11px] uppercase tracking-widest font-bold">
-                    🔴 Ao Vivo Sábado · 15h
+                    {eventBadge}
                   </span>
                   <h1 className="text-2xl md:text-3xl font-black text-white leading-tight">
                     {page.title}

@@ -1287,6 +1287,7 @@ export type Database = {
           created_at: string
           custom_css: string | null
           description: string | null
+          event_date: string | null
           form_fields: Json | null
           hero_image_url: string | null
           id: string
@@ -1304,6 +1305,7 @@ export type Database = {
           created_at?: string
           custom_css?: string | null
           description?: string | null
+          event_date?: string | null
           form_fields?: Json | null
           hero_image_url?: string | null
           id?: string
@@ -1321,6 +1323,7 @@ export type Database = {
           created_at?: string
           custom_css?: string | null
           description?: string | null
+          event_date?: string | null
           form_fields?: Json | null
           hero_image_url?: string | null
           id?: string
