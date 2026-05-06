@@ -67,6 +67,7 @@ export function POSPickupOrders({ storeId }: Props) {
   const [loading, setLoading] = useState(true);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [originFilter, setOriginFilter] = useState<"all" | "site" | "store">("all");
 
   // Processing dialog state
   const [processingOrder, setProcessingOrder] = useState<PickupOrder | null>(null);
