@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, CreditCard, Monitor, Send } from "lucide-react";
+import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, CreditCard, Monitor, Send, Store } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,6 +62,7 @@ const Events = () => {
   const [description, setDescription] = useState("");
   const [shippingCost, setShippingCost] = useState("");
   const [selectedWhatsAppId, setSelectedWhatsAppId] = useState<string>("");
+  const [channel, setChannel] = useState<string>("site");
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
@@ -169,6 +170,12 @@ const Events = () => {
     
     const shippingValue = shippingCost ? parseFloat(shippingCost) : undefined;
     const whatsappId = selectedWhatsAppId && selectedWhatsAppId !== 'none' ? selectedWhatsAppId : null;
+    const STORE_BY_CHANNEL: Record<string, string | null> = {
+      site: null,
+      pos_perola: "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2",
+      pos_centro: "4ade7b44-5043-4ab1-a124-7a6ab5468e29",
+    };
+    const defaultStoreId = STORE_BY_CHANNEL[channel] ?? null;
     
     if (editingEvent) {
       await updateEvent(editingEvent, { 
@@ -176,14 +183,16 @@ const Events = () => {
         description,
         default_shipping_cost: shippingValue ?? null,
         whatsapp_number_id: whatsappId,
+        channel,
+        default_store_id: defaultStoreId,
       } as any);
     } else {
       const eventId = await createEvent(name, description);
       if (eventId) {
-        const updates: any = {};
+        const updates: any = { channel, default_store_id: defaultStoreId };
         if (shippingValue) updates.default_shipping_cost = shippingValue;
         if (whatsappId) updates.whatsapp_number_id = whatsappId;
-        if (Object.keys(updates).length > 0) await updateEvent(eventId, updates);
+        await updateEvent(eventId, updates);
       }
     }
     
@@ -196,15 +205,17 @@ const Events = () => {
     setDescription("");
     setShippingCost("");
     setSelectedWhatsAppId("");
+    setChannel("site");
     setEditingEvent(null);
   };
 
-  const handleEdit = (event: { id: string; name: string; description?: string; default_shipping_cost?: number; whatsapp_number_id?: string }) => {
+  const handleEdit = (event: { id: string; name: string; description?: string; default_shipping_cost?: number; whatsapp_number_id?: string; channel?: string }) => {
     setEditingEvent(event.id);
     setName(event.name);
     setDescription(event.description || "");
     setShippingCost(event.default_shipping_cost?.toString() || "");
     setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
+    setChannel((event as any).channel || "site");
     setDialogOpen(true);
   };
 
@@ -276,7 +287,44 @@ const Events = () => {
                     rows={3}
                   />
                   </div>
-                   {/* Frete fixo removido — agora calculado dinamicamente no checkout */}
+                   {/* Canal do evento — define onde o pedido é roteado */}
+                   <div className="space-y-2">
+                     <Label className="flex items-center gap-2">
+                       <Store className="h-4 w-4" />
+                       Canal de Venda *
+                     </Label>
+                     <Select value={channel} onValueChange={setChannel}>
+                       <SelectTrigger>
+                         <SelectValue />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="site">🌐 Site (Shopify) — venda online</SelectItem>
+                         <SelectItem value="pos_perola">🏬 Loja Pérola — venda física</SelectItem>
+                         <SelectItem value="pos_centro">🏬 Loja Centro — venda física</SelectItem>
+                       </SelectContent>
+                     </Select>
+                     <p className="text-xs text-muted-foreground">
+                       {channel === "site"
+                         ? "Pedidos vão pra Shopify. Se cliente pedir retirada, vai à aba Retiradas (sem contar no faturamento da loja)."
+                         : "TODOS os pedidos pagos serão roteados automaticamente à aba Pedidos da loja escolhida e contam como venda dela."}
+                     </p>
+                   </div>
+                   {/* Frete fixo do evento */}
+                   <div className="space-y-2">
+                     <Label htmlFor="shipping">Frete padrão (R$)</Label>
+                     <Input
+                       id="shipping"
+                       type="number"
+                       step="0.01"
+                       min="0"
+                       placeholder="Ex: 19.90 (deixe vazio para usar regras dinâmicas)"
+                       value={shippingCost}
+                       onChange={(e) => setShippingCost(e.target.value)}
+                     />
+                     <p className="text-xs text-muted-foreground">
+                       Mesmo eventos de loja física podem ter frete (clientes de outras cidades / mototaxi).
+                     </p>
+                   </div>
                    <div className="space-y-2">
                      <Label className="flex items-center gap-2">
                        <Phone className="h-4 w-4" />

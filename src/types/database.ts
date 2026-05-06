@@ -7,6 +7,8 @@ export interface DbEvent {
   catalog_lead_page_id?: string;
   active_product_delay_seconds?: number;
   automation_enabled?: boolean;
+  channel?: 'site' | 'pos_perola' | 'pos_centro';
+  default_store_id?: string | null;
   created_at: string;
   updated_at: string;
 }
