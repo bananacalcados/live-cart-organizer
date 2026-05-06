@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply, Play, Pause } from "lucide-react";
 import { QuotedMessagePreview, QuotedMessageData } from "./QuotedMessagePreview";
 import { QuotedMessageBubble } from "./QuotedMessageBubble";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Message, Conversation } from "./ChatTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { uploadMediaToStorage } from "../MediaAttachmentPicker";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Popover,
   PopoverContent,
@@ -91,6 +92,13 @@ export function ChatView({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  const cancelledRef = useRef(false);
+  const recordingMimeRef = useRef<string>("");
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const audioPreviewBlobRef = useRef<Blob | null>(null);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
+  const [audioPreviewPlaying, setAudioPreviewPlaying] = useState(false);
+  const [sendingAudio, setSendingAudio] = useState(false);
   const [contactTags, setContactTags] = useState<string[]>([]);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
@@ -242,12 +250,14 @@ export function ChatView({
 
   const startRecording = useCallback(async () => {
     try {
-      const { getAudioMimeType, getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const { getAudioMimeType } = await import('@/lib/audioRecorder');
       const mimeType = getAudioMimeType();
+      recordingMimeRef.current = mimeType;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      cancelledRef.current = false;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -262,32 +272,29 @@ export function ChatView({
           timerRef.current = null;
         }
 
-        const ct = getAudioContentType(mimeType);
-        const ext = getAudioExtension(mimeType);
-        const audioBlob = new Blob(audioChunksRef.current, { type: ct });
-        if (audioBlob.size === 0) {
-          setIsRecording(false);
-          setRecordingTime(0);
+        const wasCancelled = cancelledRef.current;
+        setIsRecording(false);
+        setRecordingTime(0);
+
+        if (wasCancelled) {
+          audioChunksRef.current = [];
           return;
         }
 
-        const file = new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: ct });
-        const url = await uploadMediaToStorage(file);
-        
-        if (url && onSendAudio) {
-          onSendAudio(url);
-        } else if (!url) {
-          toast.error('Erro ao enviar áudio');
-        }
+        const { getAudioContentType } = await import('@/lib/audioRecorder');
+        const ct = getAudioContentType(recordingMimeRef.current);
+        const audioBlob = new Blob(audioChunksRef.current, { type: ct });
+        if (audioBlob.size === 0) return;
 
-        setIsRecording(false);
-        setRecordingTime(0);
+        audioPreviewBlobRef.current = audioBlob;
+        const url = URL.createObjectURL(audioBlob);
+        setAudioPreviewUrl(url);
       };
 
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingTime(0);
-      
+
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -295,16 +302,18 @@ export function ChatView({
       console.error('Error accessing microphone:', error);
       toast.error('Não foi possível acessar o microfone. Verifique as permissões.');
     }
-  }, [onSendAudio]);
+  }, []);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
+      cancelledRef.current = false;
       mediaRecorderRef.current.stop();
     }
   }, []);
 
   const cancelRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
+      cancelledRef.current = true;
       audioChunksRef.current = [];
       mediaRecorderRef.current.stop();
     }
@@ -315,6 +324,53 @@ export function ChatView({
     setIsRecording(false);
     setRecordingTime(0);
   }, []);
+
+  const discardAudioPreview = useCallback(() => {
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+    audioPreviewBlobRef.current = null;
+    setAudioPreviewUrl(null);
+    setAudioPreviewPlaying(false);
+  }, [audioPreviewUrl]);
+
+  const toggleAudioPreviewPlay = useCallback(() => {
+    if (!audioPreviewRef.current) return;
+    if (audioPreviewPlaying) {
+      audioPreviewRef.current.pause();
+      setAudioPreviewPlaying(false);
+    } else {
+      audioPreviewRef.current.play();
+      setAudioPreviewPlaying(true);
+    }
+  }, [audioPreviewPlaying]);
+
+  const sendAudioPreview = useCallback(async () => {
+    const blob = audioPreviewBlobRef.current;
+    if (!blob || !onSendAudio) return;
+    setSendingAudio(true);
+    try {
+      const { getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const mime = recordingMimeRef.current;
+      const ct = getAudioContentType(mime);
+      const ext = getAudioExtension(mime);
+      const file = new File([blob], `audio-${Date.now()}.${ext}`, { type: ct });
+      const url = await uploadMediaToStorage(file);
+      if (url) {
+        onSendAudio(url);
+        discardAudioPreview();
+      } else {
+        toast.error('Erro ao enviar áudio');
+      }
+    } finally {
+      setSendingAudio(false);
+    }
+  }, [onSendAudio, discardAudioPreview]);
+
+  const formatPreviewTime = formatRecordingTime;
+
+  const [pendingMediaFile, setPendingMediaFile] = useState<File | null>(null);
+  const [pendingMediaPreviewUrl, setPendingMediaPreviewUrl] = useState<string | null>(null);
+  const [pendingMediaCaption, setPendingMediaCaption] = useState("");
+  const [sendingMedia, setSendingMedia] = useState(false);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -327,16 +383,38 @@ export function ChatView({
       return;
     }
 
-    const mediaType = file.type.startsWith('image/') ? 'image'
-      : file.type.startsWith('video/') ? 'video'
-      : file.type.startsWith('audio/') ? 'audio' : 'document';
-
-    toast.info('Enviando arquivo...');
-    const url = await uploadMediaToStorage(file);
-    if (url) {
-      onSendMedia(url, mediaType);
-    }
+    setPendingMediaFile(file);
+    setPendingMediaPreviewUrl(URL.createObjectURL(file));
+    setPendingMediaCaption("");
   }, [onSendMedia]);
+
+  const cancelPendingMedia = useCallback(() => {
+    if (pendingMediaPreviewUrl) URL.revokeObjectURL(pendingMediaPreviewUrl);
+    setPendingMediaPreviewUrl(null);
+    setPendingMediaFile(null);
+    setPendingMediaCaption("");
+  }, [pendingMediaPreviewUrl]);
+
+  const confirmSendPendingMedia = useCallback(async () => {
+    if (!pendingMediaFile || !onSendMedia) return;
+    const file = pendingMediaFile;
+    const caption = pendingMediaCaption.trim();
+    setSendingMedia(true);
+    try {
+      const mediaType = file.type.startsWith('image/') ? 'image'
+        : file.type.startsWith('video/') ? 'video'
+        : file.type.startsWith('audio/') ? 'audio' : 'document';
+      const url = await uploadMediaToStorage(file);
+      if (url) {
+        onSendMedia(url, mediaType, caption || undefined);
+        cancelPendingMedia();
+      } else {
+        toast.error('Erro ao enviar arquivo');
+      }
+    } finally {
+      setSendingMedia(false);
+    }
+  }, [pendingMediaFile, pendingMediaCaption, onSendMedia, cancelPendingMedia]);
 
   // Helper to check if sender changed from previous message
   const isSenderChange = useCallback((msg: Message, prevMsg: Message | null): boolean => {
@@ -697,13 +775,54 @@ export function ChatView({
 
       {/* Input */}
       <div className="p-2 border-t bg-[#f0f0f0] dark:bg-[#202c33] flex items-center gap-2 flex-shrink-0">
-        {isRecording ? (
+        {audioPreviewUrl ? (
+          <>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={discardAudioPreview}
+              className="h-10 w-10 text-destructive"
+              disabled={sendingAudio}
+              title="Descartar áudio"
+            >
+              <Trash2 className="h-5 w-5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={toggleAudioPreviewPlay}
+              className="h-10 w-10"
+              title={audioPreviewPlaying ? "Pausar" : "Ouvir"}
+            >
+              {audioPreviewPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            </Button>
+            <audio
+              ref={audioPreviewRef}
+              src={audioPreviewUrl}
+              onEnded={() => setAudioPreviewPlaying(false)}
+              className="hidden"
+            />
+            <div className="flex-1 text-xs text-muted-foreground">
+              Áudio pronto — ouça antes de enviar
+            </div>
+            <Button
+              size="icon"
+              onClick={sendAudioPreview}
+              disabled={sendingAudio}
+              className="h-10 w-10 bg-stage-paid hover:bg-stage-paid/90"
+              title="Enviar áudio"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </>
+        ) : isRecording ? (
           <>
             <Button
               size="icon"
               variant="ghost"
               onClick={cancelRecording}
               className="h-10 w-10 text-destructive"
+              title="Cancelar gravação"
             >
               <X className="h-5 w-5" />
             </Button>
@@ -718,8 +837,9 @@ export function ChatView({
               size="icon"
               onClick={stopRecording}
               className="h-10 w-10 bg-stage-paid hover:bg-stage-paid/90"
+              title="Parar e ouvir"
             >
-              <Send className="h-4 w-4" />
+              <Square className="h-4 w-4" />
             </Button>
           </>
         ) : (
@@ -814,6 +934,44 @@ export function ChatView({
           onScheduled={() => onNewMessageChange("")}
         />
       )}
+
+      <Dialog open={!!pendingMediaPreviewUrl} onOpenChange={(o) => { if (!o && !sendingMedia) cancelPendingMedia(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirmar envio</DialogTitle>
+          </DialogHeader>
+          {pendingMediaFile && pendingMediaPreviewUrl && (
+            <div className="space-y-3">
+              {pendingMediaFile.type.startsWith('image/') ? (
+                <img src={pendingMediaPreviewUrl} alt="Preview" className="max-h-80 w-full object-contain rounded border" />
+              ) : pendingMediaFile.type.startsWith('video/') ? (
+                <video src={pendingMediaPreviewUrl} controls className="max-h-80 w-full rounded border" />
+              ) : pendingMediaFile.type.startsWith('audio/') ? (
+                <audio src={pendingMediaPreviewUrl} controls className="w-full" />
+              ) : (
+                <div className="p-4 border rounded text-sm text-muted-foreground">
+                  📎 {pendingMediaFile.name} ({(pendingMediaFile.size / 1024).toFixed(0)} KB)
+                </div>
+              )}
+              <Textarea
+                placeholder="Adicionar uma legenda (opcional)..."
+                value={pendingMediaCaption}
+                onChange={(e) => setPendingMediaCaption(e.target.value)}
+                rows={2}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelPendingMedia} disabled={sendingMedia}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmSendPendingMedia} disabled={sendingMedia} className="bg-stage-paid hover:bg-stage-paid/90">
+              <Send className="h-4 w-4 mr-2" />
+              {sendingMedia ? 'Enviando...' : 'Enviar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
