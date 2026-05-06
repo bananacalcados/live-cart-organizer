@@ -3279,8 +3279,10 @@ export type Database = {
           active_product_delay_seconds: number
           automation_enabled: boolean
           catalog_lead_page_id: string | null
+          channel: Database["public"]["Enums"]["event_channel"]
           created_at: string
           default_shipping_cost: number | null
+          default_store_id: string | null
           description: string | null
           id: string
           is_active: boolean
@@ -3292,8 +3294,10 @@ export type Database = {
           active_product_delay_seconds?: number
           automation_enabled?: boolean
           catalog_lead_page_id?: string | null
+          channel?: Database["public"]["Enums"]["event_channel"]
           created_at?: string
           default_shipping_cost?: number | null
+          default_store_id?: string | null
           description?: string | null
           id?: string
           is_active?: boolean
@@ -3305,8 +3309,10 @@ export type Database = {
           active_product_delay_seconds?: number
           automation_enabled?: boolean
           catalog_lead_page_id?: string | null
+          channel?: Database["public"]["Enums"]["event_channel"]
           created_at?: string
           default_shipping_cost?: number | null
+          default_store_id?: string | null
           description?: string | null
           id?: string
           is_active?: boolean
@@ -8452,6 +8458,7 @@ export type Database = {
           payment_link: string | null
           payment_method: string | null
           payment_method_detail: string | null
+          revenue_attribution: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_type: string
           seller_id: string | null
           shipped_at: string | null
@@ -8501,6 +8508,7 @@ export type Database = {
           payment_link?: string | null
           payment_method?: string | null
           payment_method_detail?: string | null
+          revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_type?: string
           seller_id?: string | null
           shipped_at?: string | null
@@ -8550,6 +8558,7 @@ export type Database = {
           payment_link?: string | null
           payment_method?: string | null
           payment_method_detail?: string | null
+          revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_type?: string
           seller_id?: string | null
           shipped_at?: string | null
@@ -12351,6 +12360,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "manager" | "user"
+      event_channel: "site" | "pos_perola" | "pos_centro"
       exchange_reason_category:
         | "tamanho"
         | "defeito"
@@ -12366,6 +12376,7 @@ export type Database = {
         | "concluido"
         | "recusado"
         | "cancelado"
+      pos_revenue_attribution: "store" | "site_pickup_only"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -12494,6 +12505,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "manager", "user"],
+      event_channel: ["site", "pos_perola", "pos_centro"],
       exchange_reason_category: [
         "tamanho",
         "defeito",
@@ -12511,6 +12523,7 @@ export const Constants = {
         "recusado",
         "cancelado",
       ],
+      pos_revenue_attribution: ["store", "site_pickup_only"],
     },
   },
 } as const
