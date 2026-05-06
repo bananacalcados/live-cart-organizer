@@ -287,7 +287,44 @@ const Events = () => {
                     rows={3}
                   />
                   </div>
-                   {/* Frete fixo removido — agora calculado dinamicamente no checkout */}
+                   {/* Canal do evento — define onde o pedido é roteado */}
+                   <div className="space-y-2">
+                     <Label className="flex items-center gap-2">
+                       <Store className="h-4 w-4" />
+                       Canal de Venda *
+                     </Label>
+                     <Select value={channel} onValueChange={setChannel}>
+                       <SelectTrigger>
+                         <SelectValue />
+                       </SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="site">🌐 Site (Shopify) — venda online</SelectItem>
+                         <SelectItem value="pos_perola">🏬 Loja Pérola — venda física</SelectItem>
+                         <SelectItem value="pos_centro">🏬 Loja Centro — venda física</SelectItem>
+                       </SelectContent>
+                     </Select>
+                     <p className="text-xs text-muted-foreground">
+                       {channel === "site"
+                         ? "Pedidos vão pra Shopify. Se cliente pedir retirada, vai à aba Retiradas (sem contar no faturamento da loja)."
+                         : "TODOS os pedidos pagos serão roteados automaticamente à aba Pedidos da loja escolhida e contam como venda dela."}
+                     </p>
+                   </div>
+                   {/* Frete fixo do evento */}
+                   <div className="space-y-2">
+                     <Label htmlFor="shipping">Frete padrão (R$)</Label>
+                     <Input
+                       id="shipping"
+                       type="number"
+                       step="0.01"
+                       min="0"
+                       placeholder="Ex: 19.90 (deixe vazio para usar regras dinâmicas)"
+                       value={shippingCost}
+                       onChange={(e) => setShippingCost(e.target.value)}
+                     />
+                     <p className="text-xs text-muted-foreground">
+                       Mesmo eventos de loja física podem ter frete (clientes de outras cidades / mototaxi).
+                     </p>
+                   </div>
                    <div className="space-y-2">
                      <Label className="flex items-center gap-2">
                        <Phone className="h-4 w-4" />
