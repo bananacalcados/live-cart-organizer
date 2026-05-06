@@ -249,12 +249,14 @@ export function ChatView({
 
   const startRecording = useCallback(async () => {
     try {
-      const { getAudioMimeType, getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const { getAudioMimeType } = await import('@/lib/audioRecorder');
       const mimeType = getAudioMimeType();
+      recordingMimeRef.current = mimeType;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      cancelledRef.current = false;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -269,32 +271,29 @@ export function ChatView({
           timerRef.current = null;
         }
 
-        const ct = getAudioContentType(mimeType);
-        const ext = getAudioExtension(mimeType);
-        const audioBlob = new Blob(audioChunksRef.current, { type: ct });
-        if (audioBlob.size === 0) {
-          setIsRecording(false);
-          setRecordingTime(0);
+        const wasCancelled = cancelledRef.current;
+        setIsRecording(false);
+        setRecordingTime(0);
+
+        if (wasCancelled) {
+          audioChunksRef.current = [];
           return;
         }
 
-        const file = new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: ct });
-        const url = await uploadMediaToStorage(file);
-        
-        if (url && onSendAudio) {
-          onSendAudio(url);
-        } else if (!url) {
-          toast.error('Erro ao enviar áudio');
-        }
+        const { getAudioContentType } = await import('@/lib/audioRecorder');
+        const ct = getAudioContentType(recordingMimeRef.current);
+        const audioBlob = new Blob(audioChunksRef.current, { type: ct });
+        if (audioBlob.size === 0) return;
 
-        setIsRecording(false);
-        setRecordingTime(0);
+        audioPreviewBlobRef.current = audioBlob;
+        const url = URL.createObjectURL(audioBlob);
+        setAudioPreviewUrl(url);
       };
 
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingTime(0);
-      
+
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -302,16 +301,18 @@ export function ChatView({
       console.error('Error accessing microphone:', error);
       toast.error('Não foi possível acessar o microfone. Verifique as permissões.');
     }
-  }, [onSendAudio]);
+  }, []);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
+      cancelledRef.current = false;
       mediaRecorderRef.current.stop();
     }
   }, []);
 
   const cancelRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
+      cancelledRef.current = true;
       audioChunksRef.current = [];
       mediaRecorderRef.current.stop();
     }
@@ -322,6 +323,48 @@ export function ChatView({
     setIsRecording(false);
     setRecordingTime(0);
   }, []);
+
+  const discardAudioPreview = useCallback(() => {
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+    audioPreviewBlobRef.current = null;
+    setAudioPreviewUrl(null);
+    setAudioPreviewPlaying(false);
+  }, [audioPreviewUrl]);
+
+  const toggleAudioPreviewPlay = useCallback(() => {
+    if (!audioPreviewRef.current) return;
+    if (audioPreviewPlaying) {
+      audioPreviewRef.current.pause();
+      setAudioPreviewPlaying(false);
+    } else {
+      audioPreviewRef.current.play();
+      setAudioPreviewPlaying(true);
+    }
+  }, [audioPreviewPlaying]);
+
+  const sendAudioPreview = useCallback(async () => {
+    const blob = audioPreviewBlobRef.current;
+    if (!blob || !onSendAudio) return;
+    setSendingAudio(true);
+    try {
+      const { getAudioExtension, getAudioContentType } = await import('@/lib/audioRecorder');
+      const mime = recordingMimeRef.current;
+      const ct = getAudioContentType(mime);
+      const ext = getAudioExtension(mime);
+      const file = new File([blob], `audio-${Date.now()}.${ext}`, { type: ct });
+      const url = await uploadMediaToStorage(file);
+      if (url) {
+        onSendAudio(url);
+        discardAudioPreview();
+      } else {
+        toast.error('Erro ao enviar áudio');
+      }
+    } finally {
+      setSendingAudio(false);
+    }
+  }, [onSendAudio, discardAudioPreview]);
+
+  const formatPreviewTime = formatRecordingTime;
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
