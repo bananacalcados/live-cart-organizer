@@ -88,7 +88,7 @@ export function POSPickupOrders({ storeId }: Props) {
       // Fetch pending_pickup sales for this store
       const { data: sales, error } = await supabase
         .from("pos_sales")
-        .select("id, store_id, subtotal, discount, total, status, notes, source_order_id, payment_method, payment_details, seller_id, created_at")
+        .select("id, store_id, subtotal, discount, total, status, notes, source_order_id, payment_method, payment_details, seller_id, revenue_attribution, created_at")
         .eq("store_id", storeId)
         .eq("status", "pending_pickup")
         .order("created_at", { ascending: false });
