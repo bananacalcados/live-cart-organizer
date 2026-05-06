@@ -14,6 +14,7 @@ import { Message, Conversation } from "./ChatTypes";
 import { supabase } from "@/integrations/supabase/client";
 import { uploadMediaToStorage } from "../MediaAttachmentPicker";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Popover,
   PopoverContent,
