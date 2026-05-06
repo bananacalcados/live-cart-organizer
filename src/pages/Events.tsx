@@ -170,6 +170,12 @@ const Events = () => {
     
     const shippingValue = shippingCost ? parseFloat(shippingCost) : undefined;
     const whatsappId = selectedWhatsAppId && selectedWhatsAppId !== 'none' ? selectedWhatsAppId : null;
+    const STORE_BY_CHANNEL: Record<string, string | null> = {
+      site: null,
+      pos_perola: "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2",
+      pos_centro: "4ade7b44-5043-4ab1-a124-7a6ab5468e29",
+    };
+    const defaultStoreId = STORE_BY_CHANNEL[channel] ?? null;
     
     if (editingEvent) {
       await updateEvent(editingEvent, { 
@@ -177,14 +183,16 @@ const Events = () => {
         description,
         default_shipping_cost: shippingValue ?? null,
         whatsapp_number_id: whatsappId,
+        channel,
+        default_store_id: defaultStoreId,
       } as any);
     } else {
       const eventId = await createEvent(name, description);
       if (eventId) {
-        const updates: any = {};
+        const updates: any = { channel, default_store_id: defaultStoreId };
         if (shippingValue) updates.default_shipping_cost = shippingValue;
         if (whatsappId) updates.whatsapp_number_id = whatsappId;
-        if (Object.keys(updates).length > 0) await updateEvent(eventId, updates);
+        await updateEvent(eventId, updates);
       }
     }
     
@@ -197,15 +205,17 @@ const Events = () => {
     setDescription("");
     setShippingCost("");
     setSelectedWhatsAppId("");
+    setChannel("site");
     setEditingEvent(null);
   };
 
-  const handleEdit = (event: { id: string; name: string; description?: string; default_shipping_cost?: number; whatsapp_number_id?: string }) => {
+  const handleEdit = (event: { id: string; name: string; description?: string; default_shipping_cost?: number; whatsapp_number_id?: string; channel?: string }) => {
     setEditingEvent(event.id);
     setName(event.name);
     setDescription(event.description || "");
     setShippingCost(event.default_shipping_cost?.toString() || "");
     setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
+    setChannel((event as any).channel || "site");
     setDialogOpen(true);
   };
 
