@@ -342,12 +342,24 @@ export function POSPickupOrders({ storeId }: Props) {
           <Package className="h-5 w-5 text-pos-orange" />
           <h2 className="text-lg font-bold text-pos-white">Retiradas na Loja</h2>
           <Badge className="bg-pos-orange/20 text-pos-orange border-pos-orange/30">
-            {orders.length} pendente{orders.length !== 1 ? "s" : ""}
+            {orders.filter(o => originFilter === "all" || (originFilter === "site" ? o.revenue_attribution === "site_pickup_only" : o.revenue_attribution !== "site_pickup_only")).length} pendente(s)
           </Badge>
         </div>
-        <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={loadOrders}>
-          <RefreshCw className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={originFilter} onValueChange={(v: any) => setOriginFilter(v)}>
+            <SelectTrigger className="h-8 w-[170px] bg-pos-white/5 border-pos-orange/30 text-pos-white text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as origens</SelectItem>
+              <SelectItem value="site">🌐 Site (retirada)</SelectItem>
+              <SelectItem value="store">🏬 Loja Física</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={loadOrders}>
+            <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
