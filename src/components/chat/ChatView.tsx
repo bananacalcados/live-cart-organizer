@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply, Play, Pause } from "lucide-react";
 import { QuotedMessagePreview, QuotedMessageData } from "./QuotedMessagePreview";
 import { QuotedMessageBubble } from "./QuotedMessageBubble";
 import { Button } from "@/components/ui/button";
