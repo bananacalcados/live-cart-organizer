@@ -45,6 +45,7 @@ const LiveOrtopedicosAbrilLP = lazy(() => import("./pages/LiveOrtopedicosAbrilLP
 const PresenterDashboard = lazy(() => import("./pages/PresenterDashboard"));
 const LiveteAnotadorDownload = lazy(() => import("./pages/LiveteAnotadorDownload"));
 const ReviewReferralPage = lazy(() => import("./pages/ReviewReferralPage"));
+const TinyFiscalImport = lazy(() => import("./pages/admin/TinyFiscalImport"));
 
 const queryClient = new QueryClient();
 
@@ -103,6 +104,7 @@ const App = () => (
               <Route path="/ai-agents" element={<ProtectedRoute requiredModule="admin"><AIAgents /></ProtectedRoute>} />
               <Route path="/presenter/:eventId" element={<ProtectedRoute requiredModule="events"><PresenterDashboard /></ProtectedRoute>} />
               <Route path="/livete-anotador" element={<ProtectedRoute requiredModule="events"><LiveteAnotadorDownload /></ProtectedRoute>} />
+              <Route path="/admin/tiny-fiscal-import" element={<ProtectedRoute requiredModule="admin"><TinyFiscalImport /></ProtectedRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
 

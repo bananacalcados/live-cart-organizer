@@ -9222,6 +9222,59 @@ export type Database = {
           },
         ]
       }
+      product_dedup_index: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          dedupe_method: string
+          id: string
+          imported_at: string | null
+          representative_category: string | null
+          representative_name: string | null
+          representative_pos_product_id: string | null
+          stores_present: string[]
+          tiny_ids_per_store: Json
+          updated_at: string
+          validation_status: string | null
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          dedupe_method: string
+          id?: string
+          imported_at?: string | null
+          representative_category?: string | null
+          representative_name?: string | null
+          representative_pos_product_id?: string | null
+          stores_present?: string[]
+          tiny_ids_per_store?: Json
+          updated_at?: string
+          validation_status?: string | null
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          dedupe_method?: string
+          id?: string
+          imported_at?: string | null
+          representative_category?: string | null
+          representative_name?: string | null
+          representative_pos_product_id?: string | null
+          stores_present?: string[]
+          tiny_ids_per_store?: Json
+          updated_at?: string
+          validation_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_dedup_index_representative_pos_product_id_fkey"
+            columns: ["representative_pos_product_id"]
+            isOneToOne: false
+            referencedRelation: "pos_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_stock_movements: {
         Row: {
           created_at: string
@@ -9303,6 +9356,7 @@ export type Database = {
           shopify_variant_id: string | null
           size: string | null
           sku: string
+          tiny_imported_at: string | null
           tiny_variant_id: string | null
           updated_at: string
           weight_kg_override: number | null
@@ -9320,6 +9374,7 @@ export type Database = {
           shopify_variant_id?: string | null
           size?: string | null
           sku: string
+          tiny_imported_at?: string | null
           tiny_variant_id?: string | null
           updated_at?: string
           weight_kg_override?: number | null
@@ -9337,6 +9392,7 @@ export type Database = {
           shopify_variant_id?: string | null
           size?: string | null
           sku?: string
+          tiny_imported_at?: string | null
           tiny_variant_id?: string | null
           updated_at?: string
           weight_kg_override?: number | null
@@ -9392,6 +9448,7 @@ export type Database = {
           brand: string | null
           category: string | null
           cest: string | null
+          classe_produto: string | null
           cost_price: number | null
           created_at: string
           created_by: string | null
@@ -9403,11 +9460,15 @@ export type Database = {
           length_cm: number | null
           name: string
           ncm: string
+          needs_review: boolean
           origem: string | null
+          review_reason: string | null
           sale_price: number | null
           shopify_product_id: string | null
           sku_root: string
+          tiny_imported_at: string | null
           tiny_product_id: string | null
+          tiny_source_store_id: string | null
           unidade: string | null
           updated_at: string
           weight_kg: number | null
@@ -9417,6 +9478,7 @@ export type Database = {
           brand?: string | null
           category?: string | null
           cest?: string | null
+          classe_produto?: string | null
           cost_price?: number | null
           created_at?: string
           created_by?: string | null
@@ -9428,11 +9490,15 @@ export type Database = {
           length_cm?: number | null
           name: string
           ncm?: string
+          needs_review?: boolean
           origem?: string | null
+          review_reason?: string | null
           sale_price?: number | null
           shopify_product_id?: string | null
           sku_root?: string
+          tiny_imported_at?: string | null
           tiny_product_id?: string | null
+          tiny_source_store_id?: string | null
           unidade?: string | null
           updated_at?: string
           weight_kg?: number | null
@@ -9442,6 +9508,7 @@ export type Database = {
           brand?: string | null
           category?: string | null
           cest?: string | null
+          classe_produto?: string | null
           cost_price?: number | null
           created_at?: string
           created_by?: string | null
@@ -9453,17 +9520,29 @@ export type Database = {
           length_cm?: number | null
           name?: string
           ncm?: string
+          needs_review?: boolean
           origem?: string | null
+          review_reason?: string | null
           sale_price?: number | null
           shopify_product_id?: string | null
           sku_root?: string
+          tiny_imported_at?: string | null
           tiny_product_id?: string | null
+          tiny_source_store_id?: string | null
           unidade?: string | null
           updated_at?: string
           weight_kg?: number | null
           width_cm?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "products_master_tiny_source_store_id_fkey"
+            columns: ["tiny_source_store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -10903,6 +10982,163 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tiny_fiscal_divergences: {
+        Row: {
+          created_at: string
+          dedup_index_id: string | null
+          field_name: string
+          id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_value: string | null
+          store_a_id: string | null
+          store_b_id: string | null
+          value_a: string | null
+          value_b: string | null
+        }
+        Insert: {
+          created_at?: string
+          dedup_index_id?: string | null
+          field_name: string
+          id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_value?: string | null
+          store_a_id?: string | null
+          store_b_id?: string | null
+          value_a?: string | null
+          value_b?: string | null
+        }
+        Update: {
+          created_at?: string
+          dedup_index_id?: string | null
+          field_name?: string
+          id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_value?: string | null
+          store_a_id?: string | null
+          store_b_id?: string | null
+          value_a?: string | null
+          value_b?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiny_fiscal_divergences_dedup_index_id_fkey"
+            columns: ["dedup_index_id"]
+            isOneToOne: false
+            referencedRelation: "product_dedup_index"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiny_fiscal_divergences_store_a_id_fkey"
+            columns: ["store_a_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiny_fiscal_divergences_store_b_id_fkey"
+            columns: ["store_b_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tiny_import_errors: {
+        Row: {
+          created_at: string
+          dedup_index_id: string | null
+          error_code: string | null
+          error_message: string | null
+          id: string
+          raw_response: Json | null
+          run_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          dedup_index_id?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          raw_response?: Json | null
+          run_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          dedup_index_id?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          raw_response?: Json | null
+          run_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiny_import_errors_dedup_index_id_fkey"
+            columns: ["dedup_index_id"]
+            isOneToOne: false
+            referencedRelation: "product_dedup_index"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiny_import_errors_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "tiny_import_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tiny_import_runs: {
+        Row: {
+          created_by: string | null
+          dry_run: boolean
+          error_message: string | null
+          failure_count: number
+          finished_at: string | null
+          id: string
+          run_type: string
+          started_at: string
+          stats: Json
+          status: string
+          success_count: number
+          total_processed: number
+        }
+        Insert: {
+          created_by?: string | null
+          dry_run?: boolean
+          error_message?: string | null
+          failure_count?: number
+          finished_at?: string | null
+          id?: string
+          run_type: string
+          started_at?: string
+          stats?: Json
+          status?: string
+          success_count?: number
+          total_processed?: number
+        }
+        Update: {
+          created_by?: string | null
+          dry_run?: boolean
+          error_message?: string | null
+          failure_count?: number
+          finished_at?: string | null
+          id?: string
+          run_type?: string
+          started_at?: string
+          stats?: Json
+          status?: string
+          success_count?: number
+          total_processed?: number
+        }
+        Relationships: []
       }
       tiny_management_sync_log: {
         Row: {
