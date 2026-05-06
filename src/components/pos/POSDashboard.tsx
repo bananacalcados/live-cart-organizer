@@ -241,12 +241,13 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       // Use paid_at when available, fallback to created_at for older sales without paid_at
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at")
+        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at, revenue_attribution")
         .eq("store_id", storeId)
         .eq("status", "completed")
         .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
 
-      const completedSales = sales || [];
+      // Exclui retiradas oriundas do Site (não contam no faturamento da loja física)
+      const completedSales = (sales || []).filter((s: any) => s.revenue_attribution !== "site_pickup_only");
       const revenue = completedSales.reduce((s, sale) => s + (sale.total || 0), 0);
       const count = completedSales.length;
 

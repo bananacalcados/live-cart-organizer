@@ -34,6 +34,7 @@ interface PickupOrder {
   payment_method: string | null;
   payment_details: any;
   seller_id: string | null;
+  revenue_attribution: string | null;
   created_at: string;
   items: PickupItem[];
 }
@@ -66,6 +67,7 @@ export function POSPickupOrders({ storeId }: Props) {
   const [loading, setLoading] = useState(true);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [originFilter, setOriginFilter] = useState<"all" | "site" | "store">("all");
 
   // Processing dialog state
   const [processingOrder, setProcessingOrder] = useState<PickupOrder | null>(null);
@@ -87,7 +89,7 @@ export function POSPickupOrders({ storeId }: Props) {
       // Fetch pending_pickup sales for this store
       const { data: sales, error } = await supabase
         .from("pos_sales")
-        .select("id, store_id, subtotal, discount, total, status, notes, source_order_id, payment_method, payment_details, seller_id, created_at")
+        .select("id, store_id, subtotal, discount, total, status, notes, source_order_id, payment_method, payment_details, seller_id, revenue_attribution, created_at")
         .eq("store_id", storeId)
         .eq("status", "pending_pickup")
         .order("created_at", { ascending: false });
@@ -340,12 +342,24 @@ export function POSPickupOrders({ storeId }: Props) {
           <Package className="h-5 w-5 text-pos-orange" />
           <h2 className="text-lg font-bold text-pos-white">Retiradas na Loja</h2>
           <Badge className="bg-pos-orange/20 text-pos-orange border-pos-orange/30">
-            {orders.length} pendente{orders.length !== 1 ? "s" : ""}
+            {orders.filter(o => originFilter === "all" || (originFilter === "site" ? o.revenue_attribution === "site_pickup_only" : o.revenue_attribution !== "site_pickup_only")).length} pendente(s)
           </Badge>
         </div>
-        <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={loadOrders}>
-          <RefreshCw className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={originFilter} onValueChange={(v: any) => setOriginFilter(v)}>
+            <SelectTrigger className="h-8 w-[170px] bg-pos-white/5 border-pos-orange/30 text-pos-white text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as origens</SelectItem>
+              <SelectItem value="site">🌐 Site (retirada)</SelectItem>
+              <SelectItem value="store">🏬 Loja Física</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={loadOrders}>
+            <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
       <ScrollArea className="flex-1">
@@ -357,16 +371,20 @@ export function POSPickupOrders({ storeId }: Props) {
               <p className="text-sm mt-1">Pedidos enviados do módulo Eventos aparecerão aqui</p>
             </div>
           ) : (
-            orders.map((order) => {
+            orders
+              .filter(o => originFilter === "all"
+                || (originFilter === "site" ? o.revenue_attribution === "site_pickup_only" : o.revenue_attribution !== "site_pickup_only"))
+              .map((order) => {
               const details = order.payment_details || {};
               const instagram = details.customer_instagram || "";
               const whatsapp = details.customer_whatsapp || "";
+              const isSite = order.revenue_attribution === "site_pickup_only";
               const createdAt = new Date(order.created_at).toLocaleString("pt-BR", {
                 day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
               });
 
               return (
-                <div key={order.id} className="rounded-xl border border-pos-orange/20 bg-pos-white/5 p-4 space-y-3">
+                <div key={order.id} className={`rounded-xl border p-4 space-y-3 ${isSite ? "border-blue-400/40 bg-blue-500/5" : "border-pos-orange/20 bg-pos-white/5"}`}>
                   {/* Customer info */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -378,6 +396,11 @@ export function POSPickupOrders({ storeId }: Props) {
                       )}
                       {!instagram && (
                         <span className="text-sm text-pos-white/60">Cliente da Live</span>
+                      )}
+                      {isSite ? (
+                        <Badge className="bg-blue-500/20 text-blue-300 border-blue-400/40 text-[10px]">🌐 Site</Badge>
+                      ) : (
+                        <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-400/40 text-[10px]">🏬 Loja</Badge>
                       )}
                     </div>
                     <span className="text-xs text-pos-white/40">{createdAt}</span>
