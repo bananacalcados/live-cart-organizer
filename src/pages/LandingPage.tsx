@@ -204,7 +204,7 @@ export default function LandingPage() {
                 {/* Title */}
                 <div className="text-center space-y-2">
                   <span className="inline-block px-3 py-1 rounded-full bg-yellow-400/20 border border-yellow-400/40 text-yellow-300 text-[11px] uppercase tracking-widest font-bold">
-                    🔴 Ao Vivo Sábado · 15h
+                    {eventBadge}
                   </span>
                   <h1 className="text-2xl md:text-3xl font-black text-white leading-tight">
                     {page.title}
