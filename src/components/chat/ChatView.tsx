@@ -91,6 +91,13 @@ export function ChatView({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  const cancelledRef = useRef(false);
+  const recordingMimeRef = useRef<string>("");
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const audioPreviewBlobRef = useRef<Blob | null>(null);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
+  const [audioPreviewPlaying, setAudioPreviewPlaying] = useState(false);
+  const [sendingAudio, setSendingAudio] = useState(false);
   const [contactTags, setContactTags] = useState<string[]>([]);
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
