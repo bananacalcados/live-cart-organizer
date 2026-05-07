@@ -251,6 +251,9 @@ export default function Companies() {
             <p className="text-sm text-muted-foreground">Cada CNPJ que emite documento fiscal pela operação.</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate("/admin/fiscal-numbering")} className="gap-2">
+              <Hash className="h-4 w-4" /> Numeração Fiscal
+            </Button>
             <Button variant="outline" onClick={() => setLinkOpen(true)} className="gap-2">
               <LinkIcon className="h-4 w-4" /> Vincular Lojas ↔ CNPJs
             </Button>
