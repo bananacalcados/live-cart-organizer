@@ -59,6 +59,18 @@ export default function TinyFiscalImport() {
     const { count: imported } = await supabase
       .from("product_dedup_index").select("*", { count: "exact", head: true }).not("imported_at", "is", null);
     setImportedCount(imported ?? 0);
+
+    const { data: valRuns } = await supabase
+      .from("tiny_import_runs").select("*").eq("run_type", "cross_validation").order("started_at", { ascending: false }).limit(1);
+    setLastValidate((valRuns?.[0] as any) ?? null);
+
+    const { count: divCount } = await supabase
+      .from("product_dedup_index").select("*", { count: "exact", head: true }).eq("validation_status", "divergent");
+    setDivergentCount(divCount ?? 0);
+
+    const { count: pendVal } = await supabase
+      .from("product_dedup_index").select("*", { count: "exact", head: true }).is("validation_status", null);
+    setPendingValidationCount(pendVal ?? 0);
   };
 
   useEffect(() => { loadStatus(); }, []);
