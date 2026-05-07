@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, ArrowLeft, Plus, Pencil, Trash2, Link as LinkIcon, KeyRound, ShieldCheck, AlertTriangle, Upload } from "lucide-react";
+import { Building2, ArrowLeft, Plus, Pencil, Trash2, Link as LinkIcon, KeyRound, ShieldCheck, AlertTriangle, Upload, Hash } from "lucide-react";
 
 type Regime = "simples_nacional" | "lucro_presumido" | "lucro_real" | "mei";
 type Ambiente = "homologacao" | "producao";
@@ -251,6 +251,9 @@ export default function Companies() {
             <p className="text-sm text-muted-foreground">Cada CNPJ que emite documento fiscal pela operação.</p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate("/admin/fiscal-numbering")} className="gap-2">
+              <Hash className="h-4 w-4" /> Numeração Fiscal
+            </Button>
             <Button variant="outline" onClick={() => setLinkOpen(true)} className="gap-2">
               <LinkIcon className="h-4 w-4" /> Vincular Lojas ↔ CNPJs
             </Button>

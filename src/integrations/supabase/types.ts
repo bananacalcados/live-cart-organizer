@@ -4444,6 +4444,50 @@ export type Database = {
           },
         ]
       }
+      fiscal_sequences: {
+        Row: {
+          ambiente: string
+          company_id: string
+          created_at: string
+          id: string
+          last_number: number
+          modelo: number
+          notes: string | null
+          serie: number
+          updated_at: string
+        }
+        Insert: {
+          ambiente?: string
+          company_id: string
+          created_at?: string
+          id?: string
+          last_number?: number
+          modelo: number
+          notes?: string | null
+          serie?: number
+          updated_at?: string
+        }
+        Update: {
+          ambiente?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          last_number?: number
+          modelo?: number
+          notes?: string | null
+          serie?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_sequences_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_campaign_messages: {
         Row: {
           campaign_id: string
@@ -12524,6 +12568,20 @@ export type Database = {
           is_sandbox: boolean
         }[]
       }
+      get_next_fiscal_number: {
+        Args: {
+          p_ambiente?: string
+          p_company_id: string
+          p_modelo: number
+          p_serie?: number
+        }
+        Returns: {
+          ambiente: string
+          modelo: number
+          next_number: number
+          serie: number
+        }[]
+      }
       get_orders_by_customer: {
         Args: { p_customer_id: string }
         Returns: {
@@ -12676,6 +12734,17 @@ export type Database = {
       set_active_mp_account: {
         Args: { p_account_id: string }
         Returns: boolean
+      }
+      set_fiscal_sequence_start: {
+        Args: {
+          p_ambiente: string
+          p_company_id: string
+          p_modelo: number
+          p_notes?: string
+          p_serie: number
+          p_starting_number: number
+        }
+        Returns: number
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
