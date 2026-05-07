@@ -313,12 +313,37 @@ export default function Companies() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1">
+                            {c.brasilnfe_token ? (
+                              <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 text-xs gap-1">
+                                <KeyRound className="h-3 w-3" /> Token OK
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                                <KeyRound className="h-3 w-3" /> Sem token
+                              </Badge>
+                            )}
+                            {c.certificate_path ? (
+                              <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 text-xs gap-1">
+                                <ShieldCheck className="h-3 w-3" /> A1 OK
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                                <AlertTriangle className="h-3 w-3" /> Sem A1
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
                             {c.is_pilot && <Badge className="bg-blue-500/20 text-blue-500 border-blue-500/30 text-xs">Piloto</Badge>}
                             {!c.is_active && <Badge variant="secondary" className="text-xs">Inativa</Badge>}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => openCredentials(c)} title="Credenciais Fiscais">
+                              <KeyRound className="h-4 w-4" />
+                            </Button>
                             <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
