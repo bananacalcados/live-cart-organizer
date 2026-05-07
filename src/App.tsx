@@ -48,6 +48,8 @@ const ReviewReferralPage = lazy(() => import("./pages/ReviewReferralPage"));
 const TinyFiscalImport = lazy(() => import("./pages/admin/TinyFiscalImport"));
 const Companies = lazy(() => import("./pages/admin/Companies"));
 const FiscalNumbering = lazy(() => import("./pages/admin/FiscalNumbering"));
+const FiscalOperations = lazy(() => import("./pages/admin/FiscalOperations"));
+const FiscalDocuments = lazy(() => import("./pages/admin/FiscalDocuments"));
 
 const queryClient = new QueryClient();
 
