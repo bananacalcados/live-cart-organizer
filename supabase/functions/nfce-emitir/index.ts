@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
         Quantidade: it.quantity,
         ValorUnitario: round2(Number(it.unit_price)),
         ValorTotal: vTotal,
-        Origem: r.origem_mercadoria,
+        Origem: origemFinal,
         ICMS: { CSOSN: r.csosn_icms, CST: r.cst_icms, Aliquota: r.aliq_icms },
         PIS: { CST: r.cst_pis, Aliquota: r.aliq_pis },
         COFINS: { CST: r.cst_cofins, Aliquota: r.aliq_cofins },
