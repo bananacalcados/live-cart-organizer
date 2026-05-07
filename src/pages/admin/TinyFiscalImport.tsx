@@ -32,7 +32,8 @@ export default function TinyFiscalImport() {
   const [dedupCount, setDedupCount] = useState<number | null>(null);
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const [importedCount, setImportedCount] = useState<number | null>(null);
-  const [batchSize, setBatchSize] = useState<number>(50);
+  const [batchSize, setBatchSize] = useState<number>(200);
+  const [concurrency, setConcurrency] = useState<number>(12);
   const [autoRun, setAutoRun] = useState(false);
   const [autoProgress, setAutoProgress] = useState<{ batches: number; ok: number; errors: number } | null>(null);
   const [runningValidate, setRunningValidate] = useState(false);
