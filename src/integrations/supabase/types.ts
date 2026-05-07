@@ -12576,10 +12576,10 @@ export type Database = {
           p_serie?: number
         }
         Returns: {
-          ambiente: string
-          modelo: number
           next_number: number
-          serie: number
+          out_ambiente: string
+          out_modelo: number
+          out_serie: number
         }[]
       }
       get_orders_by_customer: {
