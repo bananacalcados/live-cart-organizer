@@ -43,6 +43,12 @@ interface Company {
   is_active: boolean;
   is_pilot: boolean;
   notes: string | null;
+  brasilnfe_token: string | null;
+  certificate_path: string | null;
+  certificate_password: string | null;
+  certificate_valid_until: string | null;
+  certificate_filename: string | null;
+  certificate_uploaded_at: string | null;
 }
 
 interface Store {
