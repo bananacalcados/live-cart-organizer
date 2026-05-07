@@ -261,18 +261,27 @@ export default function TinyFiscalImport() {
               <Mini label="Sem token/tiny_id" value={iStats.skipped_no_tiny_id ?? 0} />
             </div>
 
-            <div className="flex items-end gap-3">
+            <div className="flex items-end gap-3 flex-wrap">
               <div className="space-y-1">
                 <Label htmlFor="batch" className="text-xs">Tamanho do batch</Label>
                 <Input
-                  id="batch" type="number" min={1} max={300}
+                  id="batch" type="number" min={1} max={1000}
                   value={batchSize}
-                  onChange={(e) => setBatchSize(Math.min(300, Math.max(1, Number(e.target.value) || 1)))}
+                  onChange={(e) => setBatchSize(Math.min(1000, Math.max(1, Number(e.target.value) || 1)))}
                   className="w-28"
                 />
               </div>
-              <div className="text-xs text-muted-foreground pb-2">
-                Tiny ~3 req/s. 20 = ~10s, 100 = ~50s. Cada batch importa apenas os pendentes.
+              <div className="space-y-1">
+                <Label htmlFor="conc" className="text-xs">Concorrência (paralelo)</Label>
+                <Input
+                  id="conc" type="number" min={1} max={30}
+                  value={concurrency}
+                  onChange={(e) => setConcurrency(Math.min(30, Math.max(1, Number(e.target.value) || 1)))}
+                  className="w-28"
+                />
+              </div>
+              <div className="text-xs text-muted-foreground pb-2 max-w-md">
+                Com 12 paralelos: ~10-15 prods/s. 200 = ~15-20s por batch. Tiny tolera bem até ~15 req/s distribuídos entre tokens.
               </div>
             </div>
 
