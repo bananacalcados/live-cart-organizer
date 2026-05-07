@@ -91,6 +91,12 @@ export default function Companies() {
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [credOpen, setCredOpen] = useState(false);
+  const [credCompany, setCredCompany] = useState<Company | null>(null);
+  const [credToken, setCredToken] = useState("");
+  const [credPassword, setCredPassword] = useState("");
+  const [credFile, setCredFile] = useState<File | null>(null);
+  const [credSaving, setCredSaving] = useState(false);
   const [form, setForm] = useState<Partial<Company>>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
