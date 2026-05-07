@@ -4444,6 +4444,183 @@ export type Database = {
           },
         ]
       }
+      fiscal_documents: {
+        Row: {
+          ambiente: string
+          brasilnfe_request: Json | null
+          brasilnfe_response: Json | null
+          cancellation_protocol: string | null
+          cancellation_reason: string | null
+          cancelled_at: string | null
+          chave_acesso: string | null
+          company_id: string
+          cpf_destinatario: string | null
+          created_at: string
+          danfe_url: string | null
+          data_autorizacao: string | null
+          events: Json | null
+          id: string
+          modelo: number
+          nome_destinatario: string | null
+          numero: number
+          order_id: string | null
+          pos_sale_id: string | null
+          protocolo: string | null
+          qrcode_url: string | null
+          rejection_code: string | null
+          rejection_message: string | null
+          serie: number
+          status: string
+          updated_at: string
+          valor_total: number | null
+          xml_content: string | null
+          xml_url: string | null
+        }
+        Insert: {
+          ambiente: string
+          brasilnfe_request?: Json | null
+          brasilnfe_response?: Json | null
+          cancellation_protocol?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          chave_acesso?: string | null
+          company_id: string
+          cpf_destinatario?: string | null
+          created_at?: string
+          danfe_url?: string | null
+          data_autorizacao?: string | null
+          events?: Json | null
+          id?: string
+          modelo: number
+          nome_destinatario?: string | null
+          numero: number
+          order_id?: string | null
+          pos_sale_id?: string | null
+          protocolo?: string | null
+          qrcode_url?: string | null
+          rejection_code?: string | null
+          rejection_message?: string | null
+          serie: number
+          status?: string
+          updated_at?: string
+          valor_total?: number | null
+          xml_content?: string | null
+          xml_url?: string | null
+        }
+        Update: {
+          ambiente?: string
+          brasilnfe_request?: Json | null
+          brasilnfe_response?: Json | null
+          cancellation_protocol?: string | null
+          cancellation_reason?: string | null
+          cancelled_at?: string | null
+          chave_acesso?: string | null
+          company_id?: string
+          cpf_destinatario?: string | null
+          created_at?: string
+          danfe_url?: string | null
+          data_autorizacao?: string | null
+          events?: Json | null
+          id?: string
+          modelo?: number
+          nome_destinatario?: string | null
+          numero?: number
+          order_id?: string | null
+          pos_sale_id?: string | null
+          protocolo?: string | null
+          qrcode_url?: string | null
+          rejection_code?: string | null
+          rejection_message?: string | null
+          serie?: number
+          status?: string
+          updated_at?: string
+          valor_total?: number | null
+          xml_content?: string | null
+          xml_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_documents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fiscal_operations: {
+        Row: {
+          aliq_cofins: number | null
+          aliq_icms: number | null
+          aliq_pis: number | null
+          cfop: string
+          created_at: string
+          csosn_icms: string | null
+          cst_cofins: string
+          cst_icms: string | null
+          cst_pis: string
+          description: string | null
+          id: string
+          is_active: boolean
+          ncm: string | null
+          origem_mercadoria: number
+          priority: number
+          tipo_operacao: string
+          uf_destino: string | null
+          uf_origem: string
+          updated_at: string
+        }
+        Insert: {
+          aliq_cofins?: number | null
+          aliq_icms?: number | null
+          aliq_pis?: number | null
+          cfop: string
+          created_at?: string
+          csosn_icms?: string | null
+          cst_cofins?: string
+          cst_icms?: string | null
+          cst_pis?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          ncm?: string | null
+          origem_mercadoria?: number
+          priority?: number
+          tipo_operacao?: string
+          uf_destino?: string | null
+          uf_origem: string
+          updated_at?: string
+        }
+        Update: {
+          aliq_cofins?: number | null
+          aliq_icms?: number | null
+          aliq_pis?: number | null
+          cfop?: string
+          created_at?: string
+          csosn_icms?: string | null
+          cst_cofins?: string
+          cst_icms?: string | null
+          cst_pis?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          ncm?: string | null
+          origem_mercadoria?: number
+          priority?: number
+          tipo_operacao?: string
+          uf_destino?: string | null
+          uf_origem?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       fiscal_sequences: {
         Row: {
           ambiente: string
@@ -8530,10 +8707,21 @@ export type Database = {
       }
       pos_sale_items: {
         Row: {
+          aliq_cofins: number | null
+          aliq_icms: number | null
+          aliq_pis: number | null
           barcode: string | null
           category: string | null
+          cest_snapshot: string | null
+          cfop_snapshot: string | null
           created_at: string
+          csosn_icms: string | null
+          cst_cofins: string | null
+          cst_icms: string | null
+          cst_pis: string | null
           id: string
+          ncm_snapshot: string | null
+          origem_mercadoria: number | null
           product_name: string
           quantity: number
           sale_id: string
@@ -8541,14 +8729,26 @@ export type Database = {
           sku: string | null
           tiny_product_id: string | null
           total_price: number
+          unidade_comercial: string | null
           unit_price: number
           variant_name: string | null
         }
         Insert: {
+          aliq_cofins?: number | null
+          aliq_icms?: number | null
+          aliq_pis?: number | null
           barcode?: string | null
           category?: string | null
+          cest_snapshot?: string | null
+          cfop_snapshot?: string | null
           created_at?: string
+          csosn_icms?: string | null
+          cst_cofins?: string | null
+          cst_icms?: string | null
+          cst_pis?: string | null
           id?: string
+          ncm_snapshot?: string | null
+          origem_mercadoria?: number | null
           product_name: string
           quantity?: number
           sale_id: string
@@ -8556,14 +8756,26 @@ export type Database = {
           sku?: string | null
           tiny_product_id?: string | null
           total_price?: number
+          unidade_comercial?: string | null
           unit_price?: number
           variant_name?: string | null
         }
         Update: {
+          aliq_cofins?: number | null
+          aliq_icms?: number | null
+          aliq_pis?: number | null
           barcode?: string | null
           category?: string | null
+          cest_snapshot?: string | null
+          cfop_snapshot?: string | null
           created_at?: string
+          csosn_icms?: string | null
+          cst_cofins?: string | null
+          cst_icms?: string | null
+          cst_pis?: string | null
           id?: string
+          ncm_snapshot?: string | null
+          origem_mercadoria?: number | null
           product_name?: string
           quantity?: number
           sale_id?: string
@@ -8571,6 +8783,7 @@ export type Database = {
           sku?: string | null
           tiny_product_id?: string | null
           total_price?: number
+          unidade_comercial?: string | null
           unit_price?: number
           variant_name?: string | null
         }
@@ -12683,6 +12896,41 @@ export type Database = {
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
+      }
+      resolve_fiscal_rule: {
+        Args: {
+          p_ncm: string
+          p_tipo_operacao?: string
+          p_uf_destino: string
+          p_uf_origem: string
+        }
+        Returns: {
+          aliq_cofins: number | null
+          aliq_icms: number | null
+          aliq_pis: number | null
+          cfop: string
+          created_at: string
+          csosn_icms: string | null
+          cst_cofins: string
+          cst_icms: string | null
+          cst_pis: string
+          description: string | null
+          id: string
+          is_active: boolean
+          ncm: string | null
+          origem_mercadoria: number
+          priority: number
+          tipo_operacao: string
+          uf_destino: string | null
+          uf_origem: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fiscal_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       save_customer_registration: {
         Args: {
