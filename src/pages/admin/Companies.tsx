@@ -529,6 +529,75 @@ export default function Companies() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Credentials Dialog */}
+        <Dialog open={credOpen} onOpenChange={setCredOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Credenciais Fiscais — {credCompany?.trade_name || credCompany?.legal_name}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                <strong>Atenção:</strong> Token e senha do certificado A1 ficam armazenados criptografados. Apenas administradores podem visualizar/alterar. O .pfx é guardado em bucket privado.
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1"><KeyRound className="h-3.5 w-3.5" /> Token Brasil NFe</Label>
+                <Input
+                  type="password"
+                  value={credToken}
+                  onChange={(e) => setCredToken(e.target.value)}
+                  placeholder="Cole o token da API Brasil NFe"
+                />
+                <p className="text-xs text-muted-foreground">Obtido no painel da Brasil NFe (api.brasilnfe.com.br).</p>
+              </div>
+
+              <div className="border-t border-border pt-4 space-y-3">
+                <Label className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> Certificado Digital A1 (.pfx)</Label>
+
+                {credCompany?.certificate_filename && (
+                  <div className="text-xs p-2 rounded border border-border bg-muted/40">
+                    <p className="text-foreground font-medium">📎 {credCompany.certificate_filename}</p>
+                    {credCompany.certificate_uploaded_at && (
+                      <p className="text-muted-foreground mt-0.5">
+                        Enviado em {new Date(credCompany.certificate_uploaded_at).toLocaleString("pt-BR")}
+                      </p>
+                    )}
+                    {credCompany.certificate_valid_until && (
+                      <p className="text-muted-foreground">
+                        Válido até {new Date(credCompany.certificate_valid_until).toLocaleDateString("pt-BR")}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Novo arquivo .pfx (opcional)</Label>
+                  <Input
+                    type="file"
+                    accept=".pfx,.p12,application/x-pkcs12"
+                    onChange={(e) => setCredFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Senha do Certificado</Label>
+                  <Input
+                    type="password"
+                    value={credPassword}
+                    onChange={(e) => setCredPassword(e.target.value)}
+                    placeholder={credCompany?.certificate_path ? "Deixe em branco para manter" : "Senha do .pfx"}
+                  />
+                </div>
+              </div>
+
+              <Button onClick={handleSaveCredentials} disabled={credSaving} className="w-full gap-2">
+                <Upload className="h-4 w-4" />
+                {credSaving ? "Salvando..." : "Salvar Credenciais"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );
