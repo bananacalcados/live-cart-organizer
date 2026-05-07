@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -32,7 +32,14 @@ export default function TinyFiscalImport() {
   const [dedupCount, setDedupCount] = useState<number | null>(null);
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const [importedCount, setImportedCount] = useState<number | null>(null);
-  const [batchSize, setBatchSize] = useState<number>(20);
+  const [batchSize, setBatchSize] = useState<number>(50);
+  const [autoRun, setAutoRun] = useState(false);
+  const [autoProgress, setAutoProgress] = useState<{ batches: number; ok: number; errors: number } | null>(null);
+  const [runningValidate, setRunningValidate] = useState(false);
+  const [lastValidate, setLastValidate] = useState<RunRow | null>(null);
+  const [divergentCount, setDivergentCount] = useState<number | null>(null);
+  const [pendingValidationCount, setPendingValidationCount] = useState<number | null>(null);
+  const autoRunRef = useRef(false);
 
   const loadStatus = async () => {
     const { data: discRuns } = await supabase
@@ -53,6 +60,18 @@ export default function TinyFiscalImport() {
     const { count: imported } = await supabase
       .from("product_dedup_index").select("*", { count: "exact", head: true }).not("imported_at", "is", null);
     setImportedCount(imported ?? 0);
+
+    const { data: valRuns } = await supabase
+      .from("tiny_import_runs").select("*").eq("run_type", "cross_validation").order("started_at", { ascending: false }).limit(1);
+    setLastValidate((valRuns?.[0] as any) ?? null);
+
+    const { count: divCount } = await supabase
+      .from("product_dedup_index").select("*", { count: "exact", head: true }).eq("validation_status", "divergent");
+    setDivergentCount(divCount ?? 0);
+
+    const { count: pendVal } = await supabase
+      .from("product_dedup_index").select("*", { count: "exact", head: true }).is("validation_status", null);
+    setPendingValidationCount(pendVal ?? 0);
   };
 
   useEffect(() => { loadStatus(); }, []);
@@ -94,8 +113,67 @@ export default function TinyFiscalImport() {
     }
   };
 
+  const runImportAll = async () => {
+    autoRunRef.current = true;
+    setAutoRun(true);
+    setAutoProgress({ batches: 0, ok: 0, errors: 0 });
+    let batches = 0, ok = 0, errors = 0;
+    try {
+      while (true) {
+        // Check pending
+        const { count } = await supabase
+          .from("product_dedup_index").select("*", { count: "exact", head: true }).is("imported_at", null);
+        if (!count || count === 0) break;
+        if (!autoRunRef.current) break;
+
+        const { data, error } = await supabase.functions.invoke("tiny-import-fiscal-deduplicated", {
+          body: { mode: "persist", limit: batchSize, skip_imported: true },
+        });
+        if (error) { errors++; break; }
+        const s = data?.stats || {};
+        batches++;
+        ok += s.tiny_ok ?? 0;
+        errors += (s.tiny_error ?? 0) + (s.skipped_no_tiny_id ?? 0);
+        setAutoProgress({ batches, ok, errors });
+        await loadStatus();
+
+        if ((s.processed ?? 0) === 0) break; // safety
+      }
+      toast({ title: "Importação completa", description: `${batches} batches • ${ok} OK • ${errors} erros/skip` });
+    } catch (e: any) {
+      toast({ title: "Erro no auto-run", description: e?.message || "Falha", variant: "destructive" });
+    } finally {
+      setAutoRun(false);
+      autoRunRef.current = false;
+      await loadStatus();
+    }
+  };
+
+  const stopAutoRun = () => { autoRunRef.current = false; };
+
+  const runValidate = async (mode: "dry_run" | "persist") => {
+    setRunningValidate(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("tiny-validate-cross-stores", {
+        body: { mode, limit: 30 },
+      });
+      if (error) throw error;
+      const s = data?.stats || {};
+      toast({
+        title: mode === "dry_run" ? "Validação (dry-run)" : "Validação persistida",
+        description: `Processados: ${s.processed} • Consistentes: ${s.consistent} • Divergentes: ${s.divergent} • Erros Tiny: ${s.tiny_errors}`,
+      });
+      await loadStatus();
+    } catch (e: any) {
+      toast({ title: "Erro", description: e?.message || "Falha", variant: "destructive" });
+    } finally {
+      setRunningValidate(false);
+    }
+  };
+
   const dStats = lastDiscovery?.stats || {};
   const iStats = lastImport?.stats || {};
+  const vStats = lastValidate?.stats || {};
 
   return (
     <div className="min-h-screen bg-background">
@@ -198,23 +276,88 @@ export default function TinyFiscalImport() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => runImport("dry_run")} disabled={runningImport || (pendingCount ?? 0) === 0} variant="outline" className="gap-2">
+              <Button onClick={() => runImport("dry_run")} disabled={runningImport || autoRun || (pendingCount ?? 0) === 0} variant="outline" className="gap-2">
                 {runningImport ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                 Importar (dry-run)
               </Button>
-              <Button onClick={() => runImport("persist")} disabled={runningImport || (pendingCount ?? 0) === 0} className="gap-2">
+              <Button onClick={() => runImport("persist")} disabled={runningImport || autoRun || (pendingCount ?? 0) === 0} variant="secondary" className="gap-2">
                 {runningImport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-                Importar (persistir batch)
+                Importar 1 batch
               </Button>
+              {!autoRun ? (
+                <Button onClick={runImportAll} disabled={runningImport || (pendingCount ?? 0) === 0} className="gap-2">
+                  <PlayCircle className="h-4 w-4" />
+                  Importar TUDO ({(pendingCount ?? 0).toLocaleString("pt-BR")} pendentes)
+                </Button>
+              ) : (
+                <Button onClick={stopAutoRun} variant="destructive" className="gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Parar (em andamento)
+                </Button>
+              )}
+            </div>
+
+            {autoProgress && (
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+                <div className="font-semibold text-primary">
+                  {autoRun ? "Auto-import rodando..." : "Auto-import finalizado"}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Batches: <b>{autoProgress.batches}</b> • OK: <b>{autoProgress.ok}</b> • Erros/skip: <b>{autoProgress.errors}</b>
+                  {autoRun && <> • Pendentes restantes: <b>{(pendingCount ?? 0).toLocaleString("pt-BR")}</b></>}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* CARD 3 - Cross-Validation */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>3. Cross-Validation</CardTitle>
+                <CardDescription>
+                  Compara os mesmos produtos (mesmo GTIN) entre as lojas Tiny e identifica divergências fiscais (NCM, CEST, origem, etc).
+                </CardDescription>
+              </div>
+              {lastValidate && (
+                <Badge variant={lastValidate.status === "completed" ? "default" : "secondary"}>
+                  {lastValidate.status} {lastValidate.dry_run ? "(dry-run)" : ""}
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Stat label="Pendentes validação" value={pendingValidationCount ?? "—"} />
+              <Stat label="Divergentes (total)" value={divergentCount ?? "—"} />
+              <Stat label="Último: Consistentes" value={vStats.consistent ?? "—"} />
+              <Stat label="Último: Divergentes" value={vStats.divergent ?? "—"} />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <Mini label="Processados" value={vStats.processed ?? 0} />
+              <Mini label="Single-store" value={vStats.single_store ?? 0} />
+              <Mini label="Divergências escritas" value={vStats.divergences_written ?? 0} />
+              <Mini label="Erros Tiny" value={vStats.tiny_errors ?? 0} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => runValidate("dry_run")} disabled={runningValidate} variant="outline" className="gap-2">
+                {runningValidate ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                Validar (dry-run)
+              </Button>
+              <Button onClick={() => runValidate("persist")} disabled={runningValidate} className="gap-2">
+                {runningValidate ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+                Validar batch (persistir)
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Cada batch processa até 30 produtos presentes em ≥2 lojas. Resultados gravados em <code>tiny_fiscal_divergences</code>.
             </div>
           </CardContent>
         </Card>
 
         <Card className="opacity-60">
-          <CardHeader><CardTitle>3. Cross-Validation</CardTitle><CardDescription>Disponível após importação.</CardDescription></CardHeader>
-        </Card>
-        <Card className="opacity-60">
-          <CardHeader><CardTitle>4. Revisão Manual</CardTitle><CardDescription>Disponível após importação.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>4. Revisão Manual</CardTitle><CardDescription>Próxima etapa: UI para revisar e resolver divergências.</CardDescription></CardHeader>
         </Card>
       </main>
     </div>
