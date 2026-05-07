@@ -117,10 +117,13 @@ Deno.serve(async (req) => {
       const candidateStores = (row.stores_present || []).filter((sid: string) => tinyIds[sid] && tokenByStore.has(sid));
       if (candidateStores.length === 0) {
         stats.skipped_no_tiny_id++;
-        await supabase.from("tiny_import_errors").insert({
-          run_id: runId, dedup_index_id: row.id,
-          error_code: "no_tiny_id_or_token", error_message: "No store with both tiny_id and active token",
-        });
+        // Mark permanently as imported with a flag so we don't keep retrying
+        if (mode === "persist") {
+          await supabase.from("product_dedup_index").update({
+            imported_at: new Date().toISOString(),
+            validation_status: "no_tiny_id",
+          }).eq("id", row.id);
+        }
         continue;
       }
       const storeId = candidateStores[0];
@@ -157,6 +160,12 @@ Deno.serve(async (req) => {
 
       if (!retorno || retorno.status !== "OK") {
         stats.tiny_error++;
+        if (mode === "persist") {
+          await supabase.from("product_dedup_index").update({
+            imported_at: new Date().toISOString(),
+            validation_status: "tiny_error",
+          }).eq("id", row.id);
+        }
         await new Promise((r) => setTimeout(r, 400));
         continue;
       }

@@ -1,0 +1,1 @@
+ALTER TABLE public.products_master ALTER COLUMN ncm DROP NOT NULL;
