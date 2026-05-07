@@ -108,6 +108,7 @@ const App = () => (
               <Route path="/livete-anotador" element={<ProtectedRoute requiredModule="events"><LiveteAnotadorDownload /></ProtectedRoute>} />
               <Route path="/admin/tiny-fiscal-import" element={<ProtectedRoute requiredModule="admin"><TinyFiscalImport /></ProtectedRoute>} />
               <Route path="/admin/companies" element={<ProtectedRoute requiredModule="admin"><Companies /></ProtectedRoute>} />
+              <Route path="/admin/fiscal-numbering" element={<ProtectedRoute requiredModule="admin"><FiscalNumbering /></ProtectedRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
 
