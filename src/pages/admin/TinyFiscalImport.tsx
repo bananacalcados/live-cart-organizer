@@ -128,7 +128,7 @@ export default function TinyFiscalImport() {
         if (!autoRunRef.current) break;
 
         const { data, error } = await supabase.functions.invoke("tiny-import-fiscal-deduplicated", {
-          body: { mode: "persist", limit: batchSize, skip_imported: true },
+          body: { mode: "persist", limit: batchSize, concurrency, skip_imported: true },
         });
         if (error) { errors++; break; }
         const s = data?.stats || {};
