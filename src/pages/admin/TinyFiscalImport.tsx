@@ -112,8 +112,66 @@ export default function TinyFiscalImport() {
     }
   };
 
+  const runImportAll = async () => {
+    setAutoRun(true);
+    setAutoProgress({ batches: 0, ok: 0, errors: 0 });
+    let batches = 0, ok = 0, errors = 0;
+    try {
+      while (true) {
+        // Check pending
+        const { count } = await supabase
+          .from("product_dedup_index").select("*", { count: "exact", head: true }).is("imported_at", null);
+        if (!count || count === 0) break;
+        if (!autoRunRef.current) break;
+
+        const { data, error } = await supabase.functions.invoke("tiny-import-fiscal-deduplicated", {
+          body: { mode: "persist", limit: batchSize, skip_imported: true },
+        });
+        if (error) { errors++; break; }
+        const s = data?.stats || {};
+        batches++;
+        ok += s.tiny_ok ?? 0;
+        errors += (s.tiny_error ?? 0) + (s.skipped_no_tiny_id ?? 0);
+        setAutoProgress({ batches, ok, errors });
+        await loadStatus();
+
+        if ((s.processed ?? 0) === 0) break; // safety
+      }
+      toast({ title: "Importação completa", description: `${batches} batches • ${ok} OK • ${errors} erros/skip` });
+    } catch (e: any) {
+      toast({ title: "Erro no auto-run", description: e?.message || "Falha", variant: "destructive" });
+    } finally {
+      setAutoRun(false);
+      autoRunRef.current = false;
+      await loadStatus();
+    }
+  };
+
+  const stopAutoRun = () => { autoRunRef.current = false; };
+
+  const runValidate = async (mode: "dry_run" | "persist") => {
+    setRunningValidate(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("tiny-validate-cross-stores", {
+        body: { mode, limit: 30 },
+      });
+      if (error) throw error;
+      const s = data?.stats || {};
+      toast({
+        title: mode === "dry_run" ? "Validação (dry-run)" : "Validação persistida",
+        description: `Processados: ${s.processed} • Consistentes: ${s.consistent} • Divergentes: ${s.divergent} • Erros Tiny: ${s.tiny_errors}`,
+      });
+      await loadStatus();
+    } catch (e: any) {
+      toast({ title: "Erro", description: e?.message || "Falha", variant: "destructive" });
+    } finally {
+      setRunningValidate(false);
+    }
+  };
+
   const dStats = lastDiscovery?.stats || {};
   const iStats = lastImport?.stats || {};
+  const vStats = lastValidate?.stats || {};
 
   return (
     <div className="min-h-screen bg-background">
