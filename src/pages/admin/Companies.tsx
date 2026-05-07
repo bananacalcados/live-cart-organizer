@@ -159,6 +159,54 @@ export default function Companies() {
     load();
   };
 
+  const openCredentials = (c: Company) => {
+    setCredCompany(c);
+    setCredToken(c.brasilnfe_token || "");
+    setCredPassword("");
+    setCredFile(null);
+    setCredOpen(true);
+  };
+
+  const handleSaveCredentials = async () => {
+    if (!credCompany) return;
+    setCredSaving(true);
+    try {
+      const updates: any = { brasilnfe_token: credToken || null };
+
+      // Upload certificate if provided
+      if (credFile) {
+        if (!credPassword) {
+          toast({ title: "Senha obrigatória", description: "Informe a senha do certificado A1", variant: "destructive" });
+          setCredSaving(false);
+          return;
+        }
+        const path = `${credCompany.id}/${Date.now()}-${credFile.name}`;
+        const { error: upErr } = await supabase.storage
+          .from("fiscal-certificates")
+          .upload(path, credFile, { upsert: true, contentType: "application/x-pkcs12" });
+        if (upErr) throw upErr;
+
+        updates.certificate_path = path;
+        updates.certificate_password = credPassword;
+        updates.certificate_filename = credFile.name;
+        updates.certificate_uploaded_at = new Date().toISOString();
+      } else if (credPassword && credCompany.certificate_path) {
+        // Updating only the password
+        updates.certificate_password = credPassword;
+      }
+
+      const { error } = await (supabase as any).from("companies").update(updates).eq("id", credCompany.id);
+      if (error) throw error;
+      toast({ title: "Credenciais atualizadas" });
+      setCredOpen(false);
+      load();
+    } catch (e: any) {
+      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    } finally {
+      setCredSaving(false);
+    }
+  };
+
   const handleLinkStore = async (storeId: string, companyId: string | null) => {
     const { error } = await supabase.from("pos_stores").update({ company_id: companyId } as any).eq("id", storeId);
     if (error) {
