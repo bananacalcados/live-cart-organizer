@@ -63,7 +63,8 @@ Deno.serve(async (req) => {
     const { data: rows } = await supabase
       .from("product_dedup_index")
       .select("*")
-      .is("validation_status", null)
+      .eq("validation_status", "pending")
+      .not("imported_at", "is", null)
       .order("created_at", { ascending: true })
       .limit(limit * 3); // sobre-amostra; filtra abaixo
 
