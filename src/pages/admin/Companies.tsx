@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, ArrowLeft, Plus, Pencil, Trash2, Link as LinkIcon } from "lucide-react";
+import { Building2, ArrowLeft, Plus, Pencil, Trash2, Link as LinkIcon, KeyRound, ShieldCheck, AlertTriangle, Upload } from "lucide-react";
 
 type Regime = "simples_nacional" | "lucro_presumido" | "lucro_real" | "mei";
 type Ambiente = "homologacao" | "producao";
@@ -43,6 +43,12 @@ interface Company {
   is_active: boolean;
   is_pilot: boolean;
   notes: string | null;
+  brasilnfe_token: string | null;
+  certificate_path: string | null;
+  certificate_password: string | null;
+  certificate_valid_until: string | null;
+  certificate_filename: string | null;
+  certificate_uploaded_at: string | null;
 }
 
 interface Store {
@@ -85,6 +91,12 @@ export default function Companies() {
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [credOpen, setCredOpen] = useState(false);
+  const [credCompany, setCredCompany] = useState<Company | null>(null);
+  const [credToken, setCredToken] = useState("");
+  const [credPassword, setCredPassword] = useState("");
+  const [credFile, setCredFile] = useState<File | null>(null);
+  const [credSaving, setCredSaving] = useState(false);
   const [form, setForm] = useState<Partial<Company>>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -145,6 +157,54 @@ export default function Companies() {
     }
     toast({ title: "Empresa excluída" });
     load();
+  };
+
+  const openCredentials = (c: Company) => {
+    setCredCompany(c);
+    setCredToken(c.brasilnfe_token || "");
+    setCredPassword("");
+    setCredFile(null);
+    setCredOpen(true);
+  };
+
+  const handleSaveCredentials = async () => {
+    if (!credCompany) return;
+    setCredSaving(true);
+    try {
+      const updates: any = { brasilnfe_token: credToken || null };
+
+      // Upload certificate if provided
+      if (credFile) {
+        if (!credPassword) {
+          toast({ title: "Senha obrigatória", description: "Informe a senha do certificado A1", variant: "destructive" });
+          setCredSaving(false);
+          return;
+        }
+        const path = `${credCompany.id}/${Date.now()}-${credFile.name}`;
+        const { error: upErr } = await supabase.storage
+          .from("fiscal-certificates")
+          .upload(path, credFile, { upsert: true, contentType: "application/x-pkcs12" });
+        if (upErr) throw upErr;
+
+        updates.certificate_path = path;
+        updates.certificate_password = credPassword;
+        updates.certificate_filename = credFile.name;
+        updates.certificate_uploaded_at = new Date().toISOString();
+      } else if (credPassword && credCompany.certificate_path) {
+        // Updating only the password
+        updates.certificate_password = credPassword;
+      }
+
+      const { error } = await (supabase as any).from("companies").update(updates).eq("id", credCompany.id);
+      if (error) throw error;
+      toast({ title: "Credenciais atualizadas" });
+      setCredOpen(false);
+      load();
+    } catch (e: any) {
+      toast({ title: "Erro", description: e.message, variant: "destructive" });
+    } finally {
+      setCredSaving(false);
+    }
   };
 
   const handleLinkStore = async (storeId: string, companyId: string | null) => {
@@ -215,6 +275,7 @@ export default function Companies() {
                     <TableHead>Regime</TableHead>
                     <TableHead>Ambiente</TableHead>
                     <TableHead>Lojas vinculadas</TableHead>
+                    <TableHead>Credenciais Fiscais</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -252,12 +313,37 @@ export default function Companies() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1">
+                            {c.brasilnfe_token ? (
+                              <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 text-xs gap-1">
+                                <KeyRound className="h-3 w-3" /> Token OK
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                                <KeyRound className="h-3 w-3" /> Sem token
+                              </Badge>
+                            )}
+                            {c.certificate_path ? (
+                              <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 text-xs gap-1">
+                                <ShieldCheck className="h-3 w-3" /> A1 OK
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs gap-1 text-muted-foreground">
+                                <AlertTriangle className="h-3 w-3" /> Sem A1
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
                             {c.is_pilot && <Badge className="bg-blue-500/20 text-blue-500 border-blue-500/30 text-xs">Piloto</Badge>}
                             {!c.is_active && <Badge variant="secondary" className="text-xs">Inativa</Badge>}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => openCredentials(c)} title="Credenciais Fiscais">
+                              <KeyRound className="h-4 w-4" />
+                            </Button>
                             <Button variant="ghost" size="icon" onClick={() => openEdit(c)}>
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -440,6 +526,75 @@ export default function Companies() {
                   </Select>
                 </div>
               ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Credentials Dialog */}
+        <Dialog open={credOpen} onOpenChange={setCredOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Credenciais Fiscais — {credCompany?.trade_name || credCompany?.legal_name}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-600 dark:text-amber-400">
+                <strong>Atenção:</strong> Token e senha do certificado A1 ficam armazenados criptografados. Apenas administradores podem visualizar/alterar. O .pfx é guardado em bucket privado.
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1"><KeyRound className="h-3.5 w-3.5" /> Token Brasil NFe</Label>
+                <Input
+                  type="password"
+                  value={credToken}
+                  onChange={(e) => setCredToken(e.target.value)}
+                  placeholder="Cole o token da API Brasil NFe"
+                />
+                <p className="text-xs text-muted-foreground">Obtido no painel da Brasil NFe (api.brasilnfe.com.br).</p>
+              </div>
+
+              <div className="border-t border-border pt-4 space-y-3">
+                <Label className="flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> Certificado Digital A1 (.pfx)</Label>
+
+                {credCompany?.certificate_filename && (
+                  <div className="text-xs p-2 rounded border border-border bg-muted/40">
+                    <p className="text-foreground font-medium">📎 {credCompany.certificate_filename}</p>
+                    {credCompany.certificate_uploaded_at && (
+                      <p className="text-muted-foreground mt-0.5">
+                        Enviado em {new Date(credCompany.certificate_uploaded_at).toLocaleString("pt-BR")}
+                      </p>
+                    )}
+                    {credCompany.certificate_valid_until && (
+                      <p className="text-muted-foreground">
+                        Válido até {new Date(credCompany.certificate_valid_until).toLocaleDateString("pt-BR")}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Novo arquivo .pfx (opcional)</Label>
+                  <Input
+                    type="file"
+                    accept=".pfx,.p12,application/x-pkcs12"
+                    onChange={(e) => setCredFile(e.target.files?.[0] || null)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Senha do Certificado</Label>
+                  <Input
+                    type="password"
+                    value={credPassword}
+                    onChange={(e) => setCredPassword(e.target.value)}
+                    placeholder={credCompany?.certificate_path ? "Deixe em branco para manter" : "Senha do .pfx"}
+                  />
+                </div>
+              </div>
+
+              <Button onClick={handleSaveCredentials} disabled={credSaving} className="w-full gap-2">
+                <Upload className="h-4 w-4" />
+                {credSaving ? "Salvando..." : "Salvar Credenciais"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

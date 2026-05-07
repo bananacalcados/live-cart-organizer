@@ -2282,7 +2282,11 @@ export type Database = {
           ambiente_nfe: Database["public"]["Enums"]["ambiente_nfe"]
           brasilnfe_token: string | null
           certificate_expires_at: string | null
+          certificate_filename: string | null
+          certificate_password: string | null
+          certificate_path: string | null
           certificate_uploaded_at: string | null
+          certificate_valid_until: string | null
           cnae_principal: string | null
           cnpj: string
           created_at: string
@@ -2314,7 +2318,11 @@ export type Database = {
           ambiente_nfe?: Database["public"]["Enums"]["ambiente_nfe"]
           brasilnfe_token?: string | null
           certificate_expires_at?: string | null
+          certificate_filename?: string | null
+          certificate_password?: string | null
+          certificate_path?: string | null
           certificate_uploaded_at?: string | null
+          certificate_valid_until?: string | null
           cnae_principal?: string | null
           cnpj: string
           created_at?: string
@@ -2346,7 +2354,11 @@ export type Database = {
           ambiente_nfe?: Database["public"]["Enums"]["ambiente_nfe"]
           brasilnfe_token?: string | null
           certificate_expires_at?: string | null
+          certificate_filename?: string | null
+          certificate_password?: string | null
+          certificate_path?: string | null
           certificate_uploaded_at?: string | null
+          certificate_valid_until?: string | null
           cnae_principal?: string | null
           cnpj?: string
           created_at?: string
