@@ -39,6 +39,7 @@ export default function TinyFiscalImport() {
   const [lastValidate, setLastValidate] = useState<RunRow | null>(null);
   const [divergentCount, setDivergentCount] = useState<number | null>(null);
   const [pendingValidationCount, setPendingValidationCount] = useState<number | null>(null);
+  const autoRunRef = useRef(false);
 
   const loadStatus = async () => {
     const { data: discRuns } = await supabase
