@@ -80,6 +80,11 @@ Deno.serve(async (req) => {
       const vTotal = round2(Number(it.unit_price) * Number(it.quantity));
       totalProd += vTotal;
 
+      // Origem prioriza o cadastro do produto (Tiny) — pode haver importados (origem 1/2)
+      const origemFinal = prodFiscal?.origem != null ? Number(prodFiscal.origem) : Number(r.origem_mercadoria ?? 0);
+      const unidadeFinal = prodFiscal?.unidade || "PC";
+      const cestFinal = prodFiscal?.cest || null;
+
       // grava snapshot
       await supabase.from("pos_sale_items").update({
         ncm_snapshot: ncm,
@@ -89,9 +94,9 @@ Deno.serve(async (req) => {
         aliq_icms: r.aliq_icms,
         cst_pis: r.cst_pis, aliq_pis: r.aliq_pis,
         cst_cofins: r.cst_cofins, aliq_cofins: r.aliq_cofins,
-        origem_mercadoria: r.origem_mercadoria,
-        cest_snapshot: (prod as any)?.cest || null,
-        unidade_comercial: (prod as any)?.unidade || "PC",
+        origem_mercadoria: origemFinal,
+        cest_snapshot: cestFinal,
+        unidade_comercial: unidadeFinal,
       }).eq("id", it.id);
 
       produtos.push({
@@ -99,7 +104,7 @@ Deno.serve(async (req) => {
         Descricao: it.product_name,
         NCM: ncm,
         CFOP: r.cfop,
-        Unidade: (prod as any)?.unidade || "PC",
+        Unidade: unidadeFinal,
         Quantidade: it.quantity,
         ValorUnitario: round2(Number(it.unit_price)),
         ValorTotal: vTotal,
