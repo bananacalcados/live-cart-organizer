@@ -9462,7 +9462,7 @@ export type Database = {
           is_active: boolean
           length_cm: number | null
           name: string
-          ncm: string
+          ncm: string | null
           needs_review: boolean
           origem: string | null
           review_reason: string | null
@@ -9492,7 +9492,7 @@ export type Database = {
           is_active?: boolean
           length_cm?: number | null
           name: string
-          ncm?: string
+          ncm?: string | null
           needs_review?: boolean
           origem?: string | null
           review_reason?: string | null
@@ -9522,7 +9522,7 @@ export type Database = {
           is_active?: boolean
           length_cm?: number | null
           name?: string
-          ncm?: string
+          ncm?: string | null
           needs_review?: boolean
           origem?: string | null
           review_reason?: string | null
