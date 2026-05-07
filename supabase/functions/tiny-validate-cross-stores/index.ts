@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       if (storeIds.length < 2) {
         stats.single_store++;
         if (mode === "persist") {
-          await supabase.from("product_dedup_index").update({ validation_status: "consistent" }).eq("id", row.id);
+          await supabase.from("product_dedup_index").update({ validation_status: "single_store" }).eq("id", row.id);
         }
         continue;
       }
