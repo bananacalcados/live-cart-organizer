@@ -276,23 +276,88 @@ export default function TinyFiscalImport() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => runImport("dry_run")} disabled={runningImport || (pendingCount ?? 0) === 0} variant="outline" className="gap-2">
+              <Button onClick={() => runImport("dry_run")} disabled={runningImport || autoRun || (pendingCount ?? 0) === 0} variant="outline" className="gap-2">
                 {runningImport ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                 Importar (dry-run)
               </Button>
-              <Button onClick={() => runImport("persist")} disabled={runningImport || (pendingCount ?? 0) === 0} className="gap-2">
+              <Button onClick={() => runImport("persist")} disabled={runningImport || autoRun || (pendingCount ?? 0) === 0} variant="secondary" className="gap-2">
                 {runningImport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-                Importar (persistir batch)
+                Importar 1 batch
               </Button>
+              {!autoRun ? (
+                <Button onClick={runImportAll} disabled={runningImport || (pendingCount ?? 0) === 0} className="gap-2">
+                  <PlayCircle className="h-4 w-4" />
+                  Importar TUDO ({(pendingCount ?? 0).toLocaleString("pt-BR")} pendentes)
+                </Button>
+              ) : (
+                <Button onClick={stopAutoRun} variant="destructive" className="gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Parar (em andamento)
+                </Button>
+              )}
+            </div>
+
+            {autoProgress && (
+              <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-sm">
+                <div className="font-semibold text-primary">
+                  {autoRun ? "Auto-import rodando..." : "Auto-import finalizado"}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Batches: <b>{autoProgress.batches}</b> • OK: <b>{autoProgress.ok}</b> • Erros/skip: <b>{autoProgress.errors}</b>
+                  {autoRun && <> • Pendentes restantes: <b>{(pendingCount ?? 0).toLocaleString("pt-BR")}</b></>}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* CARD 3 - Cross-Validation */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>3. Cross-Validation</CardTitle>
+                <CardDescription>
+                  Compara os mesmos produtos (mesmo GTIN) entre as lojas Tiny e identifica divergências fiscais (NCM, CEST, origem, etc).
+                </CardDescription>
+              </div>
+              {lastValidate && (
+                <Badge variant={lastValidate.status === "completed" ? "default" : "secondary"}>
+                  {lastValidate.status} {lastValidate.dry_run ? "(dry-run)" : ""}
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Stat label="Pendentes validação" value={pendingValidationCount ?? "—"} />
+              <Stat label="Divergentes (total)" value={divergentCount ?? "—"} />
+              <Stat label="Último: Consistentes" value={vStats.consistent ?? "—"} />
+              <Stat label="Último: Divergentes" value={vStats.divergent ?? "—"} />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              <Mini label="Processados" value={vStats.processed ?? 0} />
+              <Mini label="Single-store" value={vStats.single_store ?? 0} />
+              <Mini label="Divergências escritas" value={vStats.divergences_written ?? 0} />
+              <Mini label="Erros Tiny" value={vStats.tiny_errors ?? 0} />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => runValidate("dry_run")} disabled={runningValidate} variant="outline" className="gap-2">
+                {runningValidate ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                Validar (dry-run)
+              </Button>
+              <Button onClick={() => runValidate("persist")} disabled={runningValidate} className="gap-2">
+                {runningValidate ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+                Validar batch (persistir)
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Cada batch processa até 30 produtos presentes em ≥2 lojas. Resultados gravados em <code>tiny_fiscal_divergences</code>.
             </div>
           </CardContent>
         </Card>
 
         <Card className="opacity-60">
-          <CardHeader><CardTitle>3. Cross-Validation</CardTitle><CardDescription>Disponível após importação.</CardDescription></CardHeader>
-        </Card>
-        <Card className="opacity-60">
-          <CardHeader><CardTitle>4. Revisão Manual</CardTitle><CardDescription>Disponível após importação.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>4. Revisão Manual</CardTitle><CardDescription>Próxima etapa: UI para revisar e resolver divergências.</CardDescription></CardHeader>
         </Card>
       </main>
     </div>
