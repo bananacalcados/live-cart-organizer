@@ -160,6 +160,12 @@ Deno.serve(async (req) => {
 
       if (!retorno || retorno.status !== "OK") {
         stats.tiny_error++;
+        if (mode === "persist") {
+          await supabase.from("product_dedup_index").update({
+            imported_at: new Date().toISOString(),
+            validation_status: "tiny_error",
+          }).eq("id", row.id);
+        }
         await new Promise((r) => setTimeout(r, 400));
         continue;
       }
