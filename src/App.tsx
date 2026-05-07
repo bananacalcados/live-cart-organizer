@@ -111,6 +111,8 @@ const App = () => (
               <Route path="/admin/tiny-fiscal-import" element={<ProtectedRoute requiredModule="admin"><TinyFiscalImport /></ProtectedRoute>} />
               <Route path="/admin/companies" element={<ProtectedRoute requiredModule="admin"><Companies /></ProtectedRoute>} />
               <Route path="/admin/fiscal-numbering" element={<ProtectedRoute requiredModule="admin"><FiscalNumbering /></ProtectedRoute>} />
+              <Route path="/admin/fiscal-operations" element={<ProtectedRoute requiredModule="admin"><FiscalOperations /></ProtectedRoute>} />
+              <Route path="/admin/fiscal-documents" element={<ProtectedRoute requiredModule="admin"><FiscalDocuments /></ProtectedRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
 
