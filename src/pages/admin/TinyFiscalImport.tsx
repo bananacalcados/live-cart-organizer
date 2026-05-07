@@ -32,7 +32,13 @@ export default function TinyFiscalImport() {
   const [dedupCount, setDedupCount] = useState<number | null>(null);
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const [importedCount, setImportedCount] = useState<number | null>(null);
-  const [batchSize, setBatchSize] = useState<number>(20);
+  const [batchSize, setBatchSize] = useState<number>(50);
+  const [autoRun, setAutoRun] = useState(false);
+  const [autoProgress, setAutoProgress] = useState<{ batches: number; ok: number; errors: number } | null>(null);
+  const [runningValidate, setRunningValidate] = useState(false);
+  const [lastValidate, setLastValidate] = useState<RunRow | null>(null);
+  const [divergentCount, setDivergentCount] = useState<number | null>(null);
+  const [pendingValidationCount, setPendingValidationCount] = useState<number | null>(null);
 
   const loadStatus = async () => {
     const { data: discRuns } = await supabase
