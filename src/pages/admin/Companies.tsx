@@ -275,6 +275,7 @@ export default function Companies() {
                     <TableHead>Regime</TableHead>
                     <TableHead>Ambiente</TableHead>
                     <TableHead>Lojas vinculadas</TableHead>
+                    <TableHead>Credenciais Fiscais</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
