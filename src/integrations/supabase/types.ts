@@ -2268,6 +2268,105 @@ export type Database = {
         }
         Relationships: []
       }
+      companies: {
+        Row: {
+          address_cep: string | null
+          address_city: string | null
+          address_city_ibge: string | null
+          address_complement: string | null
+          address_country: string
+          address_neighborhood: string | null
+          address_number: string | null
+          address_state: string | null
+          address_street: string | null
+          ambiente_nfe: Database["public"]["Enums"]["ambiente_nfe"]
+          brasilnfe_token: string | null
+          certificate_expires_at: string | null
+          certificate_uploaded_at: string | null
+          cnae_principal: string | null
+          cnpj: string
+          created_at: string
+          crt: number
+          email: string | null
+          id: string
+          ie: string | null
+          ie_isento: boolean
+          im: string | null
+          is_active: boolean
+          is_pilot: boolean
+          legal_name: string
+          notes: string | null
+          phone: string | null
+          regime_tributario: Database["public"]["Enums"]["regime_tributario"]
+          trade_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          address_cep?: string | null
+          address_city?: string | null
+          address_city_ibge?: string | null
+          address_complement?: string | null
+          address_country?: string
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          ambiente_nfe?: Database["public"]["Enums"]["ambiente_nfe"]
+          brasilnfe_token?: string | null
+          certificate_expires_at?: string | null
+          certificate_uploaded_at?: string | null
+          cnae_principal?: string | null
+          cnpj: string
+          created_at?: string
+          crt?: number
+          email?: string | null
+          id?: string
+          ie?: string | null
+          ie_isento?: boolean
+          im?: string | null
+          is_active?: boolean
+          is_pilot?: boolean
+          legal_name: string
+          notes?: string | null
+          phone?: string | null
+          regime_tributario?: Database["public"]["Enums"]["regime_tributario"]
+          trade_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address_cep?: string | null
+          address_city?: string | null
+          address_city_ibge?: string | null
+          address_complement?: string | null
+          address_country?: string
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          ambiente_nfe?: Database["public"]["Enums"]["ambiente_nfe"]
+          brasilnfe_token?: string | null
+          certificate_expires_at?: string | null
+          certificate_uploaded_at?: string | null
+          cnae_principal?: string | null
+          cnpj?: string
+          created_at?: string
+          crt?: number
+          email?: string | null
+          id?: string
+          ie?: string | null
+          ie_isento?: boolean
+          im?: string | null
+          is_active?: boolean
+          is_pilot?: boolean
+          legal_name?: string
+          notes?: string | null
+          phone?: string | null
+          regime_tributario?: Database["public"]["Enums"]["regime_tributario"]
+          trade_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cost_center_fixed_cost_items: {
         Row: {
           amount: number
@@ -9045,6 +9144,7 @@ export type Database = {
       pos_stores: {
         Row: {
           address: string | null
+          company_id: string | null
           created_at: string
           id: string
           is_active: boolean
@@ -9057,6 +9157,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          company_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -9069,6 +9170,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          company_id?: string | null
           created_at?: string
           id?: string
           is_active?: boolean
@@ -9079,7 +9181,15 @@ export type Database = {
           tiny_token?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pos_stores_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       prize_wheel_segments: {
         Row: {
@@ -12598,6 +12708,7 @@ export type Database = {
       }
     }
     Enums: {
+      ambiente_nfe: "homologacao" | "producao"
       app_role: "admin" | "manager" | "user"
       event_channel: "site" | "pos_perola" | "pos_centro"
       exchange_reason_category:
@@ -12616,6 +12727,11 @@ export type Database = {
         | "recusado"
         | "cancelado"
       pos_revenue_attribution: "store" | "site_pickup_only"
+      regime_tributario:
+        | "simples_nacional"
+        | "lucro_presumido"
+        | "lucro_real"
+        | "mei"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -12743,6 +12859,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      ambiente_nfe: ["homologacao", "producao"],
       app_role: ["admin", "manager", "user"],
       event_channel: ["site", "pos_perola", "pos_centro"],
       exchange_reason_category: [
@@ -12763,6 +12880,12 @@ export const Constants = {
         "cancelado",
       ],
       pos_revenue_attribution: ["store", "site_pickup_only"],
+      regime_tributario: [
+        "simples_nacional",
+        "lucro_presumido",
+        "lucro_real",
+        "mei",
+      ],
     },
   },
 } as const
