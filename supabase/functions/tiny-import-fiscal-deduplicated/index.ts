@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const mode: "dry_run" | "persist" = body?.mode === "persist" ? "persist" : "dry_run";
     const limit: number = Math.min(Math.max(Number(body?.limit) || 200, 1), 1000);
-    const concurrency: number = Math.min(Math.max(Number(body?.concurrency) || 12, 1), 30);
+    const concurrency: number = Math.min(Math.max(Number(body?.concurrency) || 4, 1), 30);
     const onlyMethod: string | null = body?.only_method || null;
     const skipImported: boolean = body?.skip_imported !== false;
 
@@ -170,34 +170,39 @@ Deno.serve(async (req) => {
       const token = tokenByStore.get(storeId)!;
 
       let retorno: any = null;
-      for (let attempt = 0; attempt < 2; attempt++) {
+      let lastErr: string | null = null;
+      const MAX_ATTEMPTS = 5;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
         try {
           retorno = await fetchTinyProduct(token, tinyId);
-          if (retorno?.status === "OK") break;
+          if (retorno?.status === "OK") { lastErr = null; break; }
           const errMsg = retorno?.erros?.[0]?.erro || retorno?.status_processamento || "tiny_error";
-          if (attempt === 0 && /limit|excedido|429/i.test(String(errMsg))) {
-            await new Promise((r) => setTimeout(r, 1500));
+          lastErr = String(errMsg);
+          // exponential backoff on rate limits
+          if (/limit|excedido|429|muitas/i.test(lastErr) && attempt < MAX_ATTEMPTS - 1) {
+            const backoff = Math.min(15000, 1000 * Math.pow(2, attempt));
+            await new Promise((r) => setTimeout(r, backoff));
             continue;
           }
-          await supabase.from("tiny_import_errors").insert({
-            run_id: runId, dedup_index_id: row.id,
-            error_code: "tiny_error", error_message: String(errMsg).slice(0, 500),
-          });
           retorno = null; break;
         } catch (e: any) {
-          if (attempt === 0) { await new Promise((r) => setTimeout(r, 1000)); continue; }
-          await supabase.from("tiny_import_errors").insert({
-            run_id: runId, dedup_index_id: row.id,
-            error_code: "fetch_exception", error_message: String(e?.message || e).slice(0, 500),
-          });
+          lastErr = String(e?.message || e);
+          if (attempt < MAX_ATTEMPTS - 1) {
+            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+            continue;
+          }
         }
       }
 
       if (!retorno || retorno.status !== "OK") {
         stats.tiny_error++;
+        await supabase.from("tiny_import_errors").insert({
+          run_id: runId, dedup_index_id: row.id,
+          error_code: "tiny_error", error_message: (lastErr || "unknown").slice(0, 500),
+        });
+        // CRITICAL FIX: do NOT set imported_at on failures, so we retry next run
         if (mode === "persist") {
           await supabase.from("product_dedup_index").update({
-            imported_at: new Date().toISOString(),
             validation_status: "tiny_error",
           }).eq("id", row.id);
         }
