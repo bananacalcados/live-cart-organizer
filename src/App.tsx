@@ -46,6 +46,7 @@ const PresenterDashboard = lazy(() => import("./pages/PresenterDashboard"));
 const LiveteAnotadorDownload = lazy(() => import("./pages/LiveteAnotadorDownload"));
 const ReviewReferralPage = lazy(() => import("./pages/ReviewReferralPage"));
 const TinyFiscalImport = lazy(() => import("./pages/admin/TinyFiscalImport"));
+const Companies = lazy(() => import("./pages/admin/Companies"));
 
 const queryClient = new QueryClient();
 
@@ -105,6 +106,7 @@ const App = () => (
               <Route path="/presenter/:eventId" element={<ProtectedRoute requiredModule="events"><PresenterDashboard /></ProtectedRoute>} />
               <Route path="/livete-anotador" element={<ProtectedRoute requiredModule="events"><LiveteAnotadorDownload /></ProtectedRoute>} />
               <Route path="/admin/tiny-fiscal-import" element={<ProtectedRoute requiredModule="admin"><TinyFiscalImport /></ProtectedRoute>} />
+              <Route path="/admin/companies" element={<ProtectedRoute requiredModule="admin"><Companies /></ProtectedRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
 
