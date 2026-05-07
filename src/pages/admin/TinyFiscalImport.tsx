@@ -114,6 +114,7 @@ export default function TinyFiscalImport() {
   };
 
   const runImportAll = async () => {
+    autoRunRef.current = true;
     setAutoRun(true);
     setAutoProgress({ batches: 0, ok: 0, errors: 0 });
     let batches = 0, ok = 0, errors = 0;
