@@ -53,8 +53,21 @@ export default function FiscalDocuments() {
     const map: any = {
       authorized: "default", pending: "secondary", rejected: "destructive",
       cancelled: "outline", error: "destructive", denied: "destructive", sent: "secondary",
+      pending_sefaz: "secondary",
     };
-    return <Badge variant={map[s] || "outline"} className="text-xs">{s}</Badge>;
+    const label = s === "pending_sefaz" ? "contingência" : s;
+    return <Badge variant={map[s] || "outline"} className="text-xs">{label}</Badge>;
+  };
+
+  const pendingSefaz = rows.filter(r => r.status === "pending_sefaz");
+
+  const retryNow = async () => {
+    const t = toast.loading("Reprocessando fila…");
+    const { data, error } = await supabase.functions.invoke("nfce-retry-pending");
+    toast.dismiss(t);
+    if (error) return toast.error(error.message);
+    toast.success(`Processadas ${(data as any)?.processed ?? 0} notas`);
+    load();
   };
 
   return (
