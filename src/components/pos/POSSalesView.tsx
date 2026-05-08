@@ -952,6 +952,29 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
+  // Realtime: acompanha fiscal_documents da venda atual
+  useEffect(() => {
+    const sid = saleResult?.sale_id;
+    if (!sid) { setFiscalDoc(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('fiscal_documents')
+        .select('id, status, danfe_url, xml_url, qrcode_url, numero, chave_acesso, rejection_message, contingencia_motivo')
+        .eq('pos_sale_id', sid)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled && data) setFiscalDoc(data);
+    })();
+    const ch = supabase
+      .channel(`fdoc-${sid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fiscal_documents', filter: `pos_sale_id=eq.${sid}` },
+        (payload) => { if (!cancelled) setFiscalDoc(payload.new as any); })
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [saleResult?.sale_id]);
+
   const resetSale = () => {
     setCart([]);
     setSelectedCustomer(null);
