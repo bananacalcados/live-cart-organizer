@@ -3,8 +3,9 @@ import {
   ScanBarcode, Search, Plus, Minus, Trash2, User, CreditCard,
   Receipt, Printer, Camera, ShoppingCart, Package, Check,
   QrCode, Banknote, FileText, ChevronRight, Loader2, Users,
-  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag, Star, Gift
+  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag, Star, Gift, AlertTriangle
 } from "lucide-react";
+import { CancelFiscalDocDialog } from "@/components/fiscal/CancelFiscalDocDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -103,6 +104,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [emittingNfce, setEmittingNfce] = useState(false);
   const [nfceResult, setNfceResult] = useState<any>(null);
   const [fiscalDoc, setFiscalDoc] = useState<any>(null);
+  const [cancelNfceOpen, setCancelNfceOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerResults, setCustomerResults] = useState<any[]>([]);
   const [rfmMatches, setRfmMatches] = useState<any[]>([]);
@@ -1769,6 +1771,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           <Printer className="h-5 w-5" /> Imprimir NFC-e
                         </Button>
                       )}
+                      {authorized && fiscalDoc?.id && (
+                        <Button className="h-14 gap-2 text-base col-span-2" variant="destructive" onClick={() => setCancelNfceOpen(true)}>
+                          <AlertTriangle className="h-5 w-5" /> Cancelar NFC-e
+                        </Button>
+                      )}
                       {contingencia && (
                         <div className="col-span-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 p-3 text-sm text-yellow-300">
                           ⏳ SEFAZ indisponível. A venda foi concluída e a NFC-e será emitida automaticamente quando a SEFAZ voltar. O cliente receberá o link da nota por WhatsApp.
@@ -1795,6 +1802,16 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   <ShoppingCart className="h-5 w-5" /> Nova Venda
                 </Button>
               </div>
+
+              {fiscalDoc?.id && (
+                <CancelFiscalDocDialog
+                  open={cancelNfceOpen}
+                  onOpenChange={setCancelNfceOpen}
+                  fiscalDocumentId={fiscalDoc.id}
+                  modelo={65}
+                  numero={fiscalDoc.numero}
+                />
+              )}
 
               {/* Loyalty Screen (Slot -> Summary -> Prize) */}
               {showLoyaltyScreen && (

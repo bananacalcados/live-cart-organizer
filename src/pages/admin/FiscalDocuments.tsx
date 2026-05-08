@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, FileText, Send, RefreshCw, Webhook, Copy, AlertTriangle, Zap } from "lucide-react";
+import { ArrowLeft, FileText, Send, RefreshCw, Webhook, Copy, AlertTriangle, Zap, Ban } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { CancelFiscalDocDialog } from "@/components/fiscal/CancelFiscalDocDialog";
 
 export default function FiscalDocuments() {
   const [rows, setRows] = useState<any[]>([]);
@@ -16,6 +17,7 @@ export default function FiscalDocuments() {
   const [loading, setLoading] = useState(true);
   const [saleId, setSaleId] = useState("");
   const [emitting, setEmitting] = useState(false);
+  const [cancelDoc, setCancelDoc] = useState<any>(null);
 
   const webhookUrl = `https://tqxhcyuxgqbzqwoidpie.supabase.co/functions/v1/brasilnfe-webhook`;
 
@@ -133,6 +135,7 @@ export default function FiscalDocuments() {
                     <TableHead>Data</TableHead><TableHead>Empresa</TableHead><TableHead>Mod/Sér/Nº</TableHead>
                     <TableHead>Amb.</TableHead><TableHead>Status</TableHead><TableHead>CPF</TableHead>
                     <TableHead>Valor</TableHead><TableHead>Chave</TableHead><TableHead>Erro</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow></TableHeader>
                   <TableBody>
                     {rows.map(r => (
@@ -146,9 +149,16 @@ export default function FiscalDocuments() {
                         <TableCell>R$ {Number(r.valor_total || 0).toFixed(2)}</TableCell>
                         <TableCell className="font-mono text-[10px] max-w-[180px] truncate" title={r.chave_acesso}>{r.chave_acesso || "—"}</TableCell>
                         <TableCell className="text-xs text-destructive max-w-[200px] truncate" title={r.rejection_message}>{r.rejection_message || ""}</TableCell>
+                        <TableCell className="text-right">
+                          {r.status === "authorized" && (
+                            <Button size="sm" variant="ghost" onClick={() => setCancelDoc(r)} title="Cancelar nota">
+                              <Ban className="w-4 h-4 text-destructive" />
+                            </Button>
+                          )}
+                        </TableCell>
                       </TableRow>
                     ))}
-                    {!rows.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhuma emissão ainda.</TableCell></TableRow>}
+                    {!rows.length && <TableRow><TableCell colSpan={10} className="text-center text-muted-foreground py-8">Nenhuma emissão ainda.</TableCell></TableRow>}
                   </TableBody>
                 </Table>
               )}
@@ -183,6 +193,17 @@ export default function FiscalDocuments() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {cancelDoc && (
+        <CancelFiscalDocDialog
+          open={!!cancelDoc}
+          onOpenChange={(v) => { if (!v) setCancelDoc(null); }}
+          fiscalDocumentId={cancelDoc.id}
+          modelo={cancelDoc.modelo}
+          numero={cancelDoc.numero}
+          onCancelled={() => { setCancelDoc(null); load(); }}
+        />
+      )}
     </div>
   );
 }

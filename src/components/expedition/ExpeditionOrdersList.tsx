@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink, Clock, Play, RotateCcw, FileText, Printer, Loader2 } from 'lucide-react';
+import { CancelFiscalDocDialog } from '@/components/fiscal/CancelFiscalDocDialog';
 
 interface Props {
   orders: any[];
@@ -380,6 +381,7 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
   const [isResetting, setIsResetting] = useState(false);
   const [isEmittingNfe, setIsEmittingNfe] = useState(false);
   const [nfeDoc, setNfeDoc] = useState<any>(null);
+  const [cancelNfeOpen, setCancelNfeOpen] = useState(false);
 
   // Carrega doc fiscal NF-e (modelo 55) deste pedido
   const loadNfeDoc = async () => {
@@ -695,8 +697,23 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
                     <a href={nfeDoc.xml_url} target="_blank" rel="noreferrer"><FileText className="h-4 w-4" /> XML</a>
                   </Button>
                 )}
+                {nfeDoc?.status === 'authorized' && nfeDoc?.id && (
+                  <Button onClick={() => setCancelNfeOpen(true)} size="sm" variant="destructive" className="gap-2">
+                    <AlertTriangle className="h-4 w-4" /> Cancelar NF-e
+                  </Button>
+                )}
               </div>
             </div>
+            {nfeDoc?.id && (
+              <CancelFiscalDocDialog
+                open={cancelNfeOpen}
+                onOpenChange={setCancelNfeOpen}
+                fiscalDocumentId={nfeDoc.id}
+                modelo={55}
+                numero={nfeDoc.numero}
+                onCancelled={() => loadNfeDoc()}
+              />
+            )}
 
             {/* Action buttons */}
             <div className="flex flex-col gap-2">

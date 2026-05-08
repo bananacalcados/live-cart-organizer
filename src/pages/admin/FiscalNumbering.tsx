@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
-import { Hash, ArrowLeft, Plus, Pencil, Zap, AlertTriangle } from "lucide-react";
+import { Hash, ArrowLeft, Plus, Pencil, Zap, AlertTriangle, Ban } from "lucide-react";
+import { InutilizarFiscalDialog } from "@/components/fiscal/InutilizarFiscalDialog";
 
 interface Company {
   id: string;
@@ -48,6 +49,9 @@ export default function FiscalNumbering() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [inutilizations, setInutilizations] = useState<any[]>([]);
+  const [inutSeq, setInutSeq] = useState<Sequence | null>(null);
+  const [inutOpen, setInutOpen] = useState(false);
 
   const [companyId, setCompanyId] = useState("");
   const [modelo, setModelo] = useState<55 | 65>(65);
@@ -58,14 +62,16 @@ export default function FiscalNumbering() {
 
   const load = async () => {
     setLoading(true);
-    const [c, s] = await Promise.all([
+    const [c, s, i] = await Promise.all([
       (supabase as any).from("companies").select("id,legal_name,trade_name,cnpj,is_pilot,is_active").order("legal_name"),
       (supabase as any).from("fiscal_sequences").select("*").order("updated_at", { ascending: false }),
+      (supabase as any).from("fiscal_inutilizations").select("*").order("created_at", { ascending: false }).limit(50),
     ]);
     if (c.error) toast({ title: "Erro empresas", description: c.error.message, variant: "destructive" });
     else setCompanies(c.data || []);
     if (s.error) toast({ title: "Erro sequências", description: s.error.message, variant: "destructive" });
     else setSequences(s.data || []);
+    if (!i.error) setInutilizations(i.data || []);
     setLoading(false);
   };
 
@@ -271,7 +277,7 @@ export default function FiscalNumbering() {
                       <TableCell className="text-xs text-muted-foreground">
                         {new Date(s.updated_at).toLocaleString("pt-BR")}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-1">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -280,6 +286,14 @@ export default function FiscalNumbering() {
                           title="Reservar próximo número (teste)"
                         >
                           <Zap className="h-4 w-4 text-amber-500" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => { setInutSeq(s); setInutOpen(true); }}
+                          title="Inutilizar faixa de numeração"
+                        >
+                          <Ban className="h-4 w-4 text-destructive" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -297,7 +311,52 @@ export default function FiscalNumbering() {
           <p>• Mesmo com 100 emissões simultâneas, ninguém recebe o mesmo número.</p>
           <p>• Para migrar de Tiny: configure aqui o <strong>último nº emitido</strong> antes da primeira venda no novo sistema.</p>
         </div>
+
+        {inutilizations.length > 0 && (
+          <Card>
+            <CardContent className="p-4">
+              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Ban className="w-4 h-4 text-destructive" />Inutilizações registradas</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Empresa</TableHead>
+                    <TableHead>Mod/Sér</TableHead>
+                    <TableHead>Faixa</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Justificativa</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inutilizations.map((it) => (
+                    <TableRow key={it.id}>
+                      <TableCell className="text-xs">{new Date(it.created_at).toLocaleString("pt-BR")}</TableCell>
+                      <TableCell className="text-xs">{companyName(it.company_id)}</TableCell>
+                      <TableCell className="font-mono text-xs">{it.modelo}/{it.serie}</TableCell>
+                      <TableCell className="font-mono text-xs">{it.numero_inicial}–{it.numero_final}</TableCell>
+                      <TableCell>
+                        <Badge variant={it.status === "approved" ? "default" : "destructive"} className="text-xs">{it.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs max-w-[260px] truncate" title={it.justificativa}>{it.justificativa}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
       </main>
+
+      <InutilizarFiscalDialog
+        open={inutOpen}
+        onOpenChange={setInutOpen}
+        companies={companies}
+        defaultCompanyId={inutSeq?.company_id}
+        defaultModelo={inutSeq?.modelo as 55 | 65}
+        defaultSerie={inutSeq?.serie}
+        defaultAmbiente={inutSeq?.ambiente}
+        onDone={load}
+      />
     </div>
   );
 }
