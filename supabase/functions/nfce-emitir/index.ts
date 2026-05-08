@@ -100,59 +100,61 @@ Deno.serve(async (req) => {
       }).eq("id", it.id);
 
       produtos.push({
-        Codigo: it.sku || it.id,
-        Descricao: it.product_name,
+        NmProduto: it.product_name,
+        CodProduto: it.sku || String(it.id),
         NCM: ncm,
-        CFOP: r.cfop,
+        CFOP: Number(r.cfop),
         Unidade: unidadeFinal,
-        Quantidade: it.quantity,
+        Quantidade: Number(it.quantity),
         ValorUnitario: round2(Number(it.unit_price)),
         ValorTotal: vTotal,
         Origem: origemFinal,
-        ICMS: { CSOSN: r.csosn_icms, CST: r.cst_icms, Aliquota: r.aliq_icms },
-        PIS: { CST: r.cst_pis, Aliquota: r.aliq_pis },
-        COFINS: { CST: r.cst_cofins, Aliquota: r.aliq_cofins },
+        CEST: cestFinal || undefined,
+        ICMS: { CSOSN: r.csosn_icms, CST: r.cst_icms, Aliquota: Number(r.aliq_icms || 0) },
+        PIS: { CST: r.cst_pis, Aliquota: Number(r.aliq_pis || 0) },
+        COFINS: { CST: r.cst_cofins, Aliquota: Number(r.aliq_cofins || 0) },
       });
     }
 
-    // 4. Reserva próximo número
-    const { data: numData, error: nErr } = await supabase.rpc("get_next_fiscal_number", {
-      p_company_id: companyId, p_modelo: 65, p_serie: 1, p_ambiente: ambiente,
-    });
-    if (nErr) throw new Error(`Numeração: ${nErr.message}`);
-    const nfNumero = numData?.[0]?.next_number;
-    if (!nfNumero) throw new Error("Não foi possível reservar numeração");
-
-    // 5. Cria registro pendente
+    // 4. Cria registro pendente (número/série virão da resposta — o painel BrasilNFe controla a numeração)
     const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
       company_id: companyId, pos_sale_id: sale_id, modelo: 65, serie: 1,
-      numero: nfNumero, ambiente, status: "pending",
+      numero: null, ambiente, status: "pending",
       valor_total: totalProd, cpf_destinatario: cpfDest,
       nome_destinatario: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
     }).select().single();
     if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
 
-    // 6. Monta payload BrasilNFe
+    // Mapeia método de pagamento -> TipoPagamento (tabela 38 da SEFAZ)
+    const pmRaw = (sale.payment_method || "").toLowerCase();
+    const tipoPagamento =
+      pmRaw.includes("pix") ? 17 :
+      pmRaw.includes("crédito") || pmRaw.includes("credito") ? 3 :
+      pmRaw.includes("débito") || pmRaw.includes("debito") ? 4 :
+      pmRaw.includes("dinheiro") || pmRaw.includes("espécie") || pmRaw.includes("especie") ? 1 :
+      pmRaw.includes("boleto") ? 15 :
+      99;
+
+    // 5. Monta payload BrasilNFe (formato oficial da API)
     const payload = {
       TipoAmbiente: tipoAmbiente,
-      NotaFiscal: {
-        Modelo: 65, Serie: 1, Numero: nfNumero,
-        NaturezaOperacao: "Venda",
-        DataEmissao: new Date().toISOString(),
-        Emitente: { CNPJ: digits(company.cnpj), UF: ufOrigem },
-        Destinatario: {
-          CPF: cpfDest,
-          Nome: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
-        },
-        Produtos: produtos,
-        Pagamentos: [{ Forma: sale.payment_method || "01", Valor: totalProd }],
-        ValorTotal: totalProd,
+      ModeloDocumento: 65,
+      NaturezaOperacao: "Venda ao Consumidor",
+      Finalidade: 1,
+      ConsumidorFinal: true,
+      IndicadorPresenca: 1,
+      Cliente: {
+        CpfCnpj: cpfDest,
+        NmCliente: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
+        IndicadorIe: 9,
       },
+      Produtos: produtos,
+      Pagamentos: [{ TipoPagamento: tipoPagamento, Valor: round2(totalProd) }],
     };
 
     await supabase.from("fiscal_documents").update({ brasilnfe_request: payload }).eq("id", doc.id);
 
-    // 7. Chama BrasilNFe
+    // 6. Chama BrasilNFe
     const resp = await fetch(`${BRASILNFE_BASE}/Fiscal/EnviarNotaFiscal`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Token": company.brasilnfe_token },
@@ -162,25 +164,30 @@ Deno.serve(async (req) => {
     let respJson: any = null;
     try { respJson = JSON.parse(respText); } catch { respJson = { raw: respText }; }
 
-    const ok = resp.ok && (respJson?.Status === "Autorizada" || respJson?.ChaveAcesso || respJson?.chave_acesso);
-    const chave = respJson?.ChaveAcesso || respJson?.chave_acesso || null;
-    const protocolo = respJson?.Protocolo || respJson?.protocolo || null;
+    const ret = respJson?.ReturnNF || {};
+    const ok = !!ret.Ok && !!ret.ChaveNF;
+    const chave = ret.ChaveNF || null;
+    const numeroRet = ret.Numero ? Number(ret.Numero) : null;
+    const serieRet = ret.Serie ? Number(ret.Serie) : 1;
+    const protocolo = ret.Protocolo || respJson?.Protocolo || null;
+    const errorMsg = respJson?.Error || ret.DsStatusRespostaSefaz || null;
 
     await supabase.from("fiscal_documents").update({
       status: ok ? "authorized" : "rejected",
       chave_acesso: chave, protocolo,
+      numero: numeroRet, serie: serieRet,
       data_autorizacao: ok ? new Date().toISOString() : null,
       xml_url: respJson?.XmlUrl || respJson?.xml_url || null,
       danfe_url: respJson?.DanfeUrl || respJson?.danfe_url || null,
       qrcode_url: respJson?.QrCodeUrl || respJson?.qrcode_url || null,
-      rejection_code: ok ? null : (respJson?.CodigoErro || String(resp.status)),
-      rejection_message: ok ? null : (respJson?.Mensagem || respText.slice(0, 500)),
+      rejection_code: ok ? null : (ret.CodStatusRespostaSefaz ? String(ret.CodStatusRespostaSefaz) : String(resp.status)),
+      rejection_message: ok ? null : (errorMsg || respText.slice(0, 500)),
       brasilnfe_response: respJson,
     }).eq("id", doc.id);
 
     return new Response(JSON.stringify({
-      ok, document_id: doc.id, numero: nfNumero,
-      chave_acesso: chave, protocolo, response: respJson,
+      ok, document_id: doc.id, numero: numeroRet,
+      chave_acesso: chave, protocolo, error: ok ? null : errorMsg, response: respJson,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: ok ? 200 : 422 });
 
   } catch (err: any) {
