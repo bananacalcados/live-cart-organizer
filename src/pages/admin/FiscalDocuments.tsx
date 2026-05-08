@@ -67,6 +67,19 @@ export default function FiscalDocuments() {
 
       <Card>
         <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Webhook className="w-5 h-5" />Webhook BrasilNFe</CardTitle>
+          <CardDescription>Cole esta URL no painel BrasilNFe (Configurações → Webhooks) para receber notificações automáticas de status das notas.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex gap-2">
+          <Input readOnly value={webhookUrl} className="font-mono text-xs" />
+          <Button variant="outline" onClick={() => { navigator.clipboard.writeText(webhookUrl); toast.success("URL copiada"); }}>
+            <Copy className="w-4 h-4 mr-1" />Copiar
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Emitir NFC-e (teste)</CardTitle>
           <CardDescription>Cole o ID da venda POS para emitir uma NFC-e modelo 65 no ambiente da empresa.</CardDescription>
         </CardHeader>
@@ -75,6 +88,73 @@ export default function FiscalDocuments() {
           <Button onClick={emit} disabled={emitting}><Send className="w-4 h-4 mr-1" />{emitting ? "Emitindo…" : "Emitir"}</Button>
         </CardContent>
       </Card>
+
+      <Tabs defaultValue="docs">
+        <TabsList>
+          <TabsTrigger value="docs">Emissões</TabsTrigger>
+          <TabsTrigger value="events">Webhooks recebidos ({events.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="docs">
+          <Card>
+            <CardHeader><CardTitle>Últimas 100 emissões</CardTitle></CardHeader>
+            <CardContent>
+              {loading ? <p className="text-sm text-muted-foreground">Carregando…</p> : (
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>Data</TableHead><TableHead>Empresa</TableHead><TableHead>Mod/Sér/Nº</TableHead>
+                    <TableHead>Amb.</TableHead><TableHead>Status</TableHead><TableHead>CPF</TableHead>
+                    <TableHead>Valor</TableHead><TableHead>Chave</TableHead><TableHead>Erro</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {rows.map(r => (
+                      <TableRow key={r.id}>
+                        <TableCell className="text-xs">{new Date(r.created_at).toLocaleString("pt-BR")}</TableCell>
+                        <TableCell className="text-xs">{r.companies?.razao_social}</TableCell>
+                        <TableCell className="font-mono text-xs">{r.modelo}/{r.serie}/{r.numero}</TableCell>
+                        <TableCell><Badge variant="outline" className="text-[10px]">{r.ambiente}</Badge></TableCell>
+                        <TableCell>{statusBadge(r.status)}</TableCell>
+                        <TableCell className="font-mono text-xs">{r.cpf_destinatario}</TableCell>
+                        <TableCell>R$ {Number(r.valor_total || 0).toFixed(2)}</TableCell>
+                        <TableCell className="font-mono text-[10px] max-w-[180px] truncate" title={r.chave_acesso}>{r.chave_acesso || "—"}</TableCell>
+                        <TableCell className="text-xs text-destructive max-w-[200px] truncate" title={r.rejection_message}>{r.rejection_message || ""}</TableCell>
+                      </TableRow>
+                    ))}
+                    {!rows.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhuma emissão ainda.</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="events">
+          <Card>
+            <CardHeader><CardTitle>Eventos recebidos da BrasilNFe</CardTitle><CardDescription>Últimos 50 callbacks (autorização, cancelamento, rejeição etc.)</CardDescription></CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Recebido</TableHead><TableHead>Tipo</TableHead><TableHead>Chave</TableHead>
+                  <TableHead>Identificador</TableHead><TableHead>Doc.</TableHead><TableHead>Status</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {events.map(e => (
+                    <TableRow key={e.id}>
+                      <TableCell className="text-xs">{new Date(e.received_at).toLocaleString("pt-BR")}</TableCell>
+                      <TableCell className="text-xs max-w-[200px] truncate" title={e.event_type}>{e.event_type}</TableCell>
+                      <TableCell className="font-mono text-[10px] max-w-[160px] truncate" title={e.chave_acesso}>{e.chave_acesso || "—"}</TableCell>
+                      <TableCell className="font-mono text-[10px]">{e.identificador_interno || "—"}</TableCell>
+                      <TableCell className="font-mono text-[10px]">{e.fiscal_document_id ? "✓" : "—"}</TableCell>
+                      <TableCell>{e.processed ? <Badge variant="default" className="text-[10px]">processado</Badge> : <Badge variant="destructive" className="text-[10px]">{e.error_message || "pendente"}</Badge>}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!events.length && <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum webhook recebido ainda.</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <Card>
         <CardHeader><CardTitle>Últimas 100 emissões</CardTitle></CardHeader>
