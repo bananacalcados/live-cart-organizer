@@ -378,6 +378,48 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
   const [isMarking, setIsMarking] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isEmittingNfe, setIsEmittingNfe] = useState(false);
+  const [nfeDoc, setNfeDoc] = useState<any>(null);
+
+  // Carrega doc fiscal NF-e (modelo 55) deste pedido
+  const loadNfeDoc = async () => {
+    const { data } = await supabase
+      .from('fiscal_documents')
+      .select('id, status, numero, serie, chave_acesso, danfe_url, xml_url, rejection_message')
+      .eq('order_id', order.id)
+      .eq('modelo', 55)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setNfeDoc(data);
+  };
+
+  // Carrega ao expandir
+  useState(() => { if (isExpanded) loadNfeDoc(); });
+
+  const handleEmitNfe = async () => {
+    setIsEmittingNfe(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('nfe-emitir', {
+        body: { order_id: order.id },
+      });
+      if (error) throw error;
+      if (data?.contingencia) {
+        toast.warning('SEFAZ indisponível — NF-e em fila de contingência. Será reemitida automaticamente.');
+      } else if (data?.ok) {
+        toast.success(`NF-e ${data.numero} autorizada!`);
+      } else {
+        throw new Error(data?.error || 'Falha na emissão');
+      }
+      await loadNfeDoc();
+      onRefresh();
+    } catch (e: any) {
+      toast.error(`Erro ao emitir NF-e: ${e.message}`);
+    } finally {
+      setIsEmittingNfe(false);
+    }
+  };
+
 
   const handleResetExpedition = async () => {
     setIsResetting(true);
