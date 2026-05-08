@@ -1,0 +1,1 @@
+CREATE POLICY "Public can view active landing pages" ON public.campaign_landing_pages FOR SELECT TO anon USING (is_active = true);
