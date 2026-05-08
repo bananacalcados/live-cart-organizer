@@ -32,6 +32,48 @@ Deno.serve(async (req) => {
   let payload: any = null;
   try {
     const raw = await req.text();
+
+    // Validação HMAC-SHA256 do body
+    const secret = Deno.env.get("BRASILNFE_WEBHOOK_SECRET");
+    if (secret) {
+      const sigHeader =
+        req.headers.get("x-signature") ||
+        req.headers.get("x-hub-signature-256") ||
+        req.headers.get("x-brasilnfe-signature") ||
+        req.headers.get("x-webhook-signature") ||
+        req.headers.get("signature") ||
+        "";
+      const provided = sigHeader.replace(/^sha256=/i, "").trim().toLowerCase();
+
+      const key = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(secret),
+        { name: "HMAC", hash: "SHA-256" },
+        false,
+        ["sign"]
+      );
+      const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw));
+      const expected = Array.from(new Uint8Array(sigBuf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+
+      if (!provided || provided !== expected) {
+        console.warn("[brasilnfe-webhook] Invalid signature", { provided, expectedPrefix: expected.slice(0, 8), headers: Object.fromEntries(req.headers) });
+        await supabase.from("fiscal_webhook_events").insert({
+          provider: "brasilnfe",
+          event_type: "invalid_signature",
+          payload: { raw: raw.slice(0, 2000), headers: Object.fromEntries(req.headers) },
+          error_message: "Assinatura HMAC inválida",
+          processed: true,
+          processed_at: new Date().toISOString(),
+        });
+        return new Response(JSON.stringify({ ok: false, error: "invalid signature" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 401,
+        });
+      }
+    }
+
     try { payload = JSON.parse(raw); } catch { payload = { raw }; }
 
     // Extrai campos comuns (BrasilNFe pode usar diferentes formatos)
