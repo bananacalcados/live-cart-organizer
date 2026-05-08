@@ -102,6 +102,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [saleResult, setSaleResult] = useState<{ tiny_order_id?: string; tiny_order_number?: string; sale_id?: string } | null>(null);
   const [emittingNfce, setEmittingNfce] = useState(false);
   const [nfceResult, setNfceResult] = useState<any>(null);
+  const [fiscalDoc, setFiscalDoc] = useState<any>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerResults, setCustomerResults] = useState<any[]>([]);
   const [rfmMatches, setRfmMatches] = useState<any[]>([]);
