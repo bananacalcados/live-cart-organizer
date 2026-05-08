@@ -4462,7 +4462,7 @@ export type Database = {
           id: string
           modelo: number
           nome_destinatario: string | null
-          numero: number
+          numero: number | null
           order_id: string | null
           pos_sale_id: string | null
           protocolo: string | null
@@ -4493,7 +4493,7 @@ export type Database = {
           id?: string
           modelo: number
           nome_destinatario?: string | null
-          numero: number
+          numero?: number | null
           order_id?: string | null
           pos_sale_id?: string | null
           protocolo?: string | null
@@ -4524,7 +4524,7 @@ export type Database = {
           id?: string
           modelo?: number
           nome_destinatario?: string | null
-          numero?: number
+          numero?: number | null
           order_id?: string | null
           pos_sale_id?: string | null
           protocolo?: string | null

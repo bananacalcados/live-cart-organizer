@@ -1,0 +1,1 @@
+ALTER TABLE public.fiscal_documents ALTER COLUMN numero DROP NOT NULL;
