@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, FileText, Send, RefreshCw, Webhook, Copy } from "lucide-react";
+import { ArrowLeft, FileText, Send, RefreshCw, Webhook, Copy, AlertTriangle, Zap } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -53,8 +53,21 @@ export default function FiscalDocuments() {
     const map: any = {
       authorized: "default", pending: "secondary", rejected: "destructive",
       cancelled: "outline", error: "destructive", denied: "destructive", sent: "secondary",
+      pending_sefaz: "secondary",
     };
-    return <Badge variant={map[s] || "outline"} className="text-xs">{s}</Badge>;
+    const label = s === "pending_sefaz" ? "contingência" : s;
+    return <Badge variant={map[s] || "outline"} className="text-xs">{label}</Badge>;
+  };
+
+  const pendingSefaz = rows.filter(r => r.status === "pending_sefaz");
+
+  const retryNow = async () => {
+    const t = toast.loading("Reprocessando fila…");
+    const { data, error } = await supabase.functions.invoke("nfce-retry-pending");
+    toast.dismiss(t);
+    if (error) return toast.error(error.message);
+    toast.success(`Processadas ${(data as any)?.processed ?? 0} notas`);
+    load();
   };
 
   return (
@@ -64,6 +77,21 @@ export default function FiscalDocuments() {
         <h1 className="text-2xl font-bold flex items-center gap-2"><FileText className="w-6 h-6" />Documentos Fiscais</h1>
         <Button variant="ghost" size="sm" onClick={load}><RefreshCw className="w-4 h-4" /></Button>
       </div>
+
+      {pendingSefaz.length > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <div>
+                <CardTitle className="text-base">SEFAZ em contingência — {pendingSefaz.length} {pendingSefaz.length === 1 ? "nota pendente" : "notas pendentes"}</CardTitle>
+                <CardDescription>As vendas foram concluídas. Reemissão automática a cada 5 min com backoff exponencial.</CardDescription>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={retryNow}><Zap className="w-4 h-4 mr-1" />Tentar agora</Button>
+          </CardHeader>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
