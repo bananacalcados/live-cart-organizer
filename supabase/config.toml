@@ -1,4 +1,8 @@
 project_id = "tqxhcyuxgqbzqwoidpie"
+
+[functions.brasilnfe-webhook]
+verify_jwt = false
+
 [functions.yampi-lookup-sku]
 verify_jwt = false
 
