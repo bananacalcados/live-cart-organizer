@@ -191,7 +191,12 @@ Deno.serve(async (req) => {
         IndicadorIe: 9,
       },
       Produtos: produtos,
-      Pagamentos: [{ TipoPagamento: tipoPagamento, Valor: round2(totalProd) }],
+      Pagamentos: [{
+        IndicadorPagamento: 0,
+        FormaPagamento: formaPagamento,
+        Descricao: descricaoPagamento,
+        VlPago: round2(totalProd),
+      }],
     };
 
     await supabase.from("fiscal_documents").update({ brasilnfe_request: payload }).eq("id", doc.id);
