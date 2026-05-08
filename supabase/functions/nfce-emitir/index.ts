@@ -160,15 +160,22 @@ Deno.serve(async (req) => {
     }).select().single();
     if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
 
-    // Mapeia método de pagamento -> TipoPagamento (tabela 38 da SEFAZ)
+    // Mapeia método de pagamento -> FormaPagamento (tabela 38 da SEFAZ, como string)
     const pmRaw = (sale.payment_method || "").toLowerCase();
-    const tipoPagamento =
-      pmRaw.includes("pix") ? 17 :
-      pmRaw.includes("crédito") || pmRaw.includes("credito") ? 3 :
-      pmRaw.includes("débito") || pmRaw.includes("debito") ? 4 :
-      pmRaw.includes("dinheiro") || pmRaw.includes("espécie") || pmRaw.includes("especie") ? 1 :
-      pmRaw.includes("boleto") ? 15 :
-      99;
+    const formaPagamento =
+      pmRaw.includes("pix") ? "17" :
+      pmRaw.includes("crédito") || pmRaw.includes("credito") ? "03" :
+      pmRaw.includes("débito") || pmRaw.includes("debito") ? "04" :
+      pmRaw.includes("dinheiro") || pmRaw.includes("espécie") || pmRaw.includes("especie") ? "01" :
+      pmRaw.includes("boleto") ? "15" :
+      "99";
+    const descricaoPagamento =
+      formaPagamento === "17" ? "PIX" :
+      formaPagamento === "03" ? "Cartão de Crédito" :
+      formaPagamento === "04" ? "Cartão de Débito" :
+      formaPagamento === "01" ? "Dinheiro" :
+      formaPagamento === "15" ? "Boleto" :
+      "Outros";
 
     // 5. Monta payload BrasilNFe (formato oficial da API)
     const payload = {
@@ -178,13 +185,19 @@ Deno.serve(async (req) => {
       Finalidade: 1,
       ConsumidorFinal: true,
       IndicadorPresenca: 1,
+      IdentificadorInterno: `POS-${sale_id}`,
       Cliente: {
         CpfCnpj: cpfDest,
         NmCliente: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
         IndicadorIe: 9,
       },
       Produtos: produtos,
-      Pagamentos: [{ TipoPagamento: tipoPagamento, Valor: round2(totalProd) }],
+      Pagamentos: [{
+        IndicadorPagamento: 0,
+        FormaPagamento: formaPagamento,
+        Descricao: descricaoPagamento,
+        VlPago: round2(totalProd),
+      }],
     };
 
     await supabase.from("fiscal_documents").update({ brasilnfe_request: payload }).eq("id", doc.id);
