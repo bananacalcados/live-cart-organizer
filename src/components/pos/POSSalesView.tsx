@@ -103,6 +103,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [emittingNfce, setEmittingNfce] = useState(false);
   const [nfceResult, setNfceResult] = useState<any>(null);
   const [fiscalDoc, setFiscalDoc] = useState<any>(null);
+  const [cancelNfceOpen, setCancelNfceOpen] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerResults, setCustomerResults] = useState<any[]>([]);
   const [rfmMatches, setRfmMatches] = useState<any[]>([]);
@@ -1767,6 +1768,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                       {authorized && fiscalDoc?.danfe_url && (
                         <Button className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10" variant="outline" onClick={() => window.open(fiscalDoc.danfe_url, '_blank')}>
                           <Printer className="h-5 w-5" /> Imprimir NFC-e
+                        </Button>
+                      )}
+                      {authorized && fiscalDoc?.id && (
+                        <Button className="h-14 gap-2 text-base col-span-2" variant="destructive" onClick={() => setCancelNfceOpen(true)}>
+                          <AlertTriangle className="h-5 w-5" /> Cancelar NFC-e
                         </Button>
                       )}
                       {contingencia && (
