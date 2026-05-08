@@ -659,6 +659,45 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
               </div>
             )}
 
+            {/* NF-e (modelo 55) */}
+            <div className="rounded-lg border border-border/50 bg-secondary/30 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <FileText className="h-4 w-4" />
+                Nota Fiscal Eletrônica (NF-e)
+                {nfeDoc?.status === 'authorized' && <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Autorizada</Badge>}
+                {nfeDoc?.status === 'pending_sefaz' && <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">Contingência</Badge>}
+                {nfeDoc?.status === 'rejected' && <Badge variant="destructive">Rejeitada</Badge>}
+                {nfeDoc?.status === 'pending' && <Badge variant="secondary">Pendente</Badge>}
+              </div>
+              {nfeDoc?.numero && (
+                <p className="text-xs text-muted-foreground">Nº {nfeDoc.numero} • Série {nfeDoc.serie}{nfeDoc.chave_acesso ? ` • Chave ${nfeDoc.chave_acesso}` : ''}</p>
+              )}
+              {nfeDoc?.status === 'rejected' && nfeDoc?.rejection_message && (
+                <p className="text-xs text-destructive">{nfeDoc.rejection_message}</p>
+              )}
+              {nfeDoc?.status === 'pending_sefaz' && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">SEFAZ indisponível. A nota será reemitida automaticamente em segundo plano.</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {(!nfeDoc || nfeDoc.status === 'rejected') && (
+                  <Button onClick={handleEmitNfe} disabled={isEmittingNfe} size="sm" className="gap-2">
+                    {isEmittingNfe ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    {nfeDoc?.status === 'rejected' ? 'Reemitir NF-e' : 'Emitir NF-e'}
+                  </Button>
+                )}
+                {nfeDoc?.danfe_url && (
+                  <Button asChild size="sm" variant="outline" className="gap-2">
+                    <a href={nfeDoc.danfe_url} target="_blank" rel="noreferrer"><Printer className="h-4 w-4" /> Imprimir DANFE</a>
+                  </Button>
+                )}
+                {nfeDoc?.xml_url && (
+                  <Button asChild size="sm" variant="outline" className="gap-2">
+                    <a href={nfeDoc.xml_url} target="_blank" rel="noreferrer"><FileText className="h-4 w-4" /> XML</a>
+                  </Button>
+                )}
+              </div>
+            </div>
+
             {/* Action buttons */}
             <div className="flex flex-col gap-2">
               {nextStep && (
