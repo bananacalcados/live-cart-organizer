@@ -722,6 +722,28 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         setSaleResult(data);
         setStep("invoice");
 
+        // 🔥 Auto-emissão NFC-e (BrasilNFe) conforme pos_invoice_config
+        try {
+          const saleId = data?.sale_id;
+          if (saleId) {
+            const { data: cfg } = await supabase
+              .from('pos_invoice_config')
+              .select('auto_emit_on_sale, auto_emit_min_value, auto_emit_payment_methods')
+              .eq('store_id', storeId)
+              .maybeSingle();
+            const minOk = !cfg?.auto_emit_min_value || totalWithDiscount >= Number(cfg.auto_emit_min_value);
+            const methods = (cfg as any)?.auto_emit_payment_methods || [];
+            const pmName = (paymentMethodName || '').toLowerCase();
+            const methodOk = methods.length === 0 || methods.some((m: string) => pmName.includes(String(m).toLowerCase()));
+            if (cfg?.auto_emit_on_sale && minOk && methodOk) {
+              setEmittingNfce(true);
+              supabase.functions.invoke('nfce-emitir', { body: { sale_id: saleId } })
+                .catch((e) => console.error('[auto nfce-emitir]', e))
+                .finally(() => setEmittingNfce(false));
+            }
+          }
+        } catch (e) { console.error('[auto-emit cfg]', e); }
+
         // Redeem coupon (referral or internal cashback) on successful sale
         if (couponApplied) {
           try {
