@@ -82,7 +82,10 @@ Deno.serve(async (req) => {
 
       // Origem prioriza o cadastro do produto (Tiny) — pode haver importados (origem 1/2)
       const origemFinal = prodFiscal?.origem != null ? Number(prodFiscal.origem) : Number(r.origem_mercadoria ?? 0);
-      const unidadeFinal = prodFiscal?.unidade || "PC";
+      // Unidade: calçados = PAR; acessórios (bolsa/carteira/cinto/mochila/pulseira/colar/brinco/relogio/oculos/chaveiro/lenco) = UN
+      const nameUpper = String(it.product_name || "").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
+      const isAccessory = /\b(BOLSA|CARTEIRA|CINTO|MOCHILA|PULSEIRA|COLAR|BRINCO|RELOGIO|OCULOS|CHAVEIRO|LENCO|MEIA|NECESSAIRE|POCHETE)\b/.test(nameUpper);
+      const unidadeFinal = isAccessory ? "UN" : "PAR";
       const cestFinal = prodFiscal?.cest || null;
 
       // grava snapshot
