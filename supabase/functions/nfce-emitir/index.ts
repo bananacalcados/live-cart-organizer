@@ -185,6 +185,7 @@ Deno.serve(async (req) => {
       Finalidade: 1,
       ConsumidorFinal: true,
       IndicadorPresenca: 1,
+      IdentificadorInterno: `POS-${sale_id}`,
       Cliente: {
         CpfCnpj: cpfDest,
         NmCliente: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
