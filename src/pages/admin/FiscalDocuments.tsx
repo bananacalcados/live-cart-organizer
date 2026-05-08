@@ -155,37 +155,6 @@ export default function FiscalDocuments() {
           </Card>
         </TabsContent>
       </Tabs>
-
-      <Card>
-        <CardHeader><CardTitle>Últimas 100 emissões</CardTitle></CardHeader>
-        <CardContent>
-          {loading ? <p className="text-sm text-muted-foreground">Carregando…</p> : (
-            <Table>
-              <TableHeader><TableRow>
-                <TableHead>Data</TableHead><TableHead>Empresa</TableHead><TableHead>Mod/Sér/Nº</TableHead>
-                <TableHead>Amb.</TableHead><TableHead>Status</TableHead><TableHead>CPF</TableHead>
-                <TableHead>Valor</TableHead><TableHead>Chave</TableHead><TableHead>Erro</TableHead>
-              </TableRow></TableHeader>
-              <TableBody>
-                {rows.map(r => (
-                  <TableRow key={r.id}>
-                    <TableCell className="text-xs">{new Date(r.created_at).toLocaleString("pt-BR")}</TableCell>
-                    <TableCell className="text-xs">{r.companies?.razao_social}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.modelo}/{r.serie}/{r.numero}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-[10px]">{r.ambiente}</Badge></TableCell>
-                    <TableCell>{statusBadge(r.status)}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.cpf_destinatario}</TableCell>
-                    <TableCell>R$ {Number(r.valor_total || 0).toFixed(2)}</TableCell>
-                    <TableCell className="font-mono text-[10px] max-w-[180px] truncate" title={r.chave_acesso}>{r.chave_acesso || "—"}</TableCell>
-                    <TableCell className="text-xs text-destructive max-w-[200px] truncate" title={r.rejection_message}>{r.rejection_message || ""}</TableCell>
-                  </TableRow>
-                ))}
-                {!rows.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">Nenhuma emissão ainda.</TableCell></TableRow>}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
