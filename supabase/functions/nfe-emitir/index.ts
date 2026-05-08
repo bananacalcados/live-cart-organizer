@@ -121,11 +121,13 @@ Deno.serve(async (req) => {
 
     for (const [idx, it] of items.entries()) {
       let prodFiscal: any = null;
-      if (it.sku) {
+      const lookupKey = it.sku || it.barcode;
+      if (lookupKey) {
         const { data: variant } = await supabase
           .from("product_variants")
           .select("master_id, products_master:master_id(ncm, origem, cest, unidade)")
-          .eq("sku", it.sku).maybeSingle();
+          .or(`sku.eq.${lookupKey},gtin.eq.${lookupKey}`)
+          .maybeSingle();
         prodFiscal = (variant as any)?.products_master || null;
       }
       const ncmRaw: string | null = prodFiscal?.ncm || null;
