@@ -226,7 +226,8 @@ Deno.serve(async (req) => {
       "Outros";
 
     // 5. Monta payload BrasilNFe (formato oficial da API)
-    const payload = {
+    const ieEmitente = digits(company.ie);
+    const payload: any = {
       TipoAmbiente: tipoAmbiente,
       ModeloDocumento: 65,
       NaturezaOperacao: "Venda ao Consumidor",
@@ -234,6 +235,12 @@ Deno.serve(async (req) => {
       ConsumidorFinal: true,
       IndicadorPresenca: 1,
       IdentificadorInterno: `POS-${sale_id}`,
+      Emitente: {
+        CpfCnpj: digits(company.cnpj),
+        ...(ieEmitente ? { Ie: ieEmitente } : {}),
+        ...(company.ie_isento ? { IeIsento: true } : {}),
+        ...(company.im ? { Im: digits(company.im) } : {}),
+      },
       Cliente: {
         CpfCnpj: cpfDest,
         NmCliente: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
