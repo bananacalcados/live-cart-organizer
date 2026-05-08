@@ -772,6 +772,19 @@ export function POSConfig({ storeId }: Props) {
 
   const saveInvoiceConfig = async () => {
     try {
+      // Validação: loja precisa ter empresa fiscal vinculada (BrasilNFe)
+      if (autoEmit) {
+        const { data: store } = await supabase.from('pos_stores').select('company_id').eq('id', storeId).maybeSingle();
+        if (!store?.company_id) {
+          toast.error("Vincule esta loja a uma empresa (CNPJ) em Admin → Empresas antes de ativar a auto-emissão.");
+          return;
+        }
+        const { data: company } = await supabase.from('companies').select('brasilnfe_token').eq('id', store.company_id).maybeSingle();
+        if (!(company as any)?.brasilnfe_token) {
+          toast.error("A empresa vinculada não tem token BrasilNFe configurado.");
+          return;
+        }
+      }
       const payload = {
         auto_emit_on_sale: autoEmit,
         auto_emit_min_value: parseFloat(autoEmitMinValue) || 0,
@@ -1474,14 +1487,14 @@ export function POSConfig({ storeId }: Props) {
         <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2 text-pos-white">
-              <Receipt className="h-4 w-4 text-pos-orange" /> Emissão Automática de NF
+              <Receipt className="h-4 w-4 text-pos-orange" /> Emissão Automática de NFC-e (BrasilNFe)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-pos-white">Emitir NFC-e automaticamente</p>
-                <p className="text-xs text-pos-white/40">Ao finalizar cada venda</p>
+                <p className="text-xs text-pos-white/40">Ao finalizar cada venda. Se a SEFAZ estiver fora, vai pra contingência e reemite sozinho.</p>
               </div>
               <Switch checked={autoEmit} onCheckedChange={setAutoEmit} />
             </div>

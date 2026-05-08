@@ -102,6 +102,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [saleResult, setSaleResult] = useState<{ tiny_order_id?: string; tiny_order_number?: string; sale_id?: string } | null>(null);
   const [emittingNfce, setEmittingNfce] = useState(false);
   const [nfceResult, setNfceResult] = useState<any>(null);
+  const [fiscalDoc, setFiscalDoc] = useState<any>(null);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerResults, setCustomerResults] = useState<any[]>([]);
   const [rfmMatches, setRfmMatches] = useState<any[]>([]);
@@ -721,6 +722,28 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         setSaleResult(data);
         setStep("invoice");
 
+        // 🔥 Auto-emissão NFC-e (BrasilNFe) conforme pos_invoice_config
+        try {
+          const saleId = data?.sale_id;
+          if (saleId) {
+            const { data: cfg } = await supabase
+              .from('pos_invoice_config')
+              .select('auto_emit_on_sale, auto_emit_min_value, auto_emit_payment_methods')
+              .eq('store_id', storeId)
+              .maybeSingle();
+            const minOk = !cfg?.auto_emit_min_value || totalWithDiscount >= Number(cfg.auto_emit_min_value);
+            const methods = (cfg as any)?.auto_emit_payment_methods || [];
+            const pmName = (paymentMethodName || '').toLowerCase();
+            const methodOk = methods.length === 0 || methods.some((m: string) => pmName.includes(String(m).toLowerCase()));
+            if (cfg?.auto_emit_on_sale && minOk && methodOk) {
+              setEmittingNfce(true);
+              supabase.functions.invoke('nfce-emitir', { body: { sale_id: saleId } })
+                .catch((e) => console.error('[auto nfce-emitir]', e))
+                .finally(() => setEmittingNfce(false));
+            }
+          }
+        } catch (e) { console.error('[auto-emit cfg]', e); }
+
         // Redeem coupon (referral or internal cashback) on successful sale
         if (couponApplied) {
           try {
@@ -908,31 +931,49 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   };
 
   const emitNfce = async () => {
-    if (!saleResult?.tiny_order_id) return;
+    if (!saleResult?.sale_id) return;
     setEmittingNfce(true);
     try {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-emit-nfce`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-        body: JSON.stringify({
-          store_id: storeId,
-          sale_id: saleResult.sale_id,
-          tiny_order_id: saleResult.tiny_order_id,
-        }),
+      const { data, error } = await supabase.functions.invoke('nfce-emitir', {
+        body: { sale_id: saleResult.sale_id },
       });
-      const data = await resp.json();
-      if (data.success) {
-        setNfceResult(data);
-        toast.success("NFC-e emitida!");
+      if (error) throw error;
+      if (data?.ok) {
+        toast.success("NFC-e autorizada!");
+      } else if (data?.contingencia) {
+        toast.info("SEFAZ indisponível — NFC-e em contingência. Será reemitida automaticamente.");
       } else {
-        toast.error(data.error || "Erro ao emitir NFC-e");
+        toast.error(data?.error || "Erro ao emitir NFC-e");
       }
-    } catch (e) {
-      toast.error("Erro ao emitir NFC-e");
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao emitir NFC-e");
     } finally {
       setEmittingNfce(false);
     }
   };
+
+  // Realtime: acompanha fiscal_documents da venda atual
+  useEffect(() => {
+    const sid = saleResult?.sale_id;
+    if (!sid) { setFiscalDoc(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('fiscal_documents')
+        .select('id, status, danfe_url, xml_url, qrcode_url, numero, chave_acesso, rejection_message, contingencia_motivo')
+        .eq('pos_sale_id', sid)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled && data) setFiscalDoc(data);
+    })();
+    const ch = supabase
+      .channel(`fdoc-${sid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fiscal_documents', filter: `pos_sale_id=eq.${sid}` },
+        (payload) => { if (!cancelled) setFiscalDoc(payload.new as any); })
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [saleResult?.sale_id]);
 
   const resetSale = () => {
     setCart([]);
@@ -944,6 +985,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setStep("scan");
     setSaleResult(null);
     setNfceResult(null);
+    setFiscalDoc(null);
     setSearchResults([]);
     setCashReceived("");
     setInstallments("1");
@@ -1699,20 +1741,48 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 {discountValue > 0 && <p className="text-sm text-red-400">Desconto: -R$ {discountValue.toFixed(2)}</p>}
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Button
-                  className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10"
-                  variant="outline"
-                  onClick={emitNfce}
-                  disabled={emittingNfce || !!nfceResult}
-                >
-                  {emittingNfce ? <Loader2 className="h-5 w-5 animate-spin" /> : <Receipt className="h-5 w-5" />}
-                  {nfceResult ? 'NFC-e Emitida ✓' : 'Emitir NFC-e'}
-                </Button>
-                {nfceResult?.invoice_pdf_url && (
-                  <Button className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10" variant="outline" onClick={() => window.open(nfceResult.invoice_pdf_url, '_blank')}>
-                    <Printer className="h-5 w-5" /> Imprimir Nota
-                  </Button>
-                )}
+                {(() => {
+                  const status = fiscalDoc?.status as string | undefined;
+                  const authorized = status === 'authorized';
+                  const contingencia = status === 'pending_sefaz';
+                  const rejected = status === 'rejected';
+                  const pending = status === 'pending';
+                  const showEmit = !status || rejected;
+                  const btnLabel = authorized ? 'NFC-e Autorizada ✓'
+                    : contingencia ? 'Em contingência ⏳'
+                    : pending ? 'Emitindo...'
+                    : rejected ? 'Reemitir NFC-e'
+                    : 'Emitir NFC-e';
+                  return (
+                    <>
+                      <Button
+                        className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10"
+                        variant="outline"
+                        onClick={emitNfce}
+                        disabled={emittingNfce || pending || authorized || contingencia}
+                      >
+                        {(emittingNfce || pending) ? <Loader2 className="h-5 w-5 animate-spin" /> : <Receipt className="h-5 w-5" />}
+                        {btnLabel}
+                      </Button>
+                      {authorized && fiscalDoc?.danfe_url && (
+                        <Button className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10" variant="outline" onClick={() => window.open(fiscalDoc.danfe_url, '_blank')}>
+                          <Printer className="h-5 w-5" /> Imprimir NFC-e
+                        </Button>
+                      )}
+                      {contingencia && (
+                        <div className="col-span-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 p-3 text-sm text-yellow-300">
+                          ⏳ SEFAZ indisponível. A venda foi concluída e a NFC-e será emitida automaticamente quando a SEFAZ voltar. O cliente receberá o link da nota por WhatsApp.
+                        </div>
+                      )}
+                      {rejected && fiscalDoc?.rejection_message && (
+                        <div className="col-span-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-300">
+                          ❌ NFC-e rejeitada: {fiscalDoc.rejection_message}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+
                 {loyaltyConfig?.wheel_enabled && wheelSegments.length > 0 && !showWheel && (
                   <Button
                     className="h-14 gap-2 text-base bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-bold col-span-2 hover:from-yellow-500 hover:via-orange-600 hover:to-red-600 shadow-lg"
