@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
-import { Hash, ArrowLeft, Plus, Pencil, Zap, AlertTriangle } from "lucide-react";
+import { Hash, ArrowLeft, Plus, Pencil, Zap, AlertTriangle, Ban } from "lucide-react";
+import { InutilizarFiscalDialog } from "@/components/fiscal/InutilizarFiscalDialog";
 
 interface Company {
   id: string;
