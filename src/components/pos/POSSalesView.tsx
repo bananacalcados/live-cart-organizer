@@ -3,8 +3,9 @@ import {
   ScanBarcode, Search, Plus, Minus, Trash2, User, CreditCard,
   Receipt, Printer, Camera, ShoppingCart, Package, Check,
   QrCode, Banknote, FileText, ChevronRight, Loader2, Users,
-  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag, Star, Gift
+  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag, Star, Gift, AlertTriangle
 } from "lucide-react";
+import { CancelFiscalDocDialog } from "@/components/fiscal/CancelFiscalDocDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
