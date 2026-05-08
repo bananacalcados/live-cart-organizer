@@ -1803,6 +1803,16 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 </Button>
               </div>
 
+              {fiscalDoc?.id && (
+                <CancelFiscalDocDialog
+                  open={cancelNfceOpen}
+                  onOpenChange={setCancelNfceOpen}
+                  fiscalDocumentId={fiscalDoc.id}
+                  modelo={65}
+                  numero={fiscalDoc.numero}
+                />
+              )}
+
               {/* Loyalty Screen (Slot -> Summary -> Prize) */}
               {showLoyaltyScreen && (
                 <POSLoyaltyScreen
