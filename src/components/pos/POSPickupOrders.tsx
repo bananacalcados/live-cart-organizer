@@ -662,7 +662,7 @@ export function POSPickupOrders({ storeId }: Props) {
                 {!nfceResult ? (
                   <Button
                     onClick={handleEmitNfce}
-                    disabled={emittingNfce || !saleResult?.tiny_order_id}
+                    disabled={emittingNfce || !saleResult?.sale_id}
                     className="w-full bg-pos-orange hover:bg-pos-orange/90 text-pos-black font-bold gap-1.5"
                   >
                     {emittingNfce ? (
