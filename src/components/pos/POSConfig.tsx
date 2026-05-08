@@ -1487,14 +1487,14 @@ export function POSConfig({ storeId }: Props) {
         <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2 text-pos-white">
-              <Receipt className="h-4 w-4 text-pos-orange" /> Emissão Automática de NF
+              <Receipt className="h-4 w-4 text-pos-orange" /> Emissão Automática de NFC-e (BrasilNFe)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-pos-white">Emitir NFC-e automaticamente</p>
-                <p className="text-xs text-pos-white/40">Ao finalizar cada venda</p>
+                <p className="text-xs text-pos-white/40">Ao finalizar cada venda. Se a SEFAZ estiver fora, vai pra contingência e reemite sozinho.</p>
               </div>
               <Switch checked={autoEmit} onCheckedChange={setAutoEmit} />
             </div>
