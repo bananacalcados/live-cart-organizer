@@ -111,10 +111,9 @@ Deno.serve(async (req) => {
       const desc = sanitize(String(it.product_name || "")).slice(0, 120);
       produtos.push({
         NmProduto: nmProduto,
-        CdProduto: cdProduto,
-        CodProduto: cdProduto,
-        Codigo: cdProduto,
+        CodProdutoServico: cdProduto,
         Descricao: desc,
+
         NCM: ncm,
         CFOP: Number(r.cfop),
         Unidade: unidadeFinal,
