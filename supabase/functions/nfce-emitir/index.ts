@@ -257,15 +257,24 @@ Deno.serve(async (req) => {
 
     await supabase.from("fiscal_documents").update({ brasilnfe_request: payload }).eq("id", doc.id);
 
-    // 6. Chama BrasilNFe
-    const resp = await fetch(`${BRASILNFE_BASE}/Fiscal/EnviarNotaFiscal`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Token": company.brasilnfe_token },
-      body: JSON.stringify(payload),
-    });
-    const respText = await resp.text();
+    // 6. Chama BrasilNFe (com tratamento de SEFAZ offline → contingência)
+    let resp: Response | null = null;
+    let respText = "";
+    let networkError: string | null = null;
+    try {
+      resp = await fetch(`${BRASILNFE_BASE}/Fiscal/EnviarNotaFiscal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Token": company.brasilnfe_token },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(45000),
+      });
+      respText = await resp.text();
+    } catch (e: any) {
+      networkError = e?.message || String(e);
+    }
+
     let respJson: any = null;
-    try { respJson = JSON.parse(respText); } catch { respJson = { raw: respText }; }
+    if (respText) { try { respJson = JSON.parse(respText); } catch { respJson = { raw: respText }; } }
 
     const ret = respJson?.ReturnNF || {};
     const ok = !!ret.Ok && !!ret.ChaveNF;
@@ -273,25 +282,51 @@ Deno.serve(async (req) => {
     const numeroRet = ret.Numero ? Number(ret.Numero) : null;
     const serieRet = ret.Serie ? Number(ret.Serie) : 1;
     const protocolo = ret.Protocolo || respJson?.Protocolo || null;
-    const errorMsg = respJson?.Error || ret.DsStatusRespostaSefaz || null;
+    const errorMsg = respJson?.Error || ret.DsStatusRespostaSefaz || networkError || null;
+    const codSefaz = ret.CodStatusRespostaSefaz ? Number(ret.CodStatusRespostaSefaz) : null;
+
+    // Detecta SEFAZ fora do ar → fila de contingência (a venda continua válida).
+    // Códigos: 108 (paralisado momentâneo), 109 (sem previsão), 999 (erro comunic),
+    // HTTP 5xx, timeout/erro de rede, ou mensagens típicas.
+    const httpStatus = resp?.status ?? 0;
+    const msgLow = String(errorMsg || "").toLowerCase();
+    const sefazOffline =
+      !ok && (
+        networkError != null ||
+        httpStatus >= 500 ||
+        httpStatus === 0 ||
+        codSefaz === 108 || codSefaz === 109 || codSefaz === 999 ||
+        (msgLow.includes("sefaz") && (msgLow.includes("fora") || msgLow.includes("indispon") || msgLow.includes("paralis") || msgLow.includes("offline"))) ||
+        msgLow.includes("timeout") || msgLow.includes("aborted") || msgLow.includes("connection")
+      );
+
+    const finalStatus = ok ? "authorized" : (sefazOffline ? "pending_sefaz" : "rejected");
+    const nextRetry = sefazOffline ? new Date(Date.now() + 5 * 60 * 1000).toISOString() : null;
 
     await supabase.from("fiscal_documents").update({
-      status: ok ? "authorized" : "rejected",
+      status: finalStatus,
       chave_acesso: chave, protocolo,
       numero: numeroRet, serie: serieRet,
       data_autorizacao: ok ? new Date().toISOString() : null,
       xml_url: respJson?.XmlUrl || respJson?.xml_url || null,
       danfe_url: respJson?.DanfeUrl || respJson?.danfe_url || null,
       qrcode_url: respJson?.QrCodeUrl || respJson?.qrcode_url || null,
-      rejection_code: ok ? null : (ret.CodStatusRespostaSefaz ? String(ret.CodStatusRespostaSefaz) : String(resp.status)),
-      rejection_message: ok ? null : (errorMsg || respText.slice(0, 500)),
-      brasilnfe_response: respJson,
+      rejection_code: ok ? null : (codSefaz ? String(codSefaz) : (httpStatus ? String(httpStatus) : "NETWORK")),
+      rejection_message: ok ? null : (errorMsg || respText.slice(0, 500) || "Erro desconhecido"),
+      brasilnfe_response: respJson || { networkError, httpStatus },
+      contingencia_motivo: sefazOffline ? `[${codSefaz || httpStatus || "NET"}] ${(errorMsg || networkError || "SEFAZ indisponível").slice(0, 300)}` : null,
+      next_retry_at: nextRetry,
+      retry_count: 0,
     }).eq("id", doc.id);
 
+    // Resposta: 200 em sucesso, 202 em contingência (venda concluída, será reemitida), 422 em rejeição definitiva
+    const httpResp = ok ? 200 : (sefazOffline ? 202 : 422);
     return new Response(JSON.stringify({
-      ok, document_id: doc.id, numero: numeroRet,
-      chave_acesso: chave, protocolo, error: ok ? null : errorMsg, response: respJson,
-    }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: ok ? 200 : 422 });
+      ok, contingencia: sefazOffline, document_id: doc.id, numero: numeroRet,
+      chave_acesso: chave, protocolo, error: ok ? null : errorMsg,
+      message: sefazOffline ? "SEFAZ indisponível — nota em fila de contingência, será reemitida automaticamente" : null,
+      response: respJson,
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: httpResp });
 
   } catch (err: any) {
     console.error("[nfce-emitir]", err);
