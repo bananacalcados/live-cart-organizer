@@ -7352,6 +7352,195 @@ export type Database = {
         }
         Relationships: []
       }
+      nfe_distribuicao_state: {
+        Row: {
+          company_id: string
+          created_at: string
+          last_error: string | null
+          last_sync_at: string | null
+          max_nsu: string | null
+          ultimo_nsu: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          last_error?: string | null
+          last_sync_at?: string | null
+          max_nsu?: string | null
+          ultimo_nsu?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          last_error?: string | null
+          last_sync_at?: string | null
+          max_nsu?: string | null
+          ultimo_nsu?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_distribuicao_state_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nfe_received: {
+        Row: {
+          brasilnfe_response: Json | null
+          chave_acesso: string
+          company_id: string
+          created_at: string
+          danfe_url: string | null
+          data_emissao: string | null
+          destinatario_cnpj: string | null
+          emitente_cnpj: string | null
+          emitente_nome: string | null
+          emitente_uf: string | null
+          estoque_lancado_em: string | null
+          estoque_lancado_por: string | null
+          estoque_status: string
+          id: string
+          manifestacao_data: string | null
+          manifestacao_justificativa: string | null
+          manifestacao_protocolo: string | null
+          manifestacao_status: string
+          modelo: number | null
+          natureza_operacao: string | null
+          nsu: string | null
+          numero: number | null
+          serie: number | null
+          tipo_operacao: number | null
+          updated_at: string
+          valor_total: number | null
+          xml_completo_content: string | null
+          xml_resumo_content: string | null
+          xml_url: string | null
+        }
+        Insert: {
+          brasilnfe_response?: Json | null
+          chave_acesso: string
+          company_id: string
+          created_at?: string
+          danfe_url?: string | null
+          data_emissao?: string | null
+          destinatario_cnpj?: string | null
+          emitente_cnpj?: string | null
+          emitente_nome?: string | null
+          emitente_uf?: string | null
+          estoque_lancado_em?: string | null
+          estoque_lancado_por?: string | null
+          estoque_status?: string
+          id?: string
+          manifestacao_data?: string | null
+          manifestacao_justificativa?: string | null
+          manifestacao_protocolo?: string | null
+          manifestacao_status?: string
+          modelo?: number | null
+          natureza_operacao?: string | null
+          nsu?: string | null
+          numero?: number | null
+          serie?: number | null
+          tipo_operacao?: number | null
+          updated_at?: string
+          valor_total?: number | null
+          xml_completo_content?: string | null
+          xml_resumo_content?: string | null
+          xml_url?: string | null
+        }
+        Update: {
+          brasilnfe_response?: Json | null
+          chave_acesso?: string
+          company_id?: string
+          created_at?: string
+          danfe_url?: string | null
+          data_emissao?: string | null
+          destinatario_cnpj?: string | null
+          emitente_cnpj?: string | null
+          emitente_nome?: string | null
+          emitente_uf?: string | null
+          estoque_lancado_em?: string | null
+          estoque_lancado_por?: string | null
+          estoque_status?: string
+          id?: string
+          manifestacao_data?: string | null
+          manifestacao_justificativa?: string | null
+          manifestacao_protocolo?: string | null
+          manifestacao_status?: string
+          modelo?: number | null
+          natureza_operacao?: string | null
+          nsu?: string | null
+          numero?: number | null
+          serie?: number | null
+          tipo_operacao?: number | null
+          updated_at?: string
+          valor_total?: number | null
+          xml_completo_content?: string | null
+          xml_resumo_content?: string | null
+          xml_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_received_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nfe_received_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          justificativa: string | null
+          nfe_received_id: string
+          performed_by: string | null
+          protocolo: string | null
+          request_payload: Json | null
+          response_payload: Json | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          justificativa?: string | null
+          nfe_received_id: string
+          performed_by?: string | null
+          protocolo?: string | null
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          justificativa?: string | null
+          nfe_received_id?: string
+          performed_by?: string | null
+          protocolo?: string | null
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_received_events_nfe_received_id_fkey"
+            columns: ["nfe_received_id"]
+            isOneToOne: false
+            referencedRelation: "nfe_received"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       online_exchanges: {
         Row: {
           completed_at: string | null
