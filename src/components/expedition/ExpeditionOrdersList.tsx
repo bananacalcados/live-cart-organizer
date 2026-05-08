@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink, Clock, Play, RotateCcw } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink, Clock, Play, RotateCcw, FileText, Printer, Loader2 } from 'lucide-react';
 
 interface Props {
   orders: any[];
@@ -378,6 +378,48 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
   const [isMarking, setIsMarking] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [isEmittingNfe, setIsEmittingNfe] = useState(false);
+  const [nfeDoc, setNfeDoc] = useState<any>(null);
+
+  // Carrega doc fiscal NF-e (modelo 55) deste pedido
+  const loadNfeDoc = async () => {
+    const { data } = await supabase
+      .from('fiscal_documents')
+      .select('id, status, numero, serie, chave_acesso, danfe_url, xml_url, rejection_message')
+      .eq('order_id', order.id)
+      .eq('modelo', 55)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setNfeDoc(data);
+  };
+
+  // Carrega ao expandir
+  useEffect(() => { if (isExpanded) loadNfeDoc(); /* eslint-disable-next-line */ }, [isExpanded, order.id]);
+
+  const handleEmitNfe = async () => {
+    setIsEmittingNfe(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('nfe-emitir', {
+        body: { order_id: order.id },
+      });
+      if (error) throw error;
+      if (data?.contingencia) {
+        toast.warning('SEFAZ indisponível — NF-e em fila de contingência. Será reemitida automaticamente.');
+      } else if (data?.ok) {
+        toast.success(`NF-e ${data.numero} autorizada!`);
+      } else {
+        throw new Error(data?.error || 'Falha na emissão');
+      }
+      await loadNfeDoc();
+      onRefresh();
+    } catch (e: any) {
+      toast.error(`Erro ao emitir NF-e: ${e.message}`);
+    } finally {
+      setIsEmittingNfe(false);
+    }
+  };
+
 
   const handleResetExpedition = async () => {
     setIsResetting(true);
@@ -616,6 +658,45 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
                 <span className="font-medium">🏷️ Código Interno:</span> <span className="font-mono">{order.internal_barcode}</span>
               </div>
             )}
+
+            {/* NF-e (modelo 55) */}
+            <div className="rounded-lg border border-border/50 bg-secondary/30 p-3 space-y-2">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <FileText className="h-4 w-4" />
+                Nota Fiscal Eletrônica (NF-e)
+                {nfeDoc?.status === 'authorized' && <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">Autorizada</Badge>}
+                {nfeDoc?.status === 'pending_sefaz' && <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">Contingência</Badge>}
+                {nfeDoc?.status === 'rejected' && <Badge variant="destructive">Rejeitada</Badge>}
+                {nfeDoc?.status === 'pending' && <Badge variant="secondary">Pendente</Badge>}
+              </div>
+              {nfeDoc?.numero && (
+                <p className="text-xs text-muted-foreground">Nº {nfeDoc.numero} • Série {nfeDoc.serie}{nfeDoc.chave_acesso ? ` • Chave ${nfeDoc.chave_acesso}` : ''}</p>
+              )}
+              {nfeDoc?.status === 'rejected' && nfeDoc?.rejection_message && (
+                <p className="text-xs text-destructive">{nfeDoc.rejection_message}</p>
+              )}
+              {nfeDoc?.status === 'pending_sefaz' && (
+                <p className="text-xs text-amber-700 dark:text-amber-400">SEFAZ indisponível. A nota será reemitida automaticamente em segundo plano.</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {(!nfeDoc || nfeDoc.status === 'rejected') && (
+                  <Button onClick={handleEmitNfe} disabled={isEmittingNfe} size="sm" className="gap-2">
+                    {isEmittingNfe ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    {nfeDoc?.status === 'rejected' ? 'Reemitir NF-e' : 'Emitir NF-e'}
+                  </Button>
+                )}
+                {nfeDoc?.danfe_url && (
+                  <Button asChild size="sm" variant="outline" className="gap-2">
+                    <a href={nfeDoc.danfe_url} target="_blank" rel="noreferrer"><Printer className="h-4 w-4" /> Imprimir DANFE</a>
+                  </Button>
+                )}
+                {nfeDoc?.xml_url && (
+                  <Button asChild size="sm" variant="outline" className="gap-2">
+                    <a href={nfeDoc.xml_url} target="_blank" rel="noreferrer"><FileText className="h-4 w-4" /> XML</a>
+                  </Button>
+                )}
+              </div>
+            </div>
 
             {/* Action buttons */}
             <div className="flex flex-col gap-2">
