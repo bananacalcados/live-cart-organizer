@@ -4665,6 +4665,56 @@ export type Database = {
           },
         ]
       }
+      fiscal_webhook_events: {
+        Row: {
+          chave_acesso: string | null
+          error_message: string | null
+          event_type: string | null
+          fiscal_document_id: string | null
+          id: string
+          identificador_interno: string | null
+          payload: Json
+          processed: boolean
+          processed_at: string | null
+          provider: string
+          received_at: string
+        }
+        Insert: {
+          chave_acesso?: string | null
+          error_message?: string | null
+          event_type?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          identificador_interno?: string | null
+          payload: Json
+          processed?: boolean
+          processed_at?: string | null
+          provider?: string
+          received_at?: string
+        }
+        Update: {
+          chave_acesso?: string | null
+          error_message?: string | null
+          event_type?: string | null
+          fiscal_document_id?: string | null
+          id?: string
+          identificador_interno?: string | null
+          payload?: Json
+          processed?: boolean
+          processed_at?: string | null
+          provider?: string
+          received_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_webhook_events_fiscal_document_id_fkey"
+            columns: ["fiscal_document_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_campaign_messages: {
         Row: {
           campaign_id: string
