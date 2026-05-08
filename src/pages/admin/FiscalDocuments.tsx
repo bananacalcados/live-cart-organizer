@@ -12,16 +12,25 @@ import { toast } from "sonner";
 
 export default function FiscalDocuments() {
   const [rows, setRows] = useState<any[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saleId, setSaleId] = useState("");
   const [emitting, setEmitting] = useState(false);
 
+  const webhookUrl = `https://tqxhcyuxgqbzqwoidpie.supabase.co/functions/v1/brasilnfe-webhook`;
+
   const load = async () => {
     setLoading(true);
-    const { data, error } = await (supabase as any).from("fiscal_documents")
-      .select("*, companies(razao_social, cnpj)")
-      .order("created_at", { ascending: false }).limit(100);
-    if (error) toast.error(error.message); else setRows(data || []);
+    const [docsRes, evtRes] = await Promise.all([
+      (supabase as any).from("fiscal_documents")
+        .select("*, companies(razao_social, cnpj)")
+        .order("created_at", { ascending: false }).limit(100),
+      (supabase as any).from("fiscal_webhook_events")
+        .select("*")
+        .order("received_at", { ascending: false }).limit(50),
+    ]);
+    if (docsRes.error) toast.error(docsRes.error.message); else setRows(docsRes.data || []);
+    if (!evtRes.error) setEvents(evtRes.data || []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
