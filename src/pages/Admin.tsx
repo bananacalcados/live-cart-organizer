@@ -429,6 +429,37 @@ export default function Admin() {
           <TabsContent value="mercadopago" className="mt-4">
             <MercadoPagoAccountsManager />
           </TabsContent>
+
+          <TabsContent value="fiscal" className="mt-4 space-y-4">
+            <div>
+              <h2 className="text-xl font-bold text-foreground">Módulo Fiscal</h2>
+              <p className="text-sm text-muted-foreground">Gerencie empresas, numeração, operações e documentos fiscais.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {[
+                { path: "/admin/companies", label: "Empresas", desc: "Cadastro de CNPJs emissores, certificado e tokens", icon: Building2 },
+                { path: "/admin/fiscal-numbering", label: "Numeração Fiscal", desc: "Série e numeração de NFC-e / NF-e por empresa", icon: Hash },
+                { path: "/admin/fiscal-operations", label: "Operações Fiscais", desc: "CFOP, CSOSN, alíquotas e regras tributárias", icon: Settings },
+                { path: "/admin/fiscal-documents", label: "Documentos Emitidos", desc: "Histórico de NFC-e/NF-e emitidas, XML e DANFE", icon: FileText },
+                { path: "/admin/tiny-fiscal-import", label: "Importar do Tiny", desc: "Sincronizar produtos e dados fiscais do Tiny ERP", icon: Download },
+              ].map((item) => (
+                <button
+                  key={item.path}
+                  onClick={() => navigate(item.path)}
+                  className="flex items-center gap-3 p-4 rounded-lg border bg-card hover:bg-accent/50 hover:border-primary/40 transition-all text-left"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm text-foreground">{item.label}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-1">{item.desc}</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </button>
+              ))}
+            </div>
+          </TabsContent>
         </Tabs>
       </main>
     </div>
