@@ -99,9 +99,14 @@ Deno.serve(async (req) => {
         unidade_comercial: unidadeFinal,
       }).eq("id", it.id);
 
+      // SEFAZ cProd: código alfanumérico ≤60, sem espaços. Usa SKU/GTIN; fallback para id sanitizado.
+      const rawCod = String(it.sku || it.id || "").replace(/[^A-Za-z0-9._-]/g, "").slice(0, 60) || `ITEM${idx + 1}`;
+      // SEFAZ xProd: descrição ≤120 chars
+      const desc = String(it.product_name || "").slice(0, 120);
       produtos.push({
-        NmProduto: it.product_name,
-        CodProduto: it.sku || String(it.id),
+        NmProduto: rawCod,
+        Descricao: desc,
+        xProd: desc,
         NCM: ncm,
         CFOP: Number(r.cfop),
         Unidade: unidadeFinal,
