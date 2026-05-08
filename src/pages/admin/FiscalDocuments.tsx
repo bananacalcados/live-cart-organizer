@@ -193,6 +193,17 @@ export default function FiscalDocuments() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {cancelDoc && (
+        <CancelFiscalDocDialog
+          open={!!cancelDoc}
+          onOpenChange={(v) => { if (!v) setCancelDoc(null); }}
+          fiscalDocumentId={cancelDoc.id}
+          modelo={cancelDoc.modelo}
+          numero={cancelDoc.numero}
+          onCancelled={() => { setCancelDoc(null); load(); }}
+        />
+      )}
     </div>
   );
 }
