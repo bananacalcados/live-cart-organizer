@@ -4451,6 +4451,7 @@ export type Database = {
           brasilnfe_response: Json | null
           cancellation_protocol: string | null
           cancellation_reason: string | null
+          cancellation_xml: string | null
           cancelled_at: string | null
           chave_acesso: string | null
           company_id: string
@@ -4486,6 +4487,7 @@ export type Database = {
           brasilnfe_response?: Json | null
           cancellation_protocol?: string | null
           cancellation_reason?: string | null
+          cancellation_xml?: string | null
           cancelled_at?: string | null
           chave_acesso?: string | null
           company_id: string
@@ -4521,6 +4523,7 @@ export type Database = {
           brasilnfe_response?: Json | null
           cancellation_protocol?: string | null
           cancellation_reason?: string | null
+          cancellation_xml?: string | null
           cancelled_at?: string | null
           chave_acesso?: string | null
           company_id?: string
@@ -4563,6 +4566,74 @@ export type Database = {
             columns: ["pos_sale_id"]
             isOneToOne: false
             referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fiscal_inutilizations: {
+        Row: {
+          ambiente: string
+          ano: number
+          brasilnfe_request: Json | null
+          brasilnfe_response: Json | null
+          company_id: string
+          created_at: string
+          id: string
+          justificativa: string
+          modelo: number
+          numero_final: number
+          numero_inicial: number
+          protocolo: string | null
+          rejection_message: string | null
+          serie: number
+          status: string
+          updated_at: string
+          xml_content: string | null
+        }
+        Insert: {
+          ambiente: string
+          ano: number
+          brasilnfe_request?: Json | null
+          brasilnfe_response?: Json | null
+          company_id: string
+          created_at?: string
+          id?: string
+          justificativa: string
+          modelo: number
+          numero_final: number
+          numero_inicial: number
+          protocolo?: string | null
+          rejection_message?: string | null
+          serie: number
+          status?: string
+          updated_at?: string
+          xml_content?: string | null
+        }
+        Update: {
+          ambiente?: string
+          ano?: number
+          brasilnfe_request?: Json | null
+          brasilnfe_response?: Json | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          justificativa?: string
+          modelo?: number
+          numero_final?: number
+          numero_inicial?: number
+          protocolo?: string | null
+          rejection_message?: string | null
+          serie?: number
+          status?: string
+          updated_at?: string
+          xml_content?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fiscal_inutilizations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
