@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Truck, ClipboardList, ScanBarcode, Receipt, Tag, ShieldCheck, ArrowRight, Gift, Radio, Trash2, CheckCheck, Unlink, Clock, Play, RotateCcw, FileText, Printer, Loader2 } from 'lucide-react';
+import { CancelFiscalDocDialog } from '@/components/fiscal/CancelFiscalDocDialog';
 
 interface Props {
   orders: any[];
@@ -380,6 +381,7 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
   const [isResetting, setIsResetting] = useState(false);
   const [isEmittingNfe, setIsEmittingNfe] = useState(false);
   const [nfeDoc, setNfeDoc] = useState<any>(null);
+  const [cancelNfeOpen, setCancelNfeOpen] = useState(false);
 
   // Carrega doc fiscal NF-e (modelo 55) deste pedido
   const loadNfeDoc = async () => {
