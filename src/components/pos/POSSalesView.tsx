@@ -1741,20 +1741,48 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 {discountValue > 0 && <p className="text-sm text-red-400">Desconto: -R$ {discountValue.toFixed(2)}</p>}
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Button
-                  className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10"
-                  variant="outline"
-                  onClick={emitNfce}
-                  disabled={emittingNfce || !!nfceResult}
-                >
-                  {emittingNfce ? <Loader2 className="h-5 w-5 animate-spin" /> : <Receipt className="h-5 w-5" />}
-                  {nfceResult ? 'NFC-e Emitida ✓' : 'Emitir NFC-e'}
-                </Button>
-                {nfceResult?.invoice_pdf_url && (
-                  <Button className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10" variant="outline" onClick={() => window.open(nfceResult.invoice_pdf_url, '_blank')}>
-                    <Printer className="h-5 w-5" /> Imprimir Nota
-                  </Button>
-                )}
+                {(() => {
+                  const status = fiscalDoc?.status as string | undefined;
+                  const authorized = status === 'authorized';
+                  const contingencia = status === 'pending_sefaz';
+                  const rejected = status === 'rejected';
+                  const pending = status === 'pending';
+                  const showEmit = !status || rejected;
+                  const btnLabel = authorized ? 'NFC-e Autorizada ✓'
+                    : contingencia ? 'Em contingência ⏳'
+                    : pending ? 'Emitindo...'
+                    : rejected ? 'Reemitir NFC-e'
+                    : 'Emitir NFC-e';
+                  return (
+                    <>
+                      <Button
+                        className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10"
+                        variant="outline"
+                        onClick={emitNfce}
+                        disabled={emittingNfce || pending || authorized || contingencia}
+                      >
+                        {(emittingNfce || pending) ? <Loader2 className="h-5 w-5 animate-spin" /> : <Receipt className="h-5 w-5" />}
+                        {btnLabel}
+                      </Button>
+                      {authorized && fiscalDoc?.danfe_url && (
+                        <Button className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10" variant="outline" onClick={() => window.open(fiscalDoc.danfe_url, '_blank')}>
+                          <Printer className="h-5 w-5" /> Imprimir NFC-e
+                        </Button>
+                      )}
+                      {contingencia && (
+                        <div className="col-span-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 p-3 text-sm text-yellow-300">
+                          ⏳ SEFAZ indisponível. A venda foi concluída e a NFC-e será emitida automaticamente quando a SEFAZ voltar. O cliente receberá o link da nota por WhatsApp.
+                        </div>
+                      )}
+                      {rejected && fiscalDoc?.rejection_message && (
+                        <div className="col-span-2 rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-300">
+                          ❌ NFC-e rejeitada: {fiscalDoc.rejection_message}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+
                 {loyaltyConfig?.wheel_enabled && wheelSegments.length > 0 && !showWheel && (
                   <Button
                     className="h-14 gap-2 text-base bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-bold col-span-2 hover:from-yellow-500 hover:via-orange-600 hover:to-red-600 shadow-lg"
