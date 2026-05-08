@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
       TipoAmbiente: company.ambiente_nfe === "producao" ? "1" : "2",
     };
 
-    const resp = await fetch(`${BRASILNFE_BASE}/Fiscal/ManifestarDestinatario`, {
+    const resp = await fetch(`${BRASILNFE_BASE}/Fiscal/ManifestarNotaFiscal`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${company.brasilnfe_token}` },
       body: JSON.stringify(reqPayload),
