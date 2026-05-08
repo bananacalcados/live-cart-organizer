@@ -99,14 +99,19 @@ Deno.serve(async (req) => {
         unidade_comercial: unidadeFinal,
       }).eq("id", it.id);
 
-      // SEFAZ cProd: código alfanumérico ≤60, sem espaços. Usa SKU/GTIN; fallback para id sanitizado.
-      const rawCod = String(it.sku || it.id || "").replace(/[^A-Za-z0-9._-]/g, "").slice(0, 60) || `ITEM${idx + 1}`;
-      // SEFAZ xProd: descrição ≤120 chars
+      // SEFAZ cProd: ≤60 chars, sem acentos. Não pode parecer GTIN inválido.
+      // Usamos o nome do produto sanitizado e truncado.
+      const sanitize = (s: string) => s
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+        .replace(/[^A-Za-z0-9 .\-_/]/g, " ")
+        .replace(/\s+/g, " ").trim();
+      const nmRaw = sanitize(it.product_name || `ITEM ${idx + 1}`).slice(0, 60) || `ITEM${idx + 1}`;
+      // Se ficar com cara de GTIN puro (só dígitos com 8/12/13/14), prefixamos para evitar validação GTIN
+      const nmProduto = /^\d{8}$|^\d{12,14}$/.test(nmRaw) ? `P${nmRaw}`.slice(0, 60) : nmRaw;
       const desc = String(it.product_name || "").slice(0, 120);
       produtos.push({
-        NmProduto: rawCod,
+        NmProduto: nmProduto,
         Descricao: desc,
-        xProd: desc,
         NCM: ncm,
         CFOP: Number(r.cfop),
         Unidade: unidadeFinal,
