@@ -1,47 +1,59 @@
-## Plano: Agente Jess nas Automações + Tags + Leads
+# Migração NFC-e PDV: Tiny → BrasilNFe + Imprimir + Contingência
 
-### 1. Migration: Adicionar `tags` na `zoppy_customers`
-- Adicionar coluna `tags TEXT[]` na tabela `zoppy_customers`
-- Criar índice GIN para buscas eficientes por tag
+## Objetivo
+Substituir a emissão NFC-e via Tiny pela infra **BrasilNFe** já existente (`nfce-emitir` + fila `pending_sefaz`) no fluxo de fechamento do PDV, mantendo as configurações de "quando emitir" por loja e expondo o botão **Imprimir NFC-e** na tela de "Venda Finalizada". Garantir que a venda nunca trave: se SEFAZ falhar, vai pra contingência e cliente recebe o DANFE depois.
 
-### 2. Criar ferramentas (tools) novas no `_shared/ads-tools.ts`
-Duas novas tools que a Jess poderá usar nas automações:
+## O que muda (3 partes)
 
-#### `tag_or_register_contact`
-- Recebe: `phone`, `tag`, `campaign_name` (opcional), `name` (opcional)
-- Lógica de decisão inteligente:
-  1. Normaliza o telefone (E.164)
-  2. Busca na `zoppy_customers` pelo telefone, considerando variações do 9º dígito (ex: 5533991955003 = 553391955003)
-  3. **Se encontrar** → adiciona a tag no array `tags` do cliente existente
-  4. **Se NÃO encontrar** → cria um registro na `ad_leads` vinculando à campanha pelo nome
+### 1. Configuração por loja (já existe, só ajustar UI)
+A tabela `pos_invoice_config` já tem:
+- `auto_emit_on_sale` (bool) — emitir automaticamente ao concluir venda
+- `auto_emit_min_value` (numeric) — valor mínimo p/ auto-emitir
+- `auto_emit_payment_methods` (text[]) — formas de pagamento que disparam auto-emissão (ex: pix, dinheiro)
 
-#### `create_assistance_request`
-- Já existe parcialmente no motor da Jess — reutilizar a tool que cria solicitações em `ai_assistance_requests`
-- Permite transferir atendimento para vendedoras do PDV
+Em `POSConfig.tsx` (já está montada a tela). Apenas:
+- Atualizar copy: "NFC-e (BrasilNFe)" em vez de "Tiny"
+- Validar que a loja tem `company_id` vinculado e a empresa tem `brasilnfe_token` antes de salvar (toast de erro se faltar)
 
-### 3. Modificar `automation-ai-respond` para suportar modo Jess
-- Adicionar um campo na configuração da automação (ex: `use_jess_agent: true`)
-- Quando ativado, o agente usa o motor de tool calling da Jess em vez do chat simples
-- O prompt configurado na automação **sobrepõe** o prompt padrão da Jess
-- As tools disponíveis seriam um subconjunto controlado:
-  - `tag_or_register_contact` (nova)
-  - `create_assistance_request` (existente)
-  - Outras tools da Jess ficariam **desabilitadas** (ex: `generate_checkout_link`, `save_lead_data`) a menos que o prompt indique o contrário
+### 2. Fluxo de finalização da venda (`POSSalesView.tsx`)
+Substituir a função `emitNfce()` que chama `pos-tiny-emit-nfce` pela chamada à edge **`nfce-emitir`** (já existe, BrasilNFe + contingência):
 
-### 4. Lógica de match de telefone (9º dígito)
-- Criar função utilitária reutilizável que compara telefones ignorando o 9º dígito
-- Regra: Se DDI + DDD batem E os últimos 8 dígitos do número batem → é a mesma pessoa
-- Usar na busca da `zoppy_customers` e também na `ad_leads`
+```text
+finalizarVenda()
+  ├─ cria pos_sale (igual hoje)
+  ├─ lê pos_invoice_config da loja
+  ├─ se auto_emit_on_sale && total ≥ min && payment ∈ methods:
+  │     dispara nfce-emitir em background (não bloqueia tela)
+  └─ vai para step="invoice"
 
-### 5. UI: Campo de campanha na configuração da automação
-- Na tela de automações (Marketing > Automações), adicionar campo para selecionar/nomear a campanha de leads
-- Toggle para ativar "Modo Jess" na automação
+step="invoice":
+  ├─ Botão "Emitir NFC-e" (se ainda não emitida) → chama nfce-emitir
+  ├─ Polling/realtime em fiscal_documents WHERE pos_sale_id = sale.id
+  ├─ Quando status='authorized' → habilita botão "Imprimir NFC-e" (abre danfe_url)
+  ├─ Quando status='pending_sefaz' → mostra badge "Em contingência (será reemitida)" + botão Imprimir desabilitado
+  └─ Quando status='rejected' → mostra erro + botão "Tentar novamente"
+```
 
-### Fluxo exemplo:
-1. Cliente responde à automação dizendo "quero ser avisada da próxima live"
-2. Jess (via automação) recebe a mensagem com prompt customizado
-3. Jess chama `tag_or_register_contact` com tag "quer_live"
-4. Tool busca pelo telefone na zoppy_customers (com match flexível do 9º dígito)
-5. Se encontrar → adiciona tag "quer_live" no cliente
-6. Se não encontrar → cria lead na ad_leads com campaign vinculada
-7. Jess responde ao cliente confirmando o interesse
+A edge `nfce-emitir` **já trata SEFAZ offline** (códigos 108/109/999, HTTP 5xx, timeout) marcando como `pending_sefaz`. A venda no PDV é concluída normalmente — o cron `nfce-retry-pending` (já agendado) reemite a cada 5 min.
+
+### 3. Notificação ao cliente quando autorizada em contingência
+Quando o cron autoriza uma NFC-e que estava `pending_sefaz`, disparar WhatsApp pro cliente com link do DANFE — para o cliente que pediu pra "imprimir/enviar" não ficar sem nota. Implementação: trigger no UPDATE de `fiscal_documents` (status `pending_sefaz`→`authorized`) que insere job de envio.
+
+## Arquivos a editar
+- `src/components/pos/POSSalesView.tsx` — trocar `emitNfce` para chamar `nfce-emitir`; auto-emit pós-venda baseado em `pos_invoice_config`; UI do step `invoice` com 3 estados (autorizada/contingência/rejeitada) e polling realtime em `fiscal_documents`.
+- `src/components/pos/POSPickupOrders.tsx` — mesma troca de endpoint (handleEmitNfce).
+- `src/components/pos/POSConfig.tsx` — texto "BrasilNFe" + validação de `company_id` / `brasilnfe_token`.
+- `supabase/migrations/...` — trigger `on fiscal_documents` que ao virar `authorized` (vindo de `pending_sefaz`) enfileira mensagem WhatsApp pro CPF/telefone da venda.
+- *(opcional fase 2)* depreciar `supabase/functions/pos-tiny-emit-nfce` — mantemos por ora como fallback histórico, sem chamar.
+
+## Detalhes técnicos
+- **Realtime**: `supabase.channel().on('postgres_changes', { table: 'fiscal_documents', filter: 'pos_sale_id=eq.<id>' })` para atualizar a UI sem polling.
+- **Auto-emit**: roda *fire-and-forget* (`supabase.functions.invoke('nfce-emitir', { body: { sale_id }})` sem await bloqueante) — UI já mostra "emitindo..." e o realtime atualiza.
+- **Botão Imprimir**: `window.open(fiscalDoc.danfe_url, '_blank')` — `danfe_url` já é preenchido por `nfce-emitir`.
+- **Estados de status visíveis**: `pending` (emitindo), `pending_sefaz` (contingência), `authorized` (ok), `rejected` (erro).
+- **Garantia de não-bloqueio**: a venda em `pos_sales` é criada **antes** de chamar NFC-e. Falha fiscal nunca cancela venda; só impede impressão imediata.
+
+## Não está no escopo (futuro)
+- Cancelamento NFC-e (CC-e)
+- Inutilização de numeração
+- Troca/devolução fiscal
