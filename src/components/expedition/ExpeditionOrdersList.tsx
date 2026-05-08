@@ -395,7 +395,7 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
   };
 
   // Carrega ao expandir
-  useState(() => { if (isExpanded) loadNfeDoc(); });
+  useEffect(() => { if (isExpanded) loadNfeDoc(); /* eslint-disable-next-line */ }, [isExpanded, order.id]);
 
   const handleEmitNfe = async () => {
     setIsEmittingNfe(true);
