@@ -931,27 +931,22 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   };
 
   const emitNfce = async () => {
-    if (!saleResult?.tiny_order_id) return;
+    if (!saleResult?.sale_id) return;
     setEmittingNfce(true);
     try {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-emit-nfce`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-        body: JSON.stringify({
-          store_id: storeId,
-          sale_id: saleResult.sale_id,
-          tiny_order_id: saleResult.tiny_order_id,
-        }),
+      const { data, error } = await supabase.functions.invoke('nfce-emitir', {
+        body: { sale_id: saleResult.sale_id },
       });
-      const data = await resp.json();
-      if (data.success) {
-        setNfceResult(data);
-        toast.success("NFC-e emitida!");
+      if (error) throw error;
+      if (data?.ok) {
+        toast.success("NFC-e autorizada!");
+      } else if (data?.contingencia) {
+        toast.info("SEFAZ indisponível — NFC-e em contingência. Será reemitida automaticamente.");
       } else {
-        toast.error(data.error || "Erro ao emitir NFC-e");
+        toast.error(data?.error || "Erro ao emitir NFC-e");
       }
-    } catch (e) {
-      toast.error("Erro ao emitir NFC-e");
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao emitir NFC-e");
     } finally {
       setEmittingNfce(false);
     }
