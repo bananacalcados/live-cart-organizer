@@ -49,6 +49,9 @@ export default function FiscalNumbering() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [inutilizations, setInutilizations] = useState<any[]>([]);
+  const [inutSeq, setInutSeq] = useState<Sequence | null>(null);
+  const [inutOpen, setInutOpen] = useState(false);
 
   const [companyId, setCompanyId] = useState("");
   const [modelo, setModelo] = useState<55 | 65>(65);
