@@ -4454,13 +4454,16 @@ export type Database = {
           cancelled_at: string | null
           chave_acesso: string | null
           company_id: string
+          contingencia_motivo: string | null
           cpf_destinatario: string | null
           created_at: string
           danfe_url: string | null
           data_autorizacao: string | null
           events: Json | null
           id: string
+          last_retry_at: string | null
           modelo: number
+          next_retry_at: string | null
           nome_destinatario: string | null
           numero: number | null
           order_id: string | null
@@ -4469,6 +4472,7 @@ export type Database = {
           qrcode_url: string | null
           rejection_code: string | null
           rejection_message: string | null
+          retry_count: number
           serie: number
           status: string
           updated_at: string
@@ -4485,13 +4489,16 @@ export type Database = {
           cancelled_at?: string | null
           chave_acesso?: string | null
           company_id: string
+          contingencia_motivo?: string | null
           cpf_destinatario?: string | null
           created_at?: string
           danfe_url?: string | null
           data_autorizacao?: string | null
           events?: Json | null
           id?: string
+          last_retry_at?: string | null
           modelo: number
+          next_retry_at?: string | null
           nome_destinatario?: string | null
           numero?: number | null
           order_id?: string | null
@@ -4500,6 +4507,7 @@ export type Database = {
           qrcode_url?: string | null
           rejection_code?: string | null
           rejection_message?: string | null
+          retry_count?: number
           serie: number
           status?: string
           updated_at?: string
@@ -4516,13 +4524,16 @@ export type Database = {
           cancelled_at?: string | null
           chave_acesso?: string | null
           company_id?: string
+          contingencia_motivo?: string | null
           cpf_destinatario?: string | null
           created_at?: string
           danfe_url?: string | null
           data_autorizacao?: string | null
           events?: Json | null
           id?: string
+          last_retry_at?: string | null
           modelo?: number
+          next_retry_at?: string | null
           nome_destinatario?: string | null
           numero?: number | null
           order_id?: string | null
@@ -4531,6 +4542,7 @@ export type Database = {
           qrcode_url?: string | null
           rejection_code?: string | null
           rejection_message?: string | null
+          retry_count?: number
           serie?: number
           status?: string
           updated_at?: string
