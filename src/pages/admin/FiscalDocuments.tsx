@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, FileText, Send, RefreshCw, Webhook, Copy, AlertTriangle, Zap } from "lucide-react";
+import { ArrowLeft, FileText, Send, RefreshCw, Webhook, Copy, AlertTriangle, Zap, Ban } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { CancelFiscalDocDialog } from "@/components/fiscal/CancelFiscalDocDialog";
 
 export default function FiscalDocuments() {
   const [rows, setRows] = useState<any[]>([]);
@@ -16,6 +17,7 @@ export default function FiscalDocuments() {
   const [loading, setLoading] = useState(true);
   const [saleId, setSaleId] = useState("");
   const [emitting, setEmitting] = useState(false);
+  const [cancelDoc, setCancelDoc] = useState<any>(null);
 
   const webhookUrl = `https://tqxhcyuxgqbzqwoidpie.supabase.co/functions/v1/brasilnfe-webhook`;
 
