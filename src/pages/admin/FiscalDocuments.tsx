@@ -78,6 +78,21 @@ export default function FiscalDocuments() {
         <Button variant="ghost" size="sm" onClick={load}><RefreshCw className="w-4 h-4" /></Button>
       </div>
 
+      {pendingSefaz.length > 0 && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              <div>
+                <CardTitle className="text-base">SEFAZ em contingência — {pendingSefaz.length} {pendingSefaz.length === 1 ? "nota pendente" : "notas pendentes"}</CardTitle>
+                <CardDescription>As vendas foram concluídas. Reemissão automática a cada 5 min com backoff exponencial.</CardDescription>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" onClick={retryNow}><Zap className="w-4 h-4 mr-1" />Tentar agora</Button>
+          </CardHeader>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Webhook className="w-5 h-5" />Webhook BrasilNFe</CardTitle>
