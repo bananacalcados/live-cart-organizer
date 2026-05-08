@@ -695,8 +695,23 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
                     <a href={nfeDoc.xml_url} target="_blank" rel="noreferrer"><FileText className="h-4 w-4" /> XML</a>
                   </Button>
                 )}
+                {nfeDoc?.status === 'authorized' && nfeDoc?.id && (
+                  <Button onClick={() => setCancelNfeOpen(true)} size="sm" variant="destructive" className="gap-2">
+                    <AlertTriangle className="h-4 w-4" /> Cancelar NF-e
+                  </Button>
+                )}
               </div>
             </div>
+            {nfeDoc?.id && (
+              <CancelFiscalDocDialog
+                open={cancelNfeOpen}
+                onOpenChange={setCancelNfeOpen}
+                fiscalDocumentId={nfeDoc.id}
+                modelo={55}
+                numero={nfeDoc.numero}
+                onCancelled={() => loadNfeDoc()}
+              />
+            )}
 
             {/* Action buttons */}
             <div className="flex flex-col gap-2">
