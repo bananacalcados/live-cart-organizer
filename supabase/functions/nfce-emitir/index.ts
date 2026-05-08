@@ -99,18 +99,21 @@ Deno.serve(async (req) => {
         unidade_comercial: unidadeFinal,
       }).eq("id", it.id);
 
-      // SEFAZ cProd: ≤60 chars, sem acentos. Não pode parecer GTIN inválido.
-      // Usamos o nome do produto sanitizado e truncado.
       const sanitize = (s: string) => s
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
         .replace(/[^A-Za-z0-9 .\-_/]/g, " ")
         .replace(/\s+/g, " ").trim();
       const nmRaw = sanitize(it.product_name || `ITEM ${idx + 1}`).slice(0, 60) || `ITEM${idx + 1}`;
-      // Se ficar com cara de GTIN puro (só dígitos com 8/12/13/14), prefixamos para evitar validação GTIN
       const nmProduto = /^\d{8}$|^\d{12,14}$/.test(nmRaw) ? `P${nmRaw}`.slice(0, 60) : nmRaw;
+      // Código curto e limpo (cProd) — SKU sanitizado ou ITEM<n>
+      const skuClean = String(it.sku || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 30);
+      const cdProduto = skuClean || `ITEM${idx + 1}`;
       const desc = String(it.product_name || "").slice(0, 120);
       produtos.push({
         NmProduto: nmProduto,
+        CdProduto: cdProduto,
+        CodProduto: cdProduto,
+        Codigo: cdProduto,
         Descricao: desc,
         NCM: ncm,
         CFOP: Number(r.cfop),
