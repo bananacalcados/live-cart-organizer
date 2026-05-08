@@ -298,24 +298,21 @@ export function POSPickupOrders({ storeId }: Props) {
     if (!processingOrder || !saleResult?.sale_id) return;
     setEmittingNfce(true);
     try {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-emit-nfce`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-        body: JSON.stringify({
-          store_id: storeId,
-          tiny_order_id: saleResult.tiny_order_id,
-          sale_id: saleResult.sale_id || processingOrder.id,
-        }),
+      const { data, error } = await supabase.functions.invoke('nfce-emitir', {
+        body: { sale_id: saleResult.sale_id || processingOrder.id },
       });
-      const data = await resp.json();
-      if (data.success) {
-        toast.success("NFC-e emitida com sucesso!");
-        setNfceResult(data);
+      if (error) throw error;
+      if (data?.ok) {
+        toast.success("NFC-e autorizada!");
+        setNfceResult({ ...data, pdf_url: data.response?.DanfeUrl || null });
+      } else if (data?.contingencia) {
+        toast.info("SEFAZ indisponível — NFC-e em contingência. Será reemitida automaticamente.");
+        setNfceResult({ contingencia: true });
       } else {
-        toast.error(data.error || "Erro ao emitir NFC-e");
+        toast.error(data?.error || "Erro ao emitir NFC-e");
       }
-    } catch (e) {
-      toast.error("Erro ao emitir NFC-e");
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao emitir NFC-e");
     } finally {
       setEmittingNfce(false);
     }
