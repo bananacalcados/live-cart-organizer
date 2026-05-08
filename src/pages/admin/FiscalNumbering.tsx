@@ -62,14 +62,16 @@ export default function FiscalNumbering() {
 
   const load = async () => {
     setLoading(true);
-    const [c, s] = await Promise.all([
+    const [c, s, i] = await Promise.all([
       (supabase as any).from("companies").select("id,legal_name,trade_name,cnpj,is_pilot,is_active").order("legal_name"),
       (supabase as any).from("fiscal_sequences").select("*").order("updated_at", { ascending: false }),
+      (supabase as any).from("fiscal_inutilizations").select("*").order("created_at", { ascending: false }).limit(50),
     ]);
     if (c.error) toast({ title: "Erro empresas", description: c.error.message, variant: "destructive" });
     else setCompanies(c.data || []);
     if (s.error) toast({ title: "Erro sequências", description: s.error.message, variant: "destructive" });
     else setSequences(s.data || []);
+    if (!i.error) setInutilizations(i.data || []);
     setLoading(false);
   };
 
