@@ -962,6 +962,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setStep("scan");
     setSaleResult(null);
     setNfceResult(null);
+    setFiscalDoc(null);
     setSearchResults([]);
     setCashReceived("");
     setInstallments("1");
