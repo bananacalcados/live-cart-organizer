@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
           },
           PIS:    { CodSituacaoTributaria: String(r.cst_pis || "07"),    Aliquota: Number(r.aliq_pis || 0),    BaseCalculo: vTotal },
           COFINS: { CodSituacaoTributaria: String(r.cst_cofins || "07"), Aliquota: Number(r.aliq_cofins || 0), BaseCalculo: vTotal },
-          IPI:    { CodSituacaoTributaria: "53", Aliquota: 0, BaseCalculo: 0, ValorIpi: 0 },
+          IPI:    { CodSituacaoTributaria: "53", CodEnquadramentoLegal: "999", Aliquota: 0, BaseCalculo: 0, ValorIpi: 0 },
         },
       });
     }
