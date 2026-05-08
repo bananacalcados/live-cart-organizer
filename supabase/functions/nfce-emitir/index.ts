@@ -1,6 +1,54 @@
 // Edge function: nfce-emitir
 // Monta payload NFC-e (modelo 65), chama BrasilNFe e persiste em fiscal_documents.
 // Body: { sale_id: uuid, ambiente?: 'homologacao'|'producao' }
+//
+// ============================================================================
+// 🔒 GOLDEN PAYLOAD — NÃO ALTERAR SEM TESTAR EM HOMOLOGAÇÃO + PRODUÇÃO
+// ============================================================================
+// Este formato foi validado em 2026-05-08 com a API BrasilNFe e passou
+// pela SEFAZ-MG (XML assinado e transmitido com sucesso). Estrutura mínima:
+//
+// {
+//   TipoAmbiente: "1" | "2",        // string! "1"=produção, "2"=homologação
+//   ModeloDocumento: 65,            // 65 NFC-e, 55 NF-e
+//   NaturezaOperacao: "Venda ao Consumidor",
+//   Finalidade: 1,
+//   ConsumidorFinal: true,
+//   IndicadorPresenca: 1,
+//   IdentificadorInterno: "POS-<sale_id>",   // OBRIGATÓRIO (verificação ativa)
+//   Cliente: { CpfCnpj, NmCliente, IndicadorIe: 9 },
+//   Produtos: [{
+//     NmProduto,                              // SEM caracteres especiais (ex: "-")
+//     CodProdutoServico, NCM, CFOP,
+//     UnidadeComercial: "PAR" | "UN",         // PAR para calçados, UN para acessórios
+//     UnidadeMedida, UnidadeTributavel,
+//     Quantidade, QuantidadeTributavel,
+//     ValorUnitario, ValorUnitarioTributavel, ValorTotal,
+//     OrigemProduto: 0,
+//     Imposto: {                              // ⚠️ "Imposto" SINGULAR, não "Impostos"
+//       ICMS:    { CodSituacaoTributaria, AliquotaICMS, BaseCalculo, ValorIcms },
+//       PIS:     { CodSituacaoTributaria: "07", Aliquota, BaseCalculo },
+//       COFINS:  { CodSituacaoTributaria: "07", Aliquota, BaseCalculo },
+//     },
+//   }],
+//   Pagamentos: [{
+//     IndicadorPagamento: 0,
+//     FormaPagamento: "01"|"03"|"04"|"15"|"17"|"99", // STRING tabela 38 SEFAZ
+//     Descricao,
+//     VlPago,                                 // ⚠️ campo é "VlPago", não "Valor"
+//   }],
+// }
+//
+// Erros já resolvidos (NÃO REPETIR):
+// • "Unidade Comercial/Medida do produto é inválido" → use PAR/UN, não UND
+// • "Os dados de impostos não foi informado" → use "Imposto" (singular) com sub-objetos
+// • "Forma de pagamento inválida" → use FormaPagamento (string) + VlPago, não TipoPagamento
+// • "Identificador Interno não foi enviado" → sempre incluir IdentificadorInterno
+// • Caracteres especiais (-, /, etc) no NmProduto causam rejeição
+// • IE em homologação precisa de credenciamento separado na SEFAZ
+//
+// Veja mem://features/fiscal/nfe-payload-golden-template para detalhes.
+// ============================================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {

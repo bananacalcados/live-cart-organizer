@@ -10,8 +10,13 @@ const ALLOWED_ORIGINS = [
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
+  const isAllowed =
+    ALLOWED_ORIGINS.includes(origin) ||
+    /^https:\/\/[a-z0-9-]+\.lovable\.app$/i.test(origin) ||
+    /^https:\/\/[a-z0-9-]+\.lovableproject\.com$/i.test(origin) ||
+    origin.startsWith("http://localhost");
   return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : "null",
+    "Access-Control-Allow-Origin": isAllowed ? origin : "null",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
   };
