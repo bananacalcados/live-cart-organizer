@@ -196,18 +196,24 @@ export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPr
                       >
                         Finalizar Venda ✨
                       </button>
-                      <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="grid gap-2 sm:grid-cols-3">
                         <button
                           onClick={onPrintNonFiscal}
-                          className="w-full px-4 py-3 rounded-2xl bg-white/10 text-white font-bold hover:bg-white/20 transition-all border border-white/20"
+                          className="w-full px-3 py-3 rounded-2xl bg-white/10 text-white font-bold text-xs hover:bg-white/20 transition-all border border-white/20"
                         >
-                          Imprimir Cupom Não Fiscal
+                          Cupom Não Fiscal
                         </button>
                         <button
                           onClick={onPrintFiscal}
-                          className="w-full px-4 py-3 rounded-2xl bg-white/10 text-white font-bold hover:bg-white/20 transition-all border border-white/20"
+                          className="w-full px-3 py-3 rounded-2xl bg-white/10 text-white font-bold text-xs hover:bg-white/20 transition-all border border-white/20"
                         >
-                          Imprimir Cupom Fiscal
+                          Cupom Fiscal
+                        </button>
+                        <button
+                          onClick={onPrintGift}
+                          className="w-full px-3 py-3 rounded-2xl bg-amber-500/20 text-amber-200 font-bold text-xs hover:bg-amber-500/30 transition-all border border-amber-400/40"
+                        >
+                          🎁 Cupom de Troca
                         </button>
                       </div>
                     </div>
