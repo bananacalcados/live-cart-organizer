@@ -307,12 +307,22 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
   const stats = useMemo(() => {
     const completedStatuses = ["completed", "paid", "delivered"];
     const valid = sales.filter(s => completedStatuses.includes(s.status) || !["cancelled", "canceled"].includes(s.status));
-    const ltv = valid.reduce((acc, s) => acc + Number(s.total || 0), 0);
-    const count = valid.length;
+    const detailLtv = valid.reduce((acc, s) => acc + Number(s.total || 0), 0);
+    const detailCount = valid.length;
+    const zoppyDetailCount = sales.filter(s => s.id.startsWith("zoppy-")).length;
+
+    // Merge with legacy aggregate (zoppy_customers): when aggregate has more orders than the detail rows we fetched, prefer the aggregate.
+    const legacyOrders = legacyAggregate?.total_orders || 0;
+    const legacySpent = Number(legacyAggregate?.total_spent || 0);
+    const extraLegacyOrders = Math.max(0, legacyOrders - zoppyDetailCount);
+    const extraLegacySpent = legacyOrders > zoppyDetailCount ? legacySpent : 0; // only add full legacy spent when detail is incomplete
+
+    const count = detailCount + extraLegacyOrders;
+    const ltv = detailLtv + extraLegacySpent;
     const avg = count ? ltv / count : 0;
-    const lastPurchase = valid[0]?.created_at;
-    return { ltv, count, avg, lastPurchase };
-  }, [sales]);
+    const lastPurchase = valid[0]?.created_at || legacyAggregate?.last_purchase_at || null;
+    return { ltv, count, avg, lastPurchase, extraLegacyOrders };
+  }, [sales, legacyAggregate]);
 
   const activeCashbacks = cashbacks.filter(c => !c.is_used && new Date(c.expires_at) > new Date());
   const expiredOrUsedCashbacks = cashbacks.filter(c => c.is_used || new Date(c.expires_at) <= new Date());
