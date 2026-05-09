@@ -104,10 +104,137 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [addingProduct, setAddingProduct] = useState(false);
   const [newProductQty, setNewProductQty] = useState("1");
   const [currentItems, setCurrentItems] = useState<SaleItem[]>(items);
+  const [emittingNfce, setEmittingNfce] = useState(false);
+  const [fiscalDoc, setFiscalDoc] = useState<{ status: string; danfe_url: string | null } | null>(null);
 
   useEffect(() => {
     setCurrentItems(items);
   }, [items]);
+
+  // Load fiscal doc for this sale
+  useEffect(() => {
+    if (!sale?.id) { setFiscalDoc(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('fiscal_documents')
+        .select('status, danfe_url')
+        .eq('pos_sale_id', sale.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) setFiscalDoc(data as any);
+    })();
+    const ch = supabase
+      .channel(`fdoc-detail-${sale.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'fiscal_documents', filter: `pos_sale_id=eq.${sale.id}` },
+        (payload) => { if (!cancelled) setFiscalDoc(payload.new as any); })
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(ch); };
+  }, [sale?.id]);
+
+  const exchangePolicyHtml = `
+    <div class="policy">
+      <p style="font-weight:bold; margin-bottom:4px;">POLÍTICA DE TROCAS</p>
+      <p>• Produtos sem promoção: até <strong>30 dias</strong> para troca</p>
+      <p>• Produtos em promoção: até <strong>7 dias</strong> para troca</p>
+      <p>• Defeitos de fabricação: até <strong>90 dias</strong></p>
+      <p style="margin-top:6px; font-size:10px;">Conforme o CDC, em compras presenciais não há devolução do valor pago — apenas troca dentro do prazo. O direito de arrependimento (art. 49, CDC) aplica-se apenas a compras realizadas fora do estabelecimento (online/telefone).</p>
+      <p style="margin-top:4px; font-size:10px;">Apresente este cupom no momento da troca.</p>
+    </div>
+  `;
+
+  const printNonFiscal = () => {
+    if (!sale) return;
+    const subtotal = currentItems.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+    const itemsHtml = currentItems.map(i => `
+      <tr>
+        <td style="padding:4px 0; vertical-align:top;">${i.quantity}x</td>
+        <td style="padding:4px 8px; vertical-align:top;">${i.product_name}${i.variant_name ? ` - ${i.variant_name}` : ''}</td>
+        <td style="padding:4px 0; text-align:right; vertical-align:top;">R$ ${(i.unit_price * i.quantity).toFixed(2)}</td>
+      </tr>`).join('');
+    const w = window.open('', '_blank', 'width=420,height=760');
+    if (!w) { toast.error('Não foi possível abrir a impressão.'); return; }
+    w.document.write(`<html><head><title>Cupom Não Fiscal</title>
+      <style>body{font-family:Arial,sans-serif;color:#111;padding:16px}h2,p{margin:0}.muted{color:#555}.sep{border-top:1px dashed #999;margin:12px 0}table{width:100%;border-collapse:collapse;font-size:12px}.totals{font-size:14px}.policy{font-size:11px;color:#333;margin-top:8px;line-height:1.4}.policy p{margin:2px 0}@media print{body{padding:0}}</style>
+      </head><body>
+        <h2>Banana Calçados</h2><p class="muted">Cupom Não Fiscal (Nota Simples)</p>
+        <div class="sep"></div>
+        <p><strong>${sale.tiny_order_number ? `Pedido #${sale.tiny_order_number}` : 'Venda PDV'}</strong></p>
+        <p>Cliente: ${currentCustomer?.name || 'Consumidor Final'}</p>
+        <p>Vendedor(a): ${sellerName || '-'}</p>
+        <p>Data: ${new Date(sale.created_at).toLocaleString('pt-BR')}</p>
+        <div class="sep"></div>
+        <table><tbody>${itemsHtml}</tbody></table>
+        <div class="sep"></div>
+        <div class="totals">
+          <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><strong>R$ ${subtotal.toFixed(2)}</strong></div>
+          ${sale.discount > 0 ? `<div style="display:flex;justify-content:space-between;"><span>Desconto</span><strong>-R$ ${sale.discount.toFixed(2)}</strong></div>` : ''}
+          <div style="display:flex;justify-content:space-between;"><span>Total</span><strong>R$ ${sale.total.toFixed(2)}</strong></div>
+        </div>
+        <div class="sep"></div>
+        <p><strong>Pagamento</strong></p>
+        <p>${sale.payment_method || 'Não informado'}</p>
+        <div class="sep"></div>
+        ${exchangePolicyHtml}
+        <script>window.onload=()=>window.print()</script>
+      </body></html>`);
+    w.document.close();
+  };
+
+  const printGift = () => {
+    if (!sale) return;
+    const itemsHtml = currentItems.map(i => `
+      <tr>
+        <td style="padding:4px 0; vertical-align:top;">${i.quantity}x</td>
+        <td style="padding:4px 8px; vertical-align:top;">${i.product_name}${i.variant_name ? ` - ${i.variant_name}` : ''}</td>
+      </tr>`).join('');
+    const phone = currentCustomer?.whatsapp ? currentCustomer.whatsapp.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : '-';
+    const w = window.open('', '_blank', 'width=420,height=760');
+    if (!w) { toast.error('Não foi possível abrir a impressão.'); return; }
+    w.document.write(`<html><head><title>Cupom de Troca</title>
+      <style>body{font-family:Arial,sans-serif;color:#111;padding:16px}h2,p{margin:0}.muted{color:#555}.sep{border-top:1px dashed #999;margin:12px 0}table{width:100%;border-collapse:collapse;font-size:12px}.gift{text-align:center;padding:8px;border:2px dashed #d97706;border-radius:8px;margin-bottom:12px}.gift h1{font-size:18px;color:#d97706}.policy{font-size:11px;color:#333;margin-top:8px;line-height:1.4}.policy p{margin:2px 0}@media print{body{padding:0}}</style>
+      </head><body>
+        <div class="gift"><h1>🎁 CUPOM DE TROCA</h1><p class="muted" style="font-size:11px;">Apresente este cupom para trocar o produto</p></div>
+        <h2>Banana Calçados</h2>
+        <div class="sep"></div>
+        <p><strong>${sale.tiny_order_number ? `Pedido #${sale.tiny_order_number}` : 'Venda PDV'}</strong></p>
+        <p>Vendedor(a): ${sellerName || '-'}</p>
+        <p>Data: ${new Date(sale.created_at).toLocaleDateString('pt-BR')}</p>
+        <div class="sep"></div>
+        <p><strong>Comprador</strong></p>
+        <p>Nome: ${currentCustomer?.name || 'Consumidor Final'}</p>
+        <p>Telefone: ${phone}</p>
+        <div class="sep"></div>
+        <p><strong>Produto(s)</strong></p>
+        <table><tbody>${itemsHtml}</tbody></table>
+        <div class="sep"></div>
+        ${exchangePolicyHtml}
+        <p style="text-align:center;margin-top:10px;font-size:10px;color:#666;">Este cupom não exibe valores pois trata-se de presente.</p>
+        <script>window.onload=()=>window.print()</script>
+      </body></html>`);
+    w.document.close();
+  };
+
+  const handleEmitOrPrintFiscal = async () => {
+    if (!sale) return;
+    if (fiscalDoc?.danfe_url) { window.open(fiscalDoc.danfe_url, '_blank'); return; }
+    setEmittingNfce(true);
+    try {
+      const isOnline = sale.sale_type === 'online';
+      const fnName = isOnline ? 'nfe-emitir' : 'nfce-emitir';
+      const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id } });
+      if (error) throw error;
+      if (data?.ok) toast.success(`${isOnline ? 'NF-e' : 'NFC-e'} autorizada!`);
+      else if (data?.contingencia) toast.info('SEFAZ indisponível — em contingência. Será reemitida automaticamente.');
+      else toast.error(data?.error || 'Erro ao emitir nota fiscal');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao emitir nota fiscal');
+    } finally {
+      setEmittingNfce(false);
+    }
+  };
+
 
   useEffect(() => {
     setCurrentCustomer(customer);
