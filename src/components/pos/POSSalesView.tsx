@@ -1007,6 +1007,12 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     if (!saleResult?.sale_id) return;
     setEmittingNfce(true);
     try {
+      // Vendas online → emissão NF-e ocorre na aba Envios (junto do despacho)
+      if (saleType === 'online') {
+        toast.info("Esta venda online será faturada com NF-e na aba Envios.");
+        setEmittingNfce(false);
+        return;
+      }
       const { data, error } = await supabase.functions.invoke('nfce-emitir', {
         body: { sale_id: saleResult.sale_id },
       });
@@ -1371,37 +1377,82 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                       <p className="text-lg font-medium">Nenhum produto adicionado</p>
                       <p className="text-sm mt-1">Bipe um código de barras, SKU ou busque pelo nome</p>
                     </div>
-                  ) : cart.map(item => (
-                    <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl border border-pos-orange/10 bg-pos-white/5 hover:border-pos-orange/30 transition-all">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-pos-orange/10">
-                        <Package className="h-5 w-5 text-pos-orange" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate text-pos-white">{item.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange border-pos-orange/30">{item.sku}</Badge>
-                          {item.variant && <span className="text-xs text-pos-white/50">{item.variant}</span>}
-                          {item.size && <span className="text-xs text-pos-white/40">Tam: {item.size}</span>}
+                  ) : cart.map(item => {
+                    const conferenceOk = item.feetChecked && item.defectChecked;
+                    return (
+                    <div key={item.id} className={cn(
+                      "rounded-xl border p-3 transition-all space-y-2",
+                      conferenceOk
+                        ? "border-emerald-500/40 bg-emerald-500/5"
+                        : "border-amber-500/40 bg-amber-500/5"
+                    )}>
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-pos-orange/10 flex-shrink-0">
+                          <Package className="h-5 w-5 text-pos-orange" />
                         </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="outline" size="icon" className="h-7 w-7 border-pos-white/20 text-pos-white hover:bg-pos-white/10" onClick={() => updateQuantity(item.id, -1)}>
-                          <Minus className="h-3 w-3" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-pos-white whitespace-normal break-words">{item.name}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange border-pos-orange/30">{item.sku}</Badge>
+                            {item.variant && <span className="text-xs text-pos-white/50">{item.variant}</span>}
+                            {item.size && <span className="text-xs text-pos-white/40">Tam: {item.size}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button variant="outline" size="icon" className="h-7 w-7 border-pos-white/20 text-pos-white hover:bg-pos-white/10" onClick={() => updateQuantity(item.id, -1)}>
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-6 text-center font-bold text-sm text-pos-orange">{item.quantity}</span>
+                          <Button variant="outline" size="icon" className="h-7 w-7 border-pos-white/20 text-pos-white hover:bg-pos-white/10" onClick={() => updateQuantity(item.id, 1)}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="text-right min-w-[80px]">
+                          <p className="font-bold text-sm text-pos-white">R$ {(item.price * item.quantity).toFixed(2)}</p>
+                          {item.quantity > 1 && <p className="text-[10px] text-pos-white/40">{item.quantity}x R$ {item.price.toFixed(2)}</p>}
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => removeItem(item.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                        <span className="w-8 text-center font-bold text-sm text-pos-orange">{item.quantity}</span>
-                        <Button variant="outline" size="icon" className="h-7 w-7 border-pos-white/20 text-pos-white hover:bg-pos-white/10" onClick={() => updateQuantity(item.id, 1)}>
-                          <Plus className="h-3 w-3" />
-                        </Button>
                       </div>
-                      <div className="text-right min-w-[80px]">
-                        <p className="font-bold text-sm text-pos-white">R$ {(item.price * item.quantity).toFixed(2)}</p>
-                        {item.quantity > 1 && <p className="text-[10px] text-pos-white/40">{item.quantity}x R$ {item.price.toFixed(2)}</p>}
+                      {/* Conferência inline (pés + defeito) */}
+                      <div className="flex flex-wrap items-center gap-2 pl-[60px]">
+                        <button
+                          onClick={() => setItemConference(item.id, { feetChecked: !item.feetChecked })}
+                          className={cn(
+                            "text-[11px] font-semibold rounded-full px-2.5 py-1 border transition-all flex items-center gap-1",
+                            item.feetChecked
+                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                              : "bg-pos-white/5 border-pos-white/15 text-pos-white/60 hover:border-amber-400/60"
+                          )}
+                        >
+                          {item.feetChecked ? <Check className="h-3 w-3" /> : <span className="text-amber-400">·</span>}
+                          Par completo (2 pés)
+                        </button>
+                        <button
+                          onClick={() => setItemConference(item.id, { defectChecked: !item.defectChecked, defectNote: item.defectChecked ? '' : item.defectNote })}
+                          className={cn(
+                            "text-[11px] font-semibold rounded-full px-2.5 py-1 border transition-all flex items-center gap-1",
+                            item.defectChecked
+                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                              : "bg-pos-white/5 border-pos-white/15 text-pos-white/60 hover:border-amber-400/60"
+                          )}
+                        >
+                          {item.defectChecked ? <Check className="h-3 w-3" /> : <span className="text-amber-400">·</span>}
+                          Sem defeito
+                        </button>
+                        {item.defectChecked === false && item.feetChecked && (
+                          <Input
+                            value={item.defectNote || ''}
+                            onChange={(e) => setItemConference(item.id, { defectNote: e.target.value })}
+                            placeholder="Observação do defeito (opcional)"
+                            className="h-7 text-[11px] flex-1 min-w-[160px] bg-pos-white/5 border-pos-white/15 text-pos-white"
+                          />
+                        )}
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => removeItem(item.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
                     </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Cross-sell suggestions */}
                   {cart.length > 0 && (
@@ -1550,7 +1601,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           {customerCashback.expiry_date && ` · até ${new Date(customerCashback.expiry_date).toLocaleDateString('pt-BR')}`}
                         </p>
                       </div>
-                      <span className="text-[10px] text-green-400/60 italic flex-shrink-0">sugerir</span>
+                      <Button
+                        size="sm"
+                        className="h-8 text-[11px] px-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex-shrink-0"
+                        onClick={() => applyCustomerBenefit('cashback')}
+                        disabled={couponApplied?.code === customerCashback.code}
+                      >
+                        {couponApplied?.code === customerCashback.code ? '✓ Aplicado' : 'Utilizar'}
+                      </Button>
                     </div>
                   )}
 
@@ -1574,7 +1632,17 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           {` · até ${new Date(p.expires_at).toLocaleDateString('pt-BR')}`}
                         </p>
                       </div>
-                      <span className="text-[10px] text-purple-400/60 italic flex-shrink-0">sugerir</span>
+                      <Button
+                        size="sm"
+                        className="h-8 text-[11px] px-3 bg-purple-500 hover:bg-purple-600 text-white font-bold flex-shrink-0"
+                        onClick={() => {
+                          const label = p.prize_type === 'discount_percent' ? `${p.prize_value}% off` : `R$ ${p.prize_value.toFixed(2)} off`;
+                          applyCustomerBenefit('prize', p.coupon_code, p.prize_value, label);
+                        }}
+                        disabled={couponApplied?.code === p.coupon_code}
+                      >
+                        {couponApplied?.code === p.coupon_code ? '✓ Aplicado' : 'Resgatar'}
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -1609,22 +1677,56 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           )}
 
           {step === "verify" && (
-            <div className="p-6 space-y-6 overflow-auto">
-              <POSOrderVerification
-                saleId=""
-                storeId={storeId}
-                sellerId={selectedSeller}
-                items={cart.map(item => ({
-                  sku: item.sku,
-                  name: item.name,
-                  variant: item.variant,
-                  quantity: item.quantity,
-                  price: item.price,
-                  barcode: item.barcode,
-                }))}
-                onComplete={() => setStep("payment")}
-                onSkip={() => setStep("payment")}
-              />
+            <div className="p-6 space-y-4 overflow-auto">
+              <div>
+                <h2 className="text-lg font-bold mb-1 text-pos-white">Conferência de itens</h2>
+                <p className="text-sm text-pos-white/50">Revise abaixo. Itens em verde já foram conferidos na etapa de produtos.</p>
+              </div>
+              {(() => {
+                const pending = cart.filter(i => !i.feetChecked || !i.defectChecked);
+                const allOk = pending.length === 0 && cart.length > 0;
+                return (
+                  <>
+                    <div className="space-y-2">
+                      {cart.map(item => {
+                        const ok = item.feetChecked && item.defectChecked;
+                        return (
+                          <div key={item.id} className={cn(
+                            "rounded-lg border p-3 flex items-start gap-3",
+                            ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/10"
+                          )}>
+                            <div className={cn("h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0", ok ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300")}>
+                              {ok ? <Check className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-pos-white whitespace-normal break-words">{item.name}</p>
+                              <div className="flex flex-wrap gap-2 mt-1 text-[11px]">
+                                <span className={item.feetChecked ? "text-emerald-300" : "text-amber-300"}>{item.feetChecked ? "✓ Par completo" : "⚠ Pés não conferidos"}</span>
+                                <span className={item.defectChecked ? "text-emerald-300" : "text-amber-300"}>{item.defectChecked ? "✓ Sem defeito" : "⚠ Defeito não conferido"}</span>
+                                {item.defectNote && <span className="text-amber-300">📝 {item.defectNote}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        className="flex-1 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
+                        disabled={!allOk}
+                        onClick={() => setStep("payment")}
+                      >
+                        {allOk ? <><Check className="h-4 w-4 mr-1" /> Conferência concluída — avançar</> : `Faltam ${pending.length} item(s) pra conferir`}
+                      </Button>
+                      {!allOk && (
+                        <Button variant="outline" onClick={() => setStep("scan")} className="border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10">
+                          Voltar pra conferir
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
 
