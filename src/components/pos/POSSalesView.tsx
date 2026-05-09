@@ -1038,6 +1038,18 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
+  // Política de trocas (CDC) — incluída em todos os cupons
+  const exchangePolicyHtml = `
+    <div class="policy">
+      <p style="font-weight:bold; margin-bottom:4px;">POLÍTICA DE TROCAS</p>
+      <p>• Produtos sem promoção: até <strong>30 dias</strong> para troca</p>
+      <p>• Produtos em promoção: até <strong>7 dias</strong> para troca</p>
+      <p>• Defeitos de fabricação: até <strong>90 dias</strong></p>
+      <p style="margin-top:6px; font-size:10px;">Conforme o Código de Defesa do Consumidor (CDC), em compras presenciais não há direito de devolução do valor pago — apenas troca por outro produto, dentro do prazo. O direito de arrependimento (art. 49, CDC) aplica-se apenas a compras realizadas fora do estabelecimento (online/telefone).</p>
+      <p style="margin-top:4px; font-size:10px;">Apresente este cupom no momento da troca.</p>
+    </div>
+  `;
+
   const printNonFiscalReceipt = () => {
     const payName = useMultiPayment
       ? multiPayments.map(p => `${p.method_name}: R$ ${p.amount.toFixed(2)}`).join('<br/>')
@@ -1074,16 +1086,19 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             .sep { border-top: 1px dashed #999; margin: 12px 0; }
             table { width: 100%; border-collapse: collapse; font-size: 12px; }
             .totals { font-size: 14px; }
+            .policy { font-size: 11px; color: #333; margin-top: 8px; line-height: 1.4; }
+            .policy p { margin: 2px 0; }
             @media print { body { padding: 0; } button { display:none; } }
           </style>
         </head>
         <body>
           <h2>Banana Calçados</h2>
-          <p class="muted">Cupom Não Fiscal</p>
+          <p class="muted">Cupom Não Fiscal (Nota Simples)</p>
           <div class="sep"></div>
           <p><strong>${orderLabel}</strong></p>
           <p>Tipo: ${saleTypeLabel}</p>
           <p>Cliente: ${customerLabel}</p>
+          <p>Vendedor(a): ${sellers.find(s => s.id === selectedSeller)?.name || '-'}</p>
           <p>Data: ${new Date().toLocaleString('pt-BR')}</p>
           <div class="sep"></div>
           <table>
@@ -1098,6 +1113,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           <div class="sep"></div>
           <p><strong>Pagamento</strong></p>
           <p>${payName}</p>
+          <div class="sep"></div>
+          ${exchangePolicyHtml}
           <script>
             window.onload = () => { window.print(); };
           </script>
@@ -1106,6 +1123,74 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     `);
     printWindow.document.close();
   };
+
+  // Cupom de Troca (gift receipt) — sem valores e sem CPF
+  const printGiftReceipt = () => {
+    const itemsHtml = cart.map(item => `
+      <tr>
+        <td style="padding:4px 0; vertical-align:top;">${item.quantity}x</td>
+        <td style="padding:4px 8px; vertical-align:top;">${item.name}${item.variant ? ` - ${item.variant}` : ''}</td>
+      </tr>
+    `).join('');
+
+    const customerLabel = selectedCustomer?.name || 'Consumidor Final';
+    const phone = selectedCustomer?.whatsapp ? selectedCustomer.whatsapp.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : '-';
+    const orderLabel = saleResult?.tiny_order_number ? `Pedido #${saleResult.tiny_order_number}` : 'Venda PDV';
+    const storeName = 'Banana Calçados';
+
+    const printWindow = window.open('', '_blank', 'width=420,height=760');
+    if (!printWindow) {
+      toast.error('Não foi possível abrir a impressão do cupom.');
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Cupom de Troca</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #111; padding: 16px; }
+            h1, h2, p { margin: 0; }
+            .muted { color: #555; }
+            .sep { border-top: 1px dashed #999; margin: 12px 0; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            .gift { text-align:center; padding: 8px; border:2px dashed #d97706; border-radius:8px; margin-bottom:12px; }
+            .gift h1 { font-size: 18px; color: #d97706; }
+            .policy { font-size: 11px; color: #333; margin-top: 8px; line-height: 1.4; }
+            .policy p { margin: 2px 0; }
+            @media print { body { padding: 0; } button { display:none; } }
+          </style>
+        </head>
+        <body>
+          <div class="gift">
+            <h1>🎁 CUPOM DE TROCA</h1>
+            <p class="muted" style="font-size:11px;">Apresente este cupom para trocar o produto</p>
+          </div>
+          <h2>${storeName}</h2>
+          <div class="sep"></div>
+          <p><strong>${orderLabel}</strong></p>
+          <p>Loja: ${storeName}</p>
+          <p>Vendedor(a): ${sellers.find(s => s.id === selectedSeller)?.name || '-'}</p>
+          <p>Data: ${new Date().toLocaleDateString('pt-BR')}</p>
+          <div class="sep"></div>
+          <p><strong>Comprador</strong></p>
+          <p>Nome: ${customerLabel}</p>
+          <p>Telefone: ${phone}</p>
+          <div class="sep"></div>
+          <p><strong>Produto(s)</strong></p>
+          <table><tbody>${itemsHtml}</tbody></table>
+          <div class="sep"></div>
+          ${exchangePolicyHtml}
+          <p style="text-align:center; margin-top:10px; font-size:10px; color:#666;">Este cupom não exibe valores pois trata-se de presente.</p>
+          <script>
+            window.onload = () => { window.print(); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
 
   const printFiscalReceipt = async () => {
     if (saleType === 'online') {
@@ -1680,32 +1765,36 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <div className="space-y-2">
                   {/* Cashback - discrete suggestion */}
                   {customerCashback && (
-                    <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-3 py-2.5">
-                      <div className="h-8 w-8 rounded-full bg-green-500/15 flex items-center justify-center flex-shrink-0">
-                        <Tag className="h-4 w-4 text-green-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-green-400">Cashback</span>
-                          <span className="font-mono text-xs font-bold text-green-300 bg-green-500/10 px-1.5 py-0.5 rounded">
-                            {customerCashback.code}
-                          </span>
+                    <div className="rounded-xl border-2 border-emerald-400 bg-gradient-to-br from-emerald-500/20 to-green-600/15 p-4 shadow-lg shadow-emerald-500/20">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="h-12 w-12 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 shadow-md">
+                          <Tag className="h-6 w-6 text-white" />
                         </div>
-                        <p className="text-[11px] text-pos-white/60 truncate">
-                          {customerCashback.type === 'percent' 
-                            ? `${customerCashback.amount}% off` 
-                            : `R$ ${customerCashback.amount.toFixed(2)} off`}
-                          {customerCashback.min_purchase > 0 && ` · min R$ ${customerCashback.min_purchase.toFixed(2)}`}
-                          {customerCashback.expiry_date && ` · até ${new Date(customerCashback.expiry_date).toLocaleDateString('pt-BR')}`}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-base font-extrabold text-emerald-300 uppercase tracking-wide">💰 Cashback Disponível</span>
+                            <span className="font-mono text-xs font-bold text-white bg-emerald-600 px-2 py-0.5 rounded">
+                              {customerCashback.code}
+                            </span>
+                          </div>
+                          <p className="text-2xl font-black text-white mt-1">
+                            {customerCashback.type === 'percent'
+                              ? `${customerCashback.amount}% OFF`
+                              : `R$ ${customerCashback.amount.toFixed(2)} OFF`}
+                          </p>
+                          <p className="text-xs text-emerald-200/90 mt-0.5">
+                            {customerCashback.min_purchase > 0 && `Compra mín. R$ ${customerCashback.min_purchase.toFixed(2)} · `}
+                            {customerCashback.expiry_date && `Válido até ${new Date(customerCashback.expiry_date).toLocaleDateString('pt-BR')}`}
+                          </p>
+                        </div>
                       </div>
                       <Button
-                        size="sm"
-                        className="h-8 text-[11px] px-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex-shrink-0"
+                        size="lg"
+                        className="w-full h-12 text-base font-extrabold bg-emerald-500 hover:bg-emerald-600 text-white shadow-md uppercase tracking-wide"
                         onClick={() => applyCustomerBenefit('cashback')}
                         disabled={couponApplied?.code === customerCashback.code}
                       >
-                        {couponApplied?.code === customerCashback.code ? '✓ Aplicado' : 'Utilizar'}
+                        {couponApplied?.code === customerCashback.code ? '✓ Cashback Aplicado' : '🎁 Utilizar Cashback Agora'}
                       </Button>
                     </div>
                   )}
@@ -2182,6 +2271,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   }}
                   onPrintNonFiscal={printNonFiscalReceipt}
                   onPrintFiscal={printFiscalReceipt}
+                  onPrintGift={printGiftReceipt}
                   onRedeemPrize={async () => {
                     if (!wonPrize || !selectedCustomer?.whatsapp) return "";
                     const phone = selectedCustomer.whatsapp.replace(/\D/g, '');
