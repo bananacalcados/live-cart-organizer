@@ -145,6 +145,53 @@ export function POSConfig({ storeId }: Props) {
     });
   }, [storeId]);
 
+  const loadCashbackConfig = async () => {
+    // Try store-specific first, then global
+    let { data } = await supabase.from('pos_cashback_config').select('*').eq('store_id', storeId).maybeSingle() as any;
+    if (!data) {
+      const res = await supabase.from('pos_cashback_config').select('*').is('store_id', null).maybeSingle() as any;
+      data = res.data;
+    }
+    if (data) {
+      setCashbackConfigId(data.id);
+      setCashbackEnabled(!!data.is_enabled);
+      setCashbackPct(String(data.percentage ?? 5));
+      setCashbackValidity(String(data.validity_days ?? 60));
+      setCashbackMinSale(String(data.min_sale_value ?? 0));
+      setCashbackMinMultiplier(String(data.min_purchase_multiplier ?? 1.5));
+      setCashbackMax(data.max_cashback != null ? String(data.max_cashback) : "");
+      setCashbackPrefix(data.code_prefix || "CB");
+      setCashbackCooldown(String(data.cooldown_days ?? 0));
+    }
+  };
+
+  const saveCashbackConfig = async () => {
+    setSavingCashback(true);
+    try {
+      const payload: any = {
+        is_enabled: cashbackEnabled,
+        percentage: Number(cashbackPct) || 0,
+        validity_days: parseInt(cashbackValidity) || 60,
+        min_sale_value: Number(cashbackMinSale) || 0,
+        min_purchase_multiplier: Number(cashbackMinMultiplier) || 1.5,
+        max_cashback: cashbackMax ? Number(cashbackMax) : null,
+        code_prefix: cashbackPrefix || "CB",
+        cooldown_days: parseInt(cashbackCooldown) || 0,
+      };
+      if (cashbackConfigId) {
+        await supabase.from('pos_cashback_config').update(payload).eq('id', cashbackConfigId);
+      } else {
+        const { data } = await supabase.from('pos_cashback_config').insert({ store_id: null, ...payload } as any).select('id').single();
+        if (data) setCashbackConfigId(data.id);
+      }
+      toast.success("Configuração de cashback salva!");
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setSavingCashback(false);
+    }
+  };
+
   useEffect(() => {
     loadSellers();
     loadInvoiceConfig();
