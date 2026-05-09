@@ -206,7 +206,28 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
 
       const sellersPromise = supabase.from("pos_sellers").select("id, name");
 
-      const [cb, sl, zl, ly, np, sel] = await Promise.all([cashbackPromise, salesPromise, zoppySalesPromise, loyaltyPromise, npsPromise, sellersPromise]);
+      // Legacy aggregate from CRM (zoppy_customers) for accurate historical purchase count
+      const legacyAggPromise = last8
+        ? supabase
+            .from("zoppy_customers")
+            .select("total_orders, total_spent, last_purchase_at, first_purchase_at, phone")
+            .ilike("phone", `%${last8}`)
+            .order("total_orders", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null } as any);
+
+      const [cb, sl, zl, ly, np, sel, legAgg] = await Promise.all([cashbackPromise, salesPromise, zoppySalesPromise, loyaltyPromise, npsPromise, sellersPromise, legacyAggPromise]);
+
+      if (legAgg && (legAgg as any).data) {
+        const d: any = (legAgg as any).data;
+        setLegacyAggregate({
+          total_orders: Number(d.total_orders || 0),
+          total_spent: Number(d.total_spent || 0),
+          last_purchase_at: d.last_purchase_at || null,
+          first_purchase_at: d.first_purchase_at || null,
+        });
+      }
 
       setCashbacks((cb.data as CashbackRow[]) || []);
 
