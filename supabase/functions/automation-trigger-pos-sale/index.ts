@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     const storeName = store?.name || "";
 
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data: cb } = await supabase
+    let { data: cb } = await supabase
       .from("internal_cashback")
       .select("coupon_code, cashback_amount, min_purchase, expires_at")
       .ilike("customer_phone", `%${phoneSuffix}`)
@@ -70,6 +70,74 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // 💰 Auto-gerar cashback se não existir e config permitir
+    if (!cb) {
+      // Carrega config: específica da loja primeiro, depois global
+      let cfg: any = null;
+      const { data: storeCfg } = await supabase
+        .from("pos_cashback_config")
+        .select("*")
+        .eq("store_id", sale.store_id)
+        .maybeSingle();
+      cfg = storeCfg;
+      if (!cfg) {
+        const { data: globalCfg } = await supabase
+          .from("pos_cashback_config")
+          .select("*")
+          .is("store_id", null)
+          .maybeSingle();
+        cfg = globalCfg;
+      }
+
+      if (cfg && cfg.is_enabled && Number(sale.total) >= Number(cfg.min_sale_value || 0)) {
+        // Cooldown: já existe cashback ativo recente?
+        let canGenerate = true;
+        if (cfg.cooldown_days && cfg.cooldown_days > 0) {
+          const cooldownSince = new Date(Date.now() - cfg.cooldown_days * 86400 * 1000).toISOString();
+          const { data: existing } = await supabase
+            .from("internal_cashback")
+            .select("id")
+            .ilike("customer_phone", `%${phoneSuffix}`)
+            .eq("is_used", false)
+            .gte("created_at", cooldownSince)
+            .gte("expires_at", new Date().toISOString())
+            .limit(1)
+            .maybeSingle();
+          if (existing) canGenerate = false;
+        }
+
+        if (canGenerate) {
+          const pct = Number(cfg.percentage || 0) / 100;
+          let amount = Number(sale.total) * pct;
+          if (cfg.max_cashback && amount > Number(cfg.max_cashback)) amount = Number(cfg.max_cashback);
+          amount = Math.round(amount * 100) / 100;
+
+          if (amount > 0) {
+            const minMult = Number(cfg.min_purchase_multiplier || 1.5);
+            const minPurchase = Math.round(amount * minMult * 100) / 100;
+            const expiresAt = new Date(Date.now() + Number(cfg.validity_days || 60) * 86400 * 1000).toISOString();
+            const prefix = cfg.code_prefix || "CB";
+            const code = `${prefix}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+
+            const { data: inserted } = await supabase
+              .from("internal_cashback")
+              .insert({
+                coupon_code: code,
+                cashback_amount: amount,
+                min_purchase: minPurchase,
+                customer_phone: phone,
+                customer_name: customerName,
+                expires_at: expiresAt,
+                origin_type: "pos_sale",
+              })
+              .select("coupon_code, cashback_amount, min_purchase, expires_at")
+              .maybeSingle();
+            if (inserted) cb = inserted;
+          }
+        }
+      }
+    }
 
     const vars: Record<string, string> = {
       "{{nome_cliente}}": customerName,
