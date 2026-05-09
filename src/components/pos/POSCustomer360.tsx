@@ -157,6 +157,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
     setLoyalty(null);
     setNpsList([]);
     setAiInsights(null);
+    setLegacyAggregate(null);
     try {
       const phoneVariations = c.whatsapp ? buildPhoneVariations(c.whatsapp) : [];
       const last8 = c.whatsapp ? c.whatsapp.replace(/\D/g, "").slice(-8) : null;
