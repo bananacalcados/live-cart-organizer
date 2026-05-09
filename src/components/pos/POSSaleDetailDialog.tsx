@@ -1047,6 +1047,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
             )}
 
             {/* Action Buttons */}
+            <div className="space-y-2">
               {onResend && (
                 <Button
                   className="w-full gap-2 bg-orange-500 text-white hover:bg-orange-600 font-bold h-11 text-sm shadow-md"
