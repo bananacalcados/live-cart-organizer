@@ -17,6 +17,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { applyDiscount, discountBadge, type DiscountMap, type ProductDiscount } from "@/lib/catalogDiscount";
 
 interface CatalogLeadPage {
   id: string;
@@ -26,6 +28,7 @@ interface CatalogLeadPage {
   is_active: boolean;
   theme_config: any;
   selected_product_ids: string[];
+  product_discounts?: DiscountMap;
   whatsapp_numbers: Array<{ name: string; number: string }>;
   require_registration: boolean;
   shipping_cost: number;
@@ -106,6 +109,7 @@ export function CatalogLeadPageCreator() {
       is_active: true,
       theme_config: { primaryColor: "#00BFA6", secondaryColor: "#00897B", backgroundGradient: "linear-gradient(160deg, #00BFA6 0%, #00897B 50%, #004D40 100%)" },
       selected_product_ids: [],
+      product_discounts: {},
       whatsapp_numbers: [{ name: "Banana Calçados", number: "5533936180084" }],
       require_registration: true,
       shipping_cost: 0,
@@ -135,6 +139,35 @@ export function CatalogLeadPageCreator() {
     toast.success("Produto movido para o topo!");
   };
 
+  // Set or clear per-product discount (used in editor + live mode)
+  const setProductDiscount = (productId: string, discount: ProductDiscount | null) => {
+    if (!editingPage) return;
+    const current = { ...(editingPage.product_discounts || {}) } as DiscountMap;
+    if (!discount || !discount.value || discount.value <= 0) {
+      delete current[productId];
+    } else {
+      current[productId] = discount;
+    }
+    setEditingPage({ ...editingPage, product_discounts: current });
+  };
+
+  // Save discount immediately during live mode (real-time push to visitors)
+  const liveSetDiscount = async (productId: string, discount: ProductDiscount | null) => {
+    if (!editingPage || !livePageId) return;
+    const current = { ...(editingPage.product_discounts || {}) } as DiscountMap;
+    if (!discount || !discount.value || discount.value <= 0) {
+      delete current[productId];
+    } else {
+      current[productId] = discount;
+    }
+    const { error } = await supabase.from("catalog_lead_pages")
+      .update({ product_discounts: current } as any)
+      .eq("id", livePageId);
+    if (error) { toast.error(error.message); return; }
+    setEditingPage({ ...editingPage, product_discounts: current });
+    toast.success(discount && discount.value > 0 ? "Desconto aplicado ao vivo! 🔥" : "Desconto removido");
+  };
+
   const handleSave = async () => {
     if (!editingPage?.slug?.trim() || !editingPage?.title?.trim()) {
       toast.error("Preencha slug e título");
@@ -152,6 +185,7 @@ export function CatalogLeadPageCreator() {
       is_active: editingPage.is_active ?? true,
       theme_config: editingPage.theme_config,
       selected_product_ids: editingPage.selected_product_ids,
+      product_discounts: editingPage.product_discounts || {},
       whatsapp_numbers: editingPage.whatsapp_numbers,
       require_registration: editingPage.require_registration ?? true,
       shipping_cost: editingPage.shipping_cost ?? 0,
@@ -359,23 +393,60 @@ export function CatalogLeadPageCreator() {
               {/* Selected products in order */}
               {selectedIdsArray.length > 0 && (
                 <div>
-                  <Label className="text-xs font-semibold">Ordem dos produtos (arraste ⭐ para destacar)</Label>
-                  <div className="mt-2 space-y-1 max-h-[200px] overflow-auto">
-                    {liveSelectedProducts.map((p, idx) => (
-                      <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card text-xs">
-                        <span className="text-muted-foreground w-5 text-center">{idx + 1}</span>
-                        {p.imageUrl && <img src={p.imageUrl} className="w-8 h-8 rounded object-cover" />}
-                        <span className="flex-1 truncate font-medium">{p.title}</span>
-                        {idx > 0 && (
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => boostProduct(p.id)} title="Mover para o topo">
-                            <ArrowUp className="h-3.5 w-3.5" />
+                  <Label className="text-xs font-semibold">Ordem dos produtos + descontos</Label>
+                  <p className="text-[10px] text-muted-foreground mb-2">Use o campo de desconto para criar promoções específicas para a live.</p>
+                  <div className="mt-2 space-y-1 max-h-[280px] overflow-auto">
+                    {liveSelectedProducts.map((p, idx) => {
+                      const d = (editingPage?.product_discounts || {})[p.id];
+                      return (
+                        <div key={p.id} className="flex flex-wrap items-center gap-2 p-2 rounded-lg border bg-card text-xs">
+                          <span className="text-muted-foreground w-5 text-center">{idx + 1}</span>
+                          {p.imageUrl && <img src={p.imageUrl} className="w-8 h-8 rounded object-cover" />}
+                          <span className="flex-1 truncate font-medium min-w-[120px]">{p.title}</span>
+                          <span className="text-[10px] text-muted-foreground">R$ {Number(p.price).toFixed(2)}</span>
+                          {/* Discount controls */}
+                          <Select
+                            value={d?.type || "none"}
+                            onValueChange={(v) => {
+                              if (v === "none") setProductDiscount(p.id, null);
+                              else setProductDiscount(p.id, { type: v as any, value: d?.value || 0 });
+                            }}
+                          >
+                            <SelectTrigger className="h-7 w-[110px] text-[11px]">
+                              <SelectValue placeholder="Desconto" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sem desconto</SelectItem>
+                              <SelectItem value="percent">% off</SelectItem>
+                              <SelectItem value="fixed_off">R$ off</SelectItem>
+                              <SelectItem value="fixed_price">Preço fixo R$</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {d && d.type && (
+                            <Input
+                              type="number" min="0" step="0.01"
+                              value={d.value || ""}
+                              placeholder={d.type === "percent" ? "20" : d.type === "fixed_off" ? "30" : "149.90"}
+                              onChange={(e) => setProductDiscount(p.id, { type: d.type, value: Number(e.target.value) || 0 })}
+                              className="h-7 w-20 text-[11px]"
+                            />
+                          )}
+                          {d && d.value > 0 && (
+                            <span className="text-[10px] font-bold text-emerald-600">
+                              → R$ {applyDiscount(Number(p.price), d).toFixed(2)}
+                            </span>
+                          )}
+                          {idx > 0 && (
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => boostProduct(p.id)} title="Mover para o topo">
+                              <ArrowUp className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => toggleProduct(p.id)} title="Remover">
+                            <X className="h-3.5 w-3.5" />
                           </Button>
-                        )}
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive" onClick={() => toggleProduct(p.id)} title="Remover">
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -430,27 +501,62 @@ export function CatalogLeadPageCreator() {
           <div className="px-6 py-3">
             {/* Currently selected - reorder */}
             <Label className="text-xs font-semibold">Produtos no catálogo ({selectedIdsArray.length})</Label>
-            <div className="mt-2 space-y-1 max-h-[200px] overflow-auto mb-4">
+            <div className="mt-2 space-y-1 max-h-[280px] overflow-auto mb-4">
               {liveSelectedProducts.length === 0 && (
                 <p className="text-xs text-muted-foreground py-4 text-center">Nenhum produto selecionado</p>
               )}
-              {liveSelectedProducts.map((p, idx) => (
-                <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card text-xs">
-                  <span className={`w-5 text-center font-bold ${idx === 0 ? "text-amber-500" : "text-muted-foreground"}`}>
-                    {idx === 0 ? "⭐" : idx + 1}
-                  </span>
-                  {p.imageUrl && <img src={p.imageUrl} className="w-8 h-8 rounded object-cover" />}
-                  <span className="flex-1 truncate font-medium">{p.title}</span>
-                  {idx > 0 && (
-                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => liveBoostProduct(p.id)}>
-                      <Star className="h-3 w-3" />Destacar
+              {liveSelectedProducts.map((p, idx) => {
+                const d = (editingPage?.product_discounts || {})[p.id];
+                return (
+                  <div key={p.id} className="flex flex-wrap items-center gap-2 p-2 rounded-lg border bg-card text-xs">
+                    <span className={`w-5 text-center font-bold ${idx === 0 ? "text-amber-500" : "text-muted-foreground"}`}>
+                      {idx === 0 ? "⭐" : idx + 1}
+                    </span>
+                    {p.imageUrl && <img src={p.imageUrl} className="w-8 h-8 rounded object-cover" />}
+                    <span className="flex-1 truncate font-medium min-w-[120px]">{p.title}</span>
+                    <span className="text-[10px] text-muted-foreground">R$ {Number(p.price).toFixed(2)}</span>
+                    <Select
+                      value={d?.type || "none"}
+                      onValueChange={(v) => {
+                        if (v === "none") liveSetDiscount(p.id, null);
+                        else liveSetDiscount(p.id, { type: v as any, value: d?.value || 0 });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 w-[110px] text-[11px]">
+                        <SelectValue placeholder="Desconto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem desconto</SelectItem>
+                        <SelectItem value="percent">% off</SelectItem>
+                        <SelectItem value="fixed_off">R$ off</SelectItem>
+                        <SelectItem value="fixed_price">Preço fixo R$</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {d && d.type && (
+                      <Input
+                        type="number" min="0" step="0.01"
+                        defaultValue={d.value || ""}
+                        placeholder={d.type === "percent" ? "20" : d.type === "fixed_off" ? "30" : "149.90"}
+                        onBlur={(e) => liveSetDiscount(p.id, { type: d.type, value: Number(e.target.value) || 0 })}
+                        className="h-7 w-20 text-[11px]"
+                      />
+                    )}
+                    {d && d.value > 0 && (
+                      <span className="text-[10px] font-bold text-emerald-600">
+                        → R$ {applyDiscount(Number(p.price), d).toFixed(2)}
+                      </span>
+                    )}
+                    {idx > 0 && (
+                      <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => liveBoostProduct(p.id)}>
+                        <Star className="h-3 w-3" />Destacar
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => liveToggleProduct(p.id)}>
+                      <X className="h-3.5 w-3.5" />
                     </Button>
-                  )}
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => liveToggleProduct(p.id)}>
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
 

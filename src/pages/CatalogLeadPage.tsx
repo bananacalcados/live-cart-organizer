@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { toast } from "sonner";
 import { ShoppingBag, X, ChevronLeft, Instagram, Phone, Loader2, Check, Trash2, Plus, Minus, Sparkles } from "lucide-react";
+import { applyDiscount, discountBadge, type DiscountMap } from "@/lib/catalogDiscount";
 
 // ─── Types ───
 interface PageConfig {
@@ -12,6 +13,7 @@ interface PageConfig {
   subtitle: string | null;
   theme_config: { primaryColor: string; secondaryColor: string; backgroundGradient: string };
   selected_product_ids: string[];
+  product_discounts: DiscountMap;
   require_registration: boolean;
   whatsapp_numbers: Array<{ name: string; number: string }>;
   shipping_cost: number;
@@ -211,6 +213,7 @@ export default function CatalogLeadPage() {
         subtitle: cfg.subtitle,
         theme_config: cfg.theme_config || { primaryColor: "#00BFA6", secondaryColor: "#00897B", backgroundGradient: "linear-gradient(160deg, #00BFA6 0%, #00897B 50%, #004D40 100%)" },
         selected_product_ids: cfg.selected_product_ids || [],
+        product_discounts: (cfg.product_discounts as DiscountMap) || {},
         require_registration: cfg.require_registration ?? true,
         whatsapp_numbers: cfg.whatsapp_numbers || [],
         shipping_cost: resolvedShipping,
@@ -257,6 +260,7 @@ export default function CatalogLeadPage() {
             title: newData.title || prev.title,
             subtitle: newData.subtitle,
             selected_product_ids: newIds,
+            product_discounts: (newData.product_discounts as DiscountMap) || {},
             theme_config: newData.theme_config || prev.theme_config,
             shipping_cost: Number(newData.shipping_cost) || 0,
           } : prev);
@@ -378,7 +382,11 @@ export default function CatalogLeadPage() {
     }));
   };
 
-  const cartSubtotal = cart.reduce((s, c) => s + Number(c.variant.price) * c.quantity, 0);
+  const getEffectivePrice = (productId: string, basePrice: number): number => {
+    return applyDiscount(basePrice, config?.product_discounts?.[productId]);
+  };
+
+  const cartSubtotal = cart.reduce((s, c) => s + getEffectivePrice(c.productId, Number(c.variant.price)) * c.quantity, 0);
   const shippingCost = shippingAlreadyPaid ? 0 : (config?.shipping_cost || 0);
   const cartTotal = cartSubtotal + shippingCost;
 
@@ -386,59 +394,83 @@ export default function CatalogLeadPage() {
     if (cart.length === 0) return;
     setCheckoutLoading(true);
     try {
+      const stored = JSON.parse(localStorage.getItem(`catalog_lead_${slug}`) || "{}");
+      const igHandle = stored.instagram ? `@${String(stored.instagram).replace(/^@/, "")}` : `@catalogo_${Date.now()}`;
+      const phoneClean = (stored.whatsapp || "").replace(/\D/g, "");
+
+      // Upsert customer by instagram_handle (TransparentCheckout requires customer_id)
+      let customerId: string | null = null;
+      const { data: existingCustomer } = await supabase
+        .from("customers")
+        .select("id, whatsapp")
+        .ilike("instagram_handle", igHandle)
+        .maybeSingle();
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+        if (phoneClean && phoneClean !== existingCustomer.whatsapp) {
+          await supabase.from("customers").update({ whatsapp: phoneClean }).eq("id", customerId);
+        }
+      } else {
+        const { data: newCustomer, error: cErr } = await supabase
+          .from("customers")
+          .insert({ instagram_handle: igHandle, whatsapp: phoneClean || null })
+          .select("id")
+          .single();
+        if (cErr) throw cErr;
+        customerId = newCustomer.id;
+      }
+
+      // Build order products with discount applied
+      const orderProducts = cart.map(c => {
+        const finalPrice = getEffectivePrice(c.productId, Number(c.variant.price));
+        return {
+          id: crypto.randomUUID(),
+          shopifyId: c.productId,
+          title: c.productTitle,
+          variant: c.variant.label,
+          price: finalPrice,
+          quantity: c.quantity,
+          image: c.imageUrl,
+          sku: c.variant.sku || undefined,
+        };
+      });
+
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          customer_id: customerId,
+          products: orderProducts as any,
+          stage: "incomplete_order",
+          free_shipping: shippingAlreadyPaid,
+          shipping_cost: shippingCost,
+          checkout_started_at: new Date().toISOString(),
+          notes: `Catálogo Lead: ${slug}`,
+        } as any)
+        .select("id")
+        .single();
+      if (orderError) throw orderError;
+
+      const cartLink = `${CHECKOUT_BASE_URL}/checkout/order/${order.id}`;
+      await supabase.from("orders").update({ cart_link: cartLink } as any).eq("id", order.id);
+
       if (registrationId) {
         await supabase.from("catalog_lead_registrations").update({
           cart_items: cart.map(c => ({
             title: c.productTitle,
             variant: c.variant.label,
             sku: c.variant.sku,
-            price: Number(c.variant.price),
+            price: getEffectivePrice(c.productId, Number(c.variant.price)),
             quantity: c.quantity,
             image: c.imageUrl,
             variantGid: c.variant.gid,
           })),
           cart_total: cartTotal,
+          checkout_sale_id: order.id,
           status: "checkout_started",
         } as any).eq("id", registrationId);
       }
 
-      const stored = JSON.parse(localStorage.getItem(`catalog_lead_${slug}`) || "{}");
-      const { data: sale, error: saleError } = await supabase.from("pos_sales").insert({
-        store_id: DEFAULT_STORE_ID,
-        sale_type: "online",
-        status: "pending",
-        subtotal: cartSubtotal,
-        total: cartTotal,
-        discount: 0,
-        customer_name: stored.instagram ? `@${stored.instagram}` : null,
-        customer_phone: stored.whatsapp || null,
-        notes: `Catálogo Lead: ${slug} | IG: @${stored.instagram || ""}${shippingCost > 0 ? ` | Frete: R$${shippingCost.toFixed(2)}` : ""}`,
-        checkout_step: 0,
-        payment_details: { shipping_amount: shippingCost },
-      } as any).select("id").single();
-
-      if (saleError) throw saleError;
-
-      const items = cart.map(c => ({
-        sale_id: sale.id,
-        sku: c.variant.sku || `CAT-${c.variant.id}`,
-        product_name: c.productTitle,
-        variant_name: c.variant.label,
-        quantity: c.quantity,
-        unit_price: Number(c.variant.price),
-        total_price: Number(c.variant.price) * c.quantity,
-      }));
-
-      await supabase.from("pos_sale_items").insert(items);
-
-      if (registrationId) {
-        await supabase.from("catalog_lead_registrations").update({
-          checkout_sale_id: sale.id,
-          status: "checkout_started",
-        } as any).eq("id", registrationId);
-      }
-
-      window.location.href = `${CHECKOUT_BASE_URL}/checkout-loja/${DEFAULT_STORE_ID}/${sale.id}`;
+      window.location.href = cartLink;
     } catch (e) {
       console.error(e);
       toast.error("Erro ao iniciar checkout");
@@ -478,13 +510,20 @@ export default function CatalogLeadPage() {
         <div className="flex-1 overflow-auto p-4 space-y-3">
           {cart.length === 0 ? (
             <p className="text-center text-gray-400 py-8">Carrinho vazio</p>
-          ) : cart.map(item => (
+          ) : cart.map(item => {
+            const basePrice = Number(item.variant.price);
+            const finalPrice = getEffectivePrice(item.productId, basePrice);
+            const hasDiscount = finalPrice < basePrice;
+            return (
             <div key={item.variant.gid} className="flex gap-3 p-3 bg-gray-50 rounded-xl">
               <img src={item.imageUrl} alt={item.productTitle} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold line-clamp-1">{item.productTitle}</p>
                 <p className="text-xs text-gray-500">{item.variant.label}</p>
-                <p className="text-sm font-bold mt-1" style={{ color: theme.primaryColor }}>{fmt(item.variant.price)}</p>
+                <p className="text-sm font-bold mt-1" style={{ color: theme.primaryColor }}>
+                  {hasDiscount && <span className="text-xs line-through text-gray-400 mr-1">{fmt(basePrice)}</span>}
+                  {fmt(finalPrice)}
+                </p>
                 <div className="flex items-center gap-2 mt-1">
                   <button onClick={() => updateQty(item.variant.gid, -1)} className="w-6 h-6 rounded-full border flex items-center justify-center text-gray-500 hover:bg-gray-100">
                     <Minus className="h-3 w-3" />
@@ -499,7 +538,8 @@ export default function CatalogLeadPage() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         {cart.length > 0 && (
           <div className="border-t p-4 space-y-3">

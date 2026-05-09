@@ -1563,6 +1563,7 @@ export type Database = {
           id: string
           is_active: boolean
           leads_count: number
+          product_discounts: Json
           require_registration: boolean
           selected_product_ids: string[] | null
           shipping_cost: number | null
@@ -1579,6 +1580,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           leads_count?: number
+          product_discounts?: Json
           require_registration?: boolean
           selected_product_ids?: string[] | null
           shipping_cost?: number | null
@@ -1595,6 +1597,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           leads_count?: number
+          product_discounts?: Json
           require_registration?: boolean
           selected_product_ids?: string[] | null
           shipping_cost?: number | null
