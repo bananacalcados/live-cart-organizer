@@ -391,22 +391,26 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
   const handleUpdateShopify = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Atualizar pedido na Shopify? O pedido atual será cancelado e recriado com os dados atualizados. ATENÇÃO: o número do pedido na Shopify VAI MUDAR.")) return;
+    const reason = window.prompt(
+      "Trocar produto/tamanho na Shopify?\n\nO pedido atual será cancelado e um novo será criado com os dados atuais.\nO histórico fica salvo no card.\n\nMotivo da troca (opcional):",
+      "Troca de produto/tamanho"
+    );
+    if (reason === null) return; // cancel
     setIsCreatingShopifyOrder(true);
     try {
       const { data, error } = await supabase.functions.invoke("shopify-update-event-order", {
-        body: { orderId: order.id },
+        body: { orderId: order.id, reason },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       const newName = data?.current?.shopifyOrderName || null;
       applyShopifyVerification(true, newName);
-      toast.success(`Pedido atualizado na Shopify! ${newName || ""}`);
+      toast.success(`Troca registrada! Novo pedido: ${newName || ""}`);
       window.dispatchEvent(new CustomEvent('shopify-order-created', {
         detail: { orderId: order.id, shopifyOrderName: newName }
       }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Erro ao atualizar pedido");
+      toast.error(err instanceof Error ? err.message : "Erro ao registrar troca");
     } finally {
       setIsCreatingShopifyOrder(false);
     }
