@@ -501,27 +501,62 @@ export function CatalogLeadPageCreator() {
           <div className="px-6 py-3">
             {/* Currently selected - reorder */}
             <Label className="text-xs font-semibold">Produtos no catálogo ({selectedIdsArray.length})</Label>
-            <div className="mt-2 space-y-1 max-h-[200px] overflow-auto mb-4">
+            <div className="mt-2 space-y-1 max-h-[280px] overflow-auto mb-4">
               {liveSelectedProducts.length === 0 && (
                 <p className="text-xs text-muted-foreground py-4 text-center">Nenhum produto selecionado</p>
               )}
-              {liveSelectedProducts.map((p, idx) => (
-                <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card text-xs">
-                  <span className={`w-5 text-center font-bold ${idx === 0 ? "text-amber-500" : "text-muted-foreground"}`}>
-                    {idx === 0 ? "⭐" : idx + 1}
-                  </span>
-                  {p.imageUrl && <img src={p.imageUrl} className="w-8 h-8 rounded object-cover" />}
-                  <span className="flex-1 truncate font-medium">{p.title}</span>
-                  {idx > 0 && (
-                    <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => liveBoostProduct(p.id)}>
-                      <Star className="h-3 w-3" />Destacar
+              {liveSelectedProducts.map((p, idx) => {
+                const d = (editingPage?.product_discounts || {})[p.id];
+                return (
+                  <div key={p.id} className="flex flex-wrap items-center gap-2 p-2 rounded-lg border bg-card text-xs">
+                    <span className={`w-5 text-center font-bold ${idx === 0 ? "text-amber-500" : "text-muted-foreground"}`}>
+                      {idx === 0 ? "⭐" : idx + 1}
+                    </span>
+                    {p.imageUrl && <img src={p.imageUrl} className="w-8 h-8 rounded object-cover" />}
+                    <span className="flex-1 truncate font-medium min-w-[120px]">{p.title}</span>
+                    <span className="text-[10px] text-muted-foreground">R$ {Number(p.price).toFixed(2)}</span>
+                    <Select
+                      value={d?.type || "none"}
+                      onValueChange={(v) => {
+                        if (v === "none") liveSetDiscount(p.id, null);
+                        else liveSetDiscount(p.id, { type: v as any, value: d?.value || 0 });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 w-[110px] text-[11px]">
+                        <SelectValue placeholder="Desconto" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem desconto</SelectItem>
+                        <SelectItem value="percent">% off</SelectItem>
+                        <SelectItem value="fixed_off">R$ off</SelectItem>
+                        <SelectItem value="fixed_price">Preço fixo R$</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {d && d.type && (
+                      <Input
+                        type="number" min="0" step="0.01"
+                        defaultValue={d.value || ""}
+                        placeholder={d.type === "percent" ? "20" : d.type === "fixed_off" ? "30" : "149.90"}
+                        onBlur={(e) => liveSetDiscount(p.id, { type: d.type, value: Number(e.target.value) || 0 })}
+                        className="h-7 w-20 text-[11px]"
+                      />
+                    )}
+                    {d && d.value > 0 && (
+                      <span className="text-[10px] font-bold text-emerald-600">
+                        → R$ {applyDiscount(Number(p.price), d).toFixed(2)}
+                      </span>
+                    )}
+                    {idx > 0 && (
+                      <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => liveBoostProduct(p.id)}>
+                        <Star className="h-3 w-3" />Destacar
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => liveToggleProduct(p.id)}>
+                      <X className="h-3.5 w-3.5" />
                     </Button>
-                  )}
-                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => liveToggleProduct(p.id)}>
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
