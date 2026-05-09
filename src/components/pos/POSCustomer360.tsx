@@ -175,6 +175,16 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
         .order("created_at", { ascending: false })
         .limit(50);
 
+      // Legacy purchases from CRM (zoppy_sales) matched by last 8 phone digits
+      const zoppySalesPromise = last8
+        ? supabase
+            .from("zoppy_sales")
+            .select("id, completed_at, total, status, line_items, customer_phone")
+            .ilike("customer_phone", `%${last8}`)
+            .order("completed_at", { ascending: false })
+            .limit(50)
+        : Promise.resolve({ data: [], error: null } as any);
+
       const loyaltyPromise = phoneVariations.length
         ? supabase
             .from("customer_loyalty_points")
@@ -194,10 +204,35 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
 
       const sellersPromise = supabase.from("pos_sellers").select("id, name");
 
-      const [cb, sl, ly, np, sel] = await Promise.all([cashbackPromise, salesPromise, loyaltyPromise, npsPromise, sellersPromise]);
+      const [cb, sl, zl, ly, np, sel] = await Promise.all([cashbackPromise, salesPromise, zoppySalesPromise, loyaltyPromise, npsPromise, sellersPromise]);
 
       setCashbacks((cb.data as CashbackRow[]) || []);
-      setSales((sl.data as SaleRow[]) || []);
+
+      // Merge POS sales + legacy CRM sales (zoppy_sales) into a single timeline
+      const posRows: SaleRow[] = ((sl.data as any[]) || []) as SaleRow[];
+      const zoppyRows: SaleRow[] = ((zl.data as any[]) || []).map((s: any) => ({
+        id: `zoppy-${s.id}`,
+        created_at: s.completed_at,
+        total: Number(s.total || 0),
+        discount: 0,
+        status: s.status || "completed",
+        payment_method: null,
+        store_id: "",
+        seller_id: null,
+        invoice_number: null,
+        pos_sale_items: Array.isArray(s.line_items)
+          ? s.line_items.map((it: any) => ({
+              product_name: it?.product?.name || it?.name || it?.title || "Produto",
+              size: it?.variation_attributes?.size || null,
+              quantity: it?.quantity || 1,
+              unit_price: Number(it?.product?.price || it?.price || 0),
+            }))
+          : [],
+      }));
+      const merged = [...posRows, ...zoppyRows].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+      setSales(merged);
       setNpsList((np.data as NpsRow[]) || []);
       const lyData = (ly.data as any[]) || [];
       if (lyData.length) {
