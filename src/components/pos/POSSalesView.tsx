@@ -771,10 +771,34 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         setSaleResult(data);
         setStep("invoice");
 
-        // 🔥 Auto-emissão NFC-e (BrasilNFe) conforme pos_invoice_config
+        const saleId = data?.sale_id;
+
+        // Se for venda ONLINE: marca pos_sales pra aparecer na aba Envios
+        if (saleId && saleType === 'online') {
+          try {
+            const shippingAddr = selectedCustomer ? {
+              name: selectedCustomer.name,
+              cpf: selectedCustomer.cpf,
+              phone: selectedCustomer.whatsapp,
+              cep: selectedCustomer.cep,
+              address: selectedCustomer.address,
+              number: selectedCustomer.address_number,
+              complement: selectedCustomer.complement,
+              neighborhood: selectedCustomer.neighborhood,
+              city: selectedCustomer.city,
+              state: selectedCustomer.state,
+            } : null;
+            await supabase.from('pos_sales').update({
+              sale_type: 'online',
+              expedition_status: 'pending',
+              shipping_address: shippingAddr as any,
+            } as any).eq('id', saleId);
+          } catch (e) { console.error('[online sale_type update]', e); }
+        }
+
+        // 🔥 Auto-emissão NFC-e (apenas vendas presenciais)
         try {
-          const saleId = data?.sale_id;
-          if (saleId) {
+          if (saleId && saleType !== 'online') {
             const { data: cfg } = await supabase
               .from('pos_invoice_config')
               .select('auto_emit_on_sale, auto_emit_min_value, auto_emit_payment_methods')
@@ -1031,6 +1055,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setCustomerPrizes([]);
     setSelectedPayment("");
     setSelectedSeller("");
+    setSaleType(null);
+    setShowSaleTypeModal(false);
     setStep("scan");
     setSaleResult(null);
     setNfceResult(null);
@@ -1052,6 +1078,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setWonPrize(null);
     setWonCouponCode("");
     setEarnedPoints(0);
+    setCouponApplied(null);
+    setCouponCode("");
   };
 
   const steps: { id: SaleStep; label: string; icon: typeof ScanBarcode }[] = [
@@ -1102,9 +1130,40 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       <POSSellerGate
         storeId={storeId}
         sellers={sellers}
-        onSellerSelected={(id) => setSelectedSeller(id)}
+        onSellerSelected={(id) => { setSelectedSeller(id); setShowSaleTypeModal(true); }}
         onClose={onCloseSalesView}
       />
+    );
+  }
+
+  // Sale-type gate: depois de escolher vendedor, escolher Presencial vs Online
+  if (selectedSeller && !saleType) {
+    return (
+      <Dialog open={true} onOpenChange={() => {}}>
+        <DialogContent className="bg-pos-black border-pos-orange/40 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 pt-2">
+            <button
+              onClick={() => { setSaleType('physical'); setShowSaleTypeModal(false); }}
+              className="rounded-2xl border-2 border-orange-400/40 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-400 p-6 flex flex-col items-center gap-3 transition-all"
+            >
+              <div className="h-16 w-16 rounded-full bg-orange-500/20 flex items-center justify-center text-3xl">🏬</div>
+              <p className="font-bold text-pos-white">Presencial</p>
+              <p className="text-xs text-pos-white/60 text-center">Cliente leva agora · NFC-e</p>
+            </button>
+            <button
+              onClick={() => { setSaleType('online'); setShowSaleTypeModal(false); }}
+              className="rounded-2xl border-2 border-blue-400/40 bg-blue-500/5 hover:bg-blue-500/15 hover:border-blue-400 p-6 flex flex-col items-center gap-3 transition-all"
+            >
+              <div className="h-16 w-16 rounded-full bg-blue-500/20 flex items-center justify-center text-3xl">🚚</div>
+              <p className="font-bold text-pos-white">Online</p>
+              <p className="text-xs text-pos-white/60 text-center">Entrega/Envio · NF-e + Aba Envios</p>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
