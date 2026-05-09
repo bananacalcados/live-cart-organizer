@@ -593,16 +593,16 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               </Badge>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem onClick={handleUpdateShopify} disabled={isCreatingShopifyOrder}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setExchangeReason("Troca de produto/tamanho"); setShowUpdateDialog(true); }} disabled={isCreatingShopifyOrder}>
                 <RefreshCw className="h-3.5 w-3.5 mr-2" />
                 Trocar produto/tamanho (recriar)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleUnlinkShopify}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setShowUnlinkDialog(true); }}>
                 <Link2Off className="h-3.5 w-3.5 mr-2" />
                 Desvincular
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleDeleteShopify} className="text-destructive focus:text-destructive">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setShowDeleteDialog(true); }} className="text-destructive focus:text-destructive">
                 <Trash className="h-3.5 w-3.5 mr-2" />
                 Apagar pedido na Shopify
               </DropdownMenuItem>
