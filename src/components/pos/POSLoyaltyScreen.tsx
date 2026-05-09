@@ -26,12 +26,13 @@ interface Props {
   onClose: () => void;
   onPrintNonFiscal?: () => void;
   onPrintFiscal?: () => void;
+  onPrintGift?: () => void;
   onRedeemPrize?: () => Promise<string>; // returns coupon code
 }
 
 type Phase = "slot" | "summary" | "prize";
 
-export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPrize, wonCouponCode, customerName, onClose, onPrintNonFiscal, onPrintFiscal, onRedeemPrize }: Props) {
+export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPrize, wonCouponCode, customerName, onClose, onPrintNonFiscal, onPrintFiscal, onPrintGift, onRedeemPrize }: Props) {
   const [phase, setPhase] = useState<Phase>("slot");
   const [redeeming, setRedeeming] = useState(false);
   const [redeemedCode, setRedeemedCode] = useState("");
