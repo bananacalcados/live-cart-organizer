@@ -583,7 +583,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuItem onClick={handleUpdateShopify} disabled={isCreatingShopifyOrder}>
                 <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                Atualizar pedido na Shopify
+                Trocar produto/tamanho (recriar)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleUnlinkShopify}>
                 <Link2Off className="h-3.5 w-3.5 mr-2" />
