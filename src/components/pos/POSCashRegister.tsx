@@ -143,6 +143,31 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     setReceipts((data as PaymentReceipt[]) || []);
   };
 
+  const loadMovements = async () => {
+    if (!register) return;
+    const { data } = await (supabase as any)
+      .from('pos_cash_movements')
+      .select('*')
+      .eq('cash_register_id', register.id)
+      .order('created_at', { ascending: false });
+    setMovements((data as CashMovement[]) || []);
+  };
+
+  const loadReportSales = async () => {
+    if (!register) return;
+    setLoadingReport(true);
+    try {
+      const { data } = await supabase
+        .from('pos_sales')
+        .select('id, created_at, total, payment_method, payment_method_detail, customer_name, status')
+        .eq('cash_register_id', register.id)
+        .order('created_at', { ascending: true });
+      setReportSales((data as any[]) || []);
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
   const handleOpen = async () => {
     const balance = parseFloat(openingBalance) || 0;
     try {
