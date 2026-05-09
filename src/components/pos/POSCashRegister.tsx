@@ -536,6 +536,9 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
               <Button className="flex-1 min-w-[140px] gap-2 border-2 border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20" variant="outline" onClick={() => { setShowCrediario(true); loadAllPendingCrediarios(); }}>
                 <Receipt className="h-4 w-4" /> Receber Crediário
               </Button>
+              <Button className="flex-1 min-w-[140px] gap-2 border-2 border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20" variant="outline" onClick={() => { loadMovements(); loadReportSales(); setShowReport(true); }}>
+                <FileText className="h-4 w-4" /> Relatório
+              </Button>
               <Button className="flex-1 min-w-[140px] gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold" onClick={() => setShowClose(true)}>
                 <Lock className="h-4 w-4" /> Fechar Caixa
               </Button>
