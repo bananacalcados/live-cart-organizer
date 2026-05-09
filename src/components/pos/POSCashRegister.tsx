@@ -886,6 +886,246 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Movements List Dialog */}
+      <Dialog open={showMovements} onOpenChange={setShowMovements}>
+        <DialogContent className="bg-pos-black border-pos-orange/30 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-pos-white flex items-center gap-2">
+              <List className="h-5 w-5 text-pos-orange" /> Sangrias e Reforços
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {movements.length === 0 ? (
+              <p className="text-center text-pos-white/40 text-sm py-8">Nenhuma movimentação registrada</p>
+            ) : (
+              movements.map(m => (
+                <div key={m.id} className={`p-3 rounded-lg border ${m.type === 'withdraw' ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5'}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      {m.type === 'withdraw' ? (
+                        <Badge className="bg-red-500/20 text-red-400 border-red-500/30 gap-1"><ArrowUp className="h-3 w-3" /> Sangria</Badge>
+                      ) : (
+                        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 gap-1"><ArrowDown className="h-3 w-3" /> Reforço</Badge>
+                      )}
+                      <span className="text-xs text-pos-white/40">
+                        {new Date(m.created_at).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    <span className={`font-bold text-sm ${m.type === 'withdraw' ? 'text-red-400' : 'text-green-400'}`}>
+                      {m.type === 'withdraw' ? '-' : '+'} R$ {Number(m.amount).toFixed(2)}
+                    </span>
+                  </div>
+                  {m.description && (
+                    <p className="text-xs text-pos-white/60 italic">"{m.description}"</p>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Report Dialog */}
+      <Dialog open={showReport} onOpenChange={setShowReport}>
+        <DialogContent className="bg-pos-black border-pos-orange/30 max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-pos-white flex items-center justify-between gap-2 pr-8">
+              <span className="flex items-center gap-2"><FileText className="h-5 w-5 text-pos-orange" /> Relatório do Caixa</span>
+              <Button size="sm" className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted gap-1" onClick={() => printCashReport({ register: register!, movements, sales: reportSales, receipts })}>
+                <Printer className="h-4 w-4" /> Imprimir
+              </Button>
+            </DialogTitle>
+          </DialogHeader>
+          {loadingReport ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-pos-orange" /></div>
+          ) : (
+            register && <CashReportContent register={register} movements={movements} sales={reportSales} receipts={receipts} />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
+// ============ Cash Report (in-modal preview) ============
+function CashReportContent({ register, movements, sales, receipts }: { register: CashRegister; movements: CashMovement[]; sales: any[]; receipts: PaymentReceipt[] }) {
+  const grouped = groupSalesByMethod(sales);
+  const cashOut = movements.filter(m => m.type === 'withdraw').reduce((s, m) => s + Number(m.amount), 0);
+  const cashIn = movements.filter(m => m.type === 'deposit').reduce((s, m) => s + Number(m.amount), 0);
+  const expected = (register.opening_balance || 0) + (register.cash_sales || 0) + cashIn - cashOut;
+
+  return (
+    <div className="overflow-y-auto space-y-4 text-pos-white text-sm pr-2">
+      <div className="text-xs text-pos-white/50">
+        Caixa aberto em: {new Date(register.opened_at).toLocaleString('pt-BR')}
+      </div>
+
+      {/* DESTAQUE: DINHEIRO */}
+      <div className="p-4 rounded-xl border-2 border-pos-orange bg-pos-orange/10 space-y-2">
+        <h3 className="font-bold text-pos-orange flex items-center gap-2"><DollarSign className="h-4 w-4" /> DINHEIRO (ESPÉCIE) — Destaque</h3>
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="flex justify-between"><span className="text-pos-white/60">Abertura (troco):</span><span className="font-bold">R$ {(register.opening_balance || 0).toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-pos-white/60">Vendas em dinheiro:</span><span className="font-bold text-green-400">+ R$ {(register.cash_sales || 0).toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-pos-white/60">Reforços:</span><span className="font-bold text-green-400">+ R$ {cashIn.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-pos-white/60">Sangrias:</span><span className="font-bold text-red-400">- R$ {cashOut.toFixed(2)}</span></div>
+        </div>
+        <Separator className="bg-pos-orange/30" />
+        <div className="flex justify-between text-base">
+          <span className="font-bold">Saldo Esperado em Espécie:</span>
+          <span className="font-bold text-pos-orange">R$ {expected.toFixed(2)}</span>
+        </div>
+      </div>
+
+      {/* Sangrias detalhadas */}
+      {movements.filter(m => m.type === 'withdraw').length > 0 && (
+        <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/5 space-y-1">
+          <h4 className="font-bold text-red-400 text-xs uppercase">⚠️ Saídas em Dinheiro (Sangrias)</h4>
+          {movements.filter(m => m.type === 'withdraw').map(m => (
+            <div key={m.id} className="flex justify-between text-xs border-b border-red-500/10 py-1">
+              <span className="text-pos-white/70">
+                {new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {m.description || 'Sem descrição'}
+              </span>
+              <span className="font-bold text-red-400">- R$ {Number(m.amount).toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Reforços */}
+      {movements.filter(m => m.type === 'deposit').length > 0 && (
+        <div className="p-3 rounded-lg border border-green-500/30 bg-green-500/5 space-y-1">
+          <h4 className="font-bold text-green-400 text-xs uppercase">Entradas em Dinheiro (Reforços)</h4>
+          {movements.filter(m => m.type === 'deposit').map(m => (
+            <div key={m.id} className="flex justify-between text-xs border-b border-green-500/10 py-1">
+              <span className="text-pos-white/70">
+                {new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {m.description || 'Sem descrição'}
+              </span>
+              <span className="font-bold text-green-400">+ R$ {Number(m.amount).toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Vendas por método */}
+      <div className="space-y-2">
+        <h3 className="font-bold text-pos-white">Vendas por forma de pagamento</h3>
+        {Object.entries(grouped).length === 0 && (
+          <p className="text-xs text-pos-white/40">Nenhuma venda neste caixa.</p>
+        )}
+        {Object.entries(grouped).map(([method, list]: [string, any[]]) => {
+          const total = list.reduce((s, x) => s + Number(x.total || 0), 0);
+          return (
+            <div key={method} className="p-3 rounded-lg border border-pos-orange/20 bg-pos-white/5">
+              <div className="flex justify-between mb-1">
+                <span className="font-bold uppercase text-xs">{method}</span>
+                <span className="font-bold text-pos-orange">R$ {total.toFixed(2)} ({list.length})</span>
+              </div>
+              <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                {list.map(s => (
+                  <div key={s.id} className="flex justify-between text-[11px] text-pos-white/60 border-b border-pos-orange/5 py-0.5">
+                    <span>{new Date(s.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} — {s.customer_name || 'Cliente avulso'}</span>
+                    <span>R$ {Number(s.total).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function groupSalesByMethod(sales: any[]) {
+  const groups: Record<string, any[]> = {};
+  for (const s of sales) {
+    const m = (s.payment_method || 'outro').toLowerCase();
+    if (!groups[m]) groups[m] = [];
+    groups[m].push(s);
+  }
+  return groups;
+}
+
+function printCashReport({ register, movements, sales, receipts }: { register: CashRegister; movements: CashMovement[]; sales: any[]; receipts: PaymentReceipt[] }) {
+  const grouped = groupSalesByMethod(sales);
+  const cashOut = movements.filter(m => m.type === 'withdraw').reduce((s, m) => s + Number(m.amount), 0);
+  const cashIn = movements.filter(m => m.type === 'deposit').reduce((s, m) => s + Number(m.amount), 0);
+  const expected = (register.opening_balance || 0) + (register.cash_sales || 0) + cashIn - cashOut;
+  const fmt = (n: number) => `R$ ${Number(n || 0).toFixed(2)}`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Relatório de Caixa</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;color:#000;margin:20px;font-size:12px;}
+h1{font-size:16px;margin:0 0 4px;}
+h2{font-size:13px;margin:14px 0 6px;border-bottom:1px solid #000;padding-bottom:2px;}
+table{width:100%;border-collapse:collapse;margin-top:4px;}
+th,td{padding:3px 6px;text-align:left;border-bottom:1px dotted #999;font-size:11px;}
+th{border-bottom:1px solid #000;}
+.right{text-align:right;}
+.cash-highlight{border:2px solid #000;padding:10px;margin:8px 0;background:#fffbe6;}
+.cash-highlight h2{margin-top:0;font-size:14px;border:0;}
+.row{display:flex;justify-content:space-between;margin:2px 0;}
+.bold{font-weight:bold;}
+.red{color:#b00;}
+.green{color:#080;}
+.total-row{border-top:2px solid #000;font-weight:bold;font-size:13px;margin-top:6px;padding-top:6px;}
+.muted{color:#666;font-size:10px;}
+</style></head><body>
+<h1>Relatório de Caixa</h1>
+<div class="muted">Aberto em: ${new Date(register.opened_at).toLocaleString('pt-BR')}<br/>Emitido em: ${new Date().toLocaleString('pt-BR')}</div>
+
+<div class="cash-highlight">
+  <h2>💰 DINHEIRO (ESPÉCIE)</h2>
+  <div class="row"><span>Abertura (troco)</span><span>${fmt(register.opening_balance)}</span></div>
+  <div class="row"><span class="green">+ Vendas em dinheiro</span><span class="green">${fmt(register.cash_sales)}</span></div>
+  <div class="row"><span class="green">+ Reforços</span><span class="green">${fmt(cashIn)}</span></div>
+  <div class="row"><span class="red">- Sangrias</span><span class="red">${fmt(cashOut)}</span></div>
+  <div class="row total-row"><span>SALDO ESPERADO EM ESPÉCIE</span><span>${fmt(expected)}</span></div>
+</div>
+
+${movements.filter(m => m.type === 'withdraw').length > 0 ? `
+<h2>⚠️ Saídas em Dinheiro (Sangrias) — DESTAQUE</h2>
+<table><thead><tr><th>Hora</th><th>Descrição</th><th class="right">Valor</th></tr></thead><tbody>
+${movements.filter(m => m.type === 'withdraw').map(m => `<tr><td>${new Date(m.created_at).toLocaleTimeString('pt-BR')}</td><td>${m.description || '-'}</td><td class="right red bold">- ${fmt(Number(m.amount))}</td></tr>`).join('')}
+<tr class="total-row"><td colspan="2">Total Sangrias</td><td class="right red">- ${fmt(cashOut)}</td></tr>
+</tbody></table>` : ''}
+
+${movements.filter(m => m.type === 'deposit').length > 0 ? `
+<h2>Entradas em Dinheiro (Reforços)</h2>
+<table><thead><tr><th>Hora</th><th>Descrição</th><th class="right">Valor</th></tr></thead><tbody>
+${movements.filter(m => m.type === 'deposit').map(m => `<tr><td>${new Date(m.created_at).toLocaleTimeString('pt-BR')}</td><td>${m.description || '-'}</td><td class="right green bold">+ ${fmt(Number(m.amount))}</td></tr>`).join('')}
+<tr class="total-row"><td colspan="2">Total Reforços</td><td class="right green">+ ${fmt(cashIn)}</td></tr>
+</tbody></table>` : ''}
+
+<h2>Vendas por forma de pagamento</h2>
+${Object.entries(grouped).map(([method, list]: [string, any[]]) => {
+  const total = list.reduce((s, x) => s + Number(x.total || 0), 0);
+  const isCash = method.includes('dinheiro') || method.includes('especie');
+  return `
+  <div ${isCash ? 'class="cash-highlight"' : ''}>
+  <h2>${isCash ? '💵 ' : ''}${method.toUpperCase()} — ${list.length} venda(s) — Total: ${fmt(total)}</h2>
+  <table><thead><tr><th>Hora</th><th>Cliente</th><th>Status</th><th class="right">Valor</th></tr></thead><tbody>
+  ${list.map(s => `<tr><td>${new Date(s.created_at).toLocaleTimeString('pt-BR')}</td><td>${s.customer_name || 'Avulso'}</td><td>${s.status || '-'}</td><td class="right">${fmt(Number(s.total))}</td></tr>`).join('')}
+  <tr class="total-row"><td colspan="3">Total ${method}</td><td class="right">${fmt(total)}</td></tr>
+  </tbody></table>
+  </div>`;
+}).join('')}
+
+<h2>Resumo Geral</h2>
+<table><tbody>
+<tr><td>Total de vendas</td><td class="right bold">${sales.length}</td></tr>
+<tr><td>Faturamento total</td><td class="right bold">${fmt(sales.reduce((s, x) => s + Number(x.total || 0), 0))}</td></tr>
+<tr><td>Comprovantes eletrônicos anexados</td><td class="right">${receipts.length}</td></tr>
+</tbody></table>
+
+<div class="muted" style="margin-top:30px;">_______________________________<br/>Assinatura do responsável</div>
+
+<script>window.onload=()=>{window.print();};</script>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  if (!w) { toast.error('Habilite popups para imprimir'); return; }
+  w.document.write(html);
+  w.document.close();
 }
