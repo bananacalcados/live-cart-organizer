@@ -260,6 +260,7 @@ export default function CatalogLeadPage() {
             title: newData.title || prev.title,
             subtitle: newData.subtitle,
             selected_product_ids: newIds,
+            product_discounts: (newData.product_discounts as DiscountMap) || {},
             theme_config: newData.theme_config || prev.theme_config,
             shipping_cost: Number(newData.shipping_cost) || 0,
           } : prev);
