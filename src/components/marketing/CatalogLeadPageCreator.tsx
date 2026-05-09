@@ -109,6 +109,7 @@ export function CatalogLeadPageCreator() {
       is_active: true,
       theme_config: { primaryColor: "#00BFA6", secondaryColor: "#00897B", backgroundGradient: "linear-gradient(160deg, #00BFA6 0%, #00897B 50%, #004D40 100%)" },
       selected_product_ids: [],
+      product_discounts: {},
       whatsapp_numbers: [{ name: "Banana Calçados", number: "5533936180084" }],
       require_registration: true,
       shipping_cost: 0,
