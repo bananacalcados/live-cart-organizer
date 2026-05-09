@@ -120,6 +120,10 @@ export const savePosCustomer = async (
       .maybeSingle();
 
     if (error) throw error;
+
+    // Best-effort: propagate edits to CRM (zoppy_customers)
+    syncToZoppyCustomer(payload).catch((e) => console.warn("[savePosCustomer] zoppy sync skipped:", e?.message));
+
     return data;
   };
 
@@ -179,7 +183,63 @@ export const savePosCustomer = async (
     .single();
 
   if (error) throw error;
+
+  // Best-effort: propagate to CRM (zoppy_customers)
+  syncToZoppyCustomer(payload).catch((e) => console.warn("[savePosCustomer] zoppy sync skipped:", e?.message));
+
   return data;
+};
+
+/**
+ * Sync a PDV customer record back to the CRM (zoppy_customers).
+ * Matches by CPF first, then by last 8 phone digits. Only updates when found.
+ */
+const syncToZoppyCustomer = async (payload: ReturnType<typeof buildPosCustomerPayload>) => {
+  let zoppyId: string | null = null;
+
+  if (payload.cpf) {
+    const { data } = await supabase
+      .from("zoppy_customers")
+      .select("id")
+      .eq("cpf", payload.cpf)
+      .maybeSingle();
+    zoppyId = data?.id || null;
+  }
+
+  if (!zoppyId && payload.whatsapp) {
+    const last8 = payload.whatsapp.slice(-8);
+    if (last8.length === 8) {
+      const { data } = await supabase
+        .from("zoppy_customers")
+        .select("id")
+        .ilike("phone", `%${last8}`)
+        .limit(2);
+      if (data && data.length === 1) zoppyId = data[0].id;
+    }
+  }
+
+  if (!zoppyId) return;
+
+  const fullName = (payload.name || "").trim();
+  const parts = fullName.split(/\s+/);
+  const first_name = parts.shift() || "";
+  const last_name = parts.join(" ") || null;
+
+  const update: Record<string, any> = {};
+  if (first_name) update.first_name = first_name;
+  if (last_name !== undefined) update.last_name = last_name;
+  if (payload.cpf) update.cpf = payload.cpf;
+  if (payload.email) update.email = payload.email;
+  if (payload.whatsapp) update.phone = payload.whatsapp;
+  if (payload.city) update.city = payload.city;
+  if (payload.state) update.state = payload.state;
+  if (payload.shoe_size) update.shoe_size = payload.shoe_size;
+  if (payload.preferred_style) update.preferred_style = payload.preferred_style;
+  if (payload.age_range) update.age_range = payload.age_range;
+
+  if (Object.keys(update).length === 0) return;
+
+  await supabase.from("zoppy_customers").update(update).eq("id", zoppyId);
 };
 
 /** Remove a previous whatsapp number from the history */

@@ -531,12 +531,19 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         .limit(10);
       setCustomerResults(posData || []);
 
-      // Also search zoppy_customers (RFM) by phone or name
+      // Also search zoppy_customers (RFM) by phone, cpf, name or email
       const phoneTerm = term.replace(/\D/g, '');
+      const isCpf = phoneTerm.length === 11;
+      const orParts: string[] = [];
+      if (phoneTerm.length >= 4) orParts.push(`phone.ilike.%${phoneTerm}%`);
+      if (isCpf) orParts.push(`cpf.eq.${phoneTerm}`);
+      orParts.push(`first_name.ilike.%${term}%`);
+      orParts.push(`last_name.ilike.%${term}%`);
+      orParts.push(`email.ilike.%${term}%`);
       const { data: rfmData } = await supabase
         .from('zoppy_customers')
         .select('*')
-        .or(`phone.ilike.%${phoneTerm.length >= 4 ? phoneTerm : 'NOMATCH'}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%,email.ilike.%${term}%`)
+        .or(orParts.join(','))
         .limit(10);
       setRfmMatches(rfmData || []);
     } catch (e) {
