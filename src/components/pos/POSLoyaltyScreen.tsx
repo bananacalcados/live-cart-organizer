@@ -158,67 +158,64 @@ export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPr
               {/* CTA - Redeem or Save */}
               <div className="text-center space-y-3">
                 {wonPrize ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-green-400 font-bold">
-                      🎉 Você desbloqueou: {wonPrize.prize_label}!
-                    </p>
+                  <p className="text-sm text-green-400 font-bold">
+                    🎉 Você desbloqueou: {wonPrize.prize_label}!
+                  </p>
+                ) : (
+                  <p className="text-sm text-yellow-400/80">
+                    {nextTier
+                      ? `Faltam apenas ${pointsToNext} pontos para ganhar ${nextTier.prize_label}! Volte em breve! 💪`
+                      : "Continue comprando para acumular mais pontos! 💛"
+                    }
+                  </p>
+                )}
+
+                {wonPrize && (
+                  <div className="space-y-2">
                     <button
                       onClick={handleRedeemNow}
                       disabled={redeeming}
-                      className="w-full px-8 py-4 rounded-2xl bg-gradient-to-r from-green-400 via-emerald-500 to-green-600 text-white font-bold text-lg hover:from-green-500 hover:via-emerald-600 hover:to-green-700 transition-all shadow-lg shadow-green-500/30 animate-pulse disabled:opacity-50"
+                      className="w-full px-8 py-4 rounded-2xl bg-gradient-to-r from-green-400 via-emerald-500 to-green-600 text-white font-bold text-lg hover:from-green-500 hover:via-emerald-600 hover:to-green-700 transition-all shadow-lg shadow-green-500/30 disabled:opacity-50"
                     >
                       <Gift className="h-5 w-5 inline mr-2" />
                       {redeeming ? 'Resgatando...' : 'Resgatar Agora! 🎁'}
                     </button>
-                    <button
-                      onClick={handleSaveLater}
-                      className="w-full px-8 py-3 rounded-2xl bg-white/10 text-white/80 font-bold hover:bg-white/20 transition-all border border-white/20"
-                    >
-                      <Clock className="h-4 w-4 inline mr-2" />
-                      Guardar para Depois 💰
-                    </button>
                     <p className="text-[10px] text-white/40">
-                      Ao guardar, seus pontos ficam acumulados para resgatar na próxima visita!
+                      Ao guardar, seus pontos ficam acumulados para resgatar na próxima visita.
                     </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-sm text-yellow-400/80">
-                      {nextTier
-                        ? `Faltam apenas ${pointsToNext} pontos para ganhar ${nextTier.prize_label}! Volte em breve! 💪`
-                        : "Continue comprando para acumular mais pontos! 💛"
-                      }
-                    </p>
-                    <div className="grid gap-3">
-                      <button
-                        onClick={onClose}
-                        className="w-full px-8 py-3 rounded-2xl bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-bold hover:from-yellow-500 hover:via-orange-600 hover:to-red-600 transition-all shadow-lg"
-                      >
-                        Finalizar Venda ✨
-                      </button>
-                      <div className="grid gap-2 sm:grid-cols-3">
-                        <button
-                          onClick={onPrintNonFiscal}
-                          className="w-full px-3 py-3 rounded-2xl bg-white/10 text-white font-bold text-xs hover:bg-white/20 transition-all border border-white/20"
-                        >
-                          Cupom Não Fiscal
-                        </button>
-                        <button
-                          onClick={onPrintFiscal}
-                          className="w-full px-3 py-3 rounded-2xl bg-white/10 text-white font-bold text-xs hover:bg-white/20 transition-all border border-white/20"
-                        >
-                          Cupom Fiscal
-                        </button>
-                        <button
-                          onClick={onPrintGift}
-                          className="w-full px-3 py-3 rounded-2xl bg-amber-500/20 text-amber-200 font-bold text-xs hover:bg-amber-500/30 transition-all border border-amber-400/40"
-                        >
-                          🎁 Cupom de Troca
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 )}
+
+                {/* Always show print options + finalize */}
+                <div className="grid gap-2 pt-2 border-t border-white/10">
+                  <p className="text-[11px] uppercase tracking-wider text-white/50 font-bold mt-2">Imprimir comprovante</p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <button
+                      onClick={onPrintNonFiscal}
+                      className="w-full px-3 py-3 rounded-2xl bg-white/10 text-white font-bold text-xs hover:bg-white/20 transition-all border border-white/20"
+                    >
+                      🧾 Cupom Não Fiscal
+                    </button>
+                    <button
+                      onClick={onPrintFiscal}
+                      className="w-full px-3 py-3 rounded-2xl bg-white/10 text-white font-bold text-xs hover:bg-white/20 transition-all border border-white/20"
+                    >
+                      📄 Cupom Fiscal
+                    </button>
+                    <button
+                      onClick={onPrintGift}
+                      className="w-full px-3 py-3 rounded-2xl bg-amber-500/20 text-amber-200 font-bold text-xs hover:bg-amber-500/30 transition-all border border-amber-400/40"
+                    >
+                      🎁 Cupom de Troca
+                    </button>
+                  </div>
+                  <button
+                    onClick={onClose}
+                    className="w-full mt-2 px-8 py-3 rounded-2xl bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-bold hover:from-yellow-500 hover:via-orange-600 hover:to-red-600 transition-all shadow-lg"
+                  >
+                    {wonPrize ? <><Clock className="h-4 w-4 inline mr-2" />Guardar Pontos & Finalizar Venda ✨</> : <>Finalizar Venda ✨</>}
+                  </button>
+                </div>
               </div>
             </div>
           )}

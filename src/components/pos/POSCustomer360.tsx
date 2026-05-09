@@ -81,6 +81,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
   const [npsList, setNpsList] = useState<NpsRow[]>([]);
   const [stores, setStores] = useState<Record<string, string>>({});
   const [sellers, setSellers] = useState<Record<string, string>>({});
+  const [legacyAggregate, setLegacyAggregate] = useState<{ total_orders: number; total_spent: number; last_purchase_at: string | null; first_purchase_at: string | null } | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   // AI insights state
@@ -156,6 +157,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
     setLoyalty(null);
     setNpsList([]);
     setAiInsights(null);
+    setLegacyAggregate(null);
     try {
       const phoneVariations = c.whatsapp ? buildPhoneVariations(c.whatsapp) : [];
       const last8 = c.whatsapp ? c.whatsapp.replace(/\D/g, "").slice(-8) : null;
@@ -204,7 +206,28 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
 
       const sellersPromise = supabase.from("pos_sellers").select("id, name");
 
-      const [cb, sl, zl, ly, np, sel] = await Promise.all([cashbackPromise, salesPromise, zoppySalesPromise, loyaltyPromise, npsPromise, sellersPromise]);
+      // Legacy aggregate from CRM (zoppy_customers) for accurate historical purchase count
+      const legacyAggPromise = last8
+        ? supabase
+            .from("zoppy_customers")
+            .select("total_orders, total_spent, last_purchase_at, first_purchase_at, phone")
+            .ilike("phone", `%${last8}`)
+            .order("total_orders", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null } as any);
+
+      const [cb, sl, zl, ly, np, sel, legAgg] = await Promise.all([cashbackPromise, salesPromise, zoppySalesPromise, loyaltyPromise, npsPromise, sellersPromise, legacyAggPromise]);
+
+      if (legAgg && (legAgg as any).data) {
+        const d: any = (legAgg as any).data;
+        setLegacyAggregate({
+          total_orders: Number(d.total_orders || 0),
+          total_spent: Number(d.total_spent || 0),
+          last_purchase_at: d.last_purchase_at || null,
+          first_purchase_at: d.first_purchase_at || null,
+        });
+      }
 
       setCashbacks((cb.data as CashbackRow[]) || []);
 
@@ -284,12 +307,22 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
   const stats = useMemo(() => {
     const completedStatuses = ["completed", "paid", "delivered"];
     const valid = sales.filter(s => completedStatuses.includes(s.status) || !["cancelled", "canceled"].includes(s.status));
-    const ltv = valid.reduce((acc, s) => acc + Number(s.total || 0), 0);
-    const count = valid.length;
+    const detailLtv = valid.reduce((acc, s) => acc + Number(s.total || 0), 0);
+    const detailCount = valid.length;
+    const zoppyDetailCount = sales.filter(s => s.id.startsWith("zoppy-")).length;
+
+    // Merge with legacy aggregate (zoppy_customers): when aggregate has more orders than the detail rows we fetched, prefer the aggregate.
+    const legacyOrders = legacyAggregate?.total_orders || 0;
+    const legacySpent = Number(legacyAggregate?.total_spent || 0);
+    const extraLegacyOrders = Math.max(0, legacyOrders - zoppyDetailCount);
+    const extraLegacySpent = legacyOrders > zoppyDetailCount ? legacySpent : 0; // only add full legacy spent when detail is incomplete
+
+    const count = detailCount + extraLegacyOrders;
+    const ltv = detailLtv + extraLegacySpent;
     const avg = count ? ltv / count : 0;
-    const lastPurchase = valid[0]?.created_at;
-    return { ltv, count, avg, lastPurchase };
-  }, [sales]);
+    const lastPurchase = valid[0]?.created_at || legacyAggregate?.last_purchase_at || null;
+    return { ltv, count, avg, lastPurchase, extraLegacyOrders };
+  }, [sales, legacyAggregate]);
 
   const activeCashbacks = cashbacks.filter(c => !c.is_used && new Date(c.expires_at) > new Date());
   const expiredOrUsedCashbacks = cashbacks.filter(c => c.is_used || new Date(c.expires_at) <= new Date());
@@ -363,7 +396,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             placeholder="Buscar por Nome, CPF, WhatsApp ou Email…"
-            className="bg-white !text-black font-semibold placeholder:text-black/50 border-pos-yellow/60 focus-visible:ring-pos-yellow"
+            className="bg-pos-white/10 !text-pos-white font-semibold placeholder:text-pos-white/40 border-pos-yellow/60 focus-visible:ring-pos-yellow"
           />
           <Button onClick={() => handleSearch()} disabled={searching} className="bg-pos-yellow text-pos-black hover:bg-pos-yellow/90">
             {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
@@ -429,6 +462,16 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
                   ← Voltar
                 </Button>
               </div>
+
+              {legacyAggregate && legacyAggregate.total_orders > 0 && (
+                <div className="mt-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-bold">📜 Histórico legado:</span>
+                  <span>{legacyAggregate.total_orders} compra{legacyAggregate.total_orders > 1 ? "s" : ""} no sistema antigo</span>
+                  {legacyAggregate.total_spent > 0 && <span>· total {fmtMoney(Number(legacyAggregate.total_spent))}</span>}
+                  {legacyAggregate.first_purchase_at && <span>· cliente desde {fmtDate(legacyAggregate.first_purchase_at)}</span>}
+                  {stats.extraLegacyOrders > 0 && <span className="opacity-70">({stats.extraLegacyOrders} sem detalhamento)</span>}
+                </div>
+              )}
 
               {/* KPIs */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
