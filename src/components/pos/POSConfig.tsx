@@ -1153,9 +1153,9 @@ export function POSConfig({ storeId }: Props) {
                     if (!val || val === s.name) return;
                     const { error } = await supabase.from('pos_sellers').update({ name: val }).eq('id', s.id);
                     if (error) {
-                      toast({ title: 'Erro ao renomear', description: error.message, variant: 'destructive' });
+                      toast.error('Erro ao renomear', { description: error.message });
                     } else {
-                      toast({ title: 'Vendedora renomeada', description: `Agora chamada "${val}". Vendas anteriores permanecem vinculadas.` });
+                      toast.success('Vendedora renomeada', { description: `Agora chamada "${val}". Vendas anteriores permanecem vinculadas.` });
                     }
                   }}
                   onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
