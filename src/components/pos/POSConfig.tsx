@@ -1328,6 +1328,62 @@ export function POSConfig({ storeId }: Props) {
           </CardContent>
         </Card>
 
+        {/* ─── Cashback Config ─── */}
+        <Card className="bg-pos-white/5 border-pos-orange/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center justify-between text-pos-white">
+              <span className="flex items-center gap-2"><DollarSign className="h-4 w-4 text-emerald-400" /> Cashback Pós-Venda (Global)</span>
+              <Switch checked={cashbackEnabled} onCheckedChange={setCashbackEnabled} />
+            </CardTitle>
+          </CardHeader>
+          {cashbackEnabled && (
+            <CardContent className="space-y-4">
+              <p className="text-xs text-pos-white/50">
+                Cashback é gerado automaticamente após cada venda física e usado nas automações de pós-venda (template de boas-vindas, reativação, etc.).
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-pos-white/70 text-xs">% de retorno</Label>
+                  <Input type="number" step="0.5" value={cashbackPct} onChange={e => setCashbackPct(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">Ex: 5 = 5% do total</p>
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Validade (dias)</Label>
+                  <Input type="number" value={cashbackValidity} onChange={e => setCashbackValidity(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Venda mínima (R$)</Label>
+                  <Input type="number" step="0.01" value={cashbackMinSale} onChange={e => setCashbackMinSale(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">0 = qualquer valor gera cashback</p>
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Multiplicador compra mínima</Label>
+                  <Input type="number" step="0.1" value={cashbackMinMultiplier} onChange={e => setCashbackMinMultiplier(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">Ex: 1.5 → cashback R$ 20 exige compra ≥ R$ 30</p>
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Cashback máximo (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="opcional" value={cashbackMax} onChange={e => setCashbackMax(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">Vazio = sem teto</p>
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Cooldown (dias)</Label>
+                  <Input type="number" value={cashbackCooldown} onChange={e => setCashbackCooldown(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">0 = sempre gera. {">"}0 = não gera novo se já existir ativo</p>
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-pos-white/70 text-xs">Prefixo do cupom</Label>
+                  <Input value={cashbackPrefix} onChange={e => setCashbackPrefix(e.target.value.toUpperCase())} maxLength={6} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">Ex: CB → cupom gerado: CB-X4F92K</p>
+                </div>
+              </div>
+              <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={saveCashbackConfig} disabled={savingCashback}>
+                <Save className="h-4 w-4" /> {savingCashback ? 'Salvando...' : 'Salvar Cashback'}
+              </Button>
+            </CardContent>
+          )}
+        </Card>
+
         {/* ─── Loyalty Points Config ─── */}
         <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
