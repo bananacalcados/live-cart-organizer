@@ -41,7 +41,13 @@ interface CartItem {
   quantity: number;
   barcode: string;
   stock?: number;
+  // Conferência inline (após bipar)
+  feetChecked?: boolean;
+  defectChecked?: boolean;
+  defectNote?: string;
 }
+
+type SaleType = 'physical' | 'online';
 
 interface PaymentMethod {
   id: string;
@@ -70,6 +76,11 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPreloaded, onNavigateToWhatsApp, onCloseSalesView }: Props) {
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Tipo de venda (Presencial=NFC-e, Online=NF-e + Envios)
+  const [saleType, setSaleType] = useState<SaleType | null>(null);
+  const [showSaleTypeModal, setShowSaleTypeModal] = useState(false);
+  // Lock pra evitar bip duplicado
+  const lastScanRef = useRef<{ q: string; t: number }>({ q: "", t: 0 });
   const [barcodeInput, setBarcodeInput] = useState("");
   const [step, setStep] = useState<SaleStep>("scan");
   const [showCamera, setShowCamera] = useState(false);
@@ -325,6 +336,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }));
   };
 
+  const updatePrice = (id: string, newPrice: number) => {
+    setCart(prev => prev.map(item => item.id === id ? { ...item, price: Math.max(0, newPrice) } : item));
+  };
+
+  const setItemConference = (id: string, patch: Partial<Pick<CartItem, 'feetChecked' | 'defectChecked' | 'defectNote'>>) => {
+    setCart(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item));
+  };
+
   const removeItem = (id: string) => setCart(prev => prev.filter(item => item.id !== id));
 
   // Debounce timer ref
@@ -346,6 +365,12 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const handleBarcodeScan = async (term?: string) => {
     const query = term || barcodeInput.trim();
     if (!query) return;
+    // Lock anti-duplicidade: bloqueia mesma query em < 1.2s (bip duplo do leitor)
+    const now = Date.now();
+    if (lastScanRef.current.q === query && now - lastScanRef.current.t < 1200) {
+      return;
+    }
+    lastScanRef.current = { q: query, t: now };
     setSearching(true);
     setSearchResults([]);
     try {
@@ -464,10 +489,32 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         quantity: 1,
         barcode: product.barcode || '',
         stock: product.stock,
+        feetChecked: false,
+        defectChecked: false,
       }];
     });
     setSearchResults([]);
     setBarcodeInput("");
+  };
+
+  // Aplica cashback/prêmio do cliente como cupom
+  const applyCustomerBenefit = (kind: 'cashback' | 'prize', code?: string, value?: number, label?: string) => {
+    if (kind === 'cashback' && customerCashback) {
+      const min = customerCashback.min_purchase || 0;
+      if (subtotal < min) {
+        toast.error(`Compra mínima R$ ${min.toFixed(2)} para usar este cashback`);
+        return;
+      }
+      const discountAmt = customerCashback.type === 'percent'
+        ? subtotal * (customerCashback.amount / 100)
+        : customerCashback.amount;
+      setCouponApplied({ code: customerCashback.code, discount: Math.min(subtotal, discountAmt), label: 'Cashback', type: 'cashback' });
+      toast.success(`Cashback aplicado: -R$ ${Math.min(subtotal, discountAmt).toFixed(2)}`);
+    } else if (kind === 'prize' && code && value !== undefined) {
+      const discountAmt = label?.includes('%') ? subtotal * (value / 100) : value;
+      setCouponApplied({ code, discount: Math.min(subtotal, discountAmt), label: label || 'Prêmio', type: 'prize' });
+      toast.success(`Prêmio aplicado: -R$ ${Math.min(subtotal, discountAmt).toFixed(2)}`);
+    }
   };
 
   const searchCustomerByTerm = async () => {
@@ -724,10 +771,34 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         setSaleResult(data);
         setStep("invoice");
 
-        // 🔥 Auto-emissão NFC-e (BrasilNFe) conforme pos_invoice_config
+        const saleId = data?.sale_id;
+
+        // Se for venda ONLINE: marca pos_sales pra aparecer na aba Envios
+        if (saleId && saleType === 'online') {
+          try {
+            const shippingAddr = selectedCustomer ? {
+              name: selectedCustomer.name,
+              cpf: selectedCustomer.cpf,
+              phone: selectedCustomer.whatsapp,
+              cep: selectedCustomer.cep,
+              address: selectedCustomer.address,
+              number: selectedCustomer.address_number,
+              complement: selectedCustomer.complement,
+              neighborhood: selectedCustomer.neighborhood,
+              city: selectedCustomer.city,
+              state: selectedCustomer.state,
+            } : null;
+            await supabase.from('pos_sales').update({
+              sale_type: 'online',
+              expedition_status: 'pending',
+              shipping_address: shippingAddr as any,
+            } as any).eq('id', saleId);
+          } catch (e) { console.error('[online sale_type update]', e); }
+        }
+
+        // 🔥 Auto-emissão NFC-e (apenas vendas presenciais)
         try {
-          const saleId = data?.sale_id;
-          if (saleId) {
+          if (saleId && saleType !== 'online') {
             const { data: cfg } = await supabase
               .from('pos_invoice_config')
               .select('auto_emit_on_sale, auto_emit_min_value, auto_emit_payment_methods')
@@ -936,6 +1007,12 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     if (!saleResult?.sale_id) return;
     setEmittingNfce(true);
     try {
+      // Vendas online → emissão NF-e ocorre na aba Envios (junto do despacho)
+      if (saleType === 'online') {
+        toast.info("Esta venda online será faturada com NF-e na aba Envios.");
+        setEmittingNfce(false);
+        return;
+      }
       const { data, error } = await supabase.functions.invoke('nfce-emitir', {
         body: { sale_id: saleResult.sale_id },
       });
@@ -984,6 +1061,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setCustomerPrizes([]);
     setSelectedPayment("");
     setSelectedSeller("");
+    setSaleType(null);
+    setShowSaleTypeModal(false);
     setStep("scan");
     setSaleResult(null);
     setNfceResult(null);
@@ -1005,6 +1084,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setWonPrize(null);
     setWonCouponCode("");
     setEarnedPoints(0);
+    setCouponApplied(null);
+    setCouponCode("");
   };
 
   const steps: { id: SaleStep; label: string; icon: typeof ScanBarcode }[] = [
@@ -1055,9 +1136,40 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       <POSSellerGate
         storeId={storeId}
         sellers={sellers}
-        onSellerSelected={(id) => setSelectedSeller(id)}
+        onSellerSelected={(id) => { setSelectedSeller(id); setShowSaleTypeModal(true); }}
         onClose={onCloseSalesView}
       />
+    );
+  }
+
+  // Sale-type gate: depois de escolher vendedor, escolher Presencial vs Online
+  if (selectedSeller && !saleType) {
+    return (
+      <Dialog open={true} onOpenChange={() => {}}>
+        <DialogContent className="bg-pos-black border-pos-orange/40 max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 pt-2">
+            <button
+              onClick={() => { setSaleType('physical'); setShowSaleTypeModal(false); }}
+              className="rounded-2xl border-2 border-orange-400/40 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-400 p-6 flex flex-col items-center gap-3 transition-all"
+            >
+              <div className="h-16 w-16 rounded-full bg-orange-500/20 flex items-center justify-center text-3xl">🏬</div>
+              <p className="font-bold text-pos-white">Presencial</p>
+              <p className="text-xs text-pos-white/60 text-center">Cliente leva agora · NFC-e</p>
+            </button>
+            <button
+              onClick={() => { setSaleType('online'); setShowSaleTypeModal(false); }}
+              className="rounded-2xl border-2 border-blue-400/40 bg-blue-500/5 hover:bg-blue-500/15 hover:border-blue-400 p-6 flex flex-col items-center gap-3 transition-all"
+            >
+              <div className="h-16 w-16 rounded-full bg-blue-500/20 flex items-center justify-center text-3xl">🚚</div>
+              <p className="font-bold text-pos-white">Online</p>
+              <p className="text-xs text-pos-white/60 text-center">Entrega/Envio · NF-e + Aba Envios</p>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     );
   }
 
@@ -1158,6 +1270,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-pos-white">
                 Olá, <span className="text-pos-orange font-bold">{sellers.find(s => s.id === selectedSeller)?.name}</span>! Boas vendas! 🔥
+                {saleType && (
+                  <Badge className={cn("ml-2 text-[10px]", saleType === 'online' ? "bg-blue-500/20 text-blue-300 border-blue-500/40" : "bg-orange-500/20 text-orange-300 border-orange-500/40")}>
+                    {saleType === 'online' ? '🚚 Online (NF-e)' : '🏬 Presencial (NFC-e)'}
+                  </Badge>
+                )}
               </p>
             </div>
             <div className="flex items-center gap-1.5 text-pos-orange">
@@ -1265,37 +1382,82 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                       <p className="text-lg font-medium">Nenhum produto adicionado</p>
                       <p className="text-sm mt-1">Bipe um código de barras, SKU ou busque pelo nome</p>
                     </div>
-                  ) : cart.map(item => (
-                    <div key={item.id} className="flex items-center gap-3 p-3 rounded-xl border border-pos-orange/10 bg-pos-white/5 hover:border-pos-orange/30 transition-all">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-pos-orange/10">
-                        <Package className="h-5 w-5 text-pos-orange" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm truncate text-pos-white">{item.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange border-pos-orange/30">{item.sku}</Badge>
-                          {item.variant && <span className="text-xs text-pos-white/50">{item.variant}</span>}
-                          {item.size && <span className="text-xs text-pos-white/40">Tam: {item.size}</span>}
+                  ) : cart.map(item => {
+                    const conferenceOk = item.feetChecked && item.defectChecked;
+                    return (
+                    <div key={item.id} className={cn(
+                      "rounded-xl border p-3 transition-all space-y-2",
+                      conferenceOk
+                        ? "border-emerald-500/40 bg-emerald-500/5"
+                        : "border-amber-500/40 bg-amber-500/5"
+                    )}>
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-pos-orange/10 flex-shrink-0">
+                          <Package className="h-5 w-5 text-pos-orange" />
                         </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Button variant="outline" size="icon" className="h-7 w-7 border-pos-white/20 text-pos-white hover:bg-pos-white/10" onClick={() => updateQuantity(item.id, -1)}>
-                          <Minus className="h-3 w-3" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-pos-white whitespace-normal break-words">{item.name}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                            <Badge className="text-[10px] bg-pos-orange/20 text-pos-orange border-pos-orange/30">{item.sku}</Badge>
+                            {item.variant && <span className="text-xs text-pos-white/50">{item.variant}</span>}
+                            {item.size && <span className="text-xs text-pos-white/40">Tam: {item.size}</span>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button variant="outline" size="icon" className="h-7 w-7 border-pos-white/20 text-pos-white hover:bg-pos-white/10" onClick={() => updateQuantity(item.id, -1)}>
+                            <Minus className="h-3 w-3" />
+                          </Button>
+                          <span className="w-6 text-center font-bold text-sm text-pos-orange">{item.quantity}</span>
+                          <Button variant="outline" size="icon" className="h-7 w-7 border-pos-white/20 text-pos-white hover:bg-pos-white/10" onClick={() => updateQuantity(item.id, 1)}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="text-right min-w-[80px]">
+                          <p className="font-bold text-sm text-pos-white">R$ {(item.price * item.quantity).toFixed(2)}</p>
+                          {item.quantity > 1 && <p className="text-[10px] text-pos-white/40">{item.quantity}x R$ {item.price.toFixed(2)}</p>}
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => removeItem(item.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                        <span className="w-8 text-center font-bold text-sm text-pos-orange">{item.quantity}</span>
-                        <Button variant="outline" size="icon" className="h-7 w-7 border-pos-white/20 text-pos-white hover:bg-pos-white/10" onClick={() => updateQuantity(item.id, 1)}>
-                          <Plus className="h-3 w-3" />
-                        </Button>
                       </div>
-                      <div className="text-right min-w-[80px]">
-                        <p className="font-bold text-sm text-pos-white">R$ {(item.price * item.quantity).toFixed(2)}</p>
-                        {item.quantity > 1 && <p className="text-[10px] text-pos-white/40">{item.quantity}x R$ {item.price.toFixed(2)}</p>}
+                      {/* Conferência inline (pés + defeito) */}
+                      <div className="flex flex-wrap items-center gap-2 pl-[60px]">
+                        <button
+                          onClick={() => setItemConference(item.id, { feetChecked: !item.feetChecked })}
+                          className={cn(
+                            "text-[11px] font-semibold rounded-full px-2.5 py-1 border transition-all flex items-center gap-1",
+                            item.feetChecked
+                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                              : "bg-pos-white/5 border-pos-white/15 text-pos-white/60 hover:border-amber-400/60"
+                          )}
+                        >
+                          {item.feetChecked ? <Check className="h-3 w-3" /> : <span className="text-amber-400">·</span>}
+                          Par completo (2 pés)
+                        </button>
+                        <button
+                          onClick={() => setItemConference(item.id, { defectChecked: !item.defectChecked, defectNote: item.defectChecked ? '' : item.defectNote })}
+                          className={cn(
+                            "text-[11px] font-semibold rounded-full px-2.5 py-1 border transition-all flex items-center gap-1",
+                            item.defectChecked
+                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
+                              : "bg-pos-white/5 border-pos-white/15 text-pos-white/60 hover:border-amber-400/60"
+                          )}
+                        >
+                          {item.defectChecked ? <Check className="h-3 w-3" /> : <span className="text-amber-400">·</span>}
+                          Sem defeito
+                        </button>
+                        {item.defectChecked === false && item.feetChecked && (
+                          <Input
+                            value={item.defectNote || ''}
+                            onChange={(e) => setItemConference(item.id, { defectNote: e.target.value })}
+                            placeholder="Observação do defeito (opcional)"
+                            className="h-7 text-[11px] flex-1 min-w-[160px] bg-pos-white/5 border-pos-white/15 text-pos-white"
+                          />
+                        )}
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => removeItem(item.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
                     </div>
-                  ))}
+                    );
+                  })}
 
                   {/* Cross-sell suggestions */}
                   {cart.length > 0 && (
@@ -1444,7 +1606,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           {customerCashback.expiry_date && ` · até ${new Date(customerCashback.expiry_date).toLocaleDateString('pt-BR')}`}
                         </p>
                       </div>
-                      <span className="text-[10px] text-green-400/60 italic flex-shrink-0">sugerir</span>
+                      <Button
+                        size="sm"
+                        className="h-8 text-[11px] px-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex-shrink-0"
+                        onClick={() => applyCustomerBenefit('cashback')}
+                        disabled={couponApplied?.code === customerCashback.code}
+                      >
+                        {couponApplied?.code === customerCashback.code ? '✓ Aplicado' : 'Utilizar'}
+                      </Button>
                     </div>
                   )}
 
@@ -1468,7 +1637,17 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           {` · até ${new Date(p.expires_at).toLocaleDateString('pt-BR')}`}
                         </p>
                       </div>
-                      <span className="text-[10px] text-purple-400/60 italic flex-shrink-0">sugerir</span>
+                      <Button
+                        size="sm"
+                        className="h-8 text-[11px] px-3 bg-purple-500 hover:bg-purple-600 text-white font-bold flex-shrink-0"
+                        onClick={() => {
+                          const label = p.prize_type === 'discount_percent' ? `${p.prize_value}% off` : `R$ ${p.prize_value.toFixed(2)} off`;
+                          applyCustomerBenefit('prize', p.coupon_code, p.prize_value, label);
+                        }}
+                        disabled={couponApplied?.code === p.coupon_code}
+                      >
+                        {couponApplied?.code === p.coupon_code ? '✓ Aplicado' : 'Resgatar'}
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -1503,27 +1682,109 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           )}
 
           {step === "verify" && (
-            <div className="p-6 space-y-6 overflow-auto">
-              <POSOrderVerification
-                saleId=""
-                storeId={storeId}
-                sellerId={selectedSeller}
-                items={cart.map(item => ({
-                  sku: item.sku,
-                  name: item.name,
-                  variant: item.variant,
-                  quantity: item.quantity,
-                  price: item.price,
-                  barcode: item.barcode,
-                }))}
-                onComplete={() => setStep("payment")}
-                onSkip={() => setStep("payment")}
-              />
+            <div className="p-6 space-y-4 overflow-auto">
+              <div>
+                <h2 className="text-lg font-bold mb-1 text-pos-white">Conferência de itens</h2>
+                <p className="text-sm text-pos-white/50">Revise abaixo. Itens em verde já foram conferidos na etapa de produtos.</p>
+              </div>
+              {(() => {
+                const pending = cart.filter(i => !i.feetChecked || !i.defectChecked);
+                const allOk = pending.length === 0 && cart.length > 0;
+                return (
+                  <>
+                    <div className="space-y-2">
+                      {cart.map(item => {
+                        const ok = item.feetChecked && item.defectChecked;
+                        return (
+                          <div key={item.id} className={cn(
+                            "rounded-lg border p-3 flex items-start gap-3",
+                            ok ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/10"
+                          )}>
+                            <div className={cn("h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0", ok ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300")}>
+                              {ok ? <Check className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-pos-white whitespace-normal break-words">{item.name}</p>
+                              <div className="flex flex-wrap gap-2 mt-1 text-[11px]">
+                                <span className={item.feetChecked ? "text-emerald-300" : "text-amber-300"}>{item.feetChecked ? "✓ Par completo" : "⚠ Pés não conferidos"}</span>
+                                <span className={item.defectChecked ? "text-emerald-300" : "text-amber-300"}>{item.defectChecked ? "✓ Sem defeito" : "⚠ Defeito não conferido"}</span>
+                                {item.defectNote && <span className="text-amber-300">📝 {item.defectNote}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        className="flex-1 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
+                        disabled={!allOk}
+                        onClick={() => setStep("payment")}
+                      >
+                        {allOk ? <><Check className="h-4 w-4 mr-1" /> Conferência concluída — avançar</> : `Faltam ${pending.length} item(s) pra conferir`}
+                      </Button>
+                      {!allOk && (
+                        <Button variant="outline" onClick={() => setStep("scan")} className="border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10">
+                          Voltar pra conferir
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
 
           {step === "payment" && (
             <div className="p-6 space-y-6 overflow-auto">
+              {/* Itens editáveis */}
+              <div className="rounded-xl border border-pos-orange/20 bg-pos-white/5 p-3 space-y-2">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-bold text-pos-white">Itens da venda ({totalItems})</p>
+                  <button onClick={() => setStep("scan")} className="text-[11px] text-pos-orange hover:underline">+ Adicionar item</button>
+                </div>
+                {cart.length === 0 ? (
+                  <p className="text-xs text-pos-white/50 text-center py-3">Sem itens. Volte pra etapa Produtos.</p>
+                ) : cart.map(item => (
+                  <div key={item.id} className="flex items-start gap-2 p-2 rounded-lg bg-pos-black/40 border border-pos-white/10">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-pos-white whitespace-normal break-words leading-tight">{item.name}</p>
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        <span className="text-[10px] text-pos-orange">{item.sku}</span>
+                        {item.variant && <span className="text-[10px] text-pos-white/50">{item.variant}</span>}
+                        {item.size && <span className="text-[10px] text-pos-white/40">Tam: {item.size}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="icon" className="h-6 w-6 border-pos-white/20 text-pos-white" onClick={() => updateQuantity(item.id, -1)}>
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <span className="w-5 text-center font-bold text-xs text-pos-orange">{item.quantity}</span>
+                      <Button variant="outline" size="icon" className="h-6 w-6 border-pos-white/20 text-pos-white" onClick={() => updateQuantity(item.id, 1)}>
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-pos-white/40">R$</span>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={item.price}
+                        onChange={(e) => updatePrice(item.id, parseFloat(e.target.value) || 0)}
+                        className="h-6 w-20 text-xs px-1 text-right bg-pos-white/5 border-pos-white/15 text-pos-white"
+                      />
+                    </div>
+                    <span className="text-xs font-bold text-pos-white min-w-[60px] text-right">R$ {(item.price * item.quantity).toFixed(2)}</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-red-400 hover:bg-red-500/10" onClick={() => {
+                      removeItem(item.id);
+                      if (cart.length === 1) { setStep("scan"); toast.info("Carrinho vazio — voltando pra Produtos"); }
+                    }}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-lg font-bold mb-1 text-pos-white">Forma de Pagamento</h2>
