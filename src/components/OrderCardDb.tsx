@@ -14,6 +14,14 @@ import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { Order } from "@/types/order";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { MoreVertical, Link2Off, RefreshCw, Trash } from "lucide-react";
 
 interface OrderCardDbProps {
   order: DbOrder;
