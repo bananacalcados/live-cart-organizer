@@ -17,6 +17,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { applyDiscount, discountBadge, type DiscountMap, type ProductDiscount } from "@/lib/catalogDiscount";
 
 interface CatalogLeadPage {
   id: string;
@@ -26,6 +28,7 @@ interface CatalogLeadPage {
   is_active: boolean;
   theme_config: any;
   selected_product_ids: string[];
+  product_discounts?: DiscountMap;
   whatsapp_numbers: Array<{ name: string; number: string }>;
   require_registration: boolean;
   shipping_cost: number;
