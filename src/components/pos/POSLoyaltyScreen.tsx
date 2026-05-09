@@ -24,12 +24,14 @@ interface Props {
   wonCouponCode: string;
   customerName?: string;
   onClose: () => void;
+  onPrintNonFiscal?: () => void;
+  onPrintFiscal?: () => void;
   onRedeemPrize?: () => Promise<string>; // returns coupon code
 }
 
 type Phase = "slot" | "summary" | "prize";
 
-export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPrize, wonCouponCode, customerName, onClose, onRedeemPrize }: Props) {
+export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPrize, wonCouponCode, customerName, onClose, onPrintNonFiscal, onPrintFiscal, onRedeemPrize }: Props) {
   const [phase, setPhase] = useState<Phase>("slot");
   const [redeeming, setRedeeming] = useState(false);
   const [redeemedCode, setRedeemedCode] = useState("");
@@ -186,12 +188,28 @@ export function POSLoyaltyScreen({ open, pointsEarned, totalPoints, tiers, wonPr
                         : "Continue comprando para acumular mais pontos! 💛"
                       }
                     </p>
-                    <button
-                      onClick={onClose}
-                      className="w-full px-8 py-3 rounded-2xl bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-bold hover:from-yellow-500 hover:via-orange-600 hover:to-red-600 transition-all shadow-lg"
-                    >
-                      Finalizar ✨
-                    </button>
+                    <div className="grid gap-3">
+                      <button
+                        onClick={onClose}
+                        className="w-full px-8 py-3 rounded-2xl bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white font-bold hover:from-yellow-500 hover:via-orange-600 hover:to-red-600 transition-all shadow-lg"
+                      >
+                        Finalizar Venda ✨
+                      </button>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <button
+                          onClick={onPrintNonFiscal}
+                          className="w-full px-4 py-3 rounded-2xl bg-white/10 text-white font-bold hover:bg-white/20 transition-all border border-white/20"
+                        >
+                          Imprimir Cupom Não Fiscal
+                        </button>
+                        <button
+                          onClick={onPrintFiscal}
+                          className="w-full px-4 py-3 rounded-2xl bg-white/10 text-white font-bold hover:bg-white/20 transition-all border border-white/20"
+                        >
+                          Imprimir Cupom Fiscal
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
