@@ -411,6 +411,8 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       setIsCreatingShopifyOrder(false);
     }
   };
+
+  const handleMototaxi = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
       await storeMove(order.id, 'awaiting_mototaxi');
