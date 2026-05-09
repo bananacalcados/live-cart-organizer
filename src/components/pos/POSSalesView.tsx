@@ -41,7 +41,13 @@ interface CartItem {
   quantity: number;
   barcode: string;
   stock?: number;
+  // Conferência inline (após bipar)
+  feetChecked?: boolean;
+  defectChecked?: boolean;
+  defectNote?: string;
 }
+
+type SaleType = 'physical' | 'online';
 
 interface PaymentMethod {
   id: string;
@@ -70,6 +76,11 @@ const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPreloaded, onNavigateToWhatsApp, onCloseSalesView }: Props) {
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Tipo de venda (Presencial=NFC-e, Online=NF-e + Envios)
+  const [saleType, setSaleType] = useState<SaleType | null>(null);
+  const [showSaleTypeModal, setShowSaleTypeModal] = useState(false);
+  // Lock pra evitar bip duplicado
+  const lastScanRef = useRef<{ q: string; t: number }>({ q: "", t: 0 });
   const [barcodeInput, setBarcodeInput] = useState("");
   const [step, setStep] = useState<SaleStep>("scan");
   const [showCamera, setShowCamera] = useState(false);
@@ -325,6 +336,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }));
   };
 
+  const updatePrice = (id: string, newPrice: number) => {
+    setCart(prev => prev.map(item => item.id === id ? { ...item, price: Math.max(0, newPrice) } : item));
+  };
+
+  const setItemConference = (id: string, patch: Partial<Pick<CartItem, 'feetChecked' | 'defectChecked' | 'defectNote'>>) => {
+    setCart(prev => prev.map(item => item.id === id ? { ...item, ...patch } : item));
+  };
+
   const removeItem = (id: string) => setCart(prev => prev.filter(item => item.id !== id));
 
   // Debounce timer ref
@@ -346,6 +365,12 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const handleBarcodeScan = async (term?: string) => {
     const query = term || barcodeInput.trim();
     if (!query) return;
+    // Lock anti-duplicidade: bloqueia mesma query em < 1.2s (bip duplo do leitor)
+    const now = Date.now();
+    if (lastScanRef.current.q === query && now - lastScanRef.current.t < 1200) {
+      return;
+    }
+    lastScanRef.current = { q: query, t: now };
     setSearching(true);
     setSearchResults([]);
     try {
@@ -464,10 +489,32 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         quantity: 1,
         barcode: product.barcode || '',
         stock: product.stock,
+        feetChecked: false,
+        defectChecked: false,
       }];
     });
     setSearchResults([]);
     setBarcodeInput("");
+  };
+
+  // Aplica cashback/prêmio do cliente como cupom
+  const applyCustomerBenefit = (kind: 'cashback' | 'prize', code?: string, value?: number, label?: string) => {
+    if (kind === 'cashback' && customerCashback) {
+      const min = customerCashback.min_purchase || 0;
+      if (subtotal < min) {
+        toast.error(`Compra mínima R$ ${min.toFixed(2)} para usar este cashback`);
+        return;
+      }
+      const discountAmt = customerCashback.type === 'percent'
+        ? subtotal * (customerCashback.amount / 100)
+        : customerCashback.amount;
+      setCouponApplied({ code: customerCashback.code, discount: Math.min(subtotal, discountAmt), label: 'Cashback', type: 'cashback' });
+      toast.success(`Cashback aplicado: -R$ ${Math.min(subtotal, discountAmt).toFixed(2)}`);
+    } else if (kind === 'prize' && code && value !== undefined) {
+      const discountAmt = label?.includes('%') ? subtotal * (value / 100) : value;
+      setCouponApplied({ code, discount: Math.min(subtotal, discountAmt), label: label || 'Prêmio', type: 'prize' });
+      toast.success(`Prêmio aplicado: -R$ ${Math.min(subtotal, discountAmt).toFixed(2)}`);
+    }
   };
 
   const searchCustomerByTerm = async () => {
