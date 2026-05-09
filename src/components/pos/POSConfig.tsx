@@ -1141,7 +1141,27 @@ export function POSConfig({ storeId }: Props) {
               <p className="text-xs text-pos-white/40">Nenhuma vendedora cadastrada</p>
             ) : sellers.map(s => (
               <div key={s.id} className="flex items-center justify-between p-2 rounded-lg bg-pos-white/5 gap-2">
-                <span className="text-sm text-pos-white flex-1">{s.name}</span>
+                <Input
+                  type="text"
+                  value={s.name}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSellers(prev => prev.map(sel => sel.id === s.id ? { ...sel, name: val } : sel));
+                  }}
+                  onBlur={async (e) => {
+                    const val = e.target.value.trim();
+                    if (!val || val === s.name) return;
+                    const { error } = await supabase.from('pos_sellers').update({ name: val }).eq('id', s.id);
+                    if (error) {
+                      toast({ title: 'Erro ao renomear', description: error.message, variant: 'destructive' });
+                    } else {
+                      toast({ title: 'Vendedora renomeada', description: `Agora chamada "${val}". Vendas anteriores permanecem vinculadas.` });
+                    }
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                  className="text-sm text-pos-white flex-1 bg-transparent border-transparent hover:border-pos-orange/30 focus:border-pos-orange focus:bg-pos-white/10 h-8"
+                  title="Clique para editar o nome — o ID do vendedor é preservado"
+                />
                 <div className="flex items-center gap-2">
                   <Input
                     type="text"
