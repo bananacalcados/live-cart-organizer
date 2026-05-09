@@ -1193,7 +1193,8 @@ export function POSConfig({ storeId }: Props) {
                   <Switch checked={s.is_active} onCheckedChange={() => toggleSellerActive(s.id, s.is_active)} />
                 </div>
               </div>
-            ))}
+              );
+            })}
             <p className="text-[10px] text-pos-white/30">PIN de 4 dígitos para acesso ao painel privado. O toggle salva automaticamente.</p>
           </CardContent>
         </Card>
