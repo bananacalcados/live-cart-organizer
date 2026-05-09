@@ -2271,6 +2271,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   }}
                   onPrintNonFiscal={printNonFiscalReceipt}
                   onPrintFiscal={printFiscalReceipt}
+                  onPrintGift={printGiftReceipt}
                   onRedeemPrize={async () => {
                     if (!wonPrize || !selectedCustomer?.whatsapp) return "";
                     const phone = selectedCustomer.whatsapp.replace(/\D/g, '');
