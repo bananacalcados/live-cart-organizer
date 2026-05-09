@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { DollarSign, Lock, Unlock, ArrowDown, ArrowUp, Calculator, Clock, Search, Loader2, Receipt, Camera, CreditCard, Smartphone, Trash2, Image, Eye } from "lucide-react";
+import { DollarSign, Lock, Unlock, ArrowDown, ArrowUp, Calculator, Clock, Search, Loader2, Receipt, Camera, CreditCard, Smartphone, Trash2, Image, Eye, List, FileText, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
