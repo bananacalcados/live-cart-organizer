@@ -185,6 +185,7 @@ export function CatalogLeadPageCreator() {
       is_active: editingPage.is_active ?? true,
       theme_config: editingPage.theme_config,
       selected_product_ids: editingPage.selected_product_ids,
+      product_discounts: editingPage.product_discounts || {},
       whatsapp_numbers: editingPage.whatsapp_numbers,
       require_registration: editingPage.require_registration ?? true,
       shipping_cost: editingPage.shipping_cost ?? 0,
