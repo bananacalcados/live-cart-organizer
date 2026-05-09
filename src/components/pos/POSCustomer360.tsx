@@ -354,8 +354,8 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
       <div className="p-4 border-b border-pos-white/10 bg-[hsl(0,0%,8%)]">
         <div className="flex items-center gap-2 mb-2">
           <User className="h-5 w-5 text-pos-yellow" />
-          <h2 className="text-lg font-bold">Cliente 360°</h2>
-          <span className="text-xs text-pos-white/50">— histórico, cashback e fidelidade</span>
+          <h2 className="text-lg font-bold text-pos-white">Cliente 360°</h2>
+          <span className="text-xs text-pos-white/70">— histórico, cashback e fidelidade</span>
         </div>
         <div className="flex gap-2">
           <Input
