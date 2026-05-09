@@ -14,6 +14,14 @@ import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { Order } from "@/types/order";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { MoreVertical, Link2Off, RefreshCw, Trash } from "lucide-react";
 
 interface OrderCardDbProps {
   order: DbOrder;
@@ -344,7 +352,65 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   };
 
-  const handleMototaxi = async (e: React.MouseEvent) => {
+  const handleUnlinkShopify = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Desvincular este pedido da Shopify? O pedido permanece na Shopify, apenas o vínculo com este card será removido.")) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-delete-event-order", {
+        body: { orderId: order.id, mode: "unlink" },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setHasShopifyOrder(null);
+      setShopifyOrderName(null);
+      sessionStorage.removeItem(`shopify-verify-${order.event_id}`);
+      toast.success("Pedido desvinculado da Shopify");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao desvincular");
+    }
+  };
+
+  const handleDeleteShopify = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("APAGAR o pedido da Shopify? Essa ação cancela e exclui o pedido na Shopify. Não pode ser desfeita.")) return;
+    if (!confirm("Tem certeza absoluta? O pedido será cancelado e apagado da Shopify.")) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-delete-event-order", {
+        body: { orderId: order.id, mode: "delete" },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setHasShopifyOrder(null);
+      setShopifyOrderName(null);
+      sessionStorage.removeItem(`shopify-verify-${order.event_id}`);
+      toast.success("Pedido apagado da Shopify");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao apagar pedido");
+    }
+  };
+
+  const handleUpdateShopify = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Atualizar pedido na Shopify? O pedido atual será cancelado e recriado com os dados atualizados. ATENÇÃO: o número do pedido na Shopify VAI MUDAR.")) return;
+    setIsCreatingShopifyOrder(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-update-event-order", {
+        body: { orderId: order.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const newName = data?.current?.shopifyOrderName || null;
+      applyShopifyVerification(true, newName);
+      toast.success(`Pedido atualizado na Shopify! ${newName || ""}`);
+      window.dispatchEvent(new CustomEvent('shopify-order-created', {
+        detail: { orderId: order.id, shopifyOrderName: newName }
+      }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao atualizar pedido");
+    } finally {
+      setIsCreatingShopifyOrder(false);
+    }
+  };
     e.stopPropagation();
     try {
       await storeMove(order.id, 'awaiting_mototaxi');
@@ -497,10 +563,33 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && (
-          <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
-            <ShoppingBag className="h-3 w-3 mr-1" />
-            {shopifyOrderName ? `Shopify ${shopifyOrderName}` : 'Na Shopify'}
-          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Badge
+                variant="secondary"
+                className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30 cursor-pointer hover:bg-stage-paid/30 inline-flex items-center"
+              >
+                <ShoppingBag className="h-3 w-3 mr-1" />
+                {shopifyOrderName ? `Shopify ${shopifyOrderName}` : 'Na Shopify'}
+                <MoreVertical className="h-3 w-3 ml-1 opacity-70" />
+              </Badge>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={handleUpdateShopify} disabled={isCreatingShopifyOrder}>
+                <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                Atualizar pedido na Shopify
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleUnlinkShopify}>
+                <Link2Off className="h-3.5 w-3.5 mr-2" />
+                Desvincular
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleDeleteShopify} className="text-destructive focus:text-destructive">
+                <Trash className="h-3.5 w-3.5 mr-2" />
+                Apagar pedido na Shopify
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === false && (
           <Badge variant="secondary" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30 animate-pulse">

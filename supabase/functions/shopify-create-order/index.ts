@@ -232,11 +232,24 @@ serve(async (req) => {
 
     console.log("Shopify order created:", result.bodyJson?.order?.id, result.bodyJson?.order?.name);
 
+    const newShopifyOrderId = result.bodyJson?.order?.id ? String(result.bodyJson.order.id) : null;
+    const newShopifyOrderName = result.bodyJson?.order?.name || null;
+
+    if (newShopifyOrderId || newShopifyOrderName) {
+      await supabase
+        .from("orders")
+        .update({
+          shopify_order_id: newShopifyOrderId,
+          shopify_order_name: newShopifyOrderName,
+        })
+        .eq("id", orderId);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
-        shopifyOrderId: result.bodyJson?.order?.id,
-        shopifyOrderName: result.bodyJson?.order?.name,
+        shopifyOrderId: newShopifyOrderId,
+        shopifyOrderName: newShopifyOrderName,
       }),
       { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } },
     );
