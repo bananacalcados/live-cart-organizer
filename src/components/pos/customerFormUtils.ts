@@ -120,6 +120,10 @@ export const savePosCustomer = async (
       .maybeSingle();
 
     if (error) throw error;
+
+    // Best-effort: propagate edits to CRM (zoppy_customers)
+    syncToZoppyCustomer(payload).catch((e) => console.warn("[savePosCustomer] zoppy sync skipped:", e?.message));
+
     return data;
   };
 
