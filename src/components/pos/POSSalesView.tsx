@@ -1269,7 +1269,6 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const steps: { id: SaleStep; label: string; icon: typeof ScanBarcode }[] = [
     { id: "scan", label: "Produtos", icon: ScanBarcode },
     { id: "customer", label: "Cliente", icon: User },
-    { id: "verify", label: "Conferência", icon: Check },
     { id: "payment", label: "Pagamento", icon: CreditCard },
     { id: "invoice", label: "Nota Fiscal", icon: Receipt },
   ];
