@@ -383,12 +383,12 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
 
   return (
     <div className="flex-1 flex flex-col bg-pos-black text-pos-white overflow-hidden">
-      {/* Header / Search */}
-      <div className="p-4 border-b border-pos-white/10 bg-[hsl(0,0%,8%)]">
+      {/* Header / Search — contraste fixo: fundo preto, letras brancas; input fundo branco, letras pretas */}
+      <div className="p-4 border-b border-white/10 bg-black">
         <div className="flex items-center gap-2 mb-2">
           <User className="h-5 w-5 text-pos-yellow" />
-          <h2 className="text-lg font-bold text-pos-white">Cliente 360°</h2>
-          <span className="text-xs text-pos-white/70">— histórico, cashback e fidelidade</span>
+          <h2 className="text-lg font-bold text-white">Cliente 360°</h2>
+          <span className="text-xs text-white/70">— histórico, cashback e fidelidade</span>
         </div>
         <div className="flex gap-2">
           <Input
@@ -396,9 +396,9 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             placeholder="Buscar por Nome, CPF, WhatsApp ou Email…"
-            className="bg-pos-white/10 !text-pos-white font-semibold placeholder:text-pos-white/40 border-pos-yellow/60 focus-visible:ring-pos-yellow"
+            className="bg-white !text-black font-semibold placeholder:text-black/50 border-pos-yellow/60 focus-visible:ring-pos-yellow"
           />
-          <Button onClick={() => handleSearch()} disabled={searching} className="bg-pos-yellow text-pos-black hover:bg-pos-yellow/90">
+          <Button onClick={() => handleSearch()} disabled={searching} className="bg-pos-yellow text-black hover:bg-pos-yellow/90">
             {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
           </Button>
         </div>
