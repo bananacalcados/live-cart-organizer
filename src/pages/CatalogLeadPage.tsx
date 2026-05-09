@@ -510,13 +510,20 @@ export default function CatalogLeadPage() {
         <div className="flex-1 overflow-auto p-4 space-y-3">
           {cart.length === 0 ? (
             <p className="text-center text-gray-400 py-8">Carrinho vazio</p>
-          ) : cart.map(item => (
+          ) : cart.map(item => {
+            const basePrice = Number(item.variant.price);
+            const finalPrice = getEffectivePrice(item.productId, basePrice);
+            const hasDiscount = finalPrice < basePrice;
+            return (
             <div key={item.variant.gid} className="flex gap-3 p-3 bg-gray-50 rounded-xl">
               <img src={item.imageUrl} alt={item.productTitle} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold line-clamp-1">{item.productTitle}</p>
                 <p className="text-xs text-gray-500">{item.variant.label}</p>
-                <p className="text-sm font-bold mt-1" style={{ color: theme.primaryColor }}>{fmt(item.variant.price)}</p>
+                <p className="text-sm font-bold mt-1" style={{ color: theme.primaryColor }}>
+                  {hasDiscount && <span className="text-xs line-through text-gray-400 mr-1">{fmt(basePrice)}</span>}
+                  {fmt(finalPrice)}
+                </p>
                 <div className="flex items-center gap-2 mt-1">
                   <button onClick={() => updateQty(item.variant.gid, -1)} className="w-6 h-6 rounded-full border flex items-center justify-center text-gray-500 hover:bg-gray-100">
                     <Minus className="h-3 w-3" />
