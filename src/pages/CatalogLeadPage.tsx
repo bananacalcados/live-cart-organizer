@@ -538,7 +538,8 @@ export default function CatalogLeadPage() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         {cart.length > 0 && (
           <div className="border-t p-4 space-y-3">
