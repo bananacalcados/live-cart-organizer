@@ -94,12 +94,24 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null);
 
+  // Movements (sangrias/reforços)
+  const [movements, setMovements] = useState<CashMovement[]>([]);
+  const [showMovements, setShowMovements] = useState(false);
+
+  // Report
+  const [showReport, setShowReport] = useState(false);
+  const [reportSales, setReportSales] = useState<any[]>([]);
+  const [loadingReport, setLoadingReport] = useState(false);
+
   useEffect(() => {
     loadOpenRegister();
   }, [storeId]);
 
   useEffect(() => {
-    if (register) loadReceipts();
+    if (register) {
+      loadReceipts();
+      loadMovements();
+    }
   }, [register?.id]);
 
   const loadOpenRegister = async () => {
