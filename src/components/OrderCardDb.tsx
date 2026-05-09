@@ -371,9 +371,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   };
 
-  const handleUnlinkShopify = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm("Desvincular este pedido da Shopify? O pedido permanece na Shopify, apenas o vínculo com este card será removido.")) return;
+  const performUnlinkShopify = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("shopify-delete-event-order", {
         body: { orderId: order.id, mode: "unlink" },
@@ -389,10 +387,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   };
 
-  const handleDeleteShopify = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm("APAGAR o pedido da Shopify? Essa ação cancela e exclui o pedido na Shopify. Não pode ser desfeita.")) return;
-    if (!confirm("Tem certeza absoluta? O pedido será cancelado e apagado da Shopify.")) return;
+  const performDeleteShopify = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("shopify-delete-event-order", {
         body: { orderId: order.id, mode: "delete" },
@@ -408,13 +403,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   };
 
-  const handleUpdateShopify = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const reason = window.prompt(
-      "Trocar produto/tamanho na Shopify?\n\nO pedido atual será cancelado e um novo será criado com os dados atuais.\nO histórico fica salvo no card.\n\nMotivo da troca (opcional):",
-      "Troca de produto/tamanho"
-    );
-    if (reason === null) return; // cancel
+  const performUpdateShopify = async (reason: string) => {
     setIsCreatingShopifyOrder(true);
     try {
       const { data, error } = await supabase.functions.invoke("shopify-update-event-order", {
