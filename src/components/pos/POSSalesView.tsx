@@ -1031,6 +1031,92 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
+  const printNonFiscalReceipt = () => {
+    const payName = useMultiPayment
+      ? multiPayments.map(p => `${p.method_name}: R$ ${p.amount.toFixed(2)}`).join('<br/>')
+      : (selectedPaymentName || 'Não informado');
+    const itemsHtml = cart.map(item => `
+      <tr>
+        <td style="padding:4px 0; vertical-align:top;">${item.quantity}x</td>
+        <td style="padding:4px 8px; vertical-align:top;">${item.name}${item.variant ? ` - ${item.variant}` : ''}</td>
+        <td style="padding:4px 0; text-align:right; vertical-align:top;">R$ ${(item.price * item.quantity).toFixed(2)}</td>
+      </tr>
+    `).join('');
+
+    const saleTypeLabel = saleType === 'online' ? 'Online' : 'Presencial';
+    const customerLabel = selectedCustomer?.name || 'Consumidor Final';
+    const orderLabel = saleResult?.tiny_order_number ? `Pedido #${saleResult.tiny_order_number}` : 'Venda PDV';
+    const discountLine = totalDiscount > 0
+      ? `<div style="display:flex;justify-content:space-between;"><span>Desconto</span><strong>-R$ ${totalDiscount.toFixed(2)}</strong></div>`
+      : '';
+
+    const printWindow = window.open('', '_blank', 'width=420,height=760');
+    if (!printWindow) {
+      toast.error('Não foi possível abrir a impressão do cupom.');
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Cupom Não Fiscal</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #111; padding: 16px; }
+            h1, h2, p { margin: 0; }
+            .muted { color: #555; }
+            .sep { border-top: 1px dashed #999; margin: 12px 0; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            .totals { font-size: 14px; }
+            @media print { body { padding: 0; } button { display:none; } }
+          </style>
+        </head>
+        <body>
+          <h2>Banana Calçados</h2>
+          <p class="muted">Cupom Não Fiscal</p>
+          <div class="sep"></div>
+          <p><strong>${orderLabel}</strong></p>
+          <p>Tipo: ${saleTypeLabel}</p>
+          <p>Cliente: ${customerLabel}</p>
+          <p>Data: ${new Date().toLocaleString('pt-BR')}</p>
+          <div class="sep"></div>
+          <table>
+            <tbody>${itemsHtml}</tbody>
+          </table>
+          <div class="sep"></div>
+          <div class="totals">
+            <div style="display:flex;justify-content:space-between;"><span>Subtotal</span><strong>R$ ${subtotal.toFixed(2)}</strong></div>
+            ${discountLine}
+            <div style="display:flex;justify-content:space-between;"><span>Total</span><strong>R$ ${totalWithDiscount.toFixed(2)}</strong></div>
+          </div>
+          <div class="sep"></div>
+          <p><strong>Pagamento</strong></p>
+          <p>${payName}</p>
+          <script>
+            window.onload = () => { window.print(); };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const printFiscalReceipt = async () => {
+    if (saleType === 'online') {
+      toast.info('Venda online será faturada com NF-e na aba Envios.');
+      return;
+    }
+
+    if (fiscalDoc?.danfe_url) {
+      window.open(fiscalDoc.danfe_url, '_blank');
+      return;
+    }
+
+    if (!emittingNfce) {
+      await emitNfce();
+      toast.info('Emissão iniciada. Assim que a NFC-e autorizar, o botão abrirá a impressão fiscal.');
+    }
+  };
+
   // Realtime: acompanha fiscal_documents da venda atual
   useEffect(() => {
     const sid = saleResult?.sale_id;
@@ -2086,8 +2172,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   customerName={selectedCustomer?.name}
                   onClose={() => {
                     setShowLoyaltyScreen(false);
-                    resetSale();
                   }}
+                  onPrintNonFiscal={printNonFiscalReceipt}
+                  onPrintFiscal={printFiscalReceipt}
                   onRedeemPrize={async () => {
                     if (!wonPrize || !selectedCustomer?.whatsapp) return "";
                     const phone = selectedCustomer.whatsapp.replace(/\D/g, '');
