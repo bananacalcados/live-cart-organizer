@@ -563,10 +563,33 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && (
-          <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
-            <ShoppingBag className="h-3 w-3 mr-1" />
-            {shopifyOrderName ? `Shopify ${shopifyOrderName}` : 'Na Shopify'}
-          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Badge
+                variant="secondary"
+                className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30 cursor-pointer hover:bg-stage-paid/30 inline-flex items-center"
+              >
+                <ShoppingBag className="h-3 w-3 mr-1" />
+                {shopifyOrderName ? `Shopify ${shopifyOrderName}` : 'Na Shopify'}
+                <MoreVertical className="h-3 w-3 ml-1 opacity-70" />
+              </Badge>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={handleUpdateShopify} disabled={isCreatingShopifyOrder}>
+                <RefreshCw className="h-3.5 w-3.5 mr-2" />
+                Atualizar pedido na Shopify
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleUnlinkShopify}>
+                <Link2Off className="h-3.5 w-3.5 mr-2" />
+                Desvincular
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleDeleteShopify} className="text-destructive focus:text-destructive">
+                <Trash className="h-3.5 w-3.5 mr-2" />
+                Apagar pedido na Shopify
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === false && (
           <Badge variant="secondary" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30 animate-pulse">
