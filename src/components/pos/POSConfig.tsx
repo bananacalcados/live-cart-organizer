@@ -159,6 +159,7 @@ export function POSConfig({ storeId }: Props) {
     loadGoals();
     loadCategoriesAndBrands();
     loadCommissionTiers();
+    loadCashbackConfig();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [storeId]);
 
