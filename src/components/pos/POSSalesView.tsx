@@ -1680,32 +1680,36 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <div className="space-y-2">
                   {/* Cashback - discrete suggestion */}
                   {customerCashback && (
-                    <div className="flex items-center gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-3 py-2.5">
-                      <div className="h-8 w-8 rounded-full bg-green-500/15 flex items-center justify-center flex-shrink-0">
-                        <Tag className="h-4 w-4 text-green-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-green-400">Cashback</span>
-                          <span className="font-mono text-xs font-bold text-green-300 bg-green-500/10 px-1.5 py-0.5 rounded">
-                            {customerCashback.code}
-                          </span>
+                    <div className="rounded-xl border-2 border-emerald-400 bg-gradient-to-br from-emerald-500/20 to-green-600/15 p-4 shadow-lg shadow-emerald-500/20">
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="h-12 w-12 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 shadow-md">
+                          <Tag className="h-6 w-6 text-white" />
                         </div>
-                        <p className="text-[11px] text-pos-white/60 truncate">
-                          {customerCashback.type === 'percent' 
-                            ? `${customerCashback.amount}% off` 
-                            : `R$ ${customerCashback.amount.toFixed(2)} off`}
-                          {customerCashback.min_purchase > 0 && ` · min R$ ${customerCashback.min_purchase.toFixed(2)}`}
-                          {customerCashback.expiry_date && ` · até ${new Date(customerCashback.expiry_date).toLocaleDateString('pt-BR')}`}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-base font-extrabold text-emerald-300 uppercase tracking-wide">💰 Cashback Disponível</span>
+                            <span className="font-mono text-xs font-bold text-white bg-emerald-600 px-2 py-0.5 rounded">
+                              {customerCashback.code}
+                            </span>
+                          </div>
+                          <p className="text-2xl font-black text-white mt-1">
+                            {customerCashback.type === 'percent'
+                              ? `${customerCashback.amount}% OFF`
+                              : `R$ ${customerCashback.amount.toFixed(2)} OFF`}
+                          </p>
+                          <p className="text-xs text-emerald-200/90 mt-0.5">
+                            {customerCashback.min_purchase > 0 && `Compra mín. R$ ${customerCashback.min_purchase.toFixed(2)} · `}
+                            {customerCashback.expiry_date && `Válido até ${new Date(customerCashback.expiry_date).toLocaleDateString('pt-BR')}`}
+                          </p>
+                        </div>
                       </div>
                       <Button
-                        size="sm"
-                        className="h-8 text-[11px] px-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold flex-shrink-0"
+                        size="lg"
+                        className="w-full h-12 text-base font-extrabold bg-emerald-500 hover:bg-emerald-600 text-white shadow-md uppercase tracking-wide"
                         onClick={() => applyCustomerBenefit('cashback')}
                         disabled={couponApplied?.code === customerCashback.code}
                       >
-                        {couponApplied?.code === customerCashback.code ? '✓ Aplicado' : 'Utilizar'}
+                        {couponApplied?.code === customerCashback.code ? '✓ Cashback Aplicado' : '🎁 Utilizar Cashback Agora'}
                       </Button>
                     </div>
                   )}
