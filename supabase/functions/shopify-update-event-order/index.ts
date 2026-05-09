@@ -55,8 +55,15 @@ Deno.serve(async (req) => {
     ]);
     if (!isAdmin && !isManager) return json({ error: "Forbidden" }, 403);
 
-    const { orderId } = await req.json();
+    const { orderId, reason } = await req.json();
     if (!orderId) return json({ error: "orderId is required" }, 400);
+
+    // Snapshot do pedido atual antes de apagar
+    const { data: snapBefore } = await service
+      .from("orders")
+      .select("shopify_order_id, shopify_order_name")
+      .eq("id", orderId)
+      .single();
 
     // Step 1: delete existing Shopify order (cancel + delete + unlink)
     const delRes = await fetch(`${supabaseUrl}/functions/v1/shopify-delete-event-order`, {
@@ -88,9 +95,24 @@ Deno.serve(async (req) => {
       return json({ error: "Failed to recreate Shopify order", details: createData }, 500);
     }
 
+    // Step 3: registra histórico
+    await service.from("order_shopify_history").insert({
+      order_id: orderId,
+      previous_shopify_order_id: snapBefore?.shopify_order_id || null,
+      previous_shopify_order_name: snapBefore?.shopify_order_name || null,
+      new_shopify_order_id: createData?.shopifyOrderId ? String(createData.shopifyOrderId) : null,
+      new_shopify_order_name: createData?.shopifyOrderName || null,
+      action: "exchange",
+      reason: reason || "Troca de produto/tamanho",
+      performed_by: userId,
+    });
+
     return json({
       success: true,
-      previous: { shopifyOrderId: delData.shopifyOrderId },
+      previous: {
+        shopifyOrderId: snapBefore?.shopify_order_id || null,
+        shopifyOrderName: snapBefore?.shopify_order_name || null,
+      },
       current: {
         shopifyOrderId: createData.shopifyOrderId,
         shopifyOrderName: createData.shopifyOrderName,
