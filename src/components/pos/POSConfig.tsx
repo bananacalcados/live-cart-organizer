@@ -78,6 +78,18 @@ export function POSConfig({ storeId }: Props) {
   // Loyalty Prize Tiers
   const [loyaltyTiers, setLoyaltyTiers] = useState<any[]>([]);
   const [showAddTier, setShowAddTier] = useState(false);
+
+  // Cashback Config
+  const [cashbackConfigId, setCashbackConfigId] = useState<string | null>(null);
+  const [cashbackEnabled, setCashbackEnabled] = useState(true);
+  const [cashbackPct, setCashbackPct] = useState("5");
+  const [cashbackValidity, setCashbackValidity] = useState("60");
+  const [cashbackMinSale, setCashbackMinSale] = useState("0");
+  const [cashbackMinMultiplier, setCashbackMinMultiplier] = useState("1.5");
+  const [cashbackMax, setCashbackMax] = useState("");
+  const [cashbackPrefix, setCashbackPrefix] = useState("CB");
+  const [cashbackCooldown, setCashbackCooldown] = useState("0");
+  const [savingCashback, setSavingCashback] = useState(false);
   const [newTier, setNewTier] = useState({ name: "", min_points: "50", prize_type: "discount_percent", prize_value: "10", prize_label: "", color: "#FFD700" });
 
   // WhatsApp Pricing Rules
@@ -133,6 +145,53 @@ export function POSConfig({ storeId }: Props) {
     });
   }, [storeId]);
 
+  const loadCashbackConfig = async () => {
+    // Try store-specific first, then global
+    let { data } = await supabase.from('pos_cashback_config').select('*').eq('store_id', storeId).maybeSingle() as any;
+    if (!data) {
+      const res = await supabase.from('pos_cashback_config').select('*').is('store_id', null).maybeSingle() as any;
+      data = res.data;
+    }
+    if (data) {
+      setCashbackConfigId(data.id);
+      setCashbackEnabled(!!data.is_enabled);
+      setCashbackPct(String(data.percentage ?? 5));
+      setCashbackValidity(String(data.validity_days ?? 60));
+      setCashbackMinSale(String(data.min_sale_value ?? 0));
+      setCashbackMinMultiplier(String(data.min_purchase_multiplier ?? 1.5));
+      setCashbackMax(data.max_cashback != null ? String(data.max_cashback) : "");
+      setCashbackPrefix(data.code_prefix || "CB");
+      setCashbackCooldown(String(data.cooldown_days ?? 0));
+    }
+  };
+
+  const saveCashbackConfig = async () => {
+    setSavingCashback(true);
+    try {
+      const payload: any = {
+        is_enabled: cashbackEnabled,
+        percentage: Number(cashbackPct) || 0,
+        validity_days: parseInt(cashbackValidity) || 60,
+        min_sale_value: Number(cashbackMinSale) || 0,
+        min_purchase_multiplier: Number(cashbackMinMultiplier) || 1.5,
+        max_cashback: cashbackMax ? Number(cashbackMax) : null,
+        code_prefix: cashbackPrefix || "CB",
+        cooldown_days: parseInt(cashbackCooldown) || 0,
+      };
+      if (cashbackConfigId) {
+        await supabase.from('pos_cashback_config').update(payload).eq('id', cashbackConfigId);
+      } else {
+        const { data } = await supabase.from('pos_cashback_config').insert({ store_id: null, ...payload } as any).select('id').single();
+        if (data) setCashbackConfigId(data.id);
+      }
+      toast.success("Configuração de cashback salva!");
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setSavingCashback(false);
+    }
+  };
+
   useEffect(() => {
     loadSellers();
     loadInvoiceConfig();
@@ -147,6 +206,7 @@ export function POSConfig({ storeId }: Props) {
     loadGoals();
     loadCategoriesAndBrands();
     loadCommissionTiers();
+    loadCashbackConfig();
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [storeId]);
 
@@ -1266,6 +1326,62 @@ export function POSConfig({ storeId }: Props) {
               </div>
             ))}
           </CardContent>
+        </Card>
+
+        {/* ─── Cashback Config ─── */}
+        <Card className="bg-pos-white/5 border-pos-orange/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center justify-between text-pos-white">
+              <span className="flex items-center gap-2"><DollarSign className="h-4 w-4 text-emerald-400" /> Cashback Pós-Venda (Global)</span>
+              <Switch checked={cashbackEnabled} onCheckedChange={setCashbackEnabled} />
+            </CardTitle>
+          </CardHeader>
+          {cashbackEnabled && (
+            <CardContent className="space-y-4">
+              <p className="text-xs text-pos-white/50">
+                Cashback é gerado automaticamente após cada venda física e usado nas automações de pós-venda (template de boas-vindas, reativação, etc.).
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-pos-white/70 text-xs">% de retorno</Label>
+                  <Input type="number" step="0.5" value={cashbackPct} onChange={e => setCashbackPct(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">Ex: 5 = 5% do total</p>
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Validade (dias)</Label>
+                  <Input type="number" value={cashbackValidity} onChange={e => setCashbackValidity(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Venda mínima (R$)</Label>
+                  <Input type="number" step="0.01" value={cashbackMinSale} onChange={e => setCashbackMinSale(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">0 = qualquer valor gera cashback</p>
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Multiplicador compra mínima</Label>
+                  <Input type="number" step="0.1" value={cashbackMinMultiplier} onChange={e => setCashbackMinMultiplier(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">Ex: 1.5 → cashback R$ 20 exige compra ≥ R$ 30</p>
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Cashback máximo (R$)</Label>
+                  <Input type="number" step="0.01" placeholder="opcional" value={cashbackMax} onChange={e => setCashbackMax(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">Vazio = sem teto</p>
+                </div>
+                <div>
+                  <Label className="text-pos-white/70 text-xs">Cooldown (dias)</Label>
+                  <Input type="number" value={cashbackCooldown} onChange={e => setCashbackCooldown(e.target.value)} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">0 = sempre gera. {">"}0 = não gera novo se já existir ativo</p>
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-pos-white/70 text-xs">Prefixo do cupom</Label>
+                  <Input value={cashbackPrefix} onChange={e => setCashbackPrefix(e.target.value.toUpperCase())} maxLength={6} className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
+                  <p className="text-[10px] text-pos-white/40 mt-1">Ex: CB → cupom gerado: CB-X4F92K</p>
+                </div>
+              </div>
+              <Button className="bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold gap-2" onClick={saveCashbackConfig} disabled={savingCashback}>
+                <Save className="h-4 w-4" /> {savingCashback ? 'Salvando...' : 'Salvar Cashback'}
+              </Button>
+            </CardContent>
+          )}
         </Card>
 
         {/* ─── Loyalty Points Config ─── */}
