@@ -1139,29 +1139,42 @@ export function POSConfig({ storeId }: Props) {
           <CardContent className="space-y-2">
             {sellers.length === 0 ? (
               <p className="text-xs text-pos-white/40">Nenhuma vendedora cadastrada</p>
-            ) : sellers.map(s => (
+            ) : sellers.map(s => {
+              const original = (s as any)._originalName ?? s.name;
+              const dirty = (s.name || '').trim() !== (original || '').trim() && !!s.name?.trim();
+              const saveSeller = async () => {
+                const val = (s.name || '').trim();
+                if (!val) { toast.error('Nome não pode estar vazio'); return; }
+                if (val === original) return;
+                const { error } = await supabase.from('pos_sellers').update({ name: val }).eq('id', s.id);
+                if (error) {
+                  toast.error('Erro ao renomear', { description: error.message });
+                } else {
+                  setSellers(prev => prev.map(sel => sel.id === s.id ? { ...sel, name: val, _originalName: val } as any : sel));
+                  toast.success('Vendedora renomeada', { description: `Agora chamada "${val}". Vendas anteriores permanecem vinculadas.` });
+                }
+              };
+              return (
               <div key={s.id} className="flex items-center justify-between p-2 rounded-lg bg-pos-white/5 gap-2">
                 <Input
                   type="text"
                   value={s.name}
                   onChange={(e) => {
                     const val = e.target.value;
-                    setSellers(prev => prev.map(sel => sel.id === s.id ? { ...sel, name: val } : sel));
+                    setSellers(prev => prev.map(sel => sel.id === s.id ? { ...sel, name: val, _originalName: (sel as any)._originalName ?? sel.name } as any : sel));
                   }}
-                  onBlur={async (e) => {
-                    const val = e.target.value.trim();
-                    if (!val || val === s.name) return;
-                    const { error } = await supabase.from('pos_sellers').update({ name: val }).eq('id', s.id);
-                    if (error) {
-                      toast.error('Erro ao renomear', { description: error.message });
-                    } else {
-                      toast.success('Vendedora renomeada', { description: `Agora chamada "${val}". Vendas anteriores permanecem vinculadas.` });
-                    }
-                  }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveSeller(); }}
                   className="text-sm text-pos-white flex-1 bg-transparent border-transparent hover:border-pos-orange/30 focus:border-pos-orange focus:bg-pos-white/10 h-8"
-                  title="Clique para editar o nome — o ID do vendedor é preservado"
+                  title="Edite e clique em Salvar"
                 />
+                <Button
+                  size="sm"
+                  onClick={saveSeller}
+                  disabled={!dirty}
+                  className={`h-8 px-3 text-xs font-bold ${dirty ? 'bg-pos-orange text-pos-black hover:bg-pos-orange-muted' : 'bg-pos-white/10 text-pos-white/40 cursor-not-allowed'}`}
+                >
+                  Salvar
+                </Button>
                 <div className="flex items-center gap-2">
                   <Input
                     type="text"
@@ -1180,7 +1193,8 @@ export function POSConfig({ storeId }: Props) {
                   <Switch checked={s.is_active} onCheckedChange={() => toggleSellerActive(s.id, s.is_active)} />
                 </div>
               </div>
-            ))}
+              );
+            })}
             <p className="text-[10px] text-pos-white/30">PIN de 4 dígitos para acesso ao painel privado. O toggle salva automaticamente.</p>
           </CardContent>
         </Card>
