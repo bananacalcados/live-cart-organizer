@@ -419,14 +419,29 @@ export function POSShipments({ storeId }: Props) {
                       {/* Action buttons */}
                       <div className="flex flex-wrap gap-2">
                         {order.expedition_status === 'pending' && (
-                          <Button
-                            onClick={() => updateStatus(order.id, 'separating')}
-                            disabled={saving}
-                            className="gap-1 bg-cyan-600 hover:bg-cyan-700 text-white text-xs flex-1"
-                          >
-                            {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Package className="h-3 w-3" />}
-                            Separar
-                          </Button>
+                          <>
+                            <Button
+                              onClick={() => updateStatus(order.id, 'separating')}
+                              disabled={saving}
+                              className="gap-1 bg-cyan-600 hover:bg-cyan-700 text-white text-xs flex-1"
+                            >
+                              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Package className="h-3 w-3" />}
+                              Separar
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setShowTrackingDialog(order.id);
+                                setTrackingInput(order.tracking_code || '');
+                                setShippingNotesInput(order.shipping_notes || '');
+                              }}
+                              disabled={saving}
+                              className="gap-1 bg-green-600 hover:bg-green-700 text-white text-xs flex-1"
+                              title="Pular etapas e marcar como enviado"
+                            >
+                              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Truck className="h-3 w-3" />}
+                              Finalizar Envio
+                            </Button>
+                          </>
                         )}
 
                         {order.expedition_status === 'separating' && (
