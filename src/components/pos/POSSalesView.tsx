@@ -1136,7 +1136,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     const customerLabel = selectedCustomer?.name || 'Consumidor Final';
     const phone = selectedCustomer?.whatsapp ? selectedCustomer.whatsapp.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : '-';
     const orderLabel = saleResult?.tiny_order_number ? `Pedido #${saleResult.tiny_order_number}` : 'Venda PDV';
-    const storeName = currentStore?.name || 'Banana Calçados';
+    const storeName = 'Banana Calçados';
 
     const printWindow = window.open('', '_blank', 'width=420,height=760');
     if (!printWindow) {
