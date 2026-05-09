@@ -1039,11 +1039,69 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         order={order}
       />
 
-      <CustomerFichaDialog
-        open={showFichaDialog}
-        onOpenChange={setShowFichaDialog}
-        order={order}
-      />
+      <AlertDialog open={showUnlinkDialog} onOpenChange={setShowUnlinkDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desvincular pedido da Shopify?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O pedido permanece na Shopify, apenas o vínculo com este card será removido. Você poderá criar um novo pedido depois.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => performUnlinkShopify()}>Desvincular</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar pedido na Shopify?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação cancela e exclui o pedido na Shopify. Não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => performDeleteShopify()}
+            >
+              Apagar definitivamente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Trocar produto/tamanho na Shopify</DialogTitle>
+            <DialogDescription>
+              O pedido atual será cancelado e um novo será criado com os dados atuais. O histórico fica salvo no card. O número do pedido na Shopify será diferente.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={exchangeReason}
+            onChange={(e) => setExchangeReason(e.target.value)}
+            placeholder="Motivo da troca (opcional)"
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>Cancelar</Button>
+            <Button
+              disabled={isCreatingShopifyOrder}
+              onClick={async () => {
+                setShowUpdateDialog(false);
+                await performUpdateShopify(exchangeReason);
+              }}
+            >
+              {isCreatingShopifyOrder ? "Processando..." : "Confirmar troca"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
