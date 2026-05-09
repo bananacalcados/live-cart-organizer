@@ -78,6 +78,18 @@ export function POSConfig({ storeId }: Props) {
   // Loyalty Prize Tiers
   const [loyaltyTiers, setLoyaltyTiers] = useState<any[]>([]);
   const [showAddTier, setShowAddTier] = useState(false);
+
+  // Cashback Config
+  const [cashbackConfigId, setCashbackConfigId] = useState<string | null>(null);
+  const [cashbackEnabled, setCashbackEnabled] = useState(true);
+  const [cashbackPct, setCashbackPct] = useState("5");
+  const [cashbackValidity, setCashbackValidity] = useState("60");
+  const [cashbackMinSale, setCashbackMinSale] = useState("0");
+  const [cashbackMinMultiplier, setCashbackMinMultiplier] = useState("1.5");
+  const [cashbackMax, setCashbackMax] = useState("");
+  const [cashbackPrefix, setCashbackPrefix] = useState("CB");
+  const [cashbackCooldown, setCashbackCooldown] = useState("0");
+  const [savingCashback, setSavingCashback] = useState(false);
   const [newTier, setNewTier] = useState({ name: "", min_points: "50", prize_type: "discount_percent", prize_value: "10", prize_label: "", color: "#FFD700" });
 
   // WhatsApp Pricing Rules
