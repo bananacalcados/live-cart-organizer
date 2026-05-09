@@ -363,7 +363,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleSearch()}
             placeholder="Buscar por Nome, CPF, WhatsApp ou Email…"
-            className="bg-white !text-black font-semibold placeholder:text-black/50 border-pos-yellow/60 focus-visible:ring-pos-yellow"
+            className="bg-pos-white/10 !text-pos-white font-semibold placeholder:text-pos-white/40 border-pos-yellow/60 focus-visible:ring-pos-yellow"
           />
           <Button onClick={() => handleSearch()} disabled={searching} className="bg-pos-yellow text-pos-black hover:bg-pos-yellow/90">
             {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
