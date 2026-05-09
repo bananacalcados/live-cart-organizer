@@ -1021,8 +1021,32 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               </Button>
             )}
 
+            {/* Print / Fiscal Actions */}
+            {!isTinyOnly && (
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-wider text-gray-500 font-bold">Imprimir / Emitir Nota</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button onClick={printNonFiscal} variant="outline" className="gap-1 h-10 text-xs border-gray-300 text-gray-800 hover:bg-gray-50">
+                    🧾 Cupom Não Fiscal
+                  </Button>
+                  <Button onClick={printGift} variant="outline" className="gap-1 h-10 text-xs border-amber-300 text-amber-800 hover:bg-amber-50">
+                    🎁 Cupom de Troca
+                  </Button>
+                  <Button
+                    onClick={handleEmitOrPrintFiscal}
+                    disabled={emittingNfce}
+                    className="gap-1 h-10 text-xs col-span-2 bg-blue-600 text-white hover:bg-blue-700 font-bold"
+                  >
+                    {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    {fiscalDoc?.danfe_url
+                      ? `Imprimir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'} (autorizada)`
+                      : `Emitir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* Action Buttons */}
-            <div className="space-y-2">
               {onResend && (
                 <Button
                   className="w-full gap-2 bg-orange-500 text-white hover:bg-orange-600 font-bold h-11 text-sm shadow-md"
