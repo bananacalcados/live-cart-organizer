@@ -81,6 +81,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
   const [npsList, setNpsList] = useState<NpsRow[]>([]);
   const [stores, setStores] = useState<Record<string, string>>({});
   const [sellers, setSellers] = useState<Record<string, string>>({});
+  const [legacyAggregate, setLegacyAggregate] = useState<{ total_orders: number; total_spent: number; last_purchase_at: string | null; first_purchase_at: string | null } | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   // AI insights state
