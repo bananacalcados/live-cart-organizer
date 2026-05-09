@@ -463,6 +463,16 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
                 </Button>
               </div>
 
+              {legacyAggregate && legacyAggregate.total_orders > 0 && (
+                <div className="mt-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-bold">📜 Histórico legado:</span>
+                  <span>{legacyAggregate.total_orders} compra{legacyAggregate.total_orders > 1 ? "s" : ""} no sistema antigo</span>
+                  {legacyAggregate.total_spent > 0 && <span>· total {fmtMoney(Number(legacyAggregate.total_spent))}</span>}
+                  {legacyAggregate.first_purchase_at && <span>· cliente desde {fmtDate(legacyAggregate.first_purchase_at)}</span>}
+                  {stats.extraLegacyOrders > 0 && <span className="opacity-70">({stats.extraLegacyOrders} sem detalhamento)</span>}
+                </div>
+              )}
+
               {/* KPIs */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
                 <div className="bg-pos-black/40 rounded-lg p-2">
