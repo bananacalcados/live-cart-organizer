@@ -213,6 +213,7 @@ export default function CatalogLeadPage() {
         subtitle: cfg.subtitle,
         theme_config: cfg.theme_config || { primaryColor: "#00BFA6", secondaryColor: "#00897B", backgroundGradient: "linear-gradient(160deg, #00BFA6 0%, #00897B 50%, #004D40 100%)" },
         selected_product_ids: cfg.selected_product_ids || [],
+        product_discounts: (cfg.product_discounts as DiscountMap) || {},
         require_registration: cfg.require_registration ?? true,
         whatsapp_numbers: cfg.whatsapp_numbers || [],
         shipping_cost: resolvedShipping,
