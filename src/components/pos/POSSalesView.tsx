@@ -1098,7 +1098,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           <p><strong>${orderLabel}</strong></p>
           <p>Tipo: ${saleTypeLabel}</p>
           <p>Cliente: ${customerLabel}</p>
-          <p>Vendedor(a): ${selectedSellerName || '-'}</p>
+          <p>Vendedor(a): ${sellers.find(s => s.id === selectedSeller)?.name || '-'}</p>
           <p>Data: ${new Date().toLocaleString('pt-BR')}</p>
           <div class="sep"></div>
           <table>
