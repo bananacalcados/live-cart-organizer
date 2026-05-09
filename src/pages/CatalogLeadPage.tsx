@@ -382,7 +382,11 @@ export default function CatalogLeadPage() {
     }));
   };
 
-  const cartSubtotal = cart.reduce((s, c) => s + Number(c.variant.price) * c.quantity, 0);
+  const getEffectivePrice = (productId: string, basePrice: number): number => {
+    return applyDiscount(basePrice, config?.product_discounts?.[productId]);
+  };
+
+  const cartSubtotal = cart.reduce((s, c) => s + getEffectivePrice(c.productId, Number(c.variant.price)) * c.quantity, 0);
   const shippingCost = shippingAlreadyPaid ? 0 : (config?.shipping_cost || 0);
   const cartTotal = cartSubtotal + shippingCost;
 
@@ -390,59 +394,83 @@ export default function CatalogLeadPage() {
     if (cart.length === 0) return;
     setCheckoutLoading(true);
     try {
+      const stored = JSON.parse(localStorage.getItem(`catalog_lead_${slug}`) || "{}");
+      const igHandle = stored.instagram ? `@${String(stored.instagram).replace(/^@/, "")}` : `@catalogo_${Date.now()}`;
+      const phoneClean = (stored.whatsapp || "").replace(/\D/g, "");
+
+      // Upsert customer by instagram_handle (TransparentCheckout requires customer_id)
+      let customerId: string | null = null;
+      const { data: existingCustomer } = await supabase
+        .from("customers")
+        .select("id, whatsapp")
+        .ilike("instagram_handle", igHandle)
+        .maybeSingle();
+      if (existingCustomer) {
+        customerId = existingCustomer.id;
+        if (phoneClean && phoneClean !== existingCustomer.whatsapp) {
+          await supabase.from("customers").update({ whatsapp: phoneClean }).eq("id", customerId);
+        }
+      } else {
+        const { data: newCustomer, error: cErr } = await supabase
+          .from("customers")
+          .insert({ instagram_handle: igHandle, whatsapp: phoneClean || null })
+          .select("id")
+          .single();
+        if (cErr) throw cErr;
+        customerId = newCustomer.id;
+      }
+
+      // Build order products with discount applied
+      const orderProducts = cart.map(c => {
+        const finalPrice = getEffectivePrice(c.productId, Number(c.variant.price));
+        return {
+          id: crypto.randomUUID(),
+          shopifyId: c.productId,
+          title: c.productTitle,
+          variant: c.variant.label,
+          price: finalPrice,
+          quantity: c.quantity,
+          image: c.imageUrl,
+          sku: c.variant.sku || undefined,
+        };
+      });
+
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          customer_id: customerId,
+          products: orderProducts as any,
+          stage: "incomplete_order",
+          free_shipping: shippingAlreadyPaid,
+          shipping_cost: shippingCost,
+          checkout_started_at: new Date().toISOString(),
+          notes: `Catálogo Lead: ${slug}`,
+        } as any)
+        .select("id")
+        .single();
+      if (orderError) throw orderError;
+
+      const cartLink = `${CHECKOUT_BASE_URL}/checkout/order/${order.id}`;
+      await supabase.from("orders").update({ cart_link: cartLink } as any).eq("id", order.id);
+
       if (registrationId) {
         await supabase.from("catalog_lead_registrations").update({
           cart_items: cart.map(c => ({
             title: c.productTitle,
             variant: c.variant.label,
             sku: c.variant.sku,
-            price: Number(c.variant.price),
+            price: getEffectivePrice(c.productId, Number(c.variant.price)),
             quantity: c.quantity,
             image: c.imageUrl,
             variantGid: c.variant.gid,
           })),
           cart_total: cartTotal,
+          checkout_sale_id: order.id,
           status: "checkout_started",
         } as any).eq("id", registrationId);
       }
 
-      const stored = JSON.parse(localStorage.getItem(`catalog_lead_${slug}`) || "{}");
-      const { data: sale, error: saleError } = await supabase.from("pos_sales").insert({
-        store_id: DEFAULT_STORE_ID,
-        sale_type: "online",
-        status: "pending",
-        subtotal: cartSubtotal,
-        total: cartTotal,
-        discount: 0,
-        customer_name: stored.instagram ? `@${stored.instagram}` : null,
-        customer_phone: stored.whatsapp || null,
-        notes: `Catálogo Lead: ${slug} | IG: @${stored.instagram || ""}${shippingCost > 0 ? ` | Frete: R$${shippingCost.toFixed(2)}` : ""}`,
-        checkout_step: 0,
-        payment_details: { shipping_amount: shippingCost },
-      } as any).select("id").single();
-
-      if (saleError) throw saleError;
-
-      const items = cart.map(c => ({
-        sale_id: sale.id,
-        sku: c.variant.sku || `CAT-${c.variant.id}`,
-        product_name: c.productTitle,
-        variant_name: c.variant.label,
-        quantity: c.quantity,
-        unit_price: Number(c.variant.price),
-        total_price: Number(c.variant.price) * c.quantity,
-      }));
-
-      await supabase.from("pos_sale_items").insert(items);
-
-      if (registrationId) {
-        await supabase.from("catalog_lead_registrations").update({
-          checkout_sale_id: sale.id,
-          status: "checkout_started",
-        } as any).eq("id", registrationId);
-      }
-
-      window.location.href = `${CHECKOUT_BASE_URL}/checkout-loja/${DEFAULT_STORE_ID}/${sale.id}`;
+      window.location.href = cartLink;
     } catch (e) {
       console.error(e);
       toast.error("Erro ao iniciar checkout");
