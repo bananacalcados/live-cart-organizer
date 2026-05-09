@@ -1,59 +1,104 @@
-# Migração NFC-e PDV: Tiny → BrasilNFe + Imprimir + Contingência
+## Melhorias na aba de Vendas (PDV)
 
-## Objetivo
-Substituir a emissão NFC-e via Tiny pela infra **BrasilNFe** já existente (`nfce-emitir` + fila `pending_sefaz`) no fluxo de fechamento do PDV, mantendo as configurações de "quando emitir" por loja e expondo o botão **Imprimir NFC-e** na tela de "Venda Finalizada". Garantir que a venda nunca trave: se SEFAZ falhar, vai pra contingência e cliente recebe o DANFE depois.
+Vou implementar 6 mudanças no módulo de Vendas do PDV. Como são alterações grandes e interligadas em `POSSalesView.tsx` (2097 linhas), preciso do seu OK no plano antes de implementar.
 
-## O que muda (3 partes)
+---
 
-### 1. Configuração por loja (já existe, só ajustar UI)
-A tabela `pos_invoice_config` já tem:
-- `auto_emit_on_sale` (bool) — emitir automaticamente ao concluir venda
-- `auto_emit_min_value` (numeric) — valor mínimo p/ auto-emitir
-- `auto_emit_payment_methods` (text[]) — formas de pagamento que disparam auto-emissão (ex: pix, dinheiro)
+### 1. Venda Presencial × Online (NFC-e × NF-e)
 
-Em `POSConfig.tsx` (já está montada a tela). Apenas:
-- Atualizar copy: "NFC-e (BrasilNFe)" em vez de "Tiny"
-- Validar que a loja tem `company_id` vinculado e a empresa tem `brasilnfe_token` antes de salvar (toast de erro se faltar)
+**Fluxo novo após selecionar o vendedor:**
+- Abre um segundo modal: **"Tipo de venda"** com 2 opções grandes:
+  - 🏬 **Presencial** → NFC-e (fluxo atual)
+  - 🚚 **Online (entrega/envio)** → NF-e + envia pra aba **Envios**
+- A escolha fica salva no estado da venda (`saleType: 'presencial' | 'online'`).
 
-### 2. Fluxo de finalização da venda (`POSSalesView.tsx`)
-Substituir a função `emitNfce()` que chama `pos-tiny-emit-nfce` pela chamada à edge **`nfce-emitir`** (já existe, BrasilNFe + contingência):
+**Quando for Online:**
+- Etapa **Cliente** passa a exigir endereço completo (CEP, rua, número, bairro, cidade, UF) — hoje é opcional pra presencial.
+- Etapa **Nota Fiscal** dispara `nfe-emitir` (NF-e modelo 55) em vez de `nfce-emitir` (modelo 65).
+- Ao finalizar: cria registro em `pos_shipments` (ou tabela equivalente da aba Envios) com status `aguardando_despacho`, vinculando o `sale_id` e o número da NF-e.
+- Não imprime cupom; mostra DANFE da NF-e pra impressão A4.
 
-```text
-finalizarVenda()
-  ├─ cria pos_sale (igual hoje)
-  ├─ lê pos_invoice_config da loja
-  ├─ se auto_emit_on_sale && total ≥ min && payment ∈ methods:
-  │     dispara nfce-emitir em background (não bloqueia tela)
-  └─ vai para step="invoice"
+**Indicação visual:** badge no topo da venda mostrando "Presencial" (laranja) ou "Online" (azul) durante todo o fluxo.
 
-step="invoice":
-  ├─ Botão "Emitir NFC-e" (se ainda não emitida) → chama nfce-emitir
-  ├─ Polling/realtime em fiscal_documents WHERE pos_sale_id = sale.id
-  ├─ Quando status='authorized' → habilita botão "Imprimir NFC-e" (abre danfe_url)
-  ├─ Quando status='pending_sefaz' → mostra badge "Em contingência (será reemitida)" + botão Imprimir desabilitado
-  └─ Quando status='rejected' → mostra erro + botão "Tentar novamente"
-```
+---
 
-A edge `nfce-emitir` **já trata SEFAZ offline** (códigos 108/109/999, HTTP 5xx, timeout) marcando como `pending_sefaz`. A venda no PDV é concluída normalmente — o cron `nfce-retry-pending` (já agendado) reemite a cada 5 min.
+### 2. Conferência de produtos logo após bipar (não na etapa 3)
 
-### 3. Notificação ao cliente quando autorizada em contingência
-Quando o cron autoriza uma NFC-e que estava `pending_sefaz`, disparar WhatsApp pro cliente com link do DANFE — para o cliente que pediu pra "imprimir/enviar" não ficar sem nota. Implementação: trigger no UPDATE de `fiscal_documents` (status `pending_sefaz`→`authorized`) que insere job de envio.
+**Hoje:** bipar adiciona o produto direto; conferência (pés/defeitos) só aparece na etapa 3 num bloco confuso.
 
-## Arquivos a editar
-- `src/components/pos/POSSalesView.tsx` — trocar `emitNfce` para chamar `nfce-emitir`; auto-emit pós-venda baseado em `pos_invoice_config`; UI do step `invoice` com 3 estados (autorizada/contingência/rejeitada) e polling realtime em `fiscal_documents`.
-- `src/components/pos/POSPickupOrders.tsx` — mesma troca de endpoint (handleEmitNfce).
-- `src/components/pos/POSConfig.tsx` — texto "BrasilNFe" + validação de `company_id` / `brasilnfe_token`.
-- `supabase/migrations/...` — trigger `on fiscal_documents` que ao virar `authorized` (vindo de `pending_sefaz`) enfileira mensagem WhatsApp pro CPF/telefone da venda.
-- *(opcional fase 2)* depreciar `supabase/functions/pos-tiny-emit-nfce` — mantemos por ora como fallback histórico, sem chamar.
+**Mudança:** logo após bipar/selecionar um produto, abre um **mini-popover inline no card** do produto adicionado, com:
+- ✅ Par completo? (Sim / Falta 1 pé / Falta 2 pés)
+- 🔍 Tem defeito visível? (Não / Sim → campo de observação)
+- Botão "Confirmar e continuar"
 
-## Detalhes técnicos
-- **Realtime**: `supabase.channel().on('postgres_changes', { table: 'fiscal_documents', filter: 'pos_sale_id=eq.<id>' })` para atualizar a UI sem polling.
-- **Auto-emit**: roda *fire-and-forget* (`supabase.functions.invoke('nfce-emitir', { body: { sale_id }})` sem await bloqueante) — UI já mostra "emitindo..." e o realtime atualiza.
-- **Botão Imprimir**: `window.open(fiscalDoc.danfe_url, '_blank')` — `danfe_url` já é preenchido por `nfce-emitir`.
-- **Estados de status visíveis**: `pending` (emitindo), `pending_sefaz` (contingência), `authorized` (ok), `rejected` (erro).
-- **Garantia de não-bloqueio**: a venda em `pos_sales` é criada **antes** de chamar NFC-e. Falha fiscal nunca cancela venda; só impede impressão imediata.
+A conferência fica registrada por item e aparece resumida na etapa 3 (e some o bloco grande atual). Se o operador ignorar, fica pendente e bloqueia avançar pra Pagamento.
 
-## Não está no escopo (futuro)
-- Cancelamento NFC-e (CC-e)
-- Inutilização de numeração
-- Troca/devolução fiscal
+---
+
+### 3. Bug do scanner adicionando 2 pares
+
+**Causa provável:** o leitor envia o código + Enter rápido demais; o handler está sendo disparado 2x (debounce ausente ou duplo binding).
+
+**Correção:**
+- Adicionar **debounce de 400ms** + **lock por código de barras** (Set com TTL de 1s) no `handleBarcodeScan`.
+- Garantir que o input só processa o submit no `Enter`, não em cada `onChange` que termine com `\n`.
+- Remover qualquer `onKeyDown` + `onKeyUp` duplicados.
+
+---
+
+### 4. Cashback/Prêmios visíveis na etapa Cliente + botão "Utilizar"
+
+**Após localizar o cliente:**
+- Buscar em `internal_cashback` (saldos ativos/não expirados) e `loyalty_rewards` (prêmios desbloqueados).
+- Mostrar um card destacado: **"Saldo disponível: R$ X em cashback + Y prêmios"**.
+- Botão **"Utilizar cashback"** → abate o valor no `discount_value` da venda (respeitando `compra_minima` configurada).
+- Botão **"Resgatar prêmio"** → adiciona o prêmio como item de R$ 0,00 ao carrinho (ou desconto, dependendo do tipo).
+- Ao usar, registra `cashback_redemption` e marca o saldo como consumido só quando a venda fecha.
+
+---
+
+### 5. Nomes de produtos truncados na etapa Pagamento
+
+**Mudança simples:** na lista de itens da etapa Pagamento, trocar `truncate` por `whitespace-normal break-words` e dar `min-h` no card. Mostrar nome completo + variação (cor/tamanho) em 2 linhas se necessário.
+
+---
+
+### 6. Editar pedido na etapa Pagamento (sem voltar pra Produtos)
+
+Adicionar na lista de itens da etapa Pagamento, em cada linha:
+- **+ / −** pra ajustar quantidade
+- **🗑️** pra remover item
+- **✏️** pra editar preço unitário (abre input inline, com confirmação)
+
+Recalcula subtotal/desconto/total automaticamente. Se a lista ficar vazia, volta automaticamente pra etapa Produtos.
+
+---
+
+### Detalhes técnicos
+
+**Arquivos a editar:**
+- `src/components/pos/POSSalesView.tsx` — fluxo principal, modal tipo de venda, edição na etapa Pagamento, debounce do scanner, conferência inline.
+- `src/components/pos/POSCustomerForm.tsx` — endereço obrigatório quando online + card de cashback/prêmios.
+- `src/components/pos/POSBarcodeScanner.tsx` — lock anti-duplicidade.
+- `supabase/functions/nfe-emitir/index.ts` — já existe; só passar a usá-la pra vendas online (passar `modelo: 55`).
+- Nova migração: coluna `sale_type` em `pos_sales` (`'presencial'` default), e tabela/coluna `pos_shipments` se ainda não existir pra integração com Envios.
+
+**Banco:**
+- `ALTER TABLE pos_sales ADD COLUMN sale_type text DEFAULT 'presencial' CHECK (sale_type IN ('presencial','online'))`.
+- Confirmar se já existe a tabela de envios do PDV; se não, criar `pos_shipments` (sale_id, status, tracking, created_at).
+
+**Riscos:**
+- O `POSSalesView.tsx` é grande; vou quebrar a etapa Pagamento e a Cliente em subcomponentes pra não inflar mais o arquivo.
+- Conferência inline muda UX — pode atrapalhar quem está acostumado. Sugiro manter um toggle nas Configurações do PDV: "Conferência inline ao bipar" (default ligado).
+
+---
+
+### Ordem de execução sugerida
+
+1. Migração `sale_type` + criar tabela `pos_shipments` se faltar.
+2. Modal tipo de venda + badge + roteamento NFC-e/NF-e.
+3. Fix do scanner duplicado + conferência inline.
+4. Cashback/prêmios na etapa Cliente.
+5. Edição de itens + nomes completos na etapa Pagamento.
+
+Posso seguir? Se quiser cortar/priorizar algum item, me diz antes.
