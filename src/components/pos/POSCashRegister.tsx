@@ -228,10 +228,22 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
         .update({ [field]: current + amount, notes: movementNotes || null })
         .eq('id', register.id);
       if (error) throw error;
+
+      // Log individual movement with description
+      await (supabase as any).from('pos_cash_movements').insert({
+        cash_register_id: register.id,
+        store_id: storeId,
+        seller_id: sellerId || null,
+        type: showMovement,
+        amount,
+        description: movementNotes || null,
+      });
+
       setRegister(r => r ? { ...r, [field]: current + amount } : r);
       setShowMovement(null);
       setMovementAmount("");
       setMovementNotes("");
+      loadMovements();
       toast.success(showMovement === 'withdraw' ? 'Sangria registrada!' : 'Reforço registrado!');
     } catch (e) {
       console.error(e);
