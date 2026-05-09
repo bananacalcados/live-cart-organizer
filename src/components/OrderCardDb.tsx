@@ -15,13 +15,6 @@ import { Order } from "@/types/order";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -40,7 +33,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { MoreVertical, Link2Off, RefreshCw, Trash } from "lucide-react";
+import { Link2Off, RefreshCw, Trash } from "lucide-react";
 
 interface OrderCardDbProps {
   order: DbOrder;
@@ -83,6 +76,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [showUnlinkDialog, setShowUnlinkDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+  const [showShopifyActionsDialog, setShowShopifyActionsDialog] = useState(false);
   const [exchangeReason, setExchangeReason] = useState("Troca de produto/tamanho");
   const [isConfirming, setIsConfirming] = useState(false);
   const [liveMessages, setLiveMessages] = useState<string[]>([]);
@@ -581,33 +575,22 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <Badge
-                variant="secondary"
-                className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30 cursor-pointer hover:bg-stage-paid/30 inline-flex items-center"
-              >
-                <ShoppingBag className="h-3 w-3 mr-1" />
-                {shopifyOrderName ? `Shopify ${shopifyOrderName}` : 'Na Shopify'}
-                <MoreVertical className="h-3 w-3 ml-1 opacity-70" />
-              </Badge>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setExchangeReason("Troca de produto/tamanho"); setShowUpdateDialog(true); }} disabled={isCreatingShopifyOrder}>
-                <RefreshCw className="h-3.5 w-3.5 mr-2" />
-                Trocar produto/tamanho (recriar)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setShowUnlinkDialog(true); }}>
-                <Link2Off className="h-3.5 w-3.5 mr-2" />
-                Desvincular
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setShowDeleteDialog(true); }} className="text-destructive focus:text-destructive">
-                <Trash className="h-3.5 w-3.5 mr-2" />
-                Apagar pedido na Shopify
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowShopifyActionsDialog(true);
+            }}
+            className="inline-flex"
+          >
+            <Badge
+              variant="secondary"
+              className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30 cursor-pointer hover:bg-stage-paid/30 inline-flex items-center"
+            >
+              <ShoppingBag className="h-3 w-3 mr-1" />
+              {shopifyOrderName ? `Shopify ${shopifyOrderName}` : 'Na Shopify'}
+            </Badge>
+          </button>
         )}
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === false && (
           <Badge variant="secondary" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30 animate-pulse">
