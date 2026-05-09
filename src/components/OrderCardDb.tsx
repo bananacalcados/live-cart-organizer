@@ -352,7 +352,65 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   };
 
-  const handleMototaxi = async (e: React.MouseEvent) => {
+  const handleUnlinkShopify = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Desvincular este pedido da Shopify? O pedido permanece na Shopify, apenas o vínculo com este card será removido.")) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-delete-event-order", {
+        body: { orderId: order.id, mode: "unlink" },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setHasShopifyOrder(null);
+      setShopifyOrderName(null);
+      sessionStorage.removeItem(`shopify-verify-${order.event_id}`);
+      toast.success("Pedido desvinculado da Shopify");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao desvincular");
+    }
+  };
+
+  const handleDeleteShopify = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("APAGAR o pedido da Shopify? Essa ação cancela e exclui o pedido na Shopify. Não pode ser desfeita.")) return;
+    if (!confirm("Tem certeza absoluta? O pedido será cancelado e apagado da Shopify.")) return;
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-delete-event-order", {
+        body: { orderId: order.id, mode: "delete" },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setHasShopifyOrder(null);
+      setShopifyOrderName(null);
+      sessionStorage.removeItem(`shopify-verify-${order.event_id}`);
+      toast.success("Pedido apagado da Shopify");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao apagar pedido");
+    }
+  };
+
+  const handleUpdateShopify = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Atualizar pedido na Shopify? O pedido atual será cancelado e recriado com os dados atualizados. ATENÇÃO: o número do pedido na Shopify VAI MUDAR.")) return;
+    setIsCreatingShopifyOrder(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("shopify-update-event-order", {
+        body: { orderId: order.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const newName = data?.current?.shopifyOrderName || null;
+      applyShopifyVerification(true, newName);
+      toast.success(`Pedido atualizado na Shopify! ${newName || ""}`);
+      window.dispatchEvent(new CustomEvent('shopify-order-created', {
+        detail: { orderId: order.id, shopifyOrderName: newName }
+      }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao atualizar pedido");
+    } finally {
+      setIsCreatingShopifyOrder(false);
+    }
+  };
     e.stopPropagation();
     try {
       await storeMove(order.id, 'awaiting_mototaxi');
