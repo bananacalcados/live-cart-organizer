@@ -7827,6 +7827,47 @@ export type Database = {
           },
         ]
       }
+      pos_cash_movements: {
+        Row: {
+          amount: number
+          cash_register_id: string
+          created_at: string
+          description: string | null
+          id: string
+          seller_id: string | null
+          store_id: string
+          type: string
+        }
+        Insert: {
+          amount: number
+          cash_register_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          seller_id?: string | null
+          store_id: string
+          type: string
+        }
+        Update: {
+          amount?: number
+          cash_register_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          seller_id?: string | null
+          store_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_cash_movements_cash_register_id_fkey"
+            columns: ["cash_register_id"]
+            isOneToOne: false
+            referencedRelation: "pos_cash_registers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_cash_registers: {
         Row: {
           card_sales: number | null
