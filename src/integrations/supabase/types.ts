@@ -7619,6 +7619,53 @@ export type Database = {
         }
         Relationships: []
       }
+      order_shopify_history: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          new_shopify_order_id: string | null
+          new_shopify_order_name: string | null
+          order_id: string
+          performed_by: string | null
+          previous_shopify_order_id: string | null
+          previous_shopify_order_name: string | null
+          reason: string | null
+        }
+        Insert: {
+          action?: string
+          created_at?: string
+          id?: string
+          new_shopify_order_id?: string | null
+          new_shopify_order_name?: string | null
+          order_id: string
+          performed_by?: string | null
+          previous_shopify_order_id?: string | null
+          previous_shopify_order_name?: string | null
+          reason?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          new_shopify_order_id?: string | null
+          new_shopify_order_name?: string | null
+          order_id?: string
+          performed_by?: string | null
+          previous_shopify_order_id?: string | null
+          previous_shopify_order_name?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_shopify_history_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           ai_paused: boolean | null
