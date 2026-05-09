@@ -7908,6 +7908,59 @@ export type Database = {
           },
         ]
       }
+      pos_cashback_config: {
+        Row: {
+          code_prefix: string
+          cooldown_days: number
+          created_at: string
+          id: string
+          is_enabled: boolean
+          max_cashback: number | null
+          min_purchase_multiplier: number
+          min_sale_value: number
+          percentage: number
+          store_id: string | null
+          updated_at: string
+          validity_days: number
+        }
+        Insert: {
+          code_prefix?: string
+          cooldown_days?: number
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          max_cashback?: number | null
+          min_purchase_multiplier?: number
+          min_sale_value?: number
+          percentage?: number
+          store_id?: string | null
+          updated_at?: string
+          validity_days?: number
+        }
+        Update: {
+          code_prefix?: string
+          cooldown_days?: number
+          created_at?: string
+          id?: string
+          is_enabled?: boolean
+          max_cashback?: number | null
+          min_purchase_multiplier?: number
+          min_sale_value?: number
+          percentage?: number
+          store_id?: string | null
+          updated_at?: string
+          validity_days?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_cashback_config_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_checkout_attempts: {
         Row: {
           amount: number | null
