@@ -481,14 +481,20 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
                   <p className="text-lg font-bold text-green-400">R$ {(register.cash_sales || 0).toFixed(2)}</p>
                 </CardContent>
               </Card>
-              <Card className="bg-pos-white/5 border-pos-orange/20">
+              <Card className="bg-pos-white/5 border-pos-orange/20 cursor-pointer hover:border-pos-orange/50 transition-colors" onClick={() => { loadMovements(); setShowMovements(true); }}>
                 <CardContent className="p-4">
-                  <p className="text-xs text-pos-white/50">Sangrias / Reforços</p>
-                  <p className="text-lg font-bold text-pos-white">
-                    <span className="text-red-400">-{(register.withdrawals || 0).toFixed(2)}</span>
-                    {" / "}
-                    <span className="text-green-400">+{(register.deposits || 0).toFixed(2)}</span>
-                  </p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-pos-white/50">Sangrias / Reforços</p>
+                      <p className="text-lg font-bold text-pos-white">
+                        <span className="text-red-400">-{(register.withdrawals || 0).toFixed(2)}</span>
+                        {" / "}
+                        <span className="text-green-400">+{(register.deposits || 0).toFixed(2)}</span>
+                      </p>
+                    </div>
+                    <List className="h-4 w-4 text-pos-orange/60 flex-shrink-0" />
+                  </div>
+                  <p className="text-[9px] text-pos-orange/70 mt-1 underline">Ver lista detalhada</p>
                 </CardContent>
               </Card>
               <Card className="bg-pos-white/5 border-pos-orange/30">
