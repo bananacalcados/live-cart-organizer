@@ -1022,6 +1022,54 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         order={order}
       />
 
+      <Dialog open={showShopifyActionsDialog} onOpenChange={setShowShopifyActionsDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Ações do pedido na Shopify</DialogTitle>
+            <DialogDescription>
+              Escolha o que deseja fazer com este pedido vinculado na Shopify.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              disabled={isCreatingShopifyOrder}
+              onClick={() => {
+                setShowShopifyActionsDialog(false);
+                setExchangeReason("Troca de produto/tamanho");
+                setShowUpdateDialog(true);
+              }}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Editar pedido
+            </Button>
+            <Button
+              variant="outline"
+              className="justify-start gap-2"
+              onClick={() => {
+                setShowShopifyActionsDialog(false);
+                setShowUnlinkDialog(true);
+              }}
+            >
+              <Link2Off className="h-4 w-4" />
+              Desvincular
+            </Button>
+            <Button
+              variant="destructive"
+              className="justify-start gap-2"
+              onClick={() => {
+                setShowShopifyActionsDialog(false);
+                setShowDeleteDialog(true);
+              }}
+            >
+              <Trash className="h-4 w-4" />
+              Apagar pedido da Shopify
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={showUnlinkDialog} onOpenChange={setShowUnlinkDialog}>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
