@@ -1026,8 +1026,16 @@ export default function Marketing() {
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
+      const qDigits = searchQuery.replace(/\D/g, '');
       const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
-      if (!(name.includes(q) || (c.phone || '').includes(q) || (c.email || '').toLowerCase().includes(q))) return false;
+      const cpfDigits = ((c as any).cpf || '').replace(/\D/g, '');
+      const phoneDigits = (c.phone || '').replace(/\D/g, '');
+      const matches =
+        name.includes(q) ||
+        (c.email || '').toLowerCase().includes(q) ||
+        (qDigits.length >= 4 && phoneDigits.includes(qDigits)) ||
+        (qDigits.length >= 6 && cpfDigits.includes(qDigits));
+      if (!matches) return false;
     }
     // Exclude customers matching any excluded preset
     if (excludedPresetIds.length > 0) {
