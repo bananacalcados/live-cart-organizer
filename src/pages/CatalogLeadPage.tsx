@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { toast } from "sonner";
 import { ShoppingBag, X, ChevronLeft, Instagram, Phone, Loader2, Check, Trash2, Plus, Minus, Sparkles } from "lucide-react";
+import { applyDiscount, discountBadge, type DiscountMap } from "@/lib/catalogDiscount";
 
 // ─── Types ───
 interface PageConfig {
@@ -12,6 +13,7 @@ interface PageConfig {
   subtitle: string | null;
   theme_config: { primaryColor: string; secondaryColor: string; backgroundGradient: string };
   selected_product_ids: string[];
+  product_discounts: DiscountMap;
   require_registration: boolean;
   whatsapp_numbers: Array<{ name: string; number: string }>;
   shipping_cost: number;
