@@ -21,6 +21,25 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { MoreVertical, Link2Off, RefreshCw, Trash } from "lucide-react";
 
 interface OrderCardDbProps {
@@ -61,6 +80,10 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
   const [shopifyOrderName, setShopifyOrderName] = useState<string | null>(null);
   const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
+  const [showUnlinkDialog, setShowUnlinkDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
+  const [exchangeReason, setExchangeReason] = useState("Troca de produto/tamanho");
   const [isConfirming, setIsConfirming] = useState(false);
   const [liveMessages, setLiveMessages] = useState<string[]>([]);
   const [togglingFreeShipping, setTogglingFreeShipping] = useState(false);
@@ -352,9 +375,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   };
 
-  const handleUnlinkShopify = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm("Desvincular este pedido da Shopify? O pedido permanece na Shopify, apenas o vínculo com este card será removido.")) return;
+  const performUnlinkShopify = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("shopify-delete-event-order", {
         body: { orderId: order.id, mode: "unlink" },
@@ -370,10 +391,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   };
 
-  const handleDeleteShopify = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm("APAGAR o pedido da Shopify? Essa ação cancela e exclui o pedido na Shopify. Não pode ser desfeita.")) return;
-    if (!confirm("Tem certeza absoluta? O pedido será cancelado e apagado da Shopify.")) return;
+  const performDeleteShopify = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("shopify-delete-event-order", {
         body: { orderId: order.id, mode: "delete" },
@@ -389,13 +407,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   };
 
-  const handleUpdateShopify = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const reason = window.prompt(
-      "Trocar produto/tamanho na Shopify?\n\nO pedido atual será cancelado e um novo será criado com os dados atuais.\nO histórico fica salvo no card.\n\nMotivo da troca (opcional):",
-      "Troca de produto/tamanho"
-    );
-    if (reason === null) return; // cancel
+  const performUpdateShopify = async (reason: string) => {
     setIsCreatingShopifyOrder(true);
     try {
       const { data, error } = await supabase.functions.invoke("shopify-update-event-order", {
@@ -581,16 +593,16 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               </Badge>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" onClick={(e) => e.stopPropagation()}>
-              <DropdownMenuItem onClick={handleUpdateShopify} disabled={isCreatingShopifyOrder}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setExchangeReason("Troca de produto/tamanho"); setShowUpdateDialog(true); }} disabled={isCreatingShopifyOrder}>
                 <RefreshCw className="h-3.5 w-3.5 mr-2" />
                 Trocar produto/tamanho (recriar)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleUnlinkShopify}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setShowUnlinkDialog(true); }}>
                 <Link2Off className="h-3.5 w-3.5 mr-2" />
                 Desvincular
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleDeleteShopify} className="text-destructive focus:text-destructive">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setShowDeleteDialog(true); }} className="text-destructive focus:text-destructive">
                 <Trash className="h-3.5 w-3.5 mr-2" />
                 Apagar pedido na Shopify
               </DropdownMenuItem>
@@ -1027,11 +1039,69 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         order={order}
       />
 
-      <CustomerFichaDialog
-        open={showFichaDialog}
-        onOpenChange={setShowFichaDialog}
-        order={order}
-      />
+      <AlertDialog open={showUnlinkDialog} onOpenChange={setShowUnlinkDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desvincular pedido da Shopify?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O pedido permanece na Shopify, apenas o vínculo com este card será removido. Você poderá criar um novo pedido depois.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => performUnlinkShopify()}>Desvincular</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Apagar pedido na Shopify?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação cancela e exclui o pedido na Shopify. Não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => performDeleteShopify()}
+            >
+              Apagar definitivamente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
+        <DialogContent onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>Trocar produto/tamanho na Shopify</DialogTitle>
+            <DialogDescription>
+              O pedido atual será cancelado e um novo será criado com os dados atuais. O histórico fica salvo no card. O número do pedido na Shopify será diferente.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={exchangeReason}
+            onChange={(e) => setExchangeReason(e.target.value)}
+            placeholder="Motivo da troca (opcional)"
+            rows={3}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowUpdateDialog(false)}>Cancelar</Button>
+            <Button
+              disabled={isCreatingShopifyOrder}
+              onClick={async () => {
+                setShowUpdateDialog(false);
+                await performUpdateShopify(exchangeReason);
+              }}
+            >
+              {isCreatingShopifyOrder ? "Processando..." : "Confirmar troca"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
