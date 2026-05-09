@@ -139,6 +139,35 @@ export function CatalogLeadPageCreator() {
     toast.success("Produto movido para o topo!");
   };
 
+  // Set or clear per-product discount (used in editor + live mode)
+  const setProductDiscount = (productId: string, discount: ProductDiscount | null) => {
+    if (!editingPage) return;
+    const current = { ...(editingPage.product_discounts || {}) } as DiscountMap;
+    if (!discount || !discount.value || discount.value <= 0) {
+      delete current[productId];
+    } else {
+      current[productId] = discount;
+    }
+    setEditingPage({ ...editingPage, product_discounts: current });
+  };
+
+  // Save discount immediately during live mode (real-time push to visitors)
+  const liveSetDiscount = async (productId: string, discount: ProductDiscount | null) => {
+    if (!editingPage || !livePageId) return;
+    const current = { ...(editingPage.product_discounts || {}) } as DiscountMap;
+    if (!discount || !discount.value || discount.value <= 0) {
+      delete current[productId];
+    } else {
+      current[productId] = discount;
+    }
+    const { error } = await supabase.from("catalog_lead_pages")
+      .update({ product_discounts: current } as any)
+      .eq("id", livePageId);
+    if (error) { toast.error(error.message); return; }
+    setEditingPage({ ...editingPage, product_discounts: current });
+    toast.success(discount && discount.value > 0 ? "Desconto aplicado ao vivo! 🔥" : "Desconto removido");
+  };
+
   const handleSave = async () => {
     if (!editingPage?.slug?.trim() || !editingPage?.title?.trim()) {
       toast.error("Preencha slug e título");
