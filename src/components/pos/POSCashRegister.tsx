@@ -53,6 +53,14 @@ interface PaymentReceipt {
   sale_id: string | null;
 }
 
+interface CashMovement {
+  id: string;
+  type: 'withdraw' | 'deposit';
+  amount: number;
+  description: string | null;
+  created_at: string;
+}
+
 export function POSCashRegister({ storeId, sellerId }: Props) {
   const [register, setRegister] = useState<CashRegister | null>(null);
   const [loading, setLoading] = useState(true);
