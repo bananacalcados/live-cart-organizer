@@ -197,48 +197,10 @@ export default function EventTypebotView() {
         </div>
 
         {done ? (
-          <Card className="bg-white/5 border-white/10 p-4 mt-4 text-white">
-            {done.vip_group_link && (
-              <Button
-                className="w-full mb-3 text-slate-900 font-bold"
-                style={{ background: primary }}
-                onClick={() => window.open(done.vip_group_link, '_blank')}
-              >
-                <Users className="h-4 w-4 mr-2" /> Entrar no grupo VIP
-              </Button>
-            )}
-            {shareUrl && (
-              <>
-                <div className="flex items-center gap-2 mb-2">
-                  <Gift className="h-4 w-4" style={{ color: primary }} />
-                  <span className="text-sm font-bold">{tb.prize_description || 'Indique 3 amigos!'}</span>
-                </div>
-                <p className="text-xs text-white/70 mb-2">
-                  {done.referred_count}/3 indicações
-                  {done.prize_unlocked && ' 🎉'}
-                </p>
-                <div className="flex gap-2 mb-2">
-                  <Input value={shareUrl} readOnly className="bg-white/10 border-white/20 text-white text-xs" />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      navigator.clipboard.writeText(shareUrl);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }}
-                  >
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <Button
-                  variant="outline"
-                  className="w-full bg-white/5 border-white/20 text-white"
-                  onClick={() => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareMsg)}`, '_blank')}
-                >
-                  <Share2 className="h-4 w-4 mr-2" /> Compartilhar no WhatsApp
-                </Button>
-              </>
+          <Card className="bg-white/5 border-white/10 p-4 mt-4 text-white text-center">
+            <p className="font-medium">Cadastro confirmado!</p>
+            {!done.vip_group_link && (
+              <p className="text-sm text-white/70 mt-2">{tb.success_message}</p>
             )}
           </Card>
         ) : currentStep && currentStep.type !== 'message' && currentStep.type !== 'final' ? (
