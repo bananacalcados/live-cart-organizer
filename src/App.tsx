@@ -45,6 +45,9 @@ const LiveOrtopedicosAbrilLP = lazy(() => import("./pages/LiveOrtopedicosAbrilLP
 const PresenterDashboard = lazy(() => import("./pages/PresenterDashboard"));
 const LiveteAnotadorDownload = lazy(() => import("./pages/LiveteAnotadorDownload"));
 const ReviewReferralPage = lazy(() => import("./pages/ReviewReferralPage"));
+const EventLandingView = lazy(() => import("./pages/public/EventLandingView"));
+const EventTypebotView = lazy(() => import("./pages/public/EventTypebotView"));
+const EventCaptureBuilder = lazy(() => import("./pages/events/EventCaptureBuilder"));
 const TinyFiscalImport = lazy(() => import("./pages/admin/TinyFiscalImport"));
 const Companies = lazy(() => import("./pages/admin/Companies"));
 const FiscalNumbering = lazy(() => import("./pages/admin/FiscalNumbering"));
