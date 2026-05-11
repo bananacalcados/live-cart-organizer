@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
-import { Loader2, Share2, Copy, Check, Users, Gift, Calendar } from 'lucide-react';
+import { Loader2, Check, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Block =

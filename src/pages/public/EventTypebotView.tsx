@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Loader2, Send, Users, Share2, Copy, Check, Gift } from 'lucide-react';
+import { Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Step {
