@@ -144,6 +144,26 @@ serve(async (req) => {
       ? `${base}/${source === 'typebot' ? 'typebot' : 'live'}/${public_slug}?ref=${lead.referral_token}`
       : null;
 
+    // Resolve VIP group redirect (/vip/{slug}) into the actual chat.whatsapp.com invite,
+    // so the client can jump straight to WhatsApp without any intermediate page.
+    if (vip_group_link) {
+      const vipMatch = vip_group_link.match(/\/vip\/([^/?#]+)/i);
+      if (vipMatch) {
+        try {
+          const resp = await fetch(
+            `${Deno.env.get('SUPABASE_URL')}/functions/v1/group-redirect-link?slug=${encodeURIComponent(vipMatch[1])}&mode=api`,
+            { headers: { 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` } }
+          );
+          if (resp.ok) {
+            const j = await resp.json();
+            if (j?.invite_url) vip_group_link = j.invite_url;
+          }
+        } catch (e) {
+          console.error('vip resolve error:', e);
+        }
+      }
+    }
+
     // Trigger event-based automations (event_lead_captured / event_referral_milestone_3)
     try {
       const triggerTypes = ['event_lead_captured'];
