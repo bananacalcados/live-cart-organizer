@@ -41,7 +41,7 @@ import {
   TestTube2, StopCircle, Volume2, GitBranch, AlertTriangle,
   ShoppingCart, Sparkles, Package, ExternalLink, LayoutGrid,
   ChevronDown, ChevronUp, Filter, MapPin,
-  Bookmark,
+  Bookmark, Gift,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 
