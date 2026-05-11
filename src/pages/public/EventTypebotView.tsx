@@ -157,6 +157,7 @@ export default function EventTypebotView() {
     }
   }
 
+  return (
     <div className="min-h-screen flex flex-col" style={{ background: bg }}>
       <div className="max-w-md mx-auto w-full flex-1 flex flex-col p-4">
         <div className="text-center text-white mb-4 pt-4">
