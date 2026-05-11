@@ -120,9 +120,6 @@ export default function EventLandingView() {
       });
       if (error) throw error;
       setSuccess(data);
-      if (data?.vip_group_link) {
-        setTimeout(() => { window.location.href = data.vip_group_link; }, 2500);
-      }
     } catch (e: any) {
       toast.error(e.message || 'Erro ao cadastrar');
     } finally {
@@ -154,9 +151,19 @@ export default function EventLandingView() {
   const primary = theme.primary || '#facc15';
 
   if (success) {
-    const shareUrl = success.referral_link;
-    const shareMsg = `Olha que evento incrível! Vou estar lá. Garante seu lugar também: ${shareUrl}`;
-    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareMsg)}`;
+    // Redirect immediately to VIP group if link is available
+    if (success.vip_group_link) {
+      window.location.href = success.vip_group_link;
+      return (
+        <div className="min-h-screen flex items-center justify-center" style={{ background: bg, fontFamily: theme.font || 'Inter' }}>
+          <div className="text-center text-white">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" style={{ color: primary }} />
+            <p className="text-lg font-medium">Cadastro confirmado! Redirecionando...</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen p-4 sm:p-8" style={{ background: bg, fontFamily: theme.font || 'Inter' }}>
         <div className="max-w-xl mx-auto pt-8">
@@ -168,52 +175,8 @@ export default function EventLandingView() {
               <h1 className="text-2xl font-bold mb-2">
                 {success.already_registered ? 'Você já estava cadastrado!' : 'Cadastro confirmado!'}
               </h1>
-              <p className="text-white/80 mb-4">{lp.success_message}</p>
-              {success.vip_group_link && (
-                <Button
-                  className="w-full mb-4 text-slate-900 font-bold"
-                  style={{ background: primary }}
-                  onClick={() => window.open(success.vip_group_link, '_blank')}
-                >
-                  <Users className="h-5 w-5 mr-2" /> Entrar no grupo VIP
-                </Button>
-              )}
+              <p className="text-white/80">{lp.success_message}</p>
             </div>
-
-            {shareUrl && (
-              <div className="mt-6 pt-6 border-t border-white/10">
-                <div className="flex items-center gap-2 mb-3">
-                  <Gift className="h-5 w-5" style={{ color: primary }} />
-                  <h2 className="font-bold">{lp.prize_description || 'Indique 3 amigos e ganhe!'}</h2>
-                </div>
-                <p className="text-sm text-white/70 mb-3">
-                  Você indicou <strong>{success.referred_count}/3</strong>{' '}
-                  {success.prize_unlocked && <span className="text-green-400">🎉 Prêmio liberado!</span>}
-                </p>
-                <div className="flex gap-2 mb-2">
-                  <Input value={shareUrl} readOnly className="bg-white/10 border-white/20 text-white text-xs" />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      navigator.clipboard.writeText(shareUrl);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                      toast.success('Link copiado!');
-                    }}
-                  >
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <Button
-                  variant="outline"
-                  className="w-full bg-white/5 border-white/20 text-white hover:bg-white/10"
-                  onClick={() => window.open(waUrl, '_blank')}
-                >
-                  <Share2 className="h-4 w-4 mr-2" /> Compartilhar no WhatsApp
-                </Button>
-              </div>
-            )}
           </Card>
         </div>
       </div>
