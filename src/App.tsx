@@ -94,6 +94,9 @@ const App = () => (
               <Route path="/live-ortopedicos" element={<LiveOrtopedicosLP />} />
               <Route path="/live-ortopedicos-abril" element={<LiveOrtopedicosAbrilLP />} />
               <Route path="/r/:token" element={<ReviewReferralPage />} />
+              <Route path="/live/:slug" element={<EventLandingView />} />
+              <Route path="/typebot/:slug" element={<EventTypebotView />} />
+              <Route path="/events/:eventId/capture" element={<ProtectedRoute requiredModule="events"><EventCaptureBuilder /></ProtectedRoute>} />
 
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
