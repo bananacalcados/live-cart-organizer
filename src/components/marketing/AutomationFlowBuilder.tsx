@@ -3390,7 +3390,10 @@ export function AutomationFlowBuilder() {
                   </div>
                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                     <Switch checked={flow.is_active} onCheckedChange={() => toggleActive(flow)} />
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteFlow(flow.id)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Duplicar" onClick={() => duplicateFlow(flow)}>
+                      <Copy className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Excluir" onClick={() => deleteFlow(flow.id)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
