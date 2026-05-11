@@ -235,7 +235,12 @@ export default function EventCaptureBuilder() {
         <TabsList>
           <TabsTrigger value="lp">Landing Pages ({lps.length})</TabsTrigger>
           <TabsTrigger value="tb">Typebots ({tbs.length})</TabsTrigger>
+          <TabsTrigger value="leads">Leads Capturados</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="leads" className="mt-4">
+          <LeadsList eventId={eventId!} />
+        </TabsContent>
 
         {/* ============ LANDING PAGES ============ */}
         <TabsContent value="lp" className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 mt-4">
@@ -494,6 +499,90 @@ export default function EventCaptureBuilder() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function LeadsList({ eventId }: { eventId: string }) {
+  const [leads, setLeads] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [q, setQ] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const { data } = await supabase
+        .from('event_leads')
+        .select('id, name, phone, source, referred_count, prize_unlocked_at, created_at, utm_source, utm_campaign')
+        .eq('event_id', eventId)
+        .order('created_at', { ascending: false })
+        .limit(500);
+      setLeads(data || []);
+      setLoading(false);
+    })();
+  }, [eventId]);
+
+  const filtered = leads.filter((l) => {
+    if (!q) return true;
+    const s = q.toLowerCase();
+    return (l.name || '').toLowerCase().includes(s) || (l.phone || '').includes(s);
+  });
+
+  const exportCsv = () => {
+    const header = 'Nome,WhatsApp,Origem,Indicações,Prêmio,UTM Source,UTM Campaign,Data\n';
+    const rows = filtered.map((l) =>
+      `"${l.name}","${l.phone}","${l.source}",${l.referred_count || 0},${l.prize_unlocked_at ? 'Sim' : 'Não'},"${l.utm_source || ''}","${l.utm_campaign || ''}","${new Date(l.created_at).toLocaleString('pt-BR')}"`
+    ).join('\n');
+    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `leads-evento-${eventId}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (loading) return <div className="p-8"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-center justify-between mb-3 gap-2">
+        <div>
+          <h3 className="font-bold">{leads.length} leads capturados</h3>
+          <p className="text-xs text-muted-foreground">{leads.filter(l => l.prize_unlocked_at).length} desbloquearam o prêmio (3 indicações)</p>
+        </div>
+        <div className="flex gap-2">
+          <Input placeholder="Buscar nome ou WhatsApp..." value={q} onChange={(e) => setQ(e.target.value)} className="w-64" />
+          <Button variant="outline" onClick={exportCsv}>Exportar CSV</Button>
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs text-muted-foreground border-b">
+            <tr>
+              <th className="py-2">Nome</th>
+              <th>WhatsApp</th>
+              <th>Origem</th>
+              <th>Indicações</th>
+              <th>Prêmio</th>
+              <th>Quando</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((l) => (
+              <tr key={l.id} className="border-b hover:bg-muted/30">
+                <td className="py-2">{l.name}</td>
+                <td className="font-mono text-xs">{l.phone}</td>
+                <td><span className="px-2 py-0.5 rounded bg-muted text-xs">{l.source}</span></td>
+                <td>{l.referred_count || 0} / 3</td>
+                <td>{l.prize_unlocked_at ? '🎁 Sim' : '—'}</td>
+                <td className="text-xs text-muted-foreground">{new Date(l.created_at).toLocaleString('pt-BR')}</td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum lead capturado ainda</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   );
 }
 

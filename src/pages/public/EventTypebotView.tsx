@@ -114,6 +114,12 @@ export default function EventTypebotView() {
       if (error) throw error;
       setDone(data);
       setMessages((m) => [...m, { from: 'bot', text: tb.success_message }]);
+      // Auto-redirect to VIP group after 2s if link is configured
+      if (data?.vip_group_link) {
+        setTimeout(() => {
+          window.location.href = data.vip_group_link;
+        }, 2000);
+      }
     } catch (e: any) {
       toast.error(e.message || 'Erro ao cadastrar');
     } finally {
