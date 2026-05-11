@@ -235,7 +235,12 @@ export default function EventCaptureBuilder() {
         <TabsList>
           <TabsTrigger value="lp">Landing Pages ({lps.length})</TabsTrigger>
           <TabsTrigger value="tb">Typebots ({tbs.length})</TabsTrigger>
+          <TabsTrigger value="leads">Leads Capturados</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="leads" className="mt-4">
+          <LeadsList eventId={eventId!} />
+        </TabsContent>
 
         {/* ============ LANDING PAGES ============ */}
         <TabsContent value="lp" className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4 mt-4">
