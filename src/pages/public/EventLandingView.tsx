@@ -70,7 +70,6 @@ export default function EventLandingView() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState<any>(null);
   const [form, setForm] = useState({ name: '', phone: '', consent: false });
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     (async () => {

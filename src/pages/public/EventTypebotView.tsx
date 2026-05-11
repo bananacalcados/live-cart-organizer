@@ -41,7 +41,6 @@ export default function EventTypebotView() {
   const [collected, setCollected] = useState<{ name?: string; phone?: string }>({});
   const [done, setDone] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
