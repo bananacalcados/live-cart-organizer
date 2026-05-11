@@ -41,7 +41,7 @@ import {
   TestTube2, StopCircle, Volume2, GitBranch, AlertTriangle,
   ShoppingCart, Sparkles, Package, ExternalLink, LayoutGrid,
   ChevronDown, ChevronUp, Filter, MapPin,
-  Bookmark, Gift,
+  Bookmark, Gift, Copy,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 
@@ -3269,6 +3269,71 @@ export function AutomationFlowBuilder() {
     fetchFlows();
   };
 
+  const duplicateFlow = async (flow: AutomationFlow) => {
+    try {
+      // 1) Fetch original steps
+      const { data: srcSteps, error: stepsErr } = await supabase
+        .from("automation_steps")
+        .select("*")
+        .eq("flow_id", flow.id)
+        .order("step_order");
+      if (stepsErr) throw stepsErr;
+
+      // 2) Create new flow (inactive by default)
+      const { data: newFlow, error: flowErr } = await supabase
+        .from("automation_flows")
+        .insert({
+          name: `${flow.name} (cópia)`,
+          description: (flow as any).description || null,
+          trigger_type: flow.trigger_type,
+          trigger_config: (flow as any).trigger_config || {},
+          is_active: false,
+          event_id: (flow as any).event_id || null,
+          use_jess_agent: (flow as any).use_jess_agent || false,
+          jess_campaign_name: (flow as any).jess_campaign_name || null,
+        })
+        .select()
+        .single();
+      if (flowErr) throw flowErr;
+
+      // 3) Pre-allocate new step IDs to remap buttonBranches
+      const idMap: Record<string, string> = {};
+      const cryptoRef: any = (globalThis as any).crypto;
+      const genId = () => (cryptoRef?.randomUUID ? cryptoRef.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      for (const s of srcSteps || []) idMap[s.id] = genId();
+
+      const remapped = (srcSteps || []).map((s: any) => {
+        const cfg = { ...(s.action_config || {}) };
+        if (cfg.buttonBranches && typeof cfg.buttonBranches === 'object') {
+          const nb: Record<string, string> = {};
+          for (const [k, v] of Object.entries(cfg.buttonBranches as Record<string, string>)) {
+            nb[k] = idMap[v] || v;
+          }
+          cfg.buttonBranches = nb;
+        }
+        return {
+          id: idMap[s.id],
+          flow_id: newFlow.id,
+          step_order: s.step_order,
+          action_type: s.action_type,
+          action_config: cfg,
+          delay_seconds: s.delay_seconds || 0,
+        };
+      });
+
+      if (remapped.length > 0) {
+        const { error: insErr } = await supabase.from("automation_steps").insert(remapped);
+        if (insErr) throw insErr;
+      }
+
+      toast.success(`Automação duplicada como "${newFlow.name}"`);
+      fetchFlows();
+    } catch (e: any) {
+      console.error("[duplicateFlow]", e);
+      toast.error(`Erro ao duplicar: ${e.message || e}`);
+    }
+  };
+
   if (selectedFlow) {
     return <FlowEditor key={selectedFlow.id} flow={selectedFlow} onBack={async () => { setSelectedFlow(null); await fetchFlows(); }} onSave={fetchFlows} />;
   }
@@ -3325,7 +3390,10 @@ export function AutomationFlowBuilder() {
                   </div>
                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                     <Switch checked={flow.is_active} onCheckedChange={() => toggleActive(flow)} />
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => deleteFlow(flow.id)}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Duplicar" onClick={() => duplicateFlow(flow)}>
+                      <Copy className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" title="Excluir" onClick={() => deleteFlow(flow.id)}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
