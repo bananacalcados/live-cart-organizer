@@ -1,79 +1,165 @@
-# Sincronização Shopify ↔ Módulo Eventos
+# Plano — Live Shopping com captação, indicação e automação
 
-## 1) Diagnóstico do estado atual
+## Escopo desta entrega (Fase 1)
 
-**O que já existe:**
-- Edge function `shopify-create-order`: cria o pedido na Shopify quando o card vai pra coluna "Pago". Retorna `shopifyOrderId` + `shopifyOrderName`.
-- Edge function `shopify-cancel-live-order`: já cancela pedido na Shopify, mas hoje só é usada no fluxo de "Revisão de Duplicatas Live" (tabela `shopify_live_order_syncs`), não no card de eventos.
-- Tabela `orders` (módulo eventos): possui apenas a coluna `shopify_order_name` (ex: `#10523`). **Não persiste o `shopify_order_id` numérico** — que é exatamente o que a API Admin precisa pra cancelar/editar/deletar.
-- Frontend: ao criar o pedido, só salva `shopify_order_name` na linha do `orders` e dispara um evento `shopify-order-created`. Joga fora o `shopifyOrderId`.
+1. Builder visual de **LP do Evento** (sem precisar chamar o agente)
+2. Builder de **Typebot conversacional** (fluxo de perguntas) reutilizando o mesmo backend
+3. **Sistema de indicação** com link único por lead, contador e prêmio aos 3 cadastros
+4. Novo **gatilho de automação**: `Lead capturado em LP/Typebot` que dispara templates de WhatsApp já existentes
 
-**Por isso hoje é impossível, pelo nosso sistema:**
-1. Editar o pedido na Shopify após pago (não há fluxo, e nem temos o ID guardado).
-2. Apagar/cancelar o pedido da Shopify (não temos o ID, e o botão não existe na UI do card).
-3. Desvincular o pedido Shopify do card de eventos (nenhum botão limpa `shopify_order_name`).
+Fases futuras (fora do escopo agora): agente de IA do evento (DM 1:1) e gamificação avançada.
 
-## 2) O que é possível tecnicamente
+---
 
-| Pedido do usuário | Viável? | Observação |
-|---|---|---|
-| Atualizar pedido Shopify a partir das edições no nosso sistema | **Parcialmente** | A Shopify **não permite editar pedidos já pagos** via API REST de forma direta (linhas, preços, totais ficam congelados após pagamento). Existem 2 caminhos válidos: **(A) Cancelar + recriar** o pedido (mais simples e confiável), ou **(B) Order Editing API** via GraphQL (mais complexa, exige `orderEditBegin/orderEditAddVariant/orderEditCommit`, e tem limitações). Recomendo **(A)** porque já temos `create-order` e `cancel-live-order` funcionando. |
-| Apagar pedido na Shopify pelo nosso sistema | **Sim** | Via API REST: `POST /orders/{id}/cancel.json` (cancela) e/ou `DELETE /orders/{id}.json` (apaga, só funciona se já cancelado). Função de cancelar já existe — basta um wrapper genérico para o módulo eventos. |
-| Desvincular pedido Shopify do card | **Sim** | Apenas limpar `shopify_order_name` (e novo `shopify_order_id`) na linha do `orders`. Trivial. |
-| Recriar pedido após desvincular | **Sim** | Já é o que acontece hoje quando movemos pra "Pago" — basta o botão "Criar pedido na Shopify" ficar disponível quando o vínculo estiver vazio. |
+## 1. Banco de dados
 
-## 3) Plano de implementação
+Novas tabelas:
 
-### Passo 1 — Migration (banco)
-Adicionar `shopify_order_id` (text) à tabela `orders` para guardarmos o ID numérico, indispensável para todas as operações.
+- **`event_landing_pages`**
+  - `event_id` (fk), `slug` único, `published`, `theme_json` (cores/fontes), `config_json` (lista de blocos), `hero_image_url`, `og_image_url`
+  
+- **`event_typebots`**
+  - `event_id` (fk), `slug` único, `published`, `flow_json` (perguntas, validações, mensagens), `welcome_message`, `success_message`
 
-### Passo 2 — Persistir o ID na criação
-- `OrderCardDb.tsx` e `OrderDialogDb.tsx`: ao chamar `shopify-create-order`, salvar **tanto** `shopify_order_name` **quanto** `shopify_order_id` retornados.
-- Backfill opcional: para pedidos antigos com `shopify_order_name` mas sem `shopify_order_id`, criar uma rotina que busca por nome via `GET /orders.json?name=#10523` e preenche.
+- **`event_leads`**
+  - `event_id`, `name`, `phone` (E.164), `source` ('lp' | 'typebot' | 'referral'), `referral_token` (único, gerado no insert), `referred_by_lead_id` (fk self), `referred_count` (mantido por trigger), `prize_unlocked_at`, `vip_group_sent_at`, `landing_page_id`, `typebot_id`, `utm_*`
 
-### Passo 3 — Nova edge function `shopify-delete-event-order`
-Recebe `{ orderId }` (id do `orders` no nosso banco). Lê `shopify_order_id`, chama:
-1. `POST /orders/{id}/cancel.json` (cancela / restock=false / email=false)
-2. `DELETE /orders/{id}.json` (apaga de fato)
-3. Limpa `shopify_order_id` e `shopify_order_name` na linha do `orders`.
+- **Trigger** em `event_leads`: ao inserir com `referred_by_lead_id`, incrementa `referred_count` do indicador. Se chegar a 3 e `prize_unlocked_at` for nulo, marca timestamp e emite evento `referral_milestone_3`.
 
-Permissão: admin ou manager (mesmo padrão do `shopify-cancel-live-order`).
+- **Extensão em `automation_triggers`** (tabela existente): novos tipos de evento `lp_lead_captured`, `typebot_completed`, `referral_milestone_3`.
 
-### Passo 4 — Nova edge function `shopify-update-event-order` (estratégia cancel+recreate)
-Recebe `{ orderId }`. Faz:
-1. Cancela + apaga o pedido Shopify atual (reusa lógica do passo 3).
-2. Recria via `shopify-create-order` com os dados **atuais** do `orders` (já editados no nosso sistema).
-3. Atualiza `shopify_order_id` + `shopify_order_name` com os novos valores.
+Storage: bucket público `event-landing-assets` para imagens de fundo/hero.
 
-Importante: avisar visualmente que o número do pedido na Shopify **vai mudar** (ex: era `#10523`, vira `#10524`). Isso é inevitável nesse caminho.
+---
 
-### Passo 5 — UI no card do pedido (`OrderCardDb.tsx`)
-Quando `shopify_order_name` estiver presente, adicionar um menu (3 pontinhos) na badge "Shopify #XXXX" com:
-- **Atualizar pedido na Shopify** → chama `shopify-update-event-order` (com confirmação avisando que o número vai mudar).
-- **Desvincular** → só limpa `shopify_order_id` + `shopify_order_name` no nosso banco. Pedido permanece na Shopify.
-- **Apagar pedido na Shopify** → chama `shopify-delete-event-order` (confirmação dupla).
+## 2. Builder de LP do Evento
 
-Quando **não** houver `shopify_order_name`, o card já mostra a opção de "Criar pedido na Shopify" (comportamento atual mantido).
+Tela nova em `Eventos > {evento} > Landing Pages`.
 
-### Passo 6 — Permissões e auditoria
-- Restringir as 3 ações a admin/manager.
-- Logar cada operação numa tabela `shopify_event_order_audit` (action, order_id, shopify_order_id, user_id, result, timestamp) pra rastrear.
+**Editor visual** (split view: blocos à esquerda, preview à direita, mobile/desktop toggle):
 
-## 4) Detalhes técnicos relevantes
+Blocos arrastáveis disponíveis:
+- **Hero com imagem de fundo**: upload + controles de posição (top/center/bottom), modo (cover/contain), overlay escuro 0–100%, **desfoque do fundo** 0–20px, altura
+- **Imagem em região específica**: hero/lateral/faixa, com posicionamento livre
+- **Countdown regressivo**: input de data/hora final
+- **Data do evento** (texto formatado automaticamente)
+- **Tema do evento** (título + subtítulo)
+- **Regras do evento** (rich text)
+- **Botão CTA** → link do grupo VIP
+- **Formulário de captura**: nome + WhatsApp (validação E.164 com 9º dígito automático)
+- **Texto livre** (rich text)
 
-- **Order Editing API (alternativa B)**: se no futuro quisermos manter o **mesmo número** do pedido na Shopify ao editar, dá pra trocar a estratégia do passo 4 por `orderEditBegin → orderEditAddVariant / orderEditSetQuantity → orderEditCommit` (GraphQL Admin). Mas tem restrições: não permite trocar cliente, endereço, nem alterar pagamento já capturado. Como vocês geralmente trocam **produto/tamanho** (que mexe nas line items), a Order Editing API funcionaria, mas é bem mais código. Sugestão: começar com cancel+recreate e migrar pra Order Editing só se o "número novo a cada edição" incomodar.
-- **Pedido pago + estoque**: ao cancelar com `restock:false` + `email:false` + recriar, evitamos email duplicado pro cliente e duplicação de movimentação de estoque. Confirmar essa configuração no payload.
-- **Webhook**: o `shopify-webhook` continua funcionando normalmente — vai receber o cancel e o create do novo pedido, e qualquer downstream (RFM, expedição) já lida com isso.
+Configurações da página:
+- Slug customizado: `/live/{slug}`
+- Cores primárias e fonte
+- OG image (preview no WhatsApp)
+- Mensagem de sucesso após cadastro + link do grupo VIP exibido
+- Toggle "exigir aceite de privacidade"
 
-## 5) Arquivos afetados
+Rota pública: **`/live/:slug`** (renderiza `config_json` em React).
+Rota pública com indicação: **`/live/:slug?ref={referral_token}`**.
 
-- `supabase/migrations/<nova>.sql` (adiciona `orders.shopify_order_id`)
-- `supabase/functions/shopify-delete-event-order/index.ts` (nova)
-- `supabase/functions/shopify-update-event-order/index.ts` (nova)
-- `supabase/functions/shopify-create-order/index.ts` (sem mudança, mas validar retorno)
-- `src/components/OrderCardDb.tsx` (menu de ações + persistir `shopify_order_id`)
-- `src/components/OrderDialogDb.tsx` (persistir `shopify_order_id` ao criar)
+---
 
-## 6) Pergunta antes de eu implementar
+## 3. Builder de Typebot
 
-Quer que eu siga com **cancel + recreate** (mais simples, número novo a cada edição) ou prefere a **Order Editing API** (mantém o mesmo número, mas leva ~2x mais tempo pra implementar)?
+Tela em `Eventos > {evento} > Typebots`.
+
+Editor simples de fluxo linear (sem ramificações nessa primeira versão):
+- Lista ordenada de passos: pergunta de texto, pergunta de telefone, mensagem informativa, botão final
+- Cada passo tem rótulo, placeholder, validação (texto/telefone)
+- Mensagem de boas-vindas e mensagem de sucesso com link do grupo VIP
+
+Rota pública: **`/typebot/:slug`** e **`/typebot/:slug?ref={referral_token}`**.
+
+Backend de captura é o mesmo da LP (mesma edge function), só muda a interface.
+
+---
+
+## 4. Edge function `event-lead-capture`
+
+Recebe `{ event_id, source, lp_id|typebot_id, name, phone, ref_token? }`:
+
+1. Normaliza telefone (E.164 + 9º dígito)
+2. Resolve `referred_by_lead_id` via `ref_token`
+3. Verifica duplicata (mesmo `event_id` + `phone` → retorna lead existente sem criar novo)
+4. Insere `event_leads` com `referral_token` único gerado
+5. Emite evento `lp_lead_captured` (ou `typebot_completed`) para o motor de automações
+6. Retorna `{ referral_token, vip_group_link, share_message }` para a página exibir
+
+Trigger de banco cuida do `referral_milestone_3` quando atinge 3 indicados.
+
+---
+
+## 5. Integração com Automações
+
+No módulo Automações, adicionar **3 novos tipos de gatilho** no selector:
+
+- `Lead capturado em LP do Evento` (filtro: evento, opcional: LP específica)
+- `Lead capturado em Typebot` (filtro: evento, opcional: typebot específico)
+- `Marco de 3 indicações alcançado` (filtro: evento)
+
+**Variáveis disponíveis** nos templates/mensagens:
+- `{{nome}}` — nome do lead
+- `{{whatsapp}}` — telefone
+- `{{link_grupo_vip}}` — vem do evento
+- `{{link_indicacao}}` — URL: `https://checkout.bananacalcados.com.br/live/{slug}?ref={token}`
+- `{{data_evento}}`, `{{tema_evento}}`
+- `{{nome_indicador}}` (quando aplicável)
+- `{{indicados_count}}` (no marco de 3)
+
+As ações de automação (enviar template WhatsApp, delay, tag) já existem e ficam reutilizadas.
+
+---
+
+## 6. Página pública com indicação
+
+Após cadastrar, a LP/Typebot mostra tela de sucesso com:
+- Link do grupo VIP (botão)
+- **Card "Indique 3 amigos e ganhe {prêmio}"** com:
+  - Link único copiável: `/live/{slug}?ref={token}`
+  - Botão "Compartilhar no WhatsApp" com mensagem pré-pronta
+  - Contador: `Você já indicou X de 3`
+
+---
+
+## 7. Detalhes técnicos
+
+### Estrutura de arquivos novos
+- `src/pages/events/EventLandingBuilder.tsx` — editor visual
+- `src/pages/events/EventTypebotBuilder.tsx` — editor de fluxo
+- `src/pages/public/EventLandingView.tsx` — render público `/live/:slug`
+- `src/pages/public/EventTypebotView.tsx` — render público `/typebot/:slug`
+- `src/components/events/landing-blocks/*` — um componente por tipo de bloco
+- `src/components/events/ReferralCard.tsx` — card de indicação pós-cadastro
+- `supabase/functions/event-lead-capture/index.ts`
+- `supabase/migrations/*` — tabelas + trigger + extensão dos triggers de automação
+
+### Validação
+- Zod schemas para `config_json`, `flow_json` e payload da edge function
+- Telefone passa pelo `phoneUtils` já existente (E.164 + 9º dígito BR)
+
+### Segurança
+- RLS em `event_landing_pages`, `event_typebots`, `event_leads` (admin/operadores leem e editam; público só pode chamar a edge function para inserir leads, não acessa a tabela direto)
+- Rate limit na edge function de captura (por IP)
+- `referral_token` gerado com `gen_random_bytes` (alta entropia)
+
+---
+
+## Entregáveis dessa fase
+
+- [ ] Migrations das 3 tabelas + trigger + bucket
+- [ ] Edge function `event-lead-capture`
+- [ ] Builder visual de LP com todos os blocos listados
+- [ ] Builder de Typebot linear
+- [ ] Páginas públicas `/live/:slug` e `/typebot/:slug` com suporte a `?ref=`
+- [ ] Card de indicação pós-cadastro
+- [ ] 3 novos gatilhos no módulo Automações
+- [ ] Variáveis novas disponíveis nos templates
+
+## Fora dessa fase (próximos passos)
+
+- Agente de IA do evento em DM 1:1 (identifica lead, responde dúvidas, manda link de indicação sob demanda, consulta status de indicados)
+- Gamificação com leaderboard público de indicações
+- A/B test de LPs
+- Ramificações condicionais no Typebot

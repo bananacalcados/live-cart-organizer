@@ -41,7 +41,7 @@ import {
   TestTube2, StopCircle, Volume2, GitBranch, AlertTriangle,
   ShoppingCart, Sparkles, Package, ExternalLink, LayoutGrid,
   ChevronDown, ChevronUp, Filter, MapPin,
-  Bookmark,
+  Bookmark, Gift,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 
@@ -89,6 +89,8 @@ const TRIGGER_TYPES = [
   { value: "shopify_purchase", label: "Compra Shopify", icon: ShoppingCart, description: "Quando alguém finaliza uma compra na Shopify" },
   { value: "pos_sale_completed", label: "Venda Loja Física (POS)", icon: ShoppingBag, description: "Quando uma venda é concluída na loja física (cashback, reativação)" },
   { value: "yampi_abandoned_cart", label: "Carrinho Abandonado (Yampi)", icon: Package, description: "Quando um carrinho é abandonado na Yampi" },
+  { value: "event_lead_captured", label: "Lead Capturado (LP/Typebot do Evento)", icon: Users, description: "Quando alguém se cadastra em uma LP ou Typebot de um evento. Variáveis extras: {{link_indicacao}}, {{link_grupo_vip}}, {{nome_indicador}}" },
+  { value: "event_referral_milestone_3", label: "3 Indicações Atingidas (Evento)", icon: Gift, description: "Quando um lead indica 3 amigos e libera o prêmio" },
 ];
 
 const ACTION_TYPES = [
