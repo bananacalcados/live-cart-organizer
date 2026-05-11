@@ -3227,7 +3227,7 @@ export function AutomationFlowBuilder() {
       if (!stats[row.flow_id]) stats[row.flow_id] = { total: 0, success: 0, failed: 0, lastAt: null };
       const s = stats[row.flow_id];
       s.total++;
-      if (row.status === 'success') s.success++;
+      if (row.status === 'success' || row.status === 'sent' || row.status === 'delivered' || row.status === 'read') s.success++;
       else if (row.status === 'error' || row.status === 'failed') s.failed++;
       if (!s.lastAt) s.lastAt = row.executed_at;
     }
