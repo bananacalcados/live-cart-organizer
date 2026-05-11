@@ -542,6 +542,14 @@ const Events = () => {
                             <Play className="h-4 w-4 mr-2" />
                             Abrir Evento
                           </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => navigate(`/events/${event.id}/capture`)}
+                            title="Captação / LP"
+                          >
+                            <Target className="h-4 w-4" />
+                          </Button>
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button
