@@ -3231,6 +3231,166 @@ export type Database = {
         }
         Relationships: []
       }
+      event_landing_pages: {
+        Row: {
+          config_json: Json
+          created_at: string
+          event_id: string
+          event_starts_at: string | null
+          hero_image_url: string | null
+          id: string
+          og_image_url: string | null
+          prize_description: string | null
+          published: boolean
+          require_privacy_consent: boolean
+          slug: string
+          success_message: string | null
+          theme_json: Json
+          title: string
+          updated_at: string
+          vip_group_link: string | null
+        }
+        Insert: {
+          config_json?: Json
+          created_at?: string
+          event_id: string
+          event_starts_at?: string | null
+          hero_image_url?: string | null
+          id?: string
+          og_image_url?: string | null
+          prize_description?: string | null
+          published?: boolean
+          require_privacy_consent?: boolean
+          slug: string
+          success_message?: string | null
+          theme_json?: Json
+          title?: string
+          updated_at?: string
+          vip_group_link?: string | null
+        }
+        Update: {
+          config_json?: Json
+          created_at?: string
+          event_id?: string
+          event_starts_at?: string | null
+          hero_image_url?: string | null
+          id?: string
+          og_image_url?: string | null
+          prize_description?: string | null
+          published?: boolean
+          require_privacy_consent?: boolean
+          slug?: string
+          success_message?: string | null
+          theme_json?: Json
+          title?: string
+          updated_at?: string
+          vip_group_link?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_landing_pages_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_leads: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          landing_page_id: string | null
+          metadata: Json
+          name: string
+          phone: string
+          phone_suffix: string | null
+          prize_unlocked_at: string | null
+          referral_token: string
+          referred_by_lead_id: string | null
+          referred_count: number
+          source: string
+          typebot_id: string | null
+          updated_at: string
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          vip_group_sent_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          landing_page_id?: string | null
+          metadata?: Json
+          name: string
+          phone: string
+          phone_suffix?: string | null
+          prize_unlocked_at?: string | null
+          referral_token?: string
+          referred_by_lead_id?: string | null
+          referred_count?: number
+          source?: string
+          typebot_id?: string | null
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          vip_group_sent_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          landing_page_id?: string | null
+          metadata?: Json
+          name?: string
+          phone?: string
+          phone_suffix?: string | null
+          prize_unlocked_at?: string | null
+          referral_token?: string
+          referred_by_lead_id?: string | null
+          referred_count?: number
+          source?: string
+          typebot_id?: string | null
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          vip_group_sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_leads_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_leads_landing_page_id_fkey"
+            columns: ["landing_page_id"]
+            isOneToOne: false
+            referencedRelation: "event_landing_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_leads_referred_by_lead_id_fkey"
+            columns: ["referred_by_lead_id"]
+            isOneToOne: false
+            referencedRelation: "event_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_leads_typebot_id_fkey"
+            columns: ["typebot_id"]
+            isOneToOne: false
+            referencedRelation: "event_typebots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_promotions: {
         Row: {
           created_at: string
@@ -3390,6 +3550,65 @@ export type Database = {
           whatsapp?: string | null
         }
         Relationships: []
+      }
+      event_typebots: {
+        Row: {
+          created_at: string
+          event_id: string
+          event_starts_at: string | null
+          flow_json: Json
+          id: string
+          name: string
+          prize_description: string | null
+          published: boolean
+          slug: string
+          success_message: string | null
+          theme_json: Json
+          updated_at: string
+          vip_group_link: string | null
+          welcome_message: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          event_starts_at?: string | null
+          flow_json?: Json
+          id?: string
+          name?: string
+          prize_description?: string | null
+          published?: boolean
+          slug: string
+          success_message?: string | null
+          theme_json?: Json
+          updated_at?: string
+          vip_group_link?: string | null
+          welcome_message?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          event_starts_at?: string | null
+          flow_json?: Json
+          id?: string
+          name?: string
+          prize_description?: string | null
+          published?: boolean
+          slug?: string
+          success_message?: string | null
+          theme_json?: Json
+          updated_at?: string
+          vip_group_link?: string | null
+          welcome_message?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_typebots_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       events: {
         Row: {
