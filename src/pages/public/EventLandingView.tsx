@@ -120,6 +120,9 @@ export default function EventLandingView() {
       });
       if (error) throw error;
       setSuccess(data);
+      if (data?.vip_group_link) {
+        setTimeout(() => { window.location.href = data.vip_group_link; }, 2500);
+      }
     } catch (e: any) {
       toast.error(e.message || 'Erro ao cadastrar');
     } finally {
