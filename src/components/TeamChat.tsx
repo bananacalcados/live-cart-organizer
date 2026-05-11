@@ -222,7 +222,7 @@ export function TeamChat() {
 
   // Hide on POS page (has its own chat), landing pages, checkout pages, and VIP redirect pages
   const p = location.pathname;
-  if (p === '/pos' || p === '/live' || p === '/live-consumidor' || p.startsWith('/live-ortopedicos') || p.startsWith('/banana-') || p.startsWith('/lp/') || p.startsWith('/cat/') || p.startsWith('/evento/') || p.startsWith('/checkout') || p.startsWith('/checkout-loja/') || p.startsWith('/vip/') || p.startsWith('/dose-tripla') || p.startsWith('/catalogo/') || p.startsWith('/l/') || p.startsWith('/register/')) return null;
+  if (p === '/pos' || p === '/live' || p === '/live-consumidor' || p.startsWith('/live-ortopedicos') || p.startsWith('/banana-') || p.startsWith('/lp/') || p.startsWith('/cat/') || p.startsWith('/evento/') || p.startsWith('/checkout') || p.startsWith('/checkout-loja/') || p.startsWith('/vip/') || p.startsWith('/dose-tripla') || p.startsWith('/catalogo/') || p.startsWith('/l/') || p.startsWith('/register/') || p.startsWith('/live/') || p.startsWith('/typebot/') || p.startsWith('/r/')) return null;
 
   if (!isOpen) {
     return (
