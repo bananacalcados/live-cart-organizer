@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Loader2, Send, Users, Share2, Copy, Check, Gift } from 'lucide-react';
+import { Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Step {
@@ -41,7 +41,6 @@ export default function EventTypebotView() {
   const [collected, setCollected] = useState<{ name?: string; phone?: string }>({});
   const [done, setDone] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [copied, setCopied] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -114,11 +113,9 @@ export default function EventTypebotView() {
       if (error) throw error;
       setDone(data);
       setMessages((m) => [...m, { from: 'bot', text: tb.success_message }]);
-      // Auto-redirect to VIP group after 2s if link is configured
+      // Auto-redirect to VIP group immediately if link is configured
       if (data?.vip_group_link) {
-        setTimeout(() => {
-          window.location.href = data.vip_group_link;
-        }, 2000);
+        window.location.href = data.vip_group_link;
       }
     } catch (e: any) {
       toast.error(e.message || 'Erro ao cadastrar');
@@ -160,9 +157,6 @@ export default function EventTypebotView() {
     }
   }
 
-  const shareUrl = done?.referral_link;
-  const shareMsg = shareUrl ? `Olha que evento! Garante seu lugar: ${shareUrl}` : '';
-
   return (
     <div className="min-h-screen flex flex-col" style={{ background: bg }}>
       <div className="max-w-md mx-auto w-full flex-1 flex flex-col p-4">
@@ -199,48 +193,10 @@ export default function EventTypebotView() {
         </div>
 
         {done ? (
-          <Card className="bg-white/5 border-white/10 p-4 mt-4 text-white">
-            {done.vip_group_link && (
-              <Button
-                className="w-full mb-3 text-slate-900 font-bold"
-                style={{ background: primary }}
-                onClick={() => window.open(done.vip_group_link, '_blank')}
-              >
-                <Users className="h-4 w-4 mr-2" /> Entrar no grupo VIP
-              </Button>
-            )}
-            {shareUrl && (
-              <>
-                <div className="flex items-center gap-2 mb-2">
-                  <Gift className="h-4 w-4" style={{ color: primary }} />
-                  <span className="text-sm font-bold">{tb.prize_description || 'Indique 3 amigos!'}</span>
-                </div>
-                <p className="text-xs text-white/70 mb-2">
-                  {done.referred_count}/3 indicações
-                  {done.prize_unlocked && ' 🎉'}
-                </p>
-                <div className="flex gap-2 mb-2">
-                  <Input value={shareUrl} readOnly className="bg-white/10 border-white/20 text-white text-xs" />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      navigator.clipboard.writeText(shareUrl);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }}
-                  >
-                    {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-                <Button
-                  variant="outline"
-                  className="w-full bg-white/5 border-white/20 text-white"
-                  onClick={() => window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareMsg)}`, '_blank')}
-                >
-                  <Share2 className="h-4 w-4 mr-2" /> Compartilhar no WhatsApp
-                </Button>
-              </>
+          <Card className="bg-white/5 border-white/10 p-4 mt-4 text-white text-center">
+            <p className="font-medium">Cadastro confirmado!</p>
+            {!done.vip_group_link && (
+              <p className="text-sm text-white/70 mt-2">{tb.success_message}</p>
             )}
           </Card>
         ) : currentStep && currentStep.type !== 'message' && currentStep.type !== 'final' ? (
