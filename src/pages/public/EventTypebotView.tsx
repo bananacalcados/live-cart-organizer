@@ -54,10 +54,11 @@ export default function EventTypebotView() {
         .eq('published', true)
         .maybeSingle();
       if (data) {
-        setTb(data as any);
-        document.title = data.name || 'Cadastro';
-        const steps: Step[] = data.flow_json?.steps || [];
-        const queue: ChatMsg[] = [{ from: 'bot', text: data.welcome_message }];
+        const typed = data as any as TypebotData;
+        setTb(typed);
+        document.title = typed.name || 'Cadastro';
+        const steps: Step[] = typed.flow_json?.steps || [];
+        const queue: ChatMsg[] = [{ from: 'bot', text: typed.welcome_message }];
         if (steps[0]) queue.push({ from: 'bot', text: steps[0].text });
         setMessages(queue);
       }
