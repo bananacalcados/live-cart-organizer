@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, CreditCard, Monitor, Send, Store } from "lucide-react";
+import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, CreditCard, Monitor, Send, Store, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -541,6 +541,14 @@ const Events = () => {
                           >
                             <Play className="h-4 w-4 mr-2" />
                             Abrir Evento
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => navigate(`/events/${event.id}/capture`)}
+                            title="Captação / LP"
+                          >
+                            <Target className="h-4 w-4" />
                           </Button>
                           <Dialog>
                             <DialogTrigger asChild>
