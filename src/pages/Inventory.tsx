@@ -13,7 +13,7 @@ import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
 import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
 import { InventoryAnalytics } from "@/components/inventory/InventoryAnalytics";
-import { InventoryAIAnalysis } from "@/components/inventory/InventoryAIAnalysis";
+import InventoryAIAnalysis from "@/components/inventory/InventoryAIAnalysis";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
