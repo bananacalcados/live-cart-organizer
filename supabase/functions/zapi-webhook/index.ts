@@ -310,7 +310,7 @@ serve(async (req) => {
           }
         }
 
-        // Fallback: save as outgoing
+        // Fallback: save as outgoing (message sent from official WhatsApp app on phone)
         const quotedMsgId = asString((payload.quotedMsg as Record<string, unknown>)?.messageId) || null;
         const { error: insertError } = await supabase.from('whatsapp_messages').insert({
           phone,
@@ -325,7 +325,9 @@ serve(async (req) => {
         });
 
         if (insertError) {
-          console.error('Error saving outgoing message:', insertError);
+          console.error('[zapi] Error saving phone-sent (fromMe) message:', insertError);
+        } else {
+          console.log(`[zapi] Saved phone-sent (fromMe) message to ${phone} via instance ${whatsappNumberId}`);
         }
       } else {
         // Incoming message
