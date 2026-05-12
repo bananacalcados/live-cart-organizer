@@ -251,7 +251,9 @@ async function buildContexto(supabase: any) {
   );
 
   const alertas_encalhe = todosProdutos.filter(
-    (p) => p.estoque > 0 && (p.classificacao_giro === 'encalhe' || p.classificacao_giro === 'sem_venda')
+    (p) => p.estoque > 0
+      && p.sync_recente
+      && (p.classificacao_giro === 'encalhe' || p.classificacao_giro === 'sem_venda')
   );
 
   const gradeMap = new Map<string, any[]>();
@@ -265,18 +267,20 @@ async function buildContexto(supabase: any) {
     if (items.length < 2) continue;
     const temZero = items.some((i: any) => i.estoque === 0);
     const temPos = items.some((i: any) => i.estoque > 0);
-    if (temZero && temPos) {
+    const totalEstoquePos = items.reduce((s: number, i: any) => s + (i.estoque > 0 ? i.estoque : 0), 0);
+    if (temZero && temPos && totalEstoquePos >= 5) {
       grade_incompleta.push({
         modelo: items[0].nome,
         loja: items[0].loja,
         categoria: items[0].categoria,
+        estoque_total: totalEstoquePos,
         tamanhos: items.map((i: any) => ({ size: i.size, estoque: i.estoque, giro: i.classificacao_giro })),
       });
     }
   }
 
   const produtos_sem_venda_recente = todosProdutos.filter(
-    (p) => p.estoque > 0 && (p.dias_desde_ultima_venda === null || p.dias_desde_ultima_venda > 60)
+    (p) => p.estoque >= 2 && (p.dias_desde_ultima_venda === null || p.dias_desde_ultima_venda > 60)
   );
 
   const top20_faturamento_30d = [...todosProdutos]
