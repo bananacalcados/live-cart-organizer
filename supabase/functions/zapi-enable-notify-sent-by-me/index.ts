@@ -22,7 +22,7 @@ serve(async (req) => {
 
     const { data: numbers, error } = await supabase
       .from('whatsapp_numbers')
-      .select('id, label, zapi_instance_id, zapi_token, zapi_client_token, phone_number')
+      .select('id, label, zapi_instance_id, zapi_token, zapi_client_token')
       .eq('provider', 'zapi')
       .eq('is_active', true);
 
