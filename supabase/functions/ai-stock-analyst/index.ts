@@ -88,6 +88,22 @@ function classificarFaixaPreco(p: number): string {
 function diasEntre(a: Date, b: Date) {
   return Math.floor((a.getTime() - b.getTime()) / 86400000);
 }
+function inferirCategoria(nome: string): string {
+  const n = (nome || '').toLowerCase();
+  if (n.includes('tênis') || n.includes('tenis')) return 'Tênis';
+  if (n.includes('sandália') || n.includes('sandalia')) return 'Sandália';
+  if (n.includes('rasteira') || n.includes('rasteirinha')) return 'Rasteirinha';
+  if (n.includes('bota')) return 'Bota';
+  if (n.includes('chinelo')) return 'Chinelo';
+  if (n.includes('papete')) return 'Papete';
+  if (n.includes('babuche')) return 'Babuche';
+  if (n.includes('salto') || n.includes('scarpin') || n.includes('anabela')) return 'Salto';
+  if (n.includes('tamanco')) return 'Tamanco';
+  if (n.includes('social')) return 'Sapato Social';
+  if (n.includes('bolsa')) return 'Bolsa';
+  if (n.includes('infantil') || n.includes('baby') || n.includes('kids')) return 'Infantil';
+  return 'Outros';
+}
 function normalizeModelName(name: string, size?: string | null): string {
   let n = (name || '').trim().toLowerCase();
   if (size) {
