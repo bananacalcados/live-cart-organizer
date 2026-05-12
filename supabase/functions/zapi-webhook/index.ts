@@ -377,6 +377,7 @@ serve(async (req) => {
             sender_name: senderName,
             whatsapp_number_id: whatsappNumberId,
             quoted_message_id: quotedMsgIdIn,
+            referral: referralData,
             ...(mediaInfo ? { media_type: mediaInfo.mediaType, media_url: mediaInfo.mediaUrl } : {}),
           });
           insertError = error;
