@@ -1095,6 +1095,14 @@ export default function Inventory() {
               >
                 <Search className="h-3 w-3" /> Análise
               </Button>
+              <Button
+                variant={inventoryMode === "ai" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("ai")}
+                className="text-xs h-7 gap-1"
+              >
+                <Sparkles className="h-3 w-3" /> Análise IA
+              </Button>
               {selectedStoreId && (
                 <>
                   <Button
