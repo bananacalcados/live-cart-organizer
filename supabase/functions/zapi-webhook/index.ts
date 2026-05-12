@@ -331,6 +331,22 @@ serve(async (req) => {
         // Incoming message
         const senderName = asString(payload.senderName) || asString(payload.chatName) || asString(payload.pushName) || null;
 
+        // Capture Click-to-WhatsApp ad referral (Z-API field: externalAdReply)
+        const ext = payload.externalAdReply as Record<string, unknown> | undefined;
+        const referralData = ext ? {
+          source_url: asString(ext.sourceUrl),
+          source_type: asString(ext.sourceType),
+          source_id: asString(ext.sourceId),
+          headline: asString(ext.title),
+          body: asString(ext.body),
+          media_url: asString(ext.thumbnailUrl) || asString(ext.imageUrl) || asString(ext.mediaUrl),
+          video_url: asString(ext.videoUrl),
+          ctwa_clid: asString(ext.ctwaClid),
+        } : null;
+        if (referralData) {
+          console.log(`[zapi] Ad referral detected for ${phone}:`, JSON.stringify(referralData));
+        }
+
         // Dedup incoming: skip if same message_id + whatsapp_number_id already exists
         let skipInsert = false;
         if (messageId) {
