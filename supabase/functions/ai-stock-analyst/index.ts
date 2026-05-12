@@ -297,6 +297,15 @@ function contextoFiltradoParaAnalise(c: any) {
   };
 }
 
+function parseJsonText(text: string) {
+  try {
+    const m = text.match(/\{[\s\S]*\}/);
+    return m ? JSON.parse(m[0]) : JSON.parse(text);
+  } catch {
+    return { raw: text, parse_error: true };
+  }
+}
+
 async function callAnthropic(userContent: string, asJson: boolean) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY não configurada');
@@ -322,15 +331,48 @@ async function callAnthropic(userContent: string, asJson: boolean) {
   }
   const data = await resp.json();
   const text = data.content?.[0]?.text || '';
-  if (!asJson) return { text, usage: data.usage };
-  let parsed: any;
-  try {
-    const m = text.match(/\{[\s\S]*\}/);
-    parsed = m ? JSON.parse(m[0]) : JSON.parse(text);
-  } catch {
-    parsed = { raw: text, parse_error: true };
+  if (!asJson) return { text, usage: data.usage, model: ANTHROPIC_MODEL, provider: 'anthropic' };
+  return { json: parseJsonText(text), usage: data.usage, model: ANTHROPIC_MODEL, provider: 'anthropic' };
+}
+
+async function callLovableAI(userContent: string, asJson: boolean) {
+  const apiKey = Deno.env.get('LOVABLE_API_KEY');
+  if (!apiKey) throw new Error('LOVABLE_API_KEY não configurada');
+
+  const resp = await fetch(LOVABLE_AI_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: LOVABLE_FALLBACK_MODEL,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userContent },
+      ],
+      ...(asJson ? { response_format: { type: 'json_object' } } : {}),
+    }),
+  });
+
+  if (!resp.ok) {
+    const t = await resp.text();
+    throw new Error(`LovableAI ${resp.status}: ${t}`);
   }
-  return { json: parsed, usage: data.usage };
+  const data = await resp.json();
+  const text = data.choices?.[0]?.message?.content || '';
+  if (!asJson) return { text, usage: data.usage, model: LOVABLE_FALLBACK_MODEL, provider: 'lovable_ai' };
+  return { json: parseJsonText(text), usage: data.usage, model: LOVABLE_FALLBACK_MODEL, provider: 'lovable_ai' };
+}
+
+async function callAI(userContent: string, asJson: boolean) {
+  try {
+    return await callAnthropic(userContent, asJson);
+  } catch (err) {
+    console.warn('Anthropic falhou, fallback Lovable AI:', err instanceof Error ? err.message : err);
+    const result = await callLovableAI(userContent, asJson);
+    return { ...result, fallback_reason: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 Deno.serve(async (req) => {
