@@ -182,23 +182,30 @@ async function buildContexto(supabase: any) {
     if (dt >= trintaDiasAtras) cur.vendido_30d += Number(v.quantity) || 0;
   }
 
+  const agoraMs = agora.getTime();
+  const seteDiasMs = 7 * 86400000;
   const todosProdutos = produtos.map((p: any) => {
     const key = `${p.sku || ''}|${p.size || ''}|${p.store_id}`;
     const v = aggVendas.get(key);
     const dias_desde_ultima_venda = v ? diasEntre(agora, v.ultima_venda) : null;
     const ritmo_vendas_30d = v ? +(v.vendido_30d / 30).toFixed(3) : 0;
     const cobertura_dias = ritmo_vendas_30d > 0 ? +(Number(p.stock) / ritmo_vendas_30d).toFixed(1) : null;
+    const syncedAt = p.synced_at ? new Date(p.synced_at) : null;
+    const sync_recente = syncedAt ? (agoraMs - syncedAt.getTime()) <= seteDiasMs : false;
+    const categoriaFinal = (p.category && String(p.category).trim()) || inferirCategoria(p.name);
     return {
       sku: p.sku,
       nome: p.name,
       modelo_norm: normalizeModelName(p.name, p.size),
       size: p.size,
-      categoria: p.category,
+      categoria: categoriaFinal,
       preco: Number(p.price) || 0,
       custo: Number(p.cost_price) || 0,
       estoque: Number(p.stock) || 0,
       store_id: p.store_id,
       loja: lojaMap.get(p.store_id) || 'Desconhecida',
+      synced_at: p.synced_at,
+      sync_recente,
       dias_desde_ultima_venda,
       vendido_90d: v?.total_vendido || 0,
       vendido_30d: v?.vendido_30d || 0,
