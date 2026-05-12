@@ -9957,11 +9957,15 @@ export type Database = {
           product_name: string
           quantity: number
           reason: string | null
+          sale_event: string | null
+          sale_id: string | null
           seller_id: string | null
           seller_name: string | null
           sku: string | null
           store_id: string
           tiny_id: number
+          tiny_mirror_status: string | null
+          tiny_mirrored_at: string | null
         }
         Insert: {
           barcode?: string | null
@@ -9974,11 +9978,15 @@ export type Database = {
           product_name: string
           quantity: number
           reason?: string | null
+          sale_event?: string | null
+          sale_id?: string | null
           seller_id?: string | null
           seller_name?: string | null
           sku?: string | null
           store_id: string
           tiny_id: number
+          tiny_mirror_status?: string | null
+          tiny_mirrored_at?: string | null
         }
         Update: {
           barcode?: string | null
@@ -9991,11 +9999,15 @@ export type Database = {
           product_name?: string
           quantity?: number
           reason?: string | null
+          sale_event?: string | null
+          sale_id?: string | null
           seller_id?: string | null
           seller_name?: string | null
           sku?: string | null
           store_id?: string
           tiny_id?: number
+          tiny_mirror_status?: string | null
+          tiny_mirrored_at?: string | null
         }
         Relationships: [
           {
@@ -10003,6 +10015,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "pos_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
             referencedColumns: ["id"]
           },
           {
@@ -12306,6 +12325,85 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "tiny_sales_history_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tiny_stock_sync_errors: {
+        Row: {
+          attempted_stock: number | null
+          attempts: number
+          created_at: string
+          direction: string | null
+          error_message: string | null
+          id: string
+          last_attempt_at: string
+          product_id: string | null
+          quantity: number | null
+          resolved_at: string | null
+          sale_event: string | null
+          sale_id: string | null
+          sku: string | null
+          status: string
+          store_id: string | null
+          tiny_id: number | null
+        }
+        Insert: {
+          attempted_stock?: number | null
+          attempts?: number
+          created_at?: string
+          direction?: string | null
+          error_message?: string | null
+          id?: string
+          last_attempt_at?: string
+          product_id?: string | null
+          quantity?: number | null
+          resolved_at?: string | null
+          sale_event?: string | null
+          sale_id?: string | null
+          sku?: string | null
+          status?: string
+          store_id?: string | null
+          tiny_id?: number | null
+        }
+        Update: {
+          attempted_stock?: number | null
+          attempts?: number
+          created_at?: string
+          direction?: string | null
+          error_message?: string | null
+          id?: string
+          last_attempt_at?: string
+          product_id?: string | null
+          quantity?: number | null
+          resolved_at?: string | null
+          sale_event?: string | null
+          sale_id?: string | null
+          sku?: string | null
+          status?: string
+          store_id?: string | null
+          tiny_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiny_stock_sync_errors_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "pos_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiny_stock_sync_errors_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiny_stock_sync_errors_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "pos_stores"
