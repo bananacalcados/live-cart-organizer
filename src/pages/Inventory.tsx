@@ -4,7 +4,8 @@ import {
   ArrowLeft, Package, BarChart3, ScanBarcode, CheckCircle2,
   AlertTriangle, Loader2, Play, Pause, RotateCcw, Store,
   ClipboardList, Trash2, Search, ChevronDown, HelpCircle,
-  Camera, Tag, Printer, Download, FileText, Link2, ShoppingBag, ClipboardCheck
+  Camera, Tag, Printer, Download, FileText, Link2, ShoppingBag, ClipboardCheck,
+  Sparkles
 } from "lucide-react";
 import { InventoryVerification } from "@/components/inventory/InventoryVerification";
 import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
