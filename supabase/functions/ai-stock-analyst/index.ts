@@ -69,6 +69,8 @@ Responda sempre em português brasileiro. Seja direto e prático. Priorize os al
 
 const ANTHROPIC_MODEL = 'claude-sonnet-4-6';
 const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const LOVABLE_FALLBACK_MODEL = 'google/gemini-2.5-pro';
+const LOVABLE_AI_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 const CACHE_HOURS = 4;
 
 function classificarGiro(d: number | null): string {
