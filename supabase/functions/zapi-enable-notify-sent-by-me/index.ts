@@ -58,7 +58,7 @@ serve(async (req) => {
       ];
 
       const stepResults = await Promise.all(calls);
-      results.push({ id: n.id, label: n.label, phone: n.phone_number, steps: stepResults });
+      results.push({ id: n.id, label: n.label, steps: stepResults });
     }
 
     return new Response(JSON.stringify({ success: true, webhookUrl, results }, null, 2), {
