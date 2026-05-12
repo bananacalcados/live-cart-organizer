@@ -654,6 +654,33 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_stock_analyses: {
+        Row: {
+          analise: Json
+          contexto_resumo: Json | null
+          created_at: string
+          id: string
+          model: string | null
+          usage: Json | null
+        }
+        Insert: {
+          analise: Json
+          contexto_resumo?: Json | null
+          created_at?: string
+          id?: string
+          model?: string | null
+          usage?: Json | null
+        }
+        Update: {
+          analise?: Json
+          contexto_resumo?: Json | null
+          created_at?: string
+          id?: string
+          model?: string | null
+          usage?: Json | null
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           created_at: string
