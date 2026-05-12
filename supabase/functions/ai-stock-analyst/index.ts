@@ -230,7 +230,7 @@ async function buildContexto(supabase: any) {
 
   const catAgg: Record<string, any> = {};
   for (const v of vendas) {
-    const c = v.category || 'Sem categoria';
+    const c = v.category || inferirCategoria(v.product_name) || 'Sem categoria';
     if (!catAgg[c]) catAgg[c] = { faturamento: 0, unidades: 0, skus: new Set<string>() };
     catAgg[c].faturamento += Number(v.total_price) || 0;
     catAgg[c].unidades += Number(v.quantity) || 0;
