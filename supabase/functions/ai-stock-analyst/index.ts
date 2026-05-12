@@ -88,6 +88,22 @@ function classificarFaixaPreco(p: number): string {
 function diasEntre(a: Date, b: Date) {
   return Math.floor((a.getTime() - b.getTime()) / 86400000);
 }
+function inferirCategoria(nome: string): string {
+  const n = (nome || '').toLowerCase();
+  if (n.includes('tênis') || n.includes('tenis')) return 'Tênis';
+  if (n.includes('sandália') || n.includes('sandalia')) return 'Sandália';
+  if (n.includes('rasteira') || n.includes('rasteirinha')) return 'Rasteirinha';
+  if (n.includes('bota')) return 'Bota';
+  if (n.includes('chinelo')) return 'Chinelo';
+  if (n.includes('papete')) return 'Papete';
+  if (n.includes('babuche')) return 'Babuche';
+  if (n.includes('salto') || n.includes('scarpin') || n.includes('anabela')) return 'Salto';
+  if (n.includes('tamanco')) return 'Tamanco';
+  if (n.includes('social')) return 'Sapato Social';
+  if (n.includes('bolsa')) return 'Bolsa';
+  if (n.includes('infantil') || n.includes('baby') || n.includes('kids')) return 'Infantil';
+  return 'Outros';
+}
 function normalizeModelName(name: string, size?: string | null): string {
   let n = (name || '').trim().toLowerCase();
   if (size) {
@@ -166,23 +182,30 @@ async function buildContexto(supabase: any) {
     if (dt >= trintaDiasAtras) cur.vendido_30d += Number(v.quantity) || 0;
   }
 
+  const agoraMs = agora.getTime();
+  const seteDiasMs = 7 * 86400000;
   const todosProdutos = produtos.map((p: any) => {
     const key = `${p.sku || ''}|${p.size || ''}|${p.store_id}`;
     const v = aggVendas.get(key);
     const dias_desde_ultima_venda = v ? diasEntre(agora, v.ultima_venda) : null;
     const ritmo_vendas_30d = v ? +(v.vendido_30d / 30).toFixed(3) : 0;
     const cobertura_dias = ritmo_vendas_30d > 0 ? +(Number(p.stock) / ritmo_vendas_30d).toFixed(1) : null;
+    const syncedAt = p.synced_at ? new Date(p.synced_at) : null;
+    const sync_recente = syncedAt ? (agoraMs - syncedAt.getTime()) <= seteDiasMs : false;
+    const categoriaFinal = (p.category && String(p.category).trim()) || inferirCategoria(p.name);
     return {
       sku: p.sku,
       nome: p.name,
       modelo_norm: normalizeModelName(p.name, p.size),
       size: p.size,
-      categoria: p.category,
+      categoria: categoriaFinal,
       preco: Number(p.price) || 0,
       custo: Number(p.cost_price) || 0,
       estoque: Number(p.stock) || 0,
       store_id: p.store_id,
       loja: lojaMap.get(p.store_id) || 'Desconhecida',
+      synced_at: p.synced_at,
+      sync_recente,
       dias_desde_ultima_venda,
       vendido_90d: v?.total_vendido || 0,
       vendido_30d: v?.vendido_30d || 0,
@@ -207,7 +230,7 @@ async function buildContexto(supabase: any) {
 
   const catAgg: Record<string, any> = {};
   for (const v of vendas) {
-    const c = v.category || 'Sem categoria';
+    const c = v.category || inferirCategoria(v.product_name) || 'Sem categoria';
     if (!catAgg[c]) catAgg[c] = { faturamento: 0, unidades: 0, skus: new Set<string>() };
     catAgg[c].faturamento += Number(v.total_price) || 0;
     catAgg[c].unidades += Number(v.quantity) || 0;
@@ -228,7 +251,9 @@ async function buildContexto(supabase: any) {
   );
 
   const alertas_encalhe = todosProdutos.filter(
-    (p) => p.estoque > 0 && (p.classificacao_giro === 'encalhe' || p.classificacao_giro === 'sem_venda')
+    (p) => p.estoque > 0
+      && p.sync_recente
+      && (p.classificacao_giro === 'encalhe' || p.classificacao_giro === 'sem_venda')
   );
 
   const gradeMap = new Map<string, any[]>();
@@ -242,18 +267,20 @@ async function buildContexto(supabase: any) {
     if (items.length < 2) continue;
     const temZero = items.some((i: any) => i.estoque === 0);
     const temPos = items.some((i: any) => i.estoque > 0);
-    if (temZero && temPos) {
+    const totalEstoquePos = items.reduce((s: number, i: any) => s + (i.estoque > 0 ? i.estoque : 0), 0);
+    if (temZero && temPos && totalEstoquePos >= 5) {
       grade_incompleta.push({
         modelo: items[0].nome,
         loja: items[0].loja,
         categoria: items[0].categoria,
+        estoque_total: totalEstoquePos,
         tamanhos: items.map((i: any) => ({ size: i.size, estoque: i.estoque, giro: i.classificacao_giro })),
       });
     }
   }
 
   const produtos_sem_venda_recente = todosProdutos.filter(
-    (p) => p.estoque > 0 && (p.dias_desde_ultima_venda === null || p.dias_desde_ultima_venda > 60)
+    (p) => p.estoque >= 2 && (p.dias_desde_ultima_venda === null || p.dias_desde_ultima_venda > 60)
   );
 
   const top20_faturamento_30d = [...todosProdutos]
