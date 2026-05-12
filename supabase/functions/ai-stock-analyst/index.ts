@@ -412,9 +412,9 @@ ${historicoTxt}
 NOVA PERGUNTA DO USUÁRIO:
 ${mensagem}`;
 
-      const { text, usage } = await callAnthropic(userContent, false);
+      const { text, usage, model, provider, fallback_reason } = await callAI(userContent, false);
       return new Response(
-        JSON.stringify({ resposta: text, usage, contexto_resumo: contexto.totais }),
+        JSON.stringify({ resposta: text, usage, model, provider, fallback_reason, contexto_resumo: contexto.totais }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
