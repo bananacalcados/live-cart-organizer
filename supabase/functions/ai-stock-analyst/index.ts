@@ -468,13 +468,13 @@ DADOS (já filtrados — apenas alertas, grade incompleta, sem-venda 60d e top 2
 ${JSON.stringify(filtrado, null, 2)}
 \`\`\``;
 
-    const { json, usage } = await callAnthropic(userContent, true);
+    const { json, usage, model, provider, fallback_reason } = await callAI(userContent, true);
 
     await supabase.from('ai_stock_analyses').insert({
       analise: json,
       contexto_resumo: contexto.totais,
       usage,
-      model: ANTHROPIC_MODEL,
+      model,
     });
 
     return new Response(
@@ -483,7 +483,9 @@ ${JSON.stringify(filtrado, null, 2)}
         usage,
         contexto_resumo: contexto.totais,
         gerado_em: contexto.gerado_em,
-        model: ANTHROPIC_MODEL,
+        model,
+        provider,
+        fallback_reason,
         cached: false,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
