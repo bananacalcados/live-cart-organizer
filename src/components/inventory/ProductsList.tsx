@@ -117,8 +117,10 @@ export function ProductsList() {
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    const t = setTimeout(() => { load(); }, search ? 350 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
 
   async function sendToPos(masterId: string) {
     setSendingTo(masterId);
