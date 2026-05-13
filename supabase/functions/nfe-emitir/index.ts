@@ -202,6 +202,13 @@ Deno.serve(async (req) => {
     // 4. Monta produtos com snapshot fiscal
     const produtos: any[] = [];
     let totalProd = 0;
+    let totalDesc = 0;
+
+    // Distribui o desconto da venda proporcionalmente entre os itens (reduz base de cálculo dos
+    // impostos para que o tributo incida sobre o valor efetivamente cobrado, não o de tabela).
+    const descontoVenda = round2(Number(order.discount || 0));
+    const somaBruta = items.reduce((acc, it) => acc + Number(it.unit_price) * Number(it.quantity), 0);
+    const ratioDesc = descontoVenda > 0 && somaBruta > 0 ? descontoVenda / somaBruta : 0;
 
     for (const [idx, it] of items.entries()) {
       let prodFiscal: any = null;
