@@ -617,6 +617,24 @@ export function POSShipments({ storeId }: Props) {
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Confirmar Despacho
             </Button>
+
+            {/* WhatsApp tracking send */}
+            <div className="border-t border-gray-200 pt-3 space-y-2">
+              <label className="text-xs text-gray-600 block">📲 Enviar rastreio por WhatsApp</label>
+              <WhatsAppNumberSelector value={trackingNumberId} onChange={setTrackingNumberId} />
+              <Button
+                onClick={() => {
+                  const order = orders.find(o => o.id === showTrackingDialog);
+                  if (order) handleSendTrackingWa(order);
+                }}
+                disabled={sendingWa || !trackingNumberId || !trackingInput.trim()}
+                variant="outline"
+                className="w-full gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              >
+                {sendingWa ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Enviar Rastreio
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
