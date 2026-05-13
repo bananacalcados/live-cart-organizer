@@ -43,6 +43,25 @@ export function ProductsList() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [stockManagerId, setStockManagerId] = useState<string | null>(null);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+
+  async function backfillCosts() {
+    setBackfilling(true);
+    try {
+      const { data, error } = await supabase.rpc("backfill_master_costs_from_pos");
+      if (error) throw error;
+      const row: any = Array.isArray(data) ? data[0] : data;
+      toast.success(
+        `Custos importados do estoque local: ${row?.masters_updated ?? 0} produtos e ${row?.variants_updated ?? 0} variações`,
+        { duration: 8000 }
+      );
+      load();
+    } catch (err: any) {
+      toast.error("Erro ao importar custos: " + err.message);
+    } finally {
+      setBackfilling(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -164,6 +183,16 @@ export function ProductsList() {
             className="pl-8"
           />
         </div>
+        <Button
+          variant="outline"
+          onClick={backfillCosts}
+          disabled={backfilling}
+          className="gap-1"
+          title="Preenche o custo dos produtos zerados usando o custo já cadastrado no estoque (pos_products)"
+        >
+          {backfilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          Importar custos do estoque
+        </Button>
         <Button onClick={() => setShowForm(true)} className="gap-1">
           <Plus className="h-4 w-4" /> Novo Produto
         </Button>
