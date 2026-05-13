@@ -188,12 +188,7 @@ export function ProductsList() {
     }
   }
 
-  const filtered = items.filter((i) =>
-    !search ||
-    i.name.toLowerCase().includes(search.toLowerCase()) ||
-    i.sku_root.includes(search) ||
-    (i.brand || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = items;
 
   return (
     <div className="space-y-4">
@@ -203,7 +198,7 @@ export function ProductsList() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome, SKU, marca..."
+            placeholder="Buscar por nome, SKU, GTIN ou marca..."
             className="pl-8"
           />
         </div>
