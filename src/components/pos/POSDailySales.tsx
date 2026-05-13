@@ -212,7 +212,7 @@ export function POSDailySales({ storeId }: Props) {
     try {
       const { start, end } = getDateRange();
 
-      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details";
+      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details, tracking_code";
       
       // Query 1: Sales created in date range (pending, online_pending, failed, etc.)
       // Query 2: Sales PAID in date range (paid/completed) — appear on payment date
