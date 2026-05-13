@@ -1209,10 +1209,57 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   >
                     {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                     {fiscalDoc?.danfe_url
-                      ? `Imprimir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'} (autorizada)`
+                      ? `Visualizar / Imprimir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`
                       : `Emitir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`}
                   </Button>
                 </div>
+
+                {fiscalDoc?.status && ['autorizada', 'authorized', 'autorizado'].includes(String(fiscalDoc.status).toLowerCase()) && (
+                  <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-2.5 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] text-emerald-900">
+                        <p className="font-bold">✅ {sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'} autorizada{fiscalDoc.numero ? ` — nº ${fiscalDoc.numero}/${fiscalDoc.serie ?? '-'}` : ''}</p>
+                        {fiscalDoc.chave_acesso && (
+                          <p className="font-mono text-[10px] break-all text-emerald-800/80">{fiscalDoc.chave_acesso}</p>
+                        )}
+                      </div>
+                      {fiscalDoc.chave_acesso && (
+                        <Button onClick={handleCopyChave} variant="outline" size="sm" className="h-7 px-2 text-[10px] border-emerald-300 text-emerald-800 hover:bg-emerald-100">
+                          Copiar chave
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {fiscalDoc.danfe_url && (
+                        <Button asChild variant="outline" size="sm" className="h-9 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100">
+                          <a href={fiscalDoc.danfe_url} target="_blank" rel="noreferrer">📄 Ver DANFE (PDF)</a>
+                        </Button>
+                      )}
+                      <Button onClick={handleDownloadXml} variant="outline" size="sm" className="h-9 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100" disabled={!fiscalDoc.xml_content && !fiscalDoc.xml_url}>
+                        ⬇️ Baixar XML
+                      </Button>
+                      {fiscalDoc.qrcode_url && (
+                        <Button asChild variant="outline" size="sm" className="h-9 text-xs col-span-2 border-emerald-300 text-emerald-800 hover:bg-emerald-100">
+                          <a href={fiscalDoc.qrcode_url} target="_blank" rel="noreferrer">🔗 QR Code SEFAZ</a>
+                        </Button>
+                      )}
+                      <Button
+                        onClick={handleSendNfeWhatsapp}
+                        disabled={sendingNfeWa || !currentCustomer?.whatsapp || !trackingNumberId || !fiscalDoc.danfe_url}
+                        size="sm"
+                        className="h-9 text-xs col-span-2 bg-emerald-600 text-white hover:bg-emerald-700 font-bold"
+                      >
+                        {sendingNfeWa ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        Enviar nota por WhatsApp
+                      </Button>
+                      {(!currentCustomer?.whatsapp || !trackingNumberId) && (
+                        <p className="col-span-2 text-[10px] text-emerald-900/70">
+                          {!currentCustomer?.whatsapp ? 'Cliente sem WhatsApp.' : 'Selecione a instância na seção Rastreio acima.'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
