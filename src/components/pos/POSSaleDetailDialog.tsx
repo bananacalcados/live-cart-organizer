@@ -108,6 +108,10 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [currentItems, setCurrentItems] = useState<SaleItem[]>(items);
   const [emittingNfce, setEmittingNfce] = useState(false);
   const [fiscalDoc, setFiscalDoc] = useState<{ status: string; danfe_url: string | null } | null>(null);
+  const [trackingCode, setTrackingCode] = useState<string>(sale?.tracking_code || "");
+  const [savingTracking, setSavingTracking] = useState(false);
+  const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
+  const [sendingTracking, setSendingTracking] = useState(false);
 
   useEffect(() => {
     setCurrentItems(items);
