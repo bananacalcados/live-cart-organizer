@@ -124,7 +124,7 @@ export function POSShipments({ storeId }: Props) {
       // Also fetch checkout attempts for sales without customer_id
       const salesWithoutCustomer = sales.filter(s => !s.customer_id).map(s => s.id);
 
-      const [customersRes, sellersRes, itemsRes, checkoutRes] = await Promise.all([
+      const [customersRes, sellersRes, itemsRes, checkoutRes, fiscalRes] = await Promise.all([
         customerIds.length > 0
           ? supabase.from('pos_customers').select('id, name, whatsapp, cep, city, state, address').in('id', customerIds)
           : { data: [] },
@@ -139,7 +139,18 @@ export function POSShipments({ storeId }: Props) {
               .not('customer_name', 'is', null)
               .order('created_at', { ascending: false })
           : { data: [] },
+        supabase.from('fiscal_documents')
+          .select('pos_sale_id, status, danfe_url, numero, created_at')
+          .in('pos_sale_id', saleIds)
+          .in('status', ['authorized', 'autorizada', 'autorizado'])
+          .order('created_at', { ascending: false }),
       ]);
+
+      const fmap: Record<string, { status: string; danfe_url: string | null; numero: number | null }> = {};
+      (fiscalRes.data || []).forEach((f: any) => {
+        if (!fmap[f.pos_sale_id]) fmap[f.pos_sale_id] = { status: f.status, danfe_url: f.danfe_url, numero: f.numero };
+      });
+      setFiscalMap(fmap);
 
       const customerMap = new Map((customersRes.data || []).map(c => [c.id, c]));
       const sellerMap = new Map((sellersRes.data || []).map(s => [s.id, s]));
