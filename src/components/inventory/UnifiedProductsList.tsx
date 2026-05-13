@@ -556,10 +556,6 @@ function PosSkuEditDialog({
                 <Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
               </div>
               <div>
-                <Label>Preço promo (R$)</Label>
-                <Input type="number" step="0.01" value={promo} onChange={(e) => setPromo(e.target.value)} />
-              </div>
-              <div>
                 <Label>Custo (R$)</Label>
                 <Input type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} />
               </div>
