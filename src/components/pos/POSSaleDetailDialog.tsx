@@ -299,6 +299,64 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     }
   };
 
+  const handleCopyChave = async () => {
+    if (!fiscalDoc?.chave_acesso) return;
+    try {
+      await navigator.clipboard.writeText(fiscalDoc.chave_acesso);
+      toast.success('Chave de acesso copiada!');
+    } catch { toast.error('Falha ao copiar'); }
+  };
+
+  const handleDownloadXml = async () => {
+    if (!fiscalDoc) return;
+    try {
+      let xml = fiscalDoc.xml_content || '';
+      if (!xml && fiscalDoc.xml_url) {
+        const r = await fetch(fiscalDoc.xml_url);
+        xml = await r.text();
+      }
+      if (!xml) { toast.error('XML indisponível'); return; }
+      const blob = new Blob([xml], { type: 'application/xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${fiscalDoc.chave_acesso || `nfe-${sale?.id}`}.xml`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao baixar XML');
+    }
+  };
+
+  const handleSendNfeWhatsapp = async () => {
+    if (!sale || !fiscalDoc) return;
+    const phone = (currentCustomer?.whatsapp || '').replace(/\D/g, '');
+    if (!phone) { toast.error('Cliente sem WhatsApp cadastrado'); return; }
+    if (!trackingNumberId) { toast.error('Selecione a instância de WhatsApp (na seção Rastreio)'); return; }
+    if (!fiscalDoc.danfe_url) { toast.error('DANFE indisponível'); return; }
+    setSendingNfeWa(true);
+    try {
+      const isOnline = sale.sale_type === 'online';
+      const greeting = currentCustomer?.name ? `Oi, ${String(currentCustomer.name).split(' ')[0]}!` : 'Oi!';
+      const message = `${greeting} 🧾\nSegue a ${isOnline ? 'NF-e' : 'NFC-e'} do seu pedido.\n\n*DANFE:* ${fiscalDoc.danfe_url}${fiscalDoc.chave_acesso ? `\n*Chave:* ${fiscalDoc.chave_acesso}` : ''}`;
+      const { data: num } = await supabase
+        .from('whatsapp_numbers')
+        .select('provider')
+        .eq('id', trackingNumberId)
+        .maybeSingle();
+      const fn = (num as any)?.provider === 'meta' ? 'meta-whatsapp-send' : 'zapi-send-message';
+      const { error } = await supabase.functions.invoke(fn, {
+        body: { phone, message, whatsapp_number_id: trackingNumberId },
+      });
+      if (error) throw error;
+      toast.success('Nota enviada por WhatsApp!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao enviar nota');
+    } finally {
+      setSendingNfeWa(false);
+    }
+  };
+
 
   useEffect(() => {
     setCurrentCustomer(customer);
