@@ -11,6 +11,7 @@ import {
 import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
+import { ProductStockManagerDialog } from "./ProductStockManagerDialog";
 import { toast } from "sonner";
 
 interface Master {
@@ -40,6 +41,7 @@ export function ProductsList() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [stockManagerId, setStockManagerId] = useState<string | null>(null);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
 
   async function load() {
@@ -235,6 +237,16 @@ export function ProductsList() {
                       <Pencil className="h-3 w-3 mr-1" />
                       Editar
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs h-8"
+                      onClick={() => setStockManagerId(p.id)}
+                      title="Gerenciar estoque por variação (entrada / saída / balanço)"
+                    >
+                      <Boxes className="h-3 w-3 mr-1" />
+                      Estoque
+                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -324,6 +336,12 @@ export function ProductsList() {
         open={!!editingId}
         onOpenChange={(v) => !v && setEditingId(null)}
         onSaved={() => load()}
+      />
+
+      <ProductStockManagerDialog
+        masterId={stockManagerId}
+        open={!!stockManagerId}
+        onOpenChange={(v) => !v && setStockManagerId(null)}
       />
     </div>
   );
