@@ -534,6 +534,35 @@ export function POSShipments({ storeId }: Props) {
                             Enviado {order.shipped_at ? new Date(order.shipped_at).toLocaleDateString('pt-BR') : ''}
                           </Badge>
                         )}
+                        {(() => {
+                          const f = fiscalMap[order.id];
+                          if (f?.danfe_url) {
+                            return (
+                              <Button asChild variant="outline" className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs">
+                                <a href={f.danfe_url} target="_blank" rel="noreferrer">
+                                  <FileText className="h-3 w-3" /> NF-e nº {f.numero ?? ''} <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </Button>
+                            );
+                          }
+                          if (f) {
+                            return (
+                              <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs">
+                                <CheckCircle2 className="h-3 w-3 mr-1" /> NF-e autorizada
+                              </Badge>
+                            );
+                          }
+                          return (
+                            <Button
+                              onClick={() => handleEmitNFe(order.id)}
+                              disabled={emittingId === order.id}
+                              className="gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                            >
+                              {emittingId === order.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+                              Emitir NF-e
+                            </Button>
+                          );
+                        })()}
                         <Button
                           variant="outline"
                           onClick={() => setDeleteConfirmId(order.id)}
