@@ -39,12 +39,17 @@ interface PosSku {
   sku: string | null;
   barcode: string | null;
   name: string | null;
+  variant: string | null;
+  size: string | null;
+  color: string | null;
+  image_url: string | null;
   cost_price: number | null;
   price: number | null;
-  promo_price: number | null;
   stock: number | null;
   is_active: boolean;
 }
+
+const PAGE_SIZE = 50;
 
 interface Store {
   id: string;
@@ -76,16 +81,35 @@ export function UnifiedProductsList() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<MasterData | null>(null);
   const [editingSku, setEditingSku] = useState<PosSku | null>(null);
+  const [page, setPage] = useState(0);
 
   async function load() {
     setLoading(true);
-    const [{ data: m }, { data: pp }, { data: st }] = await Promise.all([
-      supabase.from("product_master_data").select("*").eq("is_active", true).order("name").limit(2000),
-      supabase.from("pos_products").select("id, parent_sku, store_id, sku, barcode, name, cost_price, price, promo_price, stock, is_active").eq("is_active", true).limit(20000),
+    // Batch pos_products in chunks of 1000 to bypass PostgREST default cap
+    async function fetchAllPos(): Promise<PosSku[]> {
+      const all: PosSku[] = [];
+      const CHUNK = 1000;
+      for (let from = 0; from < 50000; from += CHUNK) {
+        const { data, error } = await supabase
+          .from("pos_products")
+          .select("id, parent_sku, store_id, sku, barcode, name, variant, size, color, image_url, cost_price, price, stock, is_active")
+          .eq("is_active", true)
+          .order("id")
+          .range(from, from + CHUNK - 1);
+        if (error) { toast.error("pos_products: " + error.message); break; }
+        if (!data || data.length === 0) break;
+        all.push(...(data as any));
+        if (data.length < CHUNK) break;
+      }
+      return all;
+    }
+    const [{ data: m }, pp, { data: st }] = await Promise.all([
+      supabase.from("product_master_data").select("*").eq("is_active", true).order("name").limit(5000),
+      fetchAllPos(),
       supabase.from("pos_stores").select("id, name").order("name"),
     ]);
     setMasters((m || []) as any);
-    setPosProducts((pp || []) as any);
+    setPosProducts(pp);
     setStores((st || []) as any);
     setLoading(false);
   }
@@ -127,6 +151,12 @@ export function UnifiedProductsList() {
     if (filter === "ok") arr = arr.filter((g) => g.master && !g.master.needs_review);
     return arr.sort((a, b) => (a.master?.name || a.parent_sku).localeCompare(b.master?.name || b.parent_sku));
   }, [masters, posProducts, search, filter]);
+
+  // Reset to first page when filter/search changes
+  useEffect(() => { setPage(0); }, [search, filter]);
+
+  const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
+  const pageItems = grouped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   function toggleExpand(key: string) {
     setExpanded((e) => ({ ...e, [key]: !e[key] }));
@@ -179,7 +209,7 @@ export function UnifiedProductsList() {
           <div className="text-xs text-muted-foreground">
             {grouped.length} produtos · {grouped.reduce((s, g) => s + g.skus.length, 0)} SKUs · {grouped.reduce((s, g) => s + g.totalStock, 0)} unidades
           </div>
-          {grouped.slice(0, 200).map((g) => (
+          {pageItems.map((g) => (
             <Card key={g.parent_sku}>
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-start gap-2">
@@ -189,7 +219,7 @@ export function UnifiedProductsList() {
                   >
                     {expanded[g.parent_sku] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </Button>
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => g.master && setEditing(g.master)}>
+                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => toggleExpand(g.parent_sku)}>
                     <div className="font-semibold truncate hover:text-primary">{g.master?.name || g.parent_sku}</div>
                     <div className="text-xs text-muted-foreground font-mono">{g.parent_sku}</div>
                     <div className="flex flex-wrap gap-1 mt-1">
@@ -229,39 +259,71 @@ export function UnifiedProductsList() {
                 {expanded[g.parent_sku] && (
                   <div className="ml-9 mt-2 border-l-2 pl-3 space-y-1">
                     <div className="grid grid-cols-12 gap-2 text-[10px] uppercase text-muted-foreground font-semibold pb-1 border-b">
-                      <div className="col-span-3">Loja</div>
+                      <div className="col-span-2">Loja</div>
+                      <div className="col-span-2">Cor</div>
+                      <div className="col-span-1">Tam</div>
                       <div className="col-span-2">SKU</div>
                       <div className="col-span-3">Barcode</div>
-                      <div className="col-span-2 text-right">Estoque</div>
-                      <div className="col-span-2 text-right">Preço</div>
+                      <div className="col-span-1 text-right">Estq</div>
+                      <div className="col-span-1 text-right">R$</div>
                     </div>
-                    {g.skus.map((s) => (
-                      <div
-                        key={s.id}
-                        className="grid grid-cols-12 gap-2 text-xs items-center py-1 hover:bg-muted/30 rounded cursor-pointer"
-                        onClick={() => setEditingSku(s)}
-                      >
-                        <div className="col-span-3 flex items-center gap-1">
-                          <StoreIcon className="h-3 w-3 text-muted-foreground" />
-                          {storeName(s.store_id)}
+                    {g.skus
+                      .slice()
+                      .sort((a, b) =>
+                        (a.color || "").localeCompare(b.color || "") ||
+                        (a.size || "").localeCompare(b.size || "", undefined, { numeric: true }) ||
+                        storeName(a.store_id).localeCompare(storeName(b.store_id))
+                      )
+                      .map((s) => (
+                        <div
+                          key={s.id}
+                          className="grid grid-cols-12 gap-2 text-xs items-center py-1 hover:bg-muted/30 rounded cursor-pointer"
+                          onClick={() => setEditingSku(s)}
+                        >
+                          <div className="col-span-2 flex items-center gap-1 truncate">
+                            <StoreIcon className="h-3 w-3 text-muted-foreground" />
+                            <span className="truncate">{storeName(s.store_id)}</span>
+                          </div>
+                          <div className="col-span-2 truncate">{s.color || s.variant || "—"}</div>
+                          <div className="col-span-1 font-semibold">{s.size || "—"}</div>
+                          <div className="col-span-2 font-mono truncate">{s.sku || "—"}</div>
+                          <div className="col-span-3 font-mono truncate">{s.barcode || "—"}</div>
+                          <div className={`col-span-1 text-right font-semibold ${(s.stock || 0) <= 0 ? "text-destructive" : ""}`}>
+                            {s.stock || 0}
+                          </div>
+                          <div className="col-span-1 text-right">
+                            {(s.price || 0).toFixed(0)}
+                          </div>
                         </div>
-                        <div className="col-span-2 font-mono truncate">{s.sku || "—"}</div>
-                        <div className="col-span-3 font-mono truncate">{s.barcode || "—"}</div>
-                        <div className={`col-span-2 text-right font-semibold ${(s.stock || 0) <= 0 ? "text-destructive" : ""}`}>
-                          {s.stock || 0}
-                        </div>
-                        <div className="col-span-2 text-right">
-                          R$ {(s.price || 0).toFixed(2)}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    {g.skus.length === 0 && (
+                      <div className="text-xs text-muted-foreground py-2">Sem variações cadastradas no PDV.</div>
+                    )}
                   </div>
                 )}
               </CardContent>
             </Card>
           ))}
-          {grouped.length > 200 && (
-            <p className="text-center text-xs text-muted-foreground">Mostrando 200 de {grouped.length}. Refine a busca.</p>
+          {grouped.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <Button
+                size="sm" variant="outline"
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                ← Anterior
+              </Button>
+              <div className="text-xs text-muted-foreground">
+                Página {page + 1} de {totalPages} · {grouped.length} produtos
+              </div>
+              <Button
+                size="sm" variant="outline"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              >
+                Próxima →
+              </Button>
+            </div>
           )}
         </div>
       )}
@@ -438,7 +500,6 @@ function PosSkuEditDialog({
   const [skuCode, setSkuCode] = useState("");
   const [barcode, setBarcode] = useState("");
   const [price, setPrice] = useState("");
-  const [promo, setPromo] = useState("");
   const [cost, setCost] = useState("");
   const [stock, setStock] = useState("");
   const [saving, setSaving] = useState(false);
@@ -448,7 +509,6 @@ function PosSkuEditDialog({
     setSkuCode(sku.sku || "");
     setBarcode(sku.barcode || "");
     setPrice(sku.price?.toString() || "");
-    setPromo(sku.promo_price?.toString() || "");
     setCost(sku.cost_price?.toString() || "");
     setStock(sku.stock?.toString() || "0");
   }, [sku]);
@@ -462,7 +522,6 @@ function PosSkuEditDialog({
         sku: skuCode.trim() || null,
         barcode: barcode.trim() || null,
         price: price ? parseFloat(price) : null,
-        promo_price: promo ? parseFloat(promo) : null,
         cost_price: cost ? parseFloat(cost) : null,
         stock: stock ? parseInt(stock) : 0,
       })
@@ -495,10 +554,6 @@ function PosSkuEditDialog({
               <div>
                 <Label>Preço (R$)</Label>
                 <Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
-              </div>
-              <div>
-                <Label>Preço promo (R$)</Label>
-                <Input type="number" step="0.01" value={promo} onChange={(e) => setPromo(e.target.value)} />
               </div>
               <div>
                 <Label>Custo (R$)</Label>
