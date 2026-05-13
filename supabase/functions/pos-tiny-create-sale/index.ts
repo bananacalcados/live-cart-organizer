@@ -47,13 +47,14 @@ serve(async (req) => {
 
     const { data: store } = await supabase
       .from('pos_stores')
-      .select('tiny_token')
+      .select('tiny_token, disable_tiny_orders')
       .eq('id', store_id)
       .single();
 
-    if (!store?.tiny_token) throw new Error('Store token not configured');
+    const skipTiny = !!(store as any)?.disable_tiny_orders;
+    if (!skipTiny && !store?.tiny_token) throw new Error('Store token not configured');
 
-    const token = store.tiny_token;
+    const token = store?.tiny_token;
     const subtotal = items.reduce((s: number, i: any) => s + (i.price * i.quantity), 0);
     const total = subtotal - (discount || 0);
 
@@ -142,8 +143,11 @@ serve(async (req) => {
       return null;
     };
 
-    // Try to create order in Tiny ERP
-    try {
+    // Try to create order in Tiny ERP (skip when store has disable_tiny_orders = true)
+    if (skipTiny) {
+      console.log(`[pos-tiny-create-sale] store ${store_id} has disable_tiny_orders=true — skipping Tiny push`);
+      tinyFailed = false;
+    } else try {
       const orderItems = items.map((item: any) => ({ ...item, codigo: item.sku || '' }));
       let tinyOrder = buildTinyOrder(orderItems);
 

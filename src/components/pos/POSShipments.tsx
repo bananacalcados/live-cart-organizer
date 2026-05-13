@@ -217,12 +217,16 @@ export function POSShipments({ storeId }: Props) {
     try {
       const payload: Record<string, any> = { expedition_status: newStatus, ...extra };
       if (newStatus === 'shipped') payload.shipped_at = new Date().toISOString();
-      
+
+      // Optimistic local update so the order moves between tabs imediatamente
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, ...payload } as ShipmentOrder : o));
+
       await supabase.from('pos_sales').update(payload).eq('id', id);
       toast.success(`Status atualizado para ${STATUS_MAP[newStatus]?.label || newStatus}`);
       setExpandedId(null);
     } catch (e: any) {
       toast.error(e.message);
+      fetchOrders(); // rollback by refetching
     } finally {
       setSaving(false);
     }

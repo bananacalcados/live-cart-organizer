@@ -10149,6 +10149,7 @@ export type Database = {
           address: string | null
           company_id: string | null
           created_at: string
+          disable_tiny_orders: boolean
           id: string
           is_active: boolean
           is_simulation: boolean
@@ -10162,6 +10163,7 @@ export type Database = {
           address?: string | null
           company_id?: string | null
           created_at?: string
+          disable_tiny_orders?: boolean
           id?: string
           is_active?: boolean
           is_simulation?: boolean
@@ -10175,6 +10177,7 @@ export type Database = {
           address?: string | null
           company_id?: string | null
           created_at?: string
+          disable_tiny_orders?: boolean
           id?: string
           is_active?: boolean
           is_simulation?: boolean

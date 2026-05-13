@@ -175,11 +175,32 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     }
   };
 
-  // Load fiscal doc for this sale
+  // Load fiscal doc for this sale (prefer authorized over rejected/pending)
   useEffect(() => {
     if (!sale?.id) { setFiscalDoc(null); return; }
     let cancelled = false;
-    (async () => {
+    const loadDoc = async () => {
+      const { data: authd } = await supabase
+        .from('fiscal_documents')
+        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url')
+        .eq('pos_sale_id', sale.id)
+        .in('status', ['authorized', 'autorizada', 'autorizado'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (authd) {
+        if (!cancelled) setFiscalDoc(authd as any);
+        // Backfill DANFE/XML if missing
+        if (!authd.danfe_url || !authd.xml_content) {
+          supabase.functions.invoke('fiscal-backfill-danfe', { body: { document_id: (authd as any).id } })
+            .then(({ data }) => {
+              if (!cancelled && data?.ok) {
+                setFiscalDoc(prev => prev ? { ...prev, danfe_url: data.danfe_url ?? prev.danfe_url, xml_content: data.xml_content ?? prev.xml_content } : prev);
+              }
+            }).catch(() => {});
+        }
+        return;
+      }
       const { data } = await supabase
         .from('fiscal_documents')
         .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url')
@@ -188,11 +209,12 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         .limit(1)
         .maybeSingle();
       if (!cancelled) setFiscalDoc(data as any);
-    })();
+    };
+    loadDoc();
     const ch = supabase
       .channel(`fdoc-detail-${sale.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'fiscal_documents', filter: `pos_sale_id=eq.${sale.id}` },
-        (payload) => { if (!cancelled) setFiscalDoc(payload.new as any); })
+        () => loadDoc())
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [sale?.id]);
@@ -1204,13 +1226,15 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   </Button>
                   <Button
                     onClick={handleEmitOrPrintFiscal}
-                    disabled={emittingNfce}
+                    disabled={emittingNfce || (!!fiscalDoc?.status && ['authorized','autorizada','autorizado'].includes(String(fiscalDoc.status).toLowerCase()) && !fiscalDoc?.danfe_url)}
                     className="gap-1 h-10 text-xs col-span-2 bg-blue-600 text-white hover:bg-blue-700 font-bold"
                   >
                     {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                     {fiscalDoc?.danfe_url
                       ? `Visualizar / Imprimir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`
-                      : `Emitir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`}
+                      : (fiscalDoc?.status && ['authorized','autorizada','autorizado'].includes(String(fiscalDoc.status).toLowerCase()))
+                        ? `Carregando DANFE…`
+                        : `Emitir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`}
                   </Button>
                 </div>
 
