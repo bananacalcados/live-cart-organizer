@@ -39,12 +39,17 @@ interface PosSku {
   sku: string | null;
   barcode: string | null;
   name: string | null;
+  variant: string | null;
+  size: string | null;
+  color: string | null;
+  image_url: string | null;
   cost_price: number | null;
   price: number | null;
-  promo_price: number | null;
   stock: number | null;
   is_active: boolean;
 }
+
+const PAGE_SIZE = 50;
 
 interface Store {
   id: string;
