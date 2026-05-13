@@ -107,7 +107,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [newProductQty, setNewProductQty] = useState("1");
   const [currentItems, setCurrentItems] = useState<SaleItem[]>(items);
   const [emittingNfce, setEmittingNfce] = useState(false);
-  const [fiscalDoc, setFiscalDoc] = useState<{ status: string; danfe_url: string | null } | null>(null);
+  const [fiscalDoc, setFiscalDoc] = useState<{ id?: string; status: string; danfe_url: string | null; xml_url?: string | null; xml_content?: string | null; chave_acesso?: string | null; numero?: number | null; serie?: number | null; qrcode_url?: string | null } | null>(null);
+  const [sendingNfeWa, setSendingNfeWa] = useState(false);
   const [trackingCode, setTrackingCode] = useState<string>(sale?.tracking_code || "");
   const [savingTracking, setSavingTracking] = useState(false);
   const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
