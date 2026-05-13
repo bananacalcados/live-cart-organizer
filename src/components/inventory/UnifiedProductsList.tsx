@@ -522,7 +522,6 @@ function PosSkuEditDialog({
         sku: skuCode.trim() || null,
         barcode: barcode.trim() || null,
         price: price ? parseFloat(price) : null,
-        promo_price: promo ? parseFloat(promo) : null,
         cost_price: cost ? parseFloat(cost) : null,
         stock: stock ? parseInt(stock) : 0,
       })
