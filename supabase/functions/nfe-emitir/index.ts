@@ -354,6 +354,31 @@ Deno.serve(async (req) => {
     const ret = respJson?.ReturnNF || {};
     const ok = !!ret.Ok && !!ret.ChaveNF;
     const chave = ret.ChaveNF || null;
+
+    // BrasilNFe retorna XML e PDF como base64 — decodificar e persistir
+    let xmlContent: string | null = null;
+    let danfeUrl: string | null = respJson?.DanfeUrl || respJson?.danfe_url || null;
+    if (ok) {
+      try {
+        if (respJson?.Base64Xml) {
+          const xmlBytes = Uint8Array.from(atob(respJson.Base64Xml), c => c.charCodeAt(0));
+          xmlContent = new TextDecoder("utf-8").decode(xmlBytes);
+        }
+        if (respJson?.Base64File && chave) {
+          const pdfBytes = Uint8Array.from(atob(respJson.Base64File), c => c.charCodeAt(0));
+          const path = `danfe/${chave}.pdf`;
+          const { error: upErr } = await supabase.storage
+            .from("fiscal-documents")
+            .upload(path, pdfBytes, { contentType: "application/pdf", upsert: true });
+          if (!upErr) {
+            const { data: pub } = supabase.storage.from("fiscal-documents").getPublicUrl(path);
+            danfeUrl = pub?.publicUrl || danfeUrl;
+          }
+        }
+      } catch (e) {
+        console.error("[nfe-emitir] base64 decode/upload error", e);
+      }
+    }
     const numeroRet = ret.Numero ? Number(ret.Numero) : null;
     const serieRet = ret.Serie ? Number(ret.Serie) : 1;
     const protocolo = ret.Protocolo || respJson?.Protocolo || null;
