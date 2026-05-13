@@ -143,8 +143,11 @@ serve(async (req) => {
       return null;
     };
 
-    // Try to create order in Tiny ERP
-    try {
+    // Try to create order in Tiny ERP (skip when store has disable_tiny_orders = true)
+    if (skipTiny) {
+      console.log(`[pos-tiny-create-sale] store ${store_id} has disable_tiny_orders=true — skipping Tiny push`);
+      tinyFailed = false;
+    } else try {
       const orderItems = items.map((item: any) => ({ ...item, codigo: item.sku || '' }));
       let tinyOrder = buildTinyOrder(orderItems);
 
