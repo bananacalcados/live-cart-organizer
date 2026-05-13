@@ -1,0 +1,1 @@
+ALTER TABLE public.pos_products_phantom_backup_20260513 ENABLE ROW LEVEL SECURITY;
