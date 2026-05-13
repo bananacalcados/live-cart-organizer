@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
     if (sale_id) {
       const { data: sale, error: sErr } = await supabase
         .from("pos_sales")
-        .select("id, store_id, customer_id, customer_name, customer_phone, shipping_address, pos_sale_items(product_name, sku, barcode, quantity, unit_price)")
+        .select("id, store_id, customer_id, customer_name, customer_phone, shipping_address, discount, pos_sale_items(product_name, sku, barcode, quantity, unit_price)")
         .eq("id", sale_id).single();
       if (sErr || !sale) throw new Error(`Venda PDV não encontrada: ${sErr?.message}`);
 
