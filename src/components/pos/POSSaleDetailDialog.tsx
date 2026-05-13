@@ -1226,13 +1226,15 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   </Button>
                   <Button
                     onClick={handleEmitOrPrintFiscal}
-                    disabled={emittingNfce}
+                    disabled={emittingNfce || (!!fiscalDoc?.status && ['authorized','autorizada','autorizado'].includes(String(fiscalDoc.status).toLowerCase()) && !fiscalDoc?.danfe_url)}
                     className="gap-1 h-10 text-xs col-span-2 bg-blue-600 text-white hover:bg-blue-700 font-bold"
                   >
                     {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                     {fiscalDoc?.danfe_url
                       ? `Visualizar / Imprimir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`
-                      : `Emitir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`}
+                      : (fiscalDoc?.status && ['authorized','autorizada','autorizado'].includes(String(fiscalDoc.status).toLowerCase()))
+                        ? `Carregando DANFE…`
+                        : `Emitir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`}
                   </Button>
                 </div>
 
