@@ -81,16 +81,35 @@ export function UnifiedProductsList() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<MasterData | null>(null);
   const [editingSku, setEditingSku] = useState<PosSku | null>(null);
+  const [page, setPage] = useState(0);
 
   async function load() {
     setLoading(true);
-    const [{ data: m }, { data: pp }, { data: st }] = await Promise.all([
-      supabase.from("product_master_data").select("*").eq("is_active", true).order("name").limit(2000),
-      supabase.from("pos_products").select("id, parent_sku, store_id, sku, barcode, name, cost_price, price, promo_price, stock, is_active").eq("is_active", true).limit(20000),
+    // Batch pos_products in chunks of 1000 to bypass PostgREST default cap
+    async function fetchAllPos(): Promise<PosSku[]> {
+      const all: PosSku[] = [];
+      const CHUNK = 1000;
+      for (let from = 0; from < 50000; from += CHUNK) {
+        const { data, error } = await supabase
+          .from("pos_products")
+          .select("id, parent_sku, store_id, sku, barcode, name, variant, size, color, image_url, cost_price, price, stock, is_active")
+          .eq("is_active", true)
+          .order("id")
+          .range(from, from + CHUNK - 1);
+        if (error) { toast.error("pos_products: " + error.message); break; }
+        if (!data || data.length === 0) break;
+        all.push(...(data as any));
+        if (data.length < CHUNK) break;
+      }
+      return all;
+    }
+    const [{ data: m }, pp, { data: st }] = await Promise.all([
+      supabase.from("product_master_data").select("*").eq("is_active", true).order("name").limit(5000),
+      fetchAllPos(),
       supabase.from("pos_stores").select("id, name").order("name"),
     ]);
     setMasters((m || []) as any);
-    setPosProducts((pp || []) as any);
+    setPosProducts(pp);
     setStores((st || []) as any);
     setLoading(false);
   }
