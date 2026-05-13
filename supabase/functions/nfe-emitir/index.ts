@@ -271,7 +271,10 @@ Deno.serve(async (req) => {
 
     // 6. Cria registro pendente
     const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
-      company_id: companyId, order_id, modelo: 55, serie: 1,
+      company_id: companyId,
+      order_id: order.source === "order" ? order.source_id : null,
+      pos_sale_id: order.source === "sale" ? order.source_id : null,
+      modelo: 55, serie: 1,
       numero: null, ambiente, status: "pending",
       valor_total: valorTotalNota, cpf_destinatario: cpfDest,
       nome_destinatario: order.customer_name || "CONSUMIDOR",
@@ -290,7 +293,7 @@ Deno.serve(async (req) => {
       ConsumidorFinal: true,
       IndicadorPresenca: 9,
       ModalidadeFrete: 0, // CIF — por conta do emitente
-      IdentificadorInterno: `NFE-${order_id}`,
+      IdentificadorInterno: order.source === "sale" ? `NFE-POS-${order.source_id}` : `NFE-${order.source_id}`,
       Emitente: {
         CpfCnpj: digits(company.cnpj),
         ...(ieEmitente ? { Ie: ieEmitente } : {}),
