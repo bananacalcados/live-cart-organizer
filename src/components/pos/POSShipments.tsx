@@ -278,12 +278,17 @@ export function POSShipments({ storeId }: Props) {
     setEmittingId(id);
     try {
       const { data, error } = await supabase.functions.invoke('nfe-emitir', { body: { sale_id: id } });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      if (error) {
+        const { extractEdgeError } = await import('@/lib/edgeFunctionError');
+        toast.error(await extractEdgeError(error, 'Erro ao emitir NF-e'), { duration: 12000 });
+        return;
+      }
+      if (data?.error) { toast.error(data.error, { duration: 12000 }); return; }
       toast.success(`NF-e autorizada${data?.numero ? ` — nº ${data.numero}` : ''}`);
       fetchOrders();
     } catch (e: any) {
-      toast.error(e?.message || 'Erro ao emitir NF-e');
+      const { extractEdgeError } = await import('@/lib/edgeFunctionError');
+      toast.error(await extractEdgeError(e, 'Erro ao emitir NF-e'), { duration: 12000 });
     } finally {
       setEmittingId(null);
     }
