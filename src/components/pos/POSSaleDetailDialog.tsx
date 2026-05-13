@@ -311,12 +311,17 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       const isOnline = sale.sale_type === 'online';
       const fnName = isOnline ? 'nfe-emitir' : 'nfce-emitir';
       const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id } });
-      if (error) throw error;
+      if (error) {
+        const msg = await (await import('@/lib/edgeFunctionError')).extractEdgeError(error, 'Erro ao emitir nota fiscal');
+        toast.error(msg, { duration: 12000 });
+        return;
+      }
       if (data?.ok) toast.success(`${isOnline ? 'NF-e' : 'NFC-e'} autorizada!`);
       else if (data?.contingencia) toast.info('SEFAZ indisponível — em contingência. Será reemitida automaticamente.');
-      else toast.error(data?.error || 'Erro ao emitir nota fiscal');
+      else toast.error(data?.error || data?.rejection_message || 'Erro ao emitir nota fiscal', { duration: 12000 });
     } catch (e: any) {
-      toast.error(e?.message || 'Erro ao emitir nota fiscal');
+      const msg = await (await import('@/lib/edgeFunctionError')).extractEdgeError(e, 'Erro ao emitir nota fiscal');
+      toast.error(msg, { duration: 12000 });
     } finally {
       setEmittingNfce(false);
     }
@@ -330,12 +335,17 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       const isOnline = sale.sale_type === 'online';
       const fnName = isOnline ? 'nfe-emitir' : 'nfce-emitir';
       const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id, ambiente: 'producao' } });
-      if (error) throw error;
+      if (error) {
+        const msg = await (await import('@/lib/edgeFunctionError')).extractEdgeError(error, 'Erro ao re-emitir nota fiscal');
+        toast.error(msg, { duration: 12000 });
+        return;
+      }
       if (data?.ok) toast.success(`${isOnline ? 'NF-e' : 'NFC-e'} autorizada em PRODUÇÃO!`);
       else if (data?.contingencia) toast.info('SEFAZ indisponível — em contingência.');
-      else toast.error(data?.error || 'Erro ao re-emitir nota fiscal');
+      else toast.error(data?.error || data?.rejection_message || 'Erro ao re-emitir nota fiscal', { duration: 12000 });
     } catch (e: any) {
-      toast.error(e?.message || 'Erro ao re-emitir nota fiscal');
+      const msg = await (await import('@/lib/edgeFunctionError')).extractEdgeError(e, 'Erro ao re-emitir nota fiscal');
+      toast.error(msg, { duration: 12000 });
     } finally {
       setReemittingProd(false);
     }
