@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import {
   Loader2, Package, CheckCircle2, Clock, Truck, Search,
   ChevronDown, ChevronUp, MapPin, Phone, User, DollarSign,
-  PackageCheck, Send, Eye, RefreshCw, Trash2
+  PackageCheck, Send, Eye, RefreshCw, Trash2, FileText, ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { WhatsAppNumberSelector } from '@/components/WhatsAppNumberSelector';
 
 interface Props {
   storeId: string;
