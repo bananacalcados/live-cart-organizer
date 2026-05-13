@@ -93,6 +93,10 @@ export function POSShipments({ storeId }: Props) {
   const [showTrackingDialog, setShowTrackingDialog] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [fiscalMap, setFiscalMap] = useState<Record<string, { status: string; danfe_url: string | null; numero: number | null }>>({});
+  const [emittingId, setEmittingId] = useState<string | null>(null);
+  const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
+  const [sendingWa, setSendingWa] = useState(false);
 
   const fetchOrders = async () => {
     setLoading(true);
