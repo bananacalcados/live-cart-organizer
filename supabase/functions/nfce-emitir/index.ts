@@ -123,8 +123,10 @@ Deno.serve(async (req) => {
         prodFiscal = (variant as any)?.products_master || null;
       }
       const ncmRaw: string | null = prodFiscal?.ncm || it.ncm_snapshot || null;
-      const ncm = ncmRaw ? ncmRaw.replace(/\D/g, "") : null;
-      if (!ncm) throw new Error(`Produto ${it.product_name} (SKU ${it.sku}) sem NCM em products_master. Rode a Importação Fiscal Tiny.`);
+      // Fallback: NCM 6403.99.90 (calçados de couro) quando produto não tem cadastro fiscal.
+      // Evita travar a emissão; o ideal é rodar Importação Fiscal Tiny depois.
+      const ncm = (ncmRaw ? ncmRaw.replace(/\D/g, "") : "") || "64039990";
+      const usedNcmFallback = !ncmRaw;
 
       const { data: rule, error: rErr } = await supabase.rpc("resolve_fiscal_rule", {
         p_ncm: ncm, p_uf_origem: ufOrigem, p_uf_destino: ufDestino, p_tipo_operacao: "venda",
