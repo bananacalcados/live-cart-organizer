@@ -160,7 +160,7 @@ export default function ProductsReview() {
       // Recalcular needs_review localmente: chama RPC noop ou apenas reload
       // Como o needs_review depende de NCM+CFOP+custo, vamos refetch e a view recalcula via UPDATE individual
       // Para garantir, atualizamos needs_review = (ncm null OR cost null) num único UPDATE:
-      await supabase.rpc("recompute_needs_review" as any).catch(() => {});
+      try { await (supabase.rpc as any)("recompute_needs_review"); } catch {}
       setBulkOpen(false);
       load();
     }
