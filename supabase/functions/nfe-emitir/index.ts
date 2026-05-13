@@ -89,6 +89,7 @@ Deno.serve(async (req) => {
       customer_cpf: string | null; customer_name: string | null;
       customer_phone: string | null; customer_email: string | null;
       shipping_address: any; total_shipping: number;
+      discount: number;
       items: NormItem[];
       source: "order" | "sale"; source_id: string;
       store_company_id: string | null;
