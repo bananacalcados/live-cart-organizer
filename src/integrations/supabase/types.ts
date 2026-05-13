@@ -13339,6 +13339,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      backfill_master_costs_from_pos: {
+        Args: never
+        Returns: {
+          masters_updated: number
+          variants_updated: number
+        }[]
+      }
       calculate_rfm_scores: { Args: never; Returns: Json }
       check_chargeback_risk: {
         Args: {
