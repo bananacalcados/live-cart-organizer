@@ -23,7 +23,7 @@ import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccoun
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
-  FileText, Building2, Hash, Settings, Download, ChevronRight,
+  FileText, Building2, Hash, Settings, Download, ChevronRight, AlertCircle,
 } from "lucide-react";
 
 const ALL_MODULES = [
