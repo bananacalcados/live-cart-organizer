@@ -54,6 +54,7 @@ const FiscalNumbering = lazy(() => import("./pages/admin/FiscalNumbering"));
 const FiscalOperations = lazy(() => import("./pages/admin/FiscalOperations"));
 const FiscalDocuments = lazy(() => import("./pages/admin/FiscalDocuments"));
 const NfeReceived = lazy(() => import("./pages/admin/NfeReceived"));
+const ProductsReview = lazy(() => import("./pages/admin/ProductsReview"));
 
 const queryClient = new QueryClient();
 
