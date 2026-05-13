@@ -281,7 +281,7 @@ Deno.serve(async (req) => {
 
     // 5. Frete (a ser somado ao total da nota como vFrete; opcional)
     const vFrete = round2(Number(order.total_shipping || 0));
-    const valorTotalNota = round2(totalProd + vFrete);
+    const valorTotalNota = round2(totalProd - totalDesc + vFrete);
 
     // 6. Cria registro pendente
     const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
