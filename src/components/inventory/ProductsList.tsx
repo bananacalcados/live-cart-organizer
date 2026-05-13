@@ -202,6 +202,17 @@ export function ProductsList() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-1 p-1 rounded-lg border bg-muted/40 w-fit">
+        <Button size="sm" variant={view === "unified" ? "default" : "ghost"} onClick={() => setViewPersist("unified")} className="gap-1">
+          <Sparkles className="h-3.5 w-3.5" /> Catálogo Unificado
+        </Button>
+        <Button size="sm" variant={view === "legacy" ? "default" : "ghost"} onClick={() => setViewPersist("legacy")}>
+          Legacy
+        </Button>
+      </div>
+
+      {view === "unified" ? <UnifiedProductsList /> : (
+      <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
