@@ -152,6 +152,12 @@ export function UnifiedProductsList() {
     return arr.sort((a, b) => (a.master?.name || a.parent_sku).localeCompare(b.master?.name || b.parent_sku));
   }, [masters, posProducts, search, filter]);
 
+  // Reset to first page when filter/search changes
+  useEffect(() => { setPage(0); }, [search, filter]);
+
+  const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
+  const pageItems = grouped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   function toggleExpand(key: string) {
     setExpanded((e) => ({ ...e, [key]: !e[key] }));
   }
