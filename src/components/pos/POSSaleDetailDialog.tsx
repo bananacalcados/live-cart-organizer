@@ -1084,6 +1084,54 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               </Button>
             )}
 
+            {/* Tracking / Rastreio */}
+            {!isTinyOnly && (
+              <div className="space-y-2">
+                <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
+                  <Truck className="h-3.5 w-3.5 text-indigo-600" /> Rastreio
+                </h4>
+                <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-200 space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      value={trackingCode}
+                      onChange={(e) => setTrackingCode(e.target.value.toUpperCase())}
+                      placeholder="Código de rastreio (ex: AA123456789BR)"
+                      className="flex-1 h-9 text-sm font-mono bg-white"
+                    />
+                    <Button
+                      size="sm"
+                      className="h-9 bg-indigo-600 hover:bg-indigo-700 text-white"
+                      onClick={handleSaveTracking}
+                      disabled={savingTracking || trackingCode === (sale.tracking_code || "")}
+                    >
+                      {savingTracking ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+                    </Button>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1">
+                      <WhatsAppNumberSelector
+                        className="h-9 bg-white text-xs"
+                        value={trackingNumberId}
+                        onValueChange={setTrackingNumberId}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-9 gap-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold whitespace-nowrap"
+                      onClick={handleSendTracking}
+                      disabled={sendingTracking || !trackingCode.trim() || !currentCustomer?.whatsapp}
+                    >
+                      {sendingTracking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      Enviar Rastreio
+                    </Button>
+                  </div>
+                  {!currentCustomer?.whatsapp && (
+                    <p className="text-[11px] text-amber-700">Cliente sem WhatsApp — adicione antes de enviar.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Print / Fiscal Actions */}
             {!isTinyOnly && (
               <div className="space-y-2">
