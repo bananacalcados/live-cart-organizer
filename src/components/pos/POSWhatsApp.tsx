@@ -1430,6 +1430,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             if (reason === 'compra') {
               const conv = conversations.find(c => c.phone === selectedPhone);
               const cashbackVal = (extras as any)?.cashback_value || (extras as any)?.cashback || 0;
+              const saleVal = (extras as any)?.saleValue || (extras as any)?.sale_value || 0;
               supabase.functions.invoke('review-send-link', {
                 body: {
                   phone: selectedPhone,
@@ -1437,6 +1438,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
                   store_id: storeId,
                   store_phone: (conv as any)?.whatsapp_number_phone || null,
                   cashback_value: cashbackVal,
+                  sale_value: saleVal,
                   whatsapp_number_id: conv?.whatsapp_number_id || null,
                 },
               }).then(res => {

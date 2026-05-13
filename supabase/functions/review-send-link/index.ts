@@ -20,10 +20,28 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { phone, customer_name, store_id, store_phone, cashback_value, whatsapp_number_id } = await req.json();
+    const { phone, customer_name, store_id, store_phone, cashback_value, sale_value, whatsapp_number_id } = await req.json();
     if (!phone) {
       return new Response(JSON.stringify({ error: 'phone required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Auto-calculate cashback from sale_value using pos_cashback_config when not provided
+    let finalCashback = Number(cashback_value) || 0;
+    if (!finalCashback && Number(sale_value) > 0) {
+      const { data: cfg } = await supabase
+        .from('pos_cashback_config')
+        .select('is_enabled, percentage, min_sale_value, max_cashback')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cfg && (cfg as any).is_enabled && Number(sale_value) >= Number((cfg as any).min_sale_value || 0)) {
+        const pct = Number((cfg as any).percentage) || 0;
+        let calc = Number(sale_value) * pct / 100;
+        const maxCb = Number((cfg as any).max_cashback);
+        if (maxCb > 0 && calc > maxCb) calc = maxCb;
+        finalCashback = Math.round(calc * 100) / 100;
+      }
     }
 
     // Generate token
@@ -42,7 +60,7 @@ serve(async (req) => {
         customer_name: customer_name || null,
         store_id: store_id || null,
         store_phone: store_phone || null,
-        cashback_value: cashback_value || 0,
+        cashback_value: finalCashback,
       })
       .select('id, token, cashback_value')
       .single();
