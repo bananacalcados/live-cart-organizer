@@ -14202,6 +14202,7 @@ export type Database = {
         }[]
       }
       product_name_key: { Args: { p_name: string }; Returns: string }
+      recompute_needs_review: { Args: never; Returns: number }
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
