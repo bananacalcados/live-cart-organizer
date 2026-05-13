@@ -500,7 +500,6 @@ function PosSkuEditDialog({
   const [skuCode, setSkuCode] = useState("");
   const [barcode, setBarcode] = useState("");
   const [price, setPrice] = useState("");
-  const [promo, setPromo] = useState("");
   const [cost, setCost] = useState("");
   const [stock, setStock] = useState("");
   const [saving, setSaving] = useState(false);
@@ -510,7 +509,6 @@ function PosSkuEditDialog({
     setSkuCode(sku.sku || "");
     setBarcode(sku.barcode || "");
     setPrice(sku.price?.toString() || "");
-    setPromo(sku.promo_price?.toString() || "");
     setCost(sku.cost_price?.toString() || "");
     setStock(sku.stock?.toString() || "0");
   }, [sku]);
