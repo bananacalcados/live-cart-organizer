@@ -1703,6 +1703,45 @@ export type Database = {
           },
         ]
       }
+      catalog_sync_log: {
+        Row: {
+          base_name: string | null
+          color: string | null
+          created_at: string
+          details: Json | null
+          id: string
+          master_id: string | null
+          operation: string
+          run_id: string
+          size: string | null
+          variant_id: string | null
+        }
+        Insert: {
+          base_name?: string | null
+          color?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          master_id?: string | null
+          operation: string
+          run_id: string
+          size?: string | null
+          variant_id?: string | null
+        }
+        Update: {
+          base_name?: string | null
+          color?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          master_id?: string | null
+          operation?: string
+          run_id?: string
+          size?: string | null
+          variant_id?: string | null
+        }
+        Relationships: []
+      }
       chargebacks: {
         Row: {
           address_cep: string | null
@@ -13381,6 +13420,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      analyze_catalog_sync_from_pos: { Args: never; Returns: Json }
       analyze_variant_normalization: {
         Args: never
         Returns: {
@@ -13393,6 +13433,10 @@ export type Database = {
           swap_only: number
           total_variants: number
         }[]
+      }
+      apply_catalog_sync_from_pos: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: Json
       }
       apply_variant_normalization: {
         Args: { p_dry_run?: boolean; p_limit?: number }
@@ -13452,6 +13496,7 @@ export type Database = {
           message_id: string
         }[]
       }
+      extract_base_product_name: { Args: { p_name: string }; Returns: string }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       generate_ean13_barcode: { Args: never; Returns: string }
       generate_ean13_internal: { Args: never; Returns: string }
@@ -13785,6 +13830,7 @@ export type Database = {
           new_size: string
         }[]
       }
+      product_name_key: { Args: { p_name: string }; Returns: string }
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
@@ -13909,6 +13955,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      title_case_color: { Args: { p_color: string }; Returns: string }
       try_claim_scheduled_message: {
         Args: { p_lock_duration_seconds?: number; p_message_id: string }
         Returns: {
