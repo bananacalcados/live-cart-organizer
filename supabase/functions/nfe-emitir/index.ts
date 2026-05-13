@@ -262,17 +262,18 @@ Deno.serve(async (req) => {
         Quantidade: Number(it.quantity),
         ValorUnitario: round2(Number(it.unit_price)),
         ValorTotal: vTotal,
+        ...(vDesc > 0 ? { ValorDesconto: vDesc } : {}),
         Origem: origemFinal,
         CEST: prodFiscal?.cest || undefined,
         Imposto: {
           ICMS: {
             CodSituacaoTributaria: String(r.csosn_icms || r.cst_icms || "102"),
             AliquotaICMS: Number(r.aliq_icms || 0),
-            BaseCalculo: vTotal,
-            ValorIcms: round2(vTotal * Number(r.aliq_icms || 0) / 100),
+            BaseCalculo: vBase,
+            ValorIcms: round2(vBase * Number(r.aliq_icms || 0) / 100),
           },
-          PIS:    { CodSituacaoTributaria: String(r.cst_pis || "07"),    Aliquota: Number(r.aliq_pis || 0),    BaseCalculo: vTotal },
-          COFINS: { CodSituacaoTributaria: String(r.cst_cofins || "07"), Aliquota: Number(r.aliq_cofins || 0), BaseCalculo: vTotal },
+          PIS:    { CodSituacaoTributaria: String(r.cst_pis || "07"),    Aliquota: Number(r.aliq_pis || 0),    BaseCalculo: vBase },
+          COFINS: { CodSituacaoTributaria: String(r.cst_cofins || "07"), Aliquota: Number(r.aliq_cofins || 0), BaseCalculo: vBase },
           IPI:    { CodSituacaoTributaria: "53", CodEnquadramento: "999", Aliquota: 0 },
         },
       });
