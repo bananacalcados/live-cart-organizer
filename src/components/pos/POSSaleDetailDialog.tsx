@@ -180,7 +180,6 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!sale?.id) { setFiscalDoc(null); return; }
     let cancelled = false;
     const loadDoc = async () => {
-      // 1) try latest authorized
       const { data: authd } = await supabase
         .from('fiscal_documents')
         .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url')
@@ -189,8 +188,19 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (authd) { if (!cancelled) setFiscalDoc(authd as any); return; }
-      // 2) fallback to most recent (rejected/pending) so user sees status
+      if (authd) {
+        if (!cancelled) setFiscalDoc(authd as any);
+        // Backfill DANFE/XML if missing
+        if (!authd.danfe_url || !authd.xml_content) {
+          supabase.functions.invoke('fiscal-backfill-danfe', { body: { document_id: (authd as any).id } })
+            .then(({ data }) => {
+              if (!cancelled && data?.ok) {
+                setFiscalDoc(prev => prev ? { ...prev, danfe_url: data.danfe_url ?? prev.danfe_url, xml_content: data.xml_content ?? prev.xml_content } : prev);
+              }
+            }).catch(() => {});
+        }
+        return;
+      }
       const { data } = await supabase
         .from('fiscal_documents')
         .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url')
