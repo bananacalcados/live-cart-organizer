@@ -621,7 +621,7 @@ export function POSShipments({ storeId }: Props) {
             {/* WhatsApp tracking send */}
             <div className="border-t border-gray-200 pt-3 space-y-2">
               <label className="text-xs text-gray-600 block">📲 Enviar rastreio por WhatsApp</label>
-              <WhatsAppNumberSelector value={trackingNumberId} onChange={setTrackingNumberId} />
+              <WhatsAppNumberSelector value={trackingNumberId} onValueChange={setTrackingNumberId} />
               <Button
                 onClick={() => {
                   const order = orders.find(o => o.id === showTrackingDialog);
