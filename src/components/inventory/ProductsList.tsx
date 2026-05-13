@@ -43,6 +43,25 @@ export function ProductsList() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [stockManagerId, setStockManagerId] = useState<string | null>(null);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+
+  async function backfillCosts() {
+    setBackfilling(true);
+    try {
+      const { data, error } = await supabase.rpc("backfill_master_costs_from_pos");
+      if (error) throw error;
+      const row: any = Array.isArray(data) ? data[0] : data;
+      toast.success(
+        `Custos importados do estoque local: ${row?.masters_updated ?? 0} produtos e ${row?.variants_updated ?? 0} variações`,
+        { duration: 8000 }
+      );
+      load();
+    } catch (err: any) {
+      toast.error("Erro ao importar custos: " + err.message);
+    } finally {
+      setBackfilling(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
