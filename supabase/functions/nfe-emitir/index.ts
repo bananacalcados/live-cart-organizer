@@ -232,7 +232,10 @@ Deno.serve(async (req) => {
       const r: any = rule;
 
       const vTotal = round2(Number(it.unit_price) * Number(it.quantity));
+      const vDesc = ratioDesc > 0 ? round2(vTotal * ratioDesc) : 0;
+      const vBase = round2(vTotal - vDesc);
       totalProd += vTotal;
+      totalDesc += vDesc;
 
       const origemFinal = prodFiscal?.origem != null ? Number(prodFiscal.origem) : Number(r.origem_mercadoria ?? 0);
       const nameUpper = sanitize(it.product_name || "").toUpperCase();
