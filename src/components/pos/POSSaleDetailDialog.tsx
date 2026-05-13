@@ -107,7 +107,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [newProductQty, setNewProductQty] = useState("1");
   const [currentItems, setCurrentItems] = useState<SaleItem[]>(items);
   const [emittingNfce, setEmittingNfce] = useState(false);
-  const [fiscalDoc, setFiscalDoc] = useState<{ id?: string; status: string; danfe_url: string | null; xml_url?: string | null; xml_content?: string | null; chave_acesso?: string | null; numero?: number | null; serie?: number | null; qrcode_url?: string | null } | null>(null);
+  const [fiscalDoc, setFiscalDoc] = useState<{ id?: string; status: string; danfe_url: string | null; xml_url?: string | null; xml_content?: string | null; chave_acesso?: string | null; numero?: number | null; serie?: number | null; qrcode_url?: string | null; ambiente?: string | null } | null>(null);
+  const [reemittingProd, setReemittingProd] = useState(false);
   const [sendingNfeWa, setSendingNfeWa] = useState(false);
   const [trackingCode, setTrackingCode] = useState<string>(sale?.tracking_code || "");
   const [savingTracking, setSavingTracking] = useState(false);
@@ -182,7 +183,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     const loadDoc = async () => {
       const { data: authd } = await supabase
         .from('fiscal_documents')
-        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url')
+        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente')
         .eq('pos_sale_id', sale.id)
         .in('status', ['authorized', 'autorizada', 'autorizado'])
         .order('created_at', { ascending: false })
@@ -203,7 +204,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       }
       const { data } = await supabase
         .from('fiscal_documents')
-        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url')
+        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente')
         .eq('pos_sale_id', sale.id)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -318,6 +319,25 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       toast.error(e?.message || 'Erro ao emitir nota fiscal');
     } finally {
       setEmittingNfce(false);
+    }
+  };
+
+  const handleReemitProducao = async () => {
+    if (!sale) return;
+    if (!confirm('Re-emitir esta nota em PRODUÇÃO (com valor fiscal real)? A nota anterior em homologação será mantida no histórico.')) return;
+    setReemittingProd(true);
+    try {
+      const isOnline = sale.sale_type === 'online';
+      const fnName = isOnline ? 'nfe-emitir' : 'nfce-emitir';
+      const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id, ambiente: 'producao' } });
+      if (error) throw error;
+      if (data?.ok) toast.success(`${isOnline ? 'NF-e' : 'NFC-e'} autorizada em PRODUÇÃO!`);
+      else if (data?.contingencia) toast.info('SEFAZ indisponível — em contingência.');
+      else toast.error(data?.error || 'Erro ao re-emitir nota fiscal');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao re-emitir nota fiscal');
+    } finally {
+      setReemittingProd(false);
     }
   };
 
@@ -1243,6 +1263,9 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-[11px] text-emerald-900">
                         <p className="font-bold">✅ {sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'} autorizada{fiscalDoc.numero ? ` — nº ${fiscalDoc.numero}/${fiscalDoc.serie ?? '-'}` : ''}</p>
+                        {fiscalDoc.ambiente === 'homologacao' && (
+                          <p className="mt-0.5 inline-block rounded bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-900">⚠️ Homologação — sem valor fiscal</p>
+                        )}
                         {fiscalDoc.chave_acesso && (
                           <p className="font-mono text-[10px] break-all text-emerald-800/80">{fiscalDoc.chave_acesso}</p>
                         )}
@@ -1280,6 +1303,17 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                         <p className="col-span-2 text-[10px] text-emerald-900/70">
                           {!currentCustomer?.whatsapp ? 'Cliente sem WhatsApp.' : 'Selecione a instância na seção Rastreio acima.'}
                         </p>
+                      )}
+                      {fiscalDoc.ambiente === 'homologacao' && (
+                        <Button
+                          onClick={handleReemitProducao}
+                          disabled={reemittingProd}
+                          size="sm"
+                          className="h-9 text-xs col-span-2 bg-amber-600 text-white hover:bg-amber-700 font-bold"
+                        >
+                          {reemittingProd ? <Loader2 className="h-4 w-4 animate-spin" /> : '🔄'}
+                          Re-emitir em PRODUÇÃO (nota com valor fiscal)
+                        </Button>
                       )}
                     </div>
                   </div>
