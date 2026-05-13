@@ -322,7 +322,24 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     }
   };
 
-  const handleCopyChave = async () => {
+  const handleReemitProducao = async () => {
+    if (!sale) return;
+    if (!confirm('Re-emitir esta nota em PRODUÇÃO (com valor fiscal real)? A nota anterior em homologação será mantida no histórico.')) return;
+    setReemittingProd(true);
+    try {
+      const isOnline = sale.sale_type === 'online';
+      const fnName = isOnline ? 'nfe-emitir' : 'nfce-emitir';
+      const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id, ambiente: 'producao' } });
+      if (error) throw error;
+      if (data?.ok) toast.success(`${isOnline ? 'NF-e' : 'NFC-e'} autorizada em PRODUÇÃO!`);
+      else if (data?.contingencia) toast.info('SEFAZ indisponível — em contingência.');
+      else toast.error(data?.error || 'Erro ao re-emitir nota fiscal');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao re-emitir nota fiscal');
+    } finally {
+      setReemittingProd(false);
+    }
+  };
     if (!fiscalDoc?.chave_acesso) return;
     try {
       await navigator.clipboard.writeText(fiscalDoc.chave_acesso);
