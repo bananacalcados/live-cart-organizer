@@ -10528,6 +10528,13 @@ export type Database = {
             foreignKeyName: "product_stock_movements_variant_id_fkey"
             columns: ["variant_id"]
             isOneToOne: false
+            referencedRelation: "product_variant_stock"
+            referencedColumns: ["variant_id"]
+          },
+          {
+            foreignKeyName: "product_stock_movements_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
             referencedRelation: "product_variants"
             referencedColumns: ["id"]
           },
@@ -10884,6 +10891,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products_master"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_invoice_items_variant_id_fkey"
+            columns: ["variant_id"]
+            isOneToOne: false
+            referencedRelation: "product_variant_stock"
+            referencedColumns: ["variant_id"]
           },
           {
             foreignKeyName: "purchase_invoice_items_variant_id_fkey"
@@ -13450,7 +13464,56 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      product_master_stock: {
+        Row: {
+          master_id: string | null
+          name: string | null
+          store_centro: number | null
+          store_lojas_live: number | null
+          store_perola: number | null
+          store_site: number | null
+          store_site_centro: number | null
+          total_stock: number | null
+          total_variants: number | null
+          variants_in_stock: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "products_master"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_variant_stock: {
+        Row: {
+          barcode: string | null
+          color: string | null
+          image_url: string | null
+          master_id: string | null
+          name: string | null
+          size: string | null
+          sku: string | null
+          store_centro: number | null
+          store_lojas_live: number | null
+          store_perola: number | null
+          store_site: number | null
+          store_site_centro: number | null
+          total_stock: number | null
+          variant_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_master_id_fkey"
+            columns: ["master_id"]
+            isOneToOne: false
+            referencedRelation: "products_master"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       analyze_catalog_sync_from_pos: { Args: never; Returns: Json }
