@@ -117,6 +117,63 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     setCurrentItems(items);
   }, [items]);
 
+  useEffect(() => {
+    setTrackingCode(sale?.tracking_code || "");
+  }, [sale?.id, sale?.tracking_code]);
+
+  const handleSaveTracking = async () => {
+    if (!sale) return;
+    setSavingTracking(true);
+    try {
+      const code = trackingCode.trim();
+      const { error } = await supabase
+        .from('pos_sales')
+        .update({ tracking_code: code || null } as any)
+        .eq('id', sale.id);
+      if (error) throw error;
+      toast.success(code ? 'Código de rastreio salvo!' : 'Código de rastreio removido.');
+      onDeleted?.();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao salvar rastreio');
+    } finally {
+      setSavingTracking(false);
+    }
+  };
+
+  const handleSendTracking = async () => {
+    if (!sale) return;
+    const code = trackingCode.trim();
+    if (!code) { toast.error('Informe o código de rastreio primeiro'); return; }
+    const phone = (currentCustomer?.whatsapp || '').replace(/\D/g, '');
+    if (!phone) { toast.error('Cliente sem WhatsApp cadastrado'); return; }
+    if (!trackingNumberId) { toast.error('Selecione a instância de WhatsApp'); return; }
+
+    setSendingTracking(true);
+    try {
+      const link = `https://www.melhorrastreio.com.br/rastreio/${encodeURIComponent(code)}`;
+      const greeting = currentCustomer?.name ? `Oi, ${String(currentCustomer.name).split(' ')[0]}!` : 'Oi!';
+      const message = `${greeting} 📦\nSeu pedido foi postado.\n\n*Código de rastreio:* ${code}\n*Acompanhe aqui:* ${link}`;
+
+      // descobrir provider para escolher a função
+      const { data: num } = await supabase
+        .from('whatsapp_numbers')
+        .select('provider')
+        .eq('id', trackingNumberId)
+        .maybeSingle();
+      const fn = (num as any)?.provider === 'meta' ? 'meta-whatsapp-send' : 'zapi-send-message';
+
+      const { error } = await supabase.functions.invoke(fn, {
+        body: { phone, message, whatsapp_number_id: trackingNumberId },
+      });
+      if (error) throw error;
+      toast.success('Mensagem enviada!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao enviar mensagem');
+    } finally {
+      setSendingTracking(false);
+    }
+  };
+
   // Load fiscal doc for this sale
   useEffect(() => {
     if (!sale?.id) { setFiscalDoc(null); return; }
