@@ -183,6 +183,16 @@ export function ProductsList() {
             className="pl-8"
           />
         </div>
+        <Button
+          variant="outline"
+          onClick={backfillCosts}
+          disabled={backfilling}
+          className="gap-1"
+          title="Preenche o custo dos produtos zerados usando o custo já cadastrado no estoque (pos_products)"
+        >
+          {backfilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          Importar custos do estoque
+        </Button>
         <Button onClick={() => setShowForm(true)} className="gap-1">
           <Plus className="h-4 w-4" /> Novo Produto
         </Button>
