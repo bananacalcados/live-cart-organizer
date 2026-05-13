@@ -175,11 +175,22 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     }
   };
 
-  // Load fiscal doc for this sale
+  // Load fiscal doc for this sale (prefer authorized over rejected/pending)
   useEffect(() => {
     if (!sale?.id) { setFiscalDoc(null); return; }
     let cancelled = false;
-    (async () => {
+    const loadDoc = async () => {
+      // 1) try latest authorized
+      const { data: authd } = await supabase
+        .from('fiscal_documents')
+        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url')
+        .eq('pos_sale_id', sale.id)
+        .in('status', ['authorized', 'autorizada', 'autorizado'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (authd) { if (!cancelled) setFiscalDoc(authd as any); return; }
+      // 2) fallback to most recent (rejected/pending) so user sees status
       const { data } = await supabase
         .from('fiscal_documents')
         .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url')
@@ -188,11 +199,12 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         .limit(1)
         .maybeSingle();
       if (!cancelled) setFiscalDoc(data as any);
-    })();
+    };
+    loadDoc();
     const ch = supabase
       .channel(`fdoc-detail-${sale.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'fiscal_documents', filter: `pos_sale_id=eq.${sale.id}` },
-        (payload) => { if (!cancelled) setFiscalDoc(payload.new as any); })
+        () => loadDoc())
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
   }, [sale?.id]);
