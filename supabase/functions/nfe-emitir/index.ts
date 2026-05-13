@@ -160,6 +160,7 @@ Deno.serve(async (req) => {
         customer_email: (o as any).customer_email || null,
         shipping_address: (o as any).shipping_address || {},
         total_shipping: Number((o as any).total_shipping || 0),
+        discount: round2(Number((o as any).discount_total || (o as any).discount || 0)),
         items: ((o as any).expedition_order_items || []).map((it: any) => ({
           product_name: it.product_name, sku: it.sku || null, barcode: it.barcode || null,
           quantity: Number(it.quantity), unit_price: Number(it.unit_price),
