@@ -10549,6 +10549,7 @@ export type Database = {
           id: string
           initial_stock: number | null
           is_active: boolean
+          last_sync_source: string | null
           master_id: string
           sale_price_override: number | null
           shopify_variant_id: string | null
@@ -10567,6 +10568,7 @@ export type Database = {
           id?: string
           initial_stock?: number | null
           is_active?: boolean
+          last_sync_source?: string | null
           master_id: string
           sale_price_override?: number | null
           shopify_variant_id?: string | null
@@ -10585,6 +10587,7 @@ export type Database = {
           id?: string
           initial_stock?: number | null
           is_active?: boolean
+          last_sync_source?: string | null
           master_id?: string
           sale_price_override?: number | null
           shopify_variant_id?: string | null
@@ -13892,6 +13895,7 @@ export type Database = {
         Args: { message_id: string }
         Returns: undefined
       }
+      is_sync_in_progress: { Args: never; Returns: boolean }
       lookup_crm_by_phones: {
         Args: { p_phones: string[] }
         Returns: {
