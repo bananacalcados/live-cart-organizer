@@ -405,18 +405,23 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
       const { data, error } = await supabase.functions.invoke('nfe-emitir', {
         body: { order_id: order.id },
       });
-      if (error) throw error;
+      if (error) {
+        const { extractEdgeError } = await import('@/lib/edgeFunctionError');
+        toast.error(`Erro ao emitir NF-e: ${await extractEdgeError(error, 'Falha na emissão')}`, { duration: 12000 });
+        return;
+      }
       if (data?.contingencia) {
         toast.warning('SEFAZ indisponível — NF-e em fila de contingência. Será reemitida automaticamente.');
       } else if (data?.ok) {
         toast.success(`NF-e ${data.numero} autorizada!`);
       } else {
-        throw new Error(data?.error || 'Falha na emissão');
+        toast.error(`Erro ao emitir NF-e: ${data?.error || data?.rejection_message || 'Falha na emissão'}`, { duration: 12000 });
       }
       await loadNfeDoc();
       onRefresh();
     } catch (e: any) {
-      toast.error(`Erro ao emitir NF-e: ${e.message}`);
+      const { extractEdgeError } = await import('@/lib/edgeFunctionError');
+      toast.error(`Erro ao emitir NF-e: ${await extractEdgeError(e, 'Falha na emissão')}`, { duration: 12000 });
     } finally {
       setIsEmittingNfe(false);
     }
