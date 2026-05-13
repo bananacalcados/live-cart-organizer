@@ -182,7 +182,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     (async () => {
       const { data } = await supabase
         .from('fiscal_documents')
-        .select('status, danfe_url')
+        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url')
         .eq('pos_sale_id', sale.id)
         .order('created_at', { ascending: false })
         .limit(1)
