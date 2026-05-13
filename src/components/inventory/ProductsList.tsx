@@ -36,6 +36,10 @@ interface VariantSummary {
 }
 
 export function ProductsList() {
+  const [view, setView] = useState<"unified" | "legacy">(() => {
+    if (typeof window === "undefined") return "unified";
+    return (localStorage.getItem("products_view") as any) || "unified";
+  });
   const [items, setItems] = useState<Master[]>([]);
   const [variantSummary, setVariantSummary] = useState<Record<string, VariantSummary>>({});
   const [loading, setLoading] = useState(true);
@@ -45,6 +49,11 @@ export function ProductsList() {
   const [stockManagerId, setStockManagerId] = useState<string | null>(null);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [backfilling, setBackfilling] = useState(false);
+
+  function setViewPersist(v: "unified" | "legacy") {
+    setView(v);
+    try { localStorage.setItem("products_view", v); } catch {}
+  }
 
   async function backfillCosts() {
     setBackfilling(true);
