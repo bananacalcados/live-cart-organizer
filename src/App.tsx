@@ -54,6 +54,7 @@ const FiscalNumbering = lazy(() => import("./pages/admin/FiscalNumbering"));
 const FiscalOperations = lazy(() => import("./pages/admin/FiscalOperations"));
 const FiscalDocuments = lazy(() => import("./pages/admin/FiscalDocuments"));
 const NfeReceived = lazy(() => import("./pages/admin/NfeReceived"));
+const ProductsReview = lazy(() => import("./pages/admin/ProductsReview"));
 
 const queryClient = new QueryClient();
 
@@ -121,6 +122,7 @@ const App = () => (
               <Route path="/admin/fiscal-operations" element={<ProtectedRoute requiredModule="admin"><FiscalOperations /></ProtectedRoute>} />
               <Route path="/admin/fiscal-documents" element={<ProtectedRoute requiredModule="admin"><FiscalDocuments /></ProtectedRoute>} />
               <Route path="/admin/nfe-received" element={<ProtectedRoute requiredModule="admin"><NfeReceived /></ProtectedRoute>} />
+              <Route path="/admin/produtos-revisar" element={<ProtectedRoute requiredModule="admin"><ProductsReview /></ProtectedRoute>} />
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
 

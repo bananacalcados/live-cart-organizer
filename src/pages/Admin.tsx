@@ -23,7 +23,7 @@ import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccoun
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
-  FileText, Building2, Hash, Settings, Download, ChevronRight,
+  FileText, Building2, Hash, Settings, Download, ChevronRight, AlertCircle,
 } from "lucide-react";
 
 const ALL_MODULES = [
@@ -443,6 +443,7 @@ export default function Admin() {
                 { path: "/admin/fiscal-documents", label: "Documentos Emitidos", desc: "Histórico de NFC-e/NF-e emitidas, XML e DANFE", icon: FileText },
                 { path: "/admin/nfe-received", label: "NF-e Recebidas", desc: "NF-e em que sua empresa é destinatária — manifestação SEFAZ", icon: FileText },
                 { path: "/admin/tiny-fiscal-import", label: "Importar do Tiny", desc: "Sincronizar produtos e dados fiscais do Tiny ERP", icon: Download },
+                { path: "/admin/produtos-revisar", label: "Produtos para Revisar", desc: "Catálogo unificado: corrigir NCM/CFOP/custo pendentes", icon: AlertCircle },
               ].map((item) => (
                 <button
                   key={item.path}

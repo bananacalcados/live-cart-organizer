@@ -12142,6 +12142,30 @@ export type Database = {
           },
         ]
       }
+      system_settings: {
+        Row: {
+          description: string | null
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
       team_chat_messages: {
         Row: {
           channel: string
@@ -13730,6 +13754,24 @@ export type Database = {
           },
         ]
       }
+      v_products_needs_review: {
+        Row: {
+          brand: string | null
+          category: string | null
+          cest: string | null
+          cfop: string | null
+          cost_price: number | null
+          name: string | null
+          ncm: string | null
+          parent_sku: string | null
+          review_reason: string | null
+          sale_price: number | null
+          sku_count: number | null
+          total_stock: number | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       analyze_catalog_sync_from_pos: { Args: never; Returns: Json }
@@ -14109,6 +14151,7 @@ export type Database = {
         Returns: undefined
       }
       is_sync_in_progress: { Args: never; Returns: boolean }
+      is_unified_inventory_enabled: { Args: never; Returns: boolean }
       lookup_crm_by_phones: {
         Args: { p_phones: string[] }
         Returns: {
@@ -14159,6 +14202,7 @@ export type Database = {
         }[]
       }
       product_name_key: { Args: { p_name: string }; Returns: string }
+      recompute_needs_review: { Args: never; Returns: number }
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
@@ -14294,6 +14338,22 @@ export type Database = {
         }[]
       }
       unaccent: { Args: { "": string }; Returns: string }
+      unified_inventory_apply_nfe_entry: {
+        Args: {
+          p_barcode: string
+          p_color: string
+          p_invoice_id: string
+          p_invoice_item_id: string
+          p_master: Json
+          p_parent_sku: string
+          p_quantity: number
+          p_size: string
+          p_sku: string
+          p_store_id: string
+          p_unit_cost: number
+        }
+        Returns: Json
+      }
       update_lead_recovery: {
         Args: {
           p_disparo: number
