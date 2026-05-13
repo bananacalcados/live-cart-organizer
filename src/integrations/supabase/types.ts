@@ -9415,6 +9415,72 @@ export type Database = {
           },
         ]
       }
+      pos_products_phantom_backup_20260513: {
+        Row: {
+          barcode: string | null
+          category: string | null
+          color: string | null
+          cost_price: number | null
+          created_at: string | null
+          id: string | null
+          image_url: string | null
+          is_active: boolean | null
+          name: string | null
+          parent_sku: string | null
+          price: number | null
+          size: string | null
+          sku: string | null
+          stock: number | null
+          store_id: string | null
+          synced_at: string | null
+          tiny_id: number | null
+          updated_at: string | null
+          variant: string | null
+        }
+        Insert: {
+          barcode?: string | null
+          category?: string | null
+          color?: string | null
+          cost_price?: number | null
+          created_at?: string | null
+          id?: string | null
+          image_url?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          parent_sku?: string | null
+          price?: number | null
+          size?: string | null
+          sku?: string | null
+          stock?: number | null
+          store_id?: string | null
+          synced_at?: string | null
+          tiny_id?: number | null
+          updated_at?: string | null
+          variant?: string | null
+        }
+        Update: {
+          barcode?: string | null
+          category?: string | null
+          color?: string | null
+          cost_price?: number | null
+          created_at?: string | null
+          id?: string | null
+          image_url?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          parent_sku?: string | null
+          price?: number | null
+          size?: string | null
+          sku?: string | null
+          stock?: number | null
+          store_id?: string | null
+          synced_at?: string | null
+          tiny_id?: number | null
+          updated_at?: string | null
+          variant?: string | null
+        }
+        Relationships: []
+      }
       pos_returns: {
         Row: {
           created_at: string
