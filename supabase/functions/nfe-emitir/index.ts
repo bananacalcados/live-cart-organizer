@@ -89,6 +89,7 @@ Deno.serve(async (req) => {
       customer_cpf: string | null; customer_name: string | null;
       customer_phone: string | null; customer_email: string | null;
       shipping_address: any; total_shipping: number;
+      discount: number;
       items: NormItem[];
       source: "order" | "sale"; source_id: string;
       store_company_id: string | null;
@@ -99,7 +100,7 @@ Deno.serve(async (req) => {
     if (sale_id) {
       const { data: sale, error: sErr } = await supabase
         .from("pos_sales")
-        .select("id, store_id, customer_id, customer_name, customer_phone, shipping_address, pos_sale_items(product_name, sku, barcode, quantity, unit_price)")
+        .select("id, store_id, customer_id, customer_name, customer_phone, shipping_address, discount, pos_sale_items(product_name, sku, barcode, quantity, unit_price)")
         .eq("id", sale_id).single();
       if (sErr || !sale) throw new Error(`Venda PDV não encontrada: ${sErr?.message}`);
 
@@ -138,6 +139,7 @@ Deno.serve(async (req) => {
         customer_email: email,
         shipping_address,
         total_shipping: 0,
+        discount: round2(Number((sale as any).discount || 0)),
         items: ((sale as any).pos_sale_items || []).map((it: any) => ({
           product_name: it.product_name, sku: it.sku || null, barcode: it.barcode || null,
           quantity: Number(it.quantity), unit_price: Number(it.unit_price),
@@ -158,6 +160,7 @@ Deno.serve(async (req) => {
         customer_email: (o as any).customer_email || null,
         shipping_address: (o as any).shipping_address || {},
         total_shipping: Number((o as any).total_shipping || 0),
+        discount: round2(Number((o as any).discount_total || (o as any).discount || 0)),
         items: ((o as any).expedition_order_items || []).map((it: any) => ({
           product_name: it.product_name, sku: it.sku || null, barcode: it.barcode || null,
           quantity: Number(it.quantity), unit_price: Number(it.unit_price),
@@ -199,6 +202,13 @@ Deno.serve(async (req) => {
     // 4. Monta produtos com snapshot fiscal
     const produtos: any[] = [];
     let totalProd = 0;
+    let totalDesc = 0;
+
+    // Distribui o desconto da venda proporcionalmente entre os itens (reduz base de cálculo dos
+    // impostos para que o tributo incida sobre o valor efetivamente cobrado, não o de tabela).
+    const descontoVenda = round2(Number(order.discount || 0));
+    const somaBruta = items.reduce((acc, it) => acc + Number(it.unit_price) * Number(it.quantity), 0);
+    const ratioDesc = descontoVenda > 0 && somaBruta > 0 ? descontoVenda / somaBruta : 0;
 
     for (const [idx, it] of items.entries()) {
       let prodFiscal: any = null;
@@ -222,7 +232,10 @@ Deno.serve(async (req) => {
       const r: any = rule;
 
       const vTotal = round2(Number(it.unit_price) * Number(it.quantity));
+      const vDesc = ratioDesc > 0 ? round2(vTotal * ratioDesc) : 0;
+      const vBase = round2(vTotal - vDesc);
       totalProd += vTotal;
+      totalDesc += vDesc;
 
       const origemFinal = prodFiscal?.origem != null ? Number(prodFiscal.origem) : Number(r.origem_mercadoria ?? 0);
       const nameUpper = sanitize(it.product_name || "").toUpperCase();
@@ -249,17 +262,18 @@ Deno.serve(async (req) => {
         Quantidade: Number(it.quantity),
         ValorUnitario: round2(Number(it.unit_price)),
         ValorTotal: vTotal,
+        ...(vDesc > 0 ? { ValorDesconto: vDesc } : {}),
         Origem: origemFinal,
         CEST: prodFiscal?.cest || undefined,
         Imposto: {
           ICMS: {
             CodSituacaoTributaria: String(r.csosn_icms || r.cst_icms || "102"),
             AliquotaICMS: Number(r.aliq_icms || 0),
-            BaseCalculo: vTotal,
-            ValorIcms: round2(vTotal * Number(r.aliq_icms || 0) / 100),
+            BaseCalculo: vBase,
+            ValorIcms: round2(vBase * Number(r.aliq_icms || 0) / 100),
           },
-          PIS:    { CodSituacaoTributaria: String(r.cst_pis || "07"),    Aliquota: Number(r.aliq_pis || 0),    BaseCalculo: vTotal },
-          COFINS: { CodSituacaoTributaria: String(r.cst_cofins || "07"), Aliquota: Number(r.aliq_cofins || 0), BaseCalculo: vTotal },
+          PIS:    { CodSituacaoTributaria: String(r.cst_pis || "07"),    Aliquota: Number(r.aliq_pis || 0),    BaseCalculo: vBase },
+          COFINS: { CodSituacaoTributaria: String(r.cst_cofins || "07"), Aliquota: Number(r.aliq_cofins || 0), BaseCalculo: vBase },
           IPI:    { CodSituacaoTributaria: "53", CodEnquadramento: "999", Aliquota: 0 },
         },
       });
@@ -267,7 +281,7 @@ Deno.serve(async (req) => {
 
     // 5. Frete (a ser somado ao total da nota como vFrete; opcional)
     const vFrete = round2(Number(order.total_shipping || 0));
-    const valorTotalNota = round2(totalProd + vFrete);
+    const valorTotalNota = round2(totalProd - totalDesc + vFrete);
 
     // 6. Cria registro pendente
     const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({

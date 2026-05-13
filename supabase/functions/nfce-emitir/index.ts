@@ -104,6 +104,13 @@ Deno.serve(async (req) => {
     const ufDestino = (sale.shipping_state || ufOrigem).toUpperCase();
     const produtos: any[] = [];
     let totalProd = 0;
+    let totalDesc = 0;
+
+    // Distribui desconto proporcionalmente entre os itens (reduz base de cálculo dos impostos
+    // para que o imposto seja sobre o valor efetivamente cobrado do cliente, não o de tabela).
+    const descontoVenda = round2(Number(sale.discount || 0));
+    const somaBruta = items.reduce((acc: number, it: any) => acc + Number(it.unit_price) * Number(it.quantity), 0);
+    const ratioDesc = descontoVenda > 0 && somaBruta > 0 ? descontoVenda / somaBruta : 0;
 
     for (const [idx, it] of items.entries()) {
       // Busca dados fiscais via products_master (importação Tiny) usando GTIN/SKU
@@ -126,7 +133,10 @@ Deno.serve(async (req) => {
 
       const r: any = rule;
       const vTotal = round2(Number(it.unit_price) * Number(it.quantity));
+      const vDesc = ratioDesc > 0 ? round2(vTotal * ratioDesc) : 0;
+      const vBase = round2(vTotal - vDesc);
       totalProd += vTotal;
+      totalDesc += vDesc;
 
       // Origem prioriza o cadastro do produto (Tiny) — pode haver importados (origem 1/2)
       const origemFinal = prodFiscal?.origem != null ? Number(prodFiscal.origem) : Number(r.origem_mercadoria ?? 0);
@@ -176,34 +186,37 @@ Deno.serve(async (req) => {
         Quantidade: Number(it.quantity),
         ValorUnitario: round2(Number(it.unit_price)),
         ValorTotal: vTotal,
+        ...(vDesc > 0 ? { ValorDesconto: vDesc } : {}),
         Origem: origemFinal,
         CEST: cestFinal || undefined,
         Imposto: {
           ICMS: {
             CodSituacaoTributaria: String(r.csosn_icms || r.cst_icms || "102"),
             AliquotaICMS: Number(r.aliq_icms || 0),
-            BaseCalculo: vTotal,
-            ValorIcms: round2(vTotal * Number(r.aliq_icms || 0) / 100),
+            BaseCalculo: vBase,
+            ValorIcms: round2(vBase * Number(r.aliq_icms || 0) / 100),
           },
           PIS: {
             CodSituacaoTributaria: String(r.cst_pis || "07"),
             Aliquota: Number(r.aliq_pis || 0),
-            BaseCalculo: vTotal,
+            BaseCalculo: vBase,
           },
           COFINS: {
             CodSituacaoTributaria: String(r.cst_cofins || "07"),
             Aliquota: Number(r.aliq_cofins || 0),
-            BaseCalculo: vTotal,
+            BaseCalculo: vBase,
           },
         },
       });
     }
 
+    const totalLiquido = round2(totalProd - totalDesc);
+
     // 4. Cria registro pendente (número/série virão da resposta — o painel BrasilNFe controla a numeração)
     const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
       company_id: companyId, pos_sale_id: sale_id, modelo: 65, serie: 1,
       numero: null, ambiente, status: "pending",
-      valor_total: totalProd, cpf_destinatario: cpfDest,
+      valor_total: totalLiquido, cpf_destinatario: cpfDest,
       nome_destinatario: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
     }).select().single();
     if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
@@ -251,7 +264,7 @@ Deno.serve(async (req) => {
         IndicadorPagamento: 0,
         FormaPagamento: formaPagamento,
         Descricao: descricaoPagamento,
-        VlPago: round2(totalProd),
+        VlPago: totalLiquido,
       }],
     };
 
