@@ -8,10 +8,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes } from "lucide-react";
+import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes, Sparkles } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
 import { ProductStockManagerDialog } from "./ProductStockManagerDialog";
+import { UnifiedProductsList } from "./UnifiedProductsList";
 import { toast } from "sonner";
 
 interface Master {
@@ -35,6 +36,10 @@ interface VariantSummary {
 }
 
 export function ProductsList() {
+  const [view, setView] = useState<"unified" | "legacy">(() => {
+    if (typeof window === "undefined") return "unified";
+    return (localStorage.getItem("products_view") as any) || "unified";
+  });
   const [items, setItems] = useState<Master[]>([]);
   const [variantSummary, setVariantSummary] = useState<Record<string, VariantSummary>>({});
   const [loading, setLoading] = useState(true);
@@ -44,6 +49,11 @@ export function ProductsList() {
   const [stockManagerId, setStockManagerId] = useState<string | null>(null);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [backfilling, setBackfilling] = useState(false);
+
+  function setViewPersist(v: "unified" | "legacy") {
+    setView(v);
+    try { localStorage.setItem("products_view", v); } catch {}
+  }
 
   async function backfillCosts() {
     setBackfilling(true);
@@ -192,6 +202,17 @@ export function ProductsList() {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center gap-1 p-1 rounded-lg border bg-muted/40 w-fit">
+        <Button size="sm" variant={view === "unified" ? "default" : "ghost"} onClick={() => setViewPersist("unified")} className="gap-1">
+          <Sparkles className="h-3.5 w-3.5" /> Catálogo Unificado
+        </Button>
+        <Button size="sm" variant={view === "legacy" ? "default" : "ghost"} onClick={() => setViewPersist("legacy")}>
+          Legacy
+        </Button>
+      </div>
+
+      {view === "unified" ? <UnifiedProductsList /> : (
+      <div className="space-y-4">
       <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
         <div className="relative flex-1">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -391,6 +412,8 @@ export function ProductsList() {
         open={!!stockManagerId}
         onOpenChange={(v) => !v && setStockManagerId(null)}
       />
+    </div>
+      )}
     </div>
   );
 }
