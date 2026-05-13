@@ -40,15 +40,20 @@ export default function FiscalDocuments() {
   const emit = async () => {
     if (!saleId.trim()) return toast.error("Informe um sale_id");
     setEmitting(true);
-    const { data, error } = await supabase.functions.invoke("nfce-emitir", { body: { sale_id: saleId.trim() } });
-    setEmitting(false);
-    if (error) return toast.error(error.message);
-    if ((data as any)?.ok) {
-      toast.success(`NFC-e ${(data as any).numero} autorizada`);
-    } else {
-      toast.error(`Falhou: ${(data as any)?.response?.Mensagem || JSON.stringify(data)}`);
+    try {
+      const { data, error } = await supabase.functions.invoke("nfce-emitir", { body: { sale_id: saleId.trim() } });
+      if (error) {
+        const { extractEdgeError } = await import("@/lib/edgeFunctionError");
+        toast.error(await extractEdgeError(error, "Erro ao emitir NFC-e"), { duration: 12000 });
+      } else if ((data as any)?.ok) {
+        toast.success(`NFC-e ${(data as any).numero} autorizada`);
+      } else {
+        toast.error((data as any)?.error || (data as any)?.response?.Mensagem || "Falha ao emitir NFC-e", { duration: 12000 });
+      }
+    } finally {
+      setEmitting(false);
+      load();
     }
-    load();
   };
 
   const statusBadge = (s: string) => {
