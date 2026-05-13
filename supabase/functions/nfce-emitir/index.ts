@@ -264,7 +264,7 @@ Deno.serve(async (req) => {
         IndicadorPagamento: 0,
         FormaPagamento: formaPagamento,
         Descricao: descricaoPagamento,
-        VlPago: round2(totalProd),
+        VlPago: totalLiquido,
       }],
     };
 
