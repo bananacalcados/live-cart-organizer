@@ -9352,6 +9352,7 @@ export type Database = {
           image_url: string | null
           is_active: boolean
           name: string
+          parent_sku: string | null
           price: number
           size: string | null
           sku: string
@@ -9372,6 +9373,7 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean
           name: string
+          parent_sku?: string | null
           price?: number
           size?: string | null
           sku?: string
@@ -9392,6 +9394,7 @@ export type Database = {
           image_url?: string | null
           is_active?: boolean
           name?: string
+          parent_sku?: string | null
           price?: number
           size?: string | null
           sku?: string
@@ -10117,6 +10120,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pos_stock_adjustments_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_a1_orphan_pos_products"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pos_stock_adjustments_sale_id_fkey"
             columns: ["sale_id"]
             isOneToOne: false
@@ -10464,7 +10474,104 @@ export type Database = {
             referencedRelation: "pos_products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_dedup_index_representative_pos_product_id_fkey"
+            columns: ["representative_pos_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_a1_orphan_pos_products"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      product_master_data: {
+        Row: {
+          brand: string | null
+          category: string | null
+          cest: string | null
+          cfop: string | null
+          classe_produto: string | null
+          cost_price: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          height_cm: number | null
+          images: string[] | null
+          is_active: boolean
+          length_cm: number | null
+          markup: number | null
+          name: string
+          ncm: string | null
+          needs_review: boolean | null
+          origem: string | null
+          parent_sku: string
+          review_reason: string | null
+          sale_price: number | null
+          shopify_product_id: string | null
+          tiny_product_id: string | null
+          unidade: string | null
+          updated_at: string
+          weight_kg: number | null
+          width_cm: number | null
+        }
+        Insert: {
+          brand?: string | null
+          category?: string | null
+          cest?: string | null
+          cfop?: string | null
+          classe_produto?: string | null
+          cost_price?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          height_cm?: number | null
+          images?: string[] | null
+          is_active?: boolean
+          length_cm?: number | null
+          markup?: number | null
+          name: string
+          ncm?: string | null
+          needs_review?: boolean | null
+          origem?: string | null
+          parent_sku: string
+          review_reason?: string | null
+          sale_price?: number | null
+          shopify_product_id?: string | null
+          tiny_product_id?: string | null
+          unidade?: string | null
+          updated_at?: string
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Update: {
+          brand?: string | null
+          category?: string | null
+          cest?: string | null
+          cfop?: string | null
+          classe_produto?: string | null
+          cost_price?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          height_cm?: number | null
+          images?: string[] | null
+          is_active?: boolean
+          length_cm?: number | null
+          markup?: number | null
+          name?: string
+          ncm?: string | null
+          needs_review?: boolean | null
+          origem?: string | null
+          parent_sku?: string
+          review_reason?: string | null
+          sale_price?: number | null
+          shopify_product_id?: string | null
+          tiny_product_id?: string | null
+          unidade?: string | null
+          updated_at?: string
+          weight_kg?: number | null
+          width_cm?: number | null
+        }
+        Relationships: []
       }
       product_stock_movements: {
         Row: {
@@ -11838,6 +11945,75 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_movements: {
+        Row: {
+          barcode: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          idempotency_key: string | null
+          movement_type: string
+          notes: string | null
+          parent_sku: string | null
+          pos_product_id: string | null
+          quantity: number
+          reference_id: string | null
+          reference_type: string | null
+          sku: string | null
+          store_id: string | null
+          unit_cost: number | null
+        }
+        Insert: {
+          barcode?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string | null
+          movement_type: string
+          notes?: string | null
+          parent_sku?: string | null
+          pos_product_id?: string | null
+          quantity: number
+          reference_id?: string | null
+          reference_type?: string | null
+          sku?: string | null
+          store_id?: string | null
+          unit_cost?: number | null
+        }
+        Update: {
+          barcode?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          idempotency_key?: string | null
+          movement_type?: string
+          notes?: string | null
+          parent_sku?: string | null
+          pos_product_id?: string | null
+          quantity?: number
+          reference_id?: string | null
+          reference_type?: string | null
+          sku?: string | null
+          store_id?: string | null
+          unit_cost?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_pos_product_id_fkey"
+            columns: ["pos_product_id"]
+            isOneToOne: false
+            referencedRelation: "pos_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_pos_product_id_fkey"
+            columns: ["pos_product_id"]
+            isOneToOne: false
+            referencedRelation: "v_a1_orphan_pos_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       strategy_tasks: {
         Row: {
           completed_at: string | null
@@ -12512,6 +12688,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "pos_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiny_stock_sync_errors_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_a1_orphan_pos_products"
             referencedColumns: ["id"]
           },
           {
@@ -13517,6 +13700,36 @@ export type Database = {
           },
         ]
       }
+      v_a1_backfill_summary: {
+        Row: {
+          distinct_parents_in_pos: number | null
+          pos_orphans: number | null
+          pos_with_parent: number | null
+          total_master_data: number | null
+          total_pos_products: number | null
+        }
+        Relationships: []
+      }
+      v_a1_orphan_pos_products: {
+        Row: {
+          barcode: string | null
+          id: string | null
+          name: string | null
+          parent_sku: string | null
+          sku: string | null
+          status: string | null
+          store_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_products_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       analyze_catalog_sync_from_pos: { Args: never; Returns: Json }
@@ -14027,6 +14240,7 @@ export type Database = {
           image_url: string | null
           is_active: boolean
           name: string
+          parent_sku: string | null
           price: number
           size: string | null
           sku: string
