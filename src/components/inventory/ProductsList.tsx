@@ -65,9 +65,31 @@ export function ProductsList() {
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("products_master")
-      .select("*")
+    const term = search.trim();
+    let query = supabase.from("products_master").select("*");
+
+    if (term) {
+      // 1) Look up matching variants by SKU/GTIN to find their master_ids
+      const { data: variantHits } = await supabase
+        .from("product_variants")
+        .select("master_id")
+        .or(`sku.ilike.%${term}%,gtin.ilike.%${term}%`)
+        .limit(200);
+      const masterIds = Array.from(new Set((variantHits || []).map((v: any) => v.master_id).filter(Boolean)));
+
+      // 2) Match on master fields (name, sku_root, brand) OR ids found via variants
+      const orParts = [
+        `name.ilike.%${term}%`,
+        `sku_root.ilike.%${term}%`,
+        `brand.ilike.%${term}%`,
+      ];
+      if (masterIds.length > 0) {
+        orParts.push(`id.in.(${masterIds.join(",")})`);
+      }
+      query = query.or(orParts.join(","));
+    }
+
+    const { data, error } = await query
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) {
