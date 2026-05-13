@@ -259,39 +259,71 @@ export function UnifiedProductsList() {
                 {expanded[g.parent_sku] && (
                   <div className="ml-9 mt-2 border-l-2 pl-3 space-y-1">
                     <div className="grid grid-cols-12 gap-2 text-[10px] uppercase text-muted-foreground font-semibold pb-1 border-b">
-                      <div className="col-span-3">Loja</div>
+                      <div className="col-span-2">Loja</div>
+                      <div className="col-span-2">Cor</div>
+                      <div className="col-span-1">Tam</div>
                       <div className="col-span-2">SKU</div>
                       <div className="col-span-3">Barcode</div>
-                      <div className="col-span-2 text-right">Estoque</div>
-                      <div className="col-span-2 text-right">Preço</div>
+                      <div className="col-span-1 text-right">Estq</div>
+                      <div className="col-span-1 text-right">R$</div>
                     </div>
-                    {g.skus.map((s) => (
-                      <div
-                        key={s.id}
-                        className="grid grid-cols-12 gap-2 text-xs items-center py-1 hover:bg-muted/30 rounded cursor-pointer"
-                        onClick={() => setEditingSku(s)}
-                      >
-                        <div className="col-span-3 flex items-center gap-1">
-                          <StoreIcon className="h-3 w-3 text-muted-foreground" />
-                          {storeName(s.store_id)}
+                    {g.skus
+                      .slice()
+                      .sort((a, b) =>
+                        (a.color || "").localeCompare(b.color || "") ||
+                        (a.size || "").localeCompare(b.size || "", undefined, { numeric: true }) ||
+                        storeName(a.store_id).localeCompare(storeName(b.store_id))
+                      )
+                      .map((s) => (
+                        <div
+                          key={s.id}
+                          className="grid grid-cols-12 gap-2 text-xs items-center py-1 hover:bg-muted/30 rounded cursor-pointer"
+                          onClick={() => setEditingSku(s)}
+                        >
+                          <div className="col-span-2 flex items-center gap-1 truncate">
+                            <StoreIcon className="h-3 w-3 text-muted-foreground" />
+                            <span className="truncate">{storeName(s.store_id)}</span>
+                          </div>
+                          <div className="col-span-2 truncate">{s.color || s.variant || "—"}</div>
+                          <div className="col-span-1 font-semibold">{s.size || "—"}</div>
+                          <div className="col-span-2 font-mono truncate">{s.sku || "—"}</div>
+                          <div className="col-span-3 font-mono truncate">{s.barcode || "—"}</div>
+                          <div className={`col-span-1 text-right font-semibold ${(s.stock || 0) <= 0 ? "text-destructive" : ""}`}>
+                            {s.stock || 0}
+                          </div>
+                          <div className="col-span-1 text-right">
+                            {(s.price || 0).toFixed(0)}
+                          </div>
                         </div>
-                        <div className="col-span-2 font-mono truncate">{s.sku || "—"}</div>
-                        <div className="col-span-3 font-mono truncate">{s.barcode || "—"}</div>
-                        <div className={`col-span-2 text-right font-semibold ${(s.stock || 0) <= 0 ? "text-destructive" : ""}`}>
-                          {s.stock || 0}
-                        </div>
-                        <div className="col-span-2 text-right">
-                          R$ {(s.price || 0).toFixed(2)}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    {g.skus.length === 0 && (
+                      <div className="text-xs text-muted-foreground py-2">Sem variações cadastradas no PDV.</div>
+                    )}
                   </div>
                 )}
               </CardContent>
             </Card>
           ))}
-          {grouped.length > 200 && (
-            <p className="text-center text-xs text-muted-foreground">Mostrando 200 de {grouped.length}. Refine a busca.</p>
+          {grouped.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <Button
+                size="sm" variant="outline"
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                ← Anterior
+              </Button>
+              <div className="text-xs text-muted-foreground">
+                Página {page + 1} de {totalPages} · {grouped.length} produtos
+              </div>
+              <Button
+                size="sm" variant="outline"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              >
+                Próxima →
+              </Button>
+            </div>
           )}
         </div>
       )}
