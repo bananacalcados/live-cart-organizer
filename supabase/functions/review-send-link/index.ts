@@ -60,7 +60,7 @@ serve(async (req) => {
         customer_name: customer_name || null,
         store_id: store_id || null,
         store_phone: store_phone || null,
-        cashback_value: cashback_value || 0,
+        cashback_value: finalCashback,
       })
       .select('id, token, cashback_value')
       .single();
