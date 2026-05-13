@@ -1304,6 +1304,17 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                           {!currentCustomer?.whatsapp ? 'Cliente sem WhatsApp.' : 'Selecione a instância na seção Rastreio acima.'}
                         </p>
                       )}
+                      {fiscalDoc.ambiente === 'homologacao' && (
+                        <Button
+                          onClick={handleReemitProducao}
+                          disabled={reemittingProd}
+                          size="sm"
+                          className="h-9 text-xs col-span-2 bg-amber-600 text-white hover:bg-amber-700 font-bold"
+                        >
+                          {reemittingProd ? <Loader2 className="h-4 w-4 animate-spin" /> : '🔄'}
+                          Re-emitir em PRODUÇÃO (nota com valor fiscal)
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}
