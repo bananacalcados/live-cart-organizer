@@ -1,165 +1,101 @@
-# Plano — Live Shopping com captação, indicação e automação
 
-## Escopo desta entrega (Fase 1)
+# Plano — Opção A: Unificação real em `pos_products`
 
-1. Builder visual de **LP do Evento** (sem precisar chamar o agente)
-2. Builder de **Typebot conversacional** (fluxo de perguntas) reutilizando o mesmo backend
-3. **Sistema de indicação** com link único por lead, contador e prêmio aos 3 cadastros
-4. Novo **gatilho de automação**: `Lead capturado em LP/Typebot` que dispara templates de WhatsApp já existentes
+## Objetivo
+Tornar `pos_products` a **única fonte de verdade operacional** (estoque por loja, código de barras, vendas PDV/site, entrada de NF-e, emissão de NF-e/NFC-e via BrasilNFe). Os metadados fiscais e de catálogo (NCM, CFOP, custo, imagens, descrição, hierarquia pai→variantes) passam para uma tabela complementar **`product_master_data`** ligada por `parent_sku`. No fim, `products_master` e `product_variants` são removidas.
 
-Fases futuras (fora do escopo agora): agente de IA do evento (DM 1:1) e gamificação avançada.
+## Arquitetura final
 
----
+```text
+                    ┌──────────────────────────┐
+                    │  product_master_data     │  (1 linha por modelo-pai)
+                    │  - parent_sku (PK)       │
+                    │  - name, description     │
+                    │  - ncm, cfop, cest       │
+                    │  - cost, markup          │
+                    │  - images[], shopify_id  │
+                    └─────────────┬────────────┘
+                                  │ parent_sku
+                    ┌─────────────▼────────────┐
+                    │       pos_products       │  (1 linha por SKU × loja)
+                    │  - sku, parent_sku       │
+                    │  - color, size, barcode  │
+                    │  - store_id, stock       │
+                    │  - price, promo_price    │
+                    └──────────────────────────┘
+                              ▲       ▲
+                  PDV / Site  │       │  Entrada NF-e
+                  (baixa estoque)     (sobe estoque)
+```
 
-## 1. Banco de dados
-
-Novas tabelas:
-
-- **`event_landing_pages`**
-  - `event_id` (fk), `slug` único, `published`, `theme_json` (cores/fontes), `config_json` (lista de blocos), `hero_image_url`, `og_image_url`
-  
-- **`event_typebots`**
-  - `event_id` (fk), `slug` único, `published`, `flow_json` (perguntas, validações, mensagens), `welcome_message`, `success_message`
-
-- **`event_leads`**
-  - `event_id`, `name`, `phone` (E.164), `source` ('lp' | 'typebot' | 'referral'), `referral_token` (único, gerado no insert), `referred_by_lead_id` (fk self), `referred_count` (mantido por trigger), `prize_unlocked_at`, `vip_group_sent_at`, `landing_page_id`, `typebot_id`, `utm_*`
-
-- **Trigger** em `event_leads`: ao inserir com `referred_by_lead_id`, incrementa `referred_count` do indicador. Se chegar a 3 e `prize_unlocked_at` for nulo, marca timestamp e emite evento `referral_milestone_3`.
-
-- **Extensão em `automation_triggers`** (tabela existente): novos tipos de evento `lp_lead_captured`, `typebot_completed`, `referral_milestone_3`.
-
-Storage: bucket público `event-landing-assets` para imagens de fundo/hero.
-
----
-
-## 2. Builder de LP do Evento
-
-Tela nova em `Eventos > {evento} > Landing Pages`.
-
-**Editor visual** (split view: blocos à esquerda, preview à direita, mobile/desktop toggle):
-
-Blocos arrastáveis disponíveis:
-- **Hero com imagem de fundo**: upload + controles de posição (top/center/bottom), modo (cover/contain), overlay escuro 0–100%, **desfoque do fundo** 0–20px, altura
-- **Imagem em região específica**: hero/lateral/faixa, com posicionamento livre
-- **Countdown regressivo**: input de data/hora final
-- **Data do evento** (texto formatado automaticamente)
-- **Tema do evento** (título + subtítulo)
-- **Regras do evento** (rich text)
-- **Botão CTA** → link do grupo VIP
-- **Formulário de captura**: nome + WhatsApp (validação E.164 com 9º dígito automático)
-- **Texto livre** (rich text)
-
-Configurações da página:
-- Slug customizado: `/live/{slug}`
-- Cores primárias e fonte
-- OG image (preview no WhatsApp)
-- Mensagem de sucesso após cadastro + link do grupo VIP exibido
-- Toggle "exigir aceite de privacidade"
-
-Rota pública: **`/live/:slug`** (renderiza `config_json` em React).
-Rota pública com indicação: **`/live/:slug?ref={referral_token}`**.
+Tudo (PDV, site, expedição, balanço, captação, NF-e entrada, BrasilNFe saída, edição de produto) lê e escreve em `pos_products` + `product_master_data`.
 
 ---
 
-## 3. Builder de Typebot
+## Etapas
 
-Tela em `Eventos > {evento} > Typebots`.
+### Etapa A1 — Criar `product_master_data` e backfill
+- `CREATE TABLE product_master_data` com NCM, CFOP, CEST, descrição, custo, markup, imagens, shopify_id, etc.
+- Backfill a partir de `products_master` usando `parent_sku` deduzido (mesma lógica de `extract_base_product_name` já validada).
+- Adicionar coluna `parent_sku` em `pos_products` (se não existir) e popular via mesma regra.
+- **Risco:** SKUs sem padrão claro de "pai" ficam órfãos.
+- **Mitigação:** relatório de órfãos antes de prosseguir; fallback `parent_sku = sku` para itens únicos.
 
-Editor simples de fluxo linear (sem ramificações nessa primeira versão):
-- Lista ordenada de passos: pergunta de texto, pergunta de telefone, mensagem informativa, botão final
-- Cada passo tem rótulo, placeholder, validação (texto/telefone)
-- Mensagem de boas-vindas e mensagem de sucesso com link do grupo VIP
+### Etapa A2 — Trigger de entrada NF-e direto em `pos_products`
+- Reescrever o pipeline de importação NF-e (`NfeImporter`, `ProductCaptureTab`, edge `tiny-fiscal-import`) para:
+  - Inserir/atualizar linha em `pos_products` (uma por loja de destino) **somando estoque**.
+  - Inserir/atualizar `product_master_data` (NCM, custo, descrição) por `parent_sku`.
+- **Risco:** quebrar fluxo fiscal em produção durante a troca.
+- **Mitigação:** feature flag `use_unified_inventory` no edge function; rollback = desligar flag.
 
-Rota pública: **`/typebot/:slug`** e **`/typebot/:slug?ref={referral_token}`**.
+### Etapa A3 — Reescrever aba Produtos (`ProductsList`, `ProductEditDialog`, `ProductStockManagerDialog`)
+- Listar agrupando `pos_products` por `parent_sku` (cabeçalho) + variantes (SKUs).
+- Estoque exibido = soma real por loja (já está em `pos_products`).
+- Edição de nome/descrição/NCM/imagens grava em `product_master_data`.
+- Edição de preço/cor/tamanho/código de barras grava em `pos_products`.
+- **Risco:** perda de campos hoje só presentes em `product_variants`.
+- **Mitigação:** auditoria pré-migração lista campos divergentes; copia para `pos_products` ou `product_master_data` antes de cortar.
 
-Backend de captura é o mesmo da LP (mesma edge function), só muda a interface.
+### Etapa A4 — Reescrever emissão BrasilNFe (NF-e / NFC-e loja CENTRO)
+- Edge function de emissão lê `pos_products` (preço, qtd, código de barras) + `product_master_data` (NCM, CFOP, descrição fiscal).
+- Trigger pós-emissão: dá baixa em `pos_products.stock` da loja correspondente atomicamente.
+- **Risco:** divergência fiscal se NCM faltar.
+- **Mitigação:** validação obrigatória no momento da emissão (bloqueia se NCM ausente) + relatório prévio de produtos sem NCM.
 
----
+### Etapa A5 — Garantir baixa unificada em todas as vendas
+- PDV: já baixa de `pos_products` ✅
+- Site/checkout: confirmar trigger que baixa `pos_products` ao confirmar pagamento.
+- Livete/eventos: idem.
+- **Risco:** trigger duplicado dando baixa dobrada.
+- **Mitigação:** idempotência por `order_id + sku` (tabela `stock_movements` já existe — usar como lock).
 
-## 4. Edge function `event-lead-capture`
-
-Recebe `{ event_id, source, lp_id|typebot_id, name, phone, ref_token? }`:
-
-1. Normaliza telefone (E.164 + 9º dígito)
-2. Resolve `referred_by_lead_id` via `ref_token`
-3. Verifica duplicata (mesmo `event_id` + `phone` → retorna lead existente sem criar novo)
-4. Insere `event_leads` com `referral_token` único gerado
-5. Emite evento `lp_lead_captured` (ou `typebot_completed`) para o motor de automações
-6. Retorna `{ referral_token, vip_group_link, share_message }` para a página exibir
-
-Trigger de banco cuida do `referral_milestone_3` quando atinge 3 indicados.
-
----
-
-## 5. Integração com Automações
-
-No módulo Automações, adicionar **3 novos tipos de gatilho** no selector:
-
-- `Lead capturado em LP do Evento` (filtro: evento, opcional: LP específica)
-- `Lead capturado em Typebot` (filtro: evento, opcional: typebot específico)
-- `Marco de 3 indicações alcançado` (filtro: evento)
-
-**Variáveis disponíveis** nos templates/mensagens:
-- `{{nome}}` — nome do lead
-- `{{whatsapp}}` — telefone
-- `{{link_grupo_vip}}` — vem do evento
-- `{{link_indicacao}}` — URL: `https://checkout.bananacalcados.com.br/live/{slug}?ref={token}`
-- `{{data_evento}}`, `{{tema_evento}}`
-- `{{nome_indicador}}` (quando aplicável)
-- `{{indicados_count}}` (no marco de 3)
-
-As ações de automação (enviar template WhatsApp, delay, tag) já existem e ficam reutilizadas.
+### Etapa A6 — Remover triggers antigas (Etapa 3) e descomissionar tabelas
+- `DROP TRIGGER trg_master_name_to_pos / trg_variant_to_pos / trg_pos_to_catalog`
+- `DROP VIEW product_variant_stock` (se a aba Produtos já não usar mais)
+- `DROP TABLE product_variants`
+- `DROP TABLE products_master`
+- **Risco:** algum componente ainda lendo das tabelas antigas → erro 500.
+- **Mitigação:** antes do DROP, `RENAME` para `_deprecated_products_master` por 7 dias; monitorar logs Supabase; só então DROP definitivo.
 
 ---
 
-## 6. Página pública com indicação
+## Ordem de execução e checkpoints
+1. A1 (migração + backfill + relatório de órfãos) → **checkpoint: você valida o relatório.**
+2. A2 (NF-e entrada) → **checkpoint: subir 1 NF-e de teste em homologação.**
+3. A3 (aba Produtos) → **checkpoint: você navega e confirma estoque batendo.**
+4. A4 (BrasilNFe saída loja CENTRO) → **checkpoint: emitir 1 NFC-e de teste.**
+5. A5 (auditoria de baixas) → **checkpoint: 24h observando `stock_movements`.**
+6. A6 (drop tabelas antigas) → só após 7 dias sem erro nas antigas renomeadas.
 
-Após cadastrar, a LP/Typebot mostra tela de sucesso com:
-- Link do grupo VIP (botão)
-- **Card "Indique 3 amigos e ganhe {prêmio}"** com:
-  - Link único copiável: `/live/{slug}?ref={token}`
-  - Botão "Compartilhar no WhatsApp" com mensagem pré-pronta
-  - Contador: `Você já indicou X de 3`
+## Riscos transversais
+- **Concorrência de baixa**: usar `UPDATE ... WHERE stock >= qty RETURNING` para evitar estoque negativo acidental (preservando os negativos atuais que você quer manter para balanço).
+- **Multi-loja**: toda escrita deve carregar `store_id` explícito; faltar `store_id` = rejeitar.
+- **Rollback**: cada etapa é uma migration reversível; A6 é a única irreversível e só roda após janela de observação.
 
----
-
-## 7. Detalhes técnicos
-
-### Estrutura de arquivos novos
-- `src/pages/events/EventLandingBuilder.tsx` — editor visual
-- `src/pages/events/EventTypebotBuilder.tsx` — editor de fluxo
-- `src/pages/public/EventLandingView.tsx` — render público `/live/:slug`
-- `src/pages/public/EventTypebotView.tsx` — render público `/typebot/:slug`
-- `src/components/events/landing-blocks/*` — um componente por tipo de bloco
-- `src/components/events/ReferralCard.tsx` — card de indicação pós-cadastro
-- `supabase/functions/event-lead-capture/index.ts`
-- `supabase/migrations/*` — tabelas + trigger + extensão dos triggers de automação
-
-### Validação
-- Zod schemas para `config_json`, `flow_json` e payload da edge function
-- Telefone passa pelo `phoneUtils` já existente (E.164 + 9º dígito BR)
-
-### Segurança
-- RLS em `event_landing_pages`, `event_typebots`, `event_leads` (admin/operadores leem e editam; público só pode chamar a edge function para inserir leads, não acessa a tabela direto)
-- Rate limit na edge function de captura (por IP)
-- `referral_token` gerado com `gen_random_bytes` (alta entropia)
+## O que NÃO muda
+- PDV, expedição, balanço, análise IA, management — já leem `pos_products`, continuam funcionando sem alteração de código.
+- Sync Tiny continua existindo como **canal auxiliar** (recebe atualizações que vierem de fora), não como fonte de verdade.
 
 ---
 
-## Entregáveis dessa fase
-
-- [ ] Migrations das 3 tabelas + trigger + bucket
-- [ ] Edge function `event-lead-capture`
-- [ ] Builder visual de LP com todos os blocos listados
-- [ ] Builder de Typebot linear
-- [ ] Páginas públicas `/live/:slug` e `/typebot/:slug` com suporte a `?ref=`
-- [ ] Card de indicação pós-cadastro
-- [ ] 3 novos gatilhos no módulo Automações
-- [ ] Variáveis novas disponíveis nos templates
-
-## Fora dessa fase (próximos passos)
-
-- Agente de IA do evento em DM 1:1 (identifica lead, responde dúvidas, manda link de indicação sob demanda, consulta status de indicados)
-- Gamificação com leaderboard público de indicações
-- A/B test de LPs
-- Ramificações condicionais no Typebot
+Posso começar pela **Etapa A1** (criar `product_master_data` + backfill + relatório de órfãos para você revisar)?
