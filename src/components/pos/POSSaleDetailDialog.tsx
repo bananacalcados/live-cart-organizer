@@ -1263,6 +1263,9 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-[11px] text-emerald-900">
                         <p className="font-bold">✅ {sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'} autorizada{fiscalDoc.numero ? ` — nº ${fiscalDoc.numero}/${fiscalDoc.serie ?? '-'}` : ''}</p>
+                        {fiscalDoc.ambiente === 'homologacao' && (
+                          <p className="mt-0.5 inline-block rounded bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-900">⚠️ Homologação — sem valor fiscal</p>
+                        )}
                         {fiscalDoc.chave_acesso && (
                           <p className="font-mono text-[10px] break-all text-emerald-800/80">{fiscalDoc.chave_acesso}</p>
                         )}
