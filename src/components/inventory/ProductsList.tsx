@@ -413,5 +413,7 @@ export function ProductsList() {
         onOpenChange={(v) => !v && setStockManagerId(null)}
       />
     </div>
+      )}
+    </div>
   );
 }
