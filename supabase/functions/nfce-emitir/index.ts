@@ -204,17 +204,19 @@ Deno.serve(async (req) => {
           COFINS: {
             CodSituacaoTributaria: String(r.cst_cofins || "07"),
             Aliquota: Number(r.aliq_cofins || 0),
-            BaseCalculo: vTotal,
+            BaseCalculo: vBase,
           },
         },
       });
     }
 
+    const totalLiquido = round2(totalProd - totalDesc);
+
     // 4. Cria registro pendente (número/série virão da resposta — o painel BrasilNFe controla a numeração)
     const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
       company_id: companyId, pos_sale_id: sale_id, modelo: 65, serie: 1,
       numero: null, ambiente, status: "pending",
-      valor_total: totalProd, cpf_destinatario: cpfDest,
+      valor_total: totalLiquido, cpf_destinatario: cpfDest,
       nome_destinatario: sale.customer_name || (sale.pos_customers as any)?.name || "CONSUMIDOR",
     }).select().single();
     if (dErr) throw new Error(`Insert fiscal_documents: ${dErr.message}`);
