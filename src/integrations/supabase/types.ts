@@ -7353,6 +7353,39 @@ export type Database = {
           },
         ]
       }
+      master_merge_log: {
+        Row: {
+          action: string
+          base_name: string
+          canonical_master_id: string | null
+          created_at: string
+          details: Json | null
+          id: string
+          loser_master_id: string | null
+          run_id: string
+        }
+        Insert: {
+          action: string
+          base_name: string
+          canonical_master_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          loser_master_id?: string | null
+          run_id: string
+        }
+        Update: {
+          action?: string
+          base_name?: string
+          canonical_master_id?: string | null
+          created_at?: string
+          details?: Json | null
+          id?: string
+          loser_master_id?: string | null
+          run_id?: string
+        }
+        Relationships: []
+      }
       mercadopago_accounts: {
         Row: {
           access_token: string
@@ -13421,6 +13454,20 @@ export type Database = {
     }
     Functions: {
       analyze_catalog_sync_from_pos: { Args: never; Returns: Json }
+      analyze_master_duplicates: {
+        Args: { p_limit?: number }
+        Returns: {
+          base_name: string
+          canonical_id: string
+          canonical_score: number
+          canonical_variant_count: number
+          loser_ids: string[]
+          loser_variants_total: number
+          master_count: number
+          sample_examples: Json
+          total_variants: number
+        }[]
+      }
       analyze_variant_normalization: {
         Args: never
         Returns: {
@@ -13810,6 +13857,7 @@ export type Database = {
           records_deleted: number
         }[]
       }
+      merge_master_duplicates: { Args: { p_limit?: number }; Returns: Json }
       merge_tiny_online_duplicates: {
         Args: never
         Returns: {
