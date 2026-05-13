@@ -42,6 +42,39 @@ Deno.serve(async (req) => {
       });
     }
 
+    // === A2: espelhar catálogo em product_master_data (parent_sku = sku_root) ===
+    const parentSku = master.sku_root || `PMSTR-${master.id}`;
+    const reasons: string[] = [];
+    if (!master.ncm || String(master.ncm).length < 8) reasons.push("NCM ausente/inválido");
+    if (!master.cost_price || Number(master.cost_price) <= 0) reasons.push("Custo ausente");
+    if (!master.sale_price || Number(master.sale_price) <= 0) reasons.push("Preço de venda ausente");
+
+    await supabase.from("product_master_data").upsert({
+      parent_sku: parentSku,
+      name: master.name,
+      description: master.description,
+      brand: master.brand,
+      category: master.category,
+      classe_produto: master.classe_produto,
+      ncm: master.ncm,
+      cest: master.cest,
+      cfop: master.cfop || null,
+      origem: master.origem,
+      unidade: master.unidade || "PC",
+      cost_price: master.cost_price,
+      sale_price: master.sale_price,
+      weight_kg: master.weight_kg,
+      height_cm: master.height_cm,
+      width_cm: master.width_cm,
+      length_cm: master.length_cm,
+      images: master.images || [],
+      shopify_product_id: master.shopify_product_id,
+      tiny_product_id: master.tiny_product_id,
+      is_active: true,
+      needs_review: reasons.length > 0,
+      review_reason: reasons.length > 0 ? reasons.join("; ") : null,
+    }, { onConflict: "parent_sku" });
+
     // Resolve target stores: default = ALL active stores (PDV needs product everywhere)
     let targetStoreIds: string[] = [];
     if (store_id) {
