@@ -2,7 +2,10 @@
 // Emite NF-e modelo 55 (venda online) via BrasilNFe, com endereço completo do cliente
 // e fluxo de contingência idêntico ao nfce-emitir (SEFAZ offline → pending_sefaz).
 //
-// Body: { order_id: uuid (expedition_orders.id), company_id?: uuid, ambiente?: 'homologacao'|'producao' }
+// Body: { order_id?: uuid (expedition_orders.id) | sale_id?: uuid (pos_sales.id), company_id?: uuid, ambiente?: 'homologacao'|'producao' }
+// Suporta dois fluxos:
+//   A) order_id (expedition_orders) — fluxo histórico
+//   B) sale_id  (pos_sales sale_type='online') — venda PDV online; busca company_id em pos_stores.
 //
 // ============================================================================
 // 🔒 GOLDEN PAYLOAD — segue estrutura validada (ver mem://features/fiscal/nfe-payload-golden-template)
@@ -71,22 +74,100 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { order_id, company_id: forcedCompany, ambiente: forcedAmb } = await req.json();
-    if (!order_id) throw new Error("order_id obrigatório");
+    const body = await req.json();
+    const { order_id, sale_id, company_id: forcedCompany, ambiente: forcedAmb } = body;
+    if (!order_id && !sale_id) throw new Error("order_id ou sale_id obrigatório");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Carrega pedido + itens
-    const { data: order, error: oErr } = await supabase
-      .from("expedition_orders")
-      .select("*, expedition_order_items(*)")
-      .eq("id", order_id).single();
-    if (oErr || !order) throw new Error(`Pedido não encontrado: ${oErr?.message}`);
+    // 1. Carrega pedido (expedition_orders) ou venda PDV (pos_sales) e normaliza
+    type NormItem = { product_name: string; sku: string | null; barcode: string | null; quantity: number; unit_price: number };
+    type NormOrder = {
+      customer_cpf: string | null; customer_name: string | null;
+      customer_phone: string | null; customer_email: string | null;
+      shipping_address: any; total_shipping: number;
+      items: NormItem[];
+      source: "order" | "sale"; source_id: string;
+      store_company_id: string | null;
+    };
 
-    const items = order.expedition_order_items || [];
+    let order: NormOrder;
+
+    if (sale_id) {
+      const { data: sale, error: sErr } = await supabase
+        .from("pos_sales")
+        .select("id, store_id, customer_id, customer_name, customer_phone, shipping_address, pos_sale_items(product_name, sku, barcode, quantity, unit_price)")
+        .eq("id", sale_id).single();
+      if (sErr || !sale) throw new Error(`Venda PDV não encontrada: ${sErr?.message}`);
+
+      // Cliente: vem de pos_customers se houver customer_id, senão usa shipping_address
+      let cpf: string | null = null;
+      let email: string | null = null;
+      if ((sale as any).customer_id) {
+        const { data: c } = await supabase
+          .from("pos_customers")
+          .select("cpf, email, address, address_number, complement, neighborhood, city, state, cep, name, whatsapp")
+          .eq("id", (sale as any).customer_id).maybeSingle();
+        if (c) { cpf = (c as any).cpf || null; email = (c as any).email || null; }
+      }
+
+      // Normaliza shipping_address (pode vir tanto do PDV {address, number, ...} quanto do checkout {address1, province, zip})
+      const sa = ((sale as any).shipping_address || {}) as any;
+      const shipping_address = {
+        zip: sa.zip || sa.cep,
+        province: sa.province || sa.state,
+        city: sa.city,
+        address1: sa.address1 || [sa.address, sa.number].filter(Boolean).join(", "),
+        address2: sa.address2 || sa.neighborhood || sa.complement,
+      };
+
+      // company do store
+      let storeCompanyId: string | null = null;
+      if ((sale as any).store_id) {
+        const { data: st } = await supabase.from("pos_stores").select("company_id").eq("id", (sale as any).store_id).maybeSingle();
+        storeCompanyId = (st as any)?.company_id || null;
+      }
+
+      order = {
+        customer_cpf: cpf,
+        customer_name: (sale as any).customer_name || null,
+        customer_phone: (sale as any).customer_phone || null,
+        customer_email: email,
+        shipping_address,
+        total_shipping: 0,
+        items: ((sale as any).pos_sale_items || []).map((it: any) => ({
+          product_name: it.product_name, sku: it.sku || null, barcode: it.barcode || null,
+          quantity: Number(it.quantity), unit_price: Number(it.unit_price),
+        })),
+        source: "sale", source_id: (sale as any).id,
+        store_company_id: storeCompanyId,
+      };
+    } else {
+      const { data: o, error: oErr } = await supabase
+        .from("expedition_orders")
+        .select("*, expedition_order_items(*)")
+        .eq("id", order_id).single();
+      if (oErr || !o) throw new Error(`Pedido não encontrado: ${oErr?.message}`);
+      order = {
+        customer_cpf: (o as any).customer_cpf || null,
+        customer_name: (o as any).customer_name || null,
+        customer_phone: (o as any).customer_phone || null,
+        customer_email: (o as any).customer_email || null,
+        shipping_address: (o as any).shipping_address || {},
+        total_shipping: Number((o as any).total_shipping || 0),
+        items: ((o as any).expedition_order_items || []).map((it: any) => ({
+          product_name: it.product_name, sku: it.sku || null, barcode: it.barcode || null,
+          quantity: Number(it.quantity), unit_price: Number(it.unit_price),
+        })),
+        source: "order", source_id: (o as any).id,
+        store_company_id: null,
+      };
+    }
+
+    const items = order.items;
     if (!items.length) throw new Error("Pedido sem itens");
 
     const cpfDest = digits(order.customer_cpf);
@@ -95,15 +176,15 @@ Deno.serve(async (req) => {
     const ship = (order.shipping_address || {}) as any;
     const ufDestino = ufFromProvince(ship.province) || "MG";
     const cepDest = digits(ship.zip);
-    if (!cepDest || cepDest.length !== 8) throw new Error("Pedido sem CEP válido (shipping_address.zip)");
+    if (!cepDest || cepDest.length !== 8) throw new Error("Pedido sem CEP válido (shipping_address.zip/cep)");
     const cidadeDest = sanitize(ship.city || "").toUpperCase();
     if (!cidadeDest) throw new Error("Pedido sem cidade no endereço");
 
     const { logradouro, numero } = splitStreetNumber(ship.address1);
     const bairro = sanitize(ship.address2 || "Centro").slice(0, 60) || "Centro";
 
-    // 2. Empresa
-    const companyId = forcedCompany || PILOT_COMPANY_ID;
+    // 2. Empresa (prioridade: forcedCompany > pos_stores.company_id > PILOT)
+    const companyId = forcedCompany || order.store_company_id || PILOT_COMPANY_ID;
     const { data: company } = await supabase.from("companies").select("*").eq("id", companyId).single();
     if (!company) throw new Error("Empresa não encontrada");
     if (!company.brasilnfe_token) throw new Error("Empresa sem token BrasilNFe");
@@ -190,7 +271,10 @@ Deno.serve(async (req) => {
 
     // 6. Cria registro pendente
     const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
-      company_id: companyId, order_id, modelo: 55, serie: 1,
+      company_id: companyId,
+      order_id: order.source === "order" ? order.source_id : null,
+      pos_sale_id: order.source === "sale" ? order.source_id : null,
+      modelo: 55, serie: 1,
       numero: null, ambiente, status: "pending",
       valor_total: valorTotalNota, cpf_destinatario: cpfDest,
       nome_destinatario: order.customer_name || "CONSUMIDOR",
@@ -209,7 +293,7 @@ Deno.serve(async (req) => {
       ConsumidorFinal: true,
       IndicadorPresenca: 9,
       ModalidadeFrete: 0, // CIF — por conta do emitente
-      IdentificadorInterno: `NFE-${order_id}`,
+      IdentificadorInterno: order.source === "sale" ? `NFE-POS-${order.source_id}` : `NFE-${order.source_id}`,
       Emitente: {
         CpfCnpj: digits(company.cnpj),
         ...(ieEmitente ? { Ie: ieEmitente } : {}),

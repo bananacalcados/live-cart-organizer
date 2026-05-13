@@ -11,12 +11,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil, UserPlus, Store, Globe, RotateCcw, Check, X, Plus,
+  User, Phone, MapPin, CreditCard, Package, Send, Loader2, FileText, Mail, Trash2, AlertTriangle, Pencil, UserPlus, Store, Globe, RotateCcw, Check, X, Plus, Truck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { POSCustomerForm } from "./POSCustomerForm";
 import { POSTinyProductPicker } from "./POSTinyProductPicker";
+import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -62,6 +63,7 @@ interface Sale {
   customer_id: string | null;
   sale_type?: string | null;
   payment_details?: Record<string, any> | null;
+  tracking_code?: string | null;
 }
 
 interface Props {
@@ -106,10 +108,71 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [currentItems, setCurrentItems] = useState<SaleItem[]>(items);
   const [emittingNfce, setEmittingNfce] = useState(false);
   const [fiscalDoc, setFiscalDoc] = useState<{ status: string; danfe_url: string | null } | null>(null);
+  const [trackingCode, setTrackingCode] = useState<string>(sale?.tracking_code || "");
+  const [savingTracking, setSavingTracking] = useState(false);
+  const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
+  const [sendingTracking, setSendingTracking] = useState(false);
 
   useEffect(() => {
     setCurrentItems(items);
   }, [items]);
+
+  useEffect(() => {
+    setTrackingCode(sale?.tracking_code || "");
+  }, [sale?.id, sale?.tracking_code]);
+
+  const handleSaveTracking = async () => {
+    if (!sale) return;
+    setSavingTracking(true);
+    try {
+      const code = trackingCode.trim();
+      const { error } = await supabase
+        .from('pos_sales')
+        .update({ tracking_code: code || null } as any)
+        .eq('id', sale.id);
+      if (error) throw error;
+      toast.success(code ? 'Código de rastreio salvo!' : 'Código de rastreio removido.');
+      onDeleted?.();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao salvar rastreio');
+    } finally {
+      setSavingTracking(false);
+    }
+  };
+
+  const handleSendTracking = async () => {
+    if (!sale) return;
+    const code = trackingCode.trim();
+    if (!code) { toast.error('Informe o código de rastreio primeiro'); return; }
+    const phone = (currentCustomer?.whatsapp || '').replace(/\D/g, '');
+    if (!phone) { toast.error('Cliente sem WhatsApp cadastrado'); return; }
+    if (!trackingNumberId) { toast.error('Selecione a instância de WhatsApp'); return; }
+
+    setSendingTracking(true);
+    try {
+      const link = `https://www.melhorrastreio.com.br/rastreio/${encodeURIComponent(code)}`;
+      const greeting = currentCustomer?.name ? `Oi, ${String(currentCustomer.name).split(' ')[0]}!` : 'Oi!';
+      const message = `${greeting} 📦\nSeu pedido foi postado.\n\n*Código de rastreio:* ${code}\n*Acompanhe aqui:* ${link}`;
+
+      // descobrir provider para escolher a função
+      const { data: num } = await supabase
+        .from('whatsapp_numbers')
+        .select('provider')
+        .eq('id', trackingNumberId)
+        .maybeSingle();
+      const fn = (num as any)?.provider === 'meta' ? 'meta-whatsapp-send' : 'zapi-send-message';
+
+      const { error } = await supabase.functions.invoke(fn, {
+        body: { phone, message, whatsapp_number_id: trackingNumberId },
+      });
+      if (error) throw error;
+      toast.success('Mensagem enviada!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao enviar mensagem');
+    } finally {
+      setSendingTracking(false);
+    }
+  };
 
   // Load fiscal doc for this sale
   useEffect(() => {
@@ -1019,6 +1082,54 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                 {markingPaid ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                 Marcar como Pago
               </Button>
+            )}
+
+            {/* Tracking / Rastreio */}
+            {!isTinyOnly && (
+              <div className="space-y-2">
+                <h4 className="text-xs uppercase tracking-wider text-gray-500 font-bold flex items-center gap-1.5">
+                  <Truck className="h-3.5 w-3.5 text-indigo-600" /> Rastreio
+                </h4>
+                <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-200 space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      value={trackingCode}
+                      onChange={(e) => setTrackingCode(e.target.value.toUpperCase())}
+                      placeholder="Código de rastreio (ex: AA123456789BR)"
+                      className="flex-1 h-9 text-sm font-mono bg-white"
+                    />
+                    <Button
+                      size="sm"
+                      className="h-9 bg-indigo-600 hover:bg-indigo-700 text-white"
+                      onClick={handleSaveTracking}
+                      disabled={savingTracking || trackingCode === (sale.tracking_code || "")}
+                    >
+                      {savingTracking ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+                    </Button>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <div className="flex-1">
+                      <WhatsAppNumberSelector
+                        className="h-9 bg-white text-xs"
+                        value={trackingNumberId}
+                        onValueChange={setTrackingNumberId}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      className="h-9 gap-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold whitespace-nowrap"
+                      onClick={handleSendTracking}
+                      disabled={sendingTracking || !trackingCode.trim() || !currentCustomer?.whatsapp}
+                    >
+                      {sendingTracking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      Enviar Rastreio
+                    </Button>
+                  </div>
+                  {!currentCustomer?.whatsapp && (
+                    <p className="text-[11px] text-amber-700">Cliente sem WhatsApp — adicione antes de enviar.</p>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Print / Fiscal Actions */}
