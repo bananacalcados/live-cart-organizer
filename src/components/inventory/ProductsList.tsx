@@ -237,6 +237,16 @@ export function ProductsList() {
                       <Pencil className="h-3 w-3 mr-1" />
                       Editar
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs h-8"
+                      onClick={() => setStockManagerId(p.id)}
+                      title="Gerenciar estoque por variação (entrada / saída / balanço)"
+                    >
+                      <Boxes className="h-3 w-3 mr-1" />
+                      Estoque
+                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
