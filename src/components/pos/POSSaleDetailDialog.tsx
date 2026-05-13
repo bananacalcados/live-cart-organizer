@@ -62,6 +62,7 @@ interface Sale {
   customer_id: string | null;
   sale_type?: string | null;
   payment_details?: Record<string, any> | null;
+  tracking_code?: string | null;
 }
 
 interface Props {
