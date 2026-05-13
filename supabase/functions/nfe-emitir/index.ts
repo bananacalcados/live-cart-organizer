@@ -139,6 +139,7 @@ Deno.serve(async (req) => {
         customer_email: email,
         shipping_address,
         total_shipping: 0,
+        discount: round2(Number((sale as any).discount || 0)),
         items: ((sale as any).pos_sale_items || []).map((it: any) => ({
           product_name: it.product_name, sku: it.sku || null, barcode: it.barcode || null,
           quantity: Number(it.quantity), unit_price: Number(it.unit_price),
