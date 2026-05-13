@@ -209,7 +209,7 @@ export function UnifiedProductsList() {
           <div className="text-xs text-muted-foreground">
             {grouped.length} produtos · {grouped.reduce((s, g) => s + g.skus.length, 0)} SKUs · {grouped.reduce((s, g) => s + g.totalStock, 0)} unidades
           </div>
-          {grouped.slice(0, 200).map((g) => (
+          {pageItems.map((g) => (
             <Card key={g.parent_sku}>
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-start gap-2">
