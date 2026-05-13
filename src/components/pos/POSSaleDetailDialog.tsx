@@ -340,6 +340,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       setReemittingProd(false);
     }
   };
+
+  const handleCopyChave = async () => {
     if (!fiscalDoc?.chave_acesso) return;
     try {
       await navigator.clipboard.writeText(fiscalDoc.chave_acesso);
