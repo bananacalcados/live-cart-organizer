@@ -127,6 +127,7 @@ Deno.serve(async (req) => {
             .update({
               name: skuName,
               sku: v.sku,
+              parent_sku: parentSku,
               cost_price: cost,
               price: sale,
               is_active: true,
@@ -145,6 +146,7 @@ Deno.serve(async (req) => {
               store_id: targetStoreId,
               name: skuName,
               sku: v.sku,
+              parent_sku: parentSku,
               barcode: v.gtin,
               cost_price: cost,
               price: sale,
