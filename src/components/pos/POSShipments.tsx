@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import {
   Loader2, Package, CheckCircle2, Clock, Truck, Search,
   ChevronDown, ChevronUp, MapPin, Phone, User, DollarSign,
-  PackageCheck, Send, Eye, RefreshCw, Trash2
+  PackageCheck, Send, Eye, RefreshCw, Trash2, FileText, ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { WhatsAppNumberSelector } from '@/components/WhatsAppNumberSelector';
 
 interface Props {
   storeId: string;
@@ -92,6 +93,10 @@ export function POSShipments({ storeId }: Props) {
   const [showTrackingDialog, setShowTrackingDialog] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [fiscalMap, setFiscalMap] = useState<Record<string, { status: string; danfe_url: string | null; numero: number | null }>>({});
+  const [emittingId, setEmittingId] = useState<string | null>(null);
+  const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
+  const [sendingWa, setSendingWa] = useState(false);
 
   const fetchOrders = async () => {
     setLoading(true);
@@ -119,7 +124,7 @@ export function POSShipments({ storeId }: Props) {
       // Also fetch checkout attempts for sales without customer_id
       const salesWithoutCustomer = sales.filter(s => !s.customer_id).map(s => s.id);
 
-      const [customersRes, sellersRes, itemsRes, checkoutRes] = await Promise.all([
+      const [customersRes, sellersRes, itemsRes, checkoutRes, fiscalRes] = await Promise.all([
         customerIds.length > 0
           ? supabase.from('pos_customers').select('id, name, whatsapp, cep, city, state, address').in('id', customerIds)
           : { data: [] },
@@ -134,7 +139,18 @@ export function POSShipments({ storeId }: Props) {
               .not('customer_name', 'is', null)
               .order('created_at', { ascending: false })
           : { data: [] },
+        supabase.from('fiscal_documents')
+          .select('pos_sale_id, status, danfe_url, numero, created_at')
+          .in('pos_sale_id', saleIds)
+          .in('status', ['authorized', 'autorizada', 'autorizado'])
+          .order('created_at', { ascending: false }),
       ]);
+
+      const fmap: Record<string, { status: string; danfe_url: string | null; numero: number | null }> = {};
+      (fiscalRes.data || []).forEach((f: any) => {
+        if (!fmap[f.pos_sale_id]) fmap[f.pos_sale_id] = { status: f.status, danfe_url: f.danfe_url, numero: f.numero };
+      });
+      setFiscalMap(fmap);
 
       const customerMap = new Map((customersRes.data || []).map(c => [c.id, c]));
       const sellerMap = new Map((sellersRes.data || []).map(s => [s.id, s]));
@@ -256,6 +272,44 @@ export function POSShipments({ storeId }: Props) {
     setShowTrackingDialog(null);
     setTrackingInput('');
     setShippingNotesInput('');
+  };
+
+  const handleEmitNFe = async (id: string) => {
+    setEmittingId(id);
+    try {
+      const { data, error } = await supabase.functions.invoke('nfe-emitir', { body: { sale_id: id } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`NF-e autorizada${data?.numero ? ` — nº ${data.numero}` : ''}`);
+      fetchOrders();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao emitir NF-e');
+    } finally {
+      setEmittingId(null);
+    }
+  };
+
+  const handleSendTrackingWa = async (order: ShipmentOrder) => {
+    const code = (trackingInput || order.tracking_code || '').trim();
+    if (!code) { toast.error('Informe o código de rastreio'); return; }
+    const phone = (order.customer_phone || '').replace(/\D/g, '');
+    if (!phone) { toast.error('Cliente sem WhatsApp'); return; }
+    if (!trackingNumberId) { toast.error('Selecione a instância'); return; }
+    setSendingWa(true);
+    try {
+      const link = `https://www.melhorrastreio.com.br/rastreio/${encodeURIComponent(code)}`;
+      const greeting = order.customer_name ? `Oi, ${String(order.customer_name).split(' ')[0]}!` : 'Oi!';
+      const message = `${greeting} 📦\nSeu pedido foi postado.\n\n*Código de rastreio:* ${code}\n*Acompanhe:* ${link}`;
+      const { data: num } = await supabase.from('whatsapp_numbers').select('provider').eq('id', trackingNumberId).maybeSingle();
+      const fn = (num as any)?.provider === 'meta' ? 'meta-whatsapp-send' : 'zapi-send-message';
+      const { error } = await supabase.functions.invoke(fn, { body: { phone, message, whatsapp_number_id: trackingNumberId } });
+      if (error) throw error;
+      toast.success('Rastreio enviado!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao enviar');
+    } finally {
+      setSendingWa(false);
+    }
   };
 
   if (loading) {
@@ -480,6 +534,35 @@ export function POSShipments({ storeId }: Props) {
                             Enviado {order.shipped_at ? new Date(order.shipped_at).toLocaleDateString('pt-BR') : ''}
                           </Badge>
                         )}
+                        {(() => {
+                          const f = fiscalMap[order.id];
+                          if (f?.danfe_url) {
+                            return (
+                              <Button asChild variant="outline" className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs">
+                                <a href={f.danfe_url} target="_blank" rel="noreferrer">
+                                  <FileText className="h-3 w-3" /> NF-e nº {f.numero ?? ''} <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </Button>
+                            );
+                          }
+                          if (f) {
+                            return (
+                              <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs">
+                                <CheckCircle2 className="h-3 w-3 mr-1" /> NF-e autorizada
+                              </Badge>
+                            );
+                          }
+                          return (
+                            <Button
+                              onClick={() => handleEmitNFe(order.id)}
+                              disabled={emittingId === order.id}
+                              className="gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                            >
+                              {emittingId === order.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+                              Emitir NF-e
+                            </Button>
+                          );
+                        })()}
                         <Button
                           variant="outline"
                           onClick={() => setDeleteConfirmId(order.id)}
@@ -534,6 +617,24 @@ export function POSShipments({ storeId }: Props) {
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               Confirmar Despacho
             </Button>
+
+            {/* WhatsApp tracking send */}
+            <div className="border-t border-gray-200 pt-3 space-y-2">
+              <label className="text-xs text-gray-600 block">📲 Enviar rastreio por WhatsApp</label>
+              <WhatsAppNumberSelector value={trackingNumberId} onValueChange={setTrackingNumberId} />
+              <Button
+                onClick={() => {
+                  const order = orders.find(o => o.id === showTrackingDialog);
+                  if (order) handleSendTrackingWa(order);
+                }}
+                disabled={sendingWa || !trackingNumberId || !trackingInput.trim()}
+                variant="outline"
+                className="w-full gap-2 border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              >
+                {sendingWa ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Enviar Rastreio
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
