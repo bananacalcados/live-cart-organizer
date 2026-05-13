@@ -12699,6 +12699,48 @@ export type Database = {
         }
         Relationships: []
       }
+      variant_normalization_log: {
+        Row: {
+          applied_at: string
+          applied_by: string | null
+          id: string
+          master_id: string | null
+          master_name: string | null
+          new_color: string | null
+          new_size: string | null
+          old_color: string | null
+          old_size: string | null
+          reason: string | null
+          variant_id: string
+        }
+        Insert: {
+          applied_at?: string
+          applied_by?: string | null
+          id?: string
+          master_id?: string | null
+          master_name?: string | null
+          new_color?: string | null
+          new_size?: string | null
+          old_color?: string | null
+          old_size?: string | null
+          reason?: string | null
+          variant_id: string
+        }
+        Update: {
+          applied_at?: string
+          applied_by?: string | null
+          id?: string
+          master_id?: string | null
+          master_name?: string | null
+          new_color?: string | null
+          new_size?: string | null
+          old_color?: string | null
+          old_size?: string | null
+          reason?: string | null
+          variant_id?: string
+        }
+        Relationships: []
+      }
       vip_group_strategies: {
         Row: {
           created_at: string
@@ -13339,6 +13381,26 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      analyze_variant_normalization: {
+        Args: never
+        Returns: {
+          capitalization_only: number
+          color_extracted: number
+          empty_after: number
+          needs_change: number
+          no_change: number
+          size_extracted: number
+          swap_only: number
+          total_variants: number
+        }[]
+      }
+      apply_variant_normalization: {
+        Args: { p_dry_run?: boolean; p_limit?: number }
+        Returns: {
+          skipped_empty: number
+          updated_count: number
+        }[]
+      }
       backfill_master_costs_from_pos: {
         Args: never
         Returns: {
@@ -13716,6 +13778,13 @@ export type Database = {
         Args: { p_cep: string; p_number: string }
         Returns: string
       }
+      normalize_variant_color_size: {
+        Args: { p_color: string; p_master_name?: string; p_size: string }
+        Returns: {
+          new_color: string
+          new_size: string
+        }[]
+      }
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
@@ -13754,6 +13823,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      sample_variant_normalization: {
+        Args: { p_limit?: number }
+        Returns: {
+          change_type: string
+          master_name: string
+          new_color: string
+          new_size: string
+          old_color: string
+          old_size: string
+          variant_id: string
+        }[]
       }
       save_customer_registration: {
         Args: {
