@@ -219,7 +219,7 @@ export function UnifiedProductsList() {
                   >
                     {expanded[g.parent_sku] ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </Button>
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => g.master && setEditing(g.master)}>
+                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => toggleExpand(g.parent_sku)}>
                     <div className="font-semibold truncate hover:text-primary">{g.master?.name || g.parent_sku}</div>
                     <div className="text-xs text-muted-foreground font-mono">{g.parent_sku}</div>
                     <div className="flex flex-wrap gap-1 mt-1">
