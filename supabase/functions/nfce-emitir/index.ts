@@ -104,6 +104,13 @@ Deno.serve(async (req) => {
     const ufDestino = (sale.shipping_state || ufOrigem).toUpperCase();
     const produtos: any[] = [];
     let totalProd = 0;
+    let totalDesc = 0;
+
+    // Distribui desconto proporcionalmente entre os itens (reduz base de cálculo dos impostos
+    // para que o imposto seja sobre o valor efetivamente cobrado do cliente, não o de tabela).
+    const descontoVenda = round2(Number(sale.discount || 0));
+    const somaBruta = items.reduce((acc: number, it: any) => acc + Number(it.unit_price) * Number(it.quantity), 0);
+    const ratioDesc = descontoVenda > 0 && somaBruta > 0 ? descontoVenda / somaBruta : 0;
 
     for (const [idx, it] of items.entries()) {
       // Busca dados fiscais via products_master (importação Tiny) usando GTIN/SKU
