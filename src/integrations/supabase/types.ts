@@ -10505,7 +10505,7 @@ export type Database = {
           color: string | null
           cost_price_override: number | null
           created_at: string
-          gtin: string
+          gtin: string | null
           id: string
           initial_stock: number | null
           is_active: boolean
@@ -10523,7 +10523,7 @@ export type Database = {
           color?: string | null
           cost_price_override?: number | null
           created_at?: string
-          gtin?: string
+          gtin?: string | null
           id?: string
           initial_stock?: number | null
           is_active?: boolean
@@ -10541,7 +10541,7 @@ export type Database = {
           color?: string | null
           cost_price_override?: number | null
           created_at?: string
-          gtin?: string
+          gtin?: string | null
           id?: string
           initial_stock?: number | null
           is_active?: boolean
