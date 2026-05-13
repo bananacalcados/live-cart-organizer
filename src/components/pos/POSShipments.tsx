@@ -274,6 +274,44 @@ export function POSShipments({ storeId }: Props) {
     setShippingNotesInput('');
   };
 
+  const handleEmitNFe = async (id: string) => {
+    setEmittingId(id);
+    try {
+      const { data, error } = await supabase.functions.invoke('nfe-emitir', { body: { sale_id: id } });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(`NF-e autorizada${data?.numero ? ` — nº ${data.numero}` : ''}`);
+      fetchOrders();
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao emitir NF-e');
+    } finally {
+      setEmittingId(null);
+    }
+  };
+
+  const handleSendTrackingWa = async (order: ShipmentOrder) => {
+    const code = (trackingInput || order.tracking_code || '').trim();
+    if (!code) { toast.error('Informe o código de rastreio'); return; }
+    const phone = (order.customer_phone || '').replace(/\D/g, '');
+    if (!phone) { toast.error('Cliente sem WhatsApp'); return; }
+    if (!trackingNumberId) { toast.error('Selecione a instância'); return; }
+    setSendingWa(true);
+    try {
+      const link = `https://www.melhorrastreio.com.br/rastreio/${encodeURIComponent(code)}`;
+      const greeting = order.customer_name ? `Oi, ${String(order.customer_name).split(' ')[0]}!` : 'Oi!';
+      const message = `${greeting} 📦\nSeu pedido foi postado.\n\n*Código de rastreio:* ${code}\n*Acompanhe:* ${link}`;
+      const { data: num } = await supabase.from('whatsapp_numbers').select('provider').eq('id', trackingNumberId).maybeSingle();
+      const fn = (num as any)?.provider === 'meta' ? 'meta-whatsapp-send' : 'zapi-send-message';
+      const { error } = await supabase.functions.invoke(fn, { body: { phone, message, whatsapp_number_id: trackingNumberId } });
+      if (error) throw error;
+      toast.success('Rastreio enviado!');
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao enviar');
+    } finally {
+      setSendingWa(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
