@@ -301,7 +301,11 @@ export function POSPickupOrders({ storeId }: Props) {
       const { data, error } = await supabase.functions.invoke('nfce-emitir', {
         body: { sale_id: saleResult.sale_id || processingOrder.id },
       });
-      if (error) throw error;
+      if (error) {
+        const { extractEdgeError } = await import('@/lib/edgeFunctionError');
+        toast.error(await extractEdgeError(error, 'Erro ao emitir NFC-e'), { duration: 12000 });
+        return;
+      }
       if (data?.ok) {
         toast.success("NFC-e autorizada!");
         setNfceResult({ ...data, pdf_url: data.response?.DanfeUrl || null });
@@ -309,10 +313,11 @@ export function POSPickupOrders({ storeId }: Props) {
         toast.info("SEFAZ indisponível — NFC-e em contingência. Será reemitida automaticamente.");
         setNfceResult({ contingencia: true });
       } else {
-        toast.error(data?.error || "Erro ao emitir NFC-e");
+        toast.error(data?.error || data?.rejection_message || "Erro ao emitir NFC-e", { duration: 12000 });
       }
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao emitir NFC-e");
+      const { extractEdgeError } = await import('@/lib/edgeFunctionError');
+      toast.error(await extractEdgeError(e, 'Erro ao emitir NFC-e'), { duration: 12000 });
     } finally {
       setEmittingNfce(false);
     }
