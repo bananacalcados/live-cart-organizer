@@ -11,6 +11,7 @@ import {
 import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
+import { ProductStockManagerDialog } from "./ProductStockManagerDialog";
 import { toast } from "sonner";
 
 interface Master {
