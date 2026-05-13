@@ -337,6 +337,12 @@ export function ProductsList() {
         onOpenChange={(v) => !v && setEditingId(null)}
         onSaved={() => load()}
       />
+
+      <ProductStockManagerDialog
+        masterId={stockManagerId}
+        open={!!stockManagerId}
+        onOpenChange={(v) => !v && setStockManagerId(null)}
+      />
     </div>
   );
 }
