@@ -70,6 +70,12 @@ export default function EventTypebotView() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
+  // Meta Pixel — PageView on mount
+  useEffect(() => {
+    initMetaPixel();
+    trackPageView();
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900">
