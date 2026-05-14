@@ -210,10 +210,33 @@ Deno.serve(async (req) => {
     const somaBruta = items.reduce((acc, it) => acc + Number(it.unit_price) * Number(it.quantity), 0);
     const ratioDesc = descontoVenda > 0 && somaBruta > 0 ? descontoVenda / somaBruta : 0;
 
+    const missingFiscal: string[] = [];
     for (const [idx, it] of items.entries()) {
       let prodFiscal: any = null;
       const lookupKey = it.sku || it.barcode;
+
+      // 1ª prioridade: product_master_data (cadastro central por parent_sku)
       if (lookupKey) {
+        const { data: pos } = await supabase
+          .from("pos_products")
+          .select("parent_sku")
+          .or(`sku.eq.${lookupKey},barcode.eq.${lookupKey}`)
+          .not("parent_sku", "is", null)
+          .limit(1)
+          .maybeSingle();
+        const parentSku = (pos as any)?.parent_sku;
+        if (parentSku) {
+          const { data: master } = await supabase
+            .from("product_master_data")
+            .select("ncm, origem, cest, unidade, needs_review")
+            .eq("parent_sku", parentSku)
+            .maybeSingle();
+          if (master && !(master as any).needs_review) prodFiscal = master;
+        }
+      }
+
+      // 2ª prioridade (legado): product_variants -> products_master
+      if (!prodFiscal && lookupKey) {
         const { data: variant } = await supabase
           .from("product_variants")
           .select("master_id, products_master:master_id(ncm, origem, cest, unidade)")
@@ -221,9 +244,13 @@ Deno.serve(async (req) => {
           .maybeSingle();
         prodFiscal = (variant as any)?.products_master || null;
       }
+
       const ncmRaw: string | null = prodFiscal?.ncm || null;
-      // Fallback: NCM 6403.99.90 (calçados de couro) quando produto não tem cadastro fiscal.
-      const ncm = (ncmRaw ? ncmRaw.replace(/\D/g, "") : "") || "64039990";
+      const ncm = ncmRaw ? ncmRaw.replace(/\D/g, "") : "";
+      if (!ncm || ncm.length !== 8) {
+        missingFiscal.push(`${it.product_name || lookupKey || `item ${idx + 1}`} (SKU ${lookupKey || "?"})`);
+        continue;
+      }
 
       const { data: rule, error: rErr } = await supabase.rpc("resolve_fiscal_rule", {
         p_ncm: ncm, p_uf_origem: ufOrigem, p_uf_destino: ufDestino, p_tipo_operacao: "venda",
