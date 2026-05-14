@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { initMetaPixel, trackPageView, trackPixelEvent } from '@/lib/metaPixel';
 
 interface Step {
   id: string;
