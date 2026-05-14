@@ -267,7 +267,7 @@ Deno.serve(async (req) => {
       const origemFinal = prodFiscal?.origem != null ? Number(prodFiscal.origem) : Number(r.origem_mercadoria ?? 0);
       const nameUpper = sanitize(it.product_name || "").toUpperCase();
       const isAccessory = /\b(BOLSA|CARTEIRA|CINTO|MOCHILA|PULSEIRA|COLAR|BRINCO|RELOGIO|OCULOS|CHAVEIRO|LENCO|MEIA|NECESSAIRE|POCHETE)\b/.test(nameUpper);
-      const unidadeFinal = isAccessory ? "UN" : "PAR";
+      const unidadeFinal = (prodFiscal?.unidade && String(prodFiscal.unidade).trim()) || (isAccessory ? "UN" : "PAR");
 
       const nmRaw = sanitize(it.product_name || `ITEM ${idx + 1}`).slice(0, 60).trim() || `ITEM${idx + 1}`;
       const nmProduto = /^\d{8}$|^\d{12,14}$/.test(nmRaw) ? `P${nmRaw}`.slice(0, 60) : nmRaw;
