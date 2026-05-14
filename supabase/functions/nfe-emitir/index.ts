@@ -210,10 +210,33 @@ Deno.serve(async (req) => {
     const somaBruta = items.reduce((acc, it) => acc + Number(it.unit_price) * Number(it.quantity), 0);
     const ratioDesc = descontoVenda > 0 && somaBruta > 0 ? descontoVenda / somaBruta : 0;
 
+    const missingFiscal: string[] = [];
     for (const [idx, it] of items.entries()) {
       let prodFiscal: any = null;
       const lookupKey = it.sku || it.barcode;
+
+      // 1ª prioridade: product_master_data (cadastro central por parent_sku)
       if (lookupKey) {
+        const { data: pos } = await supabase
+          .from("pos_products")
+          .select("parent_sku")
+          .or(`sku.eq.${lookupKey},barcode.eq.${lookupKey}`)
+          .not("parent_sku", "is", null)
+          .limit(1)
+          .maybeSingle();
+        const parentSku = (pos as any)?.parent_sku;
+        if (parentSku) {
+          const { data: master } = await supabase
+            .from("product_master_data")
+            .select("ncm, origem, cest, unidade, needs_review")
+            .eq("parent_sku", parentSku)
+            .maybeSingle();
+          if (master && !(master as any).needs_review) prodFiscal = master;
+        }
+      }
+
+      // 2ª prioridade (legado): product_variants -> products_master
+      if (!prodFiscal && lookupKey) {
         const { data: variant } = await supabase
           .from("product_variants")
           .select("master_id, products_master:master_id(ncm, origem, cest, unidade)")
@@ -221,9 +244,13 @@ Deno.serve(async (req) => {
           .maybeSingle();
         prodFiscal = (variant as any)?.products_master || null;
       }
+
       const ncmRaw: string | null = prodFiscal?.ncm || null;
-      // Fallback: NCM 6403.99.90 (calçados de couro) quando produto não tem cadastro fiscal.
-      const ncm = (ncmRaw ? ncmRaw.replace(/\D/g, "") : "") || "64039990";
+      const ncm = ncmRaw ? ncmRaw.replace(/\D/g, "") : "";
+      if (!ncm || ncm.length !== 8) {
+        missingFiscal.push(`${it.product_name || lookupKey || `item ${idx + 1}`} (SKU ${lookupKey || "?"})`);
+        continue;
+      }
 
       const { data: rule, error: rErr } = await supabase.rpc("resolve_fiscal_rule", {
         p_ncm: ncm, p_uf_origem: ufOrigem, p_uf_destino: ufDestino, p_tipo_operacao: "venda",
@@ -240,7 +267,7 @@ Deno.serve(async (req) => {
       const origemFinal = prodFiscal?.origem != null ? Number(prodFiscal.origem) : Number(r.origem_mercadoria ?? 0);
       const nameUpper = sanitize(it.product_name || "").toUpperCase();
       const isAccessory = /\b(BOLSA|CARTEIRA|CINTO|MOCHILA|PULSEIRA|COLAR|BRINCO|RELOGIO|OCULOS|CHAVEIRO|LENCO|MEIA|NECESSAIRE|POCHETE)\b/.test(nameUpper);
-      const unidadeFinal = isAccessory ? "UN" : "PAR";
+      const unidadeFinal = (prodFiscal?.unidade && String(prodFiscal.unidade).trim()) || (isAccessory ? "UN" : "PAR");
 
       const nmRaw = sanitize(it.product_name || `ITEM ${idx + 1}`).slice(0, 60).trim() || `ITEM${idx + 1}`;
       const nmProduto = /^\d{8}$|^\d{12,14}$/.test(nmRaw) ? `P${nmRaw}`.slice(0, 60) : nmRaw;
@@ -277,6 +304,31 @@ Deno.serve(async (req) => {
           IPI:    { CodSituacaoTributaria: "53", CodEnquadramento: "999", Aliquota: 0 },
         },
       });
+    }
+
+    // Bloqueia emissão se algum item está sem cadastro fiscal completo (NCM)
+    if (missingFiscal.length > 0) {
+      // Marca os parent_skus envolvidos como needs_review
+      try {
+        const skuKeys = items.map((it: any) => it.sku || it.barcode).filter(Boolean);
+        if (skuKeys.length) {
+          const { data: posRows } = await supabase
+            .from("pos_products")
+            .select("parent_sku")
+            .in("sku", skuKeys);
+          const parents = Array.from(new Set((posRows || []).map((r: any) => r.parent_sku).filter(Boolean)));
+          if (parents.length) {
+            await supabase
+              .from("product_master_data")
+              .update({ needs_review: true, review_reason: "NCM ausente — bloqueado em emissão NF-e" })
+              .in("parent_sku", parents);
+          }
+        }
+      } catch (_) {}
+      throw new Error(
+        `Emissão bloqueada: ${missingFiscal.length} item(ns) sem NCM cadastrado. ` +
+        `Cadastre o NCM em "Produtos / Revisão" antes de emitir. Itens: ${missingFiscal.slice(0, 5).join("; ")}${missingFiscal.length > 5 ? "..." : ""}`
+      );
     }
 
     // 5. Frete (a ser somado ao total da nota como vFrete; opcional)
