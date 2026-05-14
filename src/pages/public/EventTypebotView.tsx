@@ -125,7 +125,7 @@ export default function EventTypebotView() {
       try {
         const phoneDigits = (updated.phone || '').replace(/\D/g, '');
         const today = new Date().toISOString().slice(0, 10);
-        const eventId = `lead_${phoneDigits}_${tb.id}_${today}`;
+        const eventId = `lead_${phoneDigits}_${tb.event_id}_${today}`;
         trackPixelEvent(
           'Lead',
           {
