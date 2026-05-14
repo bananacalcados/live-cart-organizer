@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { initMetaPixel, trackPageView, trackPixelEvent } from '@/lib/metaPixel';
 
 interface Step {
   id: string;
@@ -69,6 +70,12 @@ export default function EventTypebotView() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
+  // Meta Pixel — PageView on mount
+  useEffect(() => {
+    initMetaPixel();
+    trackPageView();
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900">
@@ -113,6 +120,36 @@ export default function EventTypebotView() {
       if (error) throw error;
       setDone(data);
       setMessages((m) => [...m, { from: 'bot', text: tb.success_message }]);
+
+      // Meta Pixel — Lead (browser + CAPI dedupe via event_id)
+      try {
+        const phoneDigits = (updated.phone || '').replace(/\D/g, '');
+        const today = new Date().toISOString().slice(0, 10);
+        const eventId = `lead_${phoneDigits}_${tb.event_id}_${today}`;
+        trackPixelEvent(
+          'Lead',
+          {
+            content_name: tb.name,
+            content_category: 'typebot_lead',
+            content_ids: [tb.slug],
+          },
+          { eventID: eventId },
+        );
+        supabase.functions.invoke('meta-capi-lead', {
+          body: {
+            phone: phoneDigits,
+            event_name: 'Lead',
+            campaign_id: tb.event_id,
+            campaign_slug: tb.slug,
+            campaign_name: tb.name,
+            full_name: updated.name,
+            source_url: window.location.href,
+          },
+        }).catch((e) => console.warn('[meta-capi-lead] invoke error', e));
+      } catch (e) {
+        console.warn('[typebot-pixel] lead error', e);
+      }
+
       // Auto-redirect to VIP group immediately if link is configured
       if (data?.vip_group_link) {
         window.location.href = data.vip_group_link;
