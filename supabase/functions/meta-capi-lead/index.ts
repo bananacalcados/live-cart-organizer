@@ -167,7 +167,7 @@ Deno.serve(async (req) => {
       data: [
         {
           event_name,
-          event_time: Math.floor(Date.now() / 1000),
+          event_time: eventTimeSec,
           event_id: eventId,
           action_source: "chat",
           event_source_url: source_url || undefined,
