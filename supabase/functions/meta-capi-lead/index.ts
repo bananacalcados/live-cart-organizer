@@ -99,9 +99,10 @@ Deno.serve(async (req) => {
 
     const phoneDigits = normalizePhone(phone);
 
-    // Idempotência: 1 evento por (phone, event_name, campaign_id) por dia
-    const today = new Date().toISOString().slice(0, 10);
-    const eventId = `${event_name.toLowerCase()}_${phoneDigits}_${campaign_id || "noc"}_${today}`;
+    // Idempotência: 1 evento por (phone, event_name, campaign_id) por dia (do evento)
+    const eventTimeSec = event_time && Number.isFinite(event_time) ? Math.floor(event_time) : Math.floor(Date.now() / 1000);
+    const dayKey = new Date(eventTimeSec * 1000).toISOString().slice(0, 10);
+    const eventId = `${event_name.toLowerCase()}_${phoneDigits}_${campaign_id || "noc"}_${dayKey}`;
 
     // Verifica duplicação
     const { data: existing } = await supabase
