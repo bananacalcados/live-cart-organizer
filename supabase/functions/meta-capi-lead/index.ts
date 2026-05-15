@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
       campaign_name = null,
       full_name = null,
       source_url = null,
+      event_time = null, // optional UNIX seconds (for backfill up to 7 days)
     } = body || {};
 
     if (!phone) {
