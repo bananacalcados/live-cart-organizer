@@ -162,12 +162,18 @@ async function resolveGroupUrl(
 
   if (!targetGroupIds.length) return null;
 
-  const { data: groups } = await supabase
+  const { data: groupsRaw } = await supabase
     .from('whatsapp_groups')
     .select('id, group_id, name, invite_link, is_full, participant_count, max_participants')
     .in('id', targetGroupIds)
     .eq('is_full', false)
     .order('participant_count', { ascending: false });
+
+  // Real-time capacity check (não confia só no flag is_full — ele pode estar atrasado)
+  const groups = (groupsRaw || []).filter((g: any) => {
+    const max = g.max_participants || 1024;
+    return (g.participant_count || 0) < max;
+  });
 
   if (!groups || groups.length === 0) {
     return await tryAutoCreate(supabaseUrl, supabaseKey, link.campaign_id);
