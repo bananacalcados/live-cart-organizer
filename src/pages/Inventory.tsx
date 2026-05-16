@@ -5,13 +5,14 @@ import {
   AlertTriangle, Loader2, Play, Pause, RotateCcw, Store,
   ClipboardList, Trash2, Search, ChevronDown, HelpCircle,
   Camera, Tag, Printer, Download, FileText, Link2, ShoppingBag, ClipboardCheck,
-  Sparkles
+  Sparkles, Activity
 } from "lucide-react";
 import { InventoryVerification } from "@/components/inventory/InventoryVerification";
 import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
 import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
+import { InventoryHealthDashboard } from "@/components/inventory/InventoryHealthDashboard";
 import { InventoryAnalytics } from "@/components/inventory/InventoryAnalytics";
 import InventoryAIAnalysis from "@/components/inventory/InventoryAIAnalysis";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
@@ -172,7 +173,7 @@ export default function Inventory() {
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "analytics" | "ai" | "stock" | "capture" | "products" | "nfe">("dashboard");
+  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "stock" | "capture" | "products" | "nfe">("dashboard");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
@@ -1088,6 +1089,14 @@ export default function Inventory() {
                 <BarChart3 className="h-3 w-3" /> Dashboard
               </Button>
               <Button
+                variant={inventoryMode === "health" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("health")}
+                className="text-xs h-7 gap-1"
+              >
+                <Activity className="h-3 w-3" /> Saúde
+              </Button>
+              <Button
                 variant={inventoryMode === "analytics" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setInventoryMode("analytics")}
@@ -1169,6 +1178,8 @@ export default function Inventory() {
           </div>
         ) : inventoryMode === "dashboard" ? (
           <InventoryDashboard />
+        ) : inventoryMode === "health" ? (
+          <InventoryHealthDashboard />
         ) : inventoryMode === "analytics" ? (
           <InventoryAnalytics />
         ) : inventoryMode === "ai" ? (
