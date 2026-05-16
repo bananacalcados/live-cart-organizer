@@ -25,6 +25,7 @@ const Expedition = lazy(() => import("./pages/Expedition"));
 const ExpeditionBeta = lazy(() => import("./pages/ExpeditionBeta"));
 const POS = lazy(() => import("./pages/POS"));
 const Inventory = lazy(() => import("./pages/Inventory"));
+const InventoryCategories = lazy(() => import("./pages/InventoryCategories"));
 const Management = lazy(() => import("./pages/Management"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AIAgents = lazy(() => import("./pages/AIAgents"));
