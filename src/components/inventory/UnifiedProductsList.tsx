@@ -256,51 +256,91 @@ export function UnifiedProductsList() {
                   )}
                 </div>
 
-                {expanded[g.parent_sku] && (
-                  <div className="ml-9 mt-2 border-l-2 pl-3 space-y-1">
-                    <div className="grid grid-cols-12 gap-2 text-[10px] uppercase text-muted-foreground font-semibold pb-1 border-b">
-                      <div className="col-span-2">Loja</div>
-                      <div className="col-span-2">Cor</div>
-                      <div className="col-span-1">Tam</div>
-                      <div className="col-span-2">SKU</div>
-                      <div className="col-span-3">Barcode</div>
-                      <div className="col-span-1 text-right">Estq</div>
-                      <div className="col-span-1 text-right">R$</div>
+                {expanded[g.parent_sku] && (() => {
+                  // Group SKUs by variation (color + size)
+                  const variationMap = new Map<string, { color: string; size: string; byStore: Record<string, PosSku> }>();
+                  for (const s of g.skus) {
+                    const color = s.color || s.variant || "—";
+                    const size = s.size || "—";
+                    const key = `${color}||${size}`;
+                    let row = variationMap.get(key);
+                    if (!row) {
+                      row = { color, size, byStore: {} };
+                      variationMap.set(key, row);
+                    }
+                    row.byStore[s.store_id] = s;
+                  }
+                  const variations = Array.from(variationMap.values()).sort((a, b) =>
+                    a.color.localeCompare(b.color) ||
+                    a.size.localeCompare(b.size, undefined, { numeric: true })
+                  );
+                  // Only show stores that actually have this product
+                  const storeIdsPresent = Array.from(new Set(g.skus.map((s) => s.store_id)));
+                  const orderedStores = stores.filter((st) => storeIdsPresent.includes(st.id));
+
+                  return (
+                    <div className="ml-9 mt-2 border-l-2 pl-3 overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-[10px] uppercase text-muted-foreground font-semibold border-b">
+                            <th className="text-left py-1 pr-2">Cor</th>
+                            <th className="text-left py-1 pr-2">Tam</th>
+                            {orderedStores.map((st) => (
+                              <th key={st.id} className="text-right py-1 px-2 whitespace-nowrap">
+                                <div className="flex items-center justify-end gap-1">
+                                  <StoreIcon className="h-3 w-3" />
+                                  {st.name}
+                                </div>
+                              </th>
+                            ))}
+                            <th className="text-right py-1 pl-2">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {variations.map((v) => {
+                            const total = orderedStores.reduce((sum, st) => sum + (v.byStore[st.id]?.stock || 0), 0);
+                            return (
+                              <tr key={`${v.color}||${v.size}`} className="border-b last:border-0 hover:bg-muted/30">
+                                <td className="py-1 pr-2 truncate max-w-[120px]">{v.color}</td>
+                                <td className="py-1 pr-2 font-semibold">{v.size}</td>
+                                {orderedStores.map((st) => {
+                                  const sku = v.byStore[st.id];
+                                  if (!sku) {
+                                    return <td key={st.id} className="py-1 px-2 text-right text-muted-foreground">—</td>;
+                                  }
+                                  const stock = sku.stock || 0;
+                                  return (
+                                    <td
+                                      key={st.id}
+                                      className={`py-1 px-2 text-right cursor-pointer hover:underline ${stock <= 0 ? "text-destructive" : "font-semibold"}`}
+                                      onClick={() => setEditingSku(sku)}
+                                      title={`SKU: ${sku.sku || "—"}\nBarcode: ${sku.barcode || "—"}\nR$ ${(sku.price || 0).toFixed(2)}`}
+                                    >
+                                      {stock}
+                                    </td>
+                                  );
+                                })}
+                                <td className={`py-1 pl-2 text-right font-bold ${total <= 0 ? "text-destructive" : ""}`}>
+                                  {total}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {variations.length === 0 && (
+                            <tr>
+                              <td colSpan={orderedStores.length + 3} className="text-xs text-muted-foreground py-2">
+                                Sem variações cadastradas no PDV.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        Clique no estoque de uma loja para editar o SKU. Passe o mouse para ver SKU/barcode/preço.
+                      </div>
                     </div>
-                    {g.skus
-                      .slice()
-                      .sort((a, b) =>
-                        (a.color || "").localeCompare(b.color || "") ||
-                        (a.size || "").localeCompare(b.size || "", undefined, { numeric: true }) ||
-                        storeName(a.store_id).localeCompare(storeName(b.store_id))
-                      )
-                      .map((s) => (
-                        <div
-                          key={s.id}
-                          className="grid grid-cols-12 gap-2 text-xs items-center py-1 hover:bg-muted/30 rounded cursor-pointer"
-                          onClick={() => setEditingSku(s)}
-                        >
-                          <div className="col-span-2 flex items-center gap-1 truncate">
-                            <StoreIcon className="h-3 w-3 text-muted-foreground" />
-                            <span className="truncate">{storeName(s.store_id)}</span>
-                          </div>
-                          <div className="col-span-2 truncate">{s.color || s.variant || "—"}</div>
-                          <div className="col-span-1 font-semibold">{s.size || "—"}</div>
-                          <div className="col-span-2 font-mono truncate">{s.sku || "—"}</div>
-                          <div className="col-span-3 font-mono truncate">{s.barcode || "—"}</div>
-                          <div className={`col-span-1 text-right font-semibold ${(s.stock || 0) <= 0 ? "text-destructive" : ""}`}>
-                            {s.stock || 0}
-                          </div>
-                          <div className="col-span-1 text-right">
-                            {(s.price || 0).toFixed(0)}
-                          </div>
-                        </div>
-                      ))}
-                    {g.skus.length === 0 && (
-                      <div className="text-xs text-muted-foreground py-2">Sem variações cadastradas no PDV.</div>
-                    )}
-                  </div>
-                )}
+                  );
+                })()}
               </CardContent>
             </Card>
           ))}
