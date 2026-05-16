@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Package, BarChart3, ScanBarcode, CheckCircle2,
   AlertTriangle, Loader2, Play, Pause, RotateCcw, Store,
@@ -1137,6 +1137,11 @@ export default function Inventory() {
                   >
                     <FileText className="h-3 w-3" /> NF-e Entrada
                   </Button>
+                  <Link to="/inventory/categorias">
+                    <Button variant="ghost" size="sm" className="text-xs h-7 gap-1">
+                      <Tag className="h-3 w-3" /> Categorias
+                    </Button>
+                  </Link>
                 </>
               )}
             </div>
