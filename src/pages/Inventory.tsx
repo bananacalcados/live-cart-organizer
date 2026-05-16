@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Package, BarChart3, ScanBarcode, CheckCircle2,
   AlertTriangle, Loader2, Play, Pause, RotateCcw, Store,
