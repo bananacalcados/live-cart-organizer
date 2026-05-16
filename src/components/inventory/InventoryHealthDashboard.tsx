@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/table";
 import { Loader2, RefreshCw, Activity, AlertTriangle, Boxes, Package, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { InventoryGradeCoverage } from "./InventoryGradeCoverage";
 
 type Category = { id: string; name: string; slug: string };
 type PriceTier = { id: string; label: string; min_price: number | null; max_price: number | null; color: string | null };
@@ -226,6 +228,13 @@ export function InventoryHealthDashboard() {
         </div>
       </div>
 
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">Visão geral</TabsTrigger>
+          <TabsTrigger value="grade">Cobertura de Grade</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="SKUs no recorte" value={fmtNum(kpis.skus)} icon={<Package className="h-5 w-5" />} loading={loading} />
@@ -342,6 +351,12 @@ export function InventoryHealthDashboard() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="grade">
+          <InventoryGradeCoverage />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
