@@ -9343,17 +9343,23 @@ export type Database = {
       }
       pos_products: {
         Row: {
+          age_group: string | null
+          auto_classified: boolean
           barcode: string
           category: string | null
+          category_id: string | null
+          classification_confidence: number | null
           color: string | null
           cost_price: number | null
           created_at: string
+          gender: string | null
           id: string
           image_url: string | null
           is_active: boolean
           name: string
           parent_sku: string | null
           price: number
+          price_tier_id: string | null
           size: string | null
           sku: string
           stock: number
@@ -9364,17 +9370,23 @@ export type Database = {
           variant: string
         }
         Insert: {
+          age_group?: string | null
+          auto_classified?: boolean
           barcode?: string
           category?: string | null
+          category_id?: string | null
+          classification_confidence?: number | null
           color?: string | null
           cost_price?: number | null
           created_at?: string
+          gender?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean
           name: string
           parent_sku?: string | null
           price?: number
+          price_tier_id?: string | null
           size?: string | null
           sku?: string
           stock?: number
@@ -9385,17 +9397,23 @@ export type Database = {
           variant?: string
         }
         Update: {
+          age_group?: string | null
+          auto_classified?: boolean
           barcode?: string
           category?: string | null
+          category_id?: string | null
+          classification_confidence?: number | null
           color?: string | null
           cost_price?: number | null
           created_at?: string
+          gender?: string | null
           id?: string
           image_url?: string | null
           is_active?: boolean
           name?: string
           parent_sku?: string | null
           price?: number
+          price_tier_id?: string | null
           size?: string | null
           sku?: string
           stock?: number
@@ -9406,6 +9424,20 @@ export type Database = {
           variant?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "pos_products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_products_price_tier_id_fkey"
+            columns: ["price_tier_id"]
+            isOneToOne: false
+            referencedRelation: "price_tiers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pos_products_store_id_fkey"
             columns: ["store_id"]
@@ -10345,6 +10377,39 @@ export type Database = {
           },
         ]
       }
+      price_tiers: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          label: string
+          max_price: number | null
+          min_price: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          label: string
+          max_price?: number | null
+          min_price?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          label?: string
+          max_price?: number | null
+          min_price?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       prize_wheel_segments: {
         Row: {
           color: string
@@ -10488,6 +10553,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      product_categories: {
+        Row: {
+          created_at: string
+          default_gender: string | null
+          id: string
+          is_active: boolean
+          keywords: string[]
+          name: string
+          priority: number
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_gender?: string | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          name: string
+          priority?: number
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_gender?: string | null
+          id?: string
+          is_active?: boolean
+          keywords?: string[]
+          name?: string
+          priority?: number
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       product_dedup_index: {
         Row: {
@@ -10819,14 +10920,19 @@ export type Database = {
       }
       products_master: {
         Row: {
+          age_group: string | null
+          auto_classified: boolean
           brand: string | null
           category: string | null
+          category_id: string | null
           cest: string | null
           classe_produto: string | null
+          classification_confidence: number | null
           cost_price: number | null
           created_at: string
           created_by: string | null
           description: string | null
+          gender: string | null
           height_cm: number | null
           id: string
           images: string[] | null
@@ -10836,6 +10942,7 @@ export type Database = {
           ncm: string | null
           needs_review: boolean
           origem: string | null
+          price_tier_id: string | null
           review_reason: string | null
           sale_price: number | null
           shopify_product_id: string | null
@@ -10849,14 +10956,19 @@ export type Database = {
           width_cm: number | null
         }
         Insert: {
+          age_group?: string | null
+          auto_classified?: boolean
           brand?: string | null
           category?: string | null
+          category_id?: string | null
           cest?: string | null
           classe_produto?: string | null
+          classification_confidence?: number | null
           cost_price?: number | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          gender?: string | null
           height_cm?: number | null
           id?: string
           images?: string[] | null
@@ -10866,6 +10978,7 @@ export type Database = {
           ncm?: string | null
           needs_review?: boolean
           origem?: string | null
+          price_tier_id?: string | null
           review_reason?: string | null
           sale_price?: number | null
           shopify_product_id?: string | null
@@ -10879,14 +10992,19 @@ export type Database = {
           width_cm?: number | null
         }
         Update: {
+          age_group?: string | null
+          auto_classified?: boolean
           brand?: string | null
           category?: string | null
+          category_id?: string | null
           cest?: string | null
           classe_produto?: string | null
+          classification_confidence?: number | null
           cost_price?: number | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          gender?: string | null
           height_cm?: number | null
           id?: string
           images?: string[] | null
@@ -10896,6 +11014,7 @@ export type Database = {
           ncm?: string | null
           needs_review?: boolean
           origem?: string | null
+          price_tier_id?: string | null
           review_reason?: string | null
           sale_price?: number | null
           shopify_product_id?: string | null
@@ -10909,6 +11028,20 @@ export type Database = {
           width_cm?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "products_master_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_master_price_tier_id_fkey"
+            columns: ["price_tier_id"]
+            isOneToOne: false
+            referencedRelation: "price_tiers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_master_tiny_source_store_id_fkey"
             columns: ["tiny_source_store_id"]
@@ -14341,17 +14474,23 @@ export type Database = {
       search_products_unaccent: {
         Args: { p_store_id: string; search_term: string }
         Returns: {
+          age_group: string | null
+          auto_classified: boolean
           barcode: string
           category: string | null
+          category_id: string | null
+          classification_confidence: number | null
           color: string | null
           cost_price: number | null
           created_at: string
+          gender: string | null
           id: string
           image_url: string | null
           is_active: boolean
           name: string
           parent_sku: string | null
           price: number
+          price_tier_id: string | null
           size: string | null
           sku: string
           stock: number
