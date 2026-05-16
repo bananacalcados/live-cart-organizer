@@ -1089,6 +1089,14 @@ export default function Inventory() {
                 <BarChart3 className="h-3 w-3" /> Dashboard
               </Button>
               <Button
+                variant={inventoryMode === "health" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("health")}
+                className="text-xs h-7 gap-1"
+              >
+                <Activity className="h-3 w-3" /> Saúde
+              </Button>
+              <Button
                 variant={inventoryMode === "analytics" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setInventoryMode("analytics")}
