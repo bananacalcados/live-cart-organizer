@@ -16,7 +16,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { phone, name, email, campaignTag, recoveryUrl, cartSummary, totalAmount, chosen_payment_method, pix_code, pix_expires_at } = await req.json();
+    const { phone, name, email, campaignTag, recoveryUrl, cartSummary, totalAmount, chosen_payment_method, pix_code, pix_expires_at, flowIds, metadata: extraMetadata } = await req.json();
 
     if (!phone) {
       return new Response(
@@ -49,12 +49,18 @@ serve(async (req) => {
       console.warn('Failed to persist lead (may be duplicate):', leadErr);
     }
 
-    // Find active flows with trigger_type = 'new_lead'
-    const { data: flows, error: flowsErr } = await supabase
+    // Fetch flows: either by explicit flowIds (cross-trigger dispatch, e.g. event_lead_captured)
+    // or by trigger_type='new_lead' (default behavior).
+    let flowsQuery = supabase
       .from('automation_flows')
       .select('id, name, trigger_config')
-      .eq('trigger_type', 'new_lead')
       .eq('is_active', true);
+    if (Array.isArray(flowIds) && flowIds.length > 0) {
+      flowsQuery = flowsQuery.in('id', flowIds);
+    } else {
+      flowsQuery = flowsQuery.eq('trigger_type', 'new_lead');
+    }
+    const { data: flows, error: flowsErr } = await flowsQuery;
 
     if (flowsErr) {
       console.error('Error fetching flows:', flowsErr);
