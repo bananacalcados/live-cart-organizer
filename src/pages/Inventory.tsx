@@ -5,7 +5,7 @@ import {
   AlertTriangle, Loader2, Play, Pause, RotateCcw, Store,
   ClipboardList, Trash2, Search, ChevronDown, HelpCircle,
   Camera, Tag, Printer, Download, FileText, Link2, ShoppingBag, ClipboardCheck,
-  Sparkles
+  Sparkles, Activity
 } from "lucide-react";
 import { InventoryVerification } from "@/components/inventory/InventoryVerification";
 import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
