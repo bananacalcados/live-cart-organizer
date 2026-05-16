@@ -1178,6 +1178,8 @@ export default function Inventory() {
           </div>
         ) : inventoryMode === "dashboard" ? (
           <InventoryDashboard />
+        ) : inventoryMode === "health" ? (
+          <InventoryHealthDashboard />
         ) : inventoryMode === "analytics" ? (
           <InventoryAnalytics />
         ) : inventoryMode === "ai" ? (
