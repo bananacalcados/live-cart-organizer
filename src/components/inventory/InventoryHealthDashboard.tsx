@@ -228,6 +228,13 @@ export function InventoryHealthDashboard() {
         </div>
       </div>
 
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="overview">Visão geral</TabsTrigger>
+          <TabsTrigger value="grade">Cobertura de Grade</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
       {/* KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard label="SKUs no recorte" value={fmtNum(kpis.skus)} icon={<Package className="h-5 w-5" />} loading={loading} />
