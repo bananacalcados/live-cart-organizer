@@ -351,6 +351,12 @@ export function InventoryHealthDashboard() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="grade">
+          <InventoryGradeCoverage />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
