@@ -171,12 +171,7 @@ export default function InventoryCategories() {
   }
 
   async function reclassifyAll() {
-    if (!confirm("Reclassificar todos os produtos sem categoria? Não sobrescreve overrides manuais.")) return;
-    toast.info("Rodando classificador...");
-    const { error } = await supabase.rpc("reclassify_pos_products");
-    if (error) { toast.error(error.message); return; }
-    toast.success("Reclassificação concluída");
-    loadAll();
+    toast.info("Reclassificação em massa deve ser executada via migração. Use a tela de Revisar Classificação para ajustes manuais.");
   }
 
   const totalProducts = useMemo(
