@@ -197,6 +197,7 @@ serve(async (req) => {
             phone: e164,
             name: cleanName,
             campaignTag: `event_lead:${event_id}`,
+            flowIds: matched.map((f: any) => f.id),
             metadata: {
               event_id,
               source,
