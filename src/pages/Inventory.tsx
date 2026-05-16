@@ -12,6 +12,7 @@ import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
 import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
+import { InventoryHealthDashboard } from "@/components/inventory/InventoryHealthDashboard";
 import { InventoryAnalytics } from "@/components/inventory/InventoryAnalytics";
 import InventoryAIAnalysis from "@/components/inventory/InventoryAIAnalysis";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
