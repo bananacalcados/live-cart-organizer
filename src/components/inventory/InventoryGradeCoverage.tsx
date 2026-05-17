@@ -490,7 +490,7 @@ export function InventoryGradeCoverage() {
               </span>
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1 px-6 py-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
             <div className="space-y-3">
               {modalCategory?.parents.map((p) => {
                 const sizeMap = stockBySize.get(p.parent_sku) || new Map<number, number>();
@@ -503,7 +503,7 @@ export function InventoryGradeCoverage() {
                         <div className="font-medium text-sm break-words whitespace-normal">
                           {p.displayName}
                         </div>
-                        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                        <div className="text-[11px] text-muted-foreground font-mono mt-0.5 break-all">
                           {p.parent_sku} {p.gender && <span className="capitalize">· {p.gender}</span>}
                         </div>
                       </div>
@@ -519,8 +519,8 @@ export function InventoryGradeCoverage() {
                         {p.coveragePct.toFixed(0)}% · {fmtNum(p.totalPairs)} pares
                       </Badge>
                     </div>
-                    <div className="overflow-x-auto -mx-1 px-1">
-                      <div className="inline-flex gap-1">
+                    <div className="overflow-x-auto -mx-1 px-1 pb-1">
+                      <div className="flex gap-1 w-max">
                         {range.map((sz) => {
                           const qty = sizeMap.get(sz) || 0;
                           const zero = qty <= 0;
@@ -550,7 +550,7 @@ export function InventoryGradeCoverage() {
                 </p>
               )}
             </div>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
