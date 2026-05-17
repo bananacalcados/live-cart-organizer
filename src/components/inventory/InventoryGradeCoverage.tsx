@@ -47,6 +47,7 @@ export function InventoryGradeCoverage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "complete" | "broken" | "critical">("all");
+  const [modalCatId, setModalCatId] = useState<string | null>(null);
 
   const loadMeta = useCallback(async () => {
     const [cats, st] = await Promise.all([
