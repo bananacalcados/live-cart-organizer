@@ -89,7 +89,10 @@ export function InventoryGradeCoverage() {
     });
   }, [rows, storeFilter, genderFilter, categoryFilter]);
 
-  const summaries = useMemo(() => computeParentSummaries(filteredRows), [filteredRows]);
+  const allSummaries = useMemo(() => computeParentSummaries(filteredRows), [filteredRows]);
+  // Exclude parents with zero total stock — likely discontinued, not a health signal.
+  const summaries = useMemo(() => allSummaries.filter(p => p.totalPairs > 0), [allSummaries]);
+  const inactiveSummaries = useMemo(() => allSummaries.filter(p => p.totalPairs === 0), [allSummaries]);
 
   // parent_sku -> Map<size, totalStock> for the grade detail modal
   const stockBySize = useMemo(() => {
