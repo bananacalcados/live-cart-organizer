@@ -475,6 +475,81 @@ export function InventoryGradeCoverage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ===== Models detail modal ===== */}
+      <Dialog open={!!modalCatId} onOpenChange={(o) => !o && setModalCatId(null)}>
+        <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle className="text-lg">
+              {modalCategory?.name}{" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                · {modalCategory?.parents.length || 0} modelos
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-6 py-4">
+            <div className="space-y-3">
+              {modalCategory?.parents.map((p) => {
+                const sizeMap = stockBySize.get(p.parent_sku) || new Map<number, number>();
+                const range = getGradeRange(p.gender);
+                const bucket = healthBucket(p.coveragePct, p.isComplete);
+                return (
+                  <div key={p.parent_sku} className="border rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm break-words whitespace-normal">
+                          {p.displayName}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                          {p.parent_sku} {p.gender && <span className="capitalize">· {p.gender}</span>}
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "shrink-0",
+                          bucket === "complete" && "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
+                          bucket === "broken" && "bg-amber-500/10 text-amber-700 border-amber-500/30",
+                          bucket === "critical" && "bg-destructive/10 text-destructive border-destructive/30",
+                        )}
+                      >
+                        {p.coveragePct.toFixed(0)}% · {fmtNum(p.totalPairs)} pares
+                      </Badge>
+                    </div>
+                    <div className="overflow-x-auto -mx-1 px-1">
+                      <div className="inline-flex gap-1">
+                        {range.map((sz) => {
+                          const qty = sizeMap.get(sz) || 0;
+                          const zero = qty <= 0;
+                          return (
+                            <div
+                              key={sz}
+                              className={cn(
+                                "flex flex-col items-center min-w-[48px] rounded-md border py-1.5",
+                                zero
+                                  ? "bg-destructive/5 border-destructive/30 text-destructive"
+                                  : "bg-emerald-500/5 border-emerald-500/30 text-emerald-700 dark:text-emerald-300",
+                              )}
+                            >
+                              <span className="text-xs font-semibold">{sz}</span>
+                              <span className="text-base font-bold leading-tight">{qty}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {modalCategory && modalCategory.parents.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground py-8">
+                  Nenhum modelo nesta categoria.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
