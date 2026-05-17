@@ -11,10 +11,15 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Search, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  computeParentSummaries, healthBucket, type ParentSummary, type VariantRow,
+  computeParentSummaries, healthBucket, parseSizeFromName, getGradeRange,
+  type ParentSummary, type VariantRow,
 } from "@/lib/gradeCoverage";
 
 type Category = { id: string; name: string };
@@ -42,6 +47,7 @@ export function InventoryGradeCoverage() {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "complete" | "broken" | "critical">("all");
+  const [modalCatId, setModalCatId] = useState<string | null>(null);
 
   const loadMeta = useCallback(async () => {
     const [cats, st] = await Promise.all([
@@ -84,6 +90,32 @@ export function InventoryGradeCoverage() {
   }, [rows, storeFilter, genderFilter, categoryFilter]);
 
   const summaries = useMemo(() => computeParentSummaries(filteredRows), [filteredRows]);
+
+  // parent_sku -> Map<size, totalStock> for the grade detail modal
+  const stockBySize = useMemo(() => {
+    const m = new Map<string, Map<number, number>>();
+    for (const r of filteredRows) {
+      const key = r.parent_sku || `__${r.name || "?"}`;
+      const size = parseSizeFromName(r.name);
+      if (size == null) continue;
+      const stk = Number(r.stock ?? 0);
+      const inner = m.get(key) || new Map<number, number>();
+      inner.set(size, (inner.get(size) || 0) + stk);
+      m.set(key, inner);
+    }
+    return m;
+  }, [filteredRows]);
+
+  const modalCategory = useMemo(() => {
+    if (!modalCatId) return null;
+    const name = modalCatId === "uncat"
+      ? "Sem categoria"
+      : categories.find(c => c.id === modalCatId)?.name || "—";
+    const parents = summaries
+      .filter(p => (p.category_id || "uncat") === modalCatId)
+      .sort((a, b) => a.coveragePct - b.coveragePct || a.displayName.localeCompare(b.displayName));
+    return { name, parents };
+  }, [modalCatId, summaries, categories]);
 
   // ===== Visualization 1: Health Score per category =====
   type CatHealth = {
@@ -261,7 +293,15 @@ export function InventoryGradeCoverage() {
                     <CardContent className="pt-4">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-semibold">{c.name}</span>
-                        <Badge variant="outline">{fmtNum(c.total)} modelos</Badge>
+                        <button
+                          type="button"
+                          onClick={() => setModalCatId(c.catId)}
+                          className="rounded-full"
+                        >
+                          <Badge variant="outline" className="cursor-pointer hover:bg-accent">
+                            {fmtNum(c.total)} modelos
+                          </Badge>
+                        </button>
                       </div>
                       <div className="text-2xl font-bold mb-2">
                         {completePct.toFixed(0)}% <span className="text-xs font-normal text-muted-foreground">grade completa</span>
@@ -435,6 +475,81 @@ export function InventoryGradeCoverage() {
           )}
         </CardContent>
       </Card>
+
+      {/* ===== Models detail modal ===== */}
+      <Dialog open={!!modalCatId} onOpenChange={(o) => !o && setModalCatId(null)}>
+        <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-3 border-b">
+            <DialogTitle className="text-lg">
+              {modalCategory?.name}{" "}
+              <span className="text-sm font-normal text-muted-foreground">
+                · {modalCategory?.parents.length || 0} modelos
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="flex-1 px-6 py-4">
+            <div className="space-y-3">
+              {modalCategory?.parents.map((p) => {
+                const sizeMap = stockBySize.get(p.parent_sku) || new Map<number, number>();
+                const range = getGradeRange(p.gender);
+                const bucket = healthBucket(p.coveragePct, p.isComplete);
+                return (
+                  <div key={p.parent_sku} className="border rounded-lg p-3">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm break-words whitespace-normal">
+                          {p.displayName}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                          {p.parent_sku} {p.gender && <span className="capitalize">· {p.gender}</span>}
+                        </div>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "shrink-0",
+                          bucket === "complete" && "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
+                          bucket === "broken" && "bg-amber-500/10 text-amber-700 border-amber-500/30",
+                          bucket === "critical" && "bg-destructive/10 text-destructive border-destructive/30",
+                        )}
+                      >
+                        {p.coveragePct.toFixed(0)}% · {fmtNum(p.totalPairs)} pares
+                      </Badge>
+                    </div>
+                    <div className="overflow-x-auto -mx-1 px-1">
+                      <div className="inline-flex gap-1">
+                        {range.map((sz) => {
+                          const qty = sizeMap.get(sz) || 0;
+                          const zero = qty <= 0;
+                          return (
+                            <div
+                              key={sz}
+                              className={cn(
+                                "flex flex-col items-center min-w-[48px] rounded-md border py-1.5",
+                                zero
+                                  ? "bg-destructive/5 border-destructive/30 text-destructive"
+                                  : "bg-emerald-500/5 border-emerald-500/30 text-emerald-700 dark:text-emerald-300",
+                              )}
+                            >
+                              <span className="text-xs font-semibold">{sz}</span>
+                              <span className="text-base font-bold leading-tight">{qty}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {modalCategory && modalCategory.parents.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground py-8">
+                  Nenhum modelo nesta categoria.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
