@@ -14,7 +14,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Loader2, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Search, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
