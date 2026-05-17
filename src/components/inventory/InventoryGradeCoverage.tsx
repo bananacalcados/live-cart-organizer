@@ -293,7 +293,15 @@ export function InventoryGradeCoverage() {
                     <CardContent className="pt-4">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-semibold">{c.name}</span>
-                        <Badge variant="outline">{fmtNum(c.total)} modelos</Badge>
+                        <button
+                          type="button"
+                          onClick={() => setModalCatId(c.catId)}
+                          className="rounded-full"
+                        >
+                          <Badge variant="outline" className="cursor-pointer hover:bg-accent">
+                            {fmtNum(c.total)} modelos
+                          </Badge>
+                        </button>
                       </div>
                       <div className="text-2xl font-bold mb-2">
                         {completePct.toFixed(0)}% <span className="text-xs font-normal text-muted-foreground">grade completa</span>
