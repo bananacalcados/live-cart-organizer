@@ -91,6 +91,32 @@ export function InventoryGradeCoverage() {
 
   const summaries = useMemo(() => computeParentSummaries(filteredRows), [filteredRows]);
 
+  // parent_sku -> Map<size, totalStock> for the grade detail modal
+  const stockBySize = useMemo(() => {
+    const m = new Map<string, Map<number, number>>();
+    for (const r of filteredRows) {
+      const key = r.parent_sku || `__${r.name || "?"}`;
+      const size = parseSizeFromName(r.name);
+      if (size == null) continue;
+      const stk = Number(r.stock ?? 0);
+      const inner = m.get(key) || new Map<number, number>();
+      inner.set(size, (inner.get(size) || 0) + stk);
+      m.set(key, inner);
+    }
+    return m;
+  }, [filteredRows]);
+
+  const modalCategory = useMemo(() => {
+    if (!modalCatId) return null;
+    const name = modalCatId === "uncat"
+      ? "Sem categoria"
+      : categories.find(c => c.id === modalCatId)?.name || "—";
+    const parents = summaries
+      .filter(p => (p.category_id || "uncat") === modalCatId)
+      .sort((a, b) => a.coveragePct - b.coveragePct || a.displayName.localeCompare(b.displayName));
+    return { name, parents };
+  }, [modalCatId, summaries, categories]);
+
   // ===== Visualization 1: Health Score per category =====
   type CatHealth = {
     catId: string; name: string;
