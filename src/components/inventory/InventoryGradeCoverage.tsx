@@ -111,6 +111,12 @@ export function InventoryGradeCoverage() {
 
   const modalCategory = useMemo(() => {
     if (!modalCatId) return null;
+    if (modalCatId === "__inactive__") {
+      const parents = inactiveSummaries
+        .slice()
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+      return { name: "Inativos (grade zerada)", parents };
+    }
     const name = modalCatId === "uncat"
       ? "Sem categoria"
       : categories.find(c => c.id === modalCatId)?.name || "—";
@@ -118,7 +124,7 @@ export function InventoryGradeCoverage() {
       .filter(p => (p.category_id || "uncat") === modalCatId)
       .sort((a, b) => a.coveragePct - b.coveragePct || a.displayName.localeCompare(b.displayName));
     return { name, parents };
-  }, [modalCatId, summaries, categories]);
+  }, [modalCatId, summaries, inactiveSummaries, categories]);
 
   // ===== Visualization 1: Health Score per category =====
   type CatHealth = {
