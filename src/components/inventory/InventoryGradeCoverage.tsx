@@ -485,7 +485,29 @@ export function InventoryGradeCoverage() {
         </CardContent>
       </Card>
 
-      {/* ===== Models detail modal ===== */}
+      {/* ===== Inativos (grade totalmente zerada) ===== */}
+      <Card className="border-muted">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <CardTitle className="text-base">Inativos · grade totalmente zerada</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Modelos sem nenhum par em estoque — provavelmente descontinuados. <strong>Não entram</strong> no cálculo de saúde.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setModalCatId("__inactive__")}
+              disabled={inactiveSummaries.length === 0}
+            >
+              Ver {fmtNum(inactiveSummaries.length)} modelos
+            </Button>
+          </div>
+        </CardHeader>
+      </Card>
+
+
       <Dialog open={!!modalCatId} onOpenChange={(o) => !o && setModalCatId(null)}>
         <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-6 pt-6 pb-3 border-b">
