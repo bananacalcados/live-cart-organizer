@@ -14,7 +14,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Loader2, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Search, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -89,7 +89,10 @@ export function InventoryGradeCoverage() {
     });
   }, [rows, storeFilter, genderFilter, categoryFilter]);
 
-  const summaries = useMemo(() => computeParentSummaries(filteredRows), [filteredRows]);
+  const allSummaries = useMemo(() => computeParentSummaries(filteredRows), [filteredRows]);
+  // Exclude parents with zero total stock — likely discontinued, not a health signal.
+  const summaries = useMemo(() => allSummaries.filter(p => p.totalPairs > 0), [allSummaries]);
+  const inactiveSummaries = useMemo(() => allSummaries.filter(p => p.totalPairs === 0), [allSummaries]);
 
   // parent_sku -> Map<size, totalStock> for the grade detail modal
   const stockBySize = useMemo(() => {
@@ -108,6 +111,12 @@ export function InventoryGradeCoverage() {
 
   const modalCategory = useMemo(() => {
     if (!modalCatId) return null;
+    if (modalCatId === "__inactive__") {
+      const parents = inactiveSummaries
+        .slice()
+        .sort((a, b) => a.displayName.localeCompare(b.displayName));
+      return { name: "Inativos (grade zerada)", parents };
+    }
     const name = modalCatId === "uncat"
       ? "Sem categoria"
       : categories.find(c => c.id === modalCatId)?.name || "—";
@@ -115,7 +124,7 @@ export function InventoryGradeCoverage() {
       .filter(p => (p.category_id || "uncat") === modalCatId)
       .sort((a, b) => a.coveragePct - b.coveragePct || a.displayName.localeCompare(b.displayName));
     return { name, parents };
-  }, [modalCatId, summaries, categories]);
+  }, [modalCatId, summaries, inactiveSummaries, categories]);
 
   // ===== Visualization 1: Health Score per category =====
   type CatHealth = {
@@ -476,7 +485,29 @@ export function InventoryGradeCoverage() {
         </CardContent>
       </Card>
 
-      {/* ===== Models detail modal ===== */}
+      {/* ===== Inativos (grade totalmente zerada) ===== */}
+      <Card className="border-muted">
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <CardTitle className="text-base">Inativos · grade totalmente zerada</CardTitle>
+              <p className="text-xs text-muted-foreground mt-1">
+                Modelos sem nenhum par em estoque — provavelmente descontinuados. <strong>Não entram</strong> no cálculo de saúde.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setModalCatId("__inactive__")}
+              disabled={inactiveSummaries.length === 0}
+            >
+              Ver {fmtNum(inactiveSummaries.length)} modelos
+            </Button>
+          </div>
+        </CardHeader>
+      </Card>
+
+
       <Dialog open={!!modalCatId} onOpenChange={(o) => !o && setModalCatId(null)}>
         <DialogContent className="max-w-5xl w-[95vw] max-h-[90vh] flex flex-col p-0">
           <DialogHeader className="px-6 pt-6 pb-3 border-b">
@@ -487,7 +518,7 @@ export function InventoryGradeCoverage() {
               </span>
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="flex-1 px-6 py-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-4">
             <div className="space-y-3">
               {modalCategory?.parents.map((p) => {
                 const sizeMap = stockBySize.get(p.parent_sku) || new Map<number, number>();
@@ -500,7 +531,7 @@ export function InventoryGradeCoverage() {
                         <div className="font-medium text-sm break-words whitespace-normal">
                           {p.displayName}
                         </div>
-                        <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
+                        <div className="text-[11px] text-muted-foreground font-mono mt-0.5 break-all">
                           {p.parent_sku} {p.gender && <span className="capitalize">· {p.gender}</span>}
                         </div>
                       </div>
@@ -516,8 +547,8 @@ export function InventoryGradeCoverage() {
                         {p.coveragePct.toFixed(0)}% · {fmtNum(p.totalPairs)} pares
                       </Badge>
                     </div>
-                    <div className="overflow-x-auto -mx-1 px-1">
-                      <div className="inline-flex gap-1">
+                    <div className="overflow-x-auto -mx-1 px-1 pb-1">
+                      <div className="flex gap-1 w-max">
                         {range.map((sz) => {
                           const qty = sizeMap.get(sz) || 0;
                           const zero = qty <= 0;
@@ -547,7 +578,7 @@ export function InventoryGradeCoverage() {
                 </p>
               )}
             </div>
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
