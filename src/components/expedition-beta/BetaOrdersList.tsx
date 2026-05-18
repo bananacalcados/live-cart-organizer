@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Trash2, Unlink, Clock, ArrowRight, Gift, Radio, RotateCcw, Truck, Timer } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { EmitNfeButton } from '@/components/fiscal/EmitNfeButton';
 
 function ShippingBadge({ method }: { method: string }) {
   const upper = method.toUpperCase();
