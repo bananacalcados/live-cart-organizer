@@ -66,8 +66,34 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
   const [productScanInput, setProductScanInput] = useState('');
   const [isConfirming, setIsConfirming] = useState(false);
   const [shippingFilter, setShippingFilter] = useState('all');
+  const [nfeByOrder, setNfeByOrder] = useState<Record<string, { status: string; numero: number | null }>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const productScanRef = useRef<HTMLInputElement>(null);
+
+  // Fetch NF-e status for orders in view
+  useEffect(() => {
+    const ids = orders.map(o => o.id);
+    if (ids.length === 0) { setNfeByOrder({}); return; }
+    let cancelled = false;
+    supabase
+      .from('fiscal_documents')
+      .select('order_id, status, numero, created_at')
+      .in('order_id', ids)
+      .eq('modelo', 55)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const map: Record<string, { status: string; numero: number | null }> = {};
+        (data || []).forEach((d: any) => {
+          // keep latest per order, but prefer authorized
+          if (!map[d.order_id] || (d.status === 'authorized' && map[d.order_id].status !== 'authorized')) {
+            map[d.order_id] = { status: d.status, numero: d.numero };
+          }
+        });
+        setNfeByOrder(map);
+      });
+    return () => { cancelled = true; };
+  }, [orders]);
 
   const shippingFiltered = orders.filter(o => {
     if (shippingFilter === 'priority') {
