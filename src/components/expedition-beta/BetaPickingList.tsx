@@ -591,6 +591,41 @@ export function BetaPickingList({ orders, searchTerm, showChecking, onRefresh }:
         })}
       </div>
 
+      {/* NF-e por pedido (após Conferência) */}
+      {showChecking && (
+        <Card className="border-primary/30">
+          <CardContent className="p-3 md:p-4 space-y-3">
+            <div className="flex items-start gap-2">
+              <FileText className="h-4 w-4 text-primary mt-0.5" />
+              <div>
+                <h3 className="font-bold text-sm text-foreground">Emissão de NF-e</h3>
+                <p className="text-xs text-muted-foreground">Pedidos com conferência 100% concluída — emita a NF-e antes de seguir para Bipagem.</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {(() => {
+                const ready = relevantOrders.filter(o => {
+                  const items = o.expedition_beta_order_items || [];
+                  return items.length > 0 && items.every((i: any) => (i.picked_quantity || 0) >= i.quantity);
+                });
+                if (ready.length === 0) {
+                  return <p className="text-xs text-muted-foreground text-center py-2">Nenhum pedido pronto para emissão. Conclua a conferência de todos os itens.</p>;
+                }
+                return ready.map(order => (
+                  <div key={order.id} className="flex items-center justify-between gap-2 p-2 rounded-lg border bg-secondary/20">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{order.shopify_order_name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{order.customer_name}</p>
+                    </div>
+                    <EmitNfeButton betaOrderId={order.id} onSuccess={onRefresh} />
+                  </div>
+                ));
+              })()}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stock check request dialog */}
       {stockCheckRequest && (
         <StockCheckRequestDialog
