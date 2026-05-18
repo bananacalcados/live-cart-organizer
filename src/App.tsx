@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import { TeamChat } from "./components/TeamChat";
 import { InstallPrompt } from "./components/InstallPrompt";
+import { StickyNotesFloatingButton } from "./components/sticky-notes/StickyNotesFloatingButton";
 
 // Lazy-loaded modules
 const Home = lazy(() => import("./pages/Home"));
@@ -133,6 +134,7 @@ const App = () => (
             </Routes>
           </Suspense>
           <TeamChat />
+          <StickyNotesFloatingButton />
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
