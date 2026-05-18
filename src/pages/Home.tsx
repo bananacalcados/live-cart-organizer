@@ -20,6 +20,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuthReady } from "@/hooks/useAuthReady";
+import { StickyNotesBoard } from "@/components/sticky-notes/StickyNotesBoard";
 
 const modules = [
   {
@@ -220,6 +221,12 @@ export default function Home() {
             </Card>
           ))}
         </div>
+
+        {allowedModules?.includes("admin") && (
+          <div className="mt-10">
+            <StickyNotesBoard />
+          </div>
+        )}
       </main>
     </div>
   );
