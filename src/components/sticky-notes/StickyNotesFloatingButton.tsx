@@ -23,12 +23,10 @@ export function StickyNotesFloatingButton() {
   const { notes, create, update, remove, focus } = useStickyNotes(!!userId && isAdmin && open, userId);
 
   if (!ready || !isAdmin) return null;
+  if (location.pathname === "/") return null; // Home já tem o quadro
   if (HIDE_ON.some((p) => location.pathname === p || location.pathname.startsWith(p + "/") || location.pathname.startsWith(p))) {
-    // Avoid showing on public/customer-facing routes
-    if (location.pathname !== "/" && HIDE_ON.some((p) => location.pathname.startsWith(p))) return null;
+    return null;
   }
-  // Hide on Home (já tem o quadro)
-  if (location.pathname === "/") return null;
 
   const pendingCount = notes.filter((n) => !n.is_done).length;
 
