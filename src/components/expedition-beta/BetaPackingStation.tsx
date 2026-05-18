@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CheckCircle2, ScanBarcode, Camera, Package, Loader2, PackageCheck, PackageMinus, PackageX, Search, Users, Gift, Truck } from 'lucide-react';
+import { CheckCircle2, ScanBarcode, Camera, Package, Loader2, PackageCheck, PackageMinus, PackageX, Search, Users, Gift, Truck, FileText, AlertTriangle } from 'lucide-react';
+import { EmitNfeButton } from '@/components/fiscal/EmitNfeButton';
 
 const Barcode = lazy(() => import('react-barcode'));
 
@@ -66,8 +67,34 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
   const [productScanInput, setProductScanInput] = useState('');
   const [isConfirming, setIsConfirming] = useState(false);
   const [shippingFilter, setShippingFilter] = useState('all');
+  const [nfeByOrder, setNfeByOrder] = useState<Record<string, { status: string; numero: number | null }>>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const productScanRef = useRef<HTMLInputElement>(null);
+
+  // Fetch NF-e status for orders in view
+  useEffect(() => {
+    const ids = orders.map(o => o.id);
+    if (ids.length === 0) { setNfeByOrder({}); return; }
+    let cancelled = false;
+    supabase
+      .from('fiscal_documents')
+      .select('order_id, status, numero, created_at')
+      .in('order_id', ids)
+      .eq('modelo', 55)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const map: Record<string, { status: string; numero: number | null }> = {};
+        (data || []).forEach((d: any) => {
+          // keep latest per order, but prefer authorized
+          if (!map[d.order_id] || (d.status === 'authorized' && map[d.order_id].status !== 'authorized')) {
+            map[d.order_id] = { status: d.status, numero: d.numero };
+          }
+        });
+        setNfeByOrder(map);
+      });
+    return () => { cancelled = true; };
+  }, [orders]);
 
   const shippingFiltered = orders.filter(o => {
     if (shippingFilter === 'priority') {
@@ -171,7 +198,8 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
   const totalScanned = Object.values(scannedItems).reduce((sum, qty) => sum + qty, 0);
   const allScanned = totalItems > 0 && totalScanned === totalItems;
   const allChecked = qualityChecks.feet_correct && qualityChecks.no_defects && qualityChecks.gift_verified;
-  const allVerified = allScanned && allChecked;
+  const allNfeAuthorized = !!selectedGroup && selectedGroup.orders.every(o => nfeByOrder[o.id]?.status === 'authorized');
+  const allVerified = allScanned && allChecked && allNfeAuthorized;
 
   const handleConfirmPacking = async () => {
     if (!selectedGroup) return;
@@ -282,6 +310,13 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
                         {group.orders.length > 1 && <Badge variant="secondary" className="text-[10px]"><Users className="h-3 w-3 mr-1" />{group.orders.length}</Badge>}
                         {group.hasGift && <Gift className="h-3.5 w-3.5 text-pink-500" />}
                         {hasEan && <Badge variant="outline" className="text-[10px] text-green-600">EAN-13 ✓</Badge>}
+                        {(() => {
+                          const allOk = group.orders.every(o => nfeByOrder[o.id]?.status === 'authorized');
+                          const anyPending = group.orders.some(o => ['pending', 'pending_sefaz'].includes(nfeByOrder[o.id]?.status || ''));
+                          if (allOk) return <Badge variant="outline" className="text-[10px] text-green-600 gap-1"><FileText className="h-2.5 w-2.5" />NF-e ✓</Badge>;
+                          if (anyPending) return <Badge variant="outline" className="text-[10px] text-amber-600 gap-1"><FileText className="h-2.5 w-2.5" />NF-e pendente</Badge>;
+                          return <Badge variant="outline" className="text-[10px] text-destructive gap-1"><AlertTriangle className="h-2.5 w-2.5" />Sem NF-e</Badge>;
+                        })()}
                       </div>
                       <p className="text-xs text-muted-foreground">{group.orderNames.join(', ')} • {totalQty} itens</p>
                     </div>
@@ -321,6 +356,32 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
           </CardContent>
         </Card>
       )}
+
+      {/* NF-e gate — bloqueia bipagem sem NF-e autorizada */}
+      {selectedGroup && !allNfeAuthorized && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-3 space-y-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+              <div>
+                <h3 className="font-bold text-sm text-foreground">NF-e obrigatória antes da Bipagem</h3>
+                <p className="text-xs text-muted-foreground">Emita a NF-e de cada pedido na etapa de Conferência. A confirmação da bipagem está bloqueada até todas estarem autorizadas.</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {selectedGroup.orders.map(o => (
+                <div key={o.id} className="flex items-center justify-between gap-2 p-2 rounded border bg-background">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{o.shopify_order_name}</p>
+                  </div>
+                  <EmitNfeButton betaOrderId={o.id} onSuccess={onRefresh} />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
 
       {/* Scan input */}
       <Card className="border-primary/30 bg-primary/5">
