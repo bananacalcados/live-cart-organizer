@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -17,6 +19,7 @@ interface GroupSettingsRequest {
   phones?: string[];
   messageId?: string;
   pinDuration?: string;
+  whatsapp_number_id?: string;
 }
 
 serve(async (req) => {
@@ -25,18 +28,21 @@ serve(async (req) => {
   }
 
   try {
-    const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-    const token = Deno.env.get('ZAPI_TOKEN');
-    const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+    const { action, groupId, groupName, value, phone, phones, messageId, pinDuration, whatsapp_number_id }: GroupSettingsRequest = await req.json();
 
-    if (!instanceId || !token || !clientToken) {
+    let instanceId: string, token: string, clientToken: string;
+    try {
+      const creds = await resolveZApiCredentials(whatsapp_number_id);
+      instanceId = creds.instanceId;
+      token = creds.token;
+      clientToken = creds.clientToken;
+    } catch (error) {
       return new Response(
-        JSON.stringify({ error: 'Z-API credentials not configured' }),
+        JSON.stringify({ error: 'Z-API credentials not configured', details: error instanceof Error ? error.message : String(error) }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const { action, groupId, groupName, value, phone, phones, messageId, pinDuration }: GroupSettingsRequest = await req.json();
     const baseUrl = `https://api.z-api.io/instances/${instanceId}/token/${token}`;
 
     // Normalize Brazilian phone numbers: ensure 13 digits (55 + DD + 9 + 8 digits)
