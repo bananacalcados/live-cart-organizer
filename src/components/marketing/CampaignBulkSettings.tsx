@@ -13,6 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 
 interface CampaignBulkSettingsProps {
   campaignId: string;
@@ -21,6 +22,7 @@ interface CampaignBulkSettingsProps {
 }
 
 export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: CampaignBulkSettingsProps) {
+  const { selectedNumberId } = useWhatsAppNumberStore();
   const [isApplying, setIsApplying] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -35,12 +37,13 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const [pinDuration, setPinDuration] = useState("7_days");
   const [promotePhone, setPromotePhone] = useState("");
   const [adminPhones, setAdminPhones] = useState<string[]>([]);
+  const [campaignWhatsappNumberId, setCampaignWhatsappNumberId] = useState<string | null>(null);
 
   // Load saved settings from campaign
   const loadSettings = useCallback(async () => {
     const { data } = await supabase
       .from('group_campaigns')
-      .select('group_name_template, group_photo_url, group_description, group_only_admins_send, group_only_admins_add, group_admin_phones, group_pin_message_text, group_pin_duration')
+      .select('group_name_template, group_photo_url, group_description, group_only_admins_send, group_only_admins_add, group_admin_phones, group_pin_message_text, group_pin_duration, whatsapp_number_id')
       .eq('id', campaignId)
       .single();
 
@@ -53,6 +56,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       setAdminPhones((data as any).group_admin_phones || []);
       setPinMessageText((data as any).group_pin_message_text || "");
       setPinDuration((data as any).group_pin_duration || "7_days");
+      setCampaignWhatsappNumberId((data as any).whatsapp_number_id || null);
     }
     setIsLoaded(true);
   }, [campaignId]);
@@ -188,6 +192,12 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
 
   const handlePinInAllGroups = async () => {
     if (!pinMessageText.trim()) return;
+    const resolvedWhatsappNumberId = campaignWhatsappNumberId || selectedNumberId || null;
+    if (!resolvedWhatsappNumberId) {
+      toast.error("Selecione a instância WhatsApp da campanha antes de fixar.");
+      return;
+    }
+
     setIsApplying('pin');
     try {
       const { data: groups } = await supabase
@@ -206,10 +216,10 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           const sendRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-send-group-message`, {
             method: 'POST',
             headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groupId: group.group_id, message: pinMessageText, type: 'text' }),
+            body: JSON.stringify({ groupId: group.group_id, message: pinMessageText, type: 'text', whatsapp_number_id: resolvedWhatsappNumberId }),
           });
           const sendData = await sendRes.json();
-          const messageId = sendData?.data?.messageId || sendData?.data?.zapiMessageId;
+          const messageId = sendData?.messageId || sendData?.data?.messageId || sendData?.data?.zapiMessageId || sendData?.data?.zaapId || sendData?.data?.id || null;
 
           if (!sendRes.ok || !messageId) { failed++; continue; }
 
@@ -220,7 +230,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           const pinRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
             method: 'POST',
             headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'pin-message', groupId: group.group_id, messageId, pinDuration }),
+            body: JSON.stringify({ action: 'pin-message', groupId: group.group_id, messageId, pinDuration, whatsapp_number_id: resolvedWhatsappNumberId }),
           });
           const pinData = await pinRes.json();
           if (pinRes.ok && pinData.success) success++;
