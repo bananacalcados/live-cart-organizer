@@ -148,6 +148,27 @@ Deno.serve(async (req) => {
         source: "sale", source_id: (sale as any).id,
         store_company_id: storeCompanyId,
       };
+    } else if (beta_order_id) {
+      const { data: o, error: oErr } = await supabase
+        .from("expedition_beta_orders")
+        .select("*, expedition_beta_order_items(*)")
+        .eq("id", beta_order_id).single();
+      if (oErr || !o) throw new Error(`Pedido (Beta) não encontrado: ${oErr?.message}`);
+      order = {
+        customer_cpf: (o as any).customer_cpf || null,
+        customer_name: (o as any).customer_name || null,
+        customer_phone: (o as any).customer_phone || null,
+        customer_email: (o as any).customer_email || null,
+        shipping_address: (o as any).shipping_address || {},
+        total_shipping: Number((o as any).total_shipping || 0),
+        discount: round2(Number((o as any).total_discount || 0)),
+        items: ((o as any).expedition_beta_order_items || []).map((it: any) => ({
+          product_name: it.product_name, sku: it.sku || null, barcode: it.barcode || null,
+          quantity: Number(it.quantity), unit_price: Number(it.unit_price),
+        })),
+        source: "order", source_id: (o as any).id,
+        store_company_id: null,
+      };
     } else {
       const { data: o, error: oErr } = await supabase
         .from("expedition_orders")
