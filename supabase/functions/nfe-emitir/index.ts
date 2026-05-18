@@ -2,10 +2,11 @@
 // Emite NF-e modelo 55 (venda online) via BrasilNFe, com endereço completo do cliente
 // e fluxo de contingência idêntico ao nfce-emitir (SEFAZ offline → pending_sefaz).
 //
-// Body: { order_id?: uuid (expedition_orders.id) | sale_id?: uuid (pos_sales.id), company_id?: uuid, ambiente?: 'homologacao'|'producao' }
-// Suporta dois fluxos:
-//   A) order_id (expedition_orders) — fluxo histórico
-//   B) sale_id  (pos_sales sale_type='online') — venda PDV online; busca company_id em pos_stores.
+// Body: { order_id?: uuid (expedition_orders.id) | beta_order_id?: uuid (expedition_beta_orders.id) | sale_id?: uuid (pos_sales.id), company_id?: uuid, ambiente?: 'homologacao'|'producao' }
+// Suporta três fluxos:
+//   A) order_id      (expedition_orders) — fluxo histórico
+//   B) beta_order_id (expedition_beta_orders) — fluxo Expedição Beta
+//   C) sale_id       (pos_sales sale_type='online') — venda PDV online; busca company_id em pos_stores.
 //
 // ============================================================================
 // 🔒 GOLDEN PAYLOAD — segue estrutura validada (ver mem://features/fiscal/nfe-payload-golden-template)
@@ -75,8 +76,8 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { order_id, sale_id, company_id: forcedCompany, ambiente: forcedAmb } = body;
-    if (!order_id && !sale_id) throw new Error("order_id ou sale_id obrigatório");
+    const { order_id, beta_order_id, sale_id, company_id: forcedCompany, ambiente: forcedAmb } = body;
+    if (!order_id && !beta_order_id && !sale_id) throw new Error("order_id, beta_order_id ou sale_id obrigatório");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -146,6 +147,27 @@ Deno.serve(async (req) => {
         })),
         source: "sale", source_id: (sale as any).id,
         store_company_id: storeCompanyId,
+      };
+    } else if (beta_order_id) {
+      const { data: o, error: oErr } = await supabase
+        .from("expedition_beta_orders")
+        .select("*, expedition_beta_order_items(*)")
+        .eq("id", beta_order_id).single();
+      if (oErr || !o) throw new Error(`Pedido (Beta) não encontrado: ${oErr?.message}`);
+      order = {
+        customer_cpf: (o as any).customer_cpf || null,
+        customer_name: (o as any).customer_name || null,
+        customer_phone: (o as any).customer_phone || null,
+        customer_email: (o as any).customer_email || null,
+        shipping_address: (o as any).shipping_address || {},
+        total_shipping: Number((o as any).total_shipping || 0),
+        discount: round2(Number((o as any).total_discount || 0)),
+        items: ((o as any).expedition_beta_order_items || []).map((it: any) => ({
+          product_name: it.product_name, sku: it.sku || null, barcode: it.barcode || null,
+          quantity: Number(it.quantity), unit_price: Number(it.unit_price),
+        })),
+        source: "order", source_id: (o as any).id,
+        store_company_id: null,
       };
     } else {
       const { data: o, error: oErr } = await supabase

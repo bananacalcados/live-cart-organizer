@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { CheckCircle2, AlertTriangle, Users, Package, ChevronDown, ChevronUp, Trash2, Unlink, Clock, ArrowRight, Gift, Radio, RotateCcw, Truck, Timer } from 'lucide-react';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { EmitNfeButton } from '@/components/fiscal/EmitNfeButton';
 
 function ShippingBadge({ method }: { method: string }) {
   const upper = method.toUpperCase();
@@ -484,6 +485,12 @@ function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onTogg
               <BarcodeWrapper value={order.ean13_barcode} format="EAN13" width={2} height={60} fontSize={14} />
             </div>
           )}
+
+          {/* NF-e */}
+          <div className="mb-3 p-2 rounded-md bg-secondary/30 border border-dashed">
+            <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Nota Fiscal Eletrônica (NF-e)</div>
+            <EmitNfeButton betaOrderId={order.id} />
+          </div>
 
           {/* Actions */}
           <div className="flex flex-wrap gap-2">
