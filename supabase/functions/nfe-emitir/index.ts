@@ -2,10 +2,11 @@
 // Emite NF-e modelo 55 (venda online) via BrasilNFe, com endereço completo do cliente
 // e fluxo de contingência idêntico ao nfce-emitir (SEFAZ offline → pending_sefaz).
 //
-// Body: { order_id?: uuid (expedition_orders.id) | sale_id?: uuid (pos_sales.id), company_id?: uuid, ambiente?: 'homologacao'|'producao' }
-// Suporta dois fluxos:
-//   A) order_id (expedition_orders) — fluxo histórico
-//   B) sale_id  (pos_sales sale_type='online') — venda PDV online; busca company_id em pos_stores.
+// Body: { order_id?: uuid (expedition_orders.id) | beta_order_id?: uuid (expedition_beta_orders.id) | sale_id?: uuid (pos_sales.id), company_id?: uuid, ambiente?: 'homologacao'|'producao' }
+// Suporta três fluxos:
+//   A) order_id      (expedition_orders) — fluxo histórico
+//   B) beta_order_id (expedition_beta_orders) — fluxo Expedição Beta
+//   C) sale_id       (pos_sales sale_type='online') — venda PDV online; busca company_id em pos_stores.
 //
 // ============================================================================
 // 🔒 GOLDEN PAYLOAD — segue estrutura validada (ver mem://features/fiscal/nfe-payload-golden-template)
