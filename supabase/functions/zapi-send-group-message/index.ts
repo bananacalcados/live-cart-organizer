@@ -224,9 +224,10 @@ serve(async (req) => {
       }).eq('campaign_id', campaignId).eq('group_id', groupDbId);
     }
 
-    console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'success', timestamp: new Date().toISOString() }));
+    const extractedMsgId = extractMessageId(data);
+    console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'success', extractedMessageId: extractedMsgId, responseKeys: data && typeof data === 'object' ? Object.keys(data) : null, rawSample: typeof data === 'object' ? JSON.stringify(data).slice(0, 500) : String(data), timestamp: new Date().toISOString() }));
     return new Response(
-      JSON.stringify({ success: true, data, messageId: extractMessageId(data) }),
+      JSON.stringify({ success: true, data, messageId: extractedMsgId }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
