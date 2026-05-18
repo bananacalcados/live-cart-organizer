@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { StickyNote as StickyIcon, Plus, X } from "lucide-react";
+import { StickyNote as StickyIcon, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
