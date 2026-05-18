@@ -6,10 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { CheckCircle2, Loader2, ScanBarcode, Camera, X, Search, Hand, Package, RefreshCw, Store, MapPin, Wrench, Printer } from 'lucide-react';
+import { CheckCircle2, Loader2, ScanBarcode, Camera, X, Search, Hand, Package, RefreshCw, Store, MapPin, Wrench, Printer, FileText } from 'lucide-react';
 import { ExpeditionBarcodeScanner } from '@/components/expedition/ExpeditionBarcodeScanner';
 import { StockCheckRequestDialog } from '@/components/expedition/StockCheckRequestDialog';
 import { StockCorrectionDialog } from '@/components/expedition-beta/StockCorrectionDialog';
+import { EmitNfeButton } from '@/components/fiscal/EmitNfeButton';
 
 interface Props {
   orders: any[];
