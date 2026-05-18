@@ -309,6 +309,13 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
                         {group.orders.length > 1 && <Badge variant="secondary" className="text-[10px]"><Users className="h-3 w-3 mr-1" />{group.orders.length}</Badge>}
                         {group.hasGift && <Gift className="h-3.5 w-3.5 text-pink-500" />}
                         {hasEan && <Badge variant="outline" className="text-[10px] text-green-600">EAN-13 ✓</Badge>}
+                        {(() => {
+                          const allOk = group.orders.every(o => nfeByOrder[o.id]?.status === 'authorized');
+                          const anyPending = group.orders.some(o => ['pending', 'pending_sefaz'].includes(nfeByOrder[o.id]?.status || ''));
+                          if (allOk) return <Badge variant="outline" className="text-[10px] text-green-600 gap-1"><FileText className="h-2.5 w-2.5" />NF-e ✓</Badge>;
+                          if (anyPending) return <Badge variant="outline" className="text-[10px] text-amber-600 gap-1"><FileText className="h-2.5 w-2.5" />NF-e pendente</Badge>;
+                          return <Badge variant="outline" className="text-[10px] text-destructive gap-1"><AlertTriangle className="h-2.5 w-2.5" />Sem NF-e</Badge>;
+                        })()}
                       </div>
                       <p className="text-xs text-muted-foreground">{group.orderNames.join(', ')} • {totalQty} itens</p>
                     </div>
