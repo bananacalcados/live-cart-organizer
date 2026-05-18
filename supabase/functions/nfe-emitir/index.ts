@@ -76,8 +76,8 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { order_id, sale_id, company_id: forcedCompany, ambiente: forcedAmb } = body;
-    if (!order_id && !sale_id) throw new Error("order_id ou sale_id obrigatório");
+    const { order_id, beta_order_id, sale_id, company_id: forcedCompany, ambiente: forcedAmb } = body;
+    if (!order_id && !beta_order_id && !sale_id) throw new Error("order_id, beta_order_id ou sale_id obrigatório");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
