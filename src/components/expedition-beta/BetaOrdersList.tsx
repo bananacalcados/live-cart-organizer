@@ -486,6 +486,12 @@ function BetaOrderRow({ order, isExpanded, onToggle, onAdvance, onDelete, onTogg
             </div>
           )}
 
+          {/* NF-e */}
+          <div className="mb-3 p-2 rounded-md bg-secondary/30 border border-dashed">
+            <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Nota Fiscal Eletrônica (NF-e)</div>
+            <EmitNfeButton betaOrderId={order.id} />
+          </div>
+
           {/* Actions */}
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" onClick={() => onAdvance(order.id, order.expedition_status)} className="gap-1">
