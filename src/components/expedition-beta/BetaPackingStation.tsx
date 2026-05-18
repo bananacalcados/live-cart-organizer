@@ -197,7 +197,8 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
   const totalScanned = Object.values(scannedItems).reduce((sum, qty) => sum + qty, 0);
   const allScanned = totalItems > 0 && totalScanned === totalItems;
   const allChecked = qualityChecks.feet_correct && qualityChecks.no_defects && qualityChecks.gift_verified;
-  const allVerified = allScanned && allChecked;
+  const allNfeAuthorized = !!selectedGroup && selectedGroup.orders.every(o => nfeByOrder[o.id]?.status === 'authorized');
+  const allVerified = allScanned && allChecked && allNfeAuthorized;
 
   const handleConfirmPacking = async () => {
     if (!selectedGroup) return;
