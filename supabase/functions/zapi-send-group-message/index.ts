@@ -9,6 +9,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function extractMessageId(data: Record<string, unknown> | null | undefined): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const key = data.key && typeof data.key === 'object' ? (data.key as Record<string, unknown>) : null;
+  const candidates = [
+    data.messageId,
+    data.zapiMessageId,
+    data.zaapId,
+    data.id,
+    data.messageID,
+    data.message_id,
+    key?.id,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.length > 0) return candidate;
+  }
+
+  return null;
+}
+
 interface SendGroupRequest {
   groupId: string; // e.g. "120363058412332916@g.us"
   message?: string;
@@ -200,13 +220,13 @@ serve(async (req) => {
       await supabase.from('group_campaign_messages').update({
         status: 'sent',
         sent_at: new Date().toISOString(),
-        message_id: data.messageId || data.zapiMessageId || null,
+        message_id: extractMessageId(data) || null,
       }).eq('campaign_id', campaignId).eq('group_id', groupDbId);
     }
 
     console.log(JSON.stringify({ tag: 'ZAPI_SEND_EXIT', durationMs: Date.now() - reqStartTime, exitPoint: 'success', timestamp: new Date().toISOString() }));
     return new Response(
-      JSON.stringify({ success: true, data }),
+      JSON.stringify({ success: true, data, messageId: extractMessageId(data) }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
