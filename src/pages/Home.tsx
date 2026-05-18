@@ -221,6 +221,12 @@ export default function Home() {
             </Card>
           ))}
         </div>
+
+        {allowedModules?.includes("admin") && (
+          <div className="mt-10">
+            <StickyNotesBoard />
+          </div>
+        )}
       </main>
     </div>
   );
