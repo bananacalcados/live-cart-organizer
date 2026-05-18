@@ -16,23 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 
-// Custom FontSize mark (TipTap doesn't ship one)
-const FontSize = Mark.create({
-  name: "fontSize",
-  addOptions() { return { types: ["textStyle"] as string[] }; },
-  addGlobalAttributes() {
-    return [{
-      types: ["textStyle"],
-      attributes: {
-        fontSize: {
-          default: null,
-          parseHTML: (el: HTMLElement) => el.style.fontSize?.replace(/['"]+/g, "") || null,
-          renderHTML: (attrs: any) => attrs.fontSize ? { style: `font-size: ${attrs.fontSize}` } : {},
-        },
-      },
-    }];
-  },
-});
+// FontSize is provided by @tiptap/extension-text-style v3
 
 const FONTS = [
   { label: "Padrão", value: "" },
