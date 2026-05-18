@@ -111,10 +111,13 @@ serve(async (req) => {
         endpoint = `${baseUrl}/demote-participant`;
         body = { groupId, phone };
         break;
-      case 'pin-message':
-        endpoint = `${baseUrl}/send-pin-message`;
-        body = { phone: groupId, messageId, messageAction: 'pin', pinMessageDuration: pinDuration || '7_days' };
+      case 'pin-message': {
+        endpoint = `${baseUrl}/pin-message`;
+        // Z-API espera o ID do grupo sem o sufixo @g.us
+        const phoneOrGroup = (groupId || '').replace('@g.us', '').replace(/\D/g, '');
+        body = { phone: phoneOrGroup, messageId, messageAction: 'pin', pinMessageDuration: pinDuration || '7_days' };
         break;
+      }
       default:
         return new Response(
           JSON.stringify({ error: 'Invalid action' }),
