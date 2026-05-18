@@ -117,6 +117,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [importFilterDateTo, setImportFilterDateTo] = useState<Date | undefined>(undefined);
   const [isSyncingFromZapi, setIsSyncingFromZapi] = useState(false);
   const { selectedNumberId } = useWhatsAppNumberStore();
+  const sendingMessageIdsRef = useRef<Set<string>>(new Set());
 
   const fetchCampaign = useCallback(async () => {
     const { data } = await supabase.from('group_campaigns').select('*').eq('id', campaignId).single();
@@ -258,10 +259,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           offset++;
         }
       }
-      for (const ins of allInserts) {
-        const { error } = await supabase.from('group_campaign_scheduled_messages').insert(ins as any);
-        if (error) throw error;
-      }
+      const { error } = await supabase.from('group_campaign_scheduled_messages').insert(allInserts as any);
+      if (error) throw error;
       toast.success(`${offset} mensagem(ns) agendada(s)!`);
     } else {
       // Legacy fallback
@@ -310,11 +309,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     if (data.blocks && data.blocks.length > 0) {
       let offset = 0;
       const messageGroupId = data.blocks.length > 1 ? crypto.randomUUID() : null;
-      const allInserted: string[] = [];
+      const allInserts: any[] = [];
       for (const block of data.blocks) {
         if (multiMediaTypes.includes(block.type) && block.mediaItems.length > 0) {
           for (const item of block.mediaItems) {
-            const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+            allInserts.push({
               campaign_id: campaignId,
               message_type: block.type,
               message_content: item.caption || null,
@@ -326,13 +325,11 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               message_group_id: messageGroupId,
               block_order: offset,
               status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
-            } as any).select().single();
-            if (error) throw error;
-            allInserted.push(inserted.id);
+            });
             offset++;
           }
         } else if (block.type === 'text') {
-          const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+          allInserts.push({
             campaign_id: campaignId,
             message_type: 'text',
             message_content: block.content,
@@ -343,12 +340,10 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_group_id: messageGroupId,
             block_order: offset,
             status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
-          } as any).select().single();
-          if (error) throw error;
-          allInserted.push(inserted.id);
+          });
           offset++;
         } else if (block.type === 'poll') {
-          const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+          allInserts.push({
             campaign_id: campaignId,
             message_type: 'poll',
             message_content: block.content,
@@ -361,12 +356,10 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_group_id: messageGroupId,
             block_order: offset,
             status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
-          } as any).select().single();
-          if (error) throw error;
-          allInserted.push(inserted.id);
+          });
           offset++;
         } else if (block.type === 'audio') {
-          const { data: inserted, error } = await supabase.from('group_campaign_scheduled_messages').insert({
+          allInserts.push({
             campaign_id: campaignId,
             message_type: 'audio',
             media_url: block.mediaUrl,
@@ -377,15 +370,21 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             message_group_id: messageGroupId,
             block_order: offset,
             status: offset === 0 ? 'pending' : (messageGroupId ? 'grouped' : 'pending'),
-          } as any).select().single();
-          if (error) throw error;
-          allInserted.push(inserted.id);
+          });
           offset++;
         }
       }
+      const { data: insertedRows, error } = await supabase
+        .from('group_campaign_scheduled_messages')
+        .insert(allInserts as any)
+        .select('id, block_order');
+      if (error) throw error;
+
+      const orderedInserted = (insertedRows || []).sort((a: any, b: any) => (a.block_order ?? 0) - (b.block_order ?? 0));
+
       // Send only the first block — edge function handles the rest via message_group_id
-      if (allInserted.length > 0) {
-        await sendMessage(allInserted[0]);
+      if (orderedInserted.length > 0) {
+        await sendMessage(orderedInserted[0].id);
       }
     } else {
       // Legacy fallback
@@ -465,6 +464,12 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   };
 
   const sendMessage = async (messageId: string, auto = false) => {
+    if (sendingMessageIdsRef.current.has(messageId)) {
+      toast.info('Esse disparo já está sendo processado.');
+      return;
+    }
+
+    sendingMessageIdsRef.current.add(messageId);
     if (!auto) setIsSending(messageId);
     try {
       // Trigger first batch — cron will continue remaining batches automatically
@@ -480,12 +485,19 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
         } else {
           toast.success(`Iniciado! ${result.processed}/${result.total} grupos enviados, restante será processado automaticamente`);
         }
+      } else if (res.status === 409 || result.status === 'sending') {
+        toast.info('O disparo já foi iniciado e continuará automaticamente.');
+      } else if (result.status === 'sent') {
+        toast.info('Esse disparo já foi concluído.');
       } else {
         toast.error(result.error || "Erro ao enviar");
       }
       fetchMessages();
     } catch { toast.error("Erro ao enviar"); }
-    finally { if (!auto) setIsSending(null); }
+    finally {
+      sendingMessageIdsRef.current.delete(messageId);
+      if (!auto) setIsSending(null);
+    }
   };
 
   const deleteMessage = async (id: string) => {
