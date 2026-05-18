@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CheckCircle2, ScanBarcode, Camera, Package, Loader2, PackageCheck, PackageMinus, PackageX, Search, Users, Gift, Truck, FileText, AlertTriangle } from 'lucide-react';
+import { EmitNfeButton } from '@/components/fiscal/EmitNfeButton';
 
 const Barcode = lazy(() => import('react-barcode'));
 
