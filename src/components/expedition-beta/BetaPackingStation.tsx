@@ -356,6 +356,32 @@ export function BetaPackingStation({ orders, searchTerm, onRefresh }: Props) {
         </Card>
       )}
 
+      {/* NF-e gate — bloqueia bipagem sem NF-e autorizada */}
+      {selectedGroup && !allNfeAuthorized && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-3 space-y-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+              <div>
+                <h3 className="font-bold text-sm text-foreground">NF-e obrigatória antes da Bipagem</h3>
+                <p className="text-xs text-muted-foreground">Emita a NF-e de cada pedido na etapa de Conferência. A confirmação da bipagem está bloqueada até todas estarem autorizadas.</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              {selectedGroup.orders.map(o => (
+                <div key={o.id} className="flex items-center justify-between gap-2 p-2 rounded border bg-background">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{o.shopify_order_name}</p>
+                  </div>
+                  <EmitNfeButton betaOrderId={o.id} onSuccess={onRefresh} />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+
       {/* Scan input */}
       <Card className="border-primary/30 bg-primary/5">
         <CardContent className="p-3">
