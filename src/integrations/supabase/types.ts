@@ -12144,6 +12144,60 @@ export type Database = {
         }
         Relationships: []
       }
+      sticky_notes: {
+        Row: {
+          bg_color: string
+          content: Json
+          created_at: string
+          deadline: string | null
+          height: number
+          id: string
+          is_done: boolean
+          is_shared: boolean
+          position_x: number
+          position_y: number
+          text_color: string
+          updated_at: string
+          user_id: string
+          width: number
+          z_index: number
+        }
+        Insert: {
+          bg_color?: string
+          content?: Json
+          created_at?: string
+          deadline?: string | null
+          height?: number
+          id?: string
+          is_done?: boolean
+          is_shared?: boolean
+          position_x?: number
+          position_y?: number
+          text_color?: string
+          updated_at?: string
+          user_id: string
+          width?: number
+          z_index?: number
+        }
+        Update: {
+          bg_color?: string
+          content?: Json
+          created_at?: string
+          deadline?: string | null
+          height?: number
+          id?: string
+          is_done?: boolean
+          is_shared?: boolean
+          position_x?: number
+          position_y?: number
+          text_color?: string
+          updated_at?: string
+          user_id?: string
+          width?: number
+          z_index?: number
+        }
+        Relationships: []
+      }
       stock_movements: {
         Row: {
           barcode: string | null
