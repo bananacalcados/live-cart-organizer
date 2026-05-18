@@ -105,7 +105,7 @@ export function StickyNoteEditor({ value, onChange, textColor }: Props) {
             ))}
           </SelectContent>
         </Select>
-        <Select onValueChange={(v) => editor.chain().focus().setMark("textStyle", { fontSize: v }).run()}>
+        <Select onValueChange={(v) => (editor.chain().focus() as any).setFontSize(v).run()}>
           <SelectTrigger className="h-7 w-[60px] text-xs px-2"><SelectValue placeholder="Aa" /></SelectTrigger>
           <SelectContent>
             {SIZES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
