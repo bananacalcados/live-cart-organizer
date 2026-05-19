@@ -14405,6 +14405,18 @@ export type Database = {
       }
       is_sync_in_progress: { Args: never; Returns: boolean }
       is_unified_inventory_enabled: { Args: never; Returns: boolean }
+      list_nfe_emitters: {
+        Args: never
+        Returns: {
+          ambiente_nfe: string
+          cnpj: string
+          has_brasilnfe_token: boolean
+          id: string
+          is_active: boolean
+          legal_name: string
+          trade_name: string
+        }[]
+      }
       lookup_crm_by_phones: {
         Args: { p_phones: string[] }
         Returns: {
