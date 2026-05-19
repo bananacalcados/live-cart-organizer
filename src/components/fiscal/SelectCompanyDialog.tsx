@@ -42,13 +42,18 @@ export function SelectCompanyDialog({ open, onClose, onConfirm, loading, title =
     if (!open) return;
     setFetching(true);
     supabase
-      .from('companies')
-      .select('id, legal_name, trade_name, cnpj, ambiente_nfe, brasilnfe_token, is_active')
-      .eq('is_active', true)
-      .not('brasilnfe_token', 'is', null)
-      .order('legal_name')
-      .then(({ data }) => {
-        const list = (data || []) as Company[];
+      .rpc('list_nfe_emitters')
+      .then(({ data, error }) => {
+        if (error) console.error('list_nfe_emitters error', error);
+        const list = ((data || []) as any[]).map((c) => ({
+          id: c.id,
+          legal_name: c.legal_name,
+          trade_name: c.trade_name,
+          cnpj: c.cnpj,
+          ambiente_nfe: c.ambiente_nfe,
+          brasilnfe_token: c.has_brasilnfe_token ? 'present' : null,
+          is_active: c.is_active,
+        })) as Company[];
         setCompanies(list);
         const last = localStorage.getItem(LS_KEY);
         if (last && list.find(c => c.id === last)) setSelectedId(last);
