@@ -41,12 +41,16 @@ interface GoalRow {
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 // Normalize payment method strings into a canonical bucket
-function bucketPayment(raw: string | null): string {
+function bucketPayment(raw: string | null, saleType?: string | null): string {
   const s = (raw || "").toLowerCase().trim();
-  if (!s) return "Outros";
+  if (!s) {
+    // sem método explícito → se for online (shopify/checkout), conta como Online; senão Outros
+    if (saleType === "online" || saleType === "live") return "Online";
+    return "Outros";
+  }
   if (s.includes("pix")) return "PIX";
   if (s.includes("crediário") || s.includes("crediario")) return "Crediário";
-  if (s.includes("vp") || s.includes("vps")) return "Vale Presente";
+  if (s.includes("vp") || s.includes("vps") || s.includes("vale presente") || s.includes("vale-presente")) return "Vale Presente";
   if (s.includes("débito") || s.includes("debito") || s.includes("debit")) return "Débito";
   if (s.includes("crédito") || s.includes("credito") || s.includes("credit") || s.includes("cartão") || s.includes("cartao")) return "Crédito";
   if (s.includes("dinheiro") || s === "cash") return "Dinheiro";
