@@ -1399,7 +1399,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               onDeleteMessage={handleDeleteMessage}
               onEditMessage={handleEditMessage}
               isSending={isSending}
-              customerInfoPanel={customerInfoPanel}
+              customerInfoPanel={fullCustomerInfoPanel}
               quotedMessage={quotedMessage}
               onQuoteMessage={setQuotedMessage}
               onCancelQuote={() => setQuotedMessage(null)}
