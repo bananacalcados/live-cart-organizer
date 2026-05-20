@@ -70,13 +70,14 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
 
         const { data: page } = await supabase
           .from("catalog_lead_pages")
-          .select("slug, selected_product_ids")
+          .select("slug, selected_product_ids, product_discounts")
           .eq("id", event.catalog_lead_page_id)
           .single();
 
         if (page) {
           setCatalogSlug((page as any).slug);
           setSelectedProductIds((page as any).selected_product_ids || []);
+          setProductDiscounts(((page as any).product_discounts as DiscountMap) || {});
         }
       } else {
         setDelaySeconds(event?.active_product_delay_seconds || 30);
