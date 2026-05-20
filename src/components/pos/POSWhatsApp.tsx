@@ -1070,6 +1070,17 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     </div>
   ) : null;
 
+  // Add Live order panel above customer info when applicable
+  const liveOrderRef = selectedPhone ? liveStageByPhone[selectedPhone] : null;
+  const fullCustomerInfoPanel = (
+    <>
+      {liveOrderRef && (
+        <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} />
+      )}
+      {customerInfoPanel}
+    </>
+  );
+
   return (
     <div className="h-full flex flex-col bg-[#f0f2f5] dark:bg-[#111b21] min-w-0 overflow-hidden">
       {/* WhatsApp-style Header - simplified */}
