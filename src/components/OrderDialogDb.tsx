@@ -84,6 +84,23 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [isDelivery, setIsDelivery] = useState(false);
   const [pickupStores, setPickupStores] = useState<{id: string; name: string}[]>([]);
   const [isCreatingPickup, setIsCreatingPickup] = useState(false);
+  const [isPhysicalEvent, setIsPhysicalEvent] = useState(false);
+
+  // Detect physical-store event (auto-routes to POS instead of Shopify)
+  useEffect(() => {
+    if (!eventId) { setIsPhysicalEvent(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('events')
+        .select('channel, default_store_id')
+        .eq('id', eventId)
+        .maybeSingle();
+      if (cancelled) return;
+      setIsPhysicalEvent(!!(data?.default_store_id) && (data?.channel ?? 'site') !== 'site');
+    })();
+    return () => { cancelled = true; };
+  }, [eventId]);
 
   // Load stores for pickup
   useEffect(() => {
