@@ -44,11 +44,14 @@ Deno.serve(async (req) => {
 
     if (resp.Base64File && doc.chave_acesso) {
       try {
-        const pdfBytes = Uint8Array.from(atob(resp.Base64File), c => c.charCodeAt(0));
-        const path = `danfe/${doc.chave_acesso}.pdf`;
+        const fileBytes = Uint8Array.from(atob(resp.Base64File), c => c.charCodeAt(0));
+        const isPdf = fileBytes[0] === 0x25 && fileBytes[1] === 0x50 && fileBytes[2] === 0x44 && fileBytes[3] === 0x46;
+        const ext = isPdf ? "pdf" : "html";
+        const ctype = isPdf ? "application/pdf" : "text/html; charset=utf-8";
+        const path = `danfe/${doc.chave_acesso}.${ext}`;
         const { error: upErr } = await supabase.storage
           .from("fiscal-documents")
-          .upload(path, pdfBytes, { contentType: "application/pdf", upsert: true });
+          .upload(path, fileBytes, { contentType: ctype, upsert: true });
         if (!upErr) {
           const { data: pub } = supabase.storage.from("fiscal-documents").getPublicUrl(path);
           updates.danfe_url = pub?.publicUrl || null;
