@@ -203,12 +203,31 @@ export function StickyNoteCard({ note, currentUserId, onUpdate, onDelete, onFocu
       </div>
 
       {/* Footer */}
-      {note.deadline && (
-        <div className={cn("px-2 py-1 text-xs border-t border-black/10", overdue ? "bg-red-200 text-red-900" : "")}>
-          Prazo: {format(new Date(note.deadline), "dd/MM/yyyy", { locale: ptBR })}
-          {overdue && " (atrasado)"}
-        </div>
-      )}
+      {(note.created_at || note.deadline) && (() => {
+        const createdDate = note.created_at ? new Date(note.created_at) : null;
+        const ageDays = createdDate ? Math.floor((Date.now() - createdDate.getTime()) / 86400000) : 0;
+        const stale = ageDays >= 7 && !note.is_done;
+        return (
+          <div className={cn(
+            "px-2 py-1 text-[10px] border-t border-black/10 flex items-center justify-between gap-2",
+            overdue ? "bg-red-200 text-red-900" : stale ? "bg-amber-200/70 text-amber-900" : "opacity-70"
+          )}>
+            {createdDate && (
+              <span title={format(createdDate, "dd/MM/yyyy HH:mm", { locale: ptBR })}>
+                Criado: {format(createdDate, "dd/MM", { locale: ptBR })}
+                {ageDays > 0 && ` · ${ageDays}d`}
+                {stale && " ⚠️"}
+              </span>
+            )}
+            {note.deadline && (
+              <span className="font-medium">
+                Prazo: {format(new Date(note.deadline), "dd/MM/yyyy", { locale: ptBR })}
+                {overdue && " (atrasado)"}
+              </span>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Resize handle */}
       {containerMode === "home" && isOwner && (
