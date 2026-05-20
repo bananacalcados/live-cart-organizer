@@ -544,6 +544,13 @@ export function ConversationList({
                       {(conv.customerName || contactNames[conv.phone]) && (
                         <span className="text-[11px] text-[#667781] truncate">{conv.phone}</span>
                       )}
+                      {liveStageMap[conv.phone] && (
+                        <span className="mt-0.5 inline-flex items-center gap-1 self-start px-1.5 py-[1px] rounded text-[9px] font-semibold bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400 border border-fuchsia-400/30">
+                          <Radio className="h-2.5 w-2.5" />
+                          LIVE · {liveStageMap[conv.phone].stageTitle}
+                          {liveStageMap[conv.phone].eventName ? ` · ${liveStageMap[conv.phone].eventName}` : ''}
+                        </span>
+                      )}
                     </div>
                     <span className={cn(
                       "text-xs flex-shrink-0",
