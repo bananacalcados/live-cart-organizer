@@ -1256,17 +1256,39 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   </Button>
                   <Button
                     onClick={handleEmitOrPrintFiscal}
-                    disabled={emittingNfce || (!!fiscalDoc?.status && ['authorized','autorizada','autorizado'].includes(String(fiscalDoc.status).toLowerCase()) && !fiscalDoc?.danfe_url)}
+                    disabled={emittingNfce || (!!fiscalDoc?.status && ['authorized','autorizada','autorizado'].includes(String(fiscalDoc.status).toLowerCase()) && !fiscalDoc?.danfe_url) || (fiscalDoc?.status === 'pending' || fiscalDoc?.status === 'pending_sefaz')}
                     className="gap-1 h-10 text-xs col-span-2 bg-blue-600 text-white hover:bg-blue-700 font-bold"
                   >
                     {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                    {fiscalDoc?.danfe_url
-                      ? `Visualizar / Imprimir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`
-                      : (fiscalDoc?.status && ['authorized','autorizada','autorizado'].includes(String(fiscalDoc.status).toLowerCase()))
-                        ? `Carregando DANFE…`
-                        : `Emitir ${sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'}`}
+                    {(() => {
+                      const tipo = sale.sale_type === 'online' ? 'NF-e' : 'NFC-e';
+                      const status = String(fiscalDoc?.status || '').toLowerCase();
+                      if (fiscalDoc?.danfe_url) return `Baixar / Imprimir ${tipo}`;
+                      if (['authorized','autorizada','autorizado'].includes(status)) return 'Carregando DANFE…';
+                      if (status === 'pending') return `Emitindo ${tipo}…`;
+                      if (status === 'pending_sefaz') return `Em contingência (SEFAZ off)`;
+                      if (status === 'rejected') return `Reemitir ${tipo}`;
+                      return `Emitir ${tipo}`;
+                    })()}
                   </Button>
                 </div>
+
+                {fiscalDoc?.status === 'rejected' && (
+                  <div className="rounded-md border border-red-300 bg-red-50 p-2.5 text-[11px] text-red-900 space-y-1">
+                    <p className="font-bold">❌ NFC-e rejeitada pela SEFAZ</p>
+                    <p className="text-red-800/90">
+                      {fiscalDoc.rejection_code ? `Cód. ${fiscalDoc.rejection_code} — ` : ''}
+                      {fiscalDoc.rejection_message || 'Motivo não informado.'}
+                    </p>
+                    <p className="text-red-800/70 text-[10px]">Corrija o cadastro do cliente (CPF / endereço) e clique em <strong>Reemitir NFC-e</strong>.</p>
+                  </div>
+                )}
+
+                {fiscalDoc?.status === 'pending_sefaz' && (
+                  <div className="rounded-md border border-yellow-300 bg-yellow-50 p-2.5 text-[11px] text-yellow-900">
+                    ⏳ SEFAZ indisponível. A NFC-e será emitida automaticamente quando voltar.
+                  </div>
+                )}
 
                 {fiscalDoc?.status && ['autorizada', 'authorized', 'autorizado'].includes(String(fiscalDoc.status).toLowerCase()) && (
                   <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-2.5 space-y-2">
