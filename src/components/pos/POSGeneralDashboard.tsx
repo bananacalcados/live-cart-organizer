@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { startOfMonth, startOfDay, startOfWeek, endOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
+import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 
 interface Props { onBack: () => void }
 
