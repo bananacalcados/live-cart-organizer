@@ -286,6 +286,36 @@ Deno.serve(async (req) => {
     const payload: Record<string, unknown> = { data: [eventData] };
     if (TEST_CODE) (payload as any).test_event_code = TEST_CODE;
 
+    // Pre-log: insert pending row for Purchase events tied to an order_id (idempotent)
+    const shouldLog = event_name === "Purchase" && !!order_id;
+    if (shouldLog) {
+      try {
+        await supabase.from("meta_capi_purchase_log").upsert({
+          order_id: String(order_id),
+          event_name: "Purchase",
+          event_id: eventId,
+          pixel_id: PIXEL_ID,
+          test_event_code: TEST_CODE || null,
+          status: "pending",
+          payload_summary: {
+            value: Number(value),
+            currency,
+            num_items: typeof num_items === "number" ? num_items : null,
+            content_ids: Array.isArray(content_ids) ? content_ids : null,
+            enriched: {
+              has_phone: !!ph, has_email: !!em, has_name: !!fn,
+              has_city: !!ct, has_state: !!st, has_zip: !!zp,
+              has_external_id: !!externalId, has_fbc: !!fbc, has_fbp: !!fbp,
+              has_ip: !!clientIp,
+            },
+            action_source: actionSource,
+          },
+        }, { onConflict: "order_id,event_name" });
+      } catch (e) {
+        console.warn("[meta-capi-event] pre-log failed:", e);
+      }
+    }
+
     const url = `https://graph.facebook.com/v21.0/${PIXEL_ID}/events?access_token=${encodeURIComponent(TOKEN)}`;
 
     const resp = await fetch(url, {
@@ -294,6 +324,25 @@ Deno.serve(async (req) => {
       body: JSON.stringify(payload),
     });
     const respJson = await resp.json().catch(() => ({}));
+
+    // Post-log: update result for Purchase events
+    if (shouldLog) {
+      try {
+        await supabase
+          .from("meta_capi_purchase_log")
+          .update({
+            status: resp.ok ? "sent" : "error",
+            http_status: resp.status,
+            meta_response: respJson,
+            error_message: resp.ok ? null : (respJson?.error?.message || `HTTP ${resp.status}`),
+            sent_at: new Date().toISOString(),
+          })
+          .eq("order_id", String(order_id))
+          .eq("event_name", "Purchase");
+      } catch (e) {
+        console.warn("[meta-capi-event] post-log failed:", e);
+      }
+    }
 
     // Best-effort: persist Purchase send timestamp on the order
     if (event_name === "Purchase" && order_id && resp.ok) {
@@ -306,6 +355,7 @@ Deno.serve(async (req) => {
         console.warn("[meta-capi-event] failed to mark order as sent:", e);
       }
     }
+
 
     return new Response(
       JSON.stringify({
