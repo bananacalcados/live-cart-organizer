@@ -9749,6 +9749,8 @@ export type Database = {
           customer_phone: string | null
           discount: number
           expedition_status: string
+          external_order_id: string | null
+          external_source: string | null
           id: string
           invoice_number: string | null
           invoice_pdf_url: string | null
@@ -9770,6 +9772,7 @@ export type Database = {
           seller_id: string | null
           shipped_at: string | null
           shipping_address: Json | null
+          shipping_cost: number
           shipping_notes: string | null
           source_order_id: string | null
           status: string
@@ -9799,6 +9802,8 @@ export type Database = {
           customer_phone?: string | null
           discount?: number
           expedition_status?: string
+          external_order_id?: string | null
+          external_source?: string | null
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
@@ -9820,6 +9825,7 @@ export type Database = {
           seller_id?: string | null
           shipped_at?: string | null
           shipping_address?: Json | null
+          shipping_cost?: number
           shipping_notes?: string | null
           source_order_id?: string | null
           status?: string
@@ -9849,6 +9855,8 @@ export type Database = {
           customer_phone?: string | null
           discount?: number
           expedition_status?: string
+          external_order_id?: string | null
+          external_source?: string | null
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
@@ -9870,6 +9878,7 @@ export type Database = {
           seller_id?: string | null
           shipped_at?: string | null
           shipping_address?: Json | null
+          shipping_cost?: number
           shipping_notes?: string | null
           source_order_id?: string | null
           status?: string
