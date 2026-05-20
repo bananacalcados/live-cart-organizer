@@ -303,20 +303,20 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     w.document.close();
   };
 
-  const handleEmitOrPrintFiscal = async () => {
+  const handleEmitOrPrintFiscal = async (modelo?: 'nfe' | 'nfce') => {
     if (!sale) return;
-    if (fiscalDoc?.danfe_url) { window.open(fiscalDoc.danfe_url, '_blank'); return; }
+    if (fiscalDoc?.danfe_url && !modelo) { window.open(fiscalDoc.danfe_url, '_blank'); return; }
     setEmittingNfce(true);
     try {
-      const isOnline = sale.sale_type === 'online';
-      const fnName = isOnline ? 'nfe-emitir' : 'nfce-emitir';
+      const isNfe = modelo ? modelo === 'nfe' : sale.sale_type === 'online';
+      const fnName = isNfe ? 'nfe-emitir' : 'nfce-emitir';
       const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id } });
       if (error) {
         const msg = await (await import('@/lib/edgeFunctionError')).extractEdgeError(error, 'Erro ao emitir nota fiscal');
         toast.error(msg, { duration: 12000 });
         return;
       }
-      if (data?.ok) toast.success(`${isOnline ? 'NF-e' : 'NFC-e'} autorizada!`);
+      if (data?.ok) toast.success(`${isNfe ? 'NF-e' : 'NFC-e'} autorizada!`);
       else if (data?.contingencia) toast.info('SEFAZ indisponível — em contingência. Será reemitida automaticamente.');
       else toast.error(data?.error || data?.rejection_message || 'Erro ao emitir nota fiscal', { duration: 12000 });
     } catch (e: any) {
