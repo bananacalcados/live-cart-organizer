@@ -96,7 +96,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
       const [storesRes, salesRes, goalsRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
         supabase.from("pos_sales")
-          .select("id, store_id, total, payment_method, shipping_cost, created_at, paid_at, status, sale_type, customer_name, revenue_attribution")
+          .select("id, store_id, total, payment_method, shipping_cost, created_at, paid_at, status, sale_type, customer_id, customer_name, revenue_attribution, tiny_order_number")
           // mesma regra do dashboard da loja física:
           // - somente vendas concluídas
           // - exclui vendas com revenue_attribution = site_pickup_only
@@ -146,9 +146,24 @@ export function POSGeneralDashboard({ onBack }: Props) {
         }
       }
 
+      // Enrich missing customer_name via pos_customers lookup
+      const missingCustIds = Array.from(new Set(
+        sales.filter((s: any) => s.customer_id && !s.customer_name).map((s: any) => s.customer_id)
+      ));
+      const nameById = new Map<string, string>();
+      if (missingCustIds.length > 0) {
+        for (let i = 0; i < missingCustIds.length; i += 500) {
+          const slice = missingCustIds.slice(i, i + 500);
+          const { data: custs } = await supabase
+            .from("pos_customers").select("id, name").in("id", slice);
+          for (const c of (custs || [])) if (c.id && c.name) nameById.set(c.id, c.name);
+        }
+      }
+
       setStores(storesRes.data || []);
       setSalesRows(sales.map((s: any) => ({
         ...s,
+        customer_name: s.customer_name || (s.customer_id ? nameById.get(s.customer_id) : null) || null,
         items: itemsBySale.get(s.id) || 0,
         productCost: costBySale.get(s.id) || 0,
       })));
@@ -492,6 +507,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
         bucketName={paymentModal.bucket}
         sales={modalSales}
         storesById={storesById}
+        onUpdated={load}
       />
     </div>
   );
