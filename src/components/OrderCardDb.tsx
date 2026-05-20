@@ -107,6 +107,23 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     }
   }, [order.event_id, order.id]);
 
+  // Detect if order belongs to a physical-store event (auto-routes to POS; should NOT create Shopify order)
+  useEffect(() => {
+    if (!order.event_id) { setIsPhysicalEvent(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('events')
+        .select('channel, default_store_id')
+        .eq('id', order.event_id)
+        .maybeSingle();
+      if (cancelled) return;
+      const physical = !!(data?.default_store_id) && (data?.channel ?? 'site') !== 'site';
+      setIsPhysicalEvent(physical);
+    })();
+    return () => { cancelled = true; };
+  }, [order.event_id]);
+
   const applyShopifyVerification = useCallback((verified: boolean, orderName: string | null) => {
     setHasShopifyOrder(verified);
     setShopifyOrderName(orderName);
