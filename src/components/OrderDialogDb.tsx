@@ -84,6 +84,23 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [isDelivery, setIsDelivery] = useState(false);
   const [pickupStores, setPickupStores] = useState<{id: string; name: string}[]>([]);
   const [isCreatingPickup, setIsCreatingPickup] = useState(false);
+  const [isPhysicalEvent, setIsPhysicalEvent] = useState(false);
+
+  // Detect physical-store event (auto-routes to POS instead of Shopify)
+  useEffect(() => {
+    if (!eventId) { setIsPhysicalEvent(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('events')
+        .select('channel, default_store_id')
+        .eq('id', eventId)
+        .maybeSingle();
+      if (cancelled) return;
+      setIsPhysicalEvent(!!(data?.default_store_id) && (data?.channel ?? 'site') !== 'site');
+    })();
+    return () => { cancelled = true; };
+  }, [eventId]);
 
   // Load stores for pickup
   useEffect(() => {
@@ -1056,7 +1073,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 onCheckedChange={setPaidExternally}
               />
             </div>
-            {editingOrder && editingOrder.is_paid && (
+            {editingOrder && editingOrder.is_paid && !isPhysicalEvent && (
               <Button
                 type="button"
                 variant="outline"
@@ -1071,6 +1088,11 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 )}
                 Criar Pedido na Shopify
               </Button>
+            )}
+            {editingOrder && editingOrder.is_paid && isPhysicalEvent && (
+              <div className="text-xs text-center text-muted-foreground bg-secondary/40 rounded-md py-2 px-3">
+                Evento de loja física — pedido é enviado automaticamente para o PDV ao ser pago. Sem criação na Shopify.
+              </div>
             )}
           </div>
 

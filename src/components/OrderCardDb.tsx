@@ -73,6 +73,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
   const [shopifyOrderName, setShopifyOrderName] = useState<string | null>(null);
   const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
+  const [isPhysicalEvent, setIsPhysicalEvent] = useState(false);
   const [showUnlinkDialog, setShowUnlinkDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
@@ -105,6 +106,23 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       console.warn('Erro ao persistir verificação Shopify em cache:', error);
     }
   }, [order.event_id, order.id]);
+
+  // Detect if order belongs to a physical-store event (auto-routes to POS; should NOT create Shopify order)
+  useEffect(() => {
+    if (!order.event_id) { setIsPhysicalEvent(false); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('events')
+        .select('channel, default_store_id')
+        .eq('id', order.event_id)
+        .maybeSingle();
+      if (cancelled) return;
+      const physical = !!(data?.default_store_id) && (data?.channel ?? 'site') !== 'site';
+      setIsPhysicalEvent(physical);
+    })();
+    return () => { cancelled = true; };
+  }, [order.event_id]);
 
   const applyShopifyVerification = useCallback((verified: boolean, orderName: string | null) => {
     setHasShopifyOrder(verified);
@@ -592,7 +610,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             </Badge>
           </button>
         )}
-        {(order.is_paid || order.paid_externally) && hasShopifyOrder === false && (
+        {(order.is_paid || order.paid_externally) && hasShopifyOrder === false && !isPhysicalEvent && (
           <Badge variant="secondary" className="text-[10px] bg-destructive/20 text-destructive border-destructive/30 animate-pulse">
             <AlertTriangle className="h-3 w-3 mr-1" />
             Sem Shopify
@@ -802,7 +820,11 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       {/* Registration link / Shopify order button */}
       {order.products.length > 0 && (
         <div className="mt-2 space-y-1.5">
-          {hasRegistration ? (
+          {isPhysicalEvent ? (
+            <div className="w-full text-[11px] text-center text-muted-foreground bg-secondary/40 rounded-md py-1.5 px-2">
+              Evento de loja física — pedido vai automaticamente para o PDV ao ser pago.
+            </div>
+          ) : hasRegistration ? (
             <Button
               variant="default"
               size="sm"
