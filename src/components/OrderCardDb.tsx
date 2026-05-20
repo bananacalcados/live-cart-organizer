@@ -73,6 +73,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
   const [shopifyOrderName, setShopifyOrderName] = useState<string | null>(null);
   const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
+  const [isPhysicalEvent, setIsPhysicalEvent] = useState(false);
   const [showUnlinkDialog, setShowUnlinkDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
