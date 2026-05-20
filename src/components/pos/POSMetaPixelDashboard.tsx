@@ -238,6 +238,51 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
         <KpiCard label="Taxa sucesso" value={`${kpis.rate.toFixed(1)}%`} icon={Activity} color="text-pos-yellow" />
       </div>
 
+      {/* Pixels cadastrados (auto-descoberto a partir dos logs) */}
+      <div className="px-4 pt-4">
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Eye className="h-4 w-4 text-pos-yellow" />
+            <h3 className="text-sm font-semibold">Pixels / Datasets cadastrados</h3>
+            <span className="text-[10px] text-white/40 ml-1">(últimos 30 dias)</span>
+            <span className="ml-auto text-[10px] text-white/40">{pixelSummary.length} ativo(s)</span>
+          </div>
+          {pixelSummary.length === 0 ? (
+            <p className="text-xs text-white/40">
+              Nenhum pixel/dataset detectado nos logs ainda. Configure os IDs nas variáveis de ambiente das funções <code className="text-pos-yellow">meta-capi-event</code> (online) e <code className="text-pos-yellow">meta-capi-offline</code> (PDV).
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {pixelSummary.map(p => {
+                const rate = p.total > 0 ? (p.sent / p.total) * 100 : 0;
+                const healthy = p.lastStatus === "sent";
+                return (
+                  <div key={`${p.channel}-${p.pixelRef}`} className="rounded-lg border border-white/10 bg-black/30 p-2.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`h-2 w-2 rounded-full ${healthy ? "bg-emerald-400" : p.lastStatus === "error" ? "bg-red-400" : "bg-amber-400"}`} />
+                      <Badge variant="outline" className={p.channel === "pdv" ? "border-amber-500/40 text-amber-300 text-[9px]" : "border-fuchsia-500/40 text-fuchsia-300 text-[9px]"}>
+                        {p.channel === "pdv" ? "Offline · PDV" : "Online · Live"}
+                      </Badge>
+                      <span className="ml-auto text-[10px] text-white/40">
+                        {format(new Date(p.lastSeen), "dd/MM HH:mm", { locale: ptBR })}
+                      </span>
+                    </div>
+                    <div className="font-mono text-[11px] text-white/90 truncate" title={p.pixelRef}>
+                      {p.pixelRef}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1.5 text-[10px]">
+                      <span className="text-emerald-400">✓ {p.sent}</span>
+                      <span className="text-red-400">✕ {p.errors}</span>
+                      <span className="text-white/50">total {p.total}</span>
+                      <span className="ml-auto text-pos-yellow font-semibold">{rate.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
       {/* Filters */}
       <div className="px-4 py-3 flex flex-wrap gap-2 items-center border-b border-white/10 mt-3">
         <div className="relative flex-1 min-w-[200px]">
