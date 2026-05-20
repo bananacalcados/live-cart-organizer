@@ -341,8 +341,16 @@ Deno.serve(async (req) => {
         has_external_id: !!externalId,
         has_city: !!ct,
         has_state: !!st,
+        has_zip: !!zp,
         value,
         store_name: storeName,
+        customer_name: nameRaw || null,
+        customer_phone: phoneRaw || null,
+        customer_email: emailRaw || null,
+        order_label: sale.external_source === "shopify"
+          ? (sale.notes || `Shopify ${sale.external_order_id || ""}`).trim()
+          : (sale.notes || null),
+        external_source: sale.external_source || "pdv",
       },
     }, { onConflict: "sale_id,event_name" });
 
