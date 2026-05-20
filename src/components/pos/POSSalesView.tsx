@@ -854,8 +854,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               .maybeSingle();
             const minOk = !cfg?.auto_emit_min_value || totalWithDiscount >= Number(cfg.auto_emit_min_value);
             const methods = (cfg as any)?.auto_emit_payment_methods || [];
-            const pmName = (paymentMethodName || '').toLowerCase();
-            const methodOk = methods.length === 0 || methods.some((m: string) => pmName.includes(String(m).toLowerCase()));
+            const stripAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            const pmName = stripAccents(paymentMethodName || '');
+            const methodOk = methods.length === 0 || methods.some((m: string) => pmName.includes(stripAccents(String(m))));
             if (cfg?.auto_emit_on_sale && minOk && methodOk) {
               setEmittingNfce(true);
               supabase.functions.invoke('nfce-emitir', { body: { sale_id: saleId } })
