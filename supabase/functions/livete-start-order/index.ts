@@ -224,38 +224,37 @@ serve(async (req) => {
     if (shouldSkipSend) {
       console.log(`[livete-start] Duplicate start skipped for order ${orderId} / ${phone}`);
     } else {
-      // ⚠️ ANTI-SPAM: Send ALL content as a SINGLE message to avoid WhatsApp ban.
-      // Multiple rapid messages on first contact triggered spam detection and got the number banned.
-      if (metaPhoneNumberId) {
-        await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone,
-            message: firstMessage,
-            whatsappNumberId: whatsappNumberId,
-          }),
+      // Anti-ban: envia 3 blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
+      const sendBlock = async (text: string) => {
+        if (metaPhoneNumberId) {
+          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, message: text, whatsappNumberId }),
+          });
+        } else {
+          await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, message: text, whatsapp_number_id: whatsappNumberId }),
+          });
+        }
+        await supabase.from('whatsapp_messages').insert({
+          phone, message: text, direction: 'outgoing', status: 'sent', whatsapp_number_id: whatsappNumberId,
         });
-      } else {
-        await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone,
-            message: firstMessage,
-            whatsapp_number_id: whatsappNumberId,
-          }),
-        });
-      }
+      };
 
-      // Log the unified message for history
-      await supabase.from('whatsapp_messages').insert({
-        phone,
-        message: firstMessage,
-        direction: 'outgoing',
-        status: 'sent',
-        whatsapp_number_id: whatsappNumberId,
-      });
+      const humanDelay = (text: string) => {
+        const base = Math.max(1500, text.length * 45);
+        const jitter = Math.floor(Math.random() * 800) - 400;
+        return Math.max(1200, base + jitter);
+      };
+
+      await sendBlock(blockA);
+      await new Promise(r => setTimeout(r, humanDelay(blockB)));
+      await sendBlock(blockB);
+      await new Promise(r => setTimeout(r, humanDelay(blockC)));
+      await sendBlock(blockC);
     }
 
     const responseTime = Date.now() - startTime;
