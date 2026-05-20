@@ -507,6 +507,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
         bucketName={paymentModal.bucket}
         sales={modalSales}
         storesById={storesById}
+        onUpdated={load}
       />
     </div>
   );
