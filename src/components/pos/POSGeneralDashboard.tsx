@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download } from "lucide-react";
+import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -7,12 +7,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format, startOfMonth, startOfDay, startOfWeek, endOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { startOfMonth, startOfDay, startOfWeek, endOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
+import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 
-interface Props {
-  onBack: () => void;
-}
+interface Props { onBack: () => void }
 
 type Period = "today" | "week" | "month";
 
@@ -24,23 +22,53 @@ interface StoreData {
   items: number;
   ticket: number;
   itemsPerSale: number;
+  cost: number;
+  shippingCost: number;
 }
 
 interface GoalRow {
+  id: string;
   store_id: string;
   goal_value: number;
   period: string;
   period_start: string | null;
   period_end: string | null;
   goal_type: string;
+  created_at?: string;
 }
 
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+// Normalize payment method strings into a canonical bucket
+function bucketPayment(raw: string | null): string {
+  const s = (raw || "").toLowerCase().trim();
+  if (!s) return "Outros";
+  if (s.includes("pix")) return "PIX";
+  if (s.includes("crediário") || s.includes("crediario")) return "Crediário";
+  if (s.includes("vp") || s.includes("vps")) return "Vale Presente";
+  if (s.includes("débito") || s.includes("debito") || s.includes("debit")) return "Débito";
+  if (s.includes("crédito") || s.includes("credito") || s.includes("credit") || s.includes("cartão") || s.includes("cartao")) return "Crédito";
+  if (s.includes("dinheiro") || s === "cash") return "Dinheiro";
+  if (s.includes("shopify") || s.includes("checkout") || s.includes("online") || s.includes("mercado") || s.includes("paypal")) return "Online";
+  return "Outros";
+}
+
+const PAYMENT_STYLE: Record<string, { icon: any; gradient: string }> = {
+  "PIX":           { icon: Wallet,    gradient: "from-emerald-500/20 to-emerald-700/10" },
+  "Crédito":       { icon: CreditCard, gradient: "from-blue-500/20 to-blue-700/10" },
+  "Débito":        { icon: CreditCard, gradient: "from-cyan-500/20 to-cyan-700/10" },
+  "Dinheiro":      { icon: Banknote,  gradient: "from-amber-500/20 to-amber-700/10" },
+  "Crediário":     { icon: Receipt,   gradient: "from-orange-500/20 to-orange-700/10" },
+  "Vale Presente": { icon: Wallet,    gradient: "from-fuchsia-500/20 to-fuchsia-700/10" },
+  "Online":        { icon: CreditCard, gradient: "from-indigo-500/20 to-indigo-700/10" },
+  "Outros":        { icon: DollarSign, gradient: "from-zinc-500/20 to-zinc-700/10" },
+};
 
 export function POSGeneralDashboard({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [period, setPeriod] = useState<Period>("month");
+  const [goalsDialogOpen, setGoalsDialogOpen] = useState(false);
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [salesRows, setSalesRows] = useState<any[]>([]);
   const [goals, setGoals] = useState<GoalRow[]>([]);
@@ -56,23 +84,60 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const load = async () => {
     setLoading(true);
     try {
-      const [storesRes, salesRes, itemsRes, goalsRes] = await Promise.all([
+      const [storesRes, salesRes, goalsRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
-        supabase.from("pos_sales").select("id, store_id, total, created_at, status")
+        supabase.from("pos_sales").select("id, store_id, total, payment_method, shipping_cost, created_at, status")
           .gte("created_at", periodRange.start.toISOString())
           .lte("created_at", periodRange.end.toISOString())
           .neq("status", "cancelled")
-          .limit(10000),
-        supabase.from("pos_sale_items").select("sale_id, quantity").limit(50000),
-        supabase.from("pos_goals").select("store_id, goal_value, period, period_start, period_end, goal_type").eq("is_active", true),
+          .limit(20000),
+        supabase.from("pos_goals").select("id, store_id, goal_value, period, period_start, period_end, goal_type, created_at")
+          .eq("is_active", true).is("seller_id", null),
       ]);
-      setStores(storesRes.data || []);
       const sales = salesRes.data || [];
-      const itemsMap = new Map<string, number>();
-      for (const it of (itemsRes.data || [])) {
-        itemsMap.set(it.sale_id, (itemsMap.get(it.sale_id) || 0) + Number(it.quantity || 0));
+      const saleIds = sales.map((s: any) => s.id);
+
+      // Fetch items + product costs in chunks
+      const itemsBySale = new Map<string, number>();
+      const costBySale = new Map<string, number>();
+      if (saleIds.length > 0) {
+        const chunk = 500;
+        for (let i = 0; i < saleIds.length; i += chunk) {
+          const slice = saleIds.slice(i, i + chunk);
+          const { data: itemsData } = await supabase
+            .from("pos_sale_items")
+            .select("sale_id, sku, quantity")
+            .in("sale_id", slice);
+          const skus = Array.from(new Set((itemsData || []).map(it => it.sku).filter(Boolean))) as string[];
+          let costBySku = new Map<string, number>();
+          if (skus.length > 0) {
+            // chunk SKU lookups too
+            for (let j = 0; j < skus.length; j += 500) {
+              const skuSlice = skus.slice(j, j + 500);
+              const { data: prods } = await supabase
+                .from("pos_products")
+                .select("sku, cost_price")
+                .in("sku", skuSlice);
+              for (const p of (prods || [])) {
+                if (p.sku) costBySku.set(p.sku, Number(p.cost_price || 0));
+              }
+            }
+          }
+          for (const it of (itemsData || [])) {
+            const q = Number(it.quantity || 0);
+            itemsBySale.set(it.sale_id, (itemsBySale.get(it.sale_id) || 0) + q);
+            const c = it.sku ? (costBySku.get(it.sku) || 0) : 0;
+            costBySale.set(it.sale_id, (costBySale.get(it.sale_id) || 0) + c * q);
+          }
+        }
       }
-      setSalesRows(sales.map((s: any) => ({ ...s, items: itemsMap.get(s.id) || 0 })));
+
+      setStores(storesRes.data || []);
+      setSalesRows(sales.map((s: any) => ({
+        ...s,
+        items: itemsBySale.get(s.id) || 0,
+        productCost: costBySale.get(s.id) || 0,
+      })));
       setGoals((goalsRes.data || []) as any);
     } catch (e: any) {
       toast.error("Erro ao carregar: " + e.message);
@@ -81,7 +146,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
     }
   };
 
-  useEffect(() => { load(); }, [period]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [period]);
 
   const storeData: StoreData[] = useMemo(() => {
     return stores.map(s => {
@@ -89,8 +154,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
       const revenue = rows.reduce((a, r) => a + Number(r.total || 0), 0);
       const sales = rows.length;
       const items = rows.reduce((a, r) => a + Number(r.items || 0), 0);
+      const cost = rows.reduce((a, r) => a + Number(r.productCost || 0), 0);
+      const shippingCost = rows.reduce((a, r) => a + Number(r.shipping_cost || 0), 0);
       return {
-        id: s.id, name: s.name, revenue, sales, items,
+        id: s.id, name: s.name, revenue, sales, items, cost, shippingCost,
         ticket: sales > 0 ? revenue / sales : 0,
         itemsPerSale: sales > 0 ? items / sales : 0,
       };
@@ -101,31 +168,55 @@ export function POSGeneralDashboard({ onBack }: Props) {
     const revenue = storeData.reduce((a, s) => a + s.revenue, 0);
     const sales = storeData.reduce((a, s) => a + s.sales, 0);
     const items = storeData.reduce((a, s) => a + s.items, 0);
+    const cost = storeData.reduce((a, s) => a + s.cost, 0);
+    const shippingCost = storeData.reduce((a, s) => a + s.shippingCost, 0);
+    const grossMargin = revenue - cost - shippingCost;
     return {
-      revenue, sales, items,
+      revenue, sales, items, cost, shippingCost, grossMargin,
+      marginPct: revenue > 0 ? (grossMargin / revenue) * 100 : 0,
       ticket: sales > 0 ? revenue / sales : 0,
       itemsPerSale: sales > 0 ? items / sales : 0,
     };
   }, [storeData]);
 
-  // Goals (revenue type), aggregate matching current period
+  // Payment buckets
+  const paymentBuckets = useMemo(() => {
+    const map = new Map<string, { revenue: number; sales: number }>();
+    for (const r of salesRows) {
+      const b = bucketPayment(r.payment_method);
+      const cur = map.get(b) || { revenue: 0, sales: 0 };
+      cur.revenue += Number(r.total || 0);
+      cur.sales += 1;
+      map.set(b, cur);
+    }
+    return Array.from(map.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.revenue - a.revenue);
+  }, [salesRows]);
+
+  // Goals — current month rule: prefer custom intersecting current month, fallback monthly. Only ONE per store.
   const goalData = useMemo(() => {
     const now = new Date();
-    const matching = goals.filter(g => {
-      if (g.goal_type !== "revenue") return false;
-      if (g.period_start && g.period_end) {
-        return !isBefore(now, new Date(g.period_start)) && !isAfter(now, new Date(g.period_end));
-      }
-      // map period
-      if (period === "month" && g.period === "monthly") return true;
-      if (period === "week" && g.period === "weekly") return true;
-      if (period === "today" && g.period === "daily") return true;
-      return false;
-    });
     const byStore = new Map<string, number>();
-    for (const g of matching) byStore.set(g.store_id, (byStore.get(g.store_id) || 0) + Number(g.goal_value || 0));
+    const byStoreKind = new Map<string, "custom" | "monthly">();
+
+    for (const g of goals) {
+      if (g.goal_type !== "revenue") continue;
+      let kind: "custom" | "monthly" | null = null;
+      if (g.period === "custom" && g.period_start && g.period_end) {
+        const ps = new Date(g.period_start); const pe = new Date(g.period_end);
+        if (!isBefore(now, ps) && !isAfter(now, pe)) kind = "custom";
+      } else if (g.period === "monthly") {
+        kind = "monthly";
+      }
+      if (!kind) continue;
+      const existingKind = byStoreKind.get(g.store_id);
+      // custom prevails over monthly; latest wins within same kind
+      if (!existingKind || (existingKind === "monthly" && kind === "custom")) {
+        byStore.set(g.store_id, Number(g.goal_value || 0));
+        byStoreKind.set(g.store_id, kind);
+      }
+    }
     const total = Array.from(byStore.values()).reduce((a, b) => a + b, 0);
-    const dayOfPeriod = period === "month" ? new Date().getDate() : period === "week" ? differenceInDays(now, periodRange.start) + 1 : 1;
+    const dayOfPeriod = period === "month" ? now.getDate() : period === "week" ? differenceInDays(now, periodRange.start) + 1 : 1;
     const expected = total > 0 ? (total / periodRange.days) * dayOfPeriod : 0;
     return { byStore, total, expected };
   }, [goals, period, periodRange]);
@@ -135,163 +226,220 @@ export function POSGeneralDashboard({ onBack }: Props) {
     try {
       const { data, error } = await supabase.functions.invoke("shopify-sync-to-pos", { body: { days: 365 } });
       if (error) throw error;
-      toast.success(`Sincronizado: ${data?.inserted || 0} vendas importadas, ${data?.skipped || 0} já existiam`);
+      toast.success(`Importadas ${data?.inserted || 0} vendas · ${data?.skipped || 0} já existiam`);
       await load();
     } catch (e: any) {
-      toast.error("Erro ao sincronizar: " + e.message);
+      toast.error("Erro: " + e.message);
     } finally {
       setSyncing(false);
     }
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-[hsl(var(--pos-bg))] text-foreground">
-      <div className="px-4 py-3 border-b border-border bg-white flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={onBack}>
+    <div className="flex-1 flex flex-col overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-900 to-black text-zinc-100">
+      {/* Metallic top bar */}
+      <div className="px-4 py-3 border-b border-zinc-800 bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 flex items-center gap-3 shadow-lg">
+        <Button variant="ghost" size="icon" onClick={onBack} className="text-zinc-300 hover:text-white hover:bg-zinc-800">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
-          <h2 className="text-lg font-bold flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-orange-500" />
+          <h2 className="text-lg font-bold flex items-center gap-2 bg-gradient-to-r from-zinc-100 via-white to-zinc-300 bg-clip-text text-transparent">
+            <TrendingUp className="h-5 w-5 text-zinc-300" />
             Dashboard Geral — Todas as Lojas
           </h2>
-          <p className="text-xs text-muted-foreground">Visão consolidada de faturamento, vendas e metas</p>
+          <p className="text-[11px] text-zinc-500">Faturamento · margem · metas em tempo real</p>
         </div>
         <Select value={period} onValueChange={v => setPeriod(v as Period)}>
-          <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-32 h-9 bg-zinc-800 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="today">Hoje</SelectItem>
             <SelectItem value="week">Semana</SelectItem>
             <SelectItem value="month">Mês</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline" size="sm" onClick={handleSyncShopify} disabled={syncing} className="gap-2 border-orange-400 text-orange-600 hover:bg-orange-50">
-          {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-          Sincronizar Shopify
+        <Button size="sm" onClick={() => setGoalsDialogOpen(true)} className="gap-2 bg-zinc-800 border border-zinc-700 text-zinc-200 hover:bg-zinc-700">
+          <Settings className="h-3.5 w-3.5" /> Metas
         </Button>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading} className="gap-2">
+        <Button size="sm" onClick={handleSyncShopify} disabled={syncing} className="gap-2 bg-gradient-to-r from-zinc-200 to-zinc-400 text-zinc-900 hover:from-white hover:to-zinc-300">
+          {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+          Sync Shopify
+        </Button>
+        <Button size="sm" onClick={load} disabled={loading} className="gap-2 bg-zinc-800 border border-zinc-700 text-zinc-200 hover:bg-zinc-700">
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Atualizar
         </Button>
       </div>
 
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
-          {/* Totals */}
+          {/* TOTALS KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <Kpi label="Faturamento total" value={BRL(totals.revenue)} icon={DollarSign} color="text-emerald-600" />
-            <Kpi label="Nº de vendas" value={totals.sales} icon={ShoppingBag} color="text-orange-600" />
-            <Kpi label="Itens vendidos" value={totals.items} icon={Package} color="text-blue-600" />
-            <Kpi label="Ticket médio" value={BRL(totals.ticket)} icon={DollarSign} color="text-fuchsia-600" />
-            <Kpi label="Itens / venda" value={totals.itemsPerSale.toFixed(2)} icon={Package} color="text-indigo-600" />
+            <SilverKpi label="Faturamento" value={BRL(totals.revenue)} icon={DollarSign} accent="emerald" />
+            <SilverKpi label="Nº de vendas" value={totals.sales.toString()} icon={ShoppingBag} accent="orange" />
+            <SilverKpi label="Itens vendidos" value={totals.items.toString()} icon={Package} accent="blue" />
+            <SilverKpi label="Ticket médio" value={BRL(totals.ticket)} icon={DollarSign} accent="fuchsia" />
+            <SilverKpi label="Itens / venda" value={totals.itemsPerSale.toFixed(2)} icon={Package} accent="indigo" />
           </div>
 
-          {/* Goals */}
-          {goalData.total > 0 && (
-            <div className="bg-white border border-border rounded-xl p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <Target className="h-4 w-4 text-orange-500" />
-                <h3 className="text-sm font-bold">Meta consolidada — {periodRange.label}</h3>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <GoalBox label="Meta total" value={BRL(goalData.total)} />
-                <GoalBox label="Esperado até hoje" value={BRL(goalData.expected)} sub={`${((goalData.expected / goalData.total) * 100).toFixed(0)}% da meta`} />
-                <GoalBox
-                  label="Realizado"
-                  value={BRL(totals.revenue)}
-                  sub={`${goalData.total > 0 ? ((totals.revenue / goalData.total) * 100).toFixed(1) : 0}% da meta`}
-                  highlight={totals.revenue >= goalData.expected ? "ahead" : "behind"}
-                />
-              </div>
-              <div className="mt-4">
-                <Progress value={Math.min(100, (totals.revenue / goalData.total) * 100)} className="h-2" />
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Progresso da meta total — esperado neste ponto do período: {BRL(goalData.expected)}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Per store */}
-          <div className="bg-white border border-border rounded-xl p-4 shadow-sm">
-            <h3 className="text-sm font-bold mb-3 flex items-center gap-2">
-              <Store className="h-4 w-4 text-orange-500" /> Detalhamento por Loja
-            </h3>
-            {loading ? (
-              <div className="flex items-center justify-center py-8 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando...
-              </div>
-            ) : storeData.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Nenhuma loja ativa</p>
+          {/* PAYMENT BREAKDOWN */}
+          <Panel title="Faturamento por forma de pagamento" icon={CreditCard}>
+            {paymentBuckets.length === 0 ? (
+              <p className="text-zinc-500 text-sm text-center py-3">Sem vendas no período</p>
             ) : (
-              <div className="space-y-3">
-                {storeData.map(s => {
-                  const goal = goalData.byStore.get(s.id) || 0;
-                  const pct = goal > 0 ? Math.min(100, (s.revenue / goal) * 100) : 0;
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                {paymentBuckets.map(b => {
+                  const style = PAYMENT_STYLE[b.name] || PAYMENT_STYLE["Outros"];
+                  const Icon = style.icon;
+                  const pct = totals.revenue > 0 ? (b.revenue / totals.revenue) * 100 : 0;
                   return (
-                    <div key={s.id} className="border border-border rounded-lg p-3 bg-[hsl(var(--pos-bg-2))]">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 rounded-lg bg-orange-100 text-orange-600">
-                          <Store className="h-4 w-4" />
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-semibold">{s.name}</h4>
-                          <p className="text-[11px] text-muted-foreground">{s.sales} vendas · {s.items} itens</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-emerald-600">{BRL(s.revenue)}</p>
-                          {goal > 0 && (
-                            <Badge variant="outline" className="text-[10px]">
-                              {pct.toFixed(0)}% da meta · {BRL(goal)}
-                            </Badge>
-                          )}
-                        </div>
+                    <div key={b.name} className={`bg-gradient-to-br ${style.gradient} border border-zinc-700/60 rounded-lg p-3 backdrop-blur-sm`}>
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <Icon className="h-3.5 w-3.5 text-zinc-300" />
+                        <span className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold truncate">{b.name}</span>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-[11px] mt-2">
-                        <div className="text-center bg-white rounded p-1.5 border border-border">
-                          <p className="text-muted-foreground">Ticket</p>
-                          <p className="font-bold text-foreground">{BRL(s.ticket)}</p>
-                        </div>
-                        <div className="text-center bg-white rounded p-1.5 border border-border">
-                          <p className="text-muted-foreground">Itens/venda</p>
-                          <p className="font-bold text-foreground">{s.itemsPerSale.toFixed(2)}</p>
-                        </div>
-                        <div className="text-center bg-white rounded p-1.5 border border-border">
-                          <p className="text-muted-foreground">% do total</p>
-                          <p className="font-bold text-foreground">{totals.revenue > 0 ? ((s.revenue / totals.revenue) * 100).toFixed(1) : 0}%</p>
-                        </div>
-                      </div>
-                      {goal > 0 && <Progress value={pct} className="h-1.5 mt-2" />}
+                      <p className="text-base font-bold text-zinc-100 truncate">{BRL(b.revenue)}</p>
+                      <p className="text-[10px] text-zinc-400">{b.sales} vendas · {pct.toFixed(1)}%</p>
                     </div>
                   );
                 })}
               </div>
             )}
-          </div>
+          </Panel>
+
+          {/* COSTS & MARGIN */}
+          <Panel title="Custos e margem bruta" icon={TrendingDown}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <SilverKpi label="Custo de produto" value={BRL(totals.cost)} icon={Package} accent="rose" />
+              <SilverKpi label="Custo de envio" value={BRL(totals.shippingCost)} icon={Receipt} accent="amber" />
+              <SilverKpi label="Margem bruta" value={BRL(totals.grossMargin)} icon={TrendingUp} accent="emerald" />
+              <SilverKpi label="% Margem" value={`${totals.marginPct.toFixed(1)}%`} icon={TrendingUp} accent="cyan" />
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-2">
+              Custo de produto: somatório de cost_price (pos_products) × quantidade vendida. Outros custos (operacionais, taxas, marketing) serão adicionados sob demanda.
+            </p>
+          </Panel>
+
+          {/* GOAL CONSOLIDATED */}
+          {goalData.total > 0 && (
+            <Panel title={`Meta consolidada — ${periodRange.label}`} icon={Target}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <GoalBox label="Meta total" value={BRL(goalData.total)} />
+                <GoalBox label="Esperado até hoje" value={BRL(goalData.expected)} sub={`${((goalData.expected / goalData.total) * 100).toFixed(0)}% da meta`} />
+                <GoalBox label="Realizado" value={BRL(totals.revenue)}
+                  sub={`${((totals.revenue / goalData.total) * 100).toFixed(1)}% da meta`}
+                  highlight={totals.revenue >= goalData.expected ? "ahead" : "behind"} />
+              </div>
+              <div className="mt-3">
+                <Progress value={Math.min(100, (totals.revenue / goalData.total) * 100)} className="h-2 bg-zinc-800" />
+              </div>
+            </Panel>
+          )}
+
+          {/* PER STORE */}
+          <Panel title="Detalhamento por Loja" icon={Store}>
+            {loading ? (
+              <div className="flex items-center justify-center py-8 text-zinc-400">
+                <Loader2 className="h-5 w-5 animate-spin mr-2" /> Carregando...
+              </div>
+            ) : storeData.length === 0 ? (
+              <p className="text-sm text-zinc-500 text-center py-6">Nenhuma loja ativa</p>
+            ) : (
+              <div className="space-y-3">
+                {storeData.map(s => {
+                  const goal = goalData.byStore.get(s.id) || 0;
+                  const pct = goal > 0 ? Math.min(100, (s.revenue / goal) * 100) : 0;
+                  const margin = s.revenue - s.cost - s.shippingCost;
+                  return (
+                    <div key={s.id} className="bg-gradient-to-br from-zinc-800/80 to-zinc-900/80 border border-zinc-700/60 rounded-lg p-3 shadow-md hover:shadow-zinc-700/30 transition-shadow">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 rounded-lg bg-gradient-to-br from-zinc-300 to-zinc-500 text-zinc-900 shadow-inner">
+                          <Store className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-zinc-100">{s.name}</h4>
+                          <p className="text-[11px] text-zinc-400">{s.sales} vendas · {s.items} itens · margem {BRL(margin)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-emerald-400">{BRL(s.revenue)}</p>
+                          {goal > 0 && (
+                            <Badge variant="outline" className="text-[10px] border-zinc-600 text-zinc-300 bg-zinc-900/40">
+                              {pct.toFixed(0)}% · {BRL(goal)}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 gap-2 text-[11px] mt-2">
+                        <MiniStat label="Ticket" value={BRL(s.ticket)} />
+                        <MiniStat label="Itens/venda" value={s.itemsPerSale.toFixed(2)} />
+                        <MiniStat label="Custo prod." value={BRL(s.cost)} />
+                        <MiniStat label="% do total" value={`${totals.revenue > 0 ? ((s.revenue / totals.revenue) * 100).toFixed(1) : 0}%`} />
+                      </div>
+                      {goal > 0 && <Progress value={pct} className="h-1.5 mt-2 bg-zinc-800" />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Panel>
         </div>
       </ScrollArea>
+
+      <POSGoalsManagerDialog open={goalsDialogOpen} onClose={() => setGoalsDialogOpen(false)} onSaved={load} />
     </div>
   );
 }
 
-function Kpi({ label, value, icon: Icon, color }: { label: string; value: any; icon: any; color: string }) {
+function Panel({ title, icon: Icon, children }: { title: string; icon: any; children: any }) {
   return (
-    <div className="bg-white border border-border rounded-lg p-3 shadow-sm">
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className={`h-4 w-4 ${color}`} />
-        <span className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">{label}</span>
+    <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-950/90 border border-zinc-800 rounded-xl p-4 shadow-lg backdrop-blur-sm">
+      <h3 className="text-sm font-bold mb-3 flex items-center gap-2 text-zinc-100">
+        <Icon className="h-4 w-4 text-zinc-300" /> {title}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+const ACCENT_COLORS: Record<string, string> = {
+  emerald: "text-emerald-400",
+  orange:  "text-orange-400",
+  blue:    "text-blue-400",
+  fuchsia: "text-fuchsia-400",
+  indigo:  "text-indigo-400",
+  rose:    "text-rose-400",
+  amber:   "text-amber-400",
+  cyan:    "text-cyan-400",
+};
+
+function SilverKpi({ label, value, icon: Icon, accent }: { label: string; value: string; icon: any; accent: string }) {
+  const color = ACCENT_COLORS[accent] || "text-zinc-200";
+  return (
+    <div className="relative overflow-hidden bg-gradient-to-br from-zinc-800/80 via-zinc-900/90 to-black border border-zinc-700/60 rounded-lg p-3 shadow-md">
+      <div className="absolute inset-0 bg-gradient-to-tr from-white/5 via-transparent to-transparent pointer-events-none" />
+      <div className="relative flex items-center gap-2 mb-1">
+        <Icon className={`h-3.5 w-3.5 ${color}`} />
+        <span className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">{label}</span>
       </div>
-      <p className={`text-xl font-bold ${color}`}>{value}</p>
+      <p className={`relative text-xl font-bold ${color} drop-shadow`}>{value}</p>
     </div>
   );
 }
 
 function GoalBox({ label, value, sub, highlight }: { label: string; value: string; sub?: string; highlight?: "ahead" | "behind" }) {
-  const color = highlight === "ahead" ? "text-emerald-600" : highlight === "behind" ? "text-amber-600" : "text-foreground";
+  const color = highlight === "ahead" ? "text-emerald-400" : highlight === "behind" ? "text-amber-400" : "text-zinc-100";
   return (
-    <div className="bg-[hsl(var(--pos-bg-2))] border border-border rounded-lg p-3">
-      <p className="text-[10px] uppercase font-semibold text-muted-foreground">{label}</p>
-      <p className={`text-2xl font-bold ${color}`}>{value}</p>
-      {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+    <div className="bg-gradient-to-br from-zinc-800/60 to-zinc-900/60 border border-zinc-700/60 rounded-lg p-3">
+      <p className="text-[10px] uppercase font-semibold text-zinc-400">{label}</p>
+      <p className={`text-2xl font-bold ${color} drop-shadow`}>{value}</p>
+      {sub && <p className="text-[11px] text-zinc-400 mt-0.5">{sub}</p>}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="text-center bg-zinc-950/60 rounded p-1.5 border border-zinc-800">
+      <p className="text-zinc-500 text-[10px]">{label}</p>
+      <p className="font-bold text-zinc-100 text-[12px]">{value}</p>
     </div>
   );
 }
