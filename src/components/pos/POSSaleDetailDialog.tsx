@@ -1302,13 +1302,16 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                       </>
                     );
                   })()}
+                </div>
+
+                {fiscalDoc?.status === 'rejected' && (
                   <div className="rounded-md border border-red-300 bg-red-50 p-2.5 text-[11px] text-red-900 space-y-1">
-                    <p className="font-bold">❌ NFC-e rejeitada pela SEFAZ</p>
+                    <p className="font-bold">❌ Nota rejeitada pela SEFAZ</p>
                     <p className="text-red-800/90">
                       {fiscalDoc.rejection_code ? `Cód. ${fiscalDoc.rejection_code} — ` : ''}
                       {fiscalDoc.rejection_message || 'Motivo não informado.'}
                     </p>
-                    <p className="text-red-800/70 text-[10px]">Corrija o cadastro do cliente (CPF / endereço) e clique em <strong>Reemitir NFC-e</strong>.</p>
+                    <p className="text-red-800/70 text-[10px]">Corrija o cadastro do cliente (CPF / endereço) e clique em <strong>Reemitir</strong>.</p>
                   </div>
                 )}
 
