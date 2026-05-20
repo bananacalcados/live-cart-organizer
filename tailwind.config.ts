@@ -67,6 +67,11 @@ export default {
           white: "hsl(var(--pos-white))",
           "yellow-muted": "hsl(var(--pos-yellow-muted))",
           "orange-muted": "hsl(var(--pos-orange-muted))",
+          sidebar: "hsl(var(--pos-sidebar))",
+          "sidebar-hover": "hsl(var(--pos-sidebar-hover))",
+          card: "hsl(var(--pos-card))",
+          elevated: "hsl(var(--pos-elevated))",
+          border: "hsl(var(--pos-border))",
         },
         stage: {
           incomplete: "hsl(var(--stage-incomplete))",
