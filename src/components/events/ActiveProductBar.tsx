@@ -238,6 +238,24 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
     await supabase.from("events").update({ active_product_delay_seconds: val } as any).eq("id", eventId);
   };
 
+  // Set/clear discount for a product — saves immediately for realtime push
+  const setDiscount = async (productId: string, discount: ProductDiscount | null) => {
+    if (!catalogPageId) return;
+    const next = { ...productDiscounts };
+    if (!discount || !discount.value || discount.value <= 0) {
+      delete next[productId];
+    } else {
+      next[productId] = discount;
+    }
+    const { error } = await supabase
+      .from("catalog_lead_pages")
+      .update({ product_discounts: next } as any)
+      .eq("id", catalogPageId);
+    if (error) { toast.error(error.message); return; }
+    setProductDiscounts(next);
+    toast.success(discount && discount.value > 0 ? "Desconto aplicado ao vivo! 🔥" : "Desconto removido");
+  };
+
   const copyLink = () => {
     if (!catalogSlug) return;
     const url = `${CHECKOUT_BASE_URL}/evento/${catalogSlug}`;
