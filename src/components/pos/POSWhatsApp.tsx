@@ -133,7 +133,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
         const { data: orders } = await supabase
           .from("orders")
-          .select("id, event_id, stage, updated_at, customer:customers(name, whatsapp)")
+          .select("id, event_id, stage, updated_at, customer:customers(instagram_handle, whatsapp)")
           .in("event_id", eventIds)
           .order("updated_at", { ascending: false })
           .limit(1000);
