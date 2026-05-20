@@ -227,7 +227,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [selectedSendNumberId, setSelectedSendNumberId] = useState<string | null>(null);
 
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
-  const { enrichConversations, finishConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
@@ -713,9 +713,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     return { messageId: data?.messageId || null };
   };
 
+  const normalizePhoneKey = (phone: string | null | undefined) => String(phone || '').replace(/\D/g, '').slice(-8);
+
   const handleSelectConversation = async (phone: string, whatsappNumberId?: string | null) => {
     const conversationKey = `${phone}__${whatsappNumberId || 'none'}`;
-    const selectedConversation = conversations.find((conversation) => {
+    const selectedConversation = mergedConversations.find((conversation) => {
       const key = conversation.conversationKey || `${conversation.phone}__${conversation.whatsapp_number_id || 'none'}`;
       return key === conversationKey;
     }) || null;
@@ -796,6 +798,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         if (error) throw error;
       }
 
+      await reopenConversation(selectedPhone);
+
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone,
         message: messageText,
@@ -856,6 +860,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
     setIsSending(true);
     try {
+      await reopenConversation(selectedPhone);
+
       let audioMsgId: string | null = null;
       if (useMessenger) {
         const result = await sendViaMessenger(selectedPhone, "[áudio]", messengerChannel, "audio", audioUrl, sendRoute.numberId);
@@ -914,6 +920,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
     setIsSending(true);
     try {
+      await reopenConversation(selectedPhone);
+
       const msgText = caption || `[${mediaType}]`;
       let mediaMsgId: string | null = null;
 
@@ -1016,7 +1024,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     } catch { toast.error("Erro ao salvar"); }
   };
 
-  const selectedConversation = conversations.find(c => c.conversationKey === selectedConvKey) || conversations.find(c => c.phone === selectedPhone) || null;
+  const selectedConversation = mergedConversations.find(c => c.conversationKey === selectedConvKey)
+    || mergedConversations.find(c => normalizePhoneKey(c.phone) === normalizePhoneKey(selectedPhone))
+    || null;
   const selectedChannel = getSelectedChannel();
   const requiresInstanceSelection = selectedChannel !== "instagram" && selectedChannel !== "messenger" && !selectedSendNumber;
   const totalUnread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
@@ -1119,7 +1129,10 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   ) : null;
 
   // Add Live order panel above customer info when applicable
-  const liveOrderRef = selectedPhone ? liveStageByPhone[selectedPhone] : null;
+  const liveOrderRef = selectedPhone
+    ? liveStageByPhone[selectedPhone]
+      || Object.entries(liveStageByPhone).find(([phone]) => normalizePhoneKey(phone) === normalizePhoneKey(selectedPhone))?.[1]
+    : null;
   const fullCustomerInfoPanel = (
     <>
       {liveOrderRef && (
