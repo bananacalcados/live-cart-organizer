@@ -56,13 +56,13 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
       const [offlineRes, liveRes] = await Promise.all([
         supabase
           .from("meta_capi_offline_log")
-          .select("id, sale_id, event_name, event_id, status, http_status, error_message, meta_response, payload_summary, created_at, sent_at")
+          .select("id, sale_id, event_name, event_id, dataset_id, status, http_status, error_message, meta_response, payload_summary, created_at, sent_at")
           .gte("created_at", since)
           .order("created_at", { ascending: false })
           .limit(500),
         supabase
           .from("meta_capi_purchase_log")
-          .select("id, order_id, event_name, event_id, status, http_status, error_message, meta_response, payload_summary, created_at, sent_at")
+          .select("id, order_id, event_name, event_id, pixel_id, status, http_status, error_message, meta_response, payload_summary, created_at, sent_at")
           .gte("created_at", since)
           .order("created_at", { ascending: false })
           .limit(500),
@@ -70,14 +70,18 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
 
       const offline: UnifiedLog[] = (offlineRes.data || []).map((r: any) => ({
         id: r.id, channel: "pdv", source_id: r.sale_id,
-        event_name: r.event_name, event_id: r.event_id, status: r.status,
+        event_name: r.event_name, event_id: r.event_id,
+        pixel_ref: r.dataset_id || null,
+        status: r.status,
         http_status: r.http_status, error_message: r.error_message,
         meta_response: r.meta_response, payload_summary: r.payload_summary,
         created_at: r.created_at, sent_at: r.sent_at,
       }));
       const live: UnifiedLog[] = (liveRes.data || []).map((r: any) => ({
         id: r.id, channel: "live", source_id: r.order_id,
-        event_name: r.event_name, event_id: r.event_id, status: r.status,
+        event_name: r.event_name, event_id: r.event_id,
+        pixel_ref: r.pixel_id || null,
+        status: r.status,
         http_status: r.http_status, error_message: r.error_message,
         meta_response: r.meta_response, payload_summary: r.payload_summary,
         created_at: r.created_at, sent_at: r.sent_at,
