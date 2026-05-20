@@ -1,4 +1,4 @@
-import { Store, ChevronRight, Home, Plus } from "lucide-react";
+import { Store, ChevronRight, Home, Plus, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -106,6 +106,23 @@ export function POSStoreSelector({ onSelect }: Props) {
             </div>
           ) : (
             <>
+              {/* Dashboard Geral tile */}
+              <div
+                className="cursor-pointer rounded-xl border-2 border-emerald-500/40 bg-pos-black hover:border-emerald-500 hover:shadow-[0_0_20px_hsl(150_70%_45%/0.18)] transition-all group p-6 flex items-center justify-between"
+                onClick={() => onSelect("__general__")}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-500 group-hover:bg-emerald-500 group-hover:text-pos-black transition-all group-hover:scale-110">
+                    <TrendingUp className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg text-pos-white">Dashboard Geral</h3>
+                    <p className="text-sm text-pos-white/50">Visão consolidada de todas as lojas</p>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-pos-white/40 group-hover:text-emerald-500 transition-colors" />
+              </div>
+
               {stores.map(store => (
                 <div
                   key={store.id}
