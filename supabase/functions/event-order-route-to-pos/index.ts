@@ -114,6 +114,7 @@ Deno.serve(async (req) => {
         status: "pending_pickup",
         sale_type: "live",
         source_order_id: order.id,
+        event_id: order.event_id,
         revenue_attribution: "store",
         notes: `Auto-routed (Evento Físico - ${event.channel}). Pedido CRM: ${order.id.slice(0, 8)}`,
         payment_details: {
