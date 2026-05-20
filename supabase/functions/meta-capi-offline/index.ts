@@ -139,8 +139,9 @@ Deno.serve(async (req) => {
       .from("pos_sales")
       .select(`
         id, total, status, created_at, paid_at, payment_method, sale_type,
-        customer_id, store_id,
-        customer_name, customer_phone
+        customer_id, store_id, notes, external_source, external_order_id,
+        customer_name, customer_phone, customer_email, customer_cpf,
+        customer_city, customer_state, customer_cep, shipping_address
       `)
       .eq("id", saleId)
       .maybeSingle();
@@ -218,11 +219,14 @@ Deno.serve(async (req) => {
       store = s;
     }
 
+    // shipping_address jsonb fallback (transparent checkout / shopify)
+    const shipAddr: any = sale.shipping_address || {};
+
     // Validação: precisa ter pelo menos UM identificador do cliente
-    const phoneRaw = customer?.whatsapp || sale.customer_phone || "";
-    const emailRaw = customer?.email || "";
-    const cpfRaw = customer?.cpf || "";
-    const nameRaw = customer?.name || sale.customer_name || "";
+    const phoneRaw = customer?.whatsapp || sale.customer_phone || shipAddr.phone || "";
+    const emailRaw = customer?.email || sale.customer_email || shipAddr.email || "";
+    const cpfRaw = customer?.cpf || sale.customer_cpf || shipAddr.cpf || "";
+    const nameRaw = customer?.name || sale.customer_name || shipAddr.name || "";
 
     if (!phoneRaw && !emailRaw && !cpfRaw) {
       const errMsg = "no customer identifiers (phone/email/cpf) — skipping";
