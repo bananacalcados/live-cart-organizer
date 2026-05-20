@@ -18,6 +18,7 @@ import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useSupportPhones } from "@/hooks/useSupportPhones";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { POSProductCatalogSender } from "./POSProductCatalogSender";
+import { POSLiveOrderPanel } from "./POSLiveOrderPanel";
 import { NewConversationDialog } from "./NewConversationDialog";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { toast } from "sonner";
