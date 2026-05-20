@@ -31,10 +31,12 @@ import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineSales } from "@/components/pos/POSOnlineSales";
 import { POSCheckoutMonitor } from "@/components/pos/POSCheckoutMonitor";
 import { POSCustomer360 } from "@/components/pos/POSCustomer360";
+import { POSMetaPixelDashboard } from "@/components/pos/POSMetaPixelDashboard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "seller-dashboard" | "customers";
+type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "seller-dashboard" | "customers" | "meta-pixel";
+
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
 const CONFIG_PIN = "1530";
@@ -277,7 +279,11 @@ export default function POS() {
         {section === "online" && <POSOnlineSales storeId={selectedStore} sellers={sellers} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
         {section === "pickups" && <POSPickupOrders storeId={selectedStore} />}
+        {section === "meta-pixel" && (
+          <POSMetaPixelDashboard storeId={selectedStore} onBack={() => setSection("dashboard")} />
+        )}
         {section === "searches" && <POSProductSearchLog storeId={selectedStore} />}
+
         {section === "checkout" && <POSCheckoutMonitor storeId={selectedStore} />}
         {section === "chat" && <POSTeamChat storeId={selectedStore} />}
         {section === "slowmoving" && <POSSlowMovingProducts storeId={selectedStore} />}

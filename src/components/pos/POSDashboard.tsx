@@ -21,6 +21,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { POSGoalProgress } from "./POSGoalProgress";
 import { POSSellerPrivatePanel } from "./POSSellerPrivatePanel";
 import { POSTaskWhatsAppDialog } from "./POSTaskWhatsAppDialog";
+import { POSMetaPixelCard } from "./POSMetaPixelCard";
+
 import type { DateRange } from "react-day-picker";
 
 interface Props {
@@ -552,6 +554,10 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                 />
               </div>
             </div>
+
+            {/* Meta Pixel CAPI audit */}
+            <POSMetaPixelCard onOpen={() => onNavigateToSection("meta-pixel")} />
+
           </div>
         </ScrollArea>
       )}
