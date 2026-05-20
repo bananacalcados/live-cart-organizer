@@ -90,7 +90,7 @@ export function StickyNoteCard({ note, currentUserId, onUpdate, onDelete, onFocu
     <div
       ref={cardRef}
       className={cn(
-        "absolute rounded-md shadow-lg flex flex-col select-none",
+        "absolute rounded-md shadow-lg flex flex-col select-none pointer-events-auto",
         containerMode === "floating" ? "!relative !left-0 !top-0 mb-3 w-full" : "",
         note.is_done && "opacity-60"
       )}
@@ -99,6 +99,7 @@ export function StickyNoteCard({ note, currentUserId, onUpdate, onDelete, onFocu
         background: note.bg_color, color: note.text_color, zIndex: note.z_index,
         boxShadow: "0 8px 20px rgba(0,0,0,0.25)",
         transform: "rotate(-0.4deg)",
+        touchAction: "none",
       } : {
         background: note.bg_color, color: note.text_color, minHeight: 200,
       }}
@@ -214,7 +215,7 @@ export function StickyNoteCard({ note, currentUserId, onUpdate, onDelete, onFocu
           )}>
             {createdDate && (
               <span title={format(createdDate, "dd/MM/yyyy HH:mm", { locale: ptBR })}>
-                Criado: {format(createdDate, "dd/MM", { locale: ptBR })}
+                Criado: {format(createdDate, "dd/MM/yyyy", { locale: ptBR })}
                 {ageDays > 0 && ` · ${ageDays}d`}
                 {stale && " ⚠️"}
               </span>
