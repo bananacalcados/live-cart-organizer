@@ -183,7 +183,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     const loadDoc = async () => {
       const { data: authd } = await supabase
         .from('fiscal_documents')
-        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente')
+        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
         .eq('pos_sale_id', sale.id)
         .in('status', ['authorized', 'autorizada', 'autorizado'])
         .order('created_at', { ascending: false })
@@ -204,7 +204,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       }
       const { data } = await supabase
         .from('fiscal_documents')
-        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente')
+        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
         .eq('pos_sale_id', sale.id)
         .order('created_at', { ascending: false })
         .limit(1)
