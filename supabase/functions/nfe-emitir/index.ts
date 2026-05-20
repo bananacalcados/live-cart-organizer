@@ -25,6 +25,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function buildRenderableDanfeUrl(url: string | null | undefined) {
+  if (!url || !/\.html(?:$|[?#])/i.test(url)) return url || null;
+  const endpoint = new URL("/functions/v1/fiscal-render-document", Deno.env.get("SUPABASE_URL")!);
+  endpoint.searchParams.set("url", url);
+  return endpoint.toString();
+}
+
 const BRASILNFE_BASE = "https://api.brasilnfe.com.br/services";
 const PILOT_COMPANY_ID = "febc4662-a126-493e-ada1-4729122760ed"; // VAREJO DE CALCADOS (homologação)
 
@@ -464,7 +471,7 @@ Deno.serve(async (req) => {
             .upload(path, fileBytes, { contentType: ctype, upsert: true });
           if (!upErr) {
             const { data: pub } = supabase.storage.from("fiscal-documents").getPublicUrl(path);
-            danfeUrl = pub?.publicUrl || danfeUrl;
+            danfeUrl = buildRenderableDanfeUrl(pub?.publicUrl || danfeUrl);
           }
         }
       } catch (e) {
@@ -498,7 +505,7 @@ Deno.serve(async (req) => {
       data_autorizacao: ok ? new Date().toISOString() : null,
       xml_url: respJson?.XmlUrl || respJson?.xml_url || null,
       xml_content: xmlContent,
-      danfe_url: danfeUrl,
+      danfe_url: buildRenderableDanfeUrl(danfeUrl),
       qrcode_url: respJson?.QrCodeUrl || respJson?.qrcode_url || null,
       rejection_code: ok ? null : (codSefaz ? String(codSefaz) : (httpStatus ? String(httpStatus) : "NETWORK")),
       rejection_message: ok ? null : (errorMsg || respText.slice(0, 500) || "Erro desconhecido"),

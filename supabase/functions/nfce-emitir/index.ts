@@ -60,6 +60,12 @@ const BRASILNFE_BASE = "https://api.brasilnfe.com.br/services";
 
 function digits(s: string | null | undefined) { return (s || "").replace(/\D/g, ""); }
 function round2(n: number) { return Math.round(n * 100) / 100; }
+function buildRenderableDanfeUrl(url: string | null | undefined) {
+  if (!url || !/\.html(?:$|[?#])/i.test(url)) return url || null;
+  const endpoint = new URL("/functions/v1/fiscal-render-document", Deno.env.get("SUPABASE_URL")!);
+  endpoint.searchParams.set("url", url);
+  return endpoint.toString();
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -324,7 +330,7 @@ Deno.serve(async (req) => {
       numero: numeroRet, serie: serieRet,
       data_autorizacao: ok ? new Date().toISOString() : null,
       xml_url: respJson?.XmlUrl || respJson?.xml_url || null,
-      danfe_url: respJson?.DanfeUrl || respJson?.danfe_url || null,
+      danfe_url: buildRenderableDanfeUrl(respJson?.DanfeUrl || respJson?.danfe_url || null),
       qrcode_url: respJson?.QrCodeUrl || respJson?.qrcode_url || null,
       rejection_code: ok ? null : (codSefaz ? String(codSefaz) : (httpStatus ? String(httpStatus) : "NETWORK")),
       rejection_message: ok ? null : (errorMsg || respText.slice(0, 500) || "Erro desconhecido"),

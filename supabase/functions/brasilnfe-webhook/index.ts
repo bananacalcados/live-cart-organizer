@@ -16,6 +16,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
+function buildRenderableDanfeUrl(url: string | null | undefined) {
+  if (!url || !/\.html(?:$|[?#])/i.test(url)) return url || null;
+  const endpoint = new URL("/functions/v1/fiscal-render-document", Deno.env.get("SUPABASE_URL")!);
+  endpoint.searchParams.set("url", url);
+  return endpoint.toString();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method === "GET") {
@@ -159,7 +166,7 @@ Deno.serve(async (req) => {
     }
 
     if (payload.XmlUrl || payload.xml_url) updates.xml_url = payload.XmlUrl || payload.xml_url;
-    if (payload.DanfeUrl || payload.danfe_url) updates.danfe_url = payload.DanfeUrl || payload.danfe_url;
+    if (payload.DanfeUrl || payload.danfe_url) updates.danfe_url = buildRenderableDanfeUrl(payload.DanfeUrl || payload.danfe_url);
     if (payload.QrCodeUrl || payload.qrcode_url) updates.qrcode_url = payload.QrCodeUrl || payload.qrcode_url;
 
     updates.status = newStatus;
