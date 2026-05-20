@@ -5,6 +5,7 @@ import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
 
 interface FinishedConversation {
   phone: string;
+  finished_at: string;
 }
 
 const normalizePhoneKey = (phone: string | null | undefined) => {
@@ -17,6 +18,7 @@ const normalizePhoneKey = (phone: string | null | undefined) => {
  */
 export function useConversationEnrichment() {
   const [finishedPhones, setFinishedPhones] = useState<Set<string>>(new Set());
+  const [finishedAtByPhone, setFinishedAtByPhone] = useState<Map<string, string>>(new Map());
   const [archivedPhones, setArchivedPhones] = useState<Set<string>>(new Set());
   const [awaitingPaymentPhones, setAwaitingPaymentPhones] = useState<Set<string>>(new Set());
   const [aiTransferredPhones, setAiTransferredPhones] = useState<Set<string>>(new Set());
@@ -30,7 +32,7 @@ export function useConversationEnrichment() {
     while (true) {
       const { data, error } = await supabase
         .from('chat_finished_conversations')
-        .select('phone')
+        .select('phone, finished_at')
         .range(from, from + PAGE_SIZE - 1);
 
       if (error || !data || data.length === 0) break;
@@ -41,7 +43,18 @@ export function useConversationEnrichment() {
       from += PAGE_SIZE;
     }
 
-    setFinishedPhones(new Set(allFinished.map(d => normalizePhoneKey(d.phone)).filter(Boolean)));
+    const nextFinishedMap = new Map<string, string>();
+    for (const row of allFinished) {
+      const key = normalizePhoneKey(row.phone);
+      if (!key || !row.finished_at) continue;
+      const existing = nextFinishedMap.get(key);
+      if (!existing || new Date(row.finished_at).getTime() > new Date(existing).getTime()) {
+        nextFinishedMap.set(key, row.finished_at);
+      }
+    }
+
+    setFinishedAtByPhone(nextFinishedMap);
+    setFinishedPhones(new Set(nextFinishedMap.keys()));
   }, []);
 
   const loadArchived = useCallback(async () => {
@@ -189,7 +202,7 @@ export function useConversationEnrichment() {
       });
     }
 
-    const { error } = await supabase.from('chat_finished_conversations').delete().eq('phone', phone);
+    const { error } = await supabase.rpc('reopen_finished_conversation', { p_phone: phone });
 
     if (error && phoneKey) {
       setFinishedPhones(prev => new Set([...prev, phoneKey]));
@@ -249,10 +262,14 @@ export function useConversationEnrichment() {
       const convKey = `${conv.phone}__${conv.whatsapp_number_id || 'none'}`;
       const msgs = phoneMessages.get(convKey) || phoneMessages.get(conv.phone) || [];
       let status = computeStatus(msgs);
-      const isFinished = finishedPhones.has(normalizePhoneKey(conv.phone));
+      const phoneKey = normalizePhoneKey(conv.phone);
+      const finishedAt = finishedAtByPhone.get(phoneKey);
+      const isFinished = Boolean(
+        finishedAt && new Date(conv.lastMessageAt).getTime() <= new Date(finishedAt).getTime()
+      );
       const isArchived = archivedPhones.has(conv.phone);
       const isAwaitingPayment = awaitingPaymentPhones.has(conv.phone);
-      const isAiTransferred = aiTransferredPhones.has(normalizePhoneKey(conv.phone));
+      const isAiTransferred = aiTransferredPhones.has(phoneKey);
 
       // Force AI-transferred conversations into "Novas" so sellers spot them quickly
       if (isAiTransferred && !isFinished && !isArchived) {
@@ -280,7 +297,7 @@ export function useConversationEnrichment() {
         otherInstanceLabels,
       };
     });
-  }, [computeStatus, finishedPhones, archivedPhones, awaitingPaymentPhones, aiTransferredPhones, getInstanceLabel]);
+  }, [computeStatus, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, aiTransferredPhones, getInstanceLabel]);
 
   return {
     enrichConversations,
@@ -289,6 +306,7 @@ export function useConversationEnrichment() {
     archiveConversation,
     unarchiveConversation,
     finishedPhones,
+    finishedAtByPhone,
     archivedPhones,
     awaitingPaymentPhones,
     aiTransferredPhones,
