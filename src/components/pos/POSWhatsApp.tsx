@@ -18,6 +18,7 @@ import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useSupportPhones } from "@/hooks/useSupportPhones";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { POSProductCatalogSender } from "./POSProductCatalogSender";
+import { POSLiveOrderPanel } from "./POSLiveOrderPanel";
 import { NewConversationDialog } from "./NewConversationDialog";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { toast } from "sonner";
@@ -103,9 +104,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
-  // Live filter (clientes de Lives / eventos)
+  // Live filter (pedidos da Live / eventos)
   const [liveFilterActive, setLiveFilterActive] = useState(false);
-  const [liveStageMap, setLiveStageMap] = useState<Record<string, { stageTitle: string; eventName?: string }>>({});
+  const [liveStageMap, setLiveStageMap] = useState<Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string }>>({});
 
   // Load live customers (phones from db_orders of active events of this store) with their kanban stage
   useEffect(() => {
@@ -129,12 +130,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
         const { data: orders } = await supabase
           .from("orders")
-          .select("event_id, stage, updated_at, customer:customers(whatsapp)")
+          .select("id, event_id, stage, updated_at, customer:customers(whatsapp)")
           .in("event_id", eventIds)
           .order("updated_at", { ascending: false })
           .limit(1000);
 
-        const map: Record<string, { stageTitle: string; eventName?: string }> = {};
+        const map: Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string }> = {};
         for (const o of (orders || []) as any[]) {
           const ph = o.customer?.whatsapp;
           if (!ph) continue;
@@ -145,6 +146,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           map[key] = {
             stageTitle: stageMap[o.stage] || o.stage || "Live",
             eventName: eventNameById[o.event_id],
+            orderId: o.id,
+            eventId: o.event_id,
           };
         }
         if (!cancelled) setLiveStageMap(map);
@@ -160,7 +163,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const livePhoneKey = (p: string) => String(p || "").replace(/\D/g, "").slice(-8);
   const isLiveCustomer = (phone: string) => !!liveStageMap[livePhoneKey(phone)];
   const liveStageByPhone = useMemo(() => {
-    const out: Record<string, { stageTitle: string; eventName?: string }> = {};
+    const out: Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string }> = {};
     for (const c of conversations) {
       const k = livePhoneKey(c.phone);
       if (liveStageMap[k]) out[c.phone] = liveStageMap[k];
@@ -1068,6 +1071,17 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     </div>
   ) : null;
 
+  // Add Live order panel above customer info when applicable
+  const liveOrderRef = selectedPhone ? liveStageByPhone[selectedPhone] : null;
+  const fullCustomerInfoPanel = (
+    <>
+      {liveOrderRef && (
+        <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} />
+      )}
+      {customerInfoPanel}
+    </>
+  );
+
   return (
     <div className="h-full flex flex-col bg-[#f0f2f5] dark:bg-[#111b21] min-w-0 overflow-hidden">
       {/* WhatsApp-style Header - simplified */}
@@ -1385,7 +1399,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               onDeleteMessage={handleDeleteMessage}
               onEditMessage={handleEditMessage}
               isSending={isSending}
-              customerInfoPanel={customerInfoPanel}
+              customerInfoPanel={fullCustomerInfoPanel}
               quotedMessage={quotedMessage}
               onQuoteMessage={setQuotedMessage}
               onCancelQuote={() => setQuotedMessage(null)}

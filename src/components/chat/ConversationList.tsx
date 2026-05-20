@@ -282,23 +282,55 @@ export function ConversationList({
 
         {/* Status filter tabs */}
         <div className="flex gap-1 overflow-x-auto pb-1">
-          {STATUS_TABS.map(tab => (
-            <button
-              key={tab.value}
-              onClick={() => onStatusFilterChange(tab.value)}
-              className={cn(
-                "px-2 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors flex-shrink-0",
-                statusFilter === tab.value
-                  ? "bg-[#00a884] text-white"
-                  : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
-              )}
-            >
-              {tab.shortLabel}
-              {statusCounts[tab.value] > 0 && (
-                <span className="ml-1 text-[9px] opacity-80">({statusCounts[tab.value]})</span>
-              )}
-            </button>
-          ))}
+          {STATUS_TABS.map(tab => {
+            const isActive = !liveFilterActive && statusFilter === tab.value;
+            const node = (
+              <button
+                key={tab.value}
+                onClick={() => {
+                  if (liveFilterActive && onLiveFilterToggle) onLiveFilterToggle();
+                  onStatusFilterChange(tab.value);
+                }}
+                className={cn(
+                  "px-2 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors flex-shrink-0",
+                  isActive
+                    ? "bg-[#00a884] text-white"
+                    : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
+                )}
+              >
+                {tab.shortLabel}
+                {statusCounts[tab.value] > 0 && (
+                  <span className="ml-1 text-[9px] opacity-80">({statusCounts[tab.value]})</span>
+                )}
+              </button>
+            );
+            // Inject Live tab between Follow Up and Disparos
+            if (tab.value === 'dispatch' && onLiveFilterToggle) {
+              return (
+                <span key={`${tab.value}-with-live`} className="contents">
+                  <button
+                    key="live-tab"
+                    onClick={onLiveFilterToggle}
+                    className={cn(
+                      "px-2 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors flex-shrink-0 flex items-center gap-1",
+                      liveFilterActive
+                        ? "bg-fuchsia-500 text-white"
+                        : "bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-300 hover:bg-fuchsia-500/25"
+                    )}
+                    title="Mostrar apenas conversas que possuem card de pedido em uma Live ativa"
+                  >
+                    <Radio className="h-3 w-3" />
+                    Pedidos da Live
+                    {(liveCount || 0) > 0 && (
+                      <span className="ml-0.5 text-[9px] opacity-80">({liveCount})</span>
+                    )}
+                  </button>
+                  {node}
+                </span>
+              );
+            }
+            return node;
+          })}
         </div>
 
         {/* Tag filter chips */}
@@ -378,24 +410,6 @@ export function ConversationList({
           </button>
         )}
 
-        {/* Live (events) filter */}
-        {onLiveFilterToggle && (
-          <button
-            onClick={onLiveFilterToggle}
-            className={cn(
-              "w-full flex items-center gap-2 px-2 py-1.5 rounded text-[10px] font-medium transition-colors",
-              liveFilterActive
-                ? "bg-fuchsia-500/20 text-fuchsia-500"
-                : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
-            )}
-          >
-            <Radio className="h-3 w-3" />
-            Clientes da Live
-            {(liveCount || 0) > 0 && (
-              <span className="ml-auto text-[9px] opacity-80">({liveCount})</span>
-            )}
-          </button>
-        )}
 
         {/* Stage filter */}
         <Select value={stageFilter} onValueChange={onStageFilterChange}>
