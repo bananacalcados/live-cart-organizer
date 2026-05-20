@@ -184,8 +184,12 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       const k = livePhoneKey(c.phone);
       if (liveStageMap[k]) out[c.phone] = liveStageMap[k];
     }
+    for (const g of liveGhostRows) {
+      const k = livePhoneKey(g.phone);
+      if (liveStageMap[k] && !out[g.phone]) out[g.phone] = liveStageMap[k];
+    }
     return out;
-  }, [conversations, liveStageMap]);
+  }, [conversations, liveStageMap, liveGhostRows]);
 
   // Ghost conversations: live orders whose phones aren't in real conversations.
   // Injected only when liveFilterActive so they don't pollute other tabs.
