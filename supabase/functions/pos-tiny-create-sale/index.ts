@@ -264,6 +264,8 @@ serve(async (req) => {
         .update({
           seller_id: seller_id || null,
           customer_id: customer?.id || null,
+          customer_name: customer?.name || null,
+          customer_phone: customer?.whatsapp || customer?.phone || null,
           payment_method: payment_method_name || null,
           tiny_order_id: tinyOrderId ? String(tinyOrderId) : null,
           tiny_order_number: tinyOrderNumber ? String(tinyOrderNumber) : null,
@@ -278,6 +280,8 @@ serve(async (req) => {
           store_id,
           seller_id: seller_id || null,
           customer_id: customer?.id || null,
+          customer_name: customer?.name || null,
+          customer_phone: customer?.whatsapp || customer?.phone || null,
           payment_method: payment_method_name || null,
           subtotal,
           discount: discount || 0,
