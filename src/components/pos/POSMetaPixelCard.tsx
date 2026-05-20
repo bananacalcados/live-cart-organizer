@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Activity, CheckCircle2, AlertCircle, ChevronRight, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
@@ -45,45 +44,45 @@ export function POSMetaPixelCard({ onOpen }: Props) {
   return (
     <button
       onClick={onOpen}
-      className={`w-full text-left bg-white/5 hover:bg-white/[0.08] border ${hasErrors ? "border-red-500/40" : "border-white/10"} rounded-xl p-4 transition-all group`}
+      className={`w-full text-left bg-white hover:bg-orange-50/40 border ${hasErrors ? "border-red-400/60 ring-1 ring-red-300/30" : "border-orange-200/60"} rounded-2xl p-4 transition-all group shadow-[var(--shadow-pos-card)] hover:shadow-lg`}
     >
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className={`p-2 rounded-lg ${hasErrors ? "bg-red-500/15 text-red-400" : "bg-pos-yellow/15 text-pos-yellow"}`}>
+        <div className="flex items-center gap-2.5">
+          <div className={`p-2 rounded-xl ${hasErrors ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"}`}>
             <Activity className="h-4 w-4" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white">Meta Pixel</p>
-            <p className="text-[10px] text-white/50">Auditoria de envios CAPI</p>
+            <p className="text-sm font-semibold text-neutral-800">Meta Pixel</p>
+            <p className="text-[11px] text-neutral-500">Auditoria de envios CAPI</p>
           </div>
         </div>
-        <ChevronRight className="h-4 w-4 text-white/40 group-hover:text-white/80 transition" />
+        <ChevronRight className="h-4 w-4 text-neutral-400 group-hover:text-orange-500 transition" />
       </div>
       {loading ? (
-        <div className="flex items-center gap-2 text-xs text-white/50">
+        <div className="flex items-center gap-2 text-xs text-neutral-500">
           <Loader2 className="h-3 w-3 animate-spin" /> Carregando...
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <div className="flex items-center gap-1 text-emerald-400">
-              <CheckCircle2 className="h-3 w-3" />
-              <span className="text-lg font-bold">{sent}</span>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-2">
+            <div className="flex items-center gap-1 text-emerald-700">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span className="text-lg font-bold leading-none">{sent}</span>
             </div>
-            <p className="text-[10px] text-white/50">Enviados hoje</p>
+            <p className="text-[10px] text-emerald-700/70 mt-1 font-medium">Enviados hoje</p>
           </div>
-          <div>
-            <div className="flex items-center gap-1 text-red-400">
-              <AlertCircle className="h-3 w-3" />
-              <span className="text-lg font-bold">{errors}</span>
+          <div className={`rounded-xl border p-2 ${hasErrors ? "bg-red-50 border-red-100" : "bg-neutral-50 border-neutral-100"}`}>
+            <div className={`flex items-center gap-1 ${hasErrors ? "text-red-700" : "text-neutral-500"}`}>
+              <AlertCircle className="h-3.5 w-3.5" />
+              <span className="text-lg font-bold leading-none">{errors}</span>
             </div>
-            <p className="text-[10px] text-white/50">Erros hoje</p>
+            <p className={`text-[10px] mt-1 font-medium ${hasErrors ? "text-red-700/70" : "text-neutral-500"}`}>Erros hoje</p>
           </div>
-          <div>
-            <div className={`text-lg font-bold ${rate >= 95 ? "text-emerald-400" : rate >= 80 ? "text-amber-400" : "text-red-400"}`}>
+          <div className={`rounded-xl border p-2 ${rate >= 95 ? "bg-emerald-50 border-emerald-100" : rate >= 80 ? "bg-amber-50 border-amber-100" : "bg-red-50 border-red-100"}`}>
+            <div className={`text-lg font-bold leading-none ${rate >= 95 ? "text-emerald-700" : rate >= 80 ? "text-amber-700" : "text-red-700"}`}>
               {rate.toFixed(0)}%
             </div>
-            <p className="text-[10px] text-white/50">Taxa sucesso</p>
+            <p className={`text-[10px] mt-1 font-medium ${rate >= 95 ? "text-emerald-700/70" : rate >= 80 ? "text-amber-700/70" : "text-red-700/70"}`}>Taxa sucesso</p>
           </div>
         </div>
       )}

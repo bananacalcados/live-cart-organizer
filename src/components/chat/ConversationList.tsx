@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon, Send } from "lucide-react";
+import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon, Send, Radio } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -50,6 +50,12 @@ interface ConversationListProps {
   selectedTagFilters?: string[];
   /** Callback when tag filters change */
   onSelectedTagFiltersChange?: (tags: string[]) => void;
+  /** Live (event) filter */
+  liveFilterActive?: boolean;
+  onLiveFilterToggle?: () => void;
+  liveCount?: number;
+  isLiveCustomer?: (phone: string) => boolean;
+  liveStageMap?: Record<string, { stageTitle: string; eventName?: string; color?: string }>;
 }
 
 const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel: string }[] = [
@@ -91,6 +97,11 @@ export function ConversationList({
   contactTagsMap = {},
   selectedTagFilters = [],
   onSelectedTagFiltersChange,
+  liveFilterActive,
+  onLiveFilterToggle,
+  liveCount,
+  isLiveCustomer,
+  liveStageMap = {},
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
@@ -149,6 +160,13 @@ export function ConversationList({
       // Support filter
       if (supportFilterActive && hasActiveSupport) {
         return hasActiveSupport(c.phone);
+      }
+      return true;
+    })
+    .filter(c => {
+      // Live (event) filter
+      if (liveFilterActive && isLiveCustomer) {
+        return isLiveCustomer(c.phone);
       }
       return true;
     })
@@ -360,6 +378,25 @@ export function ConversationList({
           </button>
         )}
 
+        {/* Live (events) filter */}
+        {onLiveFilterToggle && (
+          <button
+            onClick={onLiveFilterToggle}
+            className={cn(
+              "w-full flex items-center gap-2 px-2 py-1.5 rounded text-[10px] font-medium transition-colors",
+              liveFilterActive
+                ? "bg-fuchsia-500/20 text-fuchsia-500"
+                : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
+            )}
+          >
+            <Radio className="h-3 w-3" />
+            Clientes da Live
+            {(liveCount || 0) > 0 && (
+              <span className="ml-auto text-[9px] opacity-80">({liveCount})</span>
+            )}
+          </button>
+        )}
+
         {/* Stage filter */}
         <Select value={stageFilter} onValueChange={onStageFilterChange}>
           <SelectTrigger className="h-8 text-xs bg-[#f0f2f5] dark:bg-[#202c33] border-0">
@@ -506,6 +543,13 @@ export function ConversationList({
                       </div>
                       {(conv.customerName || contactNames[conv.phone]) && (
                         <span className="text-[11px] text-[#667781] truncate">{conv.phone}</span>
+                      )}
+                      {liveStageMap[conv.phone] && (
+                        <span className="mt-0.5 inline-flex items-center gap-1 self-start px-1.5 py-[1px] rounded text-[9px] font-semibold bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400 border border-fuchsia-400/30">
+                          <Radio className="h-2.5 w-2.5" />
+                          LIVE · {liveStageMap[conv.phone].stageTitle}
+                          {liveStageMap[conv.phone].eventName ? ` · ${liveStageMap[conv.phone].eventName}` : ''}
+                        </span>
                       )}
                     </div>
                     <span className={cn(
