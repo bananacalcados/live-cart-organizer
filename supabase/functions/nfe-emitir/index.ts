@@ -453,11 +453,15 @@ Deno.serve(async (req) => {
           xmlContent = new TextDecoder("utf-8").decode(xmlBytes);
         }
         if (respJson?.Base64File && chave) {
-          const pdfBytes = Uint8Array.from(atob(respJson.Base64File), c => c.charCodeAt(0));
-          const path = `danfe/${chave}.pdf`;
+          const fileBytes = Uint8Array.from(atob(respJson.Base64File), c => c.charCodeAt(0));
+          // Detecta PDF (%PDF) vs HTML (BrasilNFe devolve DANFCe NFC-e em HTML)
+          const isPdf = fileBytes[0] === 0x25 && fileBytes[1] === 0x50 && fileBytes[2] === 0x44 && fileBytes[3] === 0x46;
+          const ext = isPdf ? "pdf" : "html";
+          const ctype = isPdf ? "application/pdf" : "text/html; charset=utf-8";
+          const path = `danfe/${chave}.${ext}`;
           const { error: upErr } = await supabase.storage
             .from("fiscal-documents")
-            .upload(path, pdfBytes, { contentType: "application/pdf", upsert: true });
+            .upload(path, fileBytes, { contentType: ctype, upsert: true });
           if (!upErr) {
             const { data: pub } = supabase.storage.from("fiscal-documents").getPublicUrl(path);
             danfeUrl = pub?.publicUrl || danfeUrl;
