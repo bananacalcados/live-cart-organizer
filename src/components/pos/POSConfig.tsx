@@ -988,6 +988,10 @@ export function POSConfig({ storeId }: Props) {
         {/* Shipping Rules */}
         <ShippingRulesManager storeId={storeId} />
 
+        {/* Crediário gateways (global) */}
+        <POSCrediarioGatewaysManager />
+
+
         {/* Product Sync */}
         <Card className="bg-pos-white/5 border-pos-orange/20">
           <CardHeader className="pb-3">
