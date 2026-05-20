@@ -28,6 +28,7 @@ import { POSOrderVerification } from "./POSOrderVerification";
 import { POSReceiptUpload } from "./POSReceiptUpload";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { openFiscalDocument } from "@/lib/openFiscalDocument";
 
 interface CartItem {
   id: string;
@@ -1246,7 +1247,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
 
     if (fiscalDoc?.danfe_url) {
-      window.open(fiscalDoc.danfe_url, '_blank');
+      await openFiscalDocument(fiscalDoc.danfe_url, { autoPrint: true }).catch((e) => {
+        toast.error(e?.message || 'Erro ao abrir DANFE');
+      });
       return;
     }
 
@@ -2275,7 +2278,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                         {btnLabel}
                       </Button>
                       {authorized && fiscalDoc?.danfe_url && (
-                        <Button className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10" variant="outline" onClick={() => window.open(fiscalDoc.danfe_url, '_blank')}>
+                        <Button className="h-14 gap-2 text-base border-2 border-pos-orange/30 bg-pos-white/5 text-pos-orange hover:bg-pos-orange/10" variant="outline" onClick={() => {
+                          void openFiscalDocument(fiscalDoc.danfe_url, { autoPrint: true }).catch((e) => {
+                            toast.error(e?.message || 'Erro ao abrir DANFE');
+                          });
+                        }}>
                           <Printer className="h-5 w-5" /> Imprimir NFC-e
                         </Button>
                       )}

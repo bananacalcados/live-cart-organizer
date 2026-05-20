@@ -18,6 +18,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { POSCustomerForm } from "./POSCustomerForm";
 import { POSTinyProductPicker } from "./POSTinyProductPicker";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
+import { openFiscalDocument } from "@/lib/openFiscalDocument";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -305,7 +306,14 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
 
   const handleEmitOrPrintFiscal = async (modelo?: 'nfe' | 'nfce') => {
     if (!sale) return;
-    if (fiscalDoc?.danfe_url && !modelo) { window.open(fiscalDoc.danfe_url, '_blank'); return; }
+    if (fiscalDoc?.danfe_url && !modelo) {
+      try {
+        await openFiscalDocument(fiscalDoc.danfe_url, { autoPrint: true });
+      } catch (e: any) {
+        toast.error(e?.message || 'Erro ao abrir DANFE');
+      }
+      return;
+    }
     setEmittingNfce(true);
     try {
       const isNfe = modelo ? modelo === 'nfe' : sale.sale_type === 'online';
@@ -1341,8 +1349,17 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {fiscalDoc.danfe_url && (
-                        <Button asChild variant="outline" size="sm" className="h-9 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100">
-                          <a href={fiscalDoc.danfe_url} target="_blank" rel="noreferrer">📄 Ver DANFE (PDF)</a>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                          onClick={() => {
+                            void openFiscalDocument(fiscalDoc.danfe_url!, { autoPrint: false }).catch((e) => {
+                              toast.error(e?.message || 'Erro ao abrir DANFE');
+                            });
+                          }}
+                        >
+                          📄 Ver DANFE
                         </Button>
                       )}
                       <Button onClick={handleDownloadXml} variant="outline" size="sm" className="h-9 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100" disabled={!fiscalDoc.xml_content && !fiscalDoc.xml_url}>

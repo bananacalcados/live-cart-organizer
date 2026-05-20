@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { WhatsAppNumberSelector } from '@/components/WhatsAppNumberSelector';
+import { openFiscalDocument } from '@/lib/openFiscalDocument';
 
 interface Props {
   storeId: string;
@@ -543,10 +544,12 @@ export function POSShipments({ storeId }: Props) {
                           const f = fiscalMap[order.id];
                           if (f?.danfe_url) {
                             return (
-                              <Button asChild variant="outline" className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs">
-                                <a href={f.danfe_url} target="_blank" rel="noreferrer">
-                                  <FileText className="h-3 w-3" /> NF-e nº {f.numero ?? ''} <ExternalLink className="h-3 w-3" />
-                                </a>
+                              <Button variant="outline" className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs" onClick={() => {
+                                void openFiscalDocument(f.danfe_url!, { autoPrint: true }).catch((e) => {
+                                  toast.error(e?.message || 'Erro ao abrir DANFE');
+                                });
+                              }}>
+                                <FileText className="h-3 w-3" /> NF-e nº {f.numero ?? ''} <ExternalLink className="h-3 w-3" />
                               </Button>
                             );
                           }
