@@ -330,6 +330,19 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     if (step === "payment") loadPaymentMethods();
   }, [step, loadPaymentMethods]);
 
+  // Load crediário gateways once when entering payment step
+  useEffect(() => {
+    if (step !== "payment" || crediarioGateways.length > 0) return;
+    supabase.from("pos_crediario_gateways")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("sort_order")
+      .order("name")
+      .then(({ data }) => setCrediarioGateways((data || []) as any));
+  }, [step, crediarioGateways.length]);
+
+
+
   const updateQuantity = (id: string, delta: number) => {
     setCart(prev => prev.map(item => {
       if (item.id !== id) return item;
