@@ -96,7 +96,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
       const [storesRes, salesRes, goalsRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
         supabase.from("pos_sales")
-          .select("id, store_id, total, payment_method, shipping_cost, created_at, paid_at, status, sale_type, customer_name, revenue_attribution")
+          .select("id, store_id, total, payment_method, shipping_cost, created_at, paid_at, status, sale_type, customer_id, customer_name, revenue_attribution, tiny_order_number")
           // mesma regra do dashboard da loja física:
           // - somente vendas concluídas
           // - exclui vendas com revenue_attribution = site_pickup_only
