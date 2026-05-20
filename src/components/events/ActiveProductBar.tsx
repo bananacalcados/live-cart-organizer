@@ -384,32 +384,74 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
             </div>
           </div>
 
-          {/* Selected products (active first) */}
+          {/* Selected products (active first) — with discount controls */}
           {selectedProductIds.length > 0 && (
-            <div className="mb-3">
+            <div className="mb-3 max-h-[260px] overflow-auto pr-1">
               <Label className="text-xs text-muted-foreground mb-1 block">
                 Produtos no catálogo ({selectedProductIds.length}) — primeiro = ativo
               </Label>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="space-y-1">
                 {selectedProductIds.map((id, idx) => {
                   const sp = shopifyProducts.find(p => p.id === id);
+                  const d = productDiscounts[id];
+                  const basePrice = Number(sp?.price || 0);
+                  const finalPrice = applyDiscount(basePrice, d);
                   return (
-                    <Badge
+                    <div
                       key={id}
-                      variant={idx === 0 ? "default" : "secondary"}
-                      className="cursor-pointer gap-1 text-xs"
+                      className={`flex flex-wrap items-center gap-1.5 p-1.5 rounded-md border text-xs ${idx === 0 ? "border-amber-500/60 bg-amber-500/5" : "bg-card"}`}
                     >
-                      {idx === 0 && <Zap className="h-3 w-3" />}
-                      {sp?.title?.slice(0, 25) || id.split("/").pop()}
+                      <span className="w-5 text-center font-bold text-muted-foreground">
+                        {idx === 0 ? <Zap className="h-3 w-3 text-amber-500 mx-auto" /> : idx + 1}
+                      </span>
+                      {sp?.imageUrl && <img src={sp.imageUrl} className="w-7 h-7 rounded object-cover" />}
+                      <span className="flex-1 min-w-[120px] truncate font-medium">
+                        {sp?.title || id.split("/").pop()}
+                      </span>
+                      {sp && (
+                        <span className="text-[10px] text-muted-foreground">{fmt(basePrice)}</span>
+                      )}
+                      <Select
+                        value={d?.type || "none"}
+                        onValueChange={(v) => {
+                          if (v === "none") setDiscount(id, null);
+                          else setDiscount(id, { type: v as any, value: d?.value || 0 });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 w-[120px] text-[11px]">
+                          <SelectValue placeholder="Desconto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem desconto</SelectItem>
+                          <SelectItem value="percent">% off</SelectItem>
+                          <SelectItem value="fixed_off">R$ off</SelectItem>
+                          <SelectItem value="fixed_price">Preço final R$</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {d && d.type && (
+                        <Input
+                          type="number" min="0" step="0.01"
+                          defaultValue={d.value || ""}
+                          placeholder={d.type === "percent" ? "20" : d.type === "fixed_off" ? "30" : "50.00"}
+                          onBlur={(e) => setDiscount(id, { type: d.type, value: Number(e.target.value) || 0 })}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className="h-7 w-20 text-[11px]"
+                        />
+                      )}
+                      {d && d.value > 0 && sp && (
+                        <span className="text-[11px] font-bold text-emerald-600">
+                          → {fmt(finalPrice)}
+                        </span>
+                      )}
                       {idx !== 0 && (
-                        <button onClick={() => boostProduct(id)} className="ml-0.5 hover:text-primary">
+                        <button onClick={() => boostProduct(id)} className="p-1 hover:text-primary" title="Tornar ativo">
                           <ArrowUp className="h-3 w-3" />
                         </button>
                       )}
-                      <button onClick={() => toggleProduct(id)} className="ml-0.5 hover:text-destructive">
+                      <button onClick={() => toggleProduct(id)} className="p-1 hover:text-destructive" title="Remover">
                         <X className="h-3 w-3" />
                       </button>
-                    </Badge>
+                    </div>
                   );
                 })}
               </div>
