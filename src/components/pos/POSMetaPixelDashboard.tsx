@@ -282,6 +282,9 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
             </div>
           )}
         </div>
+      </div>
+
+
 
       {/* Filters */}
       <div className="px-4 py-3 flex flex-wrap gap-2 items-center border-b border-white/10 mt-3">
