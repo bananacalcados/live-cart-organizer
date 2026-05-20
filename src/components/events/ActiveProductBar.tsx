@@ -97,6 +97,7 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
         (payload) => {
           const newIds = (payload.new as any).selected_product_ids || [];
           setSelectedProductIds(newIds);
+          setProductDiscounts(((payload.new as any).product_discounts as DiscountMap) || {});
         }
       )
       .subscribe();
