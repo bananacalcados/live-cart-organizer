@@ -128,6 +128,33 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
     });
   }, [logs, channel, statusFilter, search]);
 
+  // Pixels/datasets registrados — agregados a partir dos logs (últimos 30d)
+  const pixelSummary = useMemo(() => {
+    const map = new Map<string, {
+      pixelRef: string;
+      channel: "pdv" | "live";
+      sent: number;
+      errors: number;
+      total: number;
+      lastSeen: string;
+      lastStatus: string;
+    }>();
+    for (const l of logs) {
+      const ref = l.pixel_ref || "(sem id)";
+      const key = `${l.channel}::${ref}`;
+      const cur = map.get(key) || { pixelRef: ref, channel: l.channel, sent: 0, errors: 0, total: 0, lastSeen: l.created_at, lastStatus: l.status };
+      cur.total += 1;
+      if (l.status === "sent") cur.sent += 1;
+      if (l.status === "error") cur.errors += 1;
+      if (l.created_at > cur.lastSeen) {
+        cur.lastSeen = l.created_at;
+        cur.lastStatus = l.status;
+      }
+      map.set(key, cur);
+    }
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [logs]);
+
   const handleRetry = async (log: UnifiedLog) => {
     setRetrying(log.id);
     try {
