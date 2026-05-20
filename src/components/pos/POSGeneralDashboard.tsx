@@ -50,7 +50,9 @@ function bucketPayment(raw: string | null, saleType?: string | null): string {
   }
   if (s.includes("pix")) return "PIX";
   if (s.includes("crediário") || s.includes("crediario")) return "Crediário";
-  if (s.includes("vp") || s.includes("vps") || s.includes("vale presente") || s.includes("vale-presente")) return "Vale Presente";
+  // VPS é forma de pagamento EXCLUSIVA (não confundir com Vale Presente)
+  if (/(^|[^a-z])vps([^a-z]|$)/.test(s)) return "VPS";
+  if (s.includes("vale presente") || s.includes("vale-presente") || /(^|[^a-z])vp([^a-z]|$)/.test(s)) return "Vale Presente";
   if (s.includes("débito") || s.includes("debito") || s.includes("debit")) return "Débito";
   if (s.includes("crédito") || s.includes("credito") || s.includes("credit") || s.includes("cartão") || s.includes("cartao")) return "Crédito";
   if (s.includes("dinheiro") || s === "cash") return "Dinheiro";
