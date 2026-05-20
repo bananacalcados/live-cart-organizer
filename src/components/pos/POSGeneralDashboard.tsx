@@ -50,7 +50,9 @@ function bucketPayment(raw: string | null, saleType?: string | null): string {
   }
   if (s.includes("pix")) return "PIX";
   if (s.includes("crediário") || s.includes("crediario")) return "Crediário";
-  if (s.includes("vp") || s.includes("vps") || s.includes("vale presente") || s.includes("vale-presente")) return "Vale Presente";
+  // VPS é forma de pagamento EXCLUSIVA (não confundir com Vale Presente)
+  if (/(^|[^a-z])vps([^a-z]|$)/.test(s)) return "VPS";
+  if (s.includes("vale presente") || s.includes("vale-presente") || /(^|[^a-z])vp([^a-z]|$)/.test(s)) return "Vale Presente";
   if (s.includes("débito") || s.includes("debito") || s.includes("debit")) return "Débito";
   if (s.includes("crédito") || s.includes("credito") || s.includes("credit") || s.includes("cartão") || s.includes("cartao")) return "Crédito";
   if (s.includes("dinheiro") || s === "cash") return "Dinheiro";
@@ -65,6 +67,7 @@ const PAYMENT_STYLE: Record<string, { icon: any; gradient: string }> = {
   "Dinheiro":      { icon: Banknote,  gradient: "from-amber-500/20 to-amber-700/10" },
   "Crediário":     { icon: Receipt,   gradient: "from-orange-500/20 to-orange-700/10" },
   "Vale Presente": { icon: Wallet,    gradient: "from-fuchsia-500/20 to-fuchsia-700/10" },
+  "VPS":           { icon: Wallet,    gradient: "from-pink-500/20 to-pink-700/10" },
   "Online":        { icon: CreditCard, gradient: "from-indigo-500/20 to-indigo-700/10" },
   "Outros":        { icon: DollarSign, gradient: "from-zinc-500/20 to-zinc-700/10" },
 };
