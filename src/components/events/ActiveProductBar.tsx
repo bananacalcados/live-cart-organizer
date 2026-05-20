@@ -40,6 +40,8 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
   const [catalogSlug, setCatalogSlug] = useState<string | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [productDiscounts, setProductDiscounts] = useState<DiscountMap>({});
+  // Local draft of selected discount type per product (so input shows even before value > 0)
+  const [draftDiscountType, setDraftDiscountType] = useState<Record<string, ProductDiscount["type"] | undefined>>({});
   const [delaySeconds, setDelaySeconds] = useState(30);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
