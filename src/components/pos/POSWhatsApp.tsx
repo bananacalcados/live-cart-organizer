@@ -133,7 +133,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
         const { data: orders } = await supabase
           .from("orders")
-          .select("id, event_id, stage, updated_at, customer:customers(name, whatsapp)")
+          .select("id, event_id, stage, updated_at, customer:customers(instagram_handle, whatsapp)")
           .in("event_id", eventIds)
           .order("updated_at", { ascending: false })
           .limit(1000);
@@ -159,7 +159,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
           const normalized = digits.startsWith("55") ? digits : `55${digits}`;
           ghosts.push({
             phone: normalized,
-            name: o.customer?.name,
+            name: o.customer?.instagram_handle,
             ...entry,
             updatedAt: o.updated_at,
             whatsapp_number_id: eventWnById[o.event_id] || null,

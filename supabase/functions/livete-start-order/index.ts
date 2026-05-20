@@ -120,13 +120,37 @@ serve(async (req) => {
 
     const checkoutLink = order.cart_link || `https://checkout.bananacalcados.com.br/checkout/order/${orderId}`;
 
-    // Messages sent as separate blocks
-    const messageParts: string[] = [];
+    // 5 variações de bloco A (abertura) — todas em tom direto, casual
+    const openings = [
+      `Oii ${igName}! Já estamos separando seu pedido por aqui 😁 Acabei de criar o link do seu carrinho com tudo certinho (inclusive as fotos das peças).\n\nÉ só clicar abaixo pra finalizar 👇`,
+      `Eaee ${igName} 🙌 Seu pedido já tá sendo separado! Montei o link do carrinho com todos os itens e fotos pra você conferir.\n\nClica aqui embaixo pra abrir 👇`,
+      `Oii ${igName} 😊 Tudo certo por aqui, já comecei a separar seu pedido. Criei o link do carrinho com fotos e valores pra ficar fácil de conferir.\n\nDá uma olhada no link aqui embaixo 👇`,
+      `Oii ${igName}! Aqui é da Banana 🍌 Já tô separando seu pedido. Te mandei o link do carrinho com tudo discriminado (fotos, valores e quantidade).\n\nSó abrir aí embaixo 👇`,
+      `Eaee ${igName} 💛 Pedido confirmado por aqui, já comecei a separar! Gerei o link do seu carrinho com fotos e detalhes pra você revisar antes de fechar.\n\nÉ só clicar abaixo 👇`,
+    ];
 
-    messageParts.push(`Oii ${igName} já estamos separando seu pedido. Inclusive já criei o link do seu carrinho 😁\n\nNo link tem todas as informações do seu pedido, inclusive fotos. Só clicar e preencher pra finalizar a compra.\n\nSó clicar abaixo pra entrar 👇`);
+    // 5 variações de bloco C (endereço) — TODAS terminam com pergunta (regra)
+    const addressKnownVariants = (addr: string) => [
+      `Pra eu já ir agilizando o envio, o endereço ainda é este?\n📍 ${addr}\n\nPosso confirmar?`,
+      `Aproveitando: o endereço de entrega continua sendo este aqui?\n📍 ${addr}\n\nConfirma pra mim?`,
+      `Pra adiantar a expedição, esse endereço ainda tá certo?\n📍 ${addr}\n\nPosso seguir com ele?`,
+      `Antes de fechar, só pra conferir — o envio continua nesse endereço?\n📍 ${addr}\n\nTá tudo certo aí?`,
+      `Só uma confirmação rapidinha: posso enviar pra esse endereço mesmo?\n📍 ${addr}\n\nTá ok ou prefere atualizar?`,
+    ];
 
-    messageParts.push(checkoutLink);
+    const addressUnknownVariants = [
+      `Pra eu já ir agilizando o envio, pode me passar seu endereço completo por aqui?`,
+      `Aproveitando, qual o endereço pra entrega? Pode me mandar por aqui mesmo?`,
+      `Pra adiantar a expedição, me passa seu endereço completinho aqui?`,
+      `Antes de fechar, qual endereço você quer usar pra entrega?`,
+      `Só falta o endereço — pode me enviar o seu completo por aqui?`,
+    ];
 
+    const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+    const blockA = pick(openings);
+    const blockB = checkoutLink;
+    let blockC: string;
     let initialStage: string;
 
     if (savedAddress) {
@@ -138,15 +162,15 @@ serve(async (req) => {
         `${savedAddress.city || ''}/${savedAddress.state || ''}`,
         savedAddress.cep ? `CEP: ${savedAddress.cep}` : '',
       ].filter(Boolean).join(', ');
-
-      messageParts.push(`Pra eu ir agilizando seu pedido, o endereço pra envio ainda é este?\n📍 ${addrStr}\n\nPosso confirmar ou prefere atualizar?`);
+      blockC = pick(addressKnownVariants(addrStr));
       initialStage = 'confirmar_endereco';
     } else {
-      messageParts.push(`Pra eu ir agilizando seu pedido, pode me passar seu endereço por aqui também? 😊`);
+      blockC = pick(addressUnknownVariants);
       initialStage = 'endereco';
     }
 
-    const firstMessage = messageParts.join('\n\n');
+    const messageParts = [blockA, blockB, blockC];
+    const firstMessage = messageParts.join('\n\n'); // só pra log/dedupe
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const sessionPayload = {
@@ -185,7 +209,7 @@ serve(async (req) => {
       .select('id, created_at')
       .eq('phone', phone)
       .eq('direction', 'outgoing')
-      .ilike('message', `%já estamos separando seu pedido%`)
+      .ilike('message', `%separando seu pedido%`)
       .gte('created_at', recentThreshold)
       .order('created_at', { ascending: false })
       .limit(1);
@@ -200,38 +224,37 @@ serve(async (req) => {
     if (shouldSkipSend) {
       console.log(`[livete-start] Duplicate start skipped for order ${orderId} / ${phone}`);
     } else {
-      // ⚠️ ANTI-SPAM: Send ALL content as a SINGLE message to avoid WhatsApp ban.
-      // Multiple rapid messages on first contact triggered spam detection and got the number banned.
-      if (metaPhoneNumberId) {
-        await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone,
-            message: firstMessage,
-            whatsappNumberId: whatsappNumberId,
-          }),
+      // Anti-ban: envia 3 blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
+      const sendBlock = async (text: string) => {
+        if (metaPhoneNumberId) {
+          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, message: text, whatsappNumberId }),
+          });
+        } else {
+          await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, message: text, whatsapp_number_id: whatsappNumberId }),
+          });
+        }
+        await supabase.from('whatsapp_messages').insert({
+          phone, message: text, direction: 'outgoing', status: 'sent', whatsapp_number_id: whatsappNumberId,
         });
-      } else {
-        await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            phone,
-            message: firstMessage,
-            whatsapp_number_id: whatsappNumberId,
-          }),
-        });
-      }
+      };
 
-      // Log the unified message for history
-      await supabase.from('whatsapp_messages').insert({
-        phone,
-        message: firstMessage,
-        direction: 'outgoing',
-        status: 'sent',
-        whatsapp_number_id: whatsappNumberId,
-      });
+      const humanDelay = (text: string) => {
+        const base = Math.max(1500, text.length * 45);
+        const jitter = Math.floor(Math.random() * 800) - 400;
+        return Math.max(1200, base + jitter);
+      };
+
+      await sendBlock(blockA);
+      await new Promise(r => setTimeout(r, humanDelay(blockB)));
+      await sendBlock(blockB);
+      await new Promise(r => setTimeout(r, humanDelay(blockC)));
+      await sendBlock(blockC);
     }
 
     const responseTime = Date.now() - startTime;
