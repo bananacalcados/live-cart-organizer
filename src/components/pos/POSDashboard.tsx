@@ -3,7 +3,7 @@ import {
   DollarSign, ShoppingCart, TrendingUp, Package, Loader2,
   RefreshCw, BarChart3, Users, MessageSquare, Headphones,
   ArrowRightLeft, ChevronRight, CalendarIcon, AlertTriangle,
-  Globe, Store, Lock, ListChecks, Check, Phone, Send, UserCheck
+  Globe, Store, Lock, Share2, Award, Trophy, Medal,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -12,10 +12,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Calendar } from "@/components/ui/calendar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { POSGoalProgress } from "./POSGoalProgress";
@@ -48,18 +45,11 @@ function getPeriodRange(period: Period, customRange: DateRange | undefined): { s
     end.setHours(23, 59, 59, 999);
     return { start, end };
   }
-
   const now = new Date();
-  const end = new Date(now);
-  end.setHours(23, 59, 59, 999);
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-
-  if (period === "week") {
-    start.setDate(start.getDate() - 6);
-  } else if (period === "month") {
-    start.setDate(1); // primeiro dia do mês calendário
-  }
+  const end = new Date(now); end.setHours(23, 59, 59, 999);
+  const start = new Date(now); start.setHours(0, 0, 0, 0);
+  if (period === "week") start.setDate(start.getDate() - 6);
+  else if (period === "month") start.setDate(1);
   return { start, end };
 }
 
@@ -68,56 +58,34 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [loading, setLoading] = useState(true);
 
-  // KPIs
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [salesCount, setSalesCount] = useState(0);
   const [avgTicket, setAvgTicket] = useState(0);
   const [avgItemsPerSale, setAvgItemsPerSale] = useState(0);
 
-  // Online vs Physical
   const [onlineRevenue, setOnlineRevenue] = useState(0);
   const [onlineSalesCount, setOnlineSalesCount] = useState(0);
   const [physicalRevenue, setPhysicalRevenue] = useState(0);
   const [physicalSalesCount, setPhysicalSalesCount] = useState(0);
 
-  // Seller metrics
   const [sellerMetrics, setSellerMetrics] = useState<SellerMetric[]>([]);
 
-  // Alerts
   const [whatsappAwaiting, setWhatsappAwaiting] = useState(0);
   const [whatsappNew, setWhatsappNew] = useState(0);
   const [supportTickets, setSupportTickets] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [showPrivatePanel, setShowPrivatePanel] = useState(false);
-  
-  // Contact tasks
-  const [contactTasks, setContactTasks] = useState<any[]>([]);
-  const [loadingTasks, setLoadingTasks] = useState(false);
+
   const [influencedRevenue, setInfluencedRevenue] = useState(0);
-  const [completingTask, setCompletingTask] = useState<string | null>(null);
-  const [completionNotes, setCompletionNotes] = useState<Record<string, string>>({});
-  const [completionSeller, setCompletionSeller] = useState<Record<string, string>>({});
-  const [storeSellers, setStoreSellers] = useState<{ id: string; name: string }[]>([]);
   const [taskWhatsAppPhone, setTaskWhatsAppPhone] = useState<string | null>(null);
+
   const loadAlerts = async () => {
     const [conversationRes, supportRes, interStoreRes, stockRes] = await Promise.all([
       supabase.rpc("get_conversation_counts"),
-      supabase
-        .from("support_tickets")
-        .select("id", { count: "exact", head: true })
-        .in("status", ["new", "in_progress"]),
-      supabase
-        .from("pos_inter_store_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("to_store_id", storeId)
-        .eq("status", "pending"),
-      supabase
-        .from("expedition_stock_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("to_store_id", storeId)
-        .eq("status", "pending"),
+      supabase.from("support_tickets").select("id", { count: "exact", head: true }).in("status", ["new", "in_progress"]),
+      supabase.from("pos_inter_store_requests").select("id", { count: "exact", head: true }).eq("to_store_id", storeId).eq("status", "pending"),
+      supabase.from("expedition_stock_requests").select("id", { count: "exact", head: true }).eq("to_store_id", storeId).eq("status", "pending"),
     ]);
-
     if (conversationRes.data && conversationRes.data.length > 0) {
       const d = conversationRes.data[0];
       setWhatsappAwaiting(Number(d.awaiting_count) || 0);
@@ -127,137 +95,45 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
     setPendingRequests((interStoreRes.count || 0) + (stockRes.count || 0));
   };
 
-  const loadContactTasks = async () => {
-    setLoadingTasks(true);
+  const loadInfluenced = async () => {
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      const { data } = await supabase
-        .from("pos_seller_tasks" as any)
-        .select("*")
-        .eq("store_id", storeId)
-        .eq("status", "pending")
-        .order("due_date", { ascending: true });
-      setContactTasks((data as any[]) || []);
-
-      // Calculate influenced revenue: sales from customers who were contacted (completed tasks) in the period
       const { start, end } = getPeriodRange(period, customRange);
       const { data: completedTasks } = await supabase
         .from("pos_seller_tasks" as any)
         .select("customer_phone")
         .eq("store_id", storeId)
         .eq("status", "completed");
-
       if (completedTasks && (completedTasks as any[]).length > 0) {
         const phones = [...new Set((completedTasks as any[]).map((t: any) => t.customer_phone).filter(Boolean))];
         if (phones.length > 0) {
           const query = supabase
-            .from("pos_sales")
-            .select("total")
-            .eq("store_id", storeId)
-            .eq("status", "completed")
+            .from("pos_sales").select("total")
+            .eq("store_id", storeId).eq("status", "completed")
             .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
           const { data: influencedSales } = await (query as any).in("customer_phone", phones);
           setInfluencedRevenue((influencedSales || []).reduce((s, sale) => s + (sale.total || 0), 0));
-        } else {
-          setInfluencedRevenue(0);
-        }
-      } else {
-        setInfluencedRevenue(0);
-      }
-    } catch (e) {
-      console.error("Load contact tasks error:", e);
-    } finally {
-      setLoadingTasks(false);
-    }
+        } else setInfluencedRevenue(0);
+      } else setInfluencedRevenue(0);
+    } catch (e) { console.error(e); }
   };
 
-  const loadSellers = async () => {
-    const { data } = await supabase
-      .from("pos_sellers")
-      .select("id, name")
-      .eq("store_id", storeId)
-      .eq("is_active", true)
-      .order("name");
-    setStoreSellers(data || []);
-  };
-
-  const handleCompleteTask = async (task: any) => {
-    const notes = completionNotes[task.id];
-    if (!notes || notes.trim().length < 3) {
-      return; // require notes
-    }
-    const selectedSellerId = completionSeller[task.id];
-    if (!selectedSellerId) {
-      return; // require seller selection
-    }
-    setCompletingTask(task.id);
-    try {
-      await supabase.from("pos_seller_tasks" as any).update({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-        completion_notes: notes.trim(),
-        completed_by_seller_id: selectedSellerId,
-      }).eq("id", task.id);
-
-      // Add gamification points to the seller who completed the task
-      if (task.points_reward) {
-        const { data: gam } = await supabase
-          .from("pos_gamification")
-          .select("id, weekly_points, total_points")
-          .eq("seller_id", selectedSellerId)
-          .eq("store_id", storeId)
-          .maybeSingle();
-        if (gam) {
-          await supabase.from("pos_gamification").update({
-            weekly_points: (gam.weekly_points || 0) + (task.points_reward || 0),
-            total_points: (gam.total_points || 0) + (task.points_reward || 0),
-          }).eq("id", gam.id);
-        } else {
-          await supabase.from("pos_gamification").insert({
-            seller_id: selectedSellerId,
-            store_id: storeId,
-            weekly_points: task.points_reward || 0,
-            total_points: task.points_reward || 0,
-            total_sales: 0,
-            complete_registrations: 0,
-            fast_requests_answered: 0,
-            returns_count: 0,
-          } as any);
-        }
-      }
-
-      setCompletionNotes(prev => { const n = { ...prev }; delete n[task.id]; return n; });
-      setCompletionSeller(prev => { const n = { ...prev }; delete n[task.id]; return n; });
-      loadContactTasks();
-    } catch (e) {
-      console.error("Complete task error:", e);
-    } finally {
-      setCompletingTask(null);
-    }
-  };
   const loadSalesData = async () => {
     setLoading(true);
     try {
       const { start, end } = getPeriodRange(period, customRange);
-
-      // Use paid_at when available, fallback to created_at for older sales without paid_at
       const { data: sales } = await supabase
         .from("pos_sales")
         .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at, revenue_attribution")
-        .eq("store_id", storeId)
-        .eq("status", "completed")
+        .eq("store_id", storeId).eq("status", "completed")
         .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
 
-      // Exclui retiradas oriundas do Site (não contam no faturamento da loja física)
       const completedSales = (sales || []).filter((s: any) => s.revenue_attribution !== "site_pickup_only");
       const revenue = completedSales.reduce((s, sale) => s + (sale.total || 0), 0);
       const count = completedSales.length;
-
       setTotalRevenue(revenue);
       setSalesCount(count);
       setAvgTicket(count > 0 ? revenue / count : 0);
 
-      // Online vs Physical breakdown
       const online = completedSales.filter((s: any) => s.sale_type === 'online' || s.sale_type === 'live');
       const physical = completedSales.filter((s: any) => s.sale_type !== 'online' && s.sale_type !== 'live');
       setOnlineRevenue(online.reduce((sum, s) => sum + (s.total || 0), 0));
@@ -267,32 +143,19 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
       if (completedSales.length > 0) {
         const saleIds = completedSales.map((s) => s.id);
-        const { data: items } = await supabase
-          .from("pos_sale_items")
-          .select("sale_id, quantity")
-          .in("sale_id", saleIds);
-
+        const { data: items } = await supabase.from("pos_sale_items").select("sale_id, quantity").in("sale_id", saleIds);
         const totalItems = (items || []).reduce((s, i) => s + (i.quantity || 0), 0);
         setAvgItemsPerSale(count > 0 ? totalItems / count : 0);
 
-        const { data: sellersData } = await supabase
-          .from("pos_sellers")
-          .select("id, name")
-          .eq("store_id", storeId);
-
+        const { data: sellersData } = await supabase.from("pos_sellers").select("id, name").eq("store_id", storeId);
         const sellersMap = new Map((sellersData || []).map((s) => [s.id, s.name]));
         const metricsMap = new Map<string, SellerMetric>();
-
         const saleItemsMap = new Map<string, number>();
-        for (const item of items || []) {
-          saleItemsMap.set(item.sale_id, (saleItemsMap.get(item.sale_id) || 0) + (item.quantity || 0));
-        }
-
+        for (const item of items || []) saleItemsMap.set(item.sale_id, (saleItemsMap.get(item.sale_id) || 0) + (item.quantity || 0));
         for (const sale of completedSales) {
           const key = sale.seller_id || "sem-vendedor";
           const name = sellersMap.get(sale.seller_id || "") || "Sem vendedor";
           const existing = metricsMap.get(key) || { name, totalSales: 0, salesCount: 0, totalItems: 0, sellerId: sale.seller_id || undefined };
-          // Use net product value (total minus shipping) for seller metrics
           const pd = (sale as any).payment_details as any;
           const shippingAmt = pd?.shipping_amount || 0;
           const netProductTotal = (sale.total || 0) - shippingAmt;
@@ -301,199 +164,188 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
           existing.totalItems += saleItemsMap.get(sale.id) || 0;
           metricsMap.set(key, existing);
         }
-
         setSellerMetrics(Array.from(metricsMap.values()).sort((a, b) => b.totalSales - a.totalSales));
       } else {
         setAvgItemsPerSale(0);
         setSellerMetrics([]);
       }
-    } catch (e) {
-      console.error("Dashboard load error:", e);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { console.error("Dashboard load error:", e); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => {
     if (period === "custom" && !customRange?.from) return;
     loadSalesData();
+    loadInfluenced();
   }, [storeId, period, customRange]);
 
-  useEffect(() => {
-    loadAlerts();
-    loadContactTasks();
-    loadSellers();
-  }, [storeId]);
-
-  useEffect(() => {
-    if (period === "custom" && !customRange?.from) return;
-    loadContactTasks();
-  }, [period, customRange]);
+  useEffect(() => { loadAlerts(); }, [storeId]);
 
   const handlePeriodChange = (v: string) => {
     if (!v) return;
-    if (v !== "custom") {
-      setCustomRange(undefined);
-    }
+    if (v !== "custom") setCustomRange(undefined);
     setPeriod(v as Period);
   };
 
-  const periodLabel = period === "day"
-    ? "Hoje"
-    : period === "week"
-    ? "Semana"
-    : period === "month"
-    ? "Mês"
-    : customRange?.from
-    ? `${format(customRange.from, "dd/MM", { locale: ptBR })}${customRange.to ? ` - ${format(customRange.to, "dd/MM", { locale: ptBR })}` : ""}`
-    : "Personalizado";
+  const periodLabel = period === "day" ? "Hoje"
+    : period === "week" ? "Esta semana"
+    : period === "month" ? "Este mês"
+    : customRange?.from ? `${format(customRange.from, "dd/MM", { locale: ptBR })}${customRange.to ? ` - ${format(customRange.to, "dd/MM", { locale: ptBR })}` : ""}` : "Personalizado";
 
   const totalAlerts = whatsappAwaiting + whatsappNew + supportTickets + pendingRequests;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div
+      className="flex-1 flex flex-col overflow-hidden"
+      style={{ background: "var(--gradient-pos-bg)", color: "hsl(var(--pos-text))" }}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-pos-orange/20 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <BarChart3 className="h-5 w-5 text-pos-orange" />
-          <h2 className="text-lg font-bold text-pos-white">Dashboard</h2>
-        </div>
+      <div className="flex items-center justify-between px-6 py-4 flex-wrap gap-3 border-b border-black/5">
+        <h2 className="text-lg md:text-xl font-bold tracking-wide uppercase" style={{ color: "hsl(var(--pos-text))" }}>
+          Visão Geral do PDV
+        </h2>
         <div className="flex items-center gap-2 flex-wrap">
-          <ToggleGroup
-            type="single"
-            value={period}
-            onValueChange={handlePeriodChange}
-            className="bg-pos-white/5 rounded-lg p-0.5"
-          >
-            <ToggleGroupItem value="day" className="text-xs px-3 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
-              Dia
-            </ToggleGroupItem>
-            <ToggleGroupItem value="week" className="text-xs px-3 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
-              Semana
-            </ToggleGroupItem>
-            <ToggleGroupItem value="month" className="text-xs px-3 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
-              Mês
-            </ToggleGroupItem>
-            <ToggleGroupItem value="custom" className="text-xs px-3 py-1 data-[state=on]:bg-pos-orange data-[state=on]:text-pos-black text-pos-white/60 rounded-md">
-              <CalendarIcon className="h-3.5 w-3.5 mr-1" />
-              Período
-            </ToggleGroupItem>
-          </ToggleGroup>
+          <div className="flex items-center bg-black/5 rounded-full p-0.5 border border-black/5">
+            {(["day","week","month","custom"] as Period[]).map(p => {
+              const active = period === p;
+              return (
+                <button
+                  key={p}
+                  onClick={() => handlePeriodChange(p)}
+                  className={cn(
+                    "text-xs px-4 py-1.5 rounded-full font-medium transition-all",
+                    active ? "text-white" : "text-black/60 hover:text-black/80"
+                  )}
+                  style={active ? { background: "var(--gradient-pos-accent)", boxShadow: "var(--shadow-pos-glow)" } : undefined}
+                >
+                  {p === "day" ? "Dia" : p === "week" ? "Semana" : p === "month" ? "Mês" : (
+                    <span className="flex items-center gap-1"><CalendarIcon className="h-3 w-3" />Período</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
           {period === "custom" && (
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs bg-white border-black/10 text-black/70 hover:bg-black/5">
                   <CalendarIcon className="h-3.5 w-3.5" />
                   {customRange?.from
                     ? `${format(customRange.from, "dd/MM")}${customRange.to ? ` - ${format(customRange.to, "dd/MM")}` : ""}`
-                    : "Selecionar datas"
-                  }
+                    : "Selecionar"}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="range"
-                  selected={customRange}
-                  onSelect={setCustomRange}
-                  disabled={(date) => date > new Date()}
-                  locale={ptBR}
-                  numberOfMonths={2}
-                  initialFocus
-                  className={cn("p-3 pointer-events-auto")}
-                />
+                <Calendar mode="range" selected={customRange} onSelect={setCustomRange} disabled={(d) => d > new Date()} locale={ptBR} numberOfMonths={2} initialFocus />
               </PopoverContent>
             </Popover>
           )}
 
-          <Button variant="outline" size="sm" className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10" onClick={() => { loadSalesData(); loadAlerts(); }}>
+          <Button variant="outline" size="icon" className="h-8 w-8 rounded-full bg-white border-black/10 text-black/60 hover:bg-black/5" onClick={() => { loadSalesData(); loadAlerts(); }}>
             <RefreshCw className="h-3.5 w-3.5" />
+          </Button>
+
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs bg-white border-black/10 text-black/70 hover:bg-black/5 rounded-full px-3">
+            <Share2 className="h-3.5 w-3.5" /> Compartilhar
+          </Button>
+          <Button size="sm" className="text-xs rounded-full px-4 text-white border-0" style={{ background: "var(--gradient-pos-accent)", boxShadow: "var(--shadow-pos-glow)" }}>
+            Publicar
           </Button>
         </div>
       </div>
 
+      <style>{`
+        [data-state=on].pos-pill { background: var(--gradient-pos-accent); color:#fff; box-shadow: var(--shadow-pos-glow); }
+      `}</style>
+
       {loading ? (
-        <div className="flex-1 flex items-center justify-center text-pos-white/50">
+        <div className="flex-1 flex items-center justify-center text-black/40">
           <Loader2 className="h-6 w-6 animate-spin mr-2" /> Carregando dashboard...
         </div>
       ) : (
         <ScrollArea className="flex-1">
-          <div className="p-4 space-y-6">
+          <div className="p-6 space-y-6 max-w-[1400px] mx-auto w-full">
+
             {/* KPI Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <KPICard icon={DollarSign} label="Faturamento" value={`R$ ${totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`} sub={periodLabel} color="text-green-400" />
-              <KPICard icon={ShoppingCart} label="Vendas" value={String(salesCount)} sub={periodLabel} color="text-pos-orange" />
-              <KPICard icon={TrendingUp} label="Ticket Médio" value={`R$ ${avgTicket.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`} sub={periodLabel} color="text-blue-400" />
-              <KPICard icon={Package} label="Itens/Venda" value={avgItemsPerSale.toFixed(1)} sub={periodLabel} color="text-purple-400" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <KPICard icon={DollarSign} label="Faturamento" value={`R$ ${totalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`} sub={periodLabel} trend="up" />
+              <KPICard icon={ShoppingCart} label="Vendas" value={String(salesCount)} sub={periodLabel} trend="bars" />
+              <KPICard icon={TrendingUp} label="Ticket Médio" value={`R$ ${avgTicket.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`} sub={periodLabel} trend="line" />
+              <KPICard icon={Package} label="Itens/Venda" value={avgItemsPerSale.toFixed(1)} sub={periodLabel} trend="wave" />
             </div>
 
-            {/* Online vs Physical breakdown */}
+            {/* Vendas por Canal */}
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
-                <Store className="h-4 w-4 text-pos-orange" /> Vendas por Canal
+              <h3 className="text-sm font-semibold flex items-center gap-2 text-black/70">
+                <Store className="h-4 w-4" /> Vendas por Canal
               </h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-4 rounded-xl bg-pos-white/5 border border-pos-orange/10 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Store className="h-4 w-4 text-green-400" />
-                    <span className="text-xs text-pos-white/50">Loja Física</span>
-                  </div>
-                  <p className="text-xl font-bold text-pos-white">R$ {physicalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-                  <p className="text-[10px] text-pos-white/30">{physicalSalesCount} venda{physicalSalesCount !== 1 ? "s" : ""}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-pos-white/5 border border-pos-orange/10 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <Globe className="h-4 w-4 text-blue-400" />
-                    <span className="text-xs text-pos-white/50">Online</span>
-                  </div>
-                  <p className="text-xl font-bold text-pos-white">R$ {onlineRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-                  <p className="text-[10px] text-pos-white/30">{onlineSalesCount} venda{onlineSalesCount !== 1 ? "s" : ""}</p>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ChannelCard
+                  type="store"
+                  title="Loja Física"
+                  value={`R$ ${physicalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                  sub={`${physicalSalesCount} venda${physicalSalesCount !== 1 ? "s" : ""}${totalRevenue > 0 ? ` (${Math.round(physicalRevenue / totalRevenue * 100)}%)` : ""}`}
+                />
+                <ChannelCard
+                  type="online"
+                  title="Online"
+                  value={`R$ ${onlineRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                  sub={`${onlineSalesCount} venda${onlineSalesCount !== 1 ? "s" : ""}`}
+                />
               </div>
             </div>
 
-            {/* Goal Progress */}
-            <POSGoalProgress
-              storeId={storeId}
-              totalRevenue={totalRevenue}
-              avgTicket={avgTicket}
-              avgItemsPerSale={avgItemsPerSale}
-              salesCount={salesCount}
-              period={period}
-              sellerMetrics={sellerMetrics.map(s => ({ ...s, sellerId: s.sellerId }))}
-            />
+            {/* Progresso das Metas */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-center">
+                <h3 className="text-sm font-bold tracking-[0.2em] uppercase text-black/70">Progresso das Metas</h3>
+              </div>
+              <div
+                className="rounded-2xl p-5 border border-black/5"
+                style={{ background: "var(--gradient-pos-silver)", boxShadow: "var(--shadow-pos-card), var(--shadow-pos-inset)" }}
+              >
+                <POSGoalProgress
+                  storeId={storeId}
+                  totalRevenue={totalRevenue}
+                  avgTicket={avgTicket}
+                  avgItemsPerSale={avgItemsPerSale}
+                  salesCount={salesCount}
+                  period={period}
+                  sellerMetrics={sellerMetrics.map(s => ({ ...s, sellerId: s.sellerId }))}
+                />
+              </div>
+            </div>
 
             {/* Seller Metrics */}
             {sellerMetrics.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
-                    <Users className="h-4 w-4 text-pos-orange" /> Desempenho por Vendedor
+                  <h3 className="text-sm font-semibold flex items-center gap-2 text-black/70">
+                    <Users className="h-4 w-4" /> Desempenho por Vendedor
                   </h3>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="gap-1.5 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs"
-                    onClick={() => setShowPrivatePanel(true)}
-                  >
+                  <Button size="sm" variant="outline" className="gap-1.5 text-xs bg-white border-black/10 text-black/70 hover:bg-black/5" onClick={() => setShowPrivatePanel(true)}>
                     <Lock className="h-3 w-3" /> Meus Dados
                   </Button>
                 </div>
-                <div className="space-y-2">
+                <div className="rounded-2xl border border-black/5 bg-white/70 backdrop-blur p-2 space-y-1" style={{ boxShadow: "var(--shadow-pos-card)" }}>
                   {sellerMetrics.map((s, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10">
+                    <div key={i} className="flex items-center justify-between p-3 rounded-xl hover:bg-black/[0.03] transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-pos-orange/20 flex items-center justify-center text-xs font-bold text-pos-orange">
+                        <div
+                          className="h-9 w-9 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                          style={{ background: i === 0 ? "var(--gradient-pos-gold)" : i === 1 ? "var(--gradient-pos-silver-strong)" : i === 2 ? "var(--gradient-pos-bronze)" : "linear-gradient(135deg, #555, #333)" }}
+                        >
                           {i + 1}º
                         </div>
                         <div>
-                          <p className="font-medium text-sm text-pos-white">{s.name}</p>
-                          <p className="text-xs text-pos-white/40">{s.salesCount} venda{s.salesCount > 1 ? "s" : ""}</p>
+                          <p className="font-medium text-sm">{s.name}</p>
+                          <p className="text-xs text-black/40">{s.salesCount} venda{s.salesCount > 1 ? "s" : ""}</p>
                         </div>
                       </div>
-                      <div className="text-right space-y-0.5">
-                        <p className="font-bold text-sm text-pos-orange">R$ {s.totalSales.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-                        <p className="text-[10px] text-pos-white/40">
+                      <div className="text-right">
+                        <p className="font-bold text-sm text-black/80">R$ {s.totalSales.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                        <p className="text-[10px] text-black/40">
                           ticket: R$ {(s.totalSales / s.salesCount).toFixed(2)} · {(s.totalItems / s.salesCount).toFixed(1)} itens/venda
                         </p>
                       </div>
@@ -503,61 +355,35 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               </div>
             )}
 
-            {/* Tarefas removed per UX request */}
-
-            {/* Influenced Revenue */}
             {influencedRevenue > 0 && (
-              <div className="p-4 rounded-xl bg-gradient-to-r from-green-500/10 to-pos-orange/10 border border-green-500/20 space-y-1">
+              <div className="p-4 rounded-2xl border border-emerald-500/20 bg-emerald-50/70 space-y-1" style={{ boxShadow: "var(--shadow-pos-card)" }}>
                 <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-green-400" />
-                  <span className="text-xs text-pos-white/60">Faturamento Influenciado por CRM</span>
+                  <TrendingUp className="h-4 w-4 text-emerald-600" />
+                  <span className="text-xs text-black/60">Faturamento Influenciado por CRM</span>
                 </div>
-                <p className="text-xl font-bold text-green-400">R$ {influencedRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-                <p className="text-[10px] text-pos-white/30">Vendas para clientes que foram contatados via tarefas</p>
+                <p className="text-xl font-bold text-emerald-700">R$ {influencedRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+                <p className="text-[10px] text-black/40">Vendas para clientes contatados via tarefas</p>
               </div>
             )}
 
-            {/* Seller Complaints */}
             <SellerComplaintsCard storeId={storeId} />
 
             {/* Operational Alerts */}
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
+              <h3 className="text-sm font-semibold flex items-center gap-2 text-black/70">
                 Alertas Operacionais
                 {totalAlerts > 0 && (
-                  <Badge className="bg-red-500 text-white border-0 text-[10px] h-4 min-w-4 px-1 animate-pulse">
-                    {totalAlerts}
-                  </Badge>
+                  <Badge className="bg-red-500 text-white border-0 text-[10px] h-4 min-w-4 px-1 animate-pulse">{totalAlerts}</Badge>
                 )}
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <AlertCard
-                  icon={MessageSquare}
-                  label="WhatsApp"
-                  count={whatsappAwaiting + whatsappNew}
-                  detail={`${whatsappAwaiting} aguardando · ${whatsappNew} novas`}
-                  onClick={() => onNavigateToSection("whatsapp")}
-                />
-                <AlertCard
-                  icon={Headphones}
-                  label="Suporte"
-                  count={supportTickets}
-                  detail="tickets abertos"
-                  onClick={() => onNavigateToSection("chat")}
-                />
-                <AlertCard
-                  icon={ArrowRightLeft}
-                  label="Solicitações"
-                  count={pendingRequests}
-                  detail="pendentes"
-                  onClick={() => onNavigateToSection("requests")}
-                />
+                <AlertCard icon={MessageSquare} label="WhatsApp" count={whatsappAwaiting + whatsappNew} detail={`${whatsappAwaiting} aguardando · ${whatsappNew} novas`} onClick={() => onNavigateToSection("whatsapp")} />
+                <AlertCard icon={Headphones} label="Suporte" count={supportTickets} detail="tickets abertos" onClick={() => onNavigateToSection("chat")} />
+                <AlertCard icon={ArrowRightLeft} label="Solicitações" count={pendingRequests} detail="pendentes" onClick={() => onNavigateToSection("requests")} />
               </div>
             </div>
 
-            {/* Meta Pixel CAPI audit */}
             <POSMetaPixelCard onOpen={() => onNavigateToSection("meta-pixel")} />
-
           </div>
         </ScrollArea>
       )}
@@ -582,21 +408,79 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   );
 }
 
-function KPICard({ icon: Icon, label, value, sub, color }: { icon: typeof DollarSign; label: string; value: string; sub: string; color: string }) {
+/* ============ subcomponents ============ */
+
+function MiniSparkline({ variant }: { variant: "up" | "bars" | "line" | "wave" }) {
+  if (variant === "bars") {
+    const bars = [4, 7, 5, 9, 6, 11, 8, 13, 9, 12, 10, 14];
+    return (
+      <svg viewBox="0 0 60 20" className="w-full h-6 opacity-50">
+        {bars.map((h, i) => (
+          <rect key={i} x={i * 5} y={20 - h} width={3} height={h} rx={0.5} fill="hsl(var(--pos-text))" />
+        ))}
+      </svg>
+    );
+  }
+  const paths: Record<string, string> = {
+    up: "M0,16 L10,14 L20,15 L30,10 L40,12 L50,6 L60,4",
+    line: "M0,12 L10,10 L20,13 L30,8 L40,11 L50,7 L60,5",
+    wave: "M0,12 L10,9 L20,13 L30,8 L40,14 L50,9 L60,11",
+  };
+  return (
+    <svg viewBox="0 0 60 20" className="w-full h-6 opacity-50">
+      <path d={paths[variant]} fill="none" stroke="hsl(var(--pos-text))" strokeWidth={1.2} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function KPICard({ icon: Icon, label, value, sub, trend }: { icon: typeof DollarSign; label: string; value: string; sub: string; trend: "up" | "bars" | "line" | "wave" }) {
   return (
     <div
-      className="relative p-4 rounded-2xl bg-pos-card border border-pos-border overflow-hidden group hover:-translate-y-0.5 transition-transform"
-      style={{ boxShadow: "var(--shadow-pos-card)" }}
+      className="relative p-4 rounded-2xl overflow-hidden group hover:-translate-y-0.5 transition-transform border border-black/[0.04]"
+      style={{ background: "var(--gradient-pos-silver)", boxShadow: "var(--shadow-pos-card), var(--shadow-pos-inset)" }}
     >
-      <div className="absolute inset-x-0 top-0 h-0.5 opacity-70" style={{ background: "var(--gradient-pos-accent)" }} />
-      <div className="flex items-start justify-between mb-2">
-        <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center bg-pos-orange/10 border border-pos-orange/20")}>
-          <Icon className={`h-4 w-4 ${color}`} />
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-black/55">
+          <Icon className="h-3.5 w-3.5" />
+          <span>{label}</span>
         </div>
-        <span className="text-[10px] text-pos-white/40 uppercase tracking-wider font-semibold">{sub}</span>
       </div>
-      <p className="text-xs text-pos-white/55 font-medium">{label}</p>
-      <p className="text-xl font-bold text-pos-white mt-0.5 tracking-tight">{value}</p>
+      <p className="text-2xl font-bold tracking-tight text-black/85">{value}</p>
+      <div className="flex items-end justify-between mt-1 gap-2">
+        <p className="text-[10px] text-black/45 uppercase tracking-wider font-medium">{sub}</p>
+        <div className="flex-1 max-w-[80px]">
+          <MiniSparkline variant={trend} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChannelCard({ type, title, value, sub }: { type: "store" | "online"; title: string; value: string; sub: string }) {
+  return (
+    <div
+      className="relative p-5 rounded-2xl overflow-hidden flex items-center gap-4 border border-black/[0.04]"
+      style={{ background: "var(--gradient-pos-silver)", boxShadow: "var(--shadow-pos-card), var(--shadow-pos-inset)" }}
+    >
+      {/* Visual icon side */}
+      <div className="relative h-20 w-28 flex-shrink-0 rounded-xl overflow-hidden flex items-center justify-center"
+        style={{ background: "linear-gradient(135deg, hsl(30 15% 88%), hsl(30 10% 75%))" }}>
+        {type === "store" ? (
+          <Store className="h-10 w-10 text-black/40" strokeWidth={1.2} />
+        ) : (
+          <Globe className="h-10 w-10 text-black/40" strokeWidth={1.2} />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-black/55 font-medium">{title}</p>
+        <p className="text-xl md:text-2xl font-bold text-black/85 mt-0.5 truncate">{value}</p>
+        <p className="text-[11px] text-black/45 mt-0.5">{sub}</p>
+      </div>
+      {type === "store" ? (
+        <ShoppingCart className="h-8 w-8 text-black/25 flex-shrink-0" strokeWidth={1.3} />
+      ) : (
+        <Globe className="h-8 w-8 text-black/25 flex-shrink-0" strokeWidth={1.3} />
+      )}
     </div>
   );
 }
@@ -608,28 +492,22 @@ function AlertCard({ icon: Icon, label, count, detail, onClick }: { icon: typeof
       onClick={onClick}
       className={cn(
         "flex items-center justify-between p-3.5 rounded-2xl border transition-all text-left w-full group hover:-translate-y-0.5",
-        hasAlert
-          ? "bg-red-500/5 border-red-500/20 hover:border-red-500/40"
-          : "bg-pos-card border-pos-border hover:border-pos-orange/30"
+        hasAlert ? "bg-red-50 border-red-200 hover:border-red-300" : "bg-white border-black/[0.06] hover:border-black/15"
       )}
       style={{ boxShadow: "var(--shadow-pos-card)" }}
     >
       <div className="flex items-center gap-3">
-        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", hasAlert ? "bg-red-500/15" : "bg-pos-orange/10")}>
-          <Icon className={cn("h-4 w-4", hasAlert ? "text-red-400" : "text-pos-orange")} />
+        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", hasAlert ? "bg-red-100" : "bg-black/5")}>
+          <Icon className={cn("h-4 w-4", hasAlert ? "text-red-500" : "text-black/60")} />
         </div>
         <div>
-          <p className="text-sm font-semibold text-pos-white">{label}</p>
-          <p className="text-[10px] text-pos-white/45">{detail}</p>
+          <p className="text-sm font-semibold text-black/80">{label}</p>
+          <p className="text-[10px] text-black/45">{detail}</p>
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {hasAlert && (
-          <Badge className="bg-red-500 text-white border-0 text-xs font-bold animate-pulse">
-            {count}
-          </Badge>
-        )}
-        <ChevronRight className="h-4 w-4 text-pos-white/20 group-hover:text-pos-orange group-hover:translate-x-0.5 transition-all" />
+        {hasAlert && <Badge className="bg-red-500 text-white border-0 text-xs font-bold animate-pulse">{count}</Badge>}
+        <ChevronRight className="h-4 w-4 text-black/20 group-hover:text-black/50 group-hover:translate-x-0.5 transition-all" />
       </div>
     </button>
   );
@@ -638,26 +516,14 @@ function AlertCard({ icon: Icon, label, count, detail, onClick }: { icon: typeof
 function SellerComplaintsCard({ storeId }: { storeId: string }) {
   const [complaints, setComplaints] = useState<{ seller_name: string; wrong_feet: number; defective: number; total: number }[]>([]);
 
-  useEffect(() => {
-    loadComplaints();
-  }, [storeId]);
+  useEffect(() => { loadComplaints(); }, [storeId]);
 
   const loadComplaints = async () => {
-    const { data } = await supabase
-      .from("pos_seller_complaints" as any)
-      .select("seller_id, complaint_type, created_at")
-      .eq("store_id", storeId);
-
+    const { data } = await supabase.from("pos_seller_complaints" as any).select("seller_id, complaint_type, created_at").eq("store_id", storeId);
     if (!data || (data as any[]).length === 0) return;
-
-    const { data: sellers } = await supabase
-      .from("pos_sellers")
-      .select("id, name")
-      .eq("store_id", storeId);
-
+    const { data: sellers } = await supabase.from("pos_sellers").select("id, name").eq("store_id", storeId);
     const sellerMap = new Map((sellers || []).map(s => [s.id, s.name]));
     const map = new Map<string, { seller_name: string; wrong_feet: number; defective: number; total: number }>();
-
     for (const c of (data as any[])) {
       const name = sellerMap.get(c.seller_id) || "Desconhecido";
       const entry = map.get(c.seller_id) || { seller_name: name, wrong_feet: 0, defective: 0, total: 0 };
@@ -666,7 +532,6 @@ function SellerComplaintsCard({ storeId }: { storeId: string }) {
       entry.total++;
       map.set(c.seller_id, entry);
     }
-
     setComplaints(Array.from(map.values()).sort((a, b) => b.total - a.total));
   };
 
@@ -674,21 +539,21 @@ function SellerComplaintsCard({ storeId }: { storeId: string }) {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-bold text-pos-white flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4 text-red-400" /> Reclamações por Vendedor
+      <h3 className="text-sm font-semibold flex items-center gap-2 text-black/70">
+        <AlertTriangle className="h-4 w-4 text-red-500" /> Reclamações por Vendedor
       </h3>
       <div className="space-y-2">
         {complaints.map((c, i) => (
-          <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-red-500/5 border border-red-500/10">
+          <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-red-50 border border-red-100">
             <div>
-              <p className="font-medium text-sm text-pos-white">{c.seller_name}</p>
-              <p className="text-[10px] text-pos-white/40">
+              <p className="font-medium text-sm text-black/80">{c.seller_name}</p>
+              <p className="text-[10px] text-black/50">
                 {c.wrong_feet > 0 && `👟 Pés trocados: ${c.wrong_feet}`}
                 {c.wrong_feet > 0 && c.defective > 0 && " · "}
                 {c.defective > 0 && `🔧 Defeitos: ${c.defective}`}
               </p>
             </div>
-            <Badge className="bg-red-500/20 text-red-400 border-red-500/30">{c.total} ocorrência{c.total > 1 ? "s" : ""}</Badge>
+            <Badge className="bg-red-500/15 text-red-600 border-red-200">{c.total} ocorrência{c.total > 1 ? "s" : ""}</Badge>
           </div>
         ))}
       </div>
