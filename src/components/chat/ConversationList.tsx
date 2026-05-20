@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon, Send } from "lucide-react";
+import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon, Send, Radio } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -50,6 +50,12 @@ interface ConversationListProps {
   selectedTagFilters?: string[];
   /** Callback when tag filters change */
   onSelectedTagFiltersChange?: (tags: string[]) => void;
+  /** Live (event) filter */
+  liveFilterActive?: boolean;
+  onLiveFilterToggle?: () => void;
+  liveCount?: number;
+  isLiveCustomer?: (phone: string) => boolean;
+  liveStageMap?: Record<string, { stageTitle: string; eventName?: string; color?: string }>;
 }
 
 const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel: string }[] = [
@@ -91,6 +97,11 @@ export function ConversationList({
   contactTagsMap = {},
   selectedTagFilters = [],
   onSelectedTagFiltersChange,
+  liveFilterActive,
+  onLiveFilterToggle,
+  liveCount,
+  isLiveCustomer,
+  liveStageMap = {},
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
@@ -149,6 +160,13 @@ export function ConversationList({
       // Support filter
       if (supportFilterActive && hasActiveSupport) {
         return hasActiveSupport(c.phone);
+      }
+      return true;
+    })
+    .filter(c => {
+      // Live (event) filter
+      if (liveFilterActive && isLiveCustomer) {
+        return isLiveCustomer(c.phone);
       }
       return true;
     })
@@ -356,6 +374,25 @@ export function ConversationList({
             Suporte Ativo
             {(supportCount || 0) > 0 && (
               <span className="ml-auto text-[9px] opacity-80">({supportCount})</span>
+            )}
+          </button>
+        )}
+
+        {/* Live (events) filter */}
+        {onLiveFilterToggle && (
+          <button
+            onClick={onLiveFilterToggle}
+            className={cn(
+              "w-full flex items-center gap-2 px-2 py-1.5 rounded text-[10px] font-medium transition-colors",
+              liveFilterActive
+                ? "bg-fuchsia-500/20 text-fuchsia-500"
+                : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
+            )}
+          >
+            <Radio className="h-3 w-3" />
+            Clientes da Live
+            {(liveCount || 0) > 0 && (
+              <span className="ml-auto text-[9px] opacity-80">({liveCount})</span>
             )}
           </button>
         )}
