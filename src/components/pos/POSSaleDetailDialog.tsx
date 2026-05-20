@@ -303,20 +303,20 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     w.document.close();
   };
 
-  const handleEmitOrPrintFiscal = async () => {
+  const handleEmitOrPrintFiscal = async (modelo?: 'nfe' | 'nfce') => {
     if (!sale) return;
-    if (fiscalDoc?.danfe_url) { window.open(fiscalDoc.danfe_url, '_blank'); return; }
+    if (fiscalDoc?.danfe_url && !modelo) { window.open(fiscalDoc.danfe_url, '_blank'); return; }
     setEmittingNfce(true);
     try {
-      const isOnline = sale.sale_type === 'online';
-      const fnName = isOnline ? 'nfe-emitir' : 'nfce-emitir';
+      const isNfe = modelo ? modelo === 'nfe' : sale.sale_type === 'online';
+      const fnName = isNfe ? 'nfe-emitir' : 'nfce-emitir';
       const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id } });
       if (error) {
         const msg = await (await import('@/lib/edgeFunctionError')).extractEdgeError(error, 'Erro ao emitir nota fiscal');
         toast.error(msg, { duration: 12000 });
         return;
       }
-      if (data?.ok) toast.success(`${isOnline ? 'NF-e' : 'NFC-e'} autorizada!`);
+      if (data?.ok) toast.success(`${isNfe ? 'NF-e' : 'NFC-e'} autorizada!`);
       else if (data?.contingencia) toast.info('SEFAZ indisponível — em contingência. Será reemitida automaticamente.');
       else toast.error(data?.error || data?.rejection_message || 'Erro ao emitir nota fiscal', { duration: 12000 });
     } catch (e: any) {
@@ -1254,33 +1254,64 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   <Button onClick={printGift} variant="outline" className="gap-1 h-10 text-xs border-amber-300 text-amber-800 hover:bg-amber-50">
                     🎁 Cupom de Troca
                   </Button>
-                  <Button
-                    onClick={handleEmitOrPrintFiscal}
-                    disabled={emittingNfce || (!!fiscalDoc?.status && ['authorized','autorizada','autorizado'].includes(String(fiscalDoc.status).toLowerCase()) && !fiscalDoc?.danfe_url) || (fiscalDoc?.status === 'pending' || fiscalDoc?.status === 'pending_sefaz')}
-                    className="gap-1 h-10 text-xs col-span-2 bg-blue-600 text-white hover:bg-blue-700 font-bold"
-                  >
-                    {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                    {(() => {
-                      const tipo = sale.sale_type === 'online' ? 'NF-e' : 'NFC-e';
-                      const status = String(fiscalDoc?.status || '').toLowerCase();
-                      if (fiscalDoc?.danfe_url) return `Baixar / Imprimir ${tipo}`;
-                      if (['authorized','autorizada','autorizado'].includes(status)) return 'Carregando DANFE…';
-                      if (status === 'pending') return `Emitindo ${tipo}…`;
-                      if (status === 'pending_sefaz') return `Em contingência (SEFAZ off)`;
-                      if (status === 'rejected') return `Reemitir ${tipo}`;
-                      return `Emitir ${tipo}`;
-                    })()}
-                  </Button>
+                  {(() => {
+                    const status = String(fiscalDoc?.status || '').toLowerCase();
+                    const isAuthorized = ['authorized','autorizada','autorizado'].includes(status);
+                    const isPending = status === 'pending' || status === 'pending_sefaz';
+                    const tipoEmitido = fiscalDoc?.numero ? (sale.sale_type === 'online' ? 'NF-e' : 'NFC-e') : '';
+
+                    if (isAuthorized || isPending) {
+                      return (
+                        <Button
+                          onClick={() => handleEmitOrPrintFiscal()}
+                          disabled={emittingNfce || (isAuthorized && !fiscalDoc?.danfe_url) || isPending}
+                          className="gap-1 h-10 text-xs col-span-2 bg-blue-600 text-white hover:bg-blue-700 font-bold"
+                        >
+                          {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                          {fiscalDoc?.danfe_url ? `Baixar / Imprimir ${tipoEmitido}`
+                            : isAuthorized ? 'Carregando DANFE…'
+                            : status === 'pending_sefaz' ? 'Em contingência (SEFAZ off)'
+                            : `Emitindo ${tipoEmitido}…`}
+                        </Button>
+                      );
+                    }
+
+                    // Sem nota autorizada — oferece ambas as opções (NF-e e NFC-e)
+                    const isRejected = status === 'rejected';
+                    return (
+                      <>
+                        <Button
+                          onClick={() => handleEmitOrPrintFiscal('nfe')}
+                          disabled={emittingNfce}
+                          className="gap-1 h-10 text-xs bg-indigo-600 text-white hover:bg-indigo-700 font-bold"
+                        >
+                          {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                          {isRejected ? 'Reemitir NF-e' : 'Emitir NF-e'}
+                        </Button>
+                        <Button
+                          onClick={() => handleEmitOrPrintFiscal('nfce')}
+                          disabled={emittingNfce}
+                          className="gap-1 h-10 text-xs bg-blue-600 text-white hover:bg-blue-700 font-bold"
+                        >
+                          {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                          {isRejected ? 'Reemitir NFC-e' : 'Emitir NFC-e'}
+                        </Button>
+                        <p className="col-span-2 text-[10px] text-gray-500 -mt-1">
+                          💡 <strong>NF-e</strong> para vendas online/Live (modelo 55) · <strong>NFC-e</strong> para venda presencial (modelo 65)
+                        </p>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {fiscalDoc?.status === 'rejected' && (
                   <div className="rounded-md border border-red-300 bg-red-50 p-2.5 text-[11px] text-red-900 space-y-1">
-                    <p className="font-bold">❌ NFC-e rejeitada pela SEFAZ</p>
+                    <p className="font-bold">❌ Nota rejeitada pela SEFAZ</p>
                     <p className="text-red-800/90">
                       {fiscalDoc.rejection_code ? `Cód. ${fiscalDoc.rejection_code} — ` : ''}
                       {fiscalDoc.rejection_message || 'Motivo não informado.'}
                     </p>
-                    <p className="text-red-800/70 text-[10px]">Corrija o cadastro do cliente (CPF / endereço) e clique em <strong>Reemitir NFC-e</strong>.</p>
+                    <p className="text-red-800/70 text-[10px]">Corrija o cadastro do cliente (CPF / endereço) e clique em <strong>Reemitir</strong>.</p>
                   </div>
                 )}
 
