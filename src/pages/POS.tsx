@@ -12,6 +12,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { POSStoreSelector } from "@/components/pos/POSStoreSelector";
+import { POSGeneralDashboard } from "@/components/pos/POSGeneralDashboard";
 import { POSSalesView } from "@/components/pos/POSSalesView";
 import { POSCashRegister } from "@/components/pos/POSCashRegister";
 
@@ -177,9 +178,9 @@ export default function POS() {
   }
 
   if (selectedStore === "__general__") {
-    const { POSGeneralDashboard } = require("@/components/pos/POSGeneralDashboard");
     return <POSGeneralDashboard onBack={() => setSelectedStore("")} />;
   }
+
 
 
   // Mobile: show priority tabs in bottom bar, rest in "more" menu
