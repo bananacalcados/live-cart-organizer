@@ -323,25 +323,36 @@ export function POSGeneralDashboard({ onBack }: Props) {
             {paymentBuckets.length === 0 ? (
               <p className="text-zinc-500 text-sm text-center py-3">Sem vendas no período</p>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-                {paymentBuckets.map(b => {
-                  const style = PAYMENT_STYLE[b.name] || PAYMENT_STYLE["Outros"];
-                  const Icon = style.icon;
-                  const pct = totals.revenue > 0 ? (b.revenue / totals.revenue) * 100 : 0;
-                  return (
-                    <div key={b.name} className={`bg-gradient-to-br ${style.gradient} border border-zinc-700/60 rounded-lg p-3 backdrop-blur-sm`}>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Icon className="h-3.5 w-3.5 text-zinc-300" />
-                        <span className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold truncate">{b.name}</span>
-                      </div>
-                      <p className="text-base font-bold text-zinc-100 truncate">{BRL(b.revenue)}</p>
-                      <p className="text-[10px] text-zinc-400">{b.sales} vendas · {pct.toFixed(1)}%</p>
-                    </div>
-                  );
-                })}
-              </div>
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                  {paymentBuckets.map(b => {
+                    const style = PAYMENT_STYLE[b.name] || PAYMENT_STYLE["Outros"];
+                    const Icon = style.icon;
+                    const pct = totals.revenue > 0 ? (b.revenue / totals.revenue) * 100 : 0;
+                    return (
+                      <button
+                        type="button"
+                        key={b.name}
+                        onClick={() => setPaymentModal({ open: true, bucket: b.name })}
+                        className={`text-left bg-gradient-to-br ${style.gradient} border border-zinc-700/60 rounded-lg p-3 backdrop-blur-sm hover:border-zinc-500 hover:scale-[1.02] transition-all cursor-pointer`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Icon className="h-3.5 w-3.5 text-zinc-300" />
+                          <span className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold truncate">{b.name}</span>
+                        </div>
+                        <p className="text-base font-bold text-zinc-100 truncate">{BRL(b.revenue)}</p>
+                        <p className="text-[10px] text-zinc-400">{b.sales} vendas · {pct.toFixed(1)}%</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-2">
+                  Clique em um card para ver as vendas. <span className="text-zinc-400 font-medium">Outros</span> = vendas sem método de pagamento registrado ou métodos não classificados (ex.: Cheque, "Venda Live - Retirada").
+                </p>
+              </>
             )}
           </Panel>
+
 
           {/* COSTS & MARGIN */}
           <Panel title="Custos e margem bruta" icon={TrendingDown}>
