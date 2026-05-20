@@ -67,6 +67,8 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [onlineSalesCount, setOnlineSalesCount] = useState(0);
   const [physicalRevenue, setPhysicalRevenue] = useState(0);
   const [physicalSalesCount, setPhysicalSalesCount] = useState(0);
+  const [liveRevenue, setLiveRevenue] = useState(0);
+  const [liveSalesCount, setLiveSalesCount] = useState(0);
 
   const [sellerMetrics, setSellerMetrics] = useState<SellerMetric[]>([]);
 
