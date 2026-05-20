@@ -7,6 +7,10 @@ const corsHeaders = {
 
 const HTML_DANFE_REGEX = /(?:^|\/)[^/?#]+\.html(?:$|[?#])/i;
 
+function toBase64(input: string) {
+  return btoa(unescape(encodeURIComponent(input)));
+}
+
 function ensureUtf8Meta(html: string) {
   if (/<meta[^>]+charset=/i.test(html)) return html;
   if (/<head[^>]*>/i.test(html)) return html.replace(/<head([^>]*)>/i, '<head$1><meta charset="utf-8">');
@@ -19,6 +23,41 @@ function injectPrintScript(html: string) {
   return `${html}${script}`;
 }
 
+function buildRedirectDocument(fetchUrl: string) {
+  return `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Carregando DANFE...</title>
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #f4f4f5; }
+      body { display: grid; place-items: center; font-family: Arial, sans-serif; color: #18181b; }
+      .status { padding: 18px 20px; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="status">Carregando DANFE...</div>
+    <script>
+      const sourceUrl = ${JSON.stringify(fetchUrl)};
+      fetch(sourceUrl, { credentials: 'omit' })
+        .then(async (response) => {
+          if (!response.ok) throw new Error('Não foi possível carregar a DANFE');
+          return await response.text();
+        })
+        .then((html) => {
+          document.open();
+          document.write(html);
+          document.close();
+        })
+        .catch((error) => {
+          document.body.innerHTML = '<div class="status">Erro ao carregar DANFE: ' + (error?.message || 'falha inesperada') + '</div>';
+        });
+    </script>
+  </body>
+</html>`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -26,8 +65,16 @@ Deno.serve(async (req) => {
     const requestUrl = new URL(req.url);
     const rawUrl = requestUrl.searchParams.get("url")?.trim();
     const autoPrint = requestUrl.searchParams.get("autoprint") === "1";
+    const rawMode = requestUrl.searchParams.get("raw") === "1";
 
     if (!rawUrl) throw new Error("url obrigatória");
+
+    if (!rawMode) {
+      const fetchUrl = new URL(req.url);
+      fetchUrl.searchParams.set("raw", "1");
+      const redirectHtml = buildRedirectDocument(fetchUrl.toString());
+      return Response.redirect(`data:text/html;charset=utf-8;base64,${toBase64(redirectHtml)}`, 302);
+    }
 
     const target = new URL(rawUrl);
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
