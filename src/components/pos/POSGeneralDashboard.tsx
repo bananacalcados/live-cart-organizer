@@ -146,9 +146,24 @@ export function POSGeneralDashboard({ onBack }: Props) {
         }
       }
 
+      // Enrich missing customer_name via pos_customers lookup
+      const missingCustIds = Array.from(new Set(
+        sales.filter((s: any) => s.customer_id && !s.customer_name).map((s: any) => s.customer_id)
+      ));
+      const nameById = new Map<string, string>();
+      if (missingCustIds.length > 0) {
+        for (let i = 0; i < missingCustIds.length; i += 500) {
+          const slice = missingCustIds.slice(i, i + 500);
+          const { data: custs } = await supabase
+            .from("pos_customers").select("id, name").in("id", slice);
+          for (const c of (custs || [])) if (c.id && c.name) nameById.set(c.id, c.name);
+        }
+      }
+
       setStores(storesRes.data || []);
       setSalesRows(sales.map((s: any) => ({
         ...s,
+        customer_name: s.customer_name || (s.customer_id ? nameById.get(s.customer_id) : null) || null,
         items: itemsBySale.get(s.id) || 0,
         productCost: costBySale.get(s.id) || 0,
       })));
