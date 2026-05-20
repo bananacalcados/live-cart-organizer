@@ -107,6 +107,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [searchResults, setSearchResults] = useState<CartItem[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
+  const [crediarioGateways, setCrediarioGateways] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCrediarioGateway, setSelectedCrediarioGateway] = useState<string>("");
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [selectedSeller, setSelectedSeller] = useState<string>("");
   const [loadingSellers, setLoadingSellers] = useState(false);
@@ -327,6 +329,19 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   useEffect(() => {
     if (step === "payment") loadPaymentMethods();
   }, [step, loadPaymentMethods]);
+
+  // Load crediário gateways once when entering payment step
+  useEffect(() => {
+    if (step !== "payment" || crediarioGateways.length > 0) return;
+    supabase.from("pos_crediario_gateways")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("sort_order")
+      .order("name")
+      .then(({ data }) => setCrediarioGateways((data || []) as any));
+  }, [step, crediarioGateways.length]);
+
+
 
   const updateQuantity = (id: string, delta: number) => {
     setCart(prev => prev.map(item => {
@@ -796,6 +811,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         setStep("invoice");
 
         const saleId = data?.sale_id;
+
+        // Persist crediário gateway when chosen
+        if (saleId && !useMultiPayment && selectedCrediarioGateway && (selectedPaymentName.toLowerCase().includes('crediário') || selectedPaymentName.toLowerCase().includes('crediario'))) {
+          try {
+            await supabase.from('pos_sales').update({ crediario_gateway: selectedCrediarioGateway } as any).eq('id', saleId);
+          } catch (e) { console.error('[crediario_gateway update]', e); }
+        }
+
+
 
         // Se for venda ONLINE: marca pos_sales pra aparecer na aba Envios
         if (saleId && saleType === 'online') {
@@ -2036,6 +2060,25 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                  )}
+                  {(selectedPaymentName.toLowerCase().includes('crediário') || selectedPaymentName.toLowerCase().includes('crediario')) && (
+                    <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
+                      <Label className="text-pos-white">Gateway do crediário</Label>
+                      {crediarioGateways.length === 0 ? (
+                        <p className="text-xs text-pos-white/50 italic">Nenhum gateway cadastrado. Cadastre em Config → Gateways de Crediário.</p>
+                      ) : (
+                        <Select value={selectedCrediarioGateway} onValueChange={setSelectedCrediarioGateway}>
+                          <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                            <SelectValue placeholder="Selecione o gateway" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {crediarioGateways.map(g => (
+                              <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                   )}
                   {selectedPaymentName.toLowerCase().includes('dinheiro') && (

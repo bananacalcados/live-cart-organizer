@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ interface SaleRow {
   customer_id?: string | null;
   customer_name?: string | null;
   tiny_order_number?: string | null;
+  crediario_gateway?: string | null;
 }
 
 interface Props {
@@ -34,6 +35,7 @@ interface Props {
 }
 
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const NO_GATEWAY = "__none__";
 
 const PAYMENT_OPTIONS = [
   "PIX",
@@ -42,6 +44,7 @@ const PAYMENT_OPTIONS = [
   "Cartão de débito",
   "Crediário",
   "Vale Presente",
+  "VPS",
   "Cheque",
   "Boleto",
   "Checkout Online",
@@ -51,10 +54,35 @@ export function POSPaymentSalesModal({ open, onClose, title, bucketName, sales, 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [gatewayFilter, setGatewayFilter] = useState<string>("all");
 
-  const total = sales.reduce((a, s) => a + Number(s.total || 0), 0);
+  const isCrediario = bucketName === "Crediário";
+
+  // Aggregate per gateway (only when bucket = Crediário)
+  const byGateway = useMemo(() => {
+    if (!isCrediario) return [];
+    const map = new Map<string, { qty: number; revenue: number }>();
+    for (const s of sales) {
+      const key = s.crediario_gateway || "(sem gateway)";
+      const cur = map.get(key) || { qty: 0, revenue: 0 };
+      cur.qty += 1;
+      cur.revenue += Number(s.total || 0);
+      map.set(key, cur);
+    }
+    return Array.from(map.entries())
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [isCrediario, sales]);
+
+  const filteredSales = useMemo(() => {
+    if (!isCrediario || gatewayFilter === "all") return sales;
+    if (gatewayFilter === NO_GATEWAY) return sales.filter(s => !s.crediario_gateway);
+    return sales.filter(s => s.crediario_gateway === gatewayFilter);
+  }, [isCrediario, gatewayFilter, sales]);
+
+  const total = filteredSales.reduce((a, s) => a + Number(s.total || 0), 0);
   const byStore = new Map<string, { qty: number; revenue: number }>();
-  for (const s of sales) {
+  for (const s of filteredSales) {
     const cur = byStore.get(s.store_id) || { qty: 0, revenue: 0 };
     cur.qty += 1;
     cur.revenue += Number(s.total || 0);
@@ -79,13 +107,47 @@ export function POSPaymentSalesModal({ open, onClose, title, bucketName, sales, 
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-4xl bg-zinc-950 border-zinc-800 text-zinc-100">
+      <DialogContent className="max-w-5xl bg-zinc-950 border-zinc-800 text-zinc-100">
         <DialogHeader>
           <DialogTitle className="text-zinc-100">{title}</DialogTitle>
-          <p className="text-xs text-zinc-400">{sales.length} vendas · {BRL(total)}</p>
+          <p className="text-xs text-zinc-400">{filteredSales.length} vendas · {BRL(total)}</p>
         </DialogHeader>
 
         <div className="space-y-3">
+          {isCrediario && byGateway.length > 0 && (
+            <div className="space-y-2 rounded border border-amber-500/30 bg-amber-500/5 p-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-amber-300 uppercase tracking-wide">Soma por gateway</p>
+                <Select value={gatewayFilter} onValueChange={setGatewayFilter}>
+                  <SelectTrigger className="h-7 text-xs w-[200px] bg-zinc-900 border-zinc-700">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-700 text-zinc-100">
+                    <SelectItem value="all">Todos os gateways</SelectItem>
+                    {byGateway.map(g => (
+                      <SelectItem key={g.name} value={g.name === "(sem gateway)" ? NO_GATEWAY : g.name}>
+                        {g.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {byGateway.map(g => (
+                  <button
+                    key={g.name}
+                    onClick={() => setGatewayFilter(g.name === "(sem gateway)" ? NO_GATEWAY : g.name)}
+                    className="text-left rounded-md border border-amber-500/30 bg-zinc-900/60 px-3 py-1.5 hover:border-amber-400 transition-colors"
+                  >
+                    <p className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold">{g.name}</p>
+                    <p className="text-sm font-bold text-amber-300">{BRL(g.revenue)}</p>
+                    <p className="text-[10px] text-zinc-500">{g.qty} vendas</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
             {Array.from(byStore.entries()).map(([sid, v]) => (
               <Badge key={sid} variant="outline" className="border-zinc-700 text-zinc-300 bg-zinc-900">
@@ -94,7 +156,7 @@ export function POSPaymentSalesModal({ open, onClose, title, bucketName, sales, 
             ))}
           </div>
 
-          <ScrollArea className="h-[60vh] rounded border border-zinc-800">
+          <ScrollArea className="h-[55vh] rounded border border-zinc-800">
             <table className="w-full text-xs">
               <thead className="bg-zinc-900 text-zinc-400 sticky top-0">
                 <tr>
@@ -103,15 +165,16 @@ export function POSPaymentSalesModal({ open, onClose, title, bucketName, sales, 
                   <th className="text-left p-2 font-medium">Loja</th>
                   <th className="text-left p-2 font-medium">Cliente</th>
                   <th className="text-left p-2 font-medium">Pagamento</th>
+                  {isCrediario && <th className="text-left p-2 font-medium">Gateway</th>}
                   <th className="text-left p-2 font-medium">Tipo</th>
                   <th className="text-right p-2 font-medium">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {sales.length === 0 && (
-                  <tr><td colSpan={7} className="text-center p-4 text-zinc-500">Sem vendas em "{bucketName}"</td></tr>
+                {filteredSales.length === 0 && (
+                  <tr><td colSpan={isCrediario ? 8 : 7} className="text-center p-4 text-zinc-500">Sem vendas em "{bucketName}"</td></tr>
                 )}
-                {sales
+                {filteredSales
                   .slice()
                   .sort((a, b) => new Date(b.paid_at || b.created_at).getTime() - new Date(a.paid_at || a.created_at).getTime())
                   .map((s) => {
@@ -159,6 +222,11 @@ export function POSPaymentSalesModal({ open, onClose, title, bucketName, sales, 
                             </div>
                           )}
                         </td>
+                        {isCrediario && (
+                          <td className="p-2 text-amber-300">
+                            {s.crediario_gateway || <span className="italic text-zinc-500">—</span>}
+                          </td>
+                        )}
                         <td className="p-2 text-zinc-400">{s.sale_type || "—"}</td>
                         <td className="p-2 text-right font-semibold text-emerald-400 whitespace-nowrap">{BRL(Number(s.total || 0))}</td>
                       </tr>

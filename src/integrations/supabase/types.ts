@@ -8539,6 +8539,33 @@ export type Database = {
           },
         ]
       }
+      pos_crediario_gateways: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pos_customers: {
         Row: {
           address: string | null
@@ -9740,6 +9767,7 @@ export type Database = {
           checkout_step: number | null
           created_at: string
           crediario_due_date: string | null
+          crediario_gateway: string | null
           crediario_paid_amount: number | null
           crediario_paid_at: string | null
           crediario_paid_method: string | null
@@ -9794,6 +9822,7 @@ export type Database = {
           checkout_step?: number | null
           created_at?: string
           crediario_due_date?: string | null
+          crediario_gateway?: string | null
           crediario_paid_amount?: number | null
           crediario_paid_at?: string | null
           crediario_paid_method?: string | null
@@ -9848,6 +9877,7 @@ export type Database = {
           checkout_step?: number | null
           created_at?: string
           crediario_due_date?: string | null
+          crediario_gateway?: string | null
           crediario_paid_amount?: number | null
           crediario_paid_at?: string | null
           crediario_paid_method?: string | null
