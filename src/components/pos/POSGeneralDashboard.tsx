@@ -91,12 +91,19 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const load = async () => {
     setLoading(true);
     try {
+      const startIso = periodRange.start.toISOString();
+      const endIso = periodRange.end.toISOString();
       const [storesRes, salesRes, goalsRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
-        supabase.from("pos_sales").select("id, store_id, total, payment_method, shipping_cost, created_at, status")
-          .gte("created_at", periodRange.start.toISOString())
-          .lte("created_at", periodRange.end.toISOString())
-          .neq("status", "cancelled")
+        supabase.from("pos_sales")
+          .select("id, store_id, total, payment_method, shipping_cost, created_at, paid_at, status, sale_type, customer_name, revenue_attribution")
+          // mesma regra do dashboard da loja física:
+          // - somente vendas concluídas
+          // - exclui vendas com revenue_attribution = site_pickup_only
+          // - usa paid_at quando existir, senão created_at
+          .eq("status", "completed")
+          .neq("revenue_attribution", "site_pickup_only")
+          .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
           .limit(20000),
         supabase.from("pos_goals").select("id, store_id, goal_value, period, period_start, period_end, goal_type, created_at")
           .eq("is_active", true).is("seller_id", null),
