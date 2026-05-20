@@ -39,6 +39,7 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
   const [catalogPageId, setCatalogPageId] = useState<string | null>(null);
   const [catalogSlug, setCatalogSlug] = useState<string | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [productDiscounts, setProductDiscounts] = useState<DiscountMap>({});
   const [delaySeconds, setDelaySeconds] = useState(30);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
