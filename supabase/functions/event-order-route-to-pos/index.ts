@@ -145,6 +145,9 @@ Deno.serve(async (req) => {
     try {
       await supabase.functions.invoke("pos-tiny-create-sale", {
         body: {
+          // CRITICAL: pass sale_id so pos-tiny-create-sale UPDATES the existing
+          // live sale instead of creating a duplicate "physical" pos_sales row.
+          sale_id: sale.id,
           store_id: storeId,
           customer: { name: customerName, whatsapp, cpf: reg?.cpf, email: reg?.email, address: shipping_address },
           items: products.map((p: any) => ({ sku: p.sku || "", name: p.title, variant: p.variant, quantity: p.quantity, price: p.price })),
