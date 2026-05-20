@@ -68,7 +68,15 @@ Deno.serve(async (req) => {
           const shippingCost = Number(o.total_shipping_price_set?.shop_money?.amount || 0);
           const items = (o.line_items || []) as any[];
           const customerName = o.customer ? `${o.customer.first_name || ""} ${o.customer.last_name || ""}`.trim() : null;
-          const customerPhone = o.phone || o.customer?.phone || null;
+          const customerPhone = o.phone || o.customer?.phone || o.shipping_address?.phone || o.billing_address?.phone || null;
+          const customerEmail = o.email || o.customer?.email || null;
+          const addr = o.shipping_address || o.billing_address || {};
+          const customerCity = addr.city || null;
+          const customerState = addr.province_code || addr.province || null;
+          const customerCep = addr.zip || null;
+          // CPF can be in note_attributes (commonly "cpf" or "CPF")
+          const cpfAttr = (o.note_attributes || []).find((a: any) => /cpf/i.test(a?.name || ""));
+          const customerCpf = cpfAttr?.value || null;
           const gateway = (o.payment_gateway_names || [])[0] || o.gateway || "shopify";
 
           const { data: sale, error: saleErr } = await supabase
@@ -87,6 +95,11 @@ Deno.serve(async (req) => {
               shipping_cost: shippingCost,
               customer_name: customerName,
               customer_phone: customerPhone,
+              customer_email: customerEmail,
+              customer_cpf: customerCpf,
+              customer_city: customerCity,
+              customer_state: customerState,
+              customer_cep: customerCep,
               paid_at: o.created_at,
               created_at: o.created_at,
               notes: `Shopify ${o.name || ""}`.trim(),
