@@ -257,3 +257,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.event-lead-capture]
 verify_jwt = false
+
+[functions.fiscal-render-document]
+verify_jwt = false
