@@ -23,6 +23,7 @@ interface UnifiedLog {
   source_id: string; // sale_id or order_id
   event_name: string;
   event_id: string;
+  pixel_ref: string | null; // dataset_id (offline) or pixel_id (online)
   status: string;
   http_status: number | null;
   error_message: string | null;
