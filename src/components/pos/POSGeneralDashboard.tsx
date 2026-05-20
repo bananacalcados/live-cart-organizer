@@ -77,6 +77,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [salesRows, setSalesRows] = useState<any[]>([]);
   const [goals, setGoals] = useState<GoalRow[]>([]);
+  const [paymentModal, setPaymentModal] = useState<{ open: boolean; bucket: string }>({ open: false, bucket: "" });
+  const [expandedStore, setExpandedStore] = useState<string | null>(null);
 
   const periodRange = useMemo(() => {
     const now = new Date();
