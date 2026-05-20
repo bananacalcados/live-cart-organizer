@@ -188,19 +188,17 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="flex-1 container py-10">
-        <div className="mb-8">
+      <main className="relative flex-1 container py-10">
+        <div className="mb-8 pr-36">
           <h2 className="text-2xl font-bold" style={{ color: "hsl(0 0% 95%)" }}>Bem-vindo ao GESTOR BANANA</h2>
           <p className="mt-1" style={{ color: "hsl(0 0% 55%)" }}>Selecione um módulo para começar</p>
         </div>
 
         {allowedModules?.includes("admin") && (
-          <div className="mb-10">
-            <StickyNotesBoard />
-          </div>
+          <StickyNotesBoard />
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {allowedModules === null ? (
             <div className="col-span-full flex justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2" style={{ borderColor: "hsl(48 95% 50%)" }} />
