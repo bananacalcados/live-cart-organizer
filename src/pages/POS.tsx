@@ -184,59 +184,71 @@ export default function POS() {
     <div className="h-screen flex flex-col md:flex-row bg-pos-black">
       {/* Desktop Sidebar */}
       {!isMobile && (
-        <div className="w-16 lg:w-52 border-r border-pos-white/10 bg-[hsl(0,0%,8%)] flex flex-col">
+        <div
+          className="w-16 lg:w-56 flex flex-col border-r border-white/5"
+          style={{ background: "var(--gradient-pos-sidebar)" }}
+        >
           {/* Logo */}
-          <div className="p-3 border-b border-pos-white/10 flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-pos-yellow text-pos-black font-bold flex-shrink-0">
-              <Store className="h-4 w-4" />
+          <div className="p-3 border-b border-white/5 flex items-center gap-2.5">
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-2xl text-white font-bold flex-shrink-0 shadow-[var(--shadow-pos-glow)]"
+              style={{ background: "var(--gradient-pos-accent)" }}
+            >
+              <Store className="h-5 w-5" />
             </div>
             <div className="hidden lg:block min-w-0">
-              <h1 className="text-xs font-bold text-white truncate">Frente de Caixa</h1>
-              <p className="text-[10px] text-pos-yellow-muted truncate">PDV</p>
+              <h1 className="text-sm font-bold text-white truncate leading-tight">Frente de Caixa</h1>
+              <p className="text-[10px] text-pos-orange/80 truncate font-medium uppercase tracking-wider">PDV</p>
             </div>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-            {SECTIONS.map(s => {
+          <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
+            {SECTIONS.map((s, idx) => {
               const Icon = s.icon;
               const isActive = section === s.id;
+              const isFirstSecondary = !s.priority && SECTIONS[idx - 1]?.priority;
               return (
-                <button
-                  key={s.id}
-                  onClick={() => handleSectionClick(s.id)}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-medium transition-all relative",
-                    isActive
-                      ? "bg-pos-yellow text-pos-white shadow-md shadow-pos-yellow/30"
-                      : "text-white/60 hover:bg-white/10 hover:text-white"
+                <div key={s.id}>
+                  {isFirstSecondary && (
+                    <div className="my-2 mx-3 h-px bg-white/5" />
                   )}
-                >
-                  <Icon className="h-4 w-4 flex-shrink-0" />
-                  <span className="hidden lg:inline">{s.label}</span>
-                  {s.id === "config" && <Lock className="h-3 w-3 opacity-50 hidden lg:inline" />}
-                  {s.badge && pendingRequests > 0 && (
-                    <Badge className="absolute -top-1 -right-1 lg:static lg:ml-auto bg-red-500 text-white border-0 text-[10px] h-4 min-w-4 px-1">
-                      {pendingRequests}
-                    </Badge>
-                  )}
-                </button>
+                  <button
+                    onClick={() => handleSectionClick(s.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-xs font-medium transition-all relative group",
+                      isActive
+                        ? "text-white shadow-[var(--shadow-pos-glow)]"
+                        : "text-white/55 hover:bg-white/5 hover:text-white"
+                    )}
+                    style={isActive ? { background: "var(--gradient-pos-accent)" } : undefined}
+                  >
+                    <Icon className={cn("h-4 w-4 flex-shrink-0", isActive ? "" : "group-hover:text-pos-orange transition-colors")} />
+                    <span className="hidden lg:inline truncate">{s.label}</span>
+                    {s.id === "config" && <Lock className="h-3 w-3 opacity-50 hidden lg:inline ml-auto" />}
+                    {s.badge && pendingRequests > 0 && (
+                      <Badge className="absolute -top-1 -right-1 lg:static lg:ml-auto bg-red-500 text-white border-2 border-pos-sidebar text-[10px] h-4 min-w-4 px-1 font-bold">
+                        {pendingRequests}
+                      </Badge>
+                    )}
+                  </button>
+                </div>
               );
             })}
           </nav>
 
           {/* Footer */}
-          <div className="p-2 border-t border-white/10 space-y-1">
+          <div className="p-2 border-t border-white/5 space-y-0.5">
             <button
               onClick={() => setSelectedStore("")}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-white/40 hover:bg-white/10 hover:text-white/70 transition-all"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/40 hover:bg-white/5 hover:text-white/80 transition-all"
             >
               <Store className="h-3.5 w-3.5 flex-shrink-0" />
               <span className="hidden lg:inline">Trocar Loja</span>
             </button>
             <button
               onClick={() => navigate("/")}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-white/40 hover:bg-white/10 hover:text-white/70 transition-all"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-white/40 hover:bg-white/5 hover:text-white/80 transition-all"
             >
               <Home className="h-3.5 w-3.5 flex-shrink-0" />
               <span className="hidden lg:inline">Início</span>

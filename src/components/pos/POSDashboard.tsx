@@ -584,39 +584,52 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
 function KPICard({ icon: Icon, label, value, sub, color }: { icon: typeof DollarSign; label: string; value: string; sub: string; color: string }) {
   return (
-    <div className="p-4 rounded-xl bg-pos-white/5 border border-pos-orange/10 space-y-2">
-      <div className="flex items-center gap-2">
-        <Icon className={`h-4 w-4 ${color}`} />
-        <span className="text-xs text-pos-white/50">{label}</span>
+    <div
+      className="relative p-4 rounded-2xl bg-pos-card border border-pos-border overflow-hidden group hover:-translate-y-0.5 transition-transform"
+      style={{ boxShadow: "var(--shadow-pos-card)" }}
+    >
+      <div className="absolute inset-x-0 top-0 h-0.5 opacity-70" style={{ background: "var(--gradient-pos-accent)" }} />
+      <div className="flex items-start justify-between mb-2">
+        <div className={cn("h-9 w-9 rounded-xl flex items-center justify-center bg-pos-orange/10 border border-pos-orange/20")}>
+          <Icon className={`h-4 w-4 ${color}`} />
+        </div>
+        <span className="text-[10px] text-pos-white/40 uppercase tracking-wider font-semibold">{sub}</span>
       </div>
-      <p className="text-xl font-bold text-pos-white">{value}</p>
-      <p className="text-[10px] text-pos-white/30">{sub}</p>
+      <p className="text-xs text-pos-white/55 font-medium">{label}</p>
+      <p className="text-xl font-bold text-pos-white mt-0.5 tracking-tight">{value}</p>
     </div>
   );
 }
 
 function AlertCard({ icon: Icon, label, count, detail, onClick }: { icon: typeof MessageSquare; label: string; count: number; detail: string; onClick: () => void }) {
+  const hasAlert = count > 0;
   return (
     <button
       onClick={onClick}
-      className="flex items-center justify-between p-3 rounded-lg bg-pos-white/5 border border-pos-orange/10 hover:bg-pos-white/10 transition-all text-left w-full group"
+      className={cn(
+        "flex items-center justify-between p-3.5 rounded-2xl border transition-all text-left w-full group hover:-translate-y-0.5",
+        hasAlert
+          ? "bg-red-500/5 border-red-500/20 hover:border-red-500/40"
+          : "bg-pos-card border-pos-border hover:border-pos-orange/30"
+      )}
+      style={{ boxShadow: "var(--shadow-pos-card)" }}
     >
       <div className="flex items-center gap-3">
-        <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${count > 0 ? "bg-red-500/20" : "bg-pos-white/10"}`}>
-          <Icon className={`h-4 w-4 ${count > 0 ? "text-red-400" : "text-pos-white/40"}`} />
+        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", hasAlert ? "bg-red-500/15" : "bg-pos-orange/10")}>
+          <Icon className={cn("h-4 w-4", hasAlert ? "text-red-400" : "text-pos-orange")} />
         </div>
         <div>
-          <p className="text-sm font-medium text-pos-white">{label}</p>
-          <p className="text-[10px] text-pos-white/40">{detail}</p>
+          <p className="text-sm font-semibold text-pos-white">{label}</p>
+          <p className="text-[10px] text-pos-white/45">{detail}</p>
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {count > 0 && (
-          <Badge className="bg-red-500 text-white border-0 text-xs animate-pulse">
+        {hasAlert && (
+          <Badge className="bg-red-500 text-white border-0 text-xs font-bold animate-pulse">
             {count}
           </Badge>
         )}
-        <ChevronRight className="h-4 w-4 text-pos-white/20 group-hover:text-pos-white/50 transition-colors" />
+        <ChevronRight className="h-4 w-4 text-pos-white/20 group-hover:text-pos-orange group-hover:translate-x-0.5 transition-all" />
       </div>
     </button>
   );
