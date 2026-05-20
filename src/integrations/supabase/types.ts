@@ -9772,9 +9772,14 @@ export type Database = {
           crediario_paid_at: string | null
           crediario_paid_method: string | null
           crediario_status: string | null
+          customer_cep: string | null
+          customer_city: string | null
+          customer_cpf: string | null
+          customer_email: string | null
           customer_id: string | null
           customer_name: string | null
           customer_phone: string | null
+          customer_state: string | null
           discount: number
           event_id: string | null
           expedition_status: string
@@ -9827,9 +9832,14 @@ export type Database = {
           crediario_paid_at?: string | null
           crediario_paid_method?: string | null
           crediario_status?: string | null
+          customer_cep?: string | null
+          customer_city?: string | null
+          customer_cpf?: string | null
+          customer_email?: string | null
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          customer_state?: string | null
           discount?: number
           event_id?: string | null
           expedition_status?: string
@@ -9882,9 +9892,14 @@ export type Database = {
           crediario_paid_at?: string | null
           crediario_paid_method?: string | null
           crediario_status?: string | null
+          customer_cep?: string | null
+          customer_city?: string | null
+          customer_cpf?: string | null
+          customer_email?: string | null
           customer_id?: string | null
           customer_name?: string | null
           customer_phone?: string | null
+          customer_state?: string | null
           discount?: number
           event_id?: string | null
           expedition_status?: string

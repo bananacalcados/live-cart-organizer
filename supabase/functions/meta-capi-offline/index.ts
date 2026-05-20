@@ -139,8 +139,9 @@ Deno.serve(async (req) => {
       .from("pos_sales")
       .select(`
         id, total, status, created_at, paid_at, payment_method, sale_type,
-        customer_id, store_id,
-        customer_name, customer_phone
+        customer_id, store_id, notes, external_source, external_order_id,
+        customer_name, customer_phone, customer_email, customer_cpf,
+        customer_city, customer_state, customer_cep, shipping_address
       `)
       .eq("id", saleId)
       .maybeSingle();
@@ -218,11 +219,14 @@ Deno.serve(async (req) => {
       store = s;
     }
 
+    // shipping_address jsonb fallback (transparent checkout / shopify)
+    const shipAddr: any = sale.shipping_address || {};
+
     // Validação: precisa ter pelo menos UM identificador do cliente
-    const phoneRaw = customer?.whatsapp || sale.customer_phone || "";
-    const emailRaw = customer?.email || "";
-    const cpfRaw = customer?.cpf || "";
-    const nameRaw = customer?.name || sale.customer_name || "";
+    const phoneRaw = customer?.whatsapp || sale.customer_phone || shipAddr.phone || "";
+    const emailRaw = customer?.email || sale.customer_email || shipAddr.email || "";
+    const cpfRaw = customer?.cpf || sale.customer_cpf || shipAddr.cpf || "";
+    const nameRaw = customer?.name || sale.customer_name || shipAddr.name || "";
 
     if (!phoneRaw && !emailRaw && !cpfRaw) {
       const errMsg = "no customer identifiers (phone/email/cpf) — skipping";
@@ -251,10 +255,10 @@ Deno.serve(async (req) => {
     const fn = first ? await hashIfPresent(normalizeName(first)) : undefined;
     const ln = last ? await hashIfPresent(normalizeName(last)) : undefined;
 
-    // Cidade/estado/cep: prefere o do cliente; fallback pro da loja
-    const cityRaw = customer?.city || store?.city || "";
-    const stateRaw = customer?.state || store?.state || "";
-    const zipRaw = customer?.cep || store?.cep || "";
+    // Cidade/estado/cep: prefere o do cliente; depois inline da venda; depois shipping_address; fallback pro da loja
+    const cityRaw = customer?.city || sale.customer_city || shipAddr.city || store?.city || "";
+    const stateRaw = customer?.state || sale.customer_state || shipAddr.state || shipAddr.province_code || store?.state || "";
+    const zipRaw = customer?.cep || sale.customer_cep || shipAddr.cep || shipAddr.zip || store?.cep || "";
     const ct = cityRaw ? await hashIfPresent(normalizeCity(cityRaw)) : undefined;
     const st = stateRaw ? await hashIfPresent(normalizeState(stateRaw)) : undefined;
     const zp = zipRaw ? await hashIfPresent(normalizeZip(zipRaw)) : undefined;
@@ -337,8 +341,16 @@ Deno.serve(async (req) => {
         has_external_id: !!externalId,
         has_city: !!ct,
         has_state: !!st,
+        has_zip: !!zp,
         value,
         store_name: storeName,
+        customer_name: nameRaw || null,
+        customer_phone: phoneRaw || null,
+        customer_email: emailRaw || null,
+        order_label: sale.external_source === "shopify"
+          ? (sale.notes || `Shopify ${sale.external_order_id || ""}`).trim()
+          : (sale.notes || null),
+        external_source: sale.external_source || "pdv",
       },
     }, { onConflict: "sale_id,event_name" });
 

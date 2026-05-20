@@ -276,12 +276,20 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
                   {log.channel === "pdv" ? <Store className="h-4 w-4" /> : <ShoppingBag className="h-4 w-4" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                     <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{log.channel === "pdv" ? "Venda PDV" : "Live"}</span>
+                    {log.payload_summary?.order_label && (
+                      <Badge variant="outline" className="text-[10px] border-orange-300 bg-orange-50 text-orange-700">
+                        {log.payload_summary.order_label}
+                      </Badge>
+                    )}
                     {statusBadge(log.status)}
                     {log.http_status && <span className="text-[10px] text-muted-foreground">HTTP {log.http_status}</span>}
                   </div>
-                  <p className="text-xs text-foreground font-mono truncate">{log.source_id}</p>
+                  {log.payload_summary?.customer_name && (
+                    <p className="text-xs font-semibold text-foreground truncate">{log.payload_summary.customer_name}</p>
+                  )}
+                  <p className="text-[10px] text-muted-foreground font-mono truncate">{log.source_id}</p>
                   {log.error_message && <p className="text-[11px] text-red-600 truncate mt-0.5">{log.error_message}</p>}
                   {log.payload_summary?.value && (
                     <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -318,6 +326,18 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
               <div className="space-y-3 text-sm">
                 <DetailRow label="Status">{statusBadge(detail.status)}</DetailRow>
                 <DetailRow label="Canal">{detail.channel === "pdv" ? "PDV (Offline)" : "Live (Online)"}</DetailRow>
+                {detail.payload_summary?.order_label && (
+                  <DetailRow label="Pedido"><span className="font-semibold">{detail.payload_summary.order_label}</span></DetailRow>
+                )}
+                {detail.payload_summary?.customer_name && (
+                  <DetailRow label="Cliente"><span className="font-semibold">{detail.payload_summary.customer_name}</span></DetailRow>
+                )}
+                {detail.payload_summary?.customer_phone && (
+                  <DetailRow label="Telefone"><span className="font-mono text-xs">{detail.payload_summary.customer_phone}</span></DetailRow>
+                )}
+                {detail.payload_summary?.customer_email && (
+                  <DetailRow label="Email"><span className="font-mono text-xs">{detail.payload_summary.customer_email}</span></DetailRow>
+                )}
                 <DetailRow label="Pixel/Dataset"><span className="font-mono text-xs">{detail.pixel_ref || "—"}</span></DetailRow>
                 <DetailRow label={detail.channel === "pdv" ? "Sale ID" : "Order ID"}><span className="font-mono text-xs">{detail.source_id}</span></DetailRow>
                 <DetailRow label="Event ID"><span className="font-mono text-xs">{detail.event_id}</span></DetailRow>

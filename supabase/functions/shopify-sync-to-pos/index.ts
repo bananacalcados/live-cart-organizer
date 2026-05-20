@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
     );
 
     const since = new Date(Date.now() - days * 86400000).toISOString();
-    let url: string | null = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/orders.json?status=any&financial_status=paid&created_at_min=${since}&limit=${limit}&fields=id,name,total_price,subtotal_price,total_discounts,total_shipping_price_set,line_items,created_at,financial_status,customer,phone,email,gateway,payment_gateway_names`;
+    let url: string | null = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/orders.json?status=any&financial_status=paid&created_at_min=${since}&limit=${limit}&fields=id,name,total_price,subtotal_price,total_discounts,total_shipping_price_set,line_items,created_at,financial_status,customer,phone,email,gateway,payment_gateway_names,shipping_address,billing_address,note_attributes`;
 
     let inserted = 0, skipped = 0, errors = 0, pages = 0;
     const safetyMax = 20;
@@ -68,7 +68,15 @@ Deno.serve(async (req) => {
           const shippingCost = Number(o.total_shipping_price_set?.shop_money?.amount || 0);
           const items = (o.line_items || []) as any[];
           const customerName = o.customer ? `${o.customer.first_name || ""} ${o.customer.last_name || ""}`.trim() : null;
-          const customerPhone = o.phone || o.customer?.phone || null;
+          const customerPhone = o.phone || o.customer?.phone || o.shipping_address?.phone || o.billing_address?.phone || null;
+          const customerEmail = o.email || o.customer?.email || null;
+          const addr = o.shipping_address || o.billing_address || {};
+          const customerCity = addr.city || null;
+          const customerState = addr.province_code || addr.province || null;
+          const customerCep = addr.zip || null;
+          // CPF can be in note_attributes (commonly "cpf" or "CPF")
+          const cpfAttr = (o.note_attributes || []).find((a: any) => /cpf/i.test(a?.name || ""));
+          const customerCpf = cpfAttr?.value || null;
           const gateway = (o.payment_gateway_names || [])[0] || o.gateway || "shopify";
 
           const { data: sale, error: saleErr } = await supabase
@@ -87,6 +95,11 @@ Deno.serve(async (req) => {
               shipping_cost: shippingCost,
               customer_name: customerName,
               customer_phone: customerPhone,
+              customer_email: customerEmail,
+              customer_cpf: customerCpf,
+              customer_city: customerCity,
+              customer_state: customerState,
+              customer_cep: customerCep,
               paid_at: o.created_at,
               created_at: o.created_at,
               notes: `Shopify ${o.name || ""}`.trim(),
