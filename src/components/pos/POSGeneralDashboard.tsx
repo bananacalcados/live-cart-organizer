@@ -197,13 +197,37 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const paymentBuckets = useMemo(() => {
     const map = new Map<string, { revenue: number; sales: number }>();
     for (const r of salesRows) {
-      const b = bucketPayment(r.payment_method);
+      const b = bucketPayment(r.payment_method, r.sale_type);
       const cur = map.get(b) || { revenue: 0, sales: 0 };
       cur.revenue += Number(r.total || 0);
       cur.sales += 1;
       map.set(b, cur);
     }
     return Array.from(map.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.revenue - a.revenue);
+  }, [salesRows]);
+
+  // Storesbyid for modal
+  const storesById = useMemo(() => new Map(stores.map(s => [s.id, s.name])), [stores]);
+
+  // Sales filtered by current modal bucket
+  const modalSales = useMemo(() => {
+    if (!paymentModal.open) return [];
+    return salesRows.filter(r => bucketPayment(r.payment_method, r.sale_type) === paymentModal.bucket);
+  }, [paymentModal, salesRows]);
+
+  // Per-store payment breakdown
+  const paymentByStore = useMemo(() => {
+    const out = new Map<string, { name: string; revenue: number; sales: number }[]>();
+    for (const r of salesRows) {
+      const list = out.get(r.store_id) || [];
+      const b = bucketPayment(r.payment_method, r.sale_type);
+      const found = list.find(x => x.name === b);
+      if (found) { found.revenue += Number(r.total || 0); found.sales += 1; }
+      else list.push({ name: b, revenue: Number(r.total || 0), sales: 1 });
+      out.set(r.store_id, list);
+    }
+    for (const [k, v] of out) out.set(k, v.sort((a, b) => b.revenue - a.revenue));
+    return out;
   }, [salesRows]);
 
   // Goals — current month rule: prefer custom intersecting current month, fallback monthly. Only ONE per store.
