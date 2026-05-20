@@ -326,6 +326,18 @@ export function POSMetaPixelDashboard({ storeId, onBack }: Props) {
               <div className="space-y-3 text-sm">
                 <DetailRow label="Status">{statusBadge(detail.status)}</DetailRow>
                 <DetailRow label="Canal">{detail.channel === "pdv" ? "PDV (Offline)" : "Live (Online)"}</DetailRow>
+                {detail.payload_summary?.order_label && (
+                  <DetailRow label="Pedido"><span className="font-semibold">{detail.payload_summary.order_label}</span></DetailRow>
+                )}
+                {detail.payload_summary?.customer_name && (
+                  <DetailRow label="Cliente"><span className="font-semibold">{detail.payload_summary.customer_name}</span></DetailRow>
+                )}
+                {detail.payload_summary?.customer_phone && (
+                  <DetailRow label="Telefone"><span className="font-mono text-xs">{detail.payload_summary.customer_phone}</span></DetailRow>
+                )}
+                {detail.payload_summary?.customer_email && (
+                  <DetailRow label="Email"><span className="font-mono text-xs">{detail.payload_summary.customer_email}</span></DetailRow>
+                )}
                 <DetailRow label="Pixel/Dataset"><span className="font-mono text-xs">{detail.pixel_ref || "—"}</span></DetailRow>
                 <DetailRow label={detail.channel === "pdv" ? "Sale ID" : "Order ID"}><span className="font-mono text-xs">{detail.source_id}</span></DetailRow>
                 <DetailRow label="Event ID"><span className="font-mono text-xs">{detail.event_id}</span></DetailRow>
