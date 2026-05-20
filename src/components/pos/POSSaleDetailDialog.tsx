@@ -1349,15 +1349,17 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {fiscalDoc.danfe_url && (
-                        <Button asChild variant="outline" size="sm" className="h-9 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              void openFiscalDocument(fiscalDoc.danfe_url!, { autoPrint: false }).catch((e) => {
-                                toast.error(e?.message || 'Erro ao abrir DANFE');
-                              });
-                            }}
-                          >📄 Ver DANFE</button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100"
+                          onClick={() => {
+                            void openFiscalDocument(fiscalDoc.danfe_url!, { autoPrint: false }).catch((e) => {
+                              toast.error(e?.message || 'Erro ao abrir DANFE');
+                            });
+                          }}
+                        >
+                          📄 Ver DANFE
                         </Button>
                       )}
                       <Button onClick={handleDownloadXml} variant="outline" size="sm" className="h-9 text-xs border-emerald-300 text-emerald-800 hover:bg-emerald-100" disabled={!fiscalDoc.xml_content && !fiscalDoc.xml_url}>
