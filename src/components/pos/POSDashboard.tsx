@@ -205,29 +205,26 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
           Visão Geral do PDV
         </h2>
         <div className="flex items-center gap-2 flex-wrap">
-          <ToggleGroup
-            type="single"
-            value={period}
-            onValueChange={handlePeriodChange}
-            className="bg-black/5 rounded-full p-0.5 border border-black/5"
-          >
-            {(["day","week","month","custom"] as Period[]).map(p => (
-              <ToggleGroupItem
-                key={p}
-                value={p}
-                className="text-xs px-4 py-1.5 rounded-full data-[state=on]:text-white data-[state=on]:shadow-[var(--shadow-pos-glow)] text-black/60 font-medium transition-all"
-                style={{}}
-              >
-                <span
-                  className="absolute inset-0 rounded-full opacity-0 data-[state=on]:opacity-100 -z-10"
-                  aria-hidden
-                />
-                {p === "day" ? "Dia" : p === "week" ? "Semana" : p === "month" ? "Mês" : (
-                  <span className="flex items-center gap-1"><CalendarIcon className="h-3 w-3" />Período</span>
-                )}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+          <div className="flex items-center bg-black/5 rounded-full p-0.5 border border-black/5">
+            {(["day","week","month","custom"] as Period[]).map(p => {
+              const active = period === p;
+              return (
+                <button
+                  key={p}
+                  onClick={() => handlePeriodChange(p)}
+                  className={cn(
+                    "text-xs px-4 py-1.5 rounded-full font-medium transition-all",
+                    active ? "text-white" : "text-black/60 hover:text-black/80"
+                  )}
+                  style={active ? { background: "var(--gradient-pos-accent)", boxShadow: "var(--shadow-pos-glow)" } : undefined}
+                >
+                  {p === "day" ? "Dia" : p === "week" ? "Semana" : p === "month" ? "Mês" : (
+                    <span className="flex items-center gap-1"><CalendarIcon className="h-3 w-3" />Período</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
           {period === "custom" && (
             <Popover>
