@@ -67,6 +67,8 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [onlineSalesCount, setOnlineSalesCount] = useState(0);
   const [physicalRevenue, setPhysicalRevenue] = useState(0);
   const [physicalSalesCount, setPhysicalSalesCount] = useState(0);
+  const [liveRevenue, setLiveRevenue] = useState(0);
+  const [liveSalesCount, setLiveSalesCount] = useState(0);
 
   const [sellerMetrics, setSellerMetrics] = useState<SellerMetric[]>([]);
 
@@ -123,7 +125,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       const { start, end } = getPeriodRange(period, customRange);
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at, revenue_attribution")
+        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at, revenue_attribution, event_id")
         .eq("store_id", storeId).eq("status", "completed")
         .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
 
@@ -140,6 +142,11 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       setOnlineSalesCount(online.length);
       setPhysicalRevenue(physical.reduce((sum, s) => sum + (s.total || 0), 0));
       setPhysicalSalesCount(physical.length);
+
+      // Faturamento Live: qualquer venda com event_id (independente do sale_type)
+      const liveSales = completedSales.filter((s: any) => s.event_id);
+      setLiveRevenue(liveSales.reduce((sum, s) => sum + (s.total || 0), 0));
+      setLiveSalesCount(liveSales.length);
 
       if (completedSales.length > 0) {
         const saleIds = completedSales.map((s) => s.id);
@@ -280,7 +287,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               <h3 className="text-sm font-semibold flex items-center gap-2 text-black/70">
                 <Store className="h-4 w-4" /> Vendas por Canal
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <ChannelCard
                   type="store"
                   title="Loja Física"
@@ -293,7 +300,14 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                   value={`R$ ${onlineRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
                   sub={`${onlineSalesCount} venda${onlineSalesCount !== 1 ? "s" : ""}`}
                 />
+                <ChannelCard
+                  type="store"
+                  title="Faturamento Live"
+                  value={`R$ ${liveRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                  sub={`${liveSalesCount} venda${liveSalesCount !== 1 ? "s" : ""}${totalRevenue > 0 ? ` (${Math.round(liveRevenue / totalRevenue * 100)}%)` : ""} · vindas de eventos`}
+                />
               </div>
+
             </div>
 
             {/* Progresso das Metas */}

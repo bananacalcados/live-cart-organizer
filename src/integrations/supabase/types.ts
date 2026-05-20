@@ -9748,6 +9748,7 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           discount: number
+          event_id: string | null
           expedition_status: string
           external_order_id: string | null
           external_source: string | null
@@ -9801,6 +9802,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           discount?: number
+          event_id?: string | null
           expedition_status?: string
           external_order_id?: string | null
           external_source?: string | null
@@ -9854,6 +9856,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           discount?: number
+          event_id?: string | null
           expedition_status?: string
           external_order_id?: string | null
           external_source?: string | null
@@ -9906,6 +9909,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "pos_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sales_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
           {

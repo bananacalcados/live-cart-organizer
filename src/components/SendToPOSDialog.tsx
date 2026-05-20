@@ -164,6 +164,7 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
           status: "pending_pickup",
           sale_type: "live",
           source_order_id: order.id,
+          event_id: order.event_id,
           // Site = retirada na loja, NÃO conta no faturamento da loja física
           revenue_attribution: isSiteChannel ? "site_pickup_only" : "store",
           notes: `Venda da Live - ${order.customer?.instagram_handle || ""}. Pedido CRM: ${order.id.slice(0, 8)}${isSiteChannel ? " (Retirada Site)" : ""}`,
