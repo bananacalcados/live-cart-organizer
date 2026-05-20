@@ -415,10 +415,15 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
                         <span className="text-[10px] text-muted-foreground">{fmt(basePrice)}</span>
                       )}
                       <Select
-                        value={d?.type || "none"}
+                        value={activeType || "none"}
                         onValueChange={(v) => {
-                          if (v === "none") setDiscount(id, null);
-                          else setDiscount(id, { type: v as any, value: d?.value || 0 });
+                          if (v === "none") {
+                            setDraftDiscountType(prev => { const n = { ...prev }; delete n[id]; return n; });
+                            if (d) setDiscount(id, null);
+                          } else {
+                            // Only set draft type — don't persist until user enters a value
+                            setDraftDiscountType(prev => ({ ...prev, [id]: v as ProductDiscount["type"] }));
+                          }
                         }}
                       >
                         <SelectTrigger className="h-7 w-[120px] text-[11px]">
@@ -431,12 +436,17 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
                           <SelectItem value="fixed_price">Preço final R$</SelectItem>
                         </SelectContent>
                       </Select>
-                      {d && d.type && (
+                      {activeType && (
                         <Input
+                          key={`${id}-${activeType}`}
                           type="number" min="0" step="0.01"
-                          defaultValue={d.value || ""}
-                          placeholder={d.type === "percent" ? "20" : d.type === "fixed_off" ? "30" : "50.00"}
-                          onBlur={(e) => setDiscount(id, { type: d.type, value: Number(e.target.value) || 0 })}
+                          autoFocus={!d}
+                          defaultValue={d?.value || ""}
+                          placeholder={activeType === "percent" ? "20" : activeType === "fixed_off" ? "30" : "50.00"}
+                          onBlur={(e) => {
+                            const val = Number(e.target.value) || 0;
+                            if (val > 0) setDiscount(id, { type: activeType, value: val });
+                          }}
                           onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                           className="h-7 w-20 text-[11px]"
                         />
