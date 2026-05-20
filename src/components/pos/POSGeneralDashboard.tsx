@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { startOfMonth, startOfDay, startOfWeek, endOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
+import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 
 interface Props { onBack: () => void }
 
@@ -40,12 +41,16 @@ interface GoalRow {
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 // Normalize payment method strings into a canonical bucket
-function bucketPayment(raw: string | null): string {
+function bucketPayment(raw: string | null, saleType?: string | null): string {
   const s = (raw || "").toLowerCase().trim();
-  if (!s) return "Outros";
+  if (!s) {
+    // sem método explícito → se for online (shopify/checkout), conta como Online; senão Outros
+    if (saleType === "online" || saleType === "live") return "Online";
+    return "Outros";
+  }
   if (s.includes("pix")) return "PIX";
   if (s.includes("crediário") || s.includes("crediario")) return "Crediário";
-  if (s.includes("vp") || s.includes("vps")) return "Vale Presente";
+  if (s.includes("vp") || s.includes("vps") || s.includes("vale presente") || s.includes("vale-presente")) return "Vale Presente";
   if (s.includes("débito") || s.includes("debito") || s.includes("debit")) return "Débito";
   if (s.includes("crédito") || s.includes("credito") || s.includes("credit") || s.includes("cartão") || s.includes("cartao")) return "Crédito";
   if (s.includes("dinheiro") || s === "cash") return "Dinheiro";
@@ -72,6 +77,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [salesRows, setSalesRows] = useState<any[]>([]);
   const [goals, setGoals] = useState<GoalRow[]>([]);
+  const [paymentModal, setPaymentModal] = useState<{ open: boolean; bucket: string }>({ open: false, bucket: "" });
+  const [expandedStore, setExpandedStore] = useState<string | null>(null);
 
   const periodRange = useMemo(() => {
     const now = new Date();
@@ -84,12 +91,19 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const load = async () => {
     setLoading(true);
     try {
+      const startIso = periodRange.start.toISOString();
+      const endIso = periodRange.end.toISOString();
       const [storesRes, salesRes, goalsRes] = await Promise.all([
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
-        supabase.from("pos_sales").select("id, store_id, total, payment_method, shipping_cost, created_at, status")
-          .gte("created_at", periodRange.start.toISOString())
-          .lte("created_at", periodRange.end.toISOString())
-          .neq("status", "cancelled")
+        supabase.from("pos_sales")
+          .select("id, store_id, total, payment_method, shipping_cost, created_at, paid_at, status, sale_type, customer_name, revenue_attribution")
+          // mesma regra do dashboard da loja física:
+          // - somente vendas concluídas
+          // - exclui vendas com revenue_attribution = site_pickup_only
+          // - usa paid_at quando existir, senão created_at
+          .eq("status", "completed")
+          .neq("revenue_attribution", "site_pickup_only")
+          .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
           .limit(20000),
         supabase.from("pos_goals").select("id, store_id, goal_value, period, period_start, period_end, goal_type, created_at")
           .eq("is_active", true).is("seller_id", null),
@@ -183,13 +197,37 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const paymentBuckets = useMemo(() => {
     const map = new Map<string, { revenue: number; sales: number }>();
     for (const r of salesRows) {
-      const b = bucketPayment(r.payment_method);
+      const b = bucketPayment(r.payment_method, r.sale_type);
       const cur = map.get(b) || { revenue: 0, sales: 0 };
       cur.revenue += Number(r.total || 0);
       cur.sales += 1;
       map.set(b, cur);
     }
     return Array.from(map.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.revenue - a.revenue);
+  }, [salesRows]);
+
+  // Storesbyid for modal
+  const storesById = useMemo(() => new Map(stores.map(s => [s.id, s.name])), [stores]);
+
+  // Sales filtered by current modal bucket
+  const modalSales = useMemo(() => {
+    if (!paymentModal.open) return [];
+    return salesRows.filter(r => bucketPayment(r.payment_method, r.sale_type) === paymentModal.bucket);
+  }, [paymentModal, salesRows]);
+
+  // Per-store payment breakdown
+  const paymentByStore = useMemo(() => {
+    const out = new Map<string, { name: string; revenue: number; sales: number }[]>();
+    for (const r of salesRows) {
+      const list = out.get(r.store_id) || [];
+      const b = bucketPayment(r.payment_method, r.sale_type);
+      const found = list.find(x => x.name === b);
+      if (found) { found.revenue += Number(r.total || 0); found.sales += 1; }
+      else list.push({ name: b, revenue: Number(r.total || 0), sales: 1 });
+      out.set(r.store_id, list);
+    }
+    for (const [k, v] of out) out.set(k, v.sort((a, b) => b.revenue - a.revenue));
+    return out;
   }, [salesRows]);
 
   // Goals — current month rule: prefer custom intersecting current month, fallback monthly. Only ONE per store.
@@ -285,25 +323,36 @@ export function POSGeneralDashboard({ onBack }: Props) {
             {paymentBuckets.length === 0 ? (
               <p className="text-zinc-500 text-sm text-center py-3">Sem vendas no período</p>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-                {paymentBuckets.map(b => {
-                  const style = PAYMENT_STYLE[b.name] || PAYMENT_STYLE["Outros"];
-                  const Icon = style.icon;
-                  const pct = totals.revenue > 0 ? (b.revenue / totals.revenue) * 100 : 0;
-                  return (
-                    <div key={b.name} className={`bg-gradient-to-br ${style.gradient} border border-zinc-700/60 rounded-lg p-3 backdrop-blur-sm`}>
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Icon className="h-3.5 w-3.5 text-zinc-300" />
-                        <span className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold truncate">{b.name}</span>
-                      </div>
-                      <p className="text-base font-bold text-zinc-100 truncate">{BRL(b.revenue)}</p>
-                      <p className="text-[10px] text-zinc-400">{b.sales} vendas · {pct.toFixed(1)}%</p>
-                    </div>
-                  );
-                })}
-              </div>
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                  {paymentBuckets.map(b => {
+                    const style = PAYMENT_STYLE[b.name] || PAYMENT_STYLE["Outros"];
+                    const Icon = style.icon;
+                    const pct = totals.revenue > 0 ? (b.revenue / totals.revenue) * 100 : 0;
+                    return (
+                      <button
+                        type="button"
+                        key={b.name}
+                        onClick={() => setPaymentModal({ open: true, bucket: b.name })}
+                        className={`text-left bg-gradient-to-br ${style.gradient} border border-zinc-700/60 rounded-lg p-3 backdrop-blur-sm hover:border-zinc-500 hover:scale-[1.02] transition-all cursor-pointer`}
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <Icon className="h-3.5 w-3.5 text-zinc-300" />
+                          <span className="text-[10px] uppercase tracking-wide text-zinc-400 font-semibold truncate">{b.name}</span>
+                        </div>
+                        <p className="text-base font-bold text-zinc-100 truncate">{BRL(b.revenue)}</p>
+                        <p className="text-[10px] text-zinc-400">{b.sales} vendas · {pct.toFixed(1)}%</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-2">
+                  Clique em um card para ver as vendas. <span className="text-zinc-400 font-medium">Outros</span> = vendas sem método de pagamento registrado ou métodos não classificados (ex.: Cheque, "Venda Live - Retirada").
+                </p>
+              </>
             )}
           </Panel>
+
 
           {/* COSTS & MARGIN */}
           <Panel title="Custos e margem bruta" icon={TrendingDown}>
@@ -348,15 +397,18 @@ export function POSGeneralDashboard({ onBack }: Props) {
                   const goal = goalData.byStore.get(s.id) || 0;
                   const pct = goal > 0 ? Math.min(100, (s.revenue / goal) * 100) : 0;
                   const margin = s.revenue - s.cost - s.shippingCost;
+                  const marginPct = s.revenue > 0 ? (margin / s.revenue) * 100 : 0;
+                  const payments = paymentByStore.get(s.id) || [];
+                  const expanded = expandedStore === s.id;
                   return (
-                    <div key={s.id} className="bg-gradient-to-br from-zinc-800/80 to-zinc-900/80 border border-zinc-700/60 rounded-lg p-3 shadow-md hover:shadow-zinc-700/30 transition-shadow">
+                    <div key={s.id} className="bg-gradient-to-br from-zinc-800/80 to-zinc-900/80 border border-zinc-700/60 rounded-lg p-3 shadow-md">
                       <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 rounded-lg bg-gradient-to-br from-zinc-300 to-zinc-500 text-zinc-900 shadow-inner">
                           <Store className="h-4 w-4" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-zinc-100">{s.name}</h4>
-                          <p className="text-[11px] text-zinc-400">{s.sales} vendas · {s.items} itens · margem {BRL(margin)}</p>
+                          <p className="text-[11px] text-zinc-400">{s.sales} vendas · {s.items} itens · margem {BRL(margin)} ({marginPct.toFixed(1)}%)</p>
                         </div>
                         <div className="text-right">
                           <p className="text-lg font-bold text-emerald-400">{BRL(s.revenue)}</p>
@@ -374,6 +426,54 @@ export function POSGeneralDashboard({ onBack }: Props) {
                         <MiniStat label="% do total" value={`${totals.revenue > 0 ? ((s.revenue / totals.revenue) * 100).toFixed(1) : 0}%`} />
                       </div>
                       {goal > 0 && <Progress value={pct} className="h-1.5 mt-2 bg-zinc-800" />}
+
+                      <button
+                        type="button"
+                        onClick={() => setExpandedStore(expanded ? null : s.id)}
+                        className="mt-3 text-[11px] text-zinc-300 hover:text-white underline underline-offset-2"
+                      >
+                        {expanded ? "▾ Ocultar detalhamento" : "▸ Ver pagamentos e custos"}
+                      </button>
+
+                      {expanded && (
+                        <div className="mt-3 space-y-3">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold mb-1.5">Formas de pagamento</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                              {payments.length === 0 && <p className="text-[11px] text-zinc-500">Sem dados</p>}
+                              {payments.map(p => {
+                                const style = PAYMENT_STYLE[p.name] || PAYMENT_STYLE["Outros"];
+                                const Icon = style.icon;
+                                const pp = s.revenue > 0 ? (p.revenue / s.revenue) * 100 : 0;
+                                return (
+                                  <button
+                                    key={p.name}
+                                    type="button"
+                                    onClick={() => setPaymentModal({ open: true, bucket: p.name })}
+                                    className={`text-left bg-gradient-to-br ${style.gradient} border border-zinc-700/60 rounded p-2 hover:border-zinc-500 transition-colors`}
+                                  >
+                                    <div className="flex items-center gap-1 mb-0.5">
+                                      <Icon className="h-3 w-3 text-zinc-300" />
+                                      <span className="text-[9px] uppercase text-zinc-400 font-semibold truncate">{p.name}</span>
+                                    </div>
+                                    <p className="text-[12px] font-bold text-zinc-100">{BRL(p.revenue)}</p>
+                                    <p className="text-[9px] text-zinc-400">{p.sales} · {pp.toFixed(1)}%</p>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold mb-1.5">Custos e margem</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                              <MiniStat label="Custo produto" value={BRL(s.cost)} />
+                              <MiniStat label="Custo envio" value={BRL(s.shippingCost)} />
+                              <MiniStat label="Margem bruta" value={BRL(margin)} />
+                              <MiniStat label="% Margem" value={`${marginPct.toFixed(1)}%`} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -384,6 +484,15 @@ export function POSGeneralDashboard({ onBack }: Props) {
       </ScrollArea>
 
       <POSGoalsManagerDialog open={goalsDialogOpen} onClose={() => setGoalsDialogOpen(false)} onSaved={load} />
+
+      <POSPaymentSalesModal
+        open={paymentModal.open}
+        onClose={() => setPaymentModal({ open: false, bucket: "" })}
+        title={`Vendas — ${paymentModal.bucket}`}
+        bucketName={paymentModal.bucket}
+        sales={modalSales}
+        storesById={storesById}
+      />
     </div>
   );
 }
