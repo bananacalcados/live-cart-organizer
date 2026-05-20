@@ -1,241 +1,128 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
+// Shopify webhook receiver — orders/paid + orders/updated
+// HMAC validation with SHOPIFY_CLIENT_SECRET (used for Shopify custom app webhooks).
+// Idempotent upsert via (external_source='shopify', external_order_id).
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-const ALLOWED_ORIGINS = [
-  "https://www.bananacalcados.com.br",
-  "https://bananacalcados.com.br",
-  "https://live-cart-organizer.lovable.app",
-  "https://checkout.bananacalcados.com.br",
-  "https://tqxhcyuxgqbzqwoidpie.supabase.co",
-];
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-shopify-hmac-sha256, x-shopify-topic, x-shopify-shop-domain",
+};
 
-function getCorsHeaders(req: Request) {
-  const origin = req.headers.get("origin") || "";
-  return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : "null",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
-    "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-  };
+const TINY_SHOPIFY_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
+
+async function verifyHmac(rawBody: string, hmacHeader: string, secret: string): Promise<boolean> {
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
+    const computed = btoa(String.fromCharCode(...new Uint8Array(sig)));
+    return computed === hmacHeader;
+  } catch {
+    return false;
+  }
 }
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: getCorsHeaders(req) });
-  }
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return new Response("Method not allowed", { status: 405, headers: corsHeaders });
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const raw = await req.text();
+    const hmac = req.headers.get("x-shopify-hmac-sha256") || "";
+    const topic = req.headers.get("x-shopify-topic") || "";
+    const secret = Deno.env.get("SHOPIFY_WEBHOOK_SECRET") || Deno.env.get("SHOPIFY_CLIENT_SECRET") || "";
 
-    const topic = req.headers.get("x-shopify-topic");
-    const body = await req.json();
-
-    console.log("Shopify webhook received:", topic);
-    console.log("Body:", JSON.stringify(body, null, 2));
-
-    // Handle checkout/order completion
-    if (topic === "checkouts/create" || topic === "checkouts/update" || topic === "orders/create" || topic === "orders/paid") {
-      const checkoutToken = body.token || body.checkout_token;
-      const financialStatus = body.financial_status;
-      
-      console.log("Checkout token:", checkoutToken);
-      console.log("Financial status:", financialStatus);
-
-      // Only process if payment is complete
-      if (financialStatus === "paid" || topic === "orders/paid") {
-        // ── AUTO-INSERT INTO BETA EXPEDITION ──
-        try {
-          const shopifyOrderId = body.id?.toString();
-          if (shopifyOrderId) {
-            const { data: existingBeta } = await supabase
-              .from("expedition_beta_orders")
-              .select("id")
-              .eq("shopify_order_id", shopifyOrderId)
-              .maybeSingle();
-
-            if (!existingBeta) {
-              const shippingAddr = body.shipping_address ? {
-                address1: body.shipping_address.address1,
-                address2: body.shipping_address.address2,
-                city: body.shipping_address.city,
-                province: body.shipping_address.province,
-                zip: body.shipping_address.zip,
-                country: body.shipping_address.country,
-                name: body.shipping_address.name,
-                phone: body.shipping_address.phone,
-              } : null;
-
-              const custName = body.customer
-                ? `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim()
-                : body.shipping_address?.name || "";
-
-              const { data: inserted } = await supabase
-                .from("expedition_beta_orders")
-                .insert({
-                  shopify_order_id: shopifyOrderId,
-                  shopify_order_name: body.name,
-                  shopify_order_number: body.order_number?.toString(),
-                  shopify_created_at: body.created_at,
-                  customer_name: custName,
-                  customer_email: body.customer?.email || body.email,
-                  customer_phone: body.customer?.phone || body.shipping_address?.phone || body.phone,
-                  shipping_address: shippingAddr,
-                  financial_status: body.financial_status || "paid",
-                  fulfillment_status: body.fulfillment_status || "unfulfilled",
-                  expedition_status: "approved",
-                  subtotal_price: parseFloat(body.subtotal_price || "0"),
-                  total_price: parseFloat(body.total_price || "0"),
-                  total_discount: parseFloat(body.total_discounts || "0"),
-                  total_shipping: (body.shipping_lines || []).reduce((s: number, l: any) => s + parseFloat(l.price || "0"), 0),
-                  total_weight_grams: body.total_weight || 0,
-                 has_gift: body.note?.toLowerCase().includes("brinde") || body.tags?.toLowerCase().includes("gift") || false,
-                 shipping_method: (body.shipping_lines || [])[0]?.title || null,
-                 })
-                 .select()
-                 .single();
-
-              if (inserted && body.line_items?.length > 0) {
-                const betaItems = body.line_items.map((li: any) => ({
-                  expedition_order_id: inserted.id,
-                  shopify_line_item_id: li.id?.toString(),
-                  product_name: li.title || li.name,
-                  variant_name: li.variant_title,
-                  sku: li.sku,
-                  quantity: li.quantity,
-                  unit_price: parseFloat(li.price || "0"),
-                  weight_grams: li.grams || 0,
-                }));
-                await supabase.from("expedition_beta_order_items").insert(betaItems);
-              }
-              console.log("Beta expedition order created:", body.name);
-            }
-          }
-        } catch (betaErr: any) {
-          console.error("Beta expedition insert error (non-blocking):", betaErr.message);
-        }
-        // ── END BETA EXPEDITION ──
-        // Find order by checkout token
-        const { data: orders, error } = await supabase
-          .from("orders")
-          .select("*")
-          .eq("checkout_token", checkoutToken);
-
-        if (error) {
-          console.error("Error finding order:", error);
-          throw error;
-        }
-
-        if (orders && orders.length > 0) {
-          const order = orders[0];
-          
-          // Update order to paid status
-          const { error: updateError } = await supabase
-            .from("orders")
-            .update({
-              is_paid: true,
-              paid_at: new Date().toISOString(),
-              stage: "paid"
-            })
-            .eq("id", order.id);
-
-          if (updateError) {
-            console.error("Error updating order:", updateError);
-            throw updateError;
-          }
-
-          await notifyPaymentConfirmed({
-            pedido_id: order.id,
-            loja: 'centro',
-            gateway: 'shopify',
-            transaction_id: body.id?.toString() || checkoutToken || order.id,
-            source: 'shopify-webhook',
-          });
-
-          console.log("Order marked as paid:", order.id);
-        } else {
-          console.log("No order found for checkout token:", checkoutToken);
-        }
-
-        // Trigger shopify_purchase automation flows
-        const customerPhone = body.phone || body.billing_address?.phone || body.shipping_address?.phone || body.customer?.phone;
-        const customerName = body.customer?.first_name || body.billing_address?.first_name || "";
-        const customerEmail = body.customer?.email || body.email || "";
-        const lineItems = body.line_items || [];
-        const customerFullName = body.customer
-          ? `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim()
-          : body.billing_address?.name || customerName;
-        const lineItemsSummary = lineItems.map((li: any) => `${li.quantity}x ${li.title || li.name}`).join(", ");
-
-        console.log("[AUTOMATION-DEBUG] Phone sources:", JSON.stringify({
-          body_phone: body.phone || null,
-          billing_phone: body.billing_address?.phone || null,
-          shipping_phone: body.shipping_address?.phone || null,
-          customer_phone: body.customer?.phone || null,
-          resolved: customerPhone || null,
-        }));
-
-        if (customerPhone) {
-          const automationPayload = {
-            phone: customerPhone,
-            name: customerFullName,
-            email: customerEmail,
-            products: lineItemsSummary,
-            orderTotal: body.total_price,
-            shopifyOrderId: body.id?.toString(),
-            shopifyOrderName: body.name,
-          };
-          console.log("[AUTOMATION-DEBUG] Invoking automation-trigger-shopify-purchase with:", JSON.stringify(automationPayload));
-
-          supabase.functions.invoke("automation-trigger-shopify-purchase", {
-            body: automationPayload,
-          }).then((res: any) => {
-            console.log("[AUTOMATION-DEBUG] automation-trigger-shopify-purchase response:", JSON.stringify({ data: res.data, error: res.error }));
-          }).catch((err: any) => {
-            console.error("[AUTOMATION-DEBUG] automation-trigger-shopify-purchase FAILED:", err?.message || err);
-          });
-        } else {
-          console.warn("[AUTOMATION-DEBUG] NO PHONE FOUND — automation NOT triggered for order:", body.name || body.id);
-        }
+    if (secret && hmac) {
+      const ok = await verifyHmac(raw, hmac, secret);
+      if (!ok) {
+        console.warn("Invalid HMAC for topic", topic);
+        return new Response("Invalid HMAC", { status: 401, headers: corsHeaders });
       }
     }
 
-    if (topic === "orders/fulfilled" || topic === "fulfillments/create") {
-      const fulfillment = body.fulfillments?.[0] || body;
-      const trackingNumber = fulfillment.tracking_number || fulfillment.tracking_numbers?.[0];
-      const trackingCompany = fulfillment.tracking_company;
+    const o = JSON.parse(raw);
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
 
-      const customerPhone = body.phone || body.billing_address?.phone || body.shipping_address?.phone || body.customer?.phone;
-      const customerName = body.customer
-        ? `${body.customer.first_name || ""} ${body.customer.last_name || ""}`.trim()
-        : body.billing_address?.name || "";
-      const customerEmail = body.customer?.email || body.email || "";
-
-      if (trackingNumber && customerPhone) {
-        supabase.functions.invoke("automation-trigger-shopify-purchase", {
-          body: {
-            phone: customerPhone,
-            name: customerName,
-            email: customerEmail,
-            shopifyOrderId: String(body.id || body.order_id),
-            shopifyOrderName: body.name,
-            rastreio: trackingNumber,
-            transportadora: trackingCompany || "",
-            trigger_type: "shopify_fulfilled"
-          }
-        }).catch((err: any) => console.error("automation fulfillment error:", err));
-      }
+    // Only paid orders count as revenue
+    const financial = (o.financial_status || "").toLowerCase();
+    if (!["paid", "partially_paid"].includes(financial)) {
+      return new Response(JSON.stringify({ ok: true, skipped: "not paid" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    const externalId = String(o.id);
+    const { data: existing } = await supabase
+      .from("pos_sales")
+      .select("id")
+      .eq("external_source", "shopify")
+      .eq("external_order_id", externalId)
+      .maybeSingle();
+    if (existing) {
+      return new Response(JSON.stringify({ ok: true, deduped: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const total = Number(o.total_price || 0);
+    const subtotal = Number(o.subtotal_price || total);
+    const discount = Number(o.total_discounts || 0);
+    const shippingCost = Number(o.total_shipping_price_set?.shop_money?.amount || 0);
+    const items = (o.line_items || []) as any[];
+    const customerName = o.customer ? `${o.customer.first_name || ""} ${o.customer.last_name || ""}`.trim() : null;
+    const customerPhone = o.phone || o.customer?.phone || null;
+    const gateway = (o.payment_gateway_names || [])[0] || o.gateway || "shopify";
+
+    const { data: sale, error } = await supabase
+      .from("pos_sales")
+      .insert({
+        store_id: TINY_SHOPIFY_STORE_ID,
+        external_source: "shopify",
+        external_order_id: externalId,
+        sale_type: "online",
+        status: "completed",
+        payment_method: gateway,
+        payment_gateway: "shopify",
+        subtotal, discount, total,
+        shipping_cost: shippingCost,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        paid_at: o.created_at,
+        created_at: o.created_at,
+        notes: `Shopify ${o.name || ""}`.trim(),
+      } as any)
+      .select("id")
+      .single();
+    if (error) throw error;
+
+    if (items.length > 0) {
+      const rows = items.map((li: any) => ({
+        sale_id: sale.id,
+        product_name: li.title || li.name || "Item Shopify",
+        variant_name: li.variant_title || null,
+        sku: li.sku || null,
+        unit_price: Number(li.price || 0),
+        quantity: Number(li.quantity || 1),
+        total_price: Number(li.price || 0) * Number(li.quantity || 1),
+      }));
+      await supabase.from("pos_sale_items").insert(rows);
+    }
+
+    return new Response(JSON.stringify({ ok: true, inserted: true }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error) {
-    console.error("Webhook error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+  } catch (e: any) {
+    console.error("shopify-webhook error", e);
+    return new Response(JSON.stringify({ error: e.message }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
