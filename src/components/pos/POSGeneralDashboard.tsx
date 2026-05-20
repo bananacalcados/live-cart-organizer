@@ -397,15 +397,18 @@ export function POSGeneralDashboard({ onBack }: Props) {
                   const goal = goalData.byStore.get(s.id) || 0;
                   const pct = goal > 0 ? Math.min(100, (s.revenue / goal) * 100) : 0;
                   const margin = s.revenue - s.cost - s.shippingCost;
+                  const marginPct = s.revenue > 0 ? (margin / s.revenue) * 100 : 0;
+                  const payments = paymentByStore.get(s.id) || [];
+                  const expanded = expandedStore === s.id;
                   return (
-                    <div key={s.id} className="bg-gradient-to-br from-zinc-800/80 to-zinc-900/80 border border-zinc-700/60 rounded-lg p-3 shadow-md hover:shadow-zinc-700/30 transition-shadow">
+                    <div key={s.id} className="bg-gradient-to-br from-zinc-800/80 to-zinc-900/80 border border-zinc-700/60 rounded-lg p-3 shadow-md">
                       <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 rounded-lg bg-gradient-to-br from-zinc-300 to-zinc-500 text-zinc-900 shadow-inner">
                           <Store className="h-4 w-4" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-zinc-100">{s.name}</h4>
-                          <p className="text-[11px] text-zinc-400">{s.sales} vendas · {s.items} itens · margem {BRL(margin)}</p>
+                          <p className="text-[11px] text-zinc-400">{s.sales} vendas · {s.items} itens · margem {BRL(margin)} ({marginPct.toFixed(1)}%)</p>
                         </div>
                         <div className="text-right">
                           <p className="text-lg font-bold text-emerald-400">{BRL(s.revenue)}</p>
@@ -423,6 +426,54 @@ export function POSGeneralDashboard({ onBack }: Props) {
                         <MiniStat label="% do total" value={`${totals.revenue > 0 ? ((s.revenue / totals.revenue) * 100).toFixed(1) : 0}%`} />
                       </div>
                       {goal > 0 && <Progress value={pct} className="h-1.5 mt-2 bg-zinc-800" />}
+
+                      <button
+                        type="button"
+                        onClick={() => setExpandedStore(expanded ? null : s.id)}
+                        className="mt-3 text-[11px] text-zinc-300 hover:text-white underline underline-offset-2"
+                      >
+                        {expanded ? "▾ Ocultar detalhamento" : "▸ Ver pagamentos e custos"}
+                      </button>
+
+                      {expanded && (
+                        <div className="mt-3 space-y-3">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold mb-1.5">Formas de pagamento</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                              {payments.length === 0 && <p className="text-[11px] text-zinc-500">Sem dados</p>}
+                              {payments.map(p => {
+                                const style = PAYMENT_STYLE[p.name] || PAYMENT_STYLE["Outros"];
+                                const Icon = style.icon;
+                                const pp = s.revenue > 0 ? (p.revenue / s.revenue) * 100 : 0;
+                                return (
+                                  <button
+                                    key={p.name}
+                                    type="button"
+                                    onClick={() => setPaymentModal({ open: true, bucket: p.name })}
+                                    className={`text-left bg-gradient-to-br ${style.gradient} border border-zinc-700/60 rounded p-2 hover:border-zinc-500 transition-colors`}
+                                  >
+                                    <div className="flex items-center gap-1 mb-0.5">
+                                      <Icon className="h-3 w-3 text-zinc-300" />
+                                      <span className="text-[9px] uppercase text-zinc-400 font-semibold truncate">{p.name}</span>
+                                    </div>
+                                    <p className="text-[12px] font-bold text-zinc-100">{BRL(p.revenue)}</p>
+                                    <p className="text-[9px] text-zinc-400">{p.sales} · {pp.toFixed(1)}%</p>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wide text-zinc-500 font-semibold mb-1.5">Custos e margem</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                              <MiniStat label="Custo produto" value={BRL(s.cost)} />
+                              <MiniStat label="Custo envio" value={BRL(s.shippingCost)} />
+                              <MiniStat label="Margem bruta" value={BRL(margin)} />
+                              <MiniStat label="% Margem" value={`${marginPct.toFixed(1)}%`} />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -433,6 +484,15 @@ export function POSGeneralDashboard({ onBack }: Props) {
       </ScrollArea>
 
       <POSGoalsManagerDialog open={goalsDialogOpen} onClose={() => setGoalsDialogOpen(false)} onSaved={load} />
+
+      <POSPaymentSalesModal
+        open={paymentModal.open}
+        onClose={() => setPaymentModal({ open: false, bucket: "" })}
+        title={`Vendas — ${paymentModal.bucket}`}
+        bucketName={paymentModal.bucket}
+        sales={modalSales}
+        storesById={storesById}
+      />
     </div>
   );
 }
