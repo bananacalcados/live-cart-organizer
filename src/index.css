@@ -66,10 +66,21 @@
     /* POS Brand Colors - Light theme */
     --pos-black: 0 0% 97%;
     --pos-yellow: 48 100% 50%;
-    --pos-orange: 25 100% 50%;
+    --pos-orange: 22 100% 52%;
     --pos-white: 0 0% 8%;
     --pos-yellow-muted: 48 85% 45%;
-    --pos-orange-muted: 25 85% 45%;
+    --pos-orange-muted: 22 85% 45%;
+
+    /* POS surfaces & effects (cascade pra todas as telas do PDV) */
+    --pos-sidebar: 0 0% 7%;
+    --pos-sidebar-hover: 0 0% 12%;
+    --pos-card: 0 0% 100%;
+    --pos-elevated: 0 0% 99%;
+    --pos-border: 22 30% 88%;
+    --gradient-pos-accent: linear-gradient(135deg, hsl(22 100% 55%) 0%, hsl(14 95% 50%) 100%);
+    --gradient-pos-sidebar: linear-gradient(180deg, hsl(0 0% 8%) 0%, hsl(0 0% 5%) 100%);
+    --shadow-pos-glow: 0 8px 24px -8px hsl(22 100% 52% / 0.45);
+    --shadow-pos-card: 0 4px 18px -6px hsl(0 0% 0% / 0.08), 0 1px 2px hsl(0 0% 0% / 0.04);
 
     /* Shadows */
     --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.05);
@@ -119,10 +130,15 @@
 
     --pos-black: 0 0% 6%;
     --pos-yellow: 48 100% 55%;
-    --pos-orange: 25 100% 55%;
+    --pos-orange: 22 100% 56%;
     --pos-white: 0 0% 95%;
     --pos-yellow-muted: 48 80% 45%;
-    --pos-orange-muted: 25 80% 45%;
+    --pos-orange-muted: 22 80% 45%;
+    --pos-sidebar: 0 0% 4%;
+    --pos-sidebar-hover: 0 0% 10%;
+    --pos-card: 0 0% 9%;
+    --pos-elevated: 0 0% 12%;
+    --pos-border: 0 0% 18%;
 
     --sidebar-background: 0 0% 4%;
     --sidebar-foreground: 45 10% 92%;
