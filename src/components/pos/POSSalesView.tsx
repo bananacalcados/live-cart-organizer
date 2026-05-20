@@ -733,6 +733,23 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
   const finalizeSale = async () => {
     if (cart.length === 0) return;
+
+    // 🚫 BLOQUEIO: não permite finalizar sem forma de pagamento
+    const hasMulti = useMultiPayment && multiPayments.length > 0;
+    const hasSingle = !useMultiPayment && !!selectedPayment;
+    if (!hasMulti && !hasSingle) {
+      toast.error("Selecione uma forma de pagamento antes de finalizar a venda.");
+      setStep("payment");
+      return;
+    }
+    if (useMultiPayment) {
+      const sumMulti = multiPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+      if (Math.abs(sumMulti - totalWithDiscount) > 0.01) {
+        toast.error(`Soma das formas de pagamento (R$ ${sumMulti.toFixed(2)}) não bate com o total (R$ ${totalWithDiscount.toFixed(2)}).`);
+        return;
+      }
+    }
+
     setFinalizingSale(true);
     try {
       let paymentMethodName = '';
