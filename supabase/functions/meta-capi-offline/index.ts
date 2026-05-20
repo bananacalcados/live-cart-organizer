@@ -255,10 +255,10 @@ Deno.serve(async (req) => {
     const fn = first ? await hashIfPresent(normalizeName(first)) : undefined;
     const ln = last ? await hashIfPresent(normalizeName(last)) : undefined;
 
-    // Cidade/estado/cep: prefere o do cliente; fallback pro da loja
-    const cityRaw = customer?.city || store?.city || "";
-    const stateRaw = customer?.state || store?.state || "";
-    const zipRaw = customer?.cep || store?.cep || "";
+    // Cidade/estado/cep: prefere o do cliente; depois inline da venda; depois shipping_address; fallback pro da loja
+    const cityRaw = customer?.city || sale.customer_city || shipAddr.city || store?.city || "";
+    const stateRaw = customer?.state || sale.customer_state || shipAddr.state || shipAddr.province_code || store?.state || "";
+    const zipRaw = customer?.cep || sale.customer_cep || shipAddr.cep || shipAddr.zip || store?.cep || "";
     const ct = cityRaw ? await hashIfPresent(normalizeCity(cityRaw)) : undefined;
     const st = stateRaw ? await hashIfPresent(normalizeState(stateRaw)) : undefined;
     const zp = zipRaw ? await hashIfPresent(normalizeZip(zipRaw)) : undefined;
