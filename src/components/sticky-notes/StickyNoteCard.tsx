@@ -23,6 +23,7 @@ export interface StickyNote {
   deadline: string | null;
   is_shared: boolean;
   is_done: boolean;
+  created_at?: string;
 }
 
 const PRESET_BG = ["#FEF3C7", "#FCA5A5", "#A7F3D0", "#BFDBFE", "#DDD6FE", "#FBCFE8", "#FDE68A", "#E5E7EB"];
