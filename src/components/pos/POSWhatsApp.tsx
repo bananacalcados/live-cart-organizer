@@ -227,7 +227,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [selectedSendNumberId, setSelectedSendNumberId] = useState<string | null>(null);
 
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
-  const { enrichConversations, finishConversation, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
+  const { enrichConversations, finishConversation, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 
@@ -367,6 +367,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         if (phonesWithoutPhotos.length > 0) {
           try {
             const zapiNum = metaNumbers.find(n => n.provider === 'zapi');
+            if (!zapiNum?.id) return;
             const resp = await supabase.functions.invoke("zapi-profile-picture", {
               body: { phones: phonesWithoutPhotos.slice(0, 20), whatsapp_number_id: zapiNum?.id },
             });
@@ -388,7 +389,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       }
     };
     load();
-  }, []);
+  }, [metaNumbers]);
 
   // Fetch profile pics for conversation phones not yet in chat_contacts
   const fetchedPhonesRef = useMemo(() => new Set<string>(), []);
@@ -398,9 +399,9 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       .filter(c => !c.isGroup && !contactPhotos[c.phone] && !fetchedPhonesRef.has(c.phone))
       .map(c => c.phone)
       .slice(0, 20);
-    if (missingPhones.length === 0) return;
-    missingPhones.forEach(p => fetchedPhonesRef.add(p));
     const zapiNum2 = metaNumbers.find(n => n.provider === 'zapi');
+    if (missingPhones.length === 0 || !zapiNum2?.id) return;
+    missingPhones.forEach(p => fetchedPhonesRef.add(p));
     supabase.functions.invoke("zapi-profile-picture", {
       body: { phones: missingPhones, whatsapp_number_id: zapiNum2?.id },
     }).then(resp => {
@@ -416,7 +417,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         }
       }
     }).catch(e => console.error("Error fetching conversation pics:", e));
-  }, [conversations, contactPhotos]);
+  }, [conversations, contactPhotos, metaNumbers]);
 
   // Load CRM data when phone is selected
   useEffect(() => {
@@ -609,18 +610,18 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   useEffect(() => {
     setConversations(prev => {
       if (prev.length === 0) return prev;
-      const normalizePhoneKey = (phone: string) => {
-        const digits = phone.replace(/\D/g, '');
-        return digits ? digits.slice(-8) : '';
-      };
       return prev.map(c => ({
         ...c,
-        isFinished: finishedPhones.has(normalizePhoneKey(c.phone)),
+        isFinished: (() => {
+          const phoneKey = normalizePhoneKey(c.phone);
+          const finishedAt = finishedAtByPhone.get(phoneKey);
+          return Boolean(finishedAt && c.lastMessageAt.getTime() <= new Date(finishedAt).getTime());
+        })(),
         isArchived: archivedPhones.has(c.phone),
         isAwaitingPayment: awaitingPaymentPhones.has(c.phone),
       }));
     });
-  }, [finishedPhones, archivedPhones, awaitingPaymentPhones]);
+  }, [finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones]);
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
     let query = supabase
