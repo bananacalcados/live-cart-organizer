@@ -396,6 +396,7 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
                 {selectedProductIds.map((id, idx) => {
                   const sp = shopifyProducts.find(p => p.id === id);
                   const d = productDiscounts[id];
+                  const activeType = d?.type || draftDiscountType[id];
                   const basePrice = Number(sp?.price || 0);
                   const finalPrice = applyDiscount(basePrice, d);
                   return (
