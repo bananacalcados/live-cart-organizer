@@ -194,6 +194,12 @@ export default function Home() {
           <p className="mt-1" style={{ color: "hsl(0 0% 55%)" }}>Selecione um módulo para começar</p>
         </div>
 
+        {allowedModules?.includes("admin") && (
+          <div className="mb-10">
+            <StickyNotesBoard />
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {allowedModules === null ? (
             <div className="col-span-full flex justify-center py-12">
@@ -221,12 +227,6 @@ export default function Home() {
             </Card>
           ))}
         </div>
-
-        {allowedModules?.includes("admin") && (
-          <div className="mt-10">
-            <StickyNotesBoard />
-          </div>
-        )}
       </main>
     </div>
   );
