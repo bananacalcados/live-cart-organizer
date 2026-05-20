@@ -1254,26 +1254,54 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   <Button onClick={printGift} variant="outline" className="gap-1 h-10 text-xs border-amber-300 text-amber-800 hover:bg-amber-50">
                     🎁 Cupom de Troca
                   </Button>
-                  <Button
-                    onClick={handleEmitOrPrintFiscal}
-                    disabled={emittingNfce || (!!fiscalDoc?.status && ['authorized','autorizada','autorizado'].includes(String(fiscalDoc.status).toLowerCase()) && !fiscalDoc?.danfe_url) || (fiscalDoc?.status === 'pending' || fiscalDoc?.status === 'pending_sefaz')}
-                    className="gap-1 h-10 text-xs col-span-2 bg-blue-600 text-white hover:bg-blue-700 font-bold"
-                  >
-                    {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                    {(() => {
-                      const tipo = sale.sale_type === 'online' ? 'NF-e' : 'NFC-e';
-                      const status = String(fiscalDoc?.status || '').toLowerCase();
-                      if (fiscalDoc?.danfe_url) return `Baixar / Imprimir ${tipo}`;
-                      if (['authorized','autorizada','autorizado'].includes(status)) return 'Carregando DANFE…';
-                      if (status === 'pending') return `Emitindo ${tipo}…`;
-                      if (status === 'pending_sefaz') return `Em contingência (SEFAZ off)`;
-                      if (status === 'rejected') return `Reemitir ${tipo}`;
-                      return `Emitir ${tipo}`;
-                    })()}
-                  </Button>
-                </div>
+                  {(() => {
+                    const status = String(fiscalDoc?.status || '').toLowerCase();
+                    const isAuthorized = ['authorized','autorizada','autorizado'].includes(status);
+                    const isPending = status === 'pending' || status === 'pending_sefaz';
+                    const tipoEmitido = fiscalDoc?.numero ? (sale.sale_type === 'online' ? 'NF-e' : 'NFC-e') : '';
 
-                {fiscalDoc?.status === 'rejected' && (
+                    if (isAuthorized || isPending) {
+                      return (
+                        <Button
+                          onClick={() => handleEmitOrPrintFiscal()}
+                          disabled={emittingNfce || (isAuthorized && !fiscalDoc?.danfe_url) || isPending}
+                          className="gap-1 h-10 text-xs col-span-2 bg-blue-600 text-white hover:bg-blue-700 font-bold"
+                        >
+                          {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                          {fiscalDoc?.danfe_url ? `Baixar / Imprimir ${tipoEmitido}`
+                            : isAuthorized ? 'Carregando DANFE…'
+                            : status === 'pending_sefaz' ? 'Em contingência (SEFAZ off)'
+                            : `Emitindo ${tipoEmitido}…`}
+                        </Button>
+                      );
+                    }
+
+                    // Sem nota autorizada — oferece ambas as opções (NF-e e NFC-e)
+                    const isRejected = status === 'rejected';
+                    return (
+                      <>
+                        <Button
+                          onClick={() => handleEmitOrPrintFiscal('nfe')}
+                          disabled={emittingNfce}
+                          className="gap-1 h-10 text-xs bg-indigo-600 text-white hover:bg-indigo-700 font-bold"
+                        >
+                          {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                          {isRejected ? 'Reemitir NF-e' : 'Emitir NF-e'}
+                        </Button>
+                        <Button
+                          onClick={() => handleEmitOrPrintFiscal('nfce')}
+                          disabled={emittingNfce}
+                          className="gap-1 h-10 text-xs bg-blue-600 text-white hover:bg-blue-700 font-bold"
+                        >
+                          {emittingNfce ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                          {isRejected ? 'Reemitir NFC-e' : 'Emitir NFC-e'}
+                        </Button>
+                        <p className="col-span-2 text-[10px] text-gray-500 -mt-1">
+                          💡 <strong>NF-e</strong> para vendas online/Live (modelo 55) · <strong>NFC-e</strong> para venda presencial (modelo 65)
+                        </p>
+                      </>
+                    );
+                  })()}
                   <div className="rounded-md border border-red-300 bg-red-50 p-2.5 text-[11px] text-red-900 space-y-1">
                     <p className="font-bold">❌ NFC-e rejeitada pela SEFAZ</p>
                     <p className="text-red-800/90">
