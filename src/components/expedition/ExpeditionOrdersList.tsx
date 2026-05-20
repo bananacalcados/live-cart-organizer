@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { openFiscalDocument } from '@/lib/openFiscalDocument';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -693,8 +694,12 @@ function OrderRow({ order, isExpanded, onToggle, onAdvance, onRefresh }: {
                   </Button>
                 )}
                 {nfeDoc?.danfe_url && (
-                  <Button asChild size="sm" variant="outline" className="gap-2">
-                    <a href={nfeDoc.danfe_url} target="_blank" rel="noreferrer"><Printer className="h-4 w-4" /> Imprimir DANFE</a>
+                  <Button size="sm" variant="outline" className="gap-2" onClick={() => {
+                    void openFiscalDocument(nfeDoc.danfe_url!, { autoPrint: true }).catch((e) => {
+                      toast.error(e?.message || 'Erro ao abrir DANFE');
+                    });
+                  }}>
+                    <Printer className="h-4 w-4" /> Imprimir DANFE
                   </Button>
                 )}
                 {nfeDoc?.xml_url && (
