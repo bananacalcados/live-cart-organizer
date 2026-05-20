@@ -103,6 +103,72 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [showSendTemplate, setShowSendTemplate] = useState(false);
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
 
+  // Live filter (clientes de Lives / eventos)
+  const [liveFilterActive, setLiveFilterActive] = useState(false);
+  const [liveStageMap, setLiveStageMap] = useState<Record<string, { stageTitle: string; eventName?: string }>>({});
+
+  // Load live customers (phones from db_orders of active events of this store) with their kanban stage
+  useEffect(() => {
+    let cancelled = false;
+    const loadLive = async () => {
+      try {
+        const { STAGES } = await import("@/types/order");
+        const stageMap = Object.fromEntries(STAGES.map(s => [s.id, s.title]));
+
+        const { data: events } = await supabase
+          .from("events")
+          .select("id, name, is_active, default_store_id, channel")
+          .eq("is_active", true);
+        const eventList = (events || []).filter((e: any) =>
+          e.default_store_id === storeId ||
+          (e.channel || "").startsWith("pos_")
+        );
+        if (eventList.length === 0) { if (!cancelled) setLiveStageMap({}); return; }
+        const eventIds = eventList.map((e: any) => e.id);
+        const eventNameById = Object.fromEntries(eventList.map((e: any) => [e.id, e.name]));
+
+        const { data: orders } = await supabase
+          .from("orders")
+          .select("event_id, stage, updated_at, customer:customers(whatsapp)")
+          .in("event_id", eventIds)
+          .order("updated_at", { ascending: false })
+          .limit(1000);
+
+        const map: Record<string, { stageTitle: string; eventName?: string }> = {};
+        for (const o of (orders || []) as any[]) {
+          const ph = o.customer?.whatsapp;
+          if (!ph) continue;
+          const digits = String(ph).replace(/\D/g, "");
+          if (digits.length < 8) continue;
+          const key = digits.slice(-8);
+          if (map[key]) continue; // first (most recent) wins
+          map[key] = {
+            stageTitle: stageMap[o.stage] || o.stage || "Live",
+            eventName: eventNameById[o.event_id],
+          };
+        }
+        if (!cancelled) setLiveStageMap(map);
+      } catch (e) {
+        console.error("loadLive error", e);
+      }
+    };
+    loadLive();
+    return () => { cancelled = true; };
+  }, [storeId]);
+
+  // Helpers consumed by ConversationList
+  const livePhoneKey = (p: string) => String(p || "").replace(/\D/g, "").slice(-8);
+  const isLiveCustomer = (phone: string) => !!liveStageMap[livePhoneKey(phone)];
+  const liveStageByPhone = useMemo(() => {
+    const out: Record<string, { stageTitle: string; eventName?: string }> = {};
+    for (const c of conversations) {
+      const k = livePhoneKey(c.phone);
+      if (liveStageMap[k]) out[c.phone] = liveStageMap[k];
+    }
+    return out;
+  }, [conversations, liveStageMap]);
+  const liveCount = Object.keys(liveStageByPhone).length;
+
   // Quote/reply
   const [quotedMessage, setQuotedMessage] = useState<QuotedMessageData | null>(null);
 
@@ -1145,6 +1211,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             contactTagsMap={contactTagsMap}
             selectedTagFilters={selectedTagFilters}
             onSelectedTagFiltersChange={setSelectedTagFilters}
+            liveFilterActive={liveFilterActive}
+            onLiveFilterToggle={() => setLiveFilterActive(p => !p)}
+            liveCount={liveCount}
+            isLiveCustomer={isLiveCustomer}
+            liveStageMap={liveStageByPhone}
           />
         </div>
 
