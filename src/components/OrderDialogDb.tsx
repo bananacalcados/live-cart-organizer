@@ -1073,7 +1073,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 onCheckedChange={setPaidExternally}
               />
             </div>
-            {editingOrder && editingOrder.is_paid && (
+            {editingOrder && editingOrder.is_paid && !isPhysicalEvent && (
               <Button
                 type="button"
                 variant="outline"
@@ -1088,6 +1088,11 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 )}
                 Criar Pedido na Shopify
               </Button>
+            )}
+            {editingOrder && editingOrder.is_paid && isPhysicalEvent && (
+              <div className="text-xs text-center text-muted-foreground bg-secondary/40 rounded-md py-2 px-3">
+                Evento de loja física — pedido é enviado automaticamente para o PDV ao ser pago. Sem criação na Shopify.
+              </div>
             )}
           </div>
 
