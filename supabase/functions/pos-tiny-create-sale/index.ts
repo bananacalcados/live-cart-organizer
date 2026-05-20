@@ -259,6 +259,23 @@ serve(async (req) => {
     // If sale_id is provided, update existing sale instead of creating a new one
     let saleId = sale_id;
     if (sale_id) {
+      // Preserve current status when sale is already in a downstream lifecycle
+      // (e.g. pending_pickup for Live auto-routed orders). Only flip to
+      // completed/pending_sync for fresh sales that don't have such status yet.
+      const { data: currentSale } = await supabase
+        .from('pos_sales')
+        .select('status')
+        .eq('id', sale_id)
+        .maybeSingle();
+      const preserveStatuses = new Set([
+        'pending_pickup', 'pending_payment', 'paid', 'shipped', 'delivered',
+        'cancelled', 'refunded', 'pending_sefaz'
+      ]);
+      const shouldPreserve = currentSale?.status && preserveStatuses.has(currentSale.status);
+      const nextStatus = shouldPreserve
+        ? currentSale!.status
+        : (tinyFailed ? 'pending_sync' : 'completed');
+
       await supabase
         .from('pos_sales')
         .update({
@@ -269,7 +286,7 @@ serve(async (req) => {
           payment_method: payment_method_name || null,
           tiny_order_id: tinyOrderId ? String(tinyOrderId) : null,
           tiny_order_number: tinyOrderNumber ? String(tinyOrderNumber) : null,
-          status: tinyFailed ? 'pending_sync' : 'completed',
+          status: nextStatus,
         } as any)
         .eq('id', sale_id);
     } else {
