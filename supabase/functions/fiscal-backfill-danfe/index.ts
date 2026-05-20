@@ -8,6 +8,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function buildRenderableDanfeUrl(url: string | null | undefined) {
+  if (!url || !/\.html(?:$|[?#])/i.test(url)) return url || null;
+  const endpoint = new URL("/functions/v1/fiscal-render-document", Deno.env.get("SUPABASE_URL")!);
+  endpoint.searchParams.set("url", url);
+  return endpoint.toString();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   try {
@@ -54,7 +61,7 @@ Deno.serve(async (req) => {
           .upload(path, fileBytes, { contentType: ctype, upsert: true });
         if (!upErr) {
           const { data: pub } = supabase.storage.from("fiscal-documents").getPublicUrl(path);
-          updates.danfe_url = pub?.publicUrl || null;
+          updates.danfe_url = buildRenderableDanfeUrl(pub?.publicUrl || null);
         } else {
           console.error("upload", upErr);
         }
