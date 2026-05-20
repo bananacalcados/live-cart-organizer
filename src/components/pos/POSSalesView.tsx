@@ -812,6 +812,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
         const saleId = data?.sale_id;
 
+        // Persist crediário gateway when chosen
+        if (saleId && !useMultiPayment && selectedCrediarioGateway && (selectedPaymentName.toLowerCase().includes('crediário') || selectedPaymentName.toLowerCase().includes('crediario'))) {
+          try {
+            await supabase.from('pos_sales').update({ crediario_gateway: selectedCrediarioGateway } as any).eq('id', saleId);
+          } catch (e) { console.error('[crediario_gateway update]', e); }
+        }
+
+
+
         // Se for venda ONLINE: marca pos_sales pra aparecer na aba Envios
         if (saleId && saleType === 'online') {
           try {
