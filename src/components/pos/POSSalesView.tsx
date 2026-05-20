@@ -2072,8 +2072,6 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                       )}
                     </div>
                   )}
-                </>
-              ) : (
                   {selectedPaymentName.toLowerCase().includes('dinheiro') && (
                     <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
                       <Label className="text-pos-white">Valor recebido</Label>
