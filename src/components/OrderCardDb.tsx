@@ -820,7 +820,11 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       {/* Registration link / Shopify order button */}
       {order.products.length > 0 && (
         <div className="mt-2 space-y-1.5">
-          {hasRegistration ? (
+          {isPhysicalEvent ? (
+            <div className="w-full text-[11px] text-center text-muted-foreground bg-secondary/40 rounded-md py-1.5 px-2">
+              Evento de loja física — pedido vai automaticamente para o PDV ao ser pago.
+            </div>
+          ) : hasRegistration ? (
             <Button
               variant="default"
               size="sm"
