@@ -287,7 +287,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               <h3 className="text-sm font-semibold flex items-center gap-2 text-black/70">
                 <Store className="h-4 w-4" /> Vendas por Canal
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <ChannelCard
                   type="store"
                   title="Loja Física"
@@ -300,7 +300,14 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                   value={`R$ ${onlineRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
                   sub={`${onlineSalesCount} venda${onlineSalesCount !== 1 ? "s" : ""}`}
                 />
+                <ChannelCard
+                  type="store"
+                  title="Faturamento Live"
+                  value={`R$ ${liveRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                  sub={`${liveSalesCount} venda${liveSalesCount !== 1 ? "s" : ""}${totalRevenue > 0 ? ` (${Math.round(liveRevenue / totalRevenue * 100)}%)` : ""} · vindas de eventos`}
+                />
               </div>
+
             </div>
 
             {/* Progresso das Metas */}
