@@ -307,7 +307,7 @@ export function ConversationList({
             // Inject Live tab between Follow Up and Disparos
             if (tab.value === 'dispatch' && onLiveFilterToggle) {
               return (
-                <>
+                <span key={`${tab.value}-with-live`} className="contents">
                   <button
                     key="live-tab"
                     onClick={onLiveFilterToggle}
@@ -326,7 +326,7 @@ export function ConversationList({
                     )}
                   </button>
                   {node}
-                </>
+                </span>
               );
             }
             return node;
