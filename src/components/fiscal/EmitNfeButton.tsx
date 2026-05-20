@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, Loader2, Download, FileCode2, XCircle, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { SelectCompanyDialog } from './SelectCompanyDialog';
 import { extractEdgeError } from '@/lib/edgeFunctionError';
+import { openFiscalDocument } from '@/lib/openFiscalDocument';
 
 interface Props {
   /** Use either betaOrderId OR orderId. betaOrderId = expedition_beta_orders.id */
@@ -103,7 +104,11 @@ export function EmitNfeButton({ betaOrderId, orderId, onSuccess, size = 'sm' }: 
           <CheckCircle2 className="h-3 w-3" /> NF-e {doc.numero}
         </Badge>
         {doc.danfe_url && (
-          <Button size={size} variant="outline" className="gap-1" onClick={() => window.open(doc.danfe_url!, '_blank')}>
+          <Button size={size} variant="outline" className="gap-1" onClick={() => {
+            void openFiscalDocument(doc.danfe_url!, { autoPrint: true }).catch((e) => {
+              toast.error(e?.message || 'Erro ao abrir DANFE');
+            });
+          }}>
             <Download className="h-3 w-3" /> DANFE
           </Button>
         )}
