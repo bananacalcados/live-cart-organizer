@@ -176,6 +176,12 @@ export default function POS() {
     return <POSStoreSelector onSelect={setSelectedStore} />;
   }
 
+  if (selectedStore === "__general__") {
+    const { POSGeneralDashboard } = require("@/components/pos/POSGeneralDashboard");
+    return <POSGeneralDashboard onBack={() => setSelectedStore("")} />;
+  }
+
+
   // Mobile: show priority tabs in bottom bar, rest in "more" menu
   const primarySections = SECTIONS.filter(s => s.priority);
   const secondarySections = SECTIONS.filter(s => !s.priority);
