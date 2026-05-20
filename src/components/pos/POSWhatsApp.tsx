@@ -107,6 +107,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   // Live filter (pedidos da Live / eventos)
   const [liveFilterActive, setLiveFilterActive] = useState(false);
   const [liveStageMap, setLiveStageMap] = useState<Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string }>>({});
+  // Live ghost rows: live orders that don't have an existing conversation yet
+  const [liveGhostRows, setLiveGhostRows] = useState<Array<{ phone: string; name?: string; stageTitle: string; eventName?: string; orderId: string; eventId: string; updatedAt: string; whatsapp_number_id?: string | null }>>([]);
 
   // Load live customers (phones from db_orders of active events of this store) with their kanban stage
   useEffect(() => {
@@ -118,45 +120,59 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
         const { data: events } = await supabase
           .from("events")
-          .select("id, name, is_active, default_store_id, channel")
+          .select("id, name, is_active, default_store_id, channel, whatsapp_number_id")
           .eq("is_active", true);
         const eventList = (events || []).filter((e: any) =>
           e.default_store_id === storeId ||
           (e.channel || "").startsWith("pos_")
         );
-        if (eventList.length === 0) { if (!cancelled) setLiveStageMap({}); return; }
+        if (eventList.length === 0) { if (!cancelled) { setLiveStageMap({}); setLiveGhostRows([]); } return; }
         const eventIds = eventList.map((e: any) => e.id);
         const eventNameById = Object.fromEntries(eventList.map((e: any) => [e.id, e.name]));
+        const eventWnById: Record<string, string | null> = Object.fromEntries(eventList.map((e: any) => [e.id, e.whatsapp_number_id]));
 
         const { data: orders } = await supabase
           .from("orders")
-          .select("id, event_id, stage, updated_at, customer:customers(whatsapp)")
+          .select("id, event_id, stage, updated_at, customer:customers(name, whatsapp)")
           .in("event_id", eventIds)
           .order("updated_at", { ascending: false })
           .limit(1000);
 
         const map: Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string }> = {};
+        const ghosts: Array<{ phone: string; name?: string; stageTitle: string; eventName?: string; orderId: string; eventId: string; updatedAt: string; whatsapp_number_id?: string | null }> = [];
+        const seenKeys = new Set<string>();
         for (const o of (orders || []) as any[]) {
           const ph = o.customer?.whatsapp;
           if (!ph) continue;
           const digits = String(ph).replace(/\D/g, "");
           if (digits.length < 8) continue;
           const key = digits.slice(-8);
-          if (map[key]) continue; // first (most recent) wins
-          map[key] = {
+          if (seenKeys.has(key)) continue;
+          seenKeys.add(key);
+          const entry = {
             stageTitle: stageMap[o.stage] || o.stage || "Live",
             eventName: eventNameById[o.event_id],
             orderId: o.id,
             eventId: o.event_id,
           };
+          map[key] = entry;
+          const normalized = digits.startsWith("55") ? digits : `55${digits}`;
+          ghosts.push({
+            phone: normalized,
+            name: o.customer?.name,
+            ...entry,
+            updatedAt: o.updated_at,
+            whatsapp_number_id: eventWnById[o.event_id] || null,
+          });
         }
-        if (!cancelled) setLiveStageMap(map);
+        if (!cancelled) { setLiveStageMap(map); setLiveGhostRows(ghosts); }
       } catch (e) {
         console.error("loadLive error", e);
       }
     };
     loadLive();
-    return () => { cancelled = true; };
+    const id = setInterval(loadLive, 20000);
+    return () => { cancelled = true; clearInterval(id); };
   }, [storeId]);
 
   // Helpers consumed by ConversationList
@@ -168,9 +184,40 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       const k = livePhoneKey(c.phone);
       if (liveStageMap[k]) out[c.phone] = liveStageMap[k];
     }
+    for (const g of liveGhostRows) {
+      const k = livePhoneKey(g.phone);
+      if (liveStageMap[k] && !out[g.phone]) out[g.phone] = liveStageMap[k];
+    }
     return out;
-  }, [conversations, liveStageMap]);
-  const liveCount = Object.keys(liveStageByPhone).length;
+  }, [conversations, liveStageMap, liveGhostRows]);
+
+  // Ghost conversations: live orders whose phones aren't in real conversations.
+  // Injected only when liveFilterActive so they don't pollute other tabs.
+  const ghostConversations = useMemo<Conversation[]>(() => {
+    if (!liveFilterActive) return [];
+    const existingKeys = new Set(conversations.map(c => livePhoneKey(c.phone)));
+    return liveGhostRows
+      .filter(g => !existingKeys.has(livePhoneKey(g.phone)))
+      .map(g => ({
+        phone: g.phone,
+        lastMessage: `📦 ${g.stageTitle}${g.eventName ? ` · ${g.eventName}` : ''} — sem conversa ainda`,
+        lastMessageAt: new Date(g.updatedAt),
+        unreadCount: 0,
+        customerName: g.name,
+        isGroup: false,
+        hasUnansweredMessage: false,
+        whatsapp_number_id: g.whatsapp_number_id ?? null,
+        conversationStatus: 'not_started' as const,
+        conversationKey: `ghost:${g.phone}`,
+      }));
+  }, [liveFilterActive, liveGhostRows, conversations]);
+
+  const mergedConversations = useMemo<Conversation[]>(
+    () => (ghostConversations.length ? [...ghostConversations, ...conversations] : conversations),
+    [ghostConversations, conversations]
+  );
+
+  const liveCount = Object.keys(liveStageByPhone).length + ghostConversations.length;
 
   // Quote/reply
   const [quotedMessage, setQuotedMessage] = useState<QuotedMessageData | null>(null);
@@ -1188,8 +1235,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         )}>
           <ConversationList
             conversations={multiInstanceFilter.length > 0
-              ? conversations.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
-              : conversations}
+              ? mergedConversations.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
+              : mergedConversations}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onSelectConversation={handleSelectConversation}

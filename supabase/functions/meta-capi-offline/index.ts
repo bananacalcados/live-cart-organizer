@@ -163,6 +163,23 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Skip Shopify-sourced sales: those events are already sent by the site (browser Pixel/CAPI)
+    // or by the Live event module at checkout. Resending here would duplicate events.
+    if (sale.external_source === "shopify") {
+      await supabase.from("meta_capi_offline_log").upsert({
+        sale_id: saleId,
+        event_name: "Purchase",
+        event_id: `skipped_shopify_${saleId}`,
+        dataset_id: DATASET_ID,
+        status: "skipped",
+        error_message: "shopify source — event already sent by site/live module",
+      }, { onConflict: "sale_id,event_name" });
+      return new Response(
+        JSON.stringify({ ok: true, skipped: true, reason: "shopify_source" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // Idempotência: se já foi enviado com sucesso, retorna sem reenviar
     const { data: existingLog } = await supabase
       .from("meta_capi_offline_log")
