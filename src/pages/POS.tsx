@@ -28,7 +28,7 @@ import { POSSlowMovingProducts } from "@/components/pos/POSSlowMovingProducts";
 import { POSShipments } from "@/components/pos/POSShipments";
 import { POSSellerDashboard } from "@/components/pos/POSSellerDashboard";
 import { POSDashboard } from "@/components/pos/POSDashboard";
-import { POSOnlineSales } from "@/components/pos/POSOnlineSales";
+import { POSOnlineHub } from "@/components/pos/POSOnlineHub";
 import { POSCheckoutMonitor } from "@/components/pos/POSCheckoutMonitor";
 import { POSCustomer360 } from "@/components/pos/POSCustomer360";
 import { POSMetaPixelDashboard } from "@/components/pos/POSMetaPixelDashboard";
@@ -288,7 +288,7 @@ export default function POS() {
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
         
         {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} />}
-        {section === "online" && <POSOnlineSales storeId={selectedStore} sellers={sellers} />}
+        {section === "online" && <POSOnlineHub storeId={selectedStore} sellers={sellers} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
         {section === "pickups" && <POSPickupOrders storeId={selectedStore} />}
         {section === "meta-pixel" && (
