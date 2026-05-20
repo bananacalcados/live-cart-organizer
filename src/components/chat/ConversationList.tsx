@@ -410,24 +410,6 @@ export function ConversationList({
           </button>
         )}
 
-        {/* Live (events) filter */}
-        {onLiveFilterToggle && (
-          <button
-            onClick={onLiveFilterToggle}
-            className={cn(
-              "w-full flex items-center gap-2 px-2 py-1.5 rounded text-[10px] font-medium transition-colors",
-              liveFilterActive
-                ? "bg-fuchsia-500/20 text-fuchsia-500"
-                : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
-            )}
-          >
-            <Radio className="h-3 w-3" />
-            Clientes da Live
-            {(liveCount || 0) > 0 && (
-              <span className="ml-auto text-[9px] opacity-80">({liveCount})</span>
-            )}
-          </button>
-        )}
 
         {/* Stage filter */}
         <Select value={stageFilter} onValueChange={onStageFilterChange}>
