@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { applyDiscount, type DiscountMap, type ProductDiscount } from "@/lib/catalogDiscount";
 
 interface ProductVariantInfo {
   title: string;
@@ -37,6 +39,7 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
   const [catalogPageId, setCatalogPageId] = useState<string | null>(null);
   const [catalogSlug, setCatalogSlug] = useState<string | null>(null);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [productDiscounts, setProductDiscounts] = useState<DiscountMap>({});
   const [delaySeconds, setDelaySeconds] = useState(30);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -67,13 +70,14 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
 
         const { data: page } = await supabase
           .from("catalog_lead_pages")
-          .select("slug, selected_product_ids")
+          .select("slug, selected_product_ids, product_discounts")
           .eq("id", event.catalog_lead_page_id)
           .single();
 
         if (page) {
           setCatalogSlug((page as any).slug);
           setSelectedProductIds((page as any).selected_product_ids || []);
+          setProductDiscounts(((page as any).product_discounts as DiscountMap) || {});
         }
       } else {
         setDelaySeconds(event?.active_product_delay_seconds || 30);
@@ -93,6 +97,7 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
         (payload) => {
           const newIds = (payload.new as any).selected_product_ids || [];
           setSelectedProductIds(newIds);
+          setProductDiscounts(((payload.new as any).product_discounts as DiscountMap) || {});
         }
       )
       .subscribe();
@@ -233,6 +238,24 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
     await supabase.from("events").update({ active_product_delay_seconds: val } as any).eq("id", eventId);
   };
 
+  // Set/clear discount for a product — saves immediately for realtime push
+  const setDiscount = async (productId: string, discount: ProductDiscount | null) => {
+    if (!catalogPageId) return;
+    const next = { ...productDiscounts };
+    if (!discount || !discount.value || discount.value <= 0) {
+      delete next[productId];
+    } else {
+      next[productId] = discount;
+    }
+    const { error } = await supabase
+      .from("catalog_lead_pages")
+      .update({ product_discounts: next } as any)
+      .eq("id", catalogPageId);
+    if (error) { toast.error(error.message); return; }
+    setProductDiscounts(next);
+    toast.success(discount && discount.value > 0 ? "Desconto aplicado ao vivo! 🔥" : "Desconto removido");
+  };
+
   const copyLink = () => {
     if (!catalogSlug) return;
     const url = `${CHECKOUT_BASE_URL}/evento/${catalogSlug}`;
@@ -361,32 +384,74 @@ export function ActiveProductBar({ eventId, eventName }: ActiveProductBarProps) 
             </div>
           </div>
 
-          {/* Selected products (active first) */}
+          {/* Selected products (active first) — with discount controls */}
           {selectedProductIds.length > 0 && (
-            <div className="mb-3">
+            <div className="mb-3 max-h-[260px] overflow-auto pr-1">
               <Label className="text-xs text-muted-foreground mb-1 block">
                 Produtos no catálogo ({selectedProductIds.length}) — primeiro = ativo
               </Label>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="space-y-1">
                 {selectedProductIds.map((id, idx) => {
                   const sp = shopifyProducts.find(p => p.id === id);
+                  const d = productDiscounts[id];
+                  const basePrice = Number(sp?.price || 0);
+                  const finalPrice = applyDiscount(basePrice, d);
                   return (
-                    <Badge
+                    <div
                       key={id}
-                      variant={idx === 0 ? "default" : "secondary"}
-                      className="cursor-pointer gap-1 text-xs"
+                      className={`flex flex-wrap items-center gap-1.5 p-1.5 rounded-md border text-xs ${idx === 0 ? "border-amber-500/60 bg-amber-500/5" : "bg-card"}`}
                     >
-                      {idx === 0 && <Zap className="h-3 w-3" />}
-                      {sp?.title?.slice(0, 25) || id.split("/").pop()}
+                      <span className="w-5 text-center font-bold text-muted-foreground">
+                        {idx === 0 ? <Zap className="h-3 w-3 text-amber-500 mx-auto" /> : idx + 1}
+                      </span>
+                      {sp?.imageUrl && <img src={sp.imageUrl} className="w-7 h-7 rounded object-cover" />}
+                      <span className="flex-1 min-w-[120px] truncate font-medium">
+                        {sp?.title || id.split("/").pop()}
+                      </span>
+                      {sp && (
+                        <span className="text-[10px] text-muted-foreground">{fmt(basePrice)}</span>
+                      )}
+                      <Select
+                        value={d?.type || "none"}
+                        onValueChange={(v) => {
+                          if (v === "none") setDiscount(id, null);
+                          else setDiscount(id, { type: v as any, value: d?.value || 0 });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 w-[120px] text-[11px]">
+                          <SelectValue placeholder="Desconto" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sem desconto</SelectItem>
+                          <SelectItem value="percent">% off</SelectItem>
+                          <SelectItem value="fixed_off">R$ off</SelectItem>
+                          <SelectItem value="fixed_price">Preço final R$</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {d && d.type && (
+                        <Input
+                          type="number" min="0" step="0.01"
+                          defaultValue={d.value || ""}
+                          placeholder={d.type === "percent" ? "20" : d.type === "fixed_off" ? "30" : "50.00"}
+                          onBlur={(e) => setDiscount(id, { type: d.type, value: Number(e.target.value) || 0 })}
+                          onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                          className="h-7 w-20 text-[11px]"
+                        />
+                      )}
+                      {d && d.value > 0 && sp && (
+                        <span className="text-[11px] font-bold text-emerald-600">
+                          → {fmt(finalPrice)}
+                        </span>
+                      )}
                       {idx !== 0 && (
-                        <button onClick={() => boostProduct(id)} className="ml-0.5 hover:text-primary">
+                        <button onClick={() => boostProduct(id)} className="p-1 hover:text-primary" title="Tornar ativo">
                           <ArrowUp className="h-3 w-3" />
                         </button>
                       )}
-                      <button onClick={() => toggleProduct(id)} className="ml-0.5 hover:text-destructive">
+                      <button onClick={() => toggleProduct(id)} className="p-1 hover:text-destructive" title="Remover">
                         <X className="h-3 w-3" />
                       </button>
-                    </Badge>
+                    </div>
                   );
                 })}
               </div>
