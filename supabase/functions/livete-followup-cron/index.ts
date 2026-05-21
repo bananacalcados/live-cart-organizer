@@ -194,7 +194,22 @@ serve(async (req) => {
 
     console.log(`[livete-followup] Processing ${followups.length} followups, created ${created} new`);
 
+    // Safety: dedupe by (order_id || phone) so we never send more than one followup
+    // per recipient in the same cron run, even if duplicate rows exist.
+    const seenKeys = new Set<string>();
+
     for (const fu of followups) {
+      const dedupeKey = fu.order_id || `phone:${fu.phone}`;
+      if (seenKeys.has(dedupeKey)) {
+        // Deactivate stale duplicate so it stops firing
+        await supabase.from('livete_followups').update({
+          is_active: false, completed_at: now.toISOString(), updated_at: now.toISOString(),
+        }).eq('id', fu.id);
+        deactivated++;
+        console.log(`[livete-followup] ${fu.phone} duplicate followup deactivated`);
+        continue;
+      }
+      seenKeys.add(dedupeKey);
       // Check if order is now paid
       if (fu.order_id) {
         const { data: paidCheck } = await supabase.rpc('check_order_paid', { p_order_id: fu.order_id });
