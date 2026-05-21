@@ -3,6 +3,7 @@ import { MessageCircle, X, ChevronLeft, Phone, Users, Pencil, Check } from "luci
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useEventStore } from "@/stores/eventStore";
@@ -21,6 +22,7 @@ export function GlobalWhatsAppChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
+  const [waMsgTick, setWaMsgTick] = useState(0);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -130,18 +132,13 @@ export function GlobalWhatsAppChat() {
     };
 
     loadConversations();
+  }, [isOpen, orders, selectedPhone, selectedConvNumberId, customers, events, chatContacts, enrichConversations, metaNumbers, waMsgTick]);
 
-    const channel = supabase
-      .channel('global-whatsapp-chat-realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' }, () => {
-        loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_messages' }, () => loadConversations())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [isOpen, orders, selectedPhone, selectedConvNumberId, customers, events, chatContacts, enrichConversations, metaNumbers]);
+  // New WhatsApp messages: broadcast-based (postgres_changes on
+  // whatsapp_messages was removed to cut DB CPU).
+  useWaMessageBroadcast(() => {
+    if (isOpen) setWaMsgTick((t) => t + 1);
+  });
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
     // Load ALL messages for this phone across all instances so full history is visible

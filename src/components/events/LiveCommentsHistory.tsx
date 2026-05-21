@@ -1,5 +1,6 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -255,35 +256,31 @@ export function LiveCommentsHistory({ eventId }: Props) {
     if (handles.length > 0) loadDmStatus(handles);
   }, [comments, loadDmStatus]);
 
-  // Realtime: novas mensagens incoming do Instagram
-  useEffect(() => {
-    if (handleToIgId.size === 0) return;
-    const igIds = Array.from(handleToIgId.values());
-    const igToHandle = new Map<string, string>();
-    handleToIgId.forEach((id, h) => igToHandle.set(id, h));
+  // Realtime: novas mensagens incoming do Instagram (broadcast — postgres_changes
+  // foi removido de whatsapp_messages para reduzir CPU do banco).
+  // Mapa precisa ser estável entre renderizações pra o handler ler valor atual.
+  const handleToIgIdRef = useRef(handleToIgId);
+  handleToIgIdRef.current = handleToIgId;
 
-    const ch = supabase
-      .channel(`ig-incoming-${eventId}-${Date.now()}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "whatsapp_messages",
-      }, (payload) => {
-        const m = payload.new as any;
-        if (m.channel !== "instagram" || m.direction !== "incoming") return;
-        const handle = igToHandle.get(m.phone);
-        if (!handle) return;
+  useWaMessageBroadcast((payload) => {
+    if (payload?.direction !== "incoming") return;
+    const phone = payload?.phone;
+    if (!phone) return;
+    // Reverse lookup: ig_user_id -> handle
+    let matchedHandle: string | null = null;
+    handleToIgIdRef.current.forEach((id, h) => {
+      if (id === phone) matchedHandle = h;
+    });
+    if (!matchedHandle) return;
 
-        setLastIncomingByHandle(prev => {
-          const next = new Map(prev);
-          next.set(handle, m.created_at);
-          return next;
-        });
-        toast(`📩 @${handle} respondeu no Instagram`, { duration: 4000 });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [handleToIgId, eventId]);
+    setLastIncomingByHandle((prev) => {
+      const next = new Map(prev);
+      next.set(matchedHandle!, payload.created_at);
+      return next;
+    });
+    toast(`📩 @${matchedHandle} respondeu no Instagram`, { duration: 4000 });
+  });
+
 
   // Agrupa por usuário
   const userGroups = useMemo<UserGroup[]>(() => {

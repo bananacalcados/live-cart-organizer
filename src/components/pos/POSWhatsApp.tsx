@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
+import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { ConversationList } from "@/components/chat/ConversationList";
@@ -60,6 +61,7 @@ interface CrmCustomerData {
 export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const currentUserId = useCurrentUserId();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [waMsgTick, setWaMsgTick] = useState(0);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
@@ -588,22 +590,23 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     };
 
     loadConversations();
-
-    const channel = supabase
-      .channel("pos-whatsapp-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "whatsapp_messages" }, () => {
-        loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "whatsapp_messages" }, () => {
-        loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, filterByAssignment, mapRowsToConvs]);
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, filterByAssignment, mapRowsToConvs, waMsgTick]);
+
+  // New WhatsApp messages broadcast (postgres_changes removed for CPU).
+  useWaMessageBroadcast(() => {
+    setWaMsgTick((t) => t + 1);
+    if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
+  });
+
+  // Status (✓✓) refresh: refetch open chat every 15s.
+  useEffect(() => {
+    if (!selectedPhone) return;
+    const interval = setInterval(() => {
+      loadMessages(selectedPhone, selectedConvNumberId);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [selectedPhone, selectedConvNumberId]);
 
   // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
   // This handles cross-device realtime updates without disrupting the current UI

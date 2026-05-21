@@ -1,80 +1,84 @@
-# Plano E1-c — Trigger condicional no Realtime de `whatsapp_messages`
+# Plano A — Broadcast via trigger para `whatsapp_messages`
 
-## Respondendo direto suas perguntas
+## Objetivo
+Tirar `whatsapp_messages` da publication `supabase_realtime` (elimina 96% do WAL decoding dessa tabela) e substituir por broadcast nativo do Postgres via trigger + `realtime.send()`. Sem impacto visual no chegar de mensagens novas.
 
-### O que são os INSERTs que ficam no Realtime
-Toda vez que uma mensagem nova **entra ou sai**, o banco faz um `INSERT` (linha nova). Exemplos:
-- Pedro manda msg pro nosso WhatsApp → webhook salva via `INSERT`
-- Operador envia msg pro Luis → app salva via `INSERT`
-- IA (Jess/Bia) responde → `INSERT`
+## Como vai funcionar
 
-**Esses INSERTs continuam disparando Realtime normalmente.** É só o `UPDATE` (mudança em linha já existente) que vou bloquear — e mesmo assim, só quando o UPDATE é APENAS de status.
+```
+ANTES                                  DEPOIS
+─────                                  ──────
+INSERT/UPDATE → WAL decoder            INSERT → trigger → realtime.send()
+  → todos os clientes recebem            → canal "wa_msg_inserts"
+                                         → clientes recebem só INSERTs
+UPDATE status (×908k/dia)             UPDATE status → nada
+  → broadcast desperdiçado              (refetch leve quando chat aberto)
+```
 
-### Seu cenário: A com Luis, B com Pedro
-| Situação | Hoje | Depois (E1-c) |
+## Mudanças
+
+### 1. Migration (banco)
+- `ALTER PUBLICATION supabase_realtime DROP TABLE whatsapp_messages`
+- Criar função `notify_wa_message_insert()` que chama `realtime.send()` no canal `wa_msg_inserts` com payload mínimo (`id`, `phone`, `whatsapp_number_id`, `direction`, `created_at`)
+- Trigger `AFTER INSERT ON whatsapp_messages FOR EACH ROW`
+- Política RLS no `realtime.messages` permitindo authenticated escutar o canal
+
+### 2. Refator dos 11 arquivos do chat
+Trocar o padrão:
+```ts
+.on('postgres_changes', { event: 'INSERT', table: 'whatsapp_messages' }, refetch)
+.on('postgres_changes', { event: 'UPDATE', table: 'whatsapp_messages' }, refetch)
+```
+Por:
+```ts
+.on('broadcast', { event: 'wa_msg_insert' }, refetch)
+```
+
+Arquivos afetados:
+- `src/pages/Chat.tsx`
+- `src/components/GlobalWhatsAppChat.tsx`
+- `src/components/DashboardChatPanel.tsx`
+- `src/components/WhatsAppChat.tsx`
+- `src/components/expedition/SupportWhatsAppChat.tsx`
+- `src/components/pos/POSWhatsApp.tsx`
+- `src/components/pos/POSWhatsAppDashboard.tsx`
+- `src/components/pos/POSSalesView.tsx`
+- `src/components/live/LiveWhatsAppChatDialog.tsx`
+- `src/components/marketing/LeadWhatsAppDialog.tsx`
+- `src/components/events/InstagramDMChat.tsx` (verificar)
+
+### 3. Compensação dos UPDATEs perdidos (status ✓✓)
+Adicionar refetch leve de 15s **apenas na conversa atualmente aberta** (não na lista). Implementação: `setInterval` dentro do `useEffect` do componente que mostra mensagens da conversa ativa. Custo: ~1 query/15s por chat aberto vs. 908k broadcasts/dia.
+
+## Garantias de não quebrar nada
+
+| Função | Status | Por quê |
 |---|---|---|
-| Pedro manda msg, B com chat aberto na conversa do Pedro | Aparece na hora ✅ | **Aparece na hora ✅** (INSERT continua via Realtime) |
-| Pedro manda msg, B com chat fechado | Notificação + badge sobe | **Igual ✅** (INSERT chega ao listener da lista) |
-| Pedro manda msg, A vendo conversa do Luis | Conversa do Pedro sobe pro topo da lista | **Igual ✅** |
-| Operador C envia msg pro Pedro de outro PC | B vê a msg saindo na hora | **Igual ✅** (INSERT) |
-| Cliente leu nossa msg → ✓✓ azul | Atualiza em ~1s | Atualiza quando: abrir o chat, ou refetch automático a cada N segundos no chat ativo |
+| Msg nova chega instantânea (chat aberto) | ✅ Mantido | Broadcast INSERT chega em <1s |
+| Lista de conversas atualiza/reordena | ✅ Mantido | Mesmo broadcast |
+| Badge/notificação de não-lida | ✅ Mantido | Mesmo broadcast |
+| Múltiplos operadores vendo msg sair | ✅ Mantido | Broadcast no INSERT |
+| ✓✓ azul de "lida" | ⚠️ Atualiza em até 15s na conversa aberta | Refetch periódico |
+| Disparo em massa (broadcast/dispatch) | ✅ Zero impacto | Não depende de Realtime; só de tabelas próprias |
+| Automação Jess/Bia/Livete | ✅ Zero impacto | Funcionam via edge functions + webhooks, não Realtime |
+| Edição de msg (raríssima) | ⚠️ Não propaga via Realtime | Aparece ao reabrir conversa |
 
-**Sua preocupação:** ZERO impacto no "chegar msg nova sem precisar abrir". Tudo que aparece sem clicar continua aparecendo sem clicar. O único atraso é no indicador de leitura (✓✓ azul).
-
----
-
-## O que o trigger vai fazer (passo a passo)
-
-Hoje a publication realtime escuta TODA mudança na tabela. Vou trocar por uma regra que diz:
-
-```
-SE for INSERT → publica no Realtime (chat ganha msg nova)
-SE for DELETE → publica no Realtime (raro, mas mantém)
-SE for UPDATE:
-   SE o campo "message" mudou (edição de texto) → publica
-   SE o campo "error_message" mudou (falha) → publica
-   SENÃO (só status mudou) → NÃO publica
-```
-
-Implementação técnica: trigger `BEFORE UPDATE` com filtro + uso de `pg_logical_emit_message` OU criação de uma view/regra. Forma mais limpa no Supabase: **remover `whatsapp_messages` da publication padrão e criar publication própria com `WITH (publish = 'insert, delete')`** + se precisar de UPDATE de conteúdo, fazer trigger que reemite via tabela auxiliar.
-
-Vou usar a abordagem mais simples e segura: **publication seletiva por operação:**
+## Rollback (se algo der errado)
+1 migration reversa:
 ```sql
-ALTER PUBLICATION supabase_realtime DROP TABLE whatsapp_messages;
-CREATE PUBLICATION supabase_realtime_wm FOR TABLE whatsapp_messages 
-  WITH (publish = 'insert, delete');
+ALTER PUBLICATION supabase_realtime ADD TABLE whatsapp_messages;
+DROP TRIGGER notify_wa_msg_insert ON whatsapp_messages;
 ```
+E reverter os 11 arquivos (mantenho commits separados).
 
-Isso elimina 100% dos UPDATEs (incluindo edição de conteúdo). A edição de msg via `zapi-edit-message` é rara (raríssima) e o operador pode atualizar abrindo a conversa.
+## Plano de execução
+1. Criar migration (drop publication + trigger + RLS no realtime.messages) — pedir aprovação
+2. Refatorar os 11 arquivos
+3. Adicionar refetch de 15s na conversa ativa (1-2 lugares)
+4. Pedir pra você testar: abrir chat, mandar msg de outro número, ver se sobe na hora
+5. Monitorar CPU do banco por 30 min
 
-Se você quiser preservar edições em tempo real, uso variante com trigger que detecta se mudou `message`. Mais complexo, mas possível.
-
----
-
-## Ganho estimado
-
-- 908k UPDATEs / 1.385M writes = **65% do volume de eventos Realtime de `whatsapp_messages`**
-- `whatsapp_messages` = ~90% do tráfego Realtime total
-- **Redução esperada de CPU do banco: 55-60%**
-
----
-
-## Riscos e mitigações
-
-| Risco | Mitigação |
-|---|---|
-| Status ✓✓ não atualiza no chat aberto | Adicionar refetch leve (a cada 10s) APENAS quando há chat ativo aberto |
-| Edição de mensagem não aparece em tempo real | Aceitar (uso muito raro) ou usar variante com trigger |
-| Quebra do PDV | Zero — INSERT continua igual |
-| Quebra de automação/dispatch | Zero — backend escreve direto, não depende de Realtime |
-| Reverter | 1 comando: dropar publication nova, readicionar tabela na padrão |
-
----
-
-## O que vou fazer
-
-1. **Migration:** remover `whatsapp_messages` da publication padrão e criar publication própria só com INSERT+DELETE.
-2. **Validação:** monitorar logs por 10 min para confirmar que chat ainda recebe msgs novas.
-3. **Ajuste no chat (opcional, fase 2):** se o ✓✓ azul atrasar demais ao ponto de incomodar, adicionar refetch de 10s na conversa ativa.
-
-Posso seguir com isso?
+## Estimativa
+- Implementação: ~45 min
+- Janela de risco: 5 min após deploy (se algo quebrar, rollback é instantâneo)
+- Ganho esperado: **-55 a -60% CPU do banco**

@@ -27,6 +27,7 @@ import { POSCrossSellSuggestions } from "./POSCrossSellSuggestions";
 import { POSOrderVerification } from "./POSOrderVerification";
 import { POSReceiptUpload } from "./POSReceiptUpload";
 import { supabase } from "@/integrations/supabase/client";
+import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
 
@@ -214,9 +215,6 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
     const channel = supabase
       .channel("pos-dashboard-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "whatsapp_messages" }, () => {
-        debouncedLoad();
-      })
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_finished_conversations" }, () => {
         debouncedLoad();
       })
@@ -227,6 +225,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       supabase.removeChannel(channel);
     };
   }, [hasOpenRegister]);
+
+  // WhatsApp messages broadcast (postgres_changes removed for CPU).
+  useWaMessageBroadcast(() => {
+    if (!hasOpenRegister) return;
+    if (notifDebounceRef.current) clearTimeout(notifDebounceRef.current);
+    notifDebounceRef.current = setTimeout(loadNotifications, 5000);
+  });
+
 
   const loadNotifications = async () => {
     try {

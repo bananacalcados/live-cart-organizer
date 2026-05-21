@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useEventStore } from "@/stores/eventStore";
@@ -168,19 +169,22 @@ export function DashboardChatPanel() {
 
   useEffect(() => {
     loadConversations();
-    const channel = supabase
-      .channel("dashboard-chat-panel-rt")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "whatsapp_messages" }, () => {
-        loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "whatsapp_messages" }, () => {
-        loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
   }, [loadConversations, selectedPhone, selectedConvNumberId]);
+
+  // New WhatsApp messages broadcast (postgres_changes removed).
+  useWaMessageBroadcast(() => {
+    loadConversations();
+    if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
+  });
+
+  // Status (✓✓) refresh: lightweight refetch every 15s on the open chat.
+  useEffect(() => {
+    if (!selectedPhone) return;
+    const interval = setInterval(() => {
+      loadMessages(selectedPhone, selectedConvNumberId);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [selectedPhone, selectedConvNumberId]);
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
     // Load ALL messages for this phone across all instances so sidebar stays in sync with kanban card chats
