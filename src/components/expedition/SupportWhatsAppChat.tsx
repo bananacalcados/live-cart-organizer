@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useWaMessageBroadcast } from '@/hooks/useWaMessageBroadcast';
 import { useZapi } from '@/hooks/useZapi';
 import { useCurrentUserId } from '@/hooks/useCurrentUserId';
 import { toast } from 'sonner';
