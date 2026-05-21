@@ -15,6 +15,7 @@ import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
 import { InventoryHealthDashboard } from "@/components/inventory/InventoryHealthDashboard";
 import { InventoryAnalytics } from "@/components/inventory/InventoryAnalytics";
 import InventoryAIAnalysis from "@/components/inventory/InventoryAIAnalysis";
+import InventoryBulkActions from "@/components/inventory/InventoryBulkActions";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
