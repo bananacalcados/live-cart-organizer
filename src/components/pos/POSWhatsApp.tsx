@@ -589,22 +589,23 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     };
 
     loadConversations();
-
-    const channel = supabase
-      .channel("pos-whatsapp-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "whatsapp_messages" }, () => {
-        loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
-      })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "whatsapp_messages" }, () => {
-        loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, filterByAssignment, mapRowsToConvs]);
+
+  // New WhatsApp messages broadcast (postgres_changes removed for CPU).
+  useWaMessageBroadcast(() => {
+    loadConversationsRef.current?.();
+    if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
+  });
+
+  // Status (✓✓) refresh: refetch open chat every 15s.
+  useEffect(() => {
+    if (!selectedPhone) return;
+    const interval = setInterval(() => {
+      loadMessages(selectedPhone, selectedConvNumberId);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [selectedPhone, selectedConvNumberId]);
 
   // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
   // This handles cross-device realtime updates without disrupting the current UI
