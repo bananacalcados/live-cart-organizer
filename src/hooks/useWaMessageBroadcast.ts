@@ -1,6 +1,19 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { toast } from "sonner";
+
+// Mapa local de nomes amigáveis das instâncias (debug temp)
+const INSTANCE_LABELS: Record<string, string> = {
+  "820ce69b-43f7-4ae2-99c5-fdc0b77def5e": "Zapi Centro",
+  "72e1beb5-8b35-4158-8ae0-3e9efa306de0": "Zapi Pérola",
+  "ae453235-50e1-4ef6-8a87-8c8a77b2b440": "Meta Pérola",
+  "c01d2777-df4c-4746-9433-d8c97c57d529": "Meta Centro",
+  "adaa3859-3123-47d6-9e98-47a9ae616c8c": "Zoppy",
+  "e3e971ee-cd93-4420-8b2e-c80ecfc1a48d": "Banana",
+  "08168ac6-eda8-4676-b918-d56c3642fc7b": "Datacrazy",
+  "0ba63cd9-2c14-41e3-91ef-6291c5396014": "Ravena",
+};
 
 /**
  * Payload broadcasted by the AFTER INSERT trigger on whatsapp_messages.
@@ -26,14 +39,15 @@ function ensureChannel() {
     .channel("wa_msg_inserts")
     .on("broadcast", { event: "wa_msg_insert" }, (msg: any) => {
       const payload = (msg?.payload ?? {}) as WaMessageInsertPayload;
-      // TEMP DEBUG — remover após validar Meta Centro
-      console.log("[wa_msg_inserts] broadcast received", {
-        id: payload.id,
-        phone: payload.phone,
-        whatsapp_number_id: payload.whatsapp_number_id,
-        direction: payload.direction,
-        listeners: listeners.size,
+      // TEMP DEBUG visual — remover após validar Meta Centro
+      const instanceLabel = payload.whatsapp_number_id
+        ? INSTANCE_LABELS[payload.whatsapp_number_id] || payload.whatsapp_number_id.slice(0, 8)
+        : "sem-instância";
+      toast.success(`📨 Broadcast: ${instanceLabel}`, {
+        description: `${payload.direction} • ${payload.phone?.slice(-8) ?? "?"}`,
+        duration: 4000,
       });
+      console.log("[wa_msg_inserts] broadcast received", payload);
       listeners.forEach((fn) => {
         try {
           fn(payload);
@@ -44,6 +58,9 @@ function ensureChannel() {
     })
     .subscribe((status) => {
       console.log("[wa_msg_inserts] channel status:", status);
+      if (status === "SUBSCRIBED") {
+        toast.info("🟢 Canal broadcast conectado", { duration: 2500 });
+      }
     });
 }
 
