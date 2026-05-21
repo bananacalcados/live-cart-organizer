@@ -2758,6 +2758,7 @@ export type Database = {
           lifetime_points: number
           store_id: string
           total_points: number
+          unified_customer_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2770,6 +2771,7 @@ export type Database = {
           lifetime_points?: number
           store_id: string
           total_points?: number
+          unified_customer_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2782,6 +2784,7 @@ export type Database = {
           lifetime_points?: number
           store_id?: string
           total_points?: number
+          unified_customer_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2815,6 +2818,7 @@ export type Database = {
           segment_id: string | null
           source: string
           store_id: string | null
+          unified_customer_id: string | null
           updated_at: string
         }
         Insert: {
@@ -2837,6 +2841,7 @@ export type Database = {
           segment_id?: string | null
           source?: string
           store_id?: string | null
+          unified_customer_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -2859,6 +2864,7 @@ export type Database = {
           segment_id?: string | null
           source?: string
           store_id?: string | null
+          unified_customer_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -14595,6 +14601,18 @@ export type Database = {
       extract_base_product_name: { Args: { p_name: string }; Returns: string }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       extract_phone_suffix8: { Args: { phone_input: string }; Returns: string }
+      find_or_create_unified_customer: {
+        Args: {
+          p_cpf?: string
+          p_email?: string
+          p_ig_user_id?: string
+          p_instagram?: string
+          p_name?: string
+          p_phone?: string
+          p_source?: string
+        }
+        Returns: string
+      }
       format_customer_code: { Args: { seq_val: number }; Returns: string }
       generate_ean13_barcode: { Args: never; Returns: string }
       generate_ean13_internal: { Args: never; Returns: string }
@@ -14932,6 +14950,10 @@ export type Database = {
         }[]
       }
       next_product_sku_root: { Args: never; Returns: string }
+      norm_cpf: { Args: { raw: string }; Returns: string }
+      norm_email: { Args: { raw: string }; Returns: string }
+      norm_instagram: { Args: { raw: string }; Returns: string }
+      norm_phone_br: { Args: { raw: string }; Returns: string }
       normalize_address_key: {
         Args: { p_cep: string; p_number: string }
         Returns: string
@@ -14943,6 +14965,8 @@ export type Database = {
           new_size: string
         }[]
       }
+      phone_ddd: { Args: { e164: string }; Returns: string }
+      phone_suffix8: { Args: { e164: string }; Returns: string }
       product_name_key: { Args: { p_name: string }; Returns: string }
       recalc_customer_metrics: {
         Args: { p_customer_id: string }

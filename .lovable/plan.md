@@ -1,150 +1,101 @@
-# Unificação de Clientes — Mapa de Migração
+# Fase 4 — Migração do App para `customers_unified`
 
-## 1. Resposta rápida sobre o "ID humano"
+## Escopo real medido
 
-Sim, vale criar um **código sequencial humano** (`customer_code`, ex.: `BC-000001`) **além do `id` UUID interno**:
+138 referências a tabelas legadas espalhadas pelo código:
 
-- `id` (UUID) → chave técnica usada em todas as foreign keys. Indexação rápida, gerada pelo banco.
-- `customer_code` (TEXT único, ex.: `BC-000123`) → usado por operadores no PDV/atendimento ("cliente BC-512"), aparece em etiquetas, NF-e, fichas impressas.
-
-Não afeta performance — apenas mais um índice único. Ganha muito em usabilidade.
-
-## 2. Tabelas envolvidas (12 fontes → 1 destino)
-
-| Tabela atual | Linhas | Destino |
+| Tabela legada | Arquivos | Risco |
 |---|---:|---|
-| `customers` | 1.390 | merge → `customers_unified` |
-| `pos_customers` | 1.507 | merge → `customers_unified` |
-| `customer_registrations` | 389 | merge (endereço) → `customers_unified` |
-| `chat_contacts` | 12.980 | merge (nome/foto) → `customers_unified` |
-| `instagram_user_links` | 710 | merge (instagram) → `customers_unified` |
-| `marketing_contacts` | 75.389 | dedupe → `customers_unified` + `customer_list_memberships` |
-| `zoppy_customers` | 25.315 | merge (RFM, compras) → `customers_unified` |
-| `ravena_customers` | 2.457 | merge (RFM legado) → `customers_unified` |
-| `customer_loyalty_points` | 1.193 | manter tabela, trocar `customer_phone` por `customer_id` |
-| `customer_prizes` | 8 | manter tabela, trocar `customer_phone` por `customer_id` |
-| `email_contacts` | 0 | descartar (vazia) |
-| Leads (`lp_leads`, `ad_leads`, `campaign_leads`, `event_leads`, `catalog_lead_registrations`) | ~13.880 | **mantidos como estão** (não viram clientes até converter) |
+| `customers` | 34 | alto (CRM, lives, chat, automações) |
+| `pos_customers` | 33 | alto (PDV, fichas, vendas) |
+| `zoppy_customers` | 28 | médio (RFM, dashboards, broadcasts) |
+| `customer_registrations` | 17 | médio (checkout) |
+| `chat_contacts` | 12 | alto (tudo do WhatsApp) |
+| `instagram_user_links` | 4 | baixo |
+| `customer_loyalty_points` | 3 | baixo (FK só) |
+| `marketing_contacts` | 3 | médio (segmentação) |
+| `ravena_customers` | 2 | baixo (legado) |
+| `customer_prizes` | 5 | baixo (FK só) |
 
-## 3. Estrutura da `customers_unified`
+Migrar tudo de uma vez é receita pra parar o ERP. Vou em **5 ondas independentes**, cada uma testável e revertível.
+
+## Estratégia: "compatibilidade dupla" durante a migração
+
+Antes de tocar uma linha de código de leitura, crio uma **camada de espelhamento via trigger**:
 
 ```text
-customers_unified
-├── id                    UUID PK
-├── customer_code         TEXT UNIQUE  (BC-000001, sequencial)
-├── tenant_id             UUID         (multi-tenant)
-│
-├── IDENTIDADE
-│   ├── name              TEXT
-│   ├── cpf               TEXT UNIQUE NULL
-│   ├── email             TEXT
-│   ├── birth_date        DATE
-│   ├── gender            TEXT
-│   │
-├── CONTATO
-│   ├── phone_e164        TEXT         (55DDD9XXXXXXXX)
-│   ├── phone_suffix8     TEXT  INDEX  (últimos 8 dígitos — match cross-source)
-│   ├── previous_phones   TEXT[]
-│   ├── instagram_handle  TEXT  INDEX
-│   ├── instagram_user_id TEXT
-│   │
-├── ENDEREÇO
-│   ├── cep, address, address_number, complement, neighborhood, city, state
-│   │
-├── PERFIL COMERCIAL
-│   ├── shoe_size, preferred_style, age_range
-│   ├── has_children, children_age_range
-│   │
-├── MÉTRICAS (atualizadas por trigger em `orders` + `pos_sales`)
-│   ├── total_orders          INT
-│   ├── total_spent           NUMERIC
-│   ├── avg_ticket            NUMERIC
-│   ├── total_items           INT
-│   ├── first_purchase_at     TIMESTAMPTZ
-│   ├── last_purchase_at      TIMESTAMPTZ
-│   │
-├── SEGMENTAÇÃO
-│   ├── rfm_segment, rfm_r, rfm_f, rfm_m
-│   ├── region_type (GV / Online), ddd
-│   ├── tags TEXT[]
-│   │
-├── STATUS
-│   ├── is_banned, ban_reason
-│   ├── live_cancellation_count
-│   │
-└── created_at, updated_at, last_seen_at
-
-customer_list_memberships
-├── customer_id  → customers_unified.id
-├── list_id      → marketing_lists.id
-└── added_at
-
--- "Últimas compras" / "produtos comprados" NÃO viram colunas.
--- Vêm de JOIN com a tabela `orders` (source of truth).
+INSERT/UPDATE em customers, pos_customers, chat_contacts, zoppy_customers
+                              │
+                              ▼
+              trigger AFTER INSERT/UPDATE
+                              │
+                              ▼
+              UPSERT em customers_unified
+                (matching por CPF > phone_suffix8 > instagram > email)
 ```
 
-**Chave de deduplicação (cascata):**
-1. CPF (limpo) → match 100%
-2. `phone_suffix8` + DDD → match forte
-3. `phone_suffix8` apenas → match provável
-4. email normalizado → match secundário
-5. `instagram_handle` normalizado → match auxiliar
+Assim o app antigo continua funcionando e `customers_unified` fica sempre fresca enquanto eu refatoro. Sem essa rede, qualquer cliente novo cadastrado durante a refatoração some.
 
-## 4. Plano de execução em 6 fases
+## Ondas de refatoração
 
-**Fase 1 — Criar a tabela e índices**
-- Criar `customers_unified` + sequence `customer_code_seq`
-- Índices: `id`, `customer_code`, `cpf`, `phone_suffix8`, `phone_e164`, `instagram_handle`, `email`, `tenant_id`
-- Criar `customer_list_memberships`
+### Onda 0 — Infra de compatibilidade (1 migração)
+1. Triggers de espelhamento em `customers`, `pos_customers`, `chat_contacts`, `zoppy_customers`, `customer_registrations`, `instagram_user_links` → upsert em `customers_unified` usando a mesma cascata de match do backfill.
+2. Helper SQL `find_or_create_unified_customer(cpf, phone, instagram, email, name)` → reusado por triggers e edge functions.
+3. Adicionar `unified_customer_id UUID` em `customer_loyalty_points` e `customer_prizes` (nullable, sem FK ainda) + backfill.
 
-**Fase 2 — Backfill (ETL em ordem de "qualidade do dado")**
-1. `zoppy_customers` (rico em compras + RFM) → semeia a base
-2. `pos_customers` (endereço completo + perfil) → merge por CPF/phone
-3. `customer_registrations` (endereço de checkout) → merge por CPF
-4. `customers` (instagram + ban) → merge por instagram/phone
-5. `instagram_user_links` → completa `instagram_user_id`
-6. `ravena_customers` (legado) → merge por phone
-7. `chat_contacts` (12k) → cria clientes só se phone novo, senão atualiza nome/foto
-8. `marketing_contacts` (75k) → dedupe por phone, criar membership por `list_id`
+### Onda 1 — Hook + store de leitura unificada (sem quebrar nada)
+- Criar `src/stores/unifiedCustomerStore.ts` (novo) que lê de `customers_unified`.
+- Criar `useUnifiedCustomer(phone|cpf|instagram)` hook.
+- `customerStore` antigo permanece, mas vira **proxy**: lê de `customers_unified` e mapeia para o shape `DbCustomer` que os componentes esperam. Zero alteração nos componentes que consomem `customerStore`.
+- **Resultado: tela do CRM, ban list, lives e PDV já passam a mostrar a base unificada sem refatorar UI.**
 
-Roda como edge function paginada (1000/lote) com log de matches/criações/conflitos.
+### Onda 2 — Escrita do PDV e Checkout (origem de cadastros)
+Refatorar quem **cria** cliente para gravar direto em `customers_unified` (e manter espelho temporário em `pos_customers`/`customer_registrations` para compatibilidade):
+- `src/components/pos/CustomerForm.tsx` + `customerFormUtils`
+- `src/components/pos/POSWhatsApp.tsx` (atribuição dinâmica)
+- Edge functions: `pos-create-customer`, `transparent-checkout-*`, `livete-*-create-order`
+- Lives: criação automática via Instagram
 
-**Fase 3 — Triggers de métricas**
-- Trigger em `orders` (e `pos_sales`) que recalcula `total_orders`, `total_spent`, `avg_ticket`, `last_purchase_at` no cliente afetado.
+### Onda 3 — CRM / Broadcasts / Segmentação (leitura pesada)
+- `src/components/management/CrmDuplicates.tsx` → some, deixa de fazer sentido.
+- Broadcasts (`broadcast-*` edge functions) passam a filtrar em `customers_unified` + `customer_list_memberships`.
+- RFM/segmentação lê de `customers_unified` (campos já existem).
+- `useCrmPhoneLookup`, `useSupportPhones`, `useConversationEnrichment` apontam para unified.
 
-**Fase 4 — Refatorar leitura/escrita do código**
-- `customerStore`, `customerFormUtils`, CRM, Broadcasts, Lives, Automações, Checkout, POS → todos passam a ler/escrever em `customers_unified`.
-- Tabelas dependentes (`customer_loyalty_points`, `customer_prizes`, `customer_registrations.customer_id`) ganham FK para `customers_unified.id`.
+### Onda 4 — Métricas (Fase 3 do plano original, encaixa aqui)
+- Triggers em `orders`, `pos_sales`, `event_orders` recalculam `total_orders`, `total_spent`, `avg_ticket`, `last_purchase_at` em `customers_unified`.
+- Substitui o trabalho que `zoppy_customers` fazia de fora.
 
-**Fase 5 — Período de observação (7 dias)**
-- Tabelas antigas ficam **read-only** (revoke INSERT/UPDATE).
-- Logs comparam leituras das novas vs antigas. Qualquer divergência é alertada.
+### Onda 5 — FKs e limpeza preparatória
+- `customer_loyalty_points.unified_customer_id` e `customer_prizes.unified_customer_id` ganham FK NOT NULL → `customers_unified.id`.
+- `customer_registrations` ganha FK `unified_customer_id`.
+- Desliga triggers de espelhamento (já não tem mais escrita nas legadas porque o código todo migrou).
+- **Tabelas antigas viram read-only** (revoke INSERT/UPDATE) → começa a Fase 5 (observação).
 
-**Fase 6 — Limpeza**
-- Drop: `email_contacts` (vazia), `ravena_customers` (legado integrado), `marketing_contacts` (substituída por unified + memberships), `instagram_user_links` (campos absorvidos).
-- Mantidas mas reduzidas a "views legadas" durante 30 dias: `pos_customers`, `customers`, `zoppy_customers` (vira VIEW sobre `customers_unified` para compatibilidade temporária).
-- Após 30 dias: drop final das views.
+## Critério de "pronto" por onda
 
-## 5. Performance esperada
+Cada onda só fecha quando:
+1. Build limpo (sem warnings de tipo).
+2. Smoke test manual nas telas tocadas.
+3. Comparação de contagens: `customers_unified` cresce no mesmo ritmo que as legadas durante a janela de overlap.
 
-- ~28.000 clientes únicos estimados após dedupe (vs 120k registros somados hoje).
-- Tabela com ~40 colunas + 7 índices: queries em <10ms para qualquer lookup por CPF/phone/instagram.
-- Métricas (total_spent etc.) pré-calculadas via trigger evitam agregação ao vivo.
-- "Histórico de compras" via JOIN com `orders` — Postgres faz isso instantaneamente com índice em `orders.customer_id`.
+## O que entrego agora (este loop)
 
-## 6. Detalhes técnicos
+Apenas a **Onda 0** — triggers de espelhamento + helper SQL + colunas `unified_customer_id` em loyalty/prizes. Sem refatorar componente nenhum ainda.
 
-- Migração feita como **edge function `unify-customers-backfill`** com flag `--dry-run` para gerar relatório antes de gravar.
-- Cada cliente unificado guarda em `metadata` jsonb a lista de origens (`{from: ['zoppy:abc', 'pos:xyz']}`) para auditoria/rollback.
-- Código humano `BC-000001` formatado via função `format_customer_code(seq)` chamada por trigger BEFORE INSERT.
-- RLS por `tenant_id` já no momento da criação.
-- Tabelas de leads **não** são tocadas — só ganham coluna opcional `converted_customer_id` para quando virarem cliente.
+Por quê: é a base que torna o resto seguro. Sem isso, qualquer onda seguinte corre risco de perder cadastros novos.
 
-## 7. O que entrego primeiro
+Depois que você validar a Onda 0 (testando criar 1 cliente no PDV e ver aparecer em `customers_unified`), abro a Onda 1.
 
-Sigo essa ordem incremental:
-1. Migration: cria `customers_unified` + `customer_list_memberships` + sequence + triggers de código.
-2. Edge function backfill em modo **dry-run** → relatório (quantos únicos, quantos matches, quantos conflitos) antes de qualquer escrita.
-3. Você revisa o relatório → autoriza a execução real.
-4. Refactor das telas/stores uma por vez (POS → CRM → Broadcasts → Automações → Lives → Checkout).
-5. Fase de read-only + drop final.
+## Riscos conhecidos
+
+- **Conflito de match**: cliente novo do PDV pode bater por suffix8 com cliente "pai" diferente. Mitigação: trigger usa exatamente a mesma cascata do backfill (CPF > suffix8+DDD > suffix8 > email > instagram), e em caso de conflito **cria registro novo em `customers_unified`** (mesma regra dos 63 conflitos de CPF que você aprovou).
+- **Performance dos triggers**: upsert por trigger em `chat_contacts` (12k linhas, atualizadas frequentemente) pode adicionar latência. Mitigação: trigger só dispara em INSERT e em UPDATE de campos relevantes (`name`, `profile_pic_url`, `whatsapp`).
+- **Realtime do chat**: refatorar `customerStore` como proxy precisa preservar shape exato para não quebrar componentes que fazem destructuring de `DbCustomer`.
+
+## Detalhes técnicos (resumo)
+
+- Helper `public.find_or_create_unified_customer(...)` retorna `uuid` do cliente unificado. SECURITY DEFINER, `SET search_path = public`.
+- Trigger genérico `mirror_to_unified()` parametrizado via `TG_ARGV` para reusar entre tabelas.
+- Atualização de `phone_e164` no `customers_unified` só ocorre se o campo estiver **vazio** (respeita sua regra: vendedora não deve sobrescrever telefone de cliente identificado por CPF).
+- `metadata.sources` é preenchido como array `['pos:uuid', 'chat:uuid', ...]` para auditoria/rollback.
