@@ -453,6 +453,7 @@ serve(async (req) => {
         media_type: 'text',
         whatsapp_number_id: dispatch.whatsapp_number_id,
         is_mass_dispatch: true,
+        source: 'broadcast',
       }).then(() => {});
     }
 
