@@ -39,15 +39,29 @@ function ensureChannel() {
     .channel("wa_msg_inserts")
     .on("broadcast", { event: "wa_msg_insert" }, (msg: any) => {
       const payload = (msg?.payload ?? {}) as WaMessageInsertPayload;
-      // TEMP DEBUG — remover após validar Meta Centro
-      console.log("[wa_msg_inserts] broadcast received", {
-        id: payload.id,
-        phone: payload.phone,
-        whatsapp_number_id: payload.whatsapp_number_id,
-        direction: payload.direction,
-        listeners: listeners.size,
+      // TEMP DEBUG visual — remover após validar Meta Centro
+      const instanceLabel = payload.whatsapp_number_id
+        ? INSTANCE_LABELS[payload.whatsapp_number_id] || payload.whatsapp_number_id.slice(0, 8)
+        : "sem-instância";
+      toast.success(`📨 Broadcast: ${instanceLabel}`, {
+        description: `${payload.direction} • ${payload.phone?.slice(-8) ?? "?"}`,
+        duration: 4000,
       });
+      console.log("[wa_msg_inserts] broadcast received", payload);
       listeners.forEach((fn) => {
+        try {
+          fn(payload);
+        } catch (e) {
+          console.error("[wa_msg_inserts] listener error", e);
+        }
+      });
+    })
+    .subscribe((status) => {
+      console.log("[wa_msg_inserts] channel status:", status);
+      if (status === "SUBSCRIBED") {
+        toast.info("🟢 Canal broadcast conectado", { duration: 2500 });
+      }
+    });
         try {
           fn(payload);
         } catch (e) {
