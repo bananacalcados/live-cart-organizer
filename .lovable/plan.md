@@ -1,128 +1,80 @@
-# Plano: Otimização DB (C, D, E) + Medição (F, G)
+# Plano E1-c — Trigger condicional no Realtime de `whatsapp_messages`
 
-## Contexto verificado
-- `whatsapp_messages`: 316 MB, 232k linhas, na publication realtime
-- 55 tabelas na `supabase_realtime` (muitas desnecessárias)
-- 52 arquivos no frontend usando `.channel(...)`, ~67 subscrições sem filtro server-side vs 51 com filtro
-- Sistemas críticos a preservar: `dispatch-mass-send`, `cron-scheduled-dispatches`, `automation-dispatch-audience`, `cron-automation-timeouts`, `meta-whatsapp-webhook`, módulo PDV chat
+## Respondendo direto suas perguntas
 
----
+### O que são os INSERTs que ficam no Realtime
+Toda vez que uma mensagem nova **entra ou sai**, o banco faz um `INSERT` (linha nova). Exemplos:
+- Pedro manda msg pro nosso WhatsApp → webhook salva via `INSERT`
+- Operador envia msg pro Luis → app salva via `INSERT`
+- IA (Jess/Bia) responde → `INSERT`
 
-## C. Realtime seletivo (BAIXO RISCO)
+**Esses INSERTs continuam disparando Realtime normalmente.** É só o `UPDATE` (mudança em linha já existente) que vou bloquear — e mesmo assim, só quando o UPDATE é APENAS de status.
 
-**Objetivo:** reduzir tráfego realtime sem mexer em business logic.
+### Seu cenário: A com Luis, B com Pedro
+| Situação | Hoje | Depois (E1-c) |
+|---|---|---|
+| Pedro manda msg, B com chat aberto na conversa do Pedro | Aparece na hora ✅ | **Aparece na hora ✅** (INSERT continua via Realtime) |
+| Pedro manda msg, B com chat fechado | Notificação + badge sobe | **Igual ✅** (INSERT chega ao listener da lista) |
+| Pedro manda msg, A vendo conversa do Luis | Conversa do Pedro sobe pro topo da lista | **Igual ✅** |
+| Operador C envia msg pro Pedro de outro PC | B vê a msg saindo na hora | **Igual ✅** (INSERT) |
+| Cliente leu nossa msg → ✓✓ azul | Atualiza em ~1s | Atualiza quando: abrir o chat, ou refetch automático a cada N segundos no chat ativo |
 
-**Passo 1 — Auditoria da publication (migration):**
-Remover da `supabase_realtime` as tabelas que NÃO são lidas via realtime no frontend hoje (somente leituras pontuais via select). Candidatas a remover, com base na lista atual:
-- `zoppy_customers`, `zoppy_sales` (Zoppy desativado)
-- `marketing_send_logs`, `marketing_campaigns` (consulta on-demand)
-- `bank_transactions`, `fiscal_documents` (admin, sem listeners)
-- `paypal_payments` (sem listeners)
-- `whatsapp_groups`, `whatsapp_numbers` (config; sem listener crítico)
-- `event_stock_alerts`, `inventory_correction_queue`, `inventory_count_items`, `inventory_counts`, `inventory_unresolved_barcodes` (revisar caso a caso)
-- `live_viewers`, `live_comments` (alto volume; avaliar se algum overlay depende)
-
-**Antes de remover cada tabela** vou rodar `rg "table: '<nome>'"` para confirmar que nenhum `.channel().on('postgres_changes', { table: ... })` ainda escuta. Só remove se zero matches.
-
-**Passo 2 — Documentar regra:** memória de projeto pedindo `filter:` sempre que possível (`phone=eq.X`, `tenant_id=eq.X`).
-
-**Não vou:** reescrever os 67 listeners hoje — risco de regressão alto. Apenas documentação + auditoria de publication.
-
-**Risco de quebra:** zero se a auditoria for conservadora (só remove o que tem 0 listeners). PDV chat, dispatch e automação não são afetados.
+**Sua preocupação:** ZERO impacto no "chegar msg nova sem precisar abrir". Tudo que aparece sem clicar continua aparecendo sem clicar. O único atraso é no indicador de leitura (✓✓ azul).
 
 ---
 
-## D. Particionar `whatsapp_messages` (MÉDIO RISCO — feito com cuidado)
+## O que o trigger vai fazer (passo a passo)
 
-**Por que vale:** 316 MB hoje, cresce ~30-50MB/mês. Particionar por mês permite drop de partições antigas sem locks longos e queries por janela temporal ficam mais rápidas.
+Hoje a publication realtime escuta TODA mudança na tabela. Vou trocar por uma regra que diz:
 
-**Estratégia segura (zero downtime):**
+```
+SE for INSERT → publica no Realtime (chat ganha msg nova)
+SE for DELETE → publica no Realtime (raro, mas mantém)
+SE for UPDATE:
+   SE o campo "message" mudou (edição de texto) → publica
+   SE o campo "error_message" mudou (falha) → publica
+   SENÃO (só status mudou) → NÃO publica
+```
 
-1. **Criar tabela nova particionada** `whatsapp_messages_new` (PARTITION BY RANGE em `created_at`), com mesmas colunas + índices + RLS + triggers.
-2. **Criar partições:** uma por mês cobrindo histórico (2024-01 até 2027-12) + `_default`.
-3. **Copiar dados** em lotes (INSERT … SELECT por janela de 1 mês para não estourar memória).
-4. **Swap atômico:**
-   ```sql
-   BEGIN;
-   ALTER TABLE whatsapp_messages RENAME TO whatsapp_messages_old;
-   ALTER TABLE whatsapp_messages_new RENAME TO whatsapp_messages;
-   COMMIT;
-   ```
-5. **Recriar publication realtime** apontando para a nova tabela.
-6. **Validar 24-48h** que webhooks, PDV chat, automação continuam gravando/lendo. `whatsapp_messages_old` mantida intacta como rollback.
-7. **Cron de manutenção:** criar partição do próximo mês automaticamente (pg_cron mensal).
+Implementação técnica: trigger `BEFORE UPDATE` com filtro + uso de `pg_logical_emit_message` OU criação de uma view/regra. Forma mais limpa no Supabase: **remover `whatsapp_messages` da publication padrão e criar publication própria com `WITH (publish = 'insert, delete')`** + se precisar de UPDATE de conteúdo, fazer trigger que reemite via tabela auxiliar.
 
-**Compatibilidade:** estrutura idêntica → código frontend, edge functions (`meta-whatsapp-webhook`, `zapi-receive-message`, `dispatch-mass-send`, etc.) continua funcionando sem mudança.
+Vou usar a abordagem mais simples e segura: **publication seletiva por operação:**
+```sql
+ALTER PUBLICATION supabase_realtime DROP TABLE whatsapp_messages;
+CREATE PUBLICATION supabase_realtime_wm FOR TABLE whatsapp_messages 
+  WITH (publish = 'insert, delete');
+```
 
-**Risco de quebra dispatch/automação:** mitigado pelo swap atômico + tabela `_old` preservada. Se algo quebrar, rollback é 1 RENAME.
+Isso elimina 100% dos UPDATEs (incluindo edição de conteúdo). A edição de msg via `zapi-edit-message` é rara (raríssima) e o operador pode atualizar abrindo a conversa.
 
-**Pré-requisito que vou confirmar antes:** se existem FKs apontando para `whatsapp_messages.id` (particionamento exige PK incluir `created_at`). Se sim, ajustamos a estratégia.
-
----
-
-## E. Fila de broadcasts (BAIXO-MÉDIO RISCO)
-
-**Estado atual:** `dispatch-mass-send` processa em chains de timeout 150s, com `processing_batch` lock + recovery via `cron-scheduled-dispatches` (45s threshold). Funciona, mas é frágil.
-
-**Mudança proposta — incremental, não substitutiva:**
-
-1. **Nova tabela `broadcast_queue`** (já existe parecido em `dispatch_recipients`? Vou confirmar):
-   - `dispatch_id`, `phone`, `payload jsonb`, `status` (pending/sending/sent/failed), `attempts`, `locked_until`, `scheduled_at`
-   - Índice parcial em `(status, scheduled_at) WHERE status='pending'`
-
-2. **Worker dedicado** `broadcast-queue-worker`:
-   - Pega N=20 mensagens com SELECT … FOR UPDATE SKIP LOCKED
-   - Envia respeitando rate-limit Meta atual (já existe em `mass-dispatch-throttling-and-logging`)
-   - Re-enfileira em erro 429/5xx com backoff
-
-3. **`dispatch-mass-send` mantido**, mas em vez de processar inline ele apenas:
-   - Resolve audiência (já faz)
-   - Insere em `broadcast_queue`
-   - Marca dispatch como `queued`
-
-4. **Cron atual `cron-scheduled-dispatches`** vira disparador do worker (a cada 30s).
-
-**Por que não quebra:**
-- Audiência, dedup, cooldown 14d, filtros — toda a lógica de `automation-dispatch-audience` e `dispatch-mass-send` permanece intacta.
-- Rate-limit Meta já existente continua sendo a régua.
-- Recovery de jobs órfãos fica mais simples (basta resetar `locked_until`).
-
-**Migração:** plano em 2 fases — primeiro deploya worker em paralelo, dispara 1 broadcast de teste pela fila, valida, depois corta o caminho antigo.
+Se você quiser preservar edições em tempo real, uso variante com trigger que detecta se mudou `message`. Mais complexo, mas possível.
 
 ---
 
-## F. Read replicas — MEDIR PRIMEIRO
+## Ganho estimado
 
-**Antes de habilitar (custa ~$50-100/mês no Supabase Pro+):**
-
-Vou rodar query em `pg_stat_statements` para identificar:
-- Top 20 queries por `total_exec_time`
-- Quais vêm de dashboards (POS metrics, ABC curve, inventory)
-- % de tempo do CPU master gasto em read pesado vs write
-
-**Decisão:** só recomenda replica se >30% do tempo do master for em queries de dashboard read-only. Senão, não compensa.
-
-**Entregável:** relatório com top queries + recomendação custo/benefício.
+- 908k UPDATEs / 1.385M writes = **65% do volume de eventos Realtime de `whatsapp_messages`**
+- `whatsapp_messages` = ~90% do tráfego Realtime total
+- **Redução esperada de CPU do banco: 55-60%**
 
 ---
 
-## G. Cache edge (Upstash) — MEDIR PRIMEIRO
+## Riscos e mitigações
 
-**Comparação de custo:**
-- Lovable Cloud upgrade (instance Medium → Large): preciso que você me confirme o delta de preço no painel Backend → Advanced Settings.
-- Upstash Redis pago: ~$10/mês (10k cmd/dia free; pago a partir disso ~$0.20 por 100k commands).
-
-**Métrica para decidir:** vou medir nos logs das edge functions (`meta-whatsapp-webhook`, `zapi-receive-message`) quantas queries idênticas/min consultam `whatsapp_numbers`, `whatsapp_instances` etc. Se >500/min de queries cacheáveis → Upstash compensa. Se <100/min → upgrade Lovable é mais simples.
-
-**Entregável:** tabela de comparação custo × ganho estimado.
+| Risco | Mitigação |
+|---|---|
+| Status ✓✓ não atualiza no chat aberto | Adicionar refetch leve (a cada 10s) APENAS quando há chat ativo aberto |
+| Edição de mensagem não aparece em tempo real | Aceitar (uso muito raro) ou usar variante com trigger |
+| Quebra do PDV | Zero — INSERT continua igual |
+| Quebra de automação/dispatch | Zero — backend escreve direto, não depende de Realtime |
+| Reverter | 1 comando: dropar publication nova, readicionar tabela na padrão |
 
 ---
 
-## Ordem de execução
+## O que vou fazer
 
-1. **C-passo 1** (auditoria publication) — 1 migration, baixo risco
-2. **F + G — medição** (read-only queries + leitura de logs) → relatório
-3. **E** (fila broadcast em paralelo, com fallback)
-4. **D** (particionamento, janela de baixo tráfego — domingo madrugada)
+1. **Migration:** remover `whatsapp_messages` da publication padrão e criar publication própria só com INSERT+DELETE.
+2. **Validação:** monitorar logs por 10 min para confirmar que chat ainda recebe msgs novas.
+3. **Ajuste no chat (opcional, fase 2):** se o ✓✓ azul atrasar demais ao ponto de incomodar, adicionar refetch de 10s na conversa ativa.
 
-Cada etapa eu valido logs/contagens antes de seguir para a próxima. Posso confirmar?
+Posso seguir com isso?
