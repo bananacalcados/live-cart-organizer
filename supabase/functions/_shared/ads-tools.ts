@@ -1162,6 +1162,7 @@ export async function executeAdsToolCall(
             whatsapp_number_id: whatsappNumberId,
             is_mass_dispatch: false,
             channel: leadChannel,
+            source: 'ads_lead',
           });
 
           if (sendSuccess) sentTargets.push({ url: target.url, color: target.color });
