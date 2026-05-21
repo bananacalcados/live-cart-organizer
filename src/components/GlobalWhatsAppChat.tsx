@@ -22,6 +22,7 @@ export function GlobalWhatsAppChat() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
+  const [waMsgTick, setWaMsgTick] = useState(0);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
