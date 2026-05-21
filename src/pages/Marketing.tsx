@@ -669,9 +669,9 @@ export default function Marketing() {
   const handleSyncRfm = async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zoppy-sync-customers`, {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/rfm-recalculate`, {
         method: 'POST', headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'calculate_rfm' }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       if (data.success) { toast.success(data.message); fetchCustomers(); }
@@ -680,19 +680,6 @@ export default function Marketing() {
     finally { setIsSyncing(false); }
   };
 
-  const handleSyncSales = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zoppy-sync-sales`, {
-        method: 'POST', headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ start_page: 1, max_pages: 50, after_date: '2022-01-01T00:00:00.000Z' }),
-      });
-      const data = await res.json();
-      if (data.success) { toast.success(data.message); if (!data.completed) toast.info("Existem mais vendas. Clique novamente."); }
-      else toast.error(data.error || "Erro ao sincronizar vendas");
-    } catch { toast.error("Erro ao sincronizar vendas"); }
-    finally { setIsSyncing(false); }
-  };
 
   const handleSyncPosShopify = async () => {
     setIsSyncing(true);
@@ -888,9 +875,9 @@ export default function Marketing() {
 
       setUploadStatus({ stage: 'rfm', progress: 92, detail: 'Recalculando RFM...' });
       try {
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zoppy-sync-customers`, {
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/rfm-recalculate`, {
           method: 'POST', headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'calculate_rfm' }),
+          body: JSON.stringify({}),
         });
         const rfmData = await res.json();
         if (rfmData.success) console.log('RFM recalculated after Excel import');
@@ -1367,9 +1354,8 @@ export default function Marketing() {
                 <Button variant="outline" size="sm" onClick={handleSyncRfm} disabled={isSyncing} className="gap-1 text-xs">
                   <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">Recalcular </span>RFM
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSyncSales} disabled={isSyncing} className="gap-1 text-xs">
-                  <Download className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">Sync </span>Vendas
-                </Button>
+
+
                 <Button variant="outline" size="sm" onClick={handleSyncPosShopify} disabled={isSyncing} className="gap-1 text-xs">
                   <Store className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} /><span className="hidden sm:inline">Sync </span>POS
                 </Button>
