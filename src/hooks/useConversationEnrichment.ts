@@ -271,8 +271,11 @@ export function useConversationEnrichment() {
       const isAwaitingPayment = awaitingPaymentPhones.has(conv.phone);
       const isAiTransferred = aiTransferredPhones.has(phoneKey);
 
-      // Force AI-transferred conversations into "Novas" so sellers spot them quickly
-      if (isAiTransferred && !isFinished && !isArchived) {
+      // Force AI-transferred conversations into "Novas" so sellers spot them quickly,
+      // but only while the conversation still has no human outgoing history.
+      // If the customer already had prior replies from the team, keep it in
+      // "Aguardando resposta" so it doesn't jump between tabs after refresh.
+      if (isAiTransferred && !isFinished && !isArchived && status === 'not_started') {
         status = 'not_started';
       }
 
