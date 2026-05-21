@@ -138,14 +138,14 @@ serve(async (req) => {
 
         const normalizedPhone = phone.replace(/\D/g, '');
 
-        const { data: existing } = await supabase
+        const { data: existingRows } = await supabase
           .from('livete_followups')
           .select('id')
           .eq('order_id', order.id)
           .eq('is_active', true)
-          .maybeSingle();
+          .limit(1);
 
-        if (existing) continue;
+        if (existingRows && existingRows.length > 0) continue;
 
         const { data: lastMsg } = await supabase
           .from('whatsapp_messages')
