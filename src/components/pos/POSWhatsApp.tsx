@@ -591,11 +591,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
     loadConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, filterByAssignment, mapRowsToConvs]);
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, filterByAssignment, mapRowsToConvs, waMsgTick]);
 
   // New WhatsApp messages broadcast (postgres_changes removed for CPU).
   useWaMessageBroadcast(() => {
-    loadConversationsRef.current?.();
+    setWaMsgTick((t) => t + 1);
     if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
   });
 
