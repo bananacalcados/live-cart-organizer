@@ -119,25 +119,15 @@ export function InstagramDMChat({
     if (open) loadHistory();
   }, [open, loadHistory]);
 
-  // Realtime: novas mensagens chegando
-  useEffect(() => {
+  // Broadcast-based new-message notification (postgres_changes removed for CPU).
+  // Filters Instagram-channel messages via refetch in loadHistory.
+  useWaMessageBroadcast((payload) => {
     if (!open || !igUserId) return;
-    const channel = supabase
-      .channel(`ig-dm-${igUserId}-${Date.now()}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "whatsapp_messages",
-        filter: `phone=eq.${igUserId}`,
-      }, (payload) => {
-        const msg = payload.new as any;
-        if (msg.channel !== "instagram") return;
-        setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
-        scrollToBottom();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [open, igUserId, scrollToBottom]);
+    if (payload?.phone !== igUserId) return;
+    loadHistory();
+    scrollToBottom();
+  });
+
 
   const handleSend = async () => {
     const text = draft.trim();
