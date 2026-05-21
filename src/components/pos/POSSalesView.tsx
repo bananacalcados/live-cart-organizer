@@ -27,6 +27,7 @@ import { POSCrossSellSuggestions } from "./POSCrossSellSuggestions";
 import { POSOrderVerification } from "./POSOrderVerification";
 import { POSReceiptUpload } from "./POSReceiptUpload";
 import { supabase } from "@/integrations/supabase/client";
+import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
 
