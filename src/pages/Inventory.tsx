@@ -174,7 +174,7 @@ export default function Inventory() {
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "stock" | "capture" | "products" | "nfe">("dashboard");
+  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe">("dashboard");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
