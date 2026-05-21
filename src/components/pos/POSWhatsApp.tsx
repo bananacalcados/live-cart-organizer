@@ -809,7 +809,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message: messageText,
         direction: "outgoing",
         status: "sent",
-        whatsapp_number_id: sendRoute.numberId,
+        whatsapp_number_id: useMessenger ? null : sendRoute.numberId,
         message_id: metaMessageId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
