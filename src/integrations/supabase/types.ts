@@ -14299,6 +14299,13 @@ export type Database = {
           archived_phones: number
         }[]
       }
+      archive_old_messages_individual: {
+        Args: { p_batch_size?: number; p_days?: number; p_keep_recent?: number }
+        Returns: {
+          affected_phones: number
+          archived_count: number
+        }[]
+      }
       archive_old_whatsapp_messages: {
         Args: { p_batch_size?: number }
         Returns: {
