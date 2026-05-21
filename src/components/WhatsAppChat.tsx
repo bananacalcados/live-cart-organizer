@@ -3,6 +3,7 @@ import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, Fil
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useZapi } from "@/hooks/useZapi";
 import { normalizeBRPhone, buildPhoneVariations } from "@/lib/phoneUtils";
 import { cn } from "@/lib/utils";
