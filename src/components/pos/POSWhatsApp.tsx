@@ -809,7 +809,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         message: messageText,
         direction: "outgoing",
         status: "sent",
-        whatsapp_number_id: sendRoute.numberId,
+        whatsapp_number_id: useMessenger ? null : sendRoute.numberId,
         message_id: metaMessageId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
@@ -887,7 +887,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       const { error: insertErr } = await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
         message_id: audioMsgId,
-        whatsapp_number_id: sendRoute.numberId,
+        whatsapp_number_id: useMessenger ? null : sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
         sender_user_id: sellerLinkedUserId || currentUserId || null,
@@ -956,7 +956,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
         message_id: mediaMsgId,
-        whatsapp_number_id: sendRoute.numberId,
+        whatsapp_number_id: useMessenger ? null : sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
         sender_user_id: sellerLinkedUserId || currentUserId || null,
