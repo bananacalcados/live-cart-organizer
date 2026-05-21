@@ -77,16 +77,14 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
 
   useEffect(() => {
     loadMessages();
-    const channel = supabase
-      .channel(`support-whatsapp-${normalizedPhone}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' }, (payload) => {
-        const newMsg = payload.new as Message;
-        if (!phoneVariations.includes(newMsg.phone)) return;
-        setMessages(prev => prev.some(m => m.id === newMsg.id) ? prev : [...prev, newMsg]);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
   }, [normalizedPhone, loadMessages]);
+
+  // Broadcast-based new-message notification (postgres_changes removed for CPU).
+  useWaMessageBroadcast((payload) => {
+    if (!payload?.phone || !phoneVariations.includes(payload.phone)) return;
+    loadMessages();
+  });
+
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
