@@ -394,14 +394,18 @@ export default function ChatPage() {
     else setIsLoadingMessages(true);
 
     const offset = loadMore ? messages.length : 0;
+
+    // Tracks whether we're already reading from the archive (older history)
+    const fromArchive = loadMore && (messages[0] as any)?.__from_archive === true;
+    const tableName = fromArchive ? 'whatsapp_messages_archive' : 'whatsapp_messages';
+
     let query = supabase
-      .from('whatsapp_messages')
+      .from(tableName as any)
       .select('*')
       .eq('phone', phone)
       .order('created_at', { ascending: false })
-      .range(offset, offset + PAGE_SIZE - 1);
-    
-    // Filter by whatsapp_number_id if specified
+      .range(fromArchive ? offset - 0 : offset, (fromArchive ? offset - 0 : offset) + PAGE_SIZE - 1);
+
     if (numberId !== undefined) {
       if (numberId) {
         query = query.eq('whatsapp_number_id', numberId);
@@ -410,7 +414,27 @@ export default function ChatPage() {
       }
     }
 
-    const { data, error } = await query;
+    let { data, error } = await query;
+
+    // Active table exhausted: switch to archive transparently
+    if (!error && (!data || data.length < PAGE_SIZE) && !fromArchive && loadMore) {
+      const remaining = PAGE_SIZE - (data?.length || 0);
+      let archiveQuery = supabase
+        .from('whatsapp_messages_archive' as any)
+        .select('*')
+        .eq('phone', phone)
+        .order('created_at', { ascending: false })
+        .range(0, remaining - 1);
+      if (numberId !== undefined) {
+        if (numberId) archiveQuery = archiveQuery.eq('whatsapp_number_id', numberId);
+        else archiveQuery = archiveQuery.is('whatsapp_number_id', null);
+      }
+      const { data: archData } = await archiveQuery;
+      if (archData && archData.length > 0) {
+        const tagged = archData.map((m: any) => ({ ...m, __from_archive: true }));
+        data = [...(data || []), ...tagged];
+      }
+    }
 
     if (!error && data) {
       const sorted = [...data].reverse() as Message[];
