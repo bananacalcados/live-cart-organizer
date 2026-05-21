@@ -1,0 +1,1 @@
+UPDATE public.whatsapp_messages SET whatsapp_number_id = NULL WHERE channel IN ('instagram','messenger') AND whatsapp_number_id IS NOT NULL;
