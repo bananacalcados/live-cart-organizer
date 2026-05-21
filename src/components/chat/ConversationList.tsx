@@ -199,6 +199,15 @@ export function ConversationList({
     archived: conversations.filter(c => c.isArchived).length,
   };
 
+  // Total unread incoming messages waiting on the human across the "Aguardando Resposta" bucket.
+  // Used to visually highlight the tab so operators don't miss new messages from customers
+  // who already have prior outgoing history (which prevents them from going to "Novas").
+  const awaitingReplyUnread = conversations.reduce((sum, c) => {
+    if (c.isFinished || c.isArchived || c.isDispatchOnly) return sum;
+    if (c.conversationStatus !== 'awaiting_reply') return sum;
+    return sum + (c.unreadCount || 0);
+  }, 0);
+
   // Count per instance (for tabs)
   const instanceCounts: Record<string, number> = { all: conversations.filter(c => !c.isArchived).length };
   for (const c of conversations.filter(c => !c.isArchived)) {
