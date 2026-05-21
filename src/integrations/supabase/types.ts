@@ -3003,6 +3003,8 @@ export type Database = {
           avg_ticket: number
           ban_reason: string | null
           birth_date: string | null
+          cashback_balance: number
+          cashback_expires_at: string | null
           cep: string | null
           children_age_range: string | null
           city: string | null
@@ -3022,6 +3024,8 @@ export type Database = {
           last_purchase_at: string | null
           last_seen_at: string | null
           live_cancellation_count: number
+          loyalty_lifetime_points: number
+          loyalty_points: number
           metadata: Json | null
           name: string | null
           neighborhood: string | null
@@ -3052,6 +3056,8 @@ export type Database = {
           avg_ticket?: number
           ban_reason?: string | null
           birth_date?: string | null
+          cashback_balance?: number
+          cashback_expires_at?: string | null
           cep?: string | null
           children_age_range?: string | null
           city?: string | null
@@ -3071,6 +3077,8 @@ export type Database = {
           last_purchase_at?: string | null
           last_seen_at?: string | null
           live_cancellation_count?: number
+          loyalty_lifetime_points?: number
+          loyalty_points?: number
           metadata?: Json | null
           name?: string | null
           neighborhood?: string | null
@@ -3101,6 +3109,8 @@ export type Database = {
           avg_ticket?: number
           ban_reason?: string | null
           birth_date?: string | null
+          cashback_balance?: number
+          cashback_expires_at?: string | null
           cep?: string | null
           children_age_range?: string | null
           city?: string | null
@@ -3120,6 +3130,8 @@ export type Database = {
           last_purchase_at?: string | null
           last_seen_at?: string | null
           live_cancellation_count?: number
+          loyalty_lifetime_points?: number
+          loyalty_points?: number
           metadata?: Json | null
           name?: string | null
           neighborhood?: string | null

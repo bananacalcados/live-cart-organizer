@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
         name: "zoppy_customers",
         rows: await fetchAll(
           "zoppy_customers",
-          "id, first_name, last_name, cpf, email, phone, gender, birth_date, address1, address2, city, state, postcode, shoe_size, preferred_style, age_range, total_orders, total_spent, avg_ticket, first_purchase_at, last_purchase_at, rfm_segment, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, region_type, ddd",
+          "id, first_name, last_name, cpf, email, phone, gender, birth_date, address1, address2, city, state, postcode, shoe_size, preferred_style, age_range, total_orders, total_spent, avg_ticket, first_purchase_at, last_purchase_at, rfm_segment, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, region_type, ddd, cashback_balance, cashback_expires_at",
           (r: any) => ({
             origin: `zoppy:${r.id}`,
             name: [r.first_name, r.last_name].filter(Boolean).join(" ").trim() || null,
@@ -141,6 +141,8 @@ Deno.serve(async (req) => {
             rfm_total: r.rfm_total_score,
             region_type: r.region_type,
             ddd: r.ddd,
+            cashback_balance: r.cashback_balance,
+            cashback_expires_at: r.cashback_expires_at,
           }),
         ),
       });
