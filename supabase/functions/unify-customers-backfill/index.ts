@@ -315,6 +315,10 @@ Deno.serve(async (req) => {
       dateEarliest("first_purchase_at" as any);
       dateLatest("last_purchase_at" as any);
 
+      // cashback: usa o maior saldo e a data de expiração mais distante
+      numericMax("cashback_balance" as any);
+      dateLatest("cashback_expires_at" as any);
+
       if (src.tags?.length) {
         const set = new Set([...(target.tags || []), ...src.tags]);
         target.tags = [...set];
