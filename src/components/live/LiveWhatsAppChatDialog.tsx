@@ -80,30 +80,18 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     }
   }, [open, viewerPhone]);
 
-  // Realtime subscription (INSERT + UPDATE for status changes)
+  // Broadcast-based new-message notification (postgres_changes removed for CPU).
+  useWaMessageBroadcast((payload) => {
+    if (!open || !viewerPhone) return;
+    if (payload?.phone !== viewerPhone) return;
+    loadMessages();
+  });
+
+  // Status (✓✓) refresh: refetch every 15s while open.
   useEffect(() => {
     if (!open || !viewerPhone) return;
-    const channel = supabase
-      .channel(`live-wa-chat-${viewerPhone}`)
-      .on("postgres_changes", {
-        event: "INSERT",
-        schema: "public",
-        table: "whatsapp_messages",
-        filter: `phone=eq.${viewerPhone}`,
-      }, (payload) => {
-        setMessages(prev => [...prev, payload.new as WaMessage]);
-      })
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "whatsapp_messages",
-        filter: `phone=eq.${viewerPhone}`,
-      }, (payload) => {
-        const updated = payload.new as WaMessage;
-        setMessages(prev => prev.map(m => m.id === updated.id ? updated : m));
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const interval = setInterval(() => loadMessages(), 15000);
+    return () => clearInterval(interval);
   }, [open, viewerPhone]);
 
   // Auto-scroll
