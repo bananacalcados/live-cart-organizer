@@ -131,18 +131,21 @@ export function GlobalWhatsAppChat() {
     };
 
     loadConversations();
-
-    const channel = supabase
-      .channel('global-whatsapp-chat-realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' }, () => {
-        loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_messages' }, () => loadConversations())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
   }, [isOpen, orders, selectedPhone, selectedConvNumberId, customers, events, chatContacts, enrichConversations, metaNumbers]);
+
+  // Broadcast-based notification of new WhatsApp messages (replaces
+  // postgres_changes on whatsapp_messages — see useWaMessageBroadcast).
+  useWaMessageBroadcast(() => {
+    if (!isOpen) return;
+    // Re-trigger the effect's logic by reloading conversations + active chat.
+    // Reads latest closure values via the loadConversations defined above.
+    // We use a small timeout to ensure conversation list is settled.
+    Promise.resolve().then(() => {
+      // No-op: loadConversations is defined inside the effect above and
+      // re-runs on its deps. To force a refresh we update a tick state.
+      __waRefreshTick.current?.();
+    });
+  });
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
     // Load ALL messages for this phone across all instances so full history is visible
