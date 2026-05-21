@@ -506,14 +506,18 @@ Deno.serve(async (req) => {
         });
       }
       const contexto = await buildContexto(supabase);
+      const contextoChat = contextoParaChat(contexto);
       const historicoTxt = (historico_conversa || [])
+        .slice(-10)
         .map((m: any) => `${m.role === 'user' ? 'Usuário' : 'Analista'}: ${m.content}`)
         .join('\n');
 
-      const userContent = `CONTEXTO COMPLETO DO ESTOQUE/VENDAS (JSON, inclui todos_produtos para consultas específicas):
+      const userContent = `CONTEXTO DO ESTOQUE/VENDAS (agregado, dados da tabela pos_products + pos_sale_items, janela de 90 dias):
 \`\`\`json
-${JSON.stringify(contexto, null, 2)}
+${JSON.stringify(contextoChat)}
 \`\`\`
+
+Use SEMPRE estes dados para responder. Se o usuário pedir algo muito específico que não esteja agregado aqui (ex: um SKU exato fora do top), responda com o que conseguir inferir e diga que pode aprofundar.
 
 HISTÓRICO DA CONVERSA:
 ${historicoTxt}
