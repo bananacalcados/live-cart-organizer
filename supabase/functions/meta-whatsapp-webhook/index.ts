@@ -348,17 +348,19 @@ serve(async (req) => {
                 const buttonText = messageText.trim().toLowerCase();
                 const isButtonReply = msg.type === 'button' || msg.type === 'interactive';
                 try {
-                  // Also try matching with/without 9th digit for phone normalization
+                  // Filter by phone suffix at the DB level (last 8 digits) so we don't miss
+                  // pending replies when there are thousands of active ones from a mass dispatch.
                   const phoneSuffix = phone.replace(/\D/g, '').slice(-8);
                   const { data: pendingReplies } = await supabase
                     .from('automation_pending_replies')
                     .select('*')
                     .eq('is_active', true)
                     .gt('expires_at', new Date().toISOString())
+                    .like('phone', `%${phoneSuffix}`)
                     .order('created_at', { ascending: false })
-                    .limit(20);
+                    .limit(5);
 
-                  // Find matching pending reply by phone suffix (handles 9th digit mismatch)
+                  // Defensive: confirm suffix actually matches (LIKE pattern is anchored at end)
                   const pendingReply = pendingReplies?.find(pr => {
                     const prSuffix = pr.phone.replace(/\D/g, '').slice(-8);
                     return prSuffix === phoneSuffix;
