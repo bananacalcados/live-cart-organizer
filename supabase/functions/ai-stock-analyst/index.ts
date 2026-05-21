@@ -406,6 +406,148 @@ function contextoParaChat(c: any) {
   };
 }
 
+function extractOpenAIText(payload: any): string {
+  const choice = payload?.choices?.[0];
+  const message = choice?.message;
+
+  const flatten = (value: any): string => {
+    if (!value) return '';
+    if (typeof value === 'string') return value.trim();
+    if (Array.isArray(value)) {
+      return value
+        .map((part) => {
+          if (typeof part === 'string') return part;
+          if (!part || typeof part !== 'object') return '';
+          if (typeof part.text === 'string') return part.text;
+          if (typeof part.content === 'string') return part.content;
+          if (part.type === 'text' && typeof part.text === 'string') return part.text;
+          return '';
+        })
+        .filter(Boolean)
+        .join('\n')
+        .trim();
+    }
+    return '';
+  };
+
+  return flatten(message?.content)
+    || flatten(message?.content_parts)
+    || flatten(choice?.delta?.content)
+    || flatten(payload?.output_text)
+    || '';
+}
+
+function sortSizes(a: string, b: string) {
+  const na = Number(String(a).replace(',', '.'));
+  const nb = Number(String(b).replace(',', '.'));
+  const validA = Number.isFinite(na);
+  const validB = Number.isFinite(nb);
+  if (validA && validB) return na - nb;
+  if (validA) return -1;
+  if (validB) return 1;
+  return String(a).localeCompare(String(b), 'pt-BR');
+}
+
+function detectarCategoriaNaPergunta(mensagem: string): string | null {
+  const categoria = inferirCategoria(mensagem);
+  return categoria === 'Outros' ? null : categoria;
+}
+
+function isNumericLikeSize(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /^\d{1,2}(?:[.,]\d)?$/.test(String(value).trim());
+}
+
+function resolveProductSize(p: any): string {
+  const rawSize = String(p?.size || '').trim();
+  if (isNumericLikeSize(rawSize)) return rawSize.replace(',', '.');
+
+  const nome = String(p?.nome || p?.name || '');
+  const matches = [...nome.matchAll(/(?:^|\D)(3[3-9]|4[0-2])(?:\D|$)/g)];
+  const fromName = matches.at(-1)?.[1];
+  if (fromName) return fromName;
+
+  return rawSize || 'SEM_TAMANHO';
+}
+
+function buildLocalChatFallback(mensagem: string, contexto: any): string | null {
+  const lower = (mensagem || '').toLowerCase();
+  const todos: any[] = contexto?.todos_produtos || [];
+  const categoria = detectarCategoriaNaPergunta(mensagem);
+
+  const pediuQuantidadePorTamanho =
+    (lower.includes('tamanho') || lower.includes('tamanhos') || lower.includes('numeração') || lower.includes('numeracao'))
+    && (lower.includes('estoque') || lower.includes('pares') || lower.includes('quantidade'));
+
+  if (pediuQuantidadePorTamanho) {
+    const base = categoria
+      ? todos.filter((p) => p.categoria === categoria || String(p.nome || '').toLowerCase().includes(categoria.toLowerCase()))
+      : todos;
+
+    const agg = new Map<string, { estoque: number; skus: number; modelos: Set<string> }>();
+    for (const p of base) {
+      const size = resolveProductSize(p);
+      let cur = agg.get(size);
+      if (!cur) {
+        cur = { estoque: 0, skus: 0, modelos: new Set<string>() };
+        agg.set(size, cur);
+      }
+      cur.estoque += Number(p.estoque) || 0;
+      cur.skus += 1;
+      if (p.modelo_norm) cur.modelos.add(p.modelo_norm);
+    }
+
+    const linhas = Array.from(agg.entries())
+      .map(([size, info]) => ({
+        size,
+        estoque: info.estoque,
+        skus: info.skus,
+        modelos: info.modelos.size,
+      }))
+      .sort((a, b) => sortSizes(a.size, b.size));
+
+    if (linhas.length === 0) {
+      return categoria
+        ? `Não encontrei produtos da categoria **${categoria}** em \`pos_products\` para montar a grade por tamanho.`
+        : 'Não encontrei produtos em `pos_products` para montar a grade por tamanho.';
+    }
+
+    const titulo = categoria
+      ? `**Estoque por tamanho — ${categoria}s**`
+      : '**Estoque por tamanho — geral**';
+
+    const totalPares = linhas.reduce((sum, item) => sum + item.estoque, 0);
+    const totalModelos = linhas.reduce((sum, item) => sum + item.modelos, 0);
+
+    return [
+      titulo,
+      `Total de pares: **${totalPares}** · tamanhos cadastrados: **${linhas.length}** · modelos mapeados: **${totalModelos}**`,
+      '',
+      ...linhas.map((item) => `- Tam. **${item.size}**: **${item.estoque}** pares (${item.skus} SKUs)`),
+    ].join('\n');
+  }
+
+  if (lower.includes('ruptura')) {
+    const itens = (contexto?.alertas_ruptura || []).slice(0, 10);
+    if (!itens.length) return 'Hoje não encontrei alertas de ruptura crítica no estoque atual.';
+    return [
+      '**Top alertas de ruptura**',
+      ...itens.map((p: any) => `- ${p.nome} · tam ${p.size || '-'} · ${p.loja} · estoque ${p.estoque} · cobertura ${p.cobertura_dias ?? 'n/d'} dias`),
+    ].join('\n');
+  }
+
+  if (lower.includes('encalh')) {
+    const itens = (contexto?.alertas_encalhe || []).slice(0, 10);
+    if (!itens.length) return 'Hoje não encontrei encalhes relevantes no estoque atual.';
+    return [
+      '**Top encalhes**',
+      ...itens.map((p: any) => `- ${p.nome} · tam ${p.size || '-'} · ${p.loja} · estoque ${p.estoque} · sem venda há ${p.dias_desde_ultima_venda ?? 'n/d'} dias`),
+    ].join('\n');
+  }
+
+  return null;
+}
+
 function parseJsonText(text: string) {
   try {
     const m = text.match(/\{[\s\S]*\}/);
@@ -451,7 +593,8 @@ async function callLovableAI(userContent: string, asJson: boolean) {
   const resp = await fetch(LOVABLE_AI_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      'Lovable-API-Key': apiKey,
+      'X-Lovable-AIG-SDK': 'vercel-ai-sdk',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -469,17 +612,17 @@ async function callLovableAI(userContent: string, asJson: boolean) {
     throw new Error(`LovableAI ${resp.status}: ${t}`);
   }
   const data = await resp.json();
-  const text = data.choices?.[0]?.message?.content || '';
+  const text = extractOpenAIText(data);
   if (!asJson) return { text, usage: data.usage, model: LOVABLE_FALLBACK_MODEL, provider: 'lovable_ai' };
   return { json: parseJsonText(text), usage: data.usage, model: LOVABLE_FALLBACK_MODEL, provider: 'lovable_ai' };
 }
 
 async function callAI(userContent: string, asJson: boolean) {
   try {
-    return await callAnthropic(userContent, asJson);
+    return await callLovableAI(userContent, asJson);
   } catch (err) {
-    console.warn('Anthropic falhou, fallback Lovable AI:', err instanceof Error ? err.message : err);
-    const result = await callLovableAI(userContent, asJson);
+    console.warn('Lovable AI falhou, fallback Anthropic:', err instanceof Error ? err.message : err);
+    const result = await callAnthropic(userContent, asJson);
     return { ...result, fallback_reason: err instanceof Error ? err.message : String(err) };
   }
 }
@@ -526,8 +669,9 @@ NOVA PERGUNTA DO USUÁRIO:
 ${mensagem}`;
 
       const { text, usage, model, provider, fallback_reason } = await callAI(userContent, false);
+      const resposta = text?.trim() || buildLocalChatFallback(mensagem, contexto) || 'Não consegui montar a resposta em texto agora, mas os dados de estoque foram carregados. Tente reformular a pergunta de forma mais específica.';
       return new Response(
-        JSON.stringify({ resposta: text, usage, model, provider, fallback_reason, contexto_resumo: contexto.totais }),
+        JSON.stringify({ resposta, usage, model, provider, fallback_reason, contexto_resumo: contexto.totais }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
