@@ -956,7 +956,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
       await supabase.from("whatsapp_messages").insert({
         phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
         message_id: mediaMsgId,
-        whatsapp_number_id: sendRoute.numberId,
+        whatsapp_number_id: useMessenger ? null : sendRoute.numberId,
         channel: useMessenger ? messengerChannel : 'whatsapp',
         quoted_message_id: quotedMessage?.message_id || null,
         sender_user_id: sellerLinkedUserId || currentUserId || null,
