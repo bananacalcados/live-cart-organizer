@@ -447,9 +447,9 @@ serve(async (req) => {
     // ── 3. Recalculate RFM ──
     if (body.recalculate_rfm !== false) {
       try {
-        const rfmRes = await fetch(`${supabaseUrl}/functions/v1/zoppy-sync-customers`, {
+        const rfmRes = await fetch(`${supabaseUrl}/functions/v1/rfm-recalculate`, {
           method: 'POST', headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'calculate_rfm' }),
+          body: JSON.stringify({}),
         });
         const rfmData = await rfmRes.json();
         console.log('RFM recalculated:', rfmData.message || rfmData);

@@ -175,8 +175,8 @@ const AIAgents = () => {
   const handleRecalculateRfm = async () => {
     setIsRecalculating(true);
     try {
-      const { data, error } = await supabase.functions.invoke('zoppy-sync-customers', {
-        body: { mode: 'calculate_rfm' },
+      const { data, error } = await supabase.functions.invoke('rfm-recalculate', {
+        body: {},
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
