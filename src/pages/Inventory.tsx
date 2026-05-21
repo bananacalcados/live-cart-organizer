@@ -1193,6 +1193,8 @@ export default function Inventory() {
           <InventoryAnalytics />
         ) : inventoryMode === "ai" ? (
           <InventoryAIAnalysis />
+        ) : inventoryMode === "bulk" ? (
+          <InventoryBulkActions />
         ) : !selectedStoreId ? (
           <div className="text-center py-20">
             <Store className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
