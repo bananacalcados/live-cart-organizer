@@ -13710,6 +13710,75 @@ export type Database = {
           },
         ]
       }
+      whatsapp_messages_archive: {
+        Row: {
+          archived_at: string
+          channel: string
+          created_at: string
+          direction: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          is_group: boolean | null
+          is_mass_dispatch: boolean
+          media_type: string | null
+          media_url: string | null
+          message: string
+          message_id: string | null
+          phone: string
+          quoted_message_id: string | null
+          referral: Json | null
+          sender_name: string | null
+          sender_user_id: string | null
+          status: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          archived_at?: string
+          channel?: string
+          created_at: string
+          direction: string
+          error_code?: string | null
+          error_message?: string | null
+          id: string
+          is_group?: boolean | null
+          is_mass_dispatch?: boolean
+          media_type?: string | null
+          media_url?: string | null
+          message: string
+          message_id?: string | null
+          phone: string
+          quoted_message_id?: string | null
+          referral?: Json | null
+          sender_name?: string | null
+          sender_user_id?: string | null
+          status?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          archived_at?: string
+          channel?: string
+          created_at?: string
+          direction?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          is_group?: boolean | null
+          is_mass_dispatch?: boolean
+          media_type?: string | null
+          media_url?: string | null
+          message?: string
+          message_id?: string | null
+          phone?: string
+          quoted_message_id?: string | null
+          referral?: Json | null
+          sender_name?: string | null
+          sender_user_id?: string | null
+          status?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       whatsapp_numbers: {
         Row: {
           access_token: string | null
@@ -14137,6 +14206,31 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_messages_unified: {
+        Row: {
+          channel: string | null
+          created_at: string | null
+          direction: string | null
+          error_code: string | null
+          error_message: string | null
+          id: string | null
+          is_archived: boolean | null
+          is_group: boolean | null
+          is_mass_dispatch: boolean | null
+          media_type: string | null
+          media_url: string | null
+          message: string | null
+          message_id: string | null
+          phone: string | null
+          quoted_message_id: string | null
+          referral: Json | null
+          sender_name: string | null
+          sender_user_id: string | null
+          status: string | null
+          whatsapp_number_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       analyze_catalog_sync_from_pos: { Args: never; Returns: Json }
@@ -14176,6 +14270,12 @@ export type Database = {
         Returns: {
           skipped_empty: number
           updated_count: number
+        }[]
+      }
+      archive_old_whatsapp_messages: {
+        Args: { p_batch_size?: number }
+        Returns: {
+          moved_count: number
         }[]
       }
       backfill_master_costs_from_pos: {
