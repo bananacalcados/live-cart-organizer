@@ -2712,6 +2712,41 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_list_memberships: {
+        Row: {
+          added_at: string
+          customer_id: string
+          id: string
+          list_id: string
+          metadata: Json | null
+          source: string | null
+        }
+        Insert: {
+          added_at?: string
+          customer_id: string
+          id?: string
+          list_id: string
+          metadata?: Json | null
+          source?: string | null
+        }
+        Update: {
+          added_at?: string
+          customer_id?: string
+          id?: string
+          list_id?: string
+          metadata?: Json | null
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_list_memberships_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers_unified"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_loyalty_points: {
         Row: {
           created_at: string
@@ -2957,6 +2992,156 @@ export type Database = {
           tags?: string[] | null
           updated_at?: string
           whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      customers_unified: {
+        Row: {
+          address: string | null
+          address_number: string | null
+          age_range: string | null
+          avg_ticket: number
+          ban_reason: string | null
+          birth_date: string | null
+          cep: string | null
+          children_age_range: string | null
+          city: string | null
+          complement: string | null
+          cpf: string | null
+          created_at: string
+          customer_code: string | null
+          ddd: string | null
+          email: string | null
+          first_purchase_at: string | null
+          gender: string | null
+          has_children: boolean | null
+          id: string
+          instagram_handle: string | null
+          instagram_user_id: string | null
+          is_banned: boolean
+          last_purchase_at: string | null
+          last_seen_at: string | null
+          live_cancellation_count: number
+          metadata: Json | null
+          name: string | null
+          neighborhood: string | null
+          phone_e164: string | null
+          phone_suffix8: string | null
+          preferred_style: string | null
+          previous_phones: string[] | null
+          region_type: string | null
+          rfm_f: number | null
+          rfm_m: number | null
+          rfm_r: number | null
+          rfm_segment: string | null
+          rfm_total: number | null
+          shoe_size: string | null
+          source_origins: Json | null
+          state: string | null
+          tags: string[] | null
+          tenant_id: string | null
+          total_items: number
+          total_orders: number
+          total_spent: number
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          address_number?: string | null
+          age_range?: string | null
+          avg_ticket?: number
+          ban_reason?: string | null
+          birth_date?: string | null
+          cep?: string | null
+          children_age_range?: string | null
+          city?: string | null
+          complement?: string | null
+          cpf?: string | null
+          created_at?: string
+          customer_code?: string | null
+          ddd?: string | null
+          email?: string | null
+          first_purchase_at?: string | null
+          gender?: string | null
+          has_children?: boolean | null
+          id?: string
+          instagram_handle?: string | null
+          instagram_user_id?: string | null
+          is_banned?: boolean
+          last_purchase_at?: string | null
+          last_seen_at?: string | null
+          live_cancellation_count?: number
+          metadata?: Json | null
+          name?: string | null
+          neighborhood?: string | null
+          phone_e164?: string | null
+          phone_suffix8?: string | null
+          preferred_style?: string | null
+          previous_phones?: string[] | null
+          region_type?: string | null
+          rfm_f?: number | null
+          rfm_m?: number | null
+          rfm_r?: number | null
+          rfm_segment?: string | null
+          rfm_total?: number | null
+          shoe_size?: string | null
+          source_origins?: Json | null
+          state?: string | null
+          tags?: string[] | null
+          tenant_id?: string | null
+          total_items?: number
+          total_orders?: number
+          total_spent?: number
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          address_number?: string | null
+          age_range?: string | null
+          avg_ticket?: number
+          ban_reason?: string | null
+          birth_date?: string | null
+          cep?: string | null
+          children_age_range?: string | null
+          city?: string | null
+          complement?: string | null
+          cpf?: string | null
+          created_at?: string
+          customer_code?: string | null
+          ddd?: string | null
+          email?: string | null
+          first_purchase_at?: string | null
+          gender?: string | null
+          has_children?: boolean | null
+          id?: string
+          instagram_handle?: string | null
+          instagram_user_id?: string | null
+          is_banned?: boolean
+          last_purchase_at?: string | null
+          last_seen_at?: string | null
+          live_cancellation_count?: number
+          metadata?: Json | null
+          name?: string | null
+          neighborhood?: string | null
+          phone_e164?: string | null
+          phone_suffix8?: string | null
+          preferred_style?: string | null
+          previous_phones?: string[] | null
+          region_type?: string | null
+          rfm_f?: number | null
+          rfm_m?: number | null
+          rfm_r?: number | null
+          rfm_segment?: string | null
+          rfm_total?: number | null
+          shoe_size?: string | null
+          source_origins?: Json | null
+          state?: string | null
+          tags?: string[] | null
+          tenant_id?: string | null
+          total_items?: number
+          total_orders?: number
+          total_spent?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -14377,6 +14562,8 @@ export type Database = {
       }
       extract_base_product_name: { Args: { p_name: string }; Returns: string }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
+      extract_phone_suffix8: { Args: { phone_input: string }; Returns: string }
+      format_customer_code: { Args: { seq_val: number }; Returns: string }
       generate_ean13_barcode: { Args: never; Returns: string }
       generate_ean13_internal: { Args: never; Returns: string }
       get_active_mp_account: {
