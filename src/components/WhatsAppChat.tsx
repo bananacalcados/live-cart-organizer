@@ -308,40 +308,23 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     loadMessages();
     // Mark messages as read when chat is opened
     setHasUnreadMessages(order.id, false);
-
-    // Subscribe to realtime for the main normalized phone
-    // Using a single channel with OR filter is more efficient
-    const channel = supabase
-      .channel(`whatsapp-messages-${normalizedPhone}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'whatsapp_messages',
-        },
-        (payload) => {
-          const newMsg = payload.new as Message;
-          // Check if this message is for our phone (any variation)
-          if (!phoneVariations.includes(newMsg.phone)) return;
-          
-          setMessages((prev) => {
-            // Avoid duplicates
-            if (prev.some(m => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
-          // If incoming message, mark as read immediately since chat is open
-          if (newMsg.direction === 'incoming') {
-            setHasUnreadMessages(order.id, false);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [normalizedPhone, order.id, setHasUnreadMessages]);
+
+  // New WhatsApp messages broadcast (postgres_changes removed for CPU).
+  // Payload carries minimal info — we filter by phone, then refetch.
+  useWaMessageBroadcast((payload) => {
+    if (!payload?.phone || !phoneVariations.includes(payload.phone)) return;
+    loadMessages();
+    if (payload.direction === 'incoming') {
+      setHasUnreadMessages(order.id, false);
+    }
+  });
+
+  // Status (✓✓) refresh: refetch every 15s while open.
+  useEffect(() => {
+    const interval = setInterval(() => loadMessages(), 15000);
+    return () => clearInterval(interval);
+  }, [normalizedPhone]);
 
   useEffect(() => {
     if (scrollRef.current) {
