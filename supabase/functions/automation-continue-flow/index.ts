@@ -217,6 +217,10 @@ serve(async (req) => {
                 },
               }),
             });
+            await supabase.from('whatsapp_messages').insert({
+              phone, message: bodyText, direction: 'outgoing', status: 'sent',
+              whatsapp_number_id: sendNumberId || null,
+            });
           } else {
             const blkType = blk.type || (blk.mediaUrl ? (blk.mediaType || 'document') : 'text');
             const blkMessage = replaceVars(blk.message || '');
@@ -231,6 +235,15 @@ serve(async (req) => {
                 type: blk.mediaUrl ? blkType : 'text',
                 whatsappNumberId: sendNumberId,
               }),
+            });
+            // Persist outgoing message (audio/text/media) so it shows up in the chat UI
+            await supabase.from('whatsapp_messages').insert({
+              phone,
+              message: blkMessage || null,
+              media_url: blk.mediaUrl || null,
+              direction: 'outgoing',
+              status: 'sent',
+              whatsapp_number_id: sendNumberId || null,
             });
           }
           if (bi < rawBlocks.length - 1) await new Promise(r => setTimeout(r, 800));
