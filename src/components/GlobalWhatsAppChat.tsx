@@ -131,21 +131,13 @@ export function GlobalWhatsAppChat() {
     };
 
     loadConversations();
+  }, [isOpen, orders, selectedPhone, selectedConvNumberId, customers, events, chatContacts, enrichConversations, metaNumbers, waMsgTick]);
 
-    // Broadcast-based notification (postgres_changes on whatsapp_messages was
-    // removed to cut DB CPU). All clients listen on the 'wa_msg_inserts' topic.
-    const channel = supabase
-      .channel(`global-wa-bcast-${Math.random().toString(36).slice(2)}`, {
-        config: { broadcast: { self: false } },
-      })
-      .on('broadcast', { event: 'wa_msg_insert' }, () => {
-        loadConversations();
-        if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [isOpen, orders, selectedPhone, selectedConvNumberId, customers, events, chatContacts, enrichConversations, metaNumbers]);
+  // New WhatsApp messages: broadcast-based (postgres_changes on
+  // whatsapp_messages was removed to cut DB CPU).
+  useWaMessageBroadcast(() => {
+    if (isOpen) setWaMsgTick((t) => t + 1);
+  });
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
     // Load ALL messages for this phone across all instances so full history is visible
