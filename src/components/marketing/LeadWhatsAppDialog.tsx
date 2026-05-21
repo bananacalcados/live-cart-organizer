@@ -81,15 +81,16 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
   useEffect(() => {
     if (open && phoneVariants.length > 0) {
       loadMessages();
-      const channel = supabase
-        .channel(`lead-chat-${cleanPhone}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' }, (payload: any) => {
-          if (phoneVariants.includes(payload.new?.phone)) loadMessages();
-        })
-        .subscribe();
-      return () => { supabase.removeChannel(channel); };
     }
   }, [open, phoneVariants.join(','), loadMessages]); // eslint-disable-line
+
+  // Broadcast-based notification (postgres_changes removed for CPU).
+  useWaMessageBroadcast((payload) => {
+    if (!open) return;
+    if (!payload?.phone || !phoneVariants.includes(payload.phone)) return;
+    loadMessages();
+  });
+
 
   // Determine which phone format exists in messages for sending
   const sendPhone = messages.length > 0 ? messages[0].phone : (cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone);
