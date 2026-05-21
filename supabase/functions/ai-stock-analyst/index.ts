@@ -453,6 +453,23 @@ function detectarCategoriaNaPergunta(mensagem: string): string | null {
   return categoria === 'Outros' ? null : categoria;
 }
 
+function isNumericLikeSize(value: string | null | undefined): boolean {
+  if (!value) return false;
+  return /^\d{1,2}(?:[.,]\d)?$/.test(String(value).trim());
+}
+
+function resolveProductSize(p: any): string {
+  const rawSize = String(p?.size || '').trim();
+  if (isNumericLikeSize(rawSize)) return rawSize.replace(',', '.');
+
+  const nome = String(p?.nome || p?.name || '');
+  const matches = [...nome.matchAll(/(?:^|\D)(3[3-9]|4[0-2])(?:\D|$)/g)];
+  const fromName = matches.at(-1)?.[1];
+  if (fromName) return fromName;
+
+  return rawSize || 'SEM_TAMANHO';
+}
+
 function buildLocalChatFallback(mensagem: string, contexto: any): string | null {
   const lower = (mensagem || '').toLowerCase();
   const todos: any[] = contexto?.todos_produtos || [];
@@ -464,12 +481,12 @@ function buildLocalChatFallback(mensagem: string, contexto: any): string | null 
 
   if (pediuQuantidadePorTamanho) {
     const base = categoria
-      ? todos.filter((p) => p.categoria === categoria)
+      ? todos.filter((p) => p.categoria === categoria || String(p.nome || '').toLowerCase().includes(categoria.toLowerCase()))
       : todos;
 
     const agg = new Map<string, { estoque: number; skus: number; modelos: Set<string> }>();
     for (const p of base) {
-      const size = String(p.size || 'SEM_TAMANHO');
+      const size = resolveProductSize(p);
       let cur = agg.get(size);
       if (!cur) {
         cur = { estoque: 0, skus: 0, modelos: new Set<string>() };
