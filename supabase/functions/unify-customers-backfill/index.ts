@@ -315,6 +315,10 @@ Deno.serve(async (req) => {
       dateEarliest("first_purchase_at" as any);
       dateLatest("last_purchase_at" as any);
 
+      // cashback: usa o maior saldo e a data de expiração mais distante
+      numericMax("cashback_balance" as any);
+      dateLatest("cashback_expires_at" as any);
+
       if (src.tags?.length) {
         const set = new Set([...(target.tags || []), ...src.tags]);
         target.tags = [...set];
@@ -437,6 +441,8 @@ Deno.serve(async (req) => {
           tags: u.tags || [],
           is_banned: u.is_banned || false, ban_reason: u.ban_reason,
           live_cancellation_count: u.live_cancellation_count || 0,
+          cashback_balance: u.cashback_balance || 0,
+          cashback_expires_at: u.cashback_expires_at,
           source_origins: u._origins,
         };
       });

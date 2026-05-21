@@ -8241,6 +8241,7 @@ export type Database = {
           created_at: string
           custom_shipping_cost: number | null
           customer_id: string
+          customer_unified_id: string | null
           delivery_method: string | null
           discount_type: string | null
           discount_value: number | null
@@ -8285,6 +8286,7 @@ export type Database = {
           created_at?: string
           custom_shipping_cost?: number | null
           customer_id: string
+          customer_unified_id?: string | null
           delivery_method?: string | null
           discount_type?: string | null
           discount_value?: number | null
@@ -8329,6 +8331,7 @@ export type Database = {
           created_at?: string
           custom_shipping_cost?: number | null
           customer_id?: string
+          customer_unified_id?: string | null
           delivery_method?: string | null
           discount_type?: string | null
           discount_value?: number | null
@@ -8368,6 +8371,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_customer_unified_id_fkey"
+            columns: ["customer_unified_id"]
+            isOneToOne: false
+            referencedRelation: "customers_unified"
             referencedColumns: ["id"]
           },
           {
@@ -9977,6 +9987,7 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           customer_state: string | null
+          customer_unified_id: string | null
           discount: number
           event_id: string | null
           expedition_status: string
@@ -10037,6 +10048,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           customer_state?: string | null
+          customer_unified_id?: string | null
           discount?: number
           event_id?: string | null
           expedition_status?: string
@@ -10097,6 +10109,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           customer_state?: string | null
+          customer_unified_id?: string | null
           discount?: number
           event_id?: string | null
           expedition_status?: string
@@ -10151,6 +10164,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "pos_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sales_customer_unified_id_fkey"
+            columns: ["customer_unified_id"]
+            isOneToOne: false
+            referencedRelation: "customers_unified"
             referencedColumns: ["id"]
           },
           {
@@ -14924,10 +14944,18 @@ export type Database = {
         }[]
       }
       product_name_key: { Args: { p_name: string }; Returns: string }
+      recalc_customer_metrics: {
+        Args: { p_customer_id: string }
+        Returns: undefined
+      }
       recompute_needs_review: { Args: never; Returns: number }
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
+      }
+      resolve_customer_unified: {
+        Args: { p_cpf?: string; p_phone: string }
+        Returns: string
       }
       resolve_fiscal_rule: {
         Args: {
