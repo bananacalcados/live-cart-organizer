@@ -351,9 +351,19 @@ Deno.serve(async (req) => {
 
         if (matchId) {
           const u = unifiedById.get(matchId)!;
-          // detecta conflito de CPF
+          // CPF é a fonte de verdade. Se diverge, são clientes diferentes que
+          // compartilham telefone (família/vendedora cadastrou número genérico).
+          // Cria registro independente SEM telefone — será preenchido quando voltar.
           if (row.cpf && u.cpf && u.cpf !== row.cpf) {
-            conflicts.push(`CPF conflito em ${matchId}: ${u.cpf} vs ${row.cpf} (${row.origin})`);
+            conflicts.push(`CPF conflito em ${matchId}: ${u.cpf} vs ${row.cpf} (${row.origin}) — criado como independente sem telefone`);
+            const id = `tmp-${++internalSeq}`;
+            const isolated: Unified = { ...row, phone: null, _origins: [row.origin], _list_ids: new Set(row.list_id ? [row.list_id] : []) };
+            unifiedById.set(id, isolated);
+            // indexa só por CPF/email/IG (sem telefone para não re-colidir)
+            if (isolated.cpf) byCpf.set(isolated.cpf, id);
+            if (isolated.email) byEmail.set(isolated.email, id);
+            if (isolated.instagram_handle) byIg.set(isolated.instagram_handle, id);
+            created++;
             continue;
           }
           mergeFields(u, row);
