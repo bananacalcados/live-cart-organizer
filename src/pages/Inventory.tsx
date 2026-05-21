@@ -15,6 +15,7 @@ import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
 import { InventoryHealthDashboard } from "@/components/inventory/InventoryHealthDashboard";
 import { InventoryAnalytics } from "@/components/inventory/InventoryAnalytics";
 import InventoryAIAnalysis from "@/components/inventory/InventoryAIAnalysis";
+import InventoryBulkActions from "@/components/inventory/InventoryBulkActions";
 import { POSBarcodeScanner } from "@/components/pos/POSBarcodeScanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,7 +174,7 @@ export default function Inventory() {
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "stock" | "capture" | "products" | "nfe">("dashboard");
+  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe">("dashboard");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
@@ -1112,6 +1113,14 @@ export default function Inventory() {
               >
                 <Sparkles className="h-3 w-3" /> Análise IA
               </Button>
+              <Button
+                variant={inventoryMode === "bulk" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("bulk")}
+                className="text-xs h-7 gap-1"
+              >
+                <Sparkles className="h-3 w-3" /> Ações em Massa
+              </Button>
               {selectedStoreId && (
                 <>
                   <Button
@@ -1184,6 +1193,8 @@ export default function Inventory() {
           <InventoryAnalytics />
         ) : inventoryMode === "ai" ? (
           <InventoryAIAnalysis />
+        ) : inventoryMode === "bulk" ? (
+          <InventoryBulkActions />
         ) : !selectedStoreId ? (
           <div className="text-center py-20">
             <Store className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
