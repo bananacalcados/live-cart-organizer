@@ -10,6 +10,7 @@ import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { useZapi } from "@/hooks/useZapi";
 import { supabase } from "@/integrations/supabase/client";
+import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { MessageStatusIcon } from "@/components/chat/MessageStatusIcon";
