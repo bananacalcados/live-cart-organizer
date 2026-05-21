@@ -529,6 +529,7 @@ serve(async (req) => {
                 media_type: 'text',
                 whatsapp_number_id: sendNumberId || null,
                 is_mass_dispatch: true,
+                source: 'broadcast',
               }).then(() => {});
               supabase.from('chat_finished_conversations').upsert({
                 phone: formattedPhone,
