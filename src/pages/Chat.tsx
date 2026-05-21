@@ -437,7 +437,7 @@ export default function ChatPage() {
     }
 
     if (!error && data) {
-      const sorted = [...data].reverse() as Message[];
+      const sorted = [...(data as any[])].reverse() as Message[];
       if (loadMore) {
         setMessages(prev => [...sorted, ...prev]);
       } else {
