@@ -353,21 +353,25 @@ export default function ChatPage() {
 
   useEffect(() => {
     loadConversations();
-    const channel = supabase
-      .channel('chat-page-realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'whatsapp_messages' }, () => {
-        loadConversations();
-        const active = activeConversationRef.current;
-        if (active.phone) loadMessages(active.phone, false, active.numberId);
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'whatsapp_messages' }, () => {
-        loadConversations();
-        const active = activeConversationRef.current;
-        if (active.phone) loadMessages(active.phone, false, active.numberId);
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
   }, [loadConversations]);
+
+  // New WhatsApp messages: broadcast-based (postgres_changes was removed
+  // from this table to cut DB CPU). See useWaMessageBroadcast.
+  useWaMessageBroadcast(() => {
+    loadConversations();
+    const active = activeConversationRef.current;
+    if (active.phone) loadMessages(active.phone, false, active.numberId);
+  });
+
+  // Status updates (✓✓ azul) no longer broadcast — lightweight refetch
+  // of the OPEN conversation every 15s keeps the ticks reasonably fresh.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const active = activeConversationRef.current;
+      if (active.phone) loadMessages(active.phone, false, active.numberId);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
   useEffect(() => {
