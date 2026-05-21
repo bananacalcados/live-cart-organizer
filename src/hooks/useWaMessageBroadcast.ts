@@ -62,16 +62,6 @@ function ensureChannel() {
         toast.info("🟢 Canal broadcast conectado", { duration: 2500 });
       }
     });
-        try {
-          fn(payload);
-        } catch (e) {
-          console.error("[wa_msg_inserts] listener error", e);
-        }
-      });
-    })
-    .subscribe((status) => {
-      console.log("[wa_msg_inserts] channel status:", status);
-    });
 }
 
 function teardownIfIdle() {
