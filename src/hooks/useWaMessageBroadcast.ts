@@ -26,6 +26,14 @@ function ensureChannel() {
     .channel("wa_msg_inserts")
     .on("broadcast", { event: "wa_msg_insert" }, (msg: any) => {
       const payload = (msg?.payload ?? {}) as WaMessageInsertPayload;
+      // TEMP DEBUG — remover após validar Meta Centro
+      console.log("[wa_msg_inserts] broadcast received", {
+        id: payload.id,
+        phone: payload.phone,
+        whatsapp_number_id: payload.whatsapp_number_id,
+        direction: payload.direction,
+        listeners: listeners.size,
+      });
       listeners.forEach((fn) => {
         try {
           fn(payload);
@@ -34,7 +42,9 @@ function ensureChannel() {
         }
       });
     })
-    .subscribe();
+    .subscribe((status) => {
+      console.log("[wa_msg_inserts] channel status:", status);
+    });
 }
 
 function teardownIfIdle() {
