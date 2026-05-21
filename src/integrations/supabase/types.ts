@@ -10670,6 +10670,10 @@ export type Database = {
         Row: {
           created_at: string
           default_gender: string | null
+          default_height_cm: number | null
+          default_length_cm: number | null
+          default_weight_kg: number | null
+          default_width_cm: number | null
           id: string
           is_active: boolean
           keywords: string[]
@@ -10681,6 +10685,10 @@ export type Database = {
         Insert: {
           created_at?: string
           default_gender?: string | null
+          default_height_cm?: number | null
+          default_length_cm?: number | null
+          default_weight_kg?: number | null
+          default_width_cm?: number | null
           id?: string
           is_active?: boolean
           keywords?: string[]
@@ -10692,6 +10700,10 @@ export type Database = {
         Update: {
           created_at?: string
           default_gender?: string | null
+          default_height_cm?: number | null
+          default_length_cm?: number | null
+          default_weight_kg?: number | null
+          default_width_cm?: number | null
           id?: string
           is_active?: boolean
           keywords?: string[]
