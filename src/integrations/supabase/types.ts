@@ -13655,6 +13655,7 @@ export type Database = {
           referral: Json | null
           sender_name: string | null
           sender_user_id: string | null
+          source: string
           status: string | null
           whatsapp_number_id: string | null
         }
@@ -13676,6 +13677,7 @@ export type Database = {
           referral?: Json | null
           sender_name?: string | null
           sender_user_id?: string | null
+          source?: string
           status?: string | null
           whatsapp_number_id?: string | null
         }
@@ -13697,6 +13699,7 @@ export type Database = {
           referral?: Json | null
           sender_name?: string | null
           sender_user_id?: string | null
+          source?: string
           status?: string | null
           whatsapp_number_id?: string | null
         }
@@ -13730,6 +13733,7 @@ export type Database = {
           referral: Json | null
           sender_name: string | null
           sender_user_id: string | null
+          source: string
           status: string | null
           whatsapp_number_id: string | null
         }
@@ -13752,6 +13756,7 @@ export type Database = {
           referral?: Json | null
           sender_name?: string | null
           sender_user_id?: string | null
+          source?: string
           status?: string | null
           whatsapp_number_id?: string | null
         }
@@ -13774,6 +13779,7 @@ export type Database = {
           referral?: Json | null
           sender_name?: string | null
           sender_user_id?: string | null
+          source?: string
           status?: string | null
           whatsapp_number_id?: string | null
         }
@@ -14270,6 +14276,20 @@ export type Database = {
         Returns: {
           skipped_empty: number
           updated_count: number
+        }[]
+      }
+      archive_inactive_ads_conversations: {
+        Args: { p_batch_size?: number; p_days?: number }
+        Returns: {
+          archived_messages: number
+          archived_phones: number
+        }[]
+      }
+      archive_inactive_broadcast_messages: {
+        Args: { p_batch_size?: number; p_days?: number }
+        Returns: {
+          archived_messages: number
+          archived_phones: number
         }[]
       }
       archive_old_whatsapp_messages: {
