@@ -324,6 +324,88 @@ function contextoFiltradoParaAnalise(c: any) {
   };
 }
 
+/**
+ * Contexto enxuto para o modo CHAT — evita estourar o limite de tokens (1M Gemini).
+ * Agrega pos_products por modelo e por tamanho, sem despejar todos os SKUs no prompt.
+ */
+function contextoParaChat(c: any) {
+  const todos: any[] = c.todos_produtos || [];
+
+  const modeloAgg = new Map<string, any>();
+  for (const p of todos) {
+    const k = `${p.modelo_norm}|${p.categoria}`;
+    let cur = modeloAgg.get(k);
+    if (!cur) {
+      cur = {
+        modelo: p.nome, categoria: p.categoria,
+        _precos: [] as number[], estoque_total: 0,
+        vendido_30d: 0, vendido_90d: 0, faturamento_90d: 0,
+        skus: 0, tamanhos: new Set<string>(), lojas: new Set<string>(),
+      };
+      modeloAgg.set(k, cur);
+    }
+    cur.estoque_total += p.estoque;
+    cur.vendido_30d += p.vendido_30d;
+    cur.vendido_90d += p.vendido_90d;
+    cur.faturamento_90d += p.faturamento_90d;
+    cur.skus += 1;
+    if (p.size) cur.tamanhos.add(String(p.size));
+    if (p.loja) cur.lojas.add(p.loja);
+    if (p.preco) cur._precos.push(p.preco);
+  }
+  const resumo_modelos = Array.from(modeloAgg.values())
+    .map((m: any) => ({
+      modelo: m.modelo, categoria: m.categoria,
+      preco_medio: m._precos.length
+        ? +(m._precos.reduce((a: number, b: number) => a + b, 0) / m._precos.length).toFixed(2) : 0,
+      estoque_total: m.estoque_total,
+      vendido_30d: m.vendido_30d, vendido_90d: m.vendido_90d,
+      faturamento_90d: +m.faturamento_90d.toFixed(2),
+      qtd_skus: m.skus,
+      tamanhos: Array.from(m.tamanhos).sort(),
+      lojas: Array.from(m.lojas),
+    }))
+    .sort((a, b) => b.faturamento_90d - a.faturamento_90d);
+
+  const tamanhoAgg = new Map<string, { estoque: number; vendido_30d: number; vendido_90d: number; skus: number }>();
+  for (const p of todos) {
+    const s = String(p.size || 'SEM_TAMANHO');
+    let cur = tamanhoAgg.get(s);
+    if (!cur) { cur = { estoque: 0, vendido_30d: 0, vendido_90d: 0, skus: 0 }; tamanhoAgg.set(s, cur); }
+    cur.estoque += p.estoque;
+    cur.vendido_30d += p.vendido_30d;
+    cur.vendido_90d += p.vendido_90d;
+    cur.skus += 1;
+  }
+  const resumo_tamanhos = Array.from(tamanhoAgg.entries())
+    .map(([size, v]) => ({ size, ...v }))
+    .sort((a, b) => b.estoque - a.estoque);
+
+  const top_estoque = [...todos]
+    .filter((p) => p.estoque > 0)
+    .sort((a, b) => b.estoque - a.estoque)
+    .slice(0, 50)
+    .map((p) => ({
+      sku: p.sku, nome: p.nome, size: p.size, loja: p.loja,
+      estoque: p.estoque, vendido_30d: p.vendido_30d, cobertura_dias: p.cobertura_dias,
+    }));
+
+  return {
+    gerado_em: c.gerado_em,
+    janela_vendas_dias: c.janela_vendas_dias,
+    totais: c.totais,
+    resumo_lojas: c.resumo_lojas,
+    categorias: c.categorias,
+    resumo_tamanhos,
+    resumo_modelos: resumo_modelos.slice(0, 200),
+    top_estoque,
+    alertas_ruptura: (c.alertas_ruptura || []).slice(0, 80),
+    alertas_encalhe: (c.alertas_encalhe || []).slice(0, 80),
+    grade_incompleta: (c.grade_incompleta || []).slice(0, 50),
+    top20_faturamento_30d: c.top20_faturamento_30d,
+  };
+}
+
 function parseJsonText(text: string) {
   try {
     const m = text.match(/\{[\s\S]*\}/);
