@@ -293,6 +293,7 @@ export function ConversationList({
         <div className="flex gap-1 overflow-x-auto pb-1">
           {STATUS_TABS.map(tab => {
             const isActive = !liveFilterActive && statusFilter === tab.value;
+            const highlightUnread = tab.value === 'awaiting_reply' && awaitingReplyUnread > 0 && !isActive;
             const node = (
               <button
                 key={tab.value}
@@ -301,15 +302,22 @@ export function ConversationList({
                   onStatusFilterChange(tab.value);
                 }}
                 className={cn(
-                  "px-2 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors flex-shrink-0",
+                  "px-2 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors flex-shrink-0 inline-flex items-center gap-1",
                   isActive
                     ? "bg-[#00a884] text-white"
-                    : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
+                    : highlightUnread
+                      ? "bg-amber-500 text-white animate-pulse ring-2 ring-amber-300"
+                      : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
                 )}
               >
                 {tab.shortLabel}
                 {statusCounts[tab.value] > 0 && (
-                  <span className="ml-1 text-[9px] opacity-80">({statusCounts[tab.value]})</span>
+                  <span className="text-[9px] opacity-80">({statusCounts[tab.value]})</span>
+                )}
+                {highlightUnread && (
+                  <span className="ml-0.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-white text-amber-600 text-[9px] font-bold">
+                    {awaitingReplyUnread}
+                  </span>
                 )}
               </button>
             );
