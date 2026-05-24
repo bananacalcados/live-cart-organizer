@@ -120,54 +120,14 @@ serve(async (req) => {
 
     const checkoutLink = order.cart_link || `https://checkout.bananacalcados.com.br/checkout/order/${orderId}`;
 
-    // 5 variações de bloco A (abertura) — todas em tom direto, casual
-    const openings = [
-      `Oii ${igName}! Já estamos separando seu pedido por aqui 😁 Acabei de criar o link do seu carrinho com tudo certinho (inclusive as fotos das peças).\n\nÉ só clicar abaixo pra finalizar 👇`,
-      `Eaee ${igName} 🙌 Seu pedido já tá sendo separado! Montei o link do carrinho com todos os itens e fotos pra você conferir.\n\nClica aqui embaixo pra abrir 👇`,
-      `Oii ${igName} 😊 Tudo certo por aqui, já comecei a separar seu pedido. Criei o link do carrinho com fotos e valores pra ficar fácil de conferir.\n\nDá uma olhada no link aqui embaixo 👇`,
-      `Oii ${igName}! Aqui é da Banana 🍌 Já tô separando seu pedido. Te mandei o link do carrinho com tudo discriminado (fotos, valores e quantidade).\n\nSó abrir aí embaixo 👇`,
-      `Eaee ${igName} 💛 Pedido confirmado por aqui, já comecei a separar! Gerei o link do seu carrinho com fotos e detalhes pra você revisar antes de fechar.\n\nÉ só clicar abaixo 👇`,
-    ];
+    const firstName = (igHandle.replace(/^@/, '').split(/[._\s]/)[0] || '').trim();
+    const displayName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : igName;
 
-    // 5 variações de bloco C (endereço) — TODAS terminam com pergunta (regra)
-    const addressKnownVariants = (addr: string) => [
-      `Pra eu já ir agilizando o envio, o endereço ainda é este?\n📍 ${addr}\n\nPosso confirmar?`,
-      `Aproveitando: o endereço de entrega continua sendo este aqui?\n📍 ${addr}\n\nConfirma pra mim?`,
-      `Pra adiantar a expedição, esse endereço ainda tá certo?\n📍 ${addr}\n\nPosso seguir com ele?`,
-      `Antes de fechar, só pra conferir — o envio continua nesse endereço?\n📍 ${addr}\n\nTá tudo certo aí?`,
-      `Só uma confirmação rapidinha: posso enviar pra esse endereço mesmo?\n📍 ${addr}\n\nTá ok ou prefere atualizar?`,
-    ];
-
-    const addressUnknownVariants = [
-      `Pra eu já ir agilizando o envio, pode me passar seu endereço completo por aqui?`,
-      `Aproveitando, qual o endereço pra entrega? Pode me mandar por aqui mesmo?`,
-      `Pra adiantar a expedição, me passa seu endereço completinho aqui?`,
-      `Antes de fechar, qual endereço você quer usar pra entrega?`,
-      `Só falta o endereço — pode me enviar o seu completo por aqui?`,
-    ];
-
-    const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
-
-    const blockA = pick(openings);
+    const blockA = `Oii ${displayName}, já separamos seu pedido.`;
     const blockB = checkoutLink;
-    let blockC: string;
-    let initialStage: string;
+    const blockC = `Só clicar no link acima pra finalizar a compra. Seu produto já foi separado, mas precisa ser pago em 10 minutos, pra continuar reservado, OK?`;
 
-    if (savedAddress) {
-      const addrStr = [
-        savedAddress.address,
-        savedAddress.address_number ? `nº ${savedAddress.address_number}` : '',
-        savedAddress.complement || '',
-        savedAddress.neighborhood || '',
-        `${savedAddress.city || ''}/${savedAddress.state || ''}`,
-        savedAddress.cep ? `CEP: ${savedAddress.cep}` : '',
-      ].filter(Boolean).join(', ');
-      blockC = pick(addressKnownVariants(addrStr));
-      initialStage = 'confirmar_endereco';
-    } else {
-      blockC = pick(addressUnknownVariants);
-      initialStage = 'endereco';
-    }
+    const initialStage = savedAddress ? 'aguardando_pagamento' : 'endereco';
 
     const messageParts = [blockA, blockB, blockC];
     const firstMessage = messageParts.join('\n\n'); // só pra log/dedupe
