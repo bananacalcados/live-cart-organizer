@@ -172,8 +172,18 @@ export function InstagramDMChat({
           fallbackCommentId,
         },
       });
-      if (error) throw error;
-      if ((data as any)?.error) throw new Error((data as any).error);
+      if (error) {
+        // FunctionsHttpError não expõe o body — tentamos ler para mensagens amigáveis
+        let friendly = "";
+        try {
+          const ctx: any = (error as any).context;
+          const resp = ctx?.response ? await ctx.response.clone().json() : null;
+          if (resp?.error === "unsupported_audio_format") friendly = resp.message;
+          else if (resp?.message) friendly = resp.message;
+        } catch {}
+        throw new Error(friendly || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).message || (data as any).error);
       toast.success(`${opts.mediaType === "image" ? "Foto" : opts.mediaType === "video" ? "Vídeo" : "Áudio"} enviado!`);
       await loadHistory();
     } catch (err: any) {
@@ -184,6 +194,7 @@ export function InstagramDMChat({
       setSending(false);
     }
   };
+
 
   const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
