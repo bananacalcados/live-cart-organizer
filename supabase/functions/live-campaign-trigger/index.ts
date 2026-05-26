@@ -222,6 +222,28 @@ Deno.serve(async (req) => {
     // Resolve o número que será usado para o envio JÁ AQUI, para persistir no dispatch
     // Prioridade: whatsapp_number_id da campanha → instância que recebeu o webhook (origem)
     const resolvedNumberId = matched.whatsapp_number_id ?? whatsapp_number_id ?? null;
+
+    // === Resolução de canal ===
+    // channel_preference: 'whatsapp' (default) | 'instagram' | 'meta_whatsapp' | 'auto'
+    const pref = (matched as any).channel_preference || "whatsapp";
+    let resolvedChannel: "whatsapp" | "instagram" = "whatsapp";
+    let resolvedIgUserId: string | null = ig_user_id || null;
+    let resolvedIgCommentId: string | null = ig_comment_id || null;
+
+    if (pref === "instagram" || (pref === "auto" && (ig_user_id || ig_username))) {
+      resolvedChannel = "instagram";
+      // Se veio só username, tenta resolver ig_user_id na tabela de vínculos
+      if (!resolvedIgUserId && ig_username) {
+        const cleanU = String(ig_username).replace(/^@/, "").trim().toLowerCase();
+        const { data: link } = await supabase
+          .from("instagram_user_links")
+          .select("ig_user_id")
+          .ilike("username", cleanU)
+          .maybeSingle();
+        resolvedIgUserId = link?.ig_user_id || null;
+      }
+    }
+
     const dispatchRows = messages.map((m) => ({
       campaign_id: matched.id,
       message_id: m.id,
@@ -230,6 +252,9 @@ Deno.serve(async (req) => {
       scheduled_at: nowIso,
       status: "pending" as const,
       whatsapp_number_id: resolvedNumberId,
+      channel: resolvedChannel,
+      ig_user_id: resolvedIgUserId,
+      ig_comment_id: resolvedIgCommentId,
     }));
     const { data: insertedDispatches } = await supabase
       .from("live_campaign_dispatches")
