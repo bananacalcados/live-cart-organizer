@@ -437,6 +437,14 @@ const Events = () => {
                         }}
                       />
                     )}
+                  <InitialMessageEditor
+                    enabled={initialMessageEnabled}
+                    blocks={initialMessageBlocks}
+                    onChange={(next) => {
+                      setInitialMessageEnabled(next.enabled);
+                      setInitialMessageBlocks(next.blocks);
+                    }}
+                  />
                   {editingEvent && (
                     <EventTeamSelector eventId={editingEvent} />
                   )}
