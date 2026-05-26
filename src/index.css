@@ -225,8 +225,9 @@
   --popover: 222 26% 10%;
   --popover-foreground: 215 25% 94%;
 
-  /* Cool blue primary */
-  --primary: 210 90% 60%;
+  /* Refined indigo primary (replaces bright cyan-blue) */
+  --primary: 232 55% 62%;
+
   --primary-foreground: 222 40% 8%;
 
   --secondary: 222 20% 16%;
@@ -244,8 +245,9 @@
 
   --border: 222 18% 18%;
   --input: 222 18% 18%;
-  --ring: 210 90% 60%;
+  --ring: 232 55% 62%;
   --radius: 0.75rem;
+
 
   /* Sophisticated palette tokens */
   --corp-cyan: 192 85% 60%;
@@ -256,12 +258,12 @@
   --corp-emerald: 160 65% 50%;
   --corp-rose: 350 75% 62%;
 
-  --gradient-accent: linear-gradient(135deg, hsl(210 90% 55%) 0%, hsl(192 85% 50%) 100%);
+  --gradient-accent: linear-gradient(135deg, hsl(232 45% 22%) 0%, hsl(238 50% 32%) 55%, hsl(245 55% 42%) 100%);
   --gradient-hero: linear-gradient(135deg, hsl(222 30% 6%) 0%, hsl(222 26% 10%) 100%);
   --gradient-card: linear-gradient(180deg, hsl(222 24% 12%) 0%, hsl(222 24% 10%) 100%);
   --gradient-corp-header: linear-gradient(135deg, hsl(222 32% 6%) 0%, hsl(222 28% 9%) 60%, hsl(222 26% 11%) 100%);
   --shadow-corp-card: 0 1px 0 hsl(0 0% 100% / 0.04) inset, 0 12px 32px -16px hsl(222 60% 0% / 0.6);
-  --shadow-corp-glow: 0 8px 28px -8px hsl(210 90% 55% / 0.5);
+  --shadow-corp-glow: 0 10px 30px -10px hsl(238 60% 35% / 0.6);
 }
 
 /* Force same look in light mode too (sophisticated dark is the brand) */
@@ -306,13 +308,14 @@
 /* CTA button — blue→cyan gradient with glow */
 .events-corporate .btn-accent {
   background: var(--gradient-accent);
-  color: hsl(222 40% 8%);
+  color: hsl(220 30% 96%);
   font-weight: 600;
-  box-shadow: var(--shadow-corp-glow);
+  border: 1px solid hsl(238 40% 50% / 0.4);
+  box-shadow: var(--shadow-corp-glow), inset 0 1px 0 hsl(0 0% 100% / 0.08);
   transition: all 0.2s ease;
 }
 .events-corporate .btn-accent:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.12);
   transform: translateY(-1px);
 }
 
