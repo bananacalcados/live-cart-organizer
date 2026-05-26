@@ -215,9 +215,10 @@ export function InstagramDMChat({
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       recordStreamRef.current = stream;
 
+      // IG só aceita áudio em mp4/m4a/aac/wav — priorizamos audio/mp4 (Safari/iOS).
       const mimeCandidates = kind === "audio"
-        ? ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
-        : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+        ? ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/aac", "audio/webm;codecs=opus", "audio/webm"]
+        : ["video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
       const mimeType = mimeCandidates.find((m) => (window as any).MediaRecorder?.isTypeSupported?.(m)) || "";
       const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       recordChunksRef.current = [];
