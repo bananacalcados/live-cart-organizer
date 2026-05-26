@@ -3892,6 +3892,10 @@ export type Database = {
           description: string | null
           id: string
           is_active: boolean
+          meta_template_body_variables: Json | null
+          meta_template_header_variable: string | null
+          meta_template_language: string | null
+          meta_template_name: string | null
           name: string
           updated_at: string
           whatsapp_number_id: string | null
@@ -3908,6 +3912,10 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          meta_template_body_variables?: Json | null
+          meta_template_header_variable?: string | null
+          meta_template_language?: string | null
+          meta_template_name?: string | null
           name: string
           updated_at?: string
           whatsapp_number_id?: string | null
@@ -3924,6 +3932,10 @@ export type Database = {
           description?: string | null
           id?: string
           is_active?: boolean
+          meta_template_body_variables?: Json | null
+          meta_template_header_variable?: string | null
+          meta_template_language?: string | null
+          meta_template_name?: string | null
           name?: string
           updated_at?: string
           whatsapp_number_id?: string | null
