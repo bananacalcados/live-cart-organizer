@@ -339,7 +339,7 @@ const Events = () => {
                   Nova Live
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
                     {editingEvent ? "Editar Evento" : "Novo Evento"}
