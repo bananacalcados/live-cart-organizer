@@ -86,9 +86,10 @@ serve(async (req) => {
     const isInstagram = channelPreference === 'instagram';
 
     if (isInstagram) {
-      if (!customer?.instagram_handle) {
-        console.error('[livete-start] Customer has no instagram_handle for IG channel:', order.customer_id);
-        return new Response(JSON.stringify({ error: 'Customer has no instagram_handle' }), {
+      // Aceita IG sem handle se tiver WhatsApp como fallback
+      if (!customer?.instagram_handle && !customer?.whatsapp) {
+        console.error('[livete-start] Customer has no instagram_handle nor whatsapp:', order.customer_id);
+        return new Response(JSON.stringify({ error: 'Customer has no contact channel' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
