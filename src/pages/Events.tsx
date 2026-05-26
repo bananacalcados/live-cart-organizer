@@ -38,6 +38,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
+import { MetaTemplateConfigurator } from "@/components/events/MetaTemplateConfigurator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone } from "lucide-react";
 import { format } from "date-fns";
@@ -64,6 +65,10 @@ const Events = () => {
   const [selectedWhatsAppId, setSelectedWhatsAppId] = useState<string>("");
   const [channel, setChannel] = useState<string>("site");
   const [channelPreference, setChannelPreference] = useState<string>("whatsapp");
+  const [metaTemplateName, setMetaTemplateName] = useState<string | null>(null);
+  const [metaTemplateLanguage, setMetaTemplateLanguage] = useState<string>("pt_BR");
+  const [metaTemplateBodyVars, setMetaTemplateBodyVars] = useState<string[]>([]);
+  const [metaTemplateHeaderVar, setMetaTemplateHeaderVar] = useState<string | null>(null);
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
@@ -178,20 +183,39 @@ const Events = () => {
     };
     const defaultStoreId = STORE_BY_CHANNEL[channel] ?? null;
     
+    const metaTemplateFields = channelPreference === "meta_whatsapp"
+      ? {
+          meta_template_name: metaTemplateName,
+          meta_template_language: metaTemplateLanguage,
+          meta_template_body_variables: metaTemplateBodyVars,
+          meta_template_header_variable: metaTemplateHeaderVar,
+        }
+      : {
+          meta_template_name: null,
+          meta_template_body_variables: [],
+          meta_template_header_variable: null,
+        };
+
     if (editingEvent) {
-      await updateEvent(editingEvent, { 
-        name, 
+      await updateEvent(editingEvent, {
+        name,
         description,
         default_shipping_cost: shippingValue ?? null,
         whatsapp_number_id: whatsappId,
         channel,
         channel_preference: channelPreference,
         default_store_id: defaultStoreId,
+        ...metaTemplateFields,
       } as any);
     } else {
       const eventId = await createEvent(name, description);
       if (eventId) {
-        const updates: any = { channel, default_store_id: defaultStoreId, channel_preference: channelPreference };
+        const updates: any = {
+          channel,
+          default_store_id: defaultStoreId,
+          channel_preference: channelPreference,
+          ...metaTemplateFields,
+        };
         if (shippingValue) updates.default_shipping_cost = shippingValue;
         if (whatsappId) updates.whatsapp_number_id = whatsappId;
         await updateEvent(eventId, updates);
@@ -209,6 +233,10 @@ const Events = () => {
     setSelectedWhatsAppId("");
     setChannel("site");
     setChannelPreference("whatsapp");
+    setMetaTemplateName(null);
+    setMetaTemplateLanguage("pt_BR");
+    setMetaTemplateBodyVars([]);
+    setMetaTemplateHeaderVar(null);
     setEditingEvent(null);
   };
 
@@ -220,6 +248,10 @@ const Events = () => {
     setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
     setChannel((event as any).channel || "site");
     setChannelPreference((event as any).channel_preference || "whatsapp");
+    setMetaTemplateName((event as any).meta_template_name || null);
+    setMetaTemplateLanguage((event as any).meta_template_language || "pt_BR");
+    setMetaTemplateBodyVars(((event as any).meta_template_body_variables as string[]) || []);
+    setMetaTemplateHeaderVar((event as any).meta_template_header_variable || null);
     setDialogOpen(true);
   };
 
@@ -378,6 +410,21 @@ const Events = () => {
                           Número WhatsApp usado para disparos automáticos neste evento.
                         </p>
                       </div>
+                    )}
+                    {channelPreference === "meta_whatsapp" && (
+                      <MetaTemplateConfigurator
+                        whatsappNumberId={selectedWhatsAppId && selectedWhatsAppId !== "none" ? selectedWhatsAppId : null}
+                        templateName={metaTemplateName}
+                        language={metaTemplateLanguage}
+                        bodyVariables={metaTemplateBodyVars}
+                        headerVariable={metaTemplateHeaderVar}
+                        onChange={(next) => {
+                          setMetaTemplateName(next.templateName);
+                          setMetaTemplateLanguage(next.language);
+                          setMetaTemplateBodyVars(next.bodyVariables);
+                          setMetaTemplateHeaderVar(next.headerVariable);
+                        }}
+                      />
                     )}
                   {editingEvent && (
                     <EventTeamSelector eventId={editingEvent} />
