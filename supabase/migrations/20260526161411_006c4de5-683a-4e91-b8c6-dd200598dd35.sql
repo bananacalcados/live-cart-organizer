@@ -1,0 +1,1 @@
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS channel_preference text NOT NULL DEFAULT 'whatsapp';
