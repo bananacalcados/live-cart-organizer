@@ -44,19 +44,27 @@ serve(async (req) => {
       .eq('id', order.customer_id)
       .single();
 
-    // Resolve event channel preference + whatsapp number
+    // Resolve event channel preference + whatsapp number + meta template config
     let channelPreference: string = 'whatsapp';
     let whatsappNumberId: string | null = null;
     let metaPhoneNumberId: string | null = null;
+    let metaTemplateName: string | null = null;
+    let metaTemplateLanguage: string = 'pt_BR';
+    let metaTemplateBodyVars: string[] = [];
+    let metaTemplateHeaderVar: string | null = null;
 
     if (order.event_id) {
       const { data: eventData } = await supabase
         .from('events')
-        .select('whatsapp_number_id, channel_preference')
+        .select('whatsapp_number_id, channel_preference, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable')
         .eq('id', order.event_id)
         .single();
 
       if (eventData?.channel_preference) channelPreference = eventData.channel_preference;
+      metaTemplateName = (eventData as any)?.meta_template_name || null;
+      metaTemplateLanguage = (eventData as any)?.meta_template_language || 'pt_BR';
+      metaTemplateBodyVars = ((eventData as any)?.meta_template_body_variables as string[]) || [];
+      metaTemplateHeaderVar = (eventData as any)?.meta_template_header_variable || null;
 
       if (eventData?.whatsapp_number_id) {
         whatsappNumberId = eventData.whatsapp_number_id;
@@ -176,13 +184,36 @@ serve(async (req) => {
     });
     await supabase.from('orders').update({ stage: 'contacted' }).eq('id', orderId);
 
+    // ===== Branch: Meta WhatsApp Template (overrides 3-block send) =====
+    const useMetaTemplate =
+      channelPreference === 'meta_whatsapp' &&
+      !!metaPhoneNumberId &&
+      !!metaTemplateName &&
+      !isInstagram;
+
+    const resolveToken = (token: string): string => {
+      switch (token) {
+        case '{customer_name}': return igHandle || displayName || '';
+        case '{customer_first_name}': return displayName || '';
+        case '{instagram}': return igName || '';
+        case '{products}': return productLines || '';
+        case '{products_short}':
+          return products.map((p: any) => `${p.quantity || 1}x ${p.title}`).join(', ');
+        case '{checkout_link}': return checkoutLink || '';
+        case '{subtotal}': return `R$${subtotal.toFixed(2)}`;
+        case '{discount}': return `R$${discountAmount.toFixed(2)}`;
+        case '{total}': return `R$${total.toFixed(2)}`;
+        case '{order_id}': return String(orderId).slice(0, 8);
+        default: return token || '';
+      }
+    };
+
     const recentThreshold = new Date(Date.now() - 15000).toISOString();
     let duplicateQuery = supabase
       .from('whatsapp_messages')
       .select('id, created_at')
       .eq('phone', phone)
       .eq('direction', 'outgoing')
-      .ilike('message', `%separando seu pedido%`)
       .gte('created_at', recentThreshold)
       .order('created_at', { ascending: false })
       .limit(1);
@@ -196,6 +227,28 @@ serve(async (req) => {
 
     if (shouldSkipSend) {
       console.log(`[livete-start] Duplicate start skipped for order ${orderId} / ${phone}`);
+    } else if (useMetaTemplate) {
+      const bodyParameters = metaTemplateBodyVars.map((t) => resolveToken(t));
+      const headerParameter = metaTemplateHeaderVar ? resolveToken(metaTemplateHeaderVar) : undefined;
+      console.log(`[livete-start] Sending Meta template ${metaTemplateName} to ${phone}`, {
+        bodyParameters, headerParameter,
+      });
+      const tplResp = await fetch(`${supabaseUrl}/functions/v1/meta-template-send`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone,
+          whatsappNumberId,
+          templateName: metaTemplateName,
+          language: metaTemplateLanguage,
+          bodyParameters,
+          headerParameter,
+        }),
+      });
+      if (!tplResp.ok) {
+        const errBody = await tplResp.text();
+        console.error('[livete-start] meta-template-send failed:', tplResp.status, errBody);
+      }
     } else {
       // Anti-ban: envia 3 blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
       const sendBlock = async (text: string) => {
