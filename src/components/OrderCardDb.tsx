@@ -542,17 +542,6 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               >
                 {order.customer?.instagram_handle}
               </button>
-              {order.customer?.instagram_handle && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 shrink-0 text-pink-500 hover:text-pink-600 hover:bg-pink-500/10"
-                  onClick={(e) => { e.stopPropagation(); setShowIgChatDialog(true); }}
-                  title="Abrir chat Instagram DM"
-                >
-                  <Instagram className="h-3.5 w-3.5" />
-                </Button>
-              )}
             </div>
             <div className="flex items-center gap-1.5 min-w-0">
               <p className="text-[11px] text-muted-foreground truncate font-mono">
