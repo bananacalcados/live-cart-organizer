@@ -254,7 +254,7 @@ export function InstagramDMChat({
           mediaUrl: publicUrl,
           mediaType: opts.mediaType,
           eventId,
-          fallbackCommentId,
+          fallbackCommentId: effectiveCommentId,
         },
       });
       if (error) {
