@@ -227,6 +227,9 @@ export default function LiveCampaignsManager() {
           caption: m.caption,
           delay_seconds: m.delay_seconds,
           is_active: m.is_active,
+          meta_template_name: m.meta_template_name || null,
+          meta_template_language: m.meta_template_language || null,
+          meta_template_variables: m.meta_template_variables || null,
         }));
         const { error } = await supabase.from("live_campaign_messages").insert(toInsert);
         if (error) throw error;
