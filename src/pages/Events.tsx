@@ -185,12 +185,13 @@ const Events = () => {
         default_shipping_cost: shippingValue ?? null,
         whatsapp_number_id: whatsappId,
         channel,
+        channel_preference: channelPreference,
         default_store_id: defaultStoreId,
       } as any);
     } else {
       const eventId = await createEvent(name, description);
       if (eventId) {
-        const updates: any = { channel, default_store_id: defaultStoreId };
+        const updates: any = { channel, default_store_id: defaultStoreId, channel_preference: channelPreference };
         if (shippingValue) updates.default_shipping_cost = shippingValue;
         if (whatsappId) updates.whatsapp_number_id = whatsappId;
         await updateEvent(eventId, updates);
