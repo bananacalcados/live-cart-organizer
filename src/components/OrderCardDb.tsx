@@ -1053,6 +1053,15 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         />
       )}
 
+      {order.customer?.instagram_handle && (
+        <InstagramDMChat
+          open={showIgChatDialog}
+          onOpenChange={setShowIgChatDialog}
+          username={order.customer.instagram_handle}
+          eventId={order.event_id}
+        />
+      )}
+
       <SendToPOSDialog
         open={showPOSDialog}
         onOpenChange={setShowPOSDialog}
