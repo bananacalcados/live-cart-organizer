@@ -260,3 +260,6 @@ verify_jwt = false
 
 [functions.fiscal-render-document]
 verify_jwt = false
+
+[functions.telegram-financial-webhook]
+verify_jwt = false
