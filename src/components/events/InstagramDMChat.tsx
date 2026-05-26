@@ -365,7 +365,7 @@ export function InstagramDMChat({
     setSending(true);
     try {
       const { data, error } = await supabase.functions.invoke("instagram-dm-send", {
-        body: { username: handle, message: text, eventId, fallbackCommentId },
+        body: { username: handle, message: text, eventId, fallbackCommentId: effectiveCommentId },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
