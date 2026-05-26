@@ -225,8 +225,9 @@
   --popover: 222 26% 10%;
   --popover-foreground: 215 25% 94%;
 
-  /* Cool blue primary */
-  --primary: 210 90% 60%;
+  /* Refined indigo primary (replaces bright cyan-blue) */
+  --primary: 232 55% 62%;
+
   --primary-foreground: 222 40% 8%;
 
   --secondary: 222 20% 16%;
