@@ -511,6 +511,14 @@ export function DashboardChatPanel() {
           </div>
         )}
       </ScrollArea>
+      {selectedIgHandle && (
+        <InstagramDMChat
+          open={!!selectedIgHandle}
+          onOpenChange={(o) => { if (!o) setSelectedIgHandle(null); }}
+          username={selectedIgHandle}
+          eventId={currentEventId || undefined}
+        />
+      )}
     </div>
   );
 }
