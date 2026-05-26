@@ -44,19 +44,27 @@ serve(async (req) => {
       .eq('id', order.customer_id)
       .single();
 
-    // Resolve event channel preference + whatsapp number
+    // Resolve event channel preference + whatsapp number + meta template config
     let channelPreference: string = 'whatsapp';
     let whatsappNumberId: string | null = null;
     let metaPhoneNumberId: string | null = null;
+    let metaTemplateName: string | null = null;
+    let metaTemplateLanguage: string = 'pt_BR';
+    let metaTemplateBodyVars: string[] = [];
+    let metaTemplateHeaderVar: string | null = null;
 
     if (order.event_id) {
       const { data: eventData } = await supabase
         .from('events')
-        .select('whatsapp_number_id, channel_preference')
+        .select('whatsapp_number_id, channel_preference, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable')
         .eq('id', order.event_id)
         .single();
 
       if (eventData?.channel_preference) channelPreference = eventData.channel_preference;
+      metaTemplateName = (eventData as any)?.meta_template_name || null;
+      metaTemplateLanguage = (eventData as any)?.meta_template_language || 'pt_BR';
+      metaTemplateBodyVars = ((eventData as any)?.meta_template_body_variables as string[]) || [];
+      metaTemplateHeaderVar = (eventData as any)?.meta_template_header_variable || null;
 
       if (eventData?.whatsapp_number_id) {
         whatsappNumberId = eventData.whatsapp_number_id;
