@@ -41,11 +41,16 @@ export function InstagramDMChat({
 }: InstagramDMChatProps) {
   const [messages, setMessages] = useState<DMMessage[]>([]);
   const [igUserId, setIgUserId] = useState<string | null>(null);
+  const [discoveredCommentId, setDiscoveredCommentId] = useState<string | null>(null);
+  const [discoveredCommentInfo, setDiscoveredCommentInfo] = useState<{ when: string; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const handle = cleanHandle(username);
+
+  // commentId efetivo: prop tem prioridade, senão usa o auto-descoberto
+  const effectiveCommentId = fallbackCommentId || discoveredCommentId || undefined;
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
@@ -81,6 +86,30 @@ export function InstagramDMChat({
       }
 
       setIgUserId(userId);
+
+      // Auto-descobrir comment_id recente (últimos 7 dias) para Private Reply
+      // — vale tanto pra primeira mensagem quanto pra recuperar conversa fora da janela de 24h
+      if (!fallbackCommentId) {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: recentComment } = await supabase
+          .from("live_comments")
+          .select("comment_id, comment_text, created_at")
+          .ilike("username", handle)
+          .gte("created_at", sevenDaysAgo)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (recentComment?.comment_id) {
+          setDiscoveredCommentId(recentComment.comment_id);
+          setDiscoveredCommentInfo({
+            when: new Date(recentComment.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+            text: recentComment.comment_text || "",
+          });
+        } else {
+          setDiscoveredCommentId(null);
+          setDiscoveredCommentInfo(null);
+        }
+      }
 
       if (!userId) {
         setMessages([]);
@@ -225,7 +254,7 @@ export function InstagramDMChat({
           mediaUrl: publicUrl,
           mediaType: opts.mediaType,
           eventId,
-          fallbackCommentId,
+          fallbackCommentId: effectiveCommentId,
         },
       });
       if (error) {
@@ -336,7 +365,7 @@ export function InstagramDMChat({
     setSending(true);
     try {
       const { data, error } = await supabase.functions.invoke("instagram-dm-send", {
-        body: { username: handle, message: text, eventId, fallbackCommentId },
+        body: { username: handle, message: text, eventId, fallbackCommentId: effectiveCommentId },
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
@@ -368,7 +397,7 @@ export function InstagramDMChat({
       : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
   };
 
-  const cannotSendDirectly = !igUserId && !fallbackCommentId;
+  const cannotSendDirectly = !igUserId && !effectiveCommentId;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -387,17 +416,22 @@ export function InstagramDMChat({
                 <Instagram className="h-4 w-4 text-pink-500" />
                 <span className="font-bold">@{handle}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground font-normal">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-normal flex-wrap">
                 {igUserId ? (
                   <Badge variant="outline" className="text-[10px]">Thread aberta</Badge>
-                ) : fallbackCommentId ? (
+                ) : effectiveCommentId ? (
                   <Badge variant="outline" className="text-[10px] bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
-                    Private Reply (1ª mensagem)
+                    Private Reply disponível
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-500 border-red-500/30">
                     Sem janela ativa
                   </Badge>
+                )}
+                {!fallbackCommentId && discoveredCommentInfo && (
+                  <span className="text-[10px] opacity-80 truncate max-w-[260px]" title={discoveredCommentInfo.text}>
+                    Comentou {discoveredCommentInfo.when}: "{discoveredCommentInfo.text.slice(0, 40)}{discoveredCommentInfo.text.length > 40 ? "…" : ""}"
+                  </span>
                 )}
               </div>
             </div>
@@ -416,9 +450,9 @@ export function InstagramDMChat({
                 <Info className="h-8 w-8 opacity-40" />
                 <p className="text-sm">Nenhuma mensagem ainda.</p>
                 <p className="text-xs">
-                  {fallbackCommentId
-                    ? "A primeira mensagem será enviada como Private Reply ao comentário."
-                    : "Aguardando o usuário iniciar conversa pra abrir a janela de 24h."}
+                  {effectiveCommentId
+                    ? "A primeira mensagem será enviada como Private Reply ao comentário recente."
+                    : "Aguardando o usuário comentar ou mandar DM pra abrir a janela."}
                 </p>
               </div>
             )}
