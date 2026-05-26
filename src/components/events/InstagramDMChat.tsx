@@ -8,6 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Instagram, Send, Loader2, AlertCircle, Info, Camera, Video, Mic, Paperclip, Square, X } from "lucide-react";
 import { toast } from "sonner";
+import { convertAudioBlobToWav } from "@/lib/audioRecorder";
 
 interface DMMessage {
   id: string;
@@ -226,9 +227,9 @@ export function InstagramDMChat({
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       recordStreamRef.current = stream;
 
-      // IG só aceita áudio em mp4/m4a/aac/wav — priorizamos audio/mp4 (Safari/iOS).
+      // IG só aceita áudio em aac/m4a/wav/mp4. No Chrome gravamos webm e convertemos para wav no cliente.
       const mimeCandidates = kind === "audio"
-        ? ["audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/aac", "audio/webm;codecs=opus", "audio/webm"]
+        ? ["audio/webm;codecs=opus", "audio/webm", "audio/mp4;codecs=mp4a.40.2", "audio/mp4", "audio/aac"]
         : ["video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
       const mimeType = mimeCandidates.find((m) => (window as any).MediaRecorder?.isTypeSupported?.(m)) || "";
       const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -242,10 +243,13 @@ export function InstagramDMChat({
         const cancelled = (mr as any)._cancelled;
         if (cancelled) return;
         const blob = new Blob(recordChunksRef.current, { type: mr.mimeType || (kind === "audio" ? "audio/webm" : "video/webm") });
-        const ext = (mr.mimeType || "").includes("mp4")
-          ? (kind === "audio" ? "m4a" : "mp4")
-          : (kind === "audio" ? "webm" : "webm");
-        await uploadAndSend(blob, { mediaType: kind, extension: ext });
+        if (kind === "audio") {
+          const wavBlob = await convertAudioBlobToWav(blob);
+          await uploadAndSend(wavBlob, { mediaType: "audio", extension: "wav" });
+          return;
+        }
+        const ext = (mr.mimeType || "").includes("mp4") ? "mp4" : "webm";
+        await uploadAndSend(blob, { mediaType: "video", extension: ext });
       };
 
       mediaRecorderRef.current = mr;
