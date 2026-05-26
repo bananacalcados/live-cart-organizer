@@ -23,12 +23,24 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { username, message, eventId, fallbackCommentId } = await req.json();
-    if (!username || !message) {
-      return new Response(JSON.stringify({ error: "username and message are required" }), {
+    const { username, message, eventId, fallbackCommentId, mediaUrl, mediaType } = await req.json();
+    if (!username || (!message && !mediaUrl)) {
+      return new Response(JSON.stringify({ error: "username and (message or mediaUrl) are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Monta payload (texto OU attachment de imagem/vídeo/áudio)
+    const buildMessagePayload = () => {
+      if (mediaUrl && mediaType) {
+        const t = String(mediaType).toLowerCase();
+        const attachType = t.startsWith("video") ? "video"
+          : t.startsWith("audio") ? "audio"
+          : "image";
+        return { attachment: { type: attachType, payload: { url: mediaUrl, is_reusable: false } } };
+      }
+      return { text: message };
+    };
 
     const cleanUsername = String(username).replace(/^@/, "").trim().toLowerCase();
 
@@ -68,21 +80,20 @@ Deno.serve(async (req) => {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           recipient: { id: link.ig_user_id },
-          message: { text: message },
+          message: buildMessagePayload(),
           messaging_type: "RESPONSE",
         }),
       });
       metaResponse = await res.json();
       if (!res.ok) {
         console.warn(`[ig-dm-send] Direct DM failed for @${cleanUsername}, trying private_reply. Error:`, JSON.stringify(metaResponse));
-        // Fallback automático para private_reply
         if (fallbackCommentId) {
           const r2 = await fetch(`${META_API}/me/messages`, {
             method: "POST",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: JSON.stringify({
               recipient: { comment_id: fallbackCommentId },
-              message: { text: message },
+              message: buildMessagePayload(),
             }),
           });
           metaResponse = await r2.json();
@@ -96,18 +107,16 @@ Deno.serve(async (req) => {
           return new Response(JSON.stringify({
             error: "Direct DM failed and no comment_id for fallback",
             details: metaResponse,
-            hint: "User may be outside the 24h window. Use a recent comment_id for private_reply fallback."
           }), { status: res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
       }
     } else if (fallbackCommentId) {
-      // Sem ID conhecido — usa private_reply direto
       const r = await fetch(`${META_API}/me/messages`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           recipient: { comment_id: fallbackCommentId },
-          message: { text: message },
+          message: buildMessagePayload(),
         }),
       });
       metaResponse = await r.json();
@@ -120,20 +129,21 @@ Deno.serve(async (req) => {
     } else {
       return new Response(JSON.stringify({
         error: "No IG user ID found for this username and no fallbackCommentId provided",
-        hint: "Provide a recent comment_id from this user to enable private_reply"
       }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Salvar a mensagem em whatsapp_messages para aparecer no histórico
+    // Salvar no histórico
     const recipientId = link?.ig_user_id || metaResponse?.recipient_id || cleanUsername;
     await supabase.from("whatsapp_messages").insert({
       phone: recipientId,
-      message,
+      message: message || null,
       direction: "outgoing",
       channel: "instagram",
       status: "sent",
       message_id: metaResponse?.message_id || null,
       sender_name: `@${cleanUsername}`,
+      media_url: mediaUrl || null,
+      media_type: mediaUrl ? (mediaType || null) : null,
     });
 
     // Registrar em live_comment_dms se temos eventId
