@@ -129,6 +129,129 @@ export function InstagramDMChat({
   });
 
 
+  // ====== Upload + envio de mídia ======
+  const [uploading, setUploading] = useState(false);
+  const [recording, setRecording] = useState<null | "audio" | "video">(null);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<Blob[]>([]);
+  const recordStreamRef = useRef<MediaStream | null>(null);
+  const recordTimerRef = useRef<number | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  const guessMediaType = (file: { type: string; name?: string }): "image" | "video" | "audio" => {
+    const t = (file.type || "").toLowerCase();
+    if (t.startsWith("video")) return "video";
+    if (t.startsWith("audio")) return "audio";
+    return "image";
+  };
+
+  const uploadAndSend = async (file: Blob, opts: { mediaType: "image" | "video" | "audio"; extension: string; caption?: string }) => {
+    if (sending || uploading) return;
+    setUploading(true);
+    try {
+      const path = `instagram-dm/${handle}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${opts.extension}`;
+      const { error: upErr } = await supabase.storage.from("chat-media").upload(path, file, {
+        contentType: file.type || (opts.mediaType === "image" ? "image/jpeg" : opts.mediaType === "video" ? "video/mp4" : "audio/mpeg"),
+        upsert: false,
+      });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+      const publicUrl = pub.publicUrl;
+
+      setSending(true);
+      const { data, error } = await supabase.functions.invoke("instagram-dm-send", {
+        body: {
+          username: handle,
+          message: opts.caption || "",
+          mediaUrl: publicUrl,
+          mediaType: opts.mediaType,
+          eventId,
+          fallbackCommentId,
+        },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(`${opts.mediaType === "image" ? "Foto" : opts.mediaType === "video" ? "Vídeo" : "Áudio"} enviado!`);
+      await loadHistory();
+    } catch (err: any) {
+      console.error("[IG DM] media send error:", err);
+      toast.error(err.message || "Falha ao enviar mídia");
+    } finally {
+      setUploading(false);
+      setSending(false);
+    }
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // reset
+    if (!file) return;
+    const mediaType = guessMediaType(file);
+    const ext = (file.name.split(".").pop() || (mediaType === "image" ? "jpg" : mediaType === "video" ? "mp4" : "m4a")).toLowerCase();
+    await uploadAndSend(file, { mediaType, extension: ext });
+  };
+
+  // ====== Gravação ao vivo (áudio/vídeo via MediaRecorder) ======
+  const stopRecording = useCallback((cancel = false) => {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") {
+      (mr as any)._cancelled = cancel;
+      mr.stop();
+    }
+    if (recordTimerRef.current) {
+      window.clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+  }, []);
+
+  const startRecording = async (kind: "audio" | "video") => {
+    if (recording) return;
+    try {
+      const constraints: MediaStreamConstraints =
+        kind === "audio" ? { audio: true } : { audio: true, video: { facingMode: "environment" } };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      recordStreamRef.current = stream;
+
+      const mimeCandidates = kind === "audio"
+        ? ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
+        : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4"];
+      const mimeType = mimeCandidates.find((m) => (window as any).MediaRecorder?.isTypeSupported?.(m)) || "";
+      const mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recordChunksRef.current = [];
+      mr.ondataavailable = (ev) => { if (ev.data?.size) recordChunksRef.current.push(ev.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        recordStreamRef.current = null;
+        setRecording(null);
+        setRecordSeconds(0);
+        const cancelled = (mr as any)._cancelled;
+        if (cancelled) return;
+        const blob = new Blob(recordChunksRef.current, { type: mr.mimeType || (kind === "audio" ? "audio/webm" : "video/webm") });
+        const ext = (mr.mimeType || "").includes("mp4")
+          ? (kind === "audio" ? "m4a" : "mp4")
+          : (kind === "audio" ? "webm" : "webm");
+        await uploadAndSend(blob, { mediaType: kind, extension: ext });
+      };
+
+      mediaRecorderRef.current = mr;
+      mr.start(250);
+      setRecording(kind);
+      setRecordSeconds(0);
+      recordTimerRef.current = window.setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+    } catch (err: any) {
+      console.error("[IG DM] record error:", err);
+      toast.error(err?.message || "Não foi possível acessar microfone/câmera");
+    }
+  };
+
+  // Stop streams se o dialog fechar
+  useEffect(() => {
+    if (!open && recording) stopRecording(true);
+  }, [open, recording, stopRecording]);
+
   const handleSend = async () => {
     const text = draft.trim();
     if (!text || sending) return;
@@ -142,7 +265,6 @@ export function InstagramDMChat({
 
       setDraft("");
       toast.success(`Enviado via ${(data as any)?.method === "private_reply" ? "Private Reply" : "DM direto"}`);
-      // Recarrega pra pegar a mensagem persistida + atualizar igUserId se acabou de descobrir
       await loadHistory();
     } catch (err: any) {
       console.error("[IG DM] send error:", err);
