@@ -79,7 +79,7 @@ export function FinancialAgentSettings() {
 
   const removeUser = async (u: AuthorizedUser) => {
     if (!confirm(`Remover ${u.display_name || u.chat_id}?`)) return;
-    await supabase.from("financial_agent_authorized_users").delete().eq("id", u.id);
+    await (supabase as any).from("financial_agent_authorized_users").delete().eq("id", u.id);
     await loadUsers();
   };
 
