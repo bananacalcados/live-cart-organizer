@@ -70,6 +70,8 @@ const Events = () => {
   const [metaTemplateLanguage, setMetaTemplateLanguage] = useState<string>("pt_BR");
   const [metaTemplateBodyVars, setMetaTemplateBodyVars] = useState<string[]>([]);
   const [metaTemplateHeaderVar, setMetaTemplateHeaderVar] = useState<string | null>(null);
+  const [initialMessageEnabled, setInitialMessageEnabled] = useState<boolean>(false);
+  const [initialMessageBlocks, setInitialMessageBlocks] = useState<string[]>([]);
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
