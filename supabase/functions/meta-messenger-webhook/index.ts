@@ -372,19 +372,25 @@ serve(async (req) => {
         }
       }
 
-      // ── Handle changes events (comments, story mentions, etc.) ──
+      // ── Handle changes events (comments, live comments, story mentions, etc.) ──
       for (const change of entry.changes || []) {
-        if (change.field === 'comments' && change.value) {
+        if ((change.field === 'comments' || change.field === 'live_comments') && change.value) {
           const comment = change.value;
           const fromId = comment.from?.id;
           const username = comment.from?.username;
           const text = comment.text || '[comentário]';
           const mediaType = comment.media?.media_product_type || 'post';
+          const isLiveComment = change.field === 'live_comments' || mediaType === 'LIVE';
 
           if (!fromId) continue;
 
           const senderName = username ? `@${username}` : null;
-          const messageText = `💬 Comentário no ${mediaType === 'REELS' ? 'Reel' : 'post'}: ${text}`;
+          const commentSurface = isLiveComment
+            ? 'Live'
+            : mediaType === 'REELS'
+              ? 'Reel'
+              : 'post';
+          const messageText = `💬 Comentário no ${commentSurface}: ${text}`;
 
           const { error } = await supabase.from('whatsapp_messages').insert({
             phone: fromId,
@@ -423,8 +429,8 @@ serve(async (req) => {
                     comment_id: comment.id,
                     username: username,
                     comment_text: text,
-                    raw_timestamp: new Date().toISOString(),
-                    source_pc: 'meta-webhook',
+                    raw_timestamp: comment.timestamp ? new Date(comment.timestamp * 1000).toISOString() : new Date().toISOString(),
+                    source_pc: isLiveComment ? 'meta-webhook-live' : 'meta-webhook',
                   });
                 if (lcErr && lcErr.code !== '23505') {
                   console.error('Error saving to live_comments:', lcErr);

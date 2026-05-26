@@ -290,14 +290,29 @@ serve(async (req) => {
           try {
             if (!fallbackCommentId) {
               const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-              const { data: lastComment } = await supabase
+              let commentQuery = supabase
                 .from('live_comments')
                 .select('comment_id')
+                .eq('event_id', order.event_id)
                 .ilike('username', igUsername)
                 .gte('created_at', sevenDaysAgo)
                 .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+                .limit(1);
+
+              let { data: lastComment } = await commentQuery.maybeSingle();
+
+              if (!lastComment?.comment_id) {
+                const { data: fallbackComment } = await supabase
+                  .from('live_comments')
+                  .select('comment_id')
+                  .ilike('username', igUsername)
+                  .gte('created_at', sevenDaysAgo)
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                lastComment = fallbackComment;
+              }
+
               if (lastComment?.comment_id) fallbackCommentId = lastComment.comment_id;
             }
           } catch {}
