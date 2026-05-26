@@ -26,6 +26,7 @@ type Campaign = {
   jess_prompt: string | null;
   total_leads: number;
   whatsapp_number_id: string | null;
+  channel_preference: "whatsapp" | "instagram" | "meta_whatsapp" | "auto";
 };
 
 type Message = {
@@ -38,7 +39,18 @@ type Message = {
   caption: string | null;
   delay_seconds: number;
   is_active: boolean;
+  meta_template_name?: string | null;
+  meta_template_language?: string | null;
+  meta_template_variables?: Record<string, string> | null;
 };
+
+type MetaTemplate = {
+  name: string;
+  language: string;
+  status: string;
+  components?: Array<{ type: string; text?: string; format?: string }>;
+};
+
 
 const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   text: FileText,
