@@ -46,6 +46,7 @@ serve(async (req) => {
 
     // Resolve event channel preference + whatsapp number + meta template config + initial message override
     let channelPreference: string = 'whatsapp';
+    let channelPreferences: string[] = [];
     let whatsappNumberId: string | null = null;
     let metaPhoneNumberId: string | null = null;
     let metaTemplateName: string | null = null;
@@ -58,11 +59,13 @@ serve(async (req) => {
     if (order.event_id) {
       const { data: eventData } = await supabase
         .from('events')
-        .select('whatsapp_number_id, channel_preference, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks')
+        .select('whatsapp_number_id, channel_preference, channel_preferences, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks')
         .eq('id', order.event_id)
         .single();
 
       if (eventData?.channel_preference) channelPreference = eventData.channel_preference;
+      channelPreferences = ((eventData as any)?.channel_preferences as string[]) || [];
+      if (!channelPreferences.length) channelPreferences = [channelPreference];
       metaTemplateName = (eventData as any)?.meta_template_name || null;
       metaTemplateLanguage = (eventData as any)?.meta_template_language || 'pt_BR';
       metaTemplateBodyVars = ((eventData as any)?.meta_template_body_variables as string[]) || [];
@@ -83,7 +86,11 @@ serve(async (req) => {
       }
     }
 
-    const isInstagram = channelPreference === 'instagram';
+    const wantsInstagram = channelPreferences.includes('instagram');
+    const wantsZapi = channelPreferences.includes('whatsapp');
+    const wantsMeta = channelPreferences.includes('meta_whatsapp');
+    // For legacy logic compatibility: "isInstagram" means IG is the only channel
+    const isInstagram = wantsInstagram && !wantsZapi && !wantsMeta;
 
     if (isInstagram) {
       // Aceita IG sem handle se tiver WhatsApp como fallback
@@ -93,7 +100,7 @@ serve(async (req) => {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-    } else if (!customer?.whatsapp) {
+    } else if (!customer?.whatsapp && !(wantsInstagram && customer?.instagram_handle)) {
       console.error('[livete-start] Customer has no WhatsApp:', order.customer_id);
       return new Response(JSON.stringify({ error: 'Customer has no WhatsApp' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
