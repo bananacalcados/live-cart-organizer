@@ -41,6 +41,8 @@ import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { MetaTemplateConfigurator } from "@/components/events/MetaTemplateConfigurator";
 import { InitialMessageEditor } from "@/components/events/InitialMessageEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Phone } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
