@@ -261,6 +261,8 @@ const Events = () => {
     setMetaTemplateLanguage((event as any).meta_template_language || "pt_BR");
     setMetaTemplateBodyVars(((event as any).meta_template_body_variables as string[]) || []);
     setMetaTemplateHeaderVar((event as any).meta_template_header_variable || null);
+    setInitialMessageEnabled(Boolean((event as any).initial_message_enabled));
+    setInitialMessageBlocks(((event as any).initial_message_blocks as string[]) || []);
     setDialogOpen(true);
   };
 
