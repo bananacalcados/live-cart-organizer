@@ -44,7 +44,7 @@ serve(async (req) => {
       .eq('id', order.customer_id)
       .single();
 
-    // Resolve event channel preference + whatsapp number + meta template config
+    // Resolve event channel preference + whatsapp number + meta template config + initial message override
     let channelPreference: string = 'whatsapp';
     let whatsappNumberId: string | null = null;
     let metaPhoneNumberId: string | null = null;
@@ -52,11 +52,13 @@ serve(async (req) => {
     let metaTemplateLanguage: string = 'pt_BR';
     let metaTemplateBodyVars: string[] = [];
     let metaTemplateHeaderVar: string | null = null;
+    let initialMessageEnabled = false;
+    let initialMessageBlocks: string[] = [];
 
     if (order.event_id) {
       const { data: eventData } = await supabase
         .from('events')
-        .select('whatsapp_number_id, channel_preference, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable')
+        .select('whatsapp_number_id, channel_preference, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks')
         .eq('id', order.event_id)
         .single();
 
@@ -65,6 +67,8 @@ serve(async (req) => {
       metaTemplateLanguage = (eventData as any)?.meta_template_language || 'pt_BR';
       metaTemplateBodyVars = ((eventData as any)?.meta_template_body_variables as string[]) || [];
       metaTemplateHeaderVar = (eventData as any)?.meta_template_header_variable || null;
+      initialMessageEnabled = Boolean((eventData as any)?.initial_message_enabled);
+      initialMessageBlocks = (((eventData as any)?.initial_message_blocks as string[]) || []).filter((b) => typeof b === 'string' && b.trim().length > 0);
 
       if (eventData?.whatsapp_number_id) {
         whatsappNumberId = eventData.whatsapp_number_id;
