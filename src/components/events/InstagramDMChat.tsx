@@ -416,17 +416,22 @@ export function InstagramDMChat({
                 <Instagram className="h-4 w-4 text-pink-500" />
                 <span className="font-bold">@{handle}</span>
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground font-normal">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-normal flex-wrap">
                 {igUserId ? (
                   <Badge variant="outline" className="text-[10px]">Thread aberta</Badge>
-                ) : fallbackCommentId ? (
+                ) : effectiveCommentId ? (
                   <Badge variant="outline" className="text-[10px] bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
-                    Private Reply (1ª mensagem)
+                    Private Reply disponível
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-500 border-red-500/30">
                     Sem janela ativa
                   </Badge>
+                )}
+                {!fallbackCommentId && discoveredCommentInfo && (
+                  <span className="text-[10px] opacity-80 truncate max-w-[260px]" title={discoveredCommentInfo.text}>
+                    Comentou {discoveredCommentInfo.when}: "{discoveredCommentInfo.text.slice(0, 40)}{discoveredCommentInfo.text.length > 40 ? "…" : ""}"
+                  </span>
                 )}
               </div>
             </div>
