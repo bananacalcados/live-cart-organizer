@@ -66,6 +66,8 @@ const Events = () => {
   const [selectedWhatsAppId, setSelectedWhatsAppId] = useState<string>("");
   const [channel, setChannel] = useState<string>("site");
   const [channelPreference, setChannelPreference] = useState<string>("whatsapp");
+  const [channelPreferences, setChannelPreferences] = useState<string[]>(["whatsapp"]);
+  const [automationEnabled, setAutomationEnabled] = useState<boolean>(true);
   const [metaTemplateName, setMetaTemplateName] = useState<string | null>(null);
   const [metaTemplateLanguage, setMetaTemplateLanguage] = useState<string>("pt_BR");
   const [metaTemplateBodyVars, setMetaTemplateBodyVars] = useState<string[]>([]);
