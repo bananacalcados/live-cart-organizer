@@ -255,7 +255,7 @@ serve(async (req) => {
         console.error('[livete-start] meta-template-send failed:', tplResp.status, errBody);
       }
     } else {
-      // Anti-ban: envia 3 blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
+      // Anti-ban: envia blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
       const sendBlock = async (text: string) => {
         if (isInstagram) {
           // Buscar último comment_id desse usuário para fallback de private_reply
@@ -307,11 +307,22 @@ serve(async (req) => {
         return Math.max(1200, base + jitter);
       };
 
-      await sendBlock(blockA);
-      await new Promise(r => setTimeout(r, humanDelay(blockB)));
-      await sendBlock(blockB);
-      await new Promise(r => setTimeout(r, humanDelay(blockC)));
-      await sendBlock(blockC);
+      // Resolve variáveis em cada bloco (regex global pra capturar múltiplas ocorrências)
+      const renderBlock = (raw: string) =>
+        raw.replace(/\{[a-z_]+\}/gi, (match) => resolveToken(match));
+
+      const sourceBlocks = useCustomInitialMessage ? initialMessageBlocks : defaultBlocks;
+      const rendered = sourceBlocks.map(renderBlock).filter((t) => t.trim().length > 0);
+
+      console.log(`[livete-start] Sending ${rendered.length} initial blocks to ${phone} (custom=${useCustomInitialMessage})`);
+
+      for (let i = 0; i < rendered.length; i++) {
+        const text = rendered[i];
+        await sendBlock(text);
+        if (i < rendered.length - 1) {
+          await new Promise((r) => setTimeout(r, humanDelay(rendered[i + 1])));
+        }
+      }
     }
 
     const responseTime = Date.now() - startTime;
