@@ -87,6 +87,30 @@ export function InstagramDMChat({
 
       setIgUserId(userId);
 
+      // Auto-descobrir comment_id recente (últimos 7 dias) para Private Reply
+      // — vale tanto pra primeira mensagem quanto pra recuperar conversa fora da janela de 24h
+      if (!fallbackCommentId) {
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: recentComment } = await supabase
+          .from("live_comments")
+          .select("comment_id, comment_text, created_at")
+          .ilike("username", handle)
+          .gte("created_at", sevenDaysAgo)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (recentComment?.comment_id) {
+          setDiscoveredCommentId(recentComment.comment_id);
+          setDiscoveredCommentInfo({
+            when: new Date(recentComment.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+            text: recentComment.comment_text || "",
+          });
+        } else {
+          setDiscoveredCommentId(null);
+          setDiscoveredCommentInfo(null);
+        }
+      }
+
       if (!userId) {
         setMessages([]);
         return;
