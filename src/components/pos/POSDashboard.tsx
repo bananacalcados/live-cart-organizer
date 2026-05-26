@@ -80,6 +80,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
   const [influencedRevenue, setInfluencedRevenue] = useState(0);
   const [taskWhatsAppPhone, setTaskWhatsAppPhone] = useState<string | null>(null);
+  const revenueStatuses = ["completed", "pending_sync", "pending_pickup", "paid"];
 
   const loadAlerts = async () => {
     const [conversationRes, supportRes, interStoreRes, stockRes] = await Promise.all([
@@ -126,7 +127,8 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       const { data: sales } = await supabase
         .from("pos_sales")
         .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at, revenue_attribution, event_id")
-        .eq("store_id", storeId).eq("status", "completed")
+        .eq("store_id", storeId)
+        .in("status", revenueStatuses)
         .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
 
       const completedSales = (sales || []).filter((s: any) => s.revenue_attribution !== "site_pickup_only");
@@ -136,7 +138,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       setSalesCount(count);
       setAvgTicket(count > 0 ? revenue / count : 0);
 
-      const online = completedSales.filter((s: any) => s.sale_type === 'online' || s.sale_type === 'live');
+      const online = completedSales.filter((s: any) => s.sale_type === 'online');
       const physical = completedSales.filter((s: any) => s.sale_type !== 'online' && s.sale_type !== 'live');
       setOnlineRevenue(online.reduce((sum, s) => sum + (s.total || 0), 0));
       setOnlineSalesCount(online.length);
