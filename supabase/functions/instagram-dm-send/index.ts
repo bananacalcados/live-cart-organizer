@@ -168,12 +168,14 @@ Deno.serve(async (req) => {
       sender_name: `@${cleanUsername}`,
       media_url: mediaUrl || null,
       media_type: mediaUrl ? (mediaType || null) : "text",
+      source: "manual",
     };
     let upgraded = false;
     if (mid) {
-      const { data: upd } = await supabase
+      const { data: upd, error: updateError } = await supabase
         .from("whatsapp_messages")
         .update({
+          phone: payload.phone,
           message: payload.message,
           media_url: payload.media_url,
           media_type: payload.media_type,
@@ -182,6 +184,9 @@ Deno.serve(async (req) => {
         })
         .eq("message_id", mid)
         .select("id");
+      if (updateError) {
+        console.error("[ig-dm-send] failed to upgrade existing message:", updateError);
+      }
       upgraded = !!(upd && upd.length > 0);
     }
     if (!upgraded) {
@@ -189,9 +194,10 @@ Deno.serve(async (req) => {
       if (mediaUrl) {
         await new Promise((r) => setTimeout(r, 800));
         if (mid) {
-          const { data: upd2 } = await supabase
+          const { data: upd2, error: updateError2 } = await supabase
             .from("whatsapp_messages")
             .update({
+              phone: payload.phone,
               message: payload.message,
               media_url: payload.media_url,
               media_type: payload.media_type,
@@ -200,11 +206,18 @@ Deno.serve(async (req) => {
             })
             .eq("message_id", mid)
             .select("id");
+          if (updateError2) {
+            console.error("[ig-dm-send] failed to upgrade existing media message after delay:", updateError2);
+          }
           upgraded = !!(upd2 && upd2.length > 0);
         }
       }
       if (!upgraded) {
-        await supabase.from("whatsapp_messages").insert(payload);
+        const { error: insertError } = await supabase.from("whatsapp_messages").insert(payload);
+        if (insertError) {
+          console.error("[ig-dm-send] failed to insert outgoing message:", insertError, payload);
+          throw new Error(`Falha ao salvar histórico da mídia: ${insertError.message}`);
+        }
       }
     }
 

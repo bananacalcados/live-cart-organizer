@@ -149,6 +149,61 @@ export function InstagramDMChat({
     return "image";
   };
 
+  const persistOutgoingMessage = useCallback(async (payload: {
+    messageId?: string | null;
+    phone?: string | null;
+    message: string;
+    mediaType?: string | null;
+    mediaUrl?: string | null;
+  }) => {
+    if (!payload.messageId && !payload.phone) return;
+
+    const row = {
+      phone: payload.phone || igUserId || handle,
+      message: payload.message,
+      direction: "outgoing" as const,
+      channel: "instagram",
+      status: "sent",
+      message_id: payload.messageId || null,
+      sender_name: `@${handle}`,
+      media_type: payload.mediaType || (payload.mediaUrl ? "image" : "text"),
+      media_url: payload.mediaUrl || null,
+      source: "manual",
+    };
+
+    if (payload.messageId) {
+      const { data: existing, error: existingError } = await supabase
+        .from("whatsapp_messages")
+        .select("id")
+        .eq("message_id", payload.messageId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from("whatsapp_messages")
+          .update({
+            phone: row.phone,
+            message: row.message,
+            status: row.status,
+            sender_name: row.sender_name,
+            media_type: row.media_type,
+            media_url: row.media_url,
+          })
+          .eq("id", existing.id);
+
+        if (updateError) throw updateError;
+        return;
+      }
+    }
+
+    const { error: insertError } = await supabase.from("whatsapp_messages").insert(row);
+    if (insertError) throw insertError;
+  }, [handle, igUserId]);
+
   const uploadAndSend = async (file: Blob, opts: { mediaType: "image" | "video" | "audio"; extension: string; caption?: string }) => {
     if (sending || uploading) return;
     setUploading(true);
@@ -185,6 +240,13 @@ export function InstagramDMChat({
         throw new Error(friendly || error.message);
       }
       if ((data as any)?.error) throw new Error((data as any).message || (data as any).error);
+      await persistOutgoingMessage({
+        messageId: (data as any)?.messageId || null,
+        phone: (data as any)?.ig_user_id || igUserId,
+        message: opts.caption || "[media]",
+        mediaType: opts.mediaType,
+        mediaUrl: publicUrl,
+      });
       toast.success(`${opts.mediaType === "image" ? "Foto" : opts.mediaType === "video" ? "Vídeo" : "Áudio"} enviado!`);
       await loadHistory();
     } catch (err: any) {
@@ -278,6 +340,13 @@ export function InstagramDMChat({
       });
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
+      await persistOutgoingMessage({
+        messageId: (data as any)?.messageId || null,
+        phone: (data as any)?.ig_user_id || igUserId,
+        message: text,
+        mediaType: "text",
+        mediaUrl: null,
+      });
 
       setDraft("");
       toast.success(`Enviado via ${(data as any)?.method === "private_reply" ? "Private Reply" : "DM direto"}`);
