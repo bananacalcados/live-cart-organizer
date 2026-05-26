@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
     const body = await req.json();
-    const { phone, message, sender_name, whatsapp_number_id } = body;
+    const { phone, message, sender_name, whatsapp_number_id, ig_user_id, ig_comment_id, ig_username } = body;
 
     if (!phone || !message) {
       return new Response(JSON.stringify({ matched: false, reason: "missing_fields" }), {
