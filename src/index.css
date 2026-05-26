@@ -208,6 +208,104 @@
   }
 }
 
+/* ============================================================
+   EVENTS MODULE — Corporate Multinational Theme
+   Sober & cool palette: navy, steel blue, silver, graphite.
+   Scoped via .events-corporate wrapper on the page root.
+   ============================================================ */
+.events-corporate {
+  --background: 215 28% 96%;
+  --foreground: 220 35% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 35% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 35% 12%;
+  --primary: 215 70% 32%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 215 20% 92%;
+  --secondary-foreground: 220 30% 18%;
+  --muted: 215 22% 94%;
+  --muted-foreground: 215 15% 42%;
+  --accent: 210 55% 42%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 358 65% 48%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 215 22% 86%;
+  --input: 215 22% 86%;
+  --ring: 215 70% 32%;
+  --radius: 0.5rem;
+  --gradient-accent: linear-gradient(135deg, hsl(215 70% 32%) 0%, hsl(210 65% 42%) 100%);
+  --gradient-hero: linear-gradient(135deg, hsl(220 40% 10%) 0%, hsl(215 35% 18%) 100%);
+  --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(215 28% 97%) 100%);
+  --gradient-corp-header: linear-gradient(135deg, hsl(220 45% 10%) 0%, hsl(215 55% 22%) 60%, hsl(210 60% 30%) 100%);
+  --shadow-corp-card: 0 1px 2px hsl(220 40% 10% / 0.04), 0 8px 24px -12px hsl(220 40% 10% / 0.14);
+  --shadow-corp-glow: 0 8px 24px -8px hsl(215 70% 32% / 0.35);
+}
+
+.dark .events-corporate {
+  --background: 220 25% 8%;
+  --foreground: 215 20% 94%;
+  --card: 220 22% 12%;
+  --card-foreground: 215 20% 94%;
+  --popover: 220 22% 12%;
+  --popover-foreground: 215 20% 94%;
+  --primary: 210 80% 58%;
+  --primary-foreground: 220 40% 8%;
+  --secondary: 220 18% 18%;
+  --secondary-foreground: 215 20% 92%;
+  --muted: 220 18% 16%;
+  --muted-foreground: 215 15% 62%;
+  --accent: 210 65% 52%;
+  --accent-foreground: 0 0% 100%;
+  --border: 220 18% 22%;
+  --input: 220 18% 22%;
+  --ring: 210 80% 58%;
+  --gradient-accent: linear-gradient(135deg, hsl(210 80% 50%) 0%, hsl(215 70% 38%) 100%);
+  --gradient-card: linear-gradient(180deg, hsl(220 22% 13%) 0%, hsl(220 22% 11%) 100%);
+  --gradient-corp-header: linear-gradient(135deg, hsl(220 40% 6%) 0%, hsl(215 45% 14%) 60%, hsl(210 55% 22%) 100%);
+}
+
+.events-corporate {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, hsl(210 60% 40% / 0.08), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, hsl(215 60% 30% / 0.06), transparent 60%),
+    hsl(var(--background));
+}
+
+.events-corporate .corp-header {
+  background: var(--gradient-corp-header);
+  color: hsl(0 0% 100%);
+  border-bottom: 1px solid hsl(215 50% 25% / 0.6);
+  box-shadow: 0 4px 24px -12px hsl(220 60% 10% / 0.4);
+}
+.events-corporate .corp-header h1 { letter-spacing: 0.02em; }
+.events-corporate .corp-header .text-accent { color: hsl(210 90% 70%); }
+.events-corporate .corp-header button { color: hsl(215 25% 92%); }
+.events-corporate .corp-header button:hover { background: hsl(0 0% 100% / 0.08); color: hsl(0 0% 100%); }
+
+.events-corporate .btn-accent {
+  background: var(--gradient-accent);
+  color: hsl(0 0% 100%);
+  box-shadow: var(--shadow-corp-glow);
+  transition: all 0.2s ease;
+}
+.events-corporate .btn-accent:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.events-corporate [role="tablist"] {
+  background: hsl(var(--muted) / 0.7);
+  border: 1px solid hsl(var(--border));
+}
+.events-corporate [role="tab"][data-state="active"] {
+  background: hsl(var(--card));
+  color: hsl(var(--primary));
+  box-shadow: inset 0 -2px 0 hsl(var(--primary));
+}
+
+.events-corporate .text-accent { color: hsl(var(--accent)); }
+
 @layer utilities {
   .text-balance {
     text-wrap: balance;
