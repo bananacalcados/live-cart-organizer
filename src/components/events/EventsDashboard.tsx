@@ -239,8 +239,8 @@ export function EventsDashboard() {
                         formatter={(value: number) => `R$ ${value.toFixed(2)}`}
                         contentStyle={{ borderRadius: 8, fontSize: 12 }}
                       />
-                      <Bar dataKey="total" name="Faturamento Total" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="received" name="Recebido" fill="hsl(var(--stage-paid))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="total" name="Faturamento Total" fill="hsl(var(--evt-chart-1, var(--primary)))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="received" name="Recebido" fill="hsl(var(--evt-chart-2, var(--muted-foreground)))" radius={[4, 4, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
