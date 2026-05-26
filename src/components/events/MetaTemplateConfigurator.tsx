@@ -2,8 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, FileText, AlertCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Loader2, FileText, AlertCircle, Type, Variable } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+
+// "Token" = value exatamente igual a um dos AVAILABLE_TOKENS (formato {algo}).
+// Qualquer outra coisa é tratada como texto livre e enviado literalmente para a Meta.
+const isTokenValue = (v: string) => /^\{[a-z_]+\}$/i.test(v || "");
 
 export const AVAILABLE_TOKENS = [
   { value: "{customer_name}", label: "Nome completo do cliente" },
