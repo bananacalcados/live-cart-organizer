@@ -308,13 +308,14 @@
 /* CTA button — blue→cyan gradient with glow */
 .events-corporate .btn-accent {
   background: var(--gradient-accent);
-  color: hsl(222 40% 8%);
+  color: hsl(220 30% 96%);
   font-weight: 600;
-  box-shadow: var(--shadow-corp-glow);
+  border: 1px solid hsl(238 40% 50% / 0.4);
+  box-shadow: var(--shadow-corp-glow), inset 0 1px 0 hsl(0 0% 100% / 0.08);
   transition: all 0.2s ease;
 }
 .events-corporate .btn-accent:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.12);
   transform: translateY(-1px);
 }
 
