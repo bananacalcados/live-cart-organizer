@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     // Pega despachos pendentes prontos pra enviar (ou expirados de lock)
     const { data: ready, error: selErr } = await supabase
       .from("live_campaign_dispatches")
-      .select("id, campaign_id, message_id, phone, lead_id, attempts, whatsapp_number_id")
+      .select("id, campaign_id, message_id, phone, lead_id, attempts, whatsapp_number_id, channel, ig_user_id, ig_comment_id")
       .eq("status", "pending")
       .lte("scheduled_at", now.toISOString())
       .or(`locked_until.is.null,locked_until.lt.${now.toISOString()}`)
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
         const [{ data: msg }, { data: camp }] = await Promise.all([
           supabase
             .from("live_campaign_messages")
-            .select("message_type, content, media_url, caption")
+            .select("message_type, content, media_url, caption, meta_template_name, meta_template_language, meta_template_variables")
             .eq("id", d.message_id)
             .single(),
           supabase
@@ -73,7 +73,67 @@ Deno.serve(async (req) => {
 
         let result: { success: boolean; error?: string; status?: number } = { success: false };
 
-        if (msg.message_type === "text") {
+        // === BRANCH 1: Instagram DM ===
+        if (d.channel === "instagram") {
+          const r = await fetch(`${SUPABASE_URL}/functions/v1/instagram-dm-send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}` },
+            body: JSON.stringify({
+              // instagram-dm-send espera username; mas se temos ig_user_id direto, ele aceita via fallback
+              username: d.ig_user_id || d.phone,
+              message: msg.message_type === "text" ? (msg.content || "") : (msg.caption || msg.content || ""),
+              fallbackCommentId: d.ig_comment_id || undefined,
+              eventId: d.campaign_id,
+            }),
+          });
+          const j = await r.json().catch(() => ({}));
+          const errDetail = typeof j?.error === "string" ? j.error : JSON.stringify(j?.error || j?.details || j || {}).slice(0, 400);
+          result = { success: r.ok && j?.success !== false, error: r.ok && j?.success !== false ? undefined : `[${r.status}] ${errDetail}`, status: r.status };
+        }
+        // === BRANCH 2: Meta WhatsApp Cloud API (Template) ===
+        else if (msg.meta_template_name) {
+          // Resolve variáveis do template substituindo placeholders por dados do lead
+          let components: Array<Record<string, unknown>> | undefined;
+          const vars = (msg.meta_template_variables as Record<string, string> | null) || null;
+          if (vars && Object.keys(vars).length > 0) {
+            const { data: lead } = await supabase
+              .from("ad_leads")
+              .select("name, phone, collected_data")
+              .eq("id", d.lead_id)
+              .maybeSingle();
+            const ctx: Record<string, string> = {
+              nome: (lead?.name || "").split(" ")[0] || "",
+              first_name: (lead?.name || "").split(" ")[0] || "",
+              phone: lead?.phone || d.phone,
+              ...(lead?.collected_data as Record<string, string> || {}),
+            };
+            const params = Object.keys(vars)
+              .sort((a, b) => Number(a) - Number(b))
+              .map((k) => {
+                const tpl = vars[k] || "";
+                const val = tpl.replace(/\{\{(\w+)\}\}/g, (_, key) => ctx[key] ?? "");
+                return { type: "text", text: val };
+              });
+            components = [{ type: "body", parameters: params }];
+          }
+
+          const r = await fetch(`${SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}` },
+            body: JSON.stringify({
+              phone: d.phone,
+              templateName: msg.meta_template_name,
+              language: msg.meta_template_language || "pt_BR",
+              components,
+              whatsappNumberId,
+            }),
+          });
+          const j = await r.json().catch(() => ({}));
+          const errDetail = typeof j?.error === "string" ? j.error : JSON.stringify(j?.error || j?.details || j || {}).slice(0, 400);
+          result = { success: r.ok && j?.success !== false, error: r.ok && j?.success !== false ? undefined : `[${r.status}] ${errDetail}`, status: r.status };
+        }
+        // === BRANCH 3 (default): Z-API WhatsApp ===
+        else if (msg.message_type === "text") {
           const r = await fetch(`${SUPABASE_URL}/functions/v1/zapi-send-message`, {
             method: "POST",
             headers: {
@@ -112,6 +172,7 @@ Deno.serve(async (req) => {
             console.error(`[live-dispatch] media send failed phone=${d.phone} type=${msg.message_type} status=${r.status} body=${errDetail}`);
           }
         }
+
 
         if (result.success) {
           await supabase

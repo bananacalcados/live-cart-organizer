@@ -26,6 +26,7 @@ type Campaign = {
   jess_prompt: string | null;
   total_leads: number;
   whatsapp_number_id: string | null;
+  channel_preference: "whatsapp" | "instagram" | "meta_whatsapp" | "auto";
 };
 
 type Message = {
@@ -38,7 +39,18 @@ type Message = {
   caption: string | null;
   delay_seconds: number;
   is_active: boolean;
+  meta_template_name?: string | null;
+  meta_template_language?: string | null;
+  meta_template_variables?: Record<string, string> | null;
 };
+
+type MetaTemplate = {
+  name: string;
+  language: string;
+  status: string;
+  components?: Array<{ type: string; text?: string; format?: string }>;
+};
+
 
 const TYPE_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   text: FileText,
@@ -70,7 +82,28 @@ export default function LiveCampaignsManager() {
     ask_shoe_size: true,
     jess_enabled: true,
     jess_prompt: "",
+    channel_preference: "whatsapp",
   });
+
+  const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+
+  async function loadMetaTemplates(whatsappNumberId?: string | null) {
+    if (metaTemplates.length > 0) return;
+    setLoadingTemplates(true);
+    try {
+      const { data } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
+        body: { whatsappNumberId: whatsappNumberId || undefined },
+      });
+      const list = (data?.templates || []).filter((t: MetaTemplate) => t.status === "APPROVED");
+      setMetaTemplates(list);
+    } catch (e) {
+      toast.error("Erro carregando templates Meta");
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }
+
 
   useEffect(() => { loadCampaigns(); }, []);
 
@@ -99,6 +132,7 @@ export default function LiveCampaignsManager() {
       ask_shoe_size: form.ask_shoe_size ?? true,
       jess_enabled: form.jess_enabled ?? true,
       jess_prompt: form.jess_prompt ?? null,
+      channel_preference: form.channel_preference ?? "whatsapp",
       slug,
     };
     if (editing) {
@@ -193,6 +227,9 @@ export default function LiveCampaignsManager() {
           caption: m.caption,
           delay_seconds: m.delay_seconds,
           is_active: m.is_active,
+          meta_template_name: m.meta_template_name || null,
+          meta_template_language: m.meta_template_language || null,
+          meta_template_variables: m.meta_template_variables || null,
         }));
         const { error } = await supabase.from("live_campaign_messages").insert(toInsert);
         if (error) throw error;
@@ -338,6 +375,21 @@ export default function LiveCampaignsManager() {
                 <p className="text-xs text-muted-foreground mt-1">Esse texto é injetado no prompt da Jess para que ela responda dúvidas reais sobre a Live (data, produtos, frete, descontos). Se em branco, ela só foca em capturar a numeração.</p>
               </div>
             )}
+            <div>
+              <Label>Canal de envio</Label>
+              <Select value={form.channel_preference || "whatsapp"} onValueChange={(v) => setForm({ ...form, channel_preference: v as Campaign["channel_preference"] })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="whatsapp">WhatsApp (Z-API)</SelectItem>
+                  <SelectItem value="instagram">Instagram DM (Meta)</SelectItem>
+                  <SelectItem value="meta_whatsapp">WhatsApp Cloud API (Templates Meta)</SelectItem>
+                  <SelectItem value="auto">Auto (IG se houver, senão WhatsApp)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Instagram: só funciona se o lead veio do IG (janela 24h ou comentário recente). Cloud API: exige templates Meta aprovados nas mensagens.
+              </p>
+            </div>
             <div className="flex items-center justify-between border rounded p-3">
               <div>
                 <p className="text-sm font-medium">Campanha ativa</p>

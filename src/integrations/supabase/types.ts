@@ -6389,9 +6389,12 @@ export type Database = {
         Row: {
           attempts: number
           campaign_id: string
+          channel: string
           created_at: string
           error_message: string | null
           id: string
+          ig_comment_id: string | null
+          ig_user_id: string | null
           lead_id: string | null
           locked_until: string | null
           message_id: string
@@ -6404,9 +6407,12 @@ export type Database = {
         Insert: {
           attempts?: number
           campaign_id: string
+          channel?: string
           created_at?: string
           error_message?: string | null
           id?: string
+          ig_comment_id?: string | null
+          ig_user_id?: string | null
           lead_id?: string | null
           locked_until?: string | null
           message_id: string
@@ -6419,9 +6425,12 @@ export type Database = {
         Update: {
           attempts?: number
           campaign_id?: string
+          channel?: string
           created_at?: string
           error_message?: string | null
           id?: string
+          ig_comment_id?: string | null
+          ig_user_id?: string | null
           lead_id?: string | null
           locked_until?: string | null
           message_id?: string
@@ -6466,6 +6475,9 @@ export type Database = {
           is_active: boolean
           media_url: string | null
           message_type: string
+          meta_template_language: string | null
+          meta_template_name: string | null
+          meta_template_variables: Json | null
           sort_order: number
           updated_at: string
         }
@@ -6479,6 +6491,9 @@ export type Database = {
           is_active?: boolean
           media_url?: string | null
           message_type?: string
+          meta_template_language?: string | null
+          meta_template_name?: string | null
+          meta_template_variables?: Json | null
           sort_order?: number
           updated_at?: string
         }
@@ -6492,6 +6507,9 @@ export type Database = {
           is_active?: boolean
           media_url?: string | null
           message_type?: string
+          meta_template_language?: string | null
+          meta_template_name?: string | null
+          meta_template_variables?: Json | null
           sort_order?: number
           updated_at?: string
         }
@@ -6508,6 +6526,7 @@ export type Database = {
       live_campaigns: {
         Row: {
           ask_shoe_size: boolean
+          channel_preference: string
           created_at: string
           default_delay_seconds: number
           id: string
@@ -6523,6 +6542,7 @@ export type Database = {
         }
         Insert: {
           ask_shoe_size?: boolean
+          channel_preference?: string
           created_at?: string
           default_delay_seconds?: number
           id?: string
@@ -6538,6 +6558,7 @@ export type Database = {
         }
         Update: {
           ask_shoe_size?: boolean
+          channel_preference?: string
           created_at?: string
           default_delay_seconds?: number
           id?: string

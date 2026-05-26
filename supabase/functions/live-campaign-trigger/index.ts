@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
     const body = await req.json();
-    const { phone, message, sender_name, whatsapp_number_id } = body;
+    const { phone, message, sender_name, whatsapp_number_id, ig_user_id, ig_comment_id, ig_username } = body;
 
     if (!phone || !message) {
       return new Response(JSON.stringify({ matched: false, reason: "missing_fields" }), {
@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     // Busca campanhas ativas
     const { data: campaigns, error: campErr } = await supabase
       .from("live_campaigns")
-      .select("id, name, slug, trigger_phrase, ask_shoe_size, jess_enabled, whatsapp_number_id")
+      .select("id, name, slug, trigger_phrase, ask_shoe_size, jess_enabled, whatsapp_number_id, channel_preference")
       .eq("is_active", true);
 
     if (campErr) throw campErr;
@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
     // Busca mensagens completas da sequência (ativas, ordenadas)
     const { data: messages } = await supabase
       .from("live_campaign_messages")
-      .select("id, sort_order, delay_seconds, message_type, content, media_url, caption")
+      .select("id, sort_order, delay_seconds, message_type, content, media_url, caption, meta_template_name")
       .eq("campaign_id", matched.id)
       .eq("is_active", true)
       .order("sort_order", { ascending: true });
@@ -222,6 +222,28 @@ Deno.serve(async (req) => {
     // Resolve o número que será usado para o envio JÁ AQUI, para persistir no dispatch
     // Prioridade: whatsapp_number_id da campanha → instância que recebeu o webhook (origem)
     const resolvedNumberId = matched.whatsapp_number_id ?? whatsapp_number_id ?? null;
+
+    // === Resolução de canal ===
+    // channel_preference: 'whatsapp' (default) | 'instagram' | 'meta_whatsapp' | 'auto'
+    const pref = (matched as any).channel_preference || "whatsapp";
+    let resolvedChannel: "whatsapp" | "instagram" = "whatsapp";
+    let resolvedIgUserId: string | null = ig_user_id || null;
+    let resolvedIgCommentId: string | null = ig_comment_id || null;
+
+    if (pref === "instagram" || (pref === "auto" && (ig_user_id || ig_username))) {
+      resolvedChannel = "instagram";
+      // Se veio só username, tenta resolver ig_user_id na tabela de vínculos
+      if (!resolvedIgUserId && ig_username) {
+        const cleanU = String(ig_username).replace(/^@/, "").trim().toLowerCase();
+        const { data: link } = await supabase
+          .from("instagram_user_links")
+          .select("ig_user_id")
+          .ilike("username", cleanU)
+          .maybeSingle();
+        resolvedIgUserId = link?.ig_user_id || null;
+      }
+    }
+
     const dispatchRows = messages.map((m) => ({
       campaign_id: matched.id,
       message_id: m.id,
@@ -230,6 +252,9 @@ Deno.serve(async (req) => {
       scheduled_at: nowIso,
       status: "pending" as const,
       whatsapp_number_id: resolvedNumberId,
+      channel: resolvedChannel,
+      ig_user_id: resolvedIgUserId,
+      ig_comment_id: resolvedIgCommentId,
     }));
     const { data: insertedDispatches } = await supabase
       .from("live_campaign_dispatches")
@@ -476,14 +501,23 @@ Deno.serve(async (req) => {
       }
     };
 
-    // Dispara em background — webhook responde imediatamente
-    // @ts-ignore - EdgeRuntime existe no runtime do Supabase
-    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
-      // @ts-ignore
-      EdgeRuntime.waitUntil(sendSequence());
+    // Para canais alternativos (Instagram ou Meta Template), delega ao cron live-campaign-dispatch
+    // que já trata as ramificações. Z-API continua com envio inline imediato.
+    const usesTemplate = messages.some((m: any) => !!m.meta_template_name);
+    const useInlineSender = resolvedChannel === "whatsapp" && !usesTemplate && pref !== "meta_whatsapp";
+
+    if (useInlineSender) {
+      // Dispara em background — webhook responde imediatamente
+      // @ts-ignore - EdgeRuntime existe no runtime do Supabase
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(sendSequence());
+      } else {
+        // Fallback: deixa rodar sem await (não bloqueia)
+        sendSequence().catch((e) => console.error("[live-trigger] background error:", e));
+      }
     } else {
-      // Fallback: deixa rodar sem await (não bloqueia)
-      sendSequence().catch((e) => console.error("[live-trigger] background error:", e));
+      console.log(`[live-trigger] canal=${resolvedChannel} pref=${pref} usesTemplate=${usesTemplate} — delegando ao cron live-campaign-dispatch`);
     }
 
     return new Response(
@@ -492,7 +526,8 @@ Deno.serve(async (req) => {
         campaign: matched.slug,
         lead_id: leadId,
         dispatched: messages.length,
-        mode: "direct_send",
+        mode: useInlineSender ? "direct_send" : "cron_delegated",
+        channel: resolvedChannel,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
