@@ -199,6 +199,32 @@ serve(async (req) => {
     } else {
       // Anti-ban: envia 3 blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
       const sendBlock = async (text: string) => {
+        if (isInstagram) {
+          // Buscar último comment_id desse usuário para fallback de private_reply
+          let fallbackCommentId: string | undefined = undefined;
+          try {
+            const { data: lastComment } = await supabase
+              .from('live_comments')
+              .select('comment_id')
+              .eq('username', `@${igUsername}`)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (lastComment?.comment_id) fallbackCommentId = lastComment.comment_id;
+          } catch {}
+
+          await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: igUsername,
+              message: text,
+              eventId: order.event_id,
+              fallbackCommentId,
+            }),
+          });
+          return;
+        }
         if (metaPhoneNumberId) {
           await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
             method: 'POST',
