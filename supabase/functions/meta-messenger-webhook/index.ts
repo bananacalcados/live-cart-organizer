@@ -403,6 +403,39 @@ serve(async (req) => {
           } else {
             console.log(`Saved Instagram comment from ${username || fromId}: ${text.slice(0, 50)}`);
 
+            // ── Also save into live_comments for active IG live event ──
+            // This is what enables the Private Reply auto-discovery in the DM modal.
+            try {
+              const { data: activeEvent } = await supabase
+                .from('events')
+                .select('id, name')
+                .eq('is_active', true)
+                .eq('channel_preference', 'instagram')
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (activeEvent && comment.id && username) {
+                const { error: lcErr } = await supabase
+                  .from('live_comments')
+                  .insert({
+                    event_id: activeEvent.id,
+                    comment_id: comment.id,
+                    username: username,
+                    comment_text: text,
+                    raw_timestamp: new Date().toISOString(),
+                    source_pc: 'meta-webhook',
+                  });
+                if (lcErr && lcErr.code !== '23505') {
+                  console.error('Error saving to live_comments:', lcErr);
+                } else if (!lcErr) {
+                  console.log(`Saved IG comment to live_comments (event ${activeEvent.name}): ${comment.id}`);
+                }
+              }
+            } catch (lcExc) {
+              console.error('live_comments insert exception:', lcExc);
+            }
+
             // Process comment automation rules (auto-reply, DM, flows)
             try {
               const automationResult = await processCommentAutomation(supabase, {
@@ -419,6 +452,7 @@ serve(async (req) => {
               console.error('Error processing comment automation:', autoErr);
             }
           }
+
 
           // Upsert chat_contacts
           if (senderName) {
