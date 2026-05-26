@@ -84,6 +84,7 @@ export function LiveCommentsHistory({ eventId }: Props) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [orderDialogOpen, setOrderDialogOpen] = useState(false);
   const [orderPrefillHandle, setOrderPrefillHandle] = useState<string>("");
+  const [orderPrefillCommentId, setOrderPrefillCommentId] = useState<string | undefined>(undefined);
 
   // Chat de DM aberto
   const [chatOpen, setChatOpen] = useState(false);
@@ -96,8 +97,9 @@ export function LiveCommentsHistory({ eventId }: Props) {
   // Última leitura do user logado por handle
   const [lastReadByHandle, setLastReadByHandle] = useState<Map<string, string>>(new Map());
 
-  const openCreateOrder = (handle: string) => {
+  const openCreateOrder = (handle: string, commentId?: string) => {
     setOrderPrefillHandle(handle.replace(/^@/, ""));
+    setOrderPrefillCommentId(commentId);
     setOrderDialogOpen(true);
   };
 
@@ -594,7 +596,7 @@ export function LiveCommentsHistory({ eventId }: Props) {
                                   variant="ghost"
                                   size="sm"
                                   className="h-5 px-1.5 text-[10px] gap-0.5 opacity-0 group-hover/comment:opacity-100 transition shrink-0"
-                                  onClick={() => openCreateOrder(group.handle)}
+                                  onClick={() => openCreateOrder(group.handle, c.comment_id)}
                                   title={`Criar pedido para @${group.handle} a partir deste comentário`}
                                 >
                                   <Plus className="h-2.5 w-2.5" /> Pedido
@@ -614,7 +616,7 @@ export function LiveCommentsHistory({ eventId }: Props) {
                             variant="default"
                             size="sm"
                             className="h-7 text-xs gap-1"
-                            onClick={() => openCreateOrder(group.handle)}
+                            onClick={() => openCreateOrder(group.handle, group.latestCommentId)}
                           >
                             <Plus className="h-3 w-3" /> Criar Pedido
                           </Button>
@@ -666,10 +668,14 @@ export function LiveCommentsHistory({ eventId }: Props) {
         open={orderDialogOpen}
         onOpenChange={(o) => {
           setOrderDialogOpen(o);
-          if (!o) setOrderPrefillHandle("");
+            if (!o) {
+              setOrderPrefillHandle("");
+              setOrderPrefillCommentId(undefined);
+            }
         }}
         eventId={eventId}
         prefillInstagram={orderPrefillHandle}
+          prefillCommentId={orderPrefillCommentId}
       />
 
       {/* Modal Chat de DM */}

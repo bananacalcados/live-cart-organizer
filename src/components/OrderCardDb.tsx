@@ -1073,6 +1073,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           onOpenChange={setShowIgChatDialog}
           username={order.customer.instagram_handle}
           eventId={order.event_id}
+          fallbackCommentId={order.latest_comment_id || undefined}
         />
       )}
 

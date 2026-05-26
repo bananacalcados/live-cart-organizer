@@ -42,6 +42,7 @@ export interface DbOrder {
   id: string;
   event_id: string;
   customer_id: string;
+  latest_comment_id?: string | null;
   cart_link?: string;
   checkout_token?: string;
   notes?: string;
