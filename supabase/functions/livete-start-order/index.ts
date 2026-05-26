@@ -197,12 +197,11 @@ serve(async (req) => {
     });
     await supabase.from('orders').update({ stage: 'contacted' }).eq('id', orderId);
 
-    // ===== Branch: Meta WhatsApp Template (overrides 3-block send) =====
+    // ===== Branch: Meta WhatsApp Template (overrides 3-block send for WA) =====
     const useMetaTemplate =
-      channelPreference === 'meta_whatsapp' &&
+      wantsMeta &&
       !!metaPhoneNumberId &&
-      !!metaTemplateName &&
-      !isInstagram;
+      !!metaTemplateName;
 
     const resolveToken = (token: string): string => {
       switch (token) {
