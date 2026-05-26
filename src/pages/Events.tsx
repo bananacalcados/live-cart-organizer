@@ -39,6 +39,7 @@ import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { MetaTemplateConfigurator } from "@/components/events/MetaTemplateConfigurator";
+import { InitialMessageEditor } from "@/components/events/InitialMessageEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone } from "lucide-react";
 import { format } from "date-fns";
