@@ -43,6 +43,7 @@ export function DashboardChatPanel() {
   const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [profilePics, setProfilePics] = useState<Record<string, string>>({});
+  const [selectedIgHandle, setSelectedIgHandle] = useState<string | null>(null);
   const fetchedPicsRef = useRef<Set<string>>(new Set());
 
   const { orders, setHasUnreadMessages } = useDbOrderStore();
