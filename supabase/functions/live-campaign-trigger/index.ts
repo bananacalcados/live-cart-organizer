@@ -224,8 +224,29 @@ Deno.serve(async (req) => {
     const resolvedNumberId = matched.whatsapp_number_id ?? whatsapp_number_id ?? null;
 
     // === Resolução de canal ===
-    // channel_preference: 'whatsapp' (default) | 'instagram' | 'meta_whatsapp' | 'auto'
-    const pref = (matched as any).channel_preference || "whatsapp";
+    // Prioridade: events.channel_preference (do evento ligado ao número WhatsApp que recebeu)
+    //             → live_campaigns.channel_preference (legado) → 'whatsapp'
+    let pref: string = (matched as any).channel_preference || "whatsapp";
+    try {
+      const lookupNumberId = resolvedNumberId;
+      if (lookupNumberId) {
+        const { data: evt } = await supabase
+          .from("events")
+          .select("channel_preference")
+          .eq("whatsapp_number_id", lookupNumberId)
+          .eq("is_active", true)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (evt && (evt as any).channel_preference) {
+          pref = (evt as any).channel_preference;
+          console.log(`[live-trigger] channel_preference resolvido pelo evento: ${pref}`);
+        }
+      }
+    } catch (e) {
+      console.warn("[live-trigger] falha ao buscar channel_preference do evento:", (e as any)?.message);
+    }
+
     let resolvedChannel: "whatsapp" | "instagram" = "whatsapp";
     let resolvedIgUserId: string | null = ig_user_id || null;
     let resolvedIgCommentId: string | null = ig_comment_id || null;
