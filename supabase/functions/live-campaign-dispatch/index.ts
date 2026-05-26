@@ -23,7 +23,7 @@ Deno.serve(async (req) => {
     // Pega despachos pendentes prontos pra enviar (ou expirados de lock)
     const { data: ready, error: selErr } = await supabase
       .from("live_campaign_dispatches")
-      .select("id, campaign_id, message_id, phone, lead_id, attempts, whatsapp_number_id")
+      .select("id, campaign_id, message_id, phone, lead_id, attempts, whatsapp_number_id, channel, ig_user_id, ig_comment_id")
       .eq("status", "pending")
       .lte("scheduled_at", now.toISOString())
       .or(`locked_until.is.null,locked_until.lt.${now.toISOString()}`)
