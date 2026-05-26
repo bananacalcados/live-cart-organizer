@@ -154,19 +154,59 @@ Deno.serve(async (req) => {
       }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Salvar no histórico
+    // Salvar no histórico — tenta atualizar a linha do echo (mesmo message_id) primeiro,
+    // pois o webhook is_echo costuma chegar antes desta resposta e grava sem media_url.
     const recipientId = link?.ig_user_id || metaResponse?.recipient_id || cleanUsername;
-    await supabase.from("whatsapp_messages").insert({
+    const mid = metaResponse?.message_id || null;
+    const payload = {
       phone: recipientId,
-      message: message || null,
-      direction: "outgoing",
+      message: message || (mediaUrl ? "[media]" : null),
+      direction: "outgoing" as const,
       channel: "instagram",
       status: "sent",
-      message_id: metaResponse?.message_id || null,
+      message_id: mid,
       sender_name: `@${cleanUsername}`,
       media_url: mediaUrl || null,
-      media_type: mediaUrl ? (mediaType || null) : null,
-    });
+      media_type: mediaUrl ? (mediaType || null) : "text",
+    };
+    let upgraded = false;
+    if (mid) {
+      const { data: upd } = await supabase
+        .from("whatsapp_messages")
+        .update({
+          message: payload.message,
+          media_url: payload.media_url,
+          media_type: payload.media_type,
+          sender_name: payload.sender_name,
+          status: "sent",
+        })
+        .eq("message_id", mid)
+        .select("id");
+      upgraded = !!(upd && upd.length > 0);
+    }
+    if (!upgraded) {
+      // Pequeno atraso para o echo chegar primeiro e evitar duplicata (mídia)
+      if (mediaUrl) {
+        await new Promise((r) => setTimeout(r, 800));
+        if (mid) {
+          const { data: upd2 } = await supabase
+            .from("whatsapp_messages")
+            .update({
+              message: payload.message,
+              media_url: payload.media_url,
+              media_type: payload.media_type,
+              sender_name: payload.sender_name,
+              status: "sent",
+            })
+            .eq("message_id", mid)
+            .select("id");
+          upgraded = !!(upd2 && upd2.length > 0);
+        }
+      }
+      if (!upgraded) {
+        await supabase.from("whatsapp_messages").insert(payload);
+      }
+    }
 
     // Registrar em live_comment_dms se temos eventId
     if (eventId && fallbackCommentId) {

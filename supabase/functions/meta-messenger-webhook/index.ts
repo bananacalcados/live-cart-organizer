@@ -86,13 +86,17 @@ serve(async (req) => {
               continue;
             }
           }
+          const att = event.message?.attachments?.[0];
+          const attType = att?.type || 'text';
+          const attUrl = att?.payload?.url || null;
           await supabase.from('whatsapp_messages').insert({
             phone: event.recipient?.id || '',
-            message: event.message?.text || '[media]',
+            message: event.message?.text || (att ? `[${attType}]` : null),
             direction: 'outgoing',
             message_id: mid || null,
             status: 'sent',
-            media_type: event.message?.attachments?.[0]?.type || 'text',
+            media_type: attType,
+            media_url: attUrl,
             channel,
             is_group: false,
           });
