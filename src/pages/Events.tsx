@@ -76,6 +76,19 @@ const Events = () => {
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
 
+  // Auto-save da mensagem inicial enquanto edita um evento existente (debounce 600ms)
+  useEffect(() => {
+    if (!editingEvent || !dialogOpen) return;
+    const t = setTimeout(() => {
+      updateEvent(editingEvent, {
+        initial_message_enabled: initialMessageEnabled,
+        initial_message_blocks: initialMessageBlocks,
+      } as any).catch((e) => console.error("[InitialMessage auto-save]", e));
+    }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMessageEnabled, initialMessageBlocks, editingEvent, dialogOpen]);
+
   const handleCopyEventId = async (eventId: string) => {
     await navigator.clipboard.writeText(eventId);
     setCopiedEventId(eventId);
