@@ -148,14 +148,15 @@ serve(async (req) => {
     const firstName = (igHandle.replace(/^@/, '').split(/[._\s]/)[0] || '').trim();
     const displayName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : igName;
 
-    const blockA = `Oii ${displayName}, já separamos seu pedido.`;
-    const blockB = checkoutLink;
-    const blockC = `Só clicar no link acima pra finalizar a compra. Seu produto já foi separado, mas precisa ser pago em 10 minutos, pra continuar reservado, OK?`;
+    const defaultBlocks = [
+      `Oii ${displayName}, já separamos seu pedido.`,
+      checkoutLink,
+      `Só clicar no link acima pra finalizar a compra. Seu produto já foi separado, mas precisa ser pago em 10 minutos, pra continuar reservado, OK?`,
+    ];
+
+    const useCustomInitialMessage = initialMessageEnabled && initialMessageBlocks.length > 0;
 
     const initialStage = savedAddress ? 'aguardando_pagamento' : 'endereco';
-
-    const messageParts = [blockA, blockB, blockC];
-    const firstMessage = messageParts.join('\n\n'); // só pra log/dedupe
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const sessionPayload = {
