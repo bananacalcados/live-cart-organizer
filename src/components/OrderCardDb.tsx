@@ -68,6 +68,7 @@ const dbOrderToOrder = (dbOrder: DbOrder): Order => {
 export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDbProps) {
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [showChatDialog, setShowChatDialog] = useState(false);
+  const [showIgChatDialog, setShowIgChatDialog] = useState(false);
   const [showPOSDialog, setShowPOSDialog] = useState(false);
   const [showFichaDialog, setShowFichaDialog] = useState(false);
   const [hasRegistration, setHasRegistration] = useState(false);
