@@ -520,7 +520,7 @@ const Events = () => {
                     <Button
                       className="flex-1 btn-accent"
                       onClick={handleSubmit}
-                      disabled={!name.trim()}
+                      disabled={!name.trim() || channelPreferences.length === 0}
                     >
                       {editingEvent ? "Salvar" : "Criar Evento"}
                     </Button>
