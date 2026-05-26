@@ -147,6 +147,49 @@ export function DashboardChatPanel() {
       });
     });
 
+    // ===== Conversas Instagram (channel='instagram') =====
+    // Agrupa por @handle (sender_name) já que phone aqui é o ig_user_id (numérico longo)
+    const igMap = new Map<string, { messages: any[]; unread: number; igUserId: string }>();
+    for (const msg of data) {
+      if (msg.channel !== "instagram") continue;
+      const rawHandle = (msg.sender_name || "").toString().trim().toLowerCase();
+      if (!rawHandle.startsWith("@")) continue;
+      const handle = rawHandle.replace(/^@/, "");
+      if (!handle) continue;
+      if (!igMap.has(handle)) igMap.set(handle, { messages: [], unread: 0, igUserId: msg.phone });
+      const e = igMap.get(handle)!;
+      e.messages.push(msg);
+      if (msg.direction === "incoming" && msg.status !== "read") e.unread++;
+    }
+
+    // Order match por instagram_handle
+    const orderByHandle = new Map<string, { stage?: string; customerId?: string }>();
+    for (const o of orders) {
+      const h = (o.customer?.instagram_handle || "").toString().trim().toLowerCase().replace(/^@/, "");
+      if (h) orderByHandle.set(h, { stage: o.stage, customerId: o.customer_id });
+    }
+
+    igMap.forEach((value, handle) => {
+      const orderData = orderByHandle.get(handle);
+      if (!orderData) return; // só conversas do evento atual
+      const lastMsg = value.messages[0];
+      convs.push({
+        phone: `ig:${handle}`,
+        lastMessage: lastMsg.message || (lastMsg.media_type ? `[${lastMsg.media_type}]` : ""),
+        lastMessageAt: new Date(lastMsg.created_at),
+        unreadCount: value.unread,
+        customerName: `@${handle}`,
+        isGroup: false,
+        hasUnansweredMessage: lastMsg.direction === "incoming",
+        stage: orderData.stage,
+        customerId: orderData.customerId,
+        whatsapp_number_id: null,
+        lastIncomingInstance: undefined,
+        isInstagram: true,
+        igHandle: handle,
+      } as any);
+    });
+
     convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
     const enriched = enrichConversations(convs, phoneMessages);
     setConversations(enriched);
