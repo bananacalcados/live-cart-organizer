@@ -375,19 +375,9 @@ export default function LiveCampaignsManager() {
                 <p className="text-xs text-muted-foreground mt-1">Esse texto é injetado no prompt da Jess para que ela responda dúvidas reais sobre a Live (data, produtos, frete, descontos). Se em branco, ela só foca em capturar a numeração.</p>
               </div>
             )}
-            <div>
-              <Label>Canal de envio</Label>
-              <Select value={form.channel_preference || "whatsapp"} onValueChange={(v) => setForm({ ...form, channel_preference: v as Campaign["channel_preference"] })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="whatsapp">WhatsApp (Z-API)</SelectItem>
-                  <SelectItem value="instagram">Instagram DM (Meta)</SelectItem>
-                  <SelectItem value="meta_whatsapp">WhatsApp Cloud API (Templates Meta)</SelectItem>
-                  <SelectItem value="auto">Auto (IG se houver, senão WhatsApp)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Instagram: só funciona se o lead veio do IG (janela 24h ou comentário recente). Cloud API: exige templates Meta aprovados nas mensagens.
+            <div className="rounded border border-dashed bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">
+                💡 O <strong>canal de disparo</strong> (WhatsApp, Instagram DM ou Meta Cloud API) agora é definido <strong>por evento</strong>, na tela de Eventos → Editar Evento → "Canal de Disparo das Automações".
               </p>
             </div>
             <div className="flex items-center justify-between border rounded p-3">
