@@ -1,101 +1,120 @@
-# Fase 4 — Migração do App para `customers_unified`
+# Plano: Canais Alternativos de Contato com Cliente da Live
 
-## Escopo real medido
+Hoje toda mensagem da Live sai via Z-API (`live-campaign-dispatch`). Vamos adicionar **2 canais alternativos**, escolhidos por campanha (ou por lead, conforme origem). A fila de despachos (`live_campaign_dispatches`) continua sendo o coração — só muda o "transporte" no momento do envio.
 
-138 referências a tabelas legadas espalhadas pelo código:
+---
 
-| Tabela legada | Arquivos | Risco |
-|---|---:|---|
-| `customers` | 34 | alto (CRM, lives, chat, automações) |
-| `pos_customers` | 33 | alto (PDV, fichas, vendas) |
-| `zoppy_customers` | 28 | médio (RFM, dashboards, broadcasts) |
-| `customer_registrations` | 17 | médio (checkout) |
-| `chat_contacts` | 12 | alto (tudo do WhatsApp) |
-| `instagram_user_links` | 4 | baixo |
-| `customer_loyalty_points` | 3 | baixo (FK só) |
-| `marketing_contacts` | 3 | médio (segmentação) |
-| `ravena_customers` | 2 | baixo (legado) |
-| `customer_prizes` | 5 | baixo (FK só) |
+## Diagnóstico do que já existe
 
-Migrar tudo de uma vez é receita pra parar o ERP. Vou em **5 ondas independentes**, cada uma testável e revertível.
+- `live-campaign-dispatch` envia tudo via Z-API (`zapi-send-message` / `zapi-send-media`).
+- `instagram-dm-send` **já funciona**: manda DM via Meta Graph (`graph.instagram.com`), com fallback `private_reply` para comentário recente. Usa `META_PAGE_ACCESS_TOKEN` e a tabela `instagram_user_links` (username → ig_user_id).
+- `instagram-send-bulk-dm` já existe (envio em lote, similar). 
+- `meta-whatsapp-send-template` + `meta-whatsapp-get-templates` já existem (WABA oficial). Templates já são listáveis no projeto.
+- `live_campaign_messages` hoje só tem `message_type` (text/audio/video/image) + `content/media_url/caption`. **Não tem campo de canal nem de template_name.**
 
-## Estratégia: "compatibilidade dupla" durante a migração
+---
 
-Antes de tocar uma linha de código de leitura, crio uma **camada de espelhamento via trigger**:
+## Opção 1 — Instagram DM (para leads vindos do IG)
 
-```text
-INSERT/UPDATE em customers, pos_customers, chat_contacts, zoppy_customers
-                              │
-                              ▼
-              trigger AFTER INSERT/UPDATE
-                              │
-                              ▼
-              UPSERT em customers_unified
-                (matching por CPF > phone_suffix8 > instagram > email)
-```
+### Como funciona
+Quando o lead entrou na Live via comentário do Instagram (Livete Anotador), já temos `ig_user_id` ou `username` salvo. Hoje a Live só dispara WhatsApp — vamos permitir que a campanha (ou só esses leads IG) saiam via DM do Instagram.
 
-Assim o app antigo continua funcionando e `customers_unified` fica sempre fresca enquanto eu refatoro. Sem essa rede, qualquer cliente novo cadastrado durante a refatoração some.
+### Limitações da Meta a respeitar
+- **Janela 24h**: só pode mandar DM se o usuário interagiu nas últimas 24h. Para Live isso é ok (acabou de comentar).
+- **Fora da janela**: precisa de `comment_id` recente (private_reply) — já temos fallback.
+- **Mídia**: imagem/vídeo/áudio funcionam via `attachment` (já implementado parcialmente em `instagram-dm-send`; expandir para os 4 tipos).
 
-## Ondas de refatoração
+### Mudanças
+1. **Schema**: adicionar em `live_campaign_dispatches`:
+   - `channel text default 'whatsapp'` ('whatsapp' | 'instagram')
+   - `ig_user_id text` (opcional) e `ig_comment_id text` (opcional, p/ fallback)
+2. **Schema**: adicionar em `live_campaigns`:
+   - `channel_preference text default 'whatsapp'` ('whatsapp' | 'instagram' | 'auto') — `auto` = usa IG quando o lead veio do IG, senão WhatsApp.
+3. **`live-campaign-trigger`** (cria a fila): ao enfileirar, se a origem do lead for IG (ou `channel_preference='instagram'`), grava `channel='instagram'` e preenche `ig_user_id`/`ig_comment_id` a partir dos dados do comentário.
+4. **`live-campaign-dispatch`**: branch no envio — se `channel='instagram'`, chama `instagram-dm-send` com `{ ig_user_id, message, fallbackCommentId, mediaUrl, mediaType }`. Salvar `whatsapp_messages` (já faz) para aparecer no histórico unificado.
+5. **UI da campanha (Live)**: switch "Canal de envio" com 3 opções (WhatsApp / Instagram / Auto). Mostrar aviso da janela 24h.
+6. **Teste end-to-end** numa Live de teste: pegar 1 comentário real, disparar campanha em modo IG, validar entrega + histórico no chat.
 
-### Onda 0 — Infra de compatibilidade (1 migração)
-1. Triggers de espelhamento em `customers`, `pos_customers`, `chat_contacts`, `zoppy_customers`, `customer_registrations`, `instagram_user_links` → upsert em `customers_unified` usando a mesma cascata de match do backfill.
-2. Helper SQL `find_or_create_unified_customer(cpf, phone, instagram, email, name)` → reusado por triggers e edge functions.
-3. Adicionar `unified_customer_id UUID` em `customer_loyalty_points` e `customer_prizes` (nullable, sem FK ainda) + backfill.
+---
 
-### Onda 1 — Hook + store de leitura unificada (sem quebrar nada)
-- Criar `src/stores/unifiedCustomerStore.ts` (novo) que lê de `customers_unified`.
-- Criar `useUnifiedCustomer(phone|cpf|instagram)` hook.
-- `customerStore` antigo permanece, mas vira **proxy**: lê de `customers_unified` e mapeia para o shape `DbCustomer` que os componentes esperam. Zero alteração nos componentes que consomem `customerStore`.
-- **Resultado: tela do CRM, ban list, lives e PDV já passam a mostrar a base unificada sem refatorar UI.**
+## Opção 2 — Meta WhatsApp Cloud API (Templates oficiais)
 
-### Onda 2 — Escrita do PDV e Checkout (origem de cadastros)
-Refatorar quem **cria** cliente para gravar direto em `customers_unified` (e manter espelho temporário em `pos_customers`/`customer_registrations` para compatibilidade):
-- `src/components/pos/CustomerForm.tsx` + `customerFormUtils`
-- `src/components/pos/POSWhatsApp.tsx` (atribuição dinâmica)
-- Edge functions: `pos-create-customer`, `transparent-checkout-*`, `livete-*-create-order`
-- Lives: criação automática via Instagram
+### Como funciona
+A WABA (Cloud API) **só permite iniciar conversa via template aprovado**. Depois que o cliente responde, abre janela 24h e dá pra mandar texto livre. Ou seja: o **primeiro disparo** da Live precisa ser um template; o Jess Mode/follow-up continua igual após resposta.
 
-### Onda 3 — CRM / Broadcasts / Segmentação (leitura pesada)
-- `src/components/management/CrmDuplicates.tsx` → some, deixa de fazer sentido.
-- Broadcasts (`broadcast-*` edge functions) passam a filtrar em `customers_unified` + `customer_list_memberships`.
-- RFM/segmentação lê de `customers_unified` (campos já existem).
-- `useCrmPhoneLookup`, `useSupportPhones`, `useConversationEnrichment` apontam para unified.
+### Limitações
+- Texto/imagem/vídeo dentro do template seguem o que foi aprovado pela Meta. Variáveis ({{1}}, {{2}}, etc.) preenchidas no momento do envio.
+- Sem `comment_id` ou similar — qualquer telefone pode receber template (desde que opt-in implícito da Live).
+- Não dá pra mandar áudio como template (limitação Meta). Áudio fica só para mensagens dentro da janela 24h.
 
-### Onda 4 — Métricas (Fase 3 do plano original, encaixa aqui)
-- Triggers em `orders`, `pos_sales`, `event_orders` recalculam `total_orders`, `total_spent`, `avg_ticket`, `last_purchase_at` em `customers_unified`.
-- Substitui o trabalho que `zoppy_customers` fazia de fora.
+### Mudanças
+1. **Schema** — adicionar em `live_campaign_messages`:
+   - `meta_template_name text` (quando preenchido, a "mensagem" é um template Meta)
+   - `meta_template_language text default 'pt_BR'`
+   - `meta_template_variables jsonb` (mapeia {{1}} → `lead.first_name`, {{2}} → `checkout_link`, etc.)
+2. **Schema** — em `live_campaigns`: já tem `whatsapp_number_id`. Adicionar opção `channel_preference='meta_whatsapp'`.
+3. **UI — editor de mensagens da campanha**:
+   - Toggle "Usar template Meta oficial"
+   - Quando ligado: dropdown carregando `meta-whatsapp-get-templates` (filtra `status=APPROVED`), preview do template, e campos para mapear variáveis a partir de placeholders fixos (`{{nome}}`, `{{checkout_link}}`, `{{produto}}`, etc.).
+4. **`live-campaign-dispatch`**: branch — se `meta_template_name` setado, chama `meta-whatsapp-send-template` com variáveis resolvidas (substituindo placeholders pelos dados do lead/pedido).
+5. **Follow-up**: o disparo de template inicia a conversa. Quando o cliente responder (webhook `meta-whatsapp-webhook`), abrir janela 24h — Jess Mode/Bia podem mandar texto livre normalmente via `meta-whatsapp-send`. Já temos esse caminho; só precisa garantir que a sessão Jess seja ativada também por resposta a template (não só ao fim da fila Z-API).
+6. **Criação de templates novos**: já existe `MetaTemplateCreator.tsx` + `meta-whatsapp-create-template`. Bom orientar criar 1-2 templates específicos para Live (ex: `live_carrinho_separado` com header IMAGE + body com nome e link).
 
-### Onda 5 — FKs e limpeza preparatória
-- `customer_loyalty_points.unified_customer_id` e `customer_prizes.unified_customer_id` ganham FK NOT NULL → `customers_unified.id`.
-- `customer_registrations` ganha FK `unified_customer_id`.
-- Desliga triggers de espelhamento (já não tem mais escrita nas legadas porque o código todo migrou).
-- **Tabelas antigas viram read-only** (revoke INSERT/UPDATE) → começa a Fase 5 (observação).
+---
 
-## Critério de "pronto" por onda
+## Estratégia de Rollout (ordem sugerida)
 
-Cada onda só fecha quando:
-1. Build limpo (sem warnings de tipo).
-2. Smoke test manual nas telas tocadas.
-3. Comparação de contagens: `customers_unified` cresce no mesmo ritmo que as legadas durante a janela de overlap.
+1. **Migration única** com todos os campos novos (`channel`, `ig_user_id`, `ig_comment_id`, `meta_template_*`, `channel_preference`).
+2. **Backend dispatch**: branchs no `live-campaign-dispatch` (Instagram + Meta Template). Manter Z-API como default.
+3. **Trigger**: `live-campaign-trigger` passa a popular `channel` e `ig_*` quando aplicável.
+4. **UI Campanhas Live**: selector de canal + editor de template.
+5. **Teste piloto** com 1 campanha em cada canal antes de migrar tudo.
+6. **Painel** simples mostrando taxa de entrega por canal (Z-API vs IG DM vs Meta Template) para você decidir quando ativar fallback automático.
 
-## O que entrego agora (este loop)
+---
 
-Apenas a **Onda 0** — triggers de espelhamento + helper SQL + colunas `unified_customer_id` em loyalty/prizes. Sem refatorar componente nenhum ainda.
+## Recomendação tática (para o problema do banimento agora)
 
-Por quê: é a base que torna o resto seguro. Sem isso, qualquer onda seguinte corre risco de perder cadastros novos.
+- **Curto prazo (esta semana)**: implementar **Opção 1 (Instagram DM)** primeiro — risco zero, já temos toda a infra Meta funcionando, e cobre 100% dos leads que vieram comentando na Live do IG.
+- **Médio prazo**: implementar **Opção 2 (Meta WhatsApp template)** — exige aprovar 1-2 templates na Meta (24-48h), mas é o canal mais escalável e não banível. Vira o canal principal da Live.
+- **Z-API**: manter como fallback para leads que vieram só por telefone (WhatsApp orgânico) ou enquanto a aprovação dos templates não sai.
 
-Depois que você validar a Onda 0 (testando criar 1 cliente no PDV e ver aparecer em `customers_unified`), abro a Onda 1.
-
-## Riscos conhecidos
-
-- **Conflito de match**: cliente novo do PDV pode bater por suffix8 com cliente "pai" diferente. Mitigação: trigger usa exatamente a mesma cascata do backfill (CPF > suffix8+DDD > suffix8 > email > instagram), e em caso de conflito **cria registro novo em `customers_unified`** (mesma regra dos 63 conflitos de CPF que você aprovou).
-- **Performance dos triggers**: upsert por trigger em `chat_contacts` (12k linhas, atualizadas frequentemente) pode adicionar latência. Mitigação: trigger só dispara em INSERT e em UPDATE de campos relevantes (`name`, `profile_pic_url`, `whatsapp`).
-- **Realtime do chat**: refatorar `customerStore` como proxy precisa preservar shape exato para não quebrar componentes que fazem destructuring de `DbCustomer`.
+---
 
 ## Detalhes técnicos (resumo)
 
-- Helper `public.find_or_create_unified_customer(...)` retorna `uuid` do cliente unificado. SECURITY DEFINER, `SET search_path = public`.
-- Trigger genérico `mirror_to_unified()` parametrizado via `TG_ARGV` para reusar entre tabelas.
-- Atualização de `phone_e164` no `customers_unified` só ocorre se o campo estiver **vazio** (respeita sua regra: vendedora não deve sobrescrever telefone de cliente identificado por CPF).
-- `metadata.sources` é preenchido como array `['pos:uuid', 'chat:uuid', ...]` para auditoria/rollback.
+**Migration:**
+```sql
+ALTER TABLE live_campaign_dispatches
+  ADD COLUMN channel text NOT NULL DEFAULT 'whatsapp',
+  ADD COLUMN ig_user_id text,
+  ADD COLUMN ig_comment_id text;
+
+ALTER TABLE live_campaigns
+  ADD COLUMN channel_preference text NOT NULL DEFAULT 'whatsapp';
+  -- valores: 'whatsapp' | 'instagram' | 'meta_whatsapp' | 'auto'
+
+ALTER TABLE live_campaign_messages
+  ADD COLUMN meta_template_name text,
+  ADD COLUMN meta_template_language text DEFAULT 'pt_BR',
+  ADD COLUMN meta_template_variables jsonb;
+```
+
+**Dispatch (pseudocódigo):**
+```ts
+if (d.channel === 'instagram') {
+  await invoke('instagram-dm-send', { ig_user_id: d.ig_user_id, message, fallbackCommentId: d.ig_comment_id, mediaUrl, mediaType });
+} else if (msg.meta_template_name) {
+  await invoke('meta-whatsapp-send-template', {
+    to: d.phone,
+    template_name: msg.meta_template_name,
+    language: msg.meta_template_language,
+    variables: resolveVars(msg.meta_template_variables, lead),
+    whatsapp_number_id: camp.whatsapp_number_id,
+  });
+} else {
+  // Z-API atual
+}
+```
+
+Confirma este plano? Se sim, começo pela **migration + Opção 1 (Instagram)** que já está 80% pronta, depois sigo para Opção 2 (templates).
