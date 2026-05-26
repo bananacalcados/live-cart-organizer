@@ -86,9 +86,10 @@ serve(async (req) => {
     const isInstagram = channelPreference === 'instagram';
 
     if (isInstagram) {
-      if (!customer?.instagram_handle) {
-        console.error('[livete-start] Customer has no instagram_handle for IG channel:', order.customer_id);
-        return new Response(JSON.stringify({ error: 'Customer has no instagram_handle' }), {
+      // Aceita IG sem handle se tiver WhatsApp como fallback
+      if (!customer?.instagram_handle && !customer?.whatsapp) {
+        console.error('[livete-start] Customer has no instagram_handle nor whatsapp:', order.customer_id);
+        return new Response(JSON.stringify({ error: 'Customer has no contact channel' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -256,22 +257,50 @@ serve(async (req) => {
       }
     } else {
       // Anti-ban: envia blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
+      // Se canal preferido for Instagram mas não conseguir entregar (sem DM thread e sem comentário recente),
+      // faz fallback automático para WhatsApp quando o cliente tiver número.
+      const waPhone = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone) : '';
+      const canFallbackToWhatsApp = !!waPhone;
+      let igFailed = false;
+
+      const sendViaWhatsApp = async (text: string) => {
+        if (!waPhone) return;
+        if (metaPhoneNumberId) {
+          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: waPhone, message: text, whatsappNumberId }),
+          });
+        } else {
+          await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: waPhone, message: text, whatsapp_number_id: whatsappNumberId }),
+          });
+        }
+        await supabase.from('whatsapp_messages').insert({
+          phone: waPhone, message: text, direction: 'outgoing', status: 'sent', whatsapp_number_id: whatsappNumberId,
+        });
+      };
+
       const sendBlock = async (text: string) => {
-        if (isInstagram) {
-          // Buscar último comment_id desse usuário para fallback de private_reply
+        if (isInstagram && !igFailed) {
+          // Buscar último comment_id desse usuário para fallback de private_reply (últimos 7 dias)
           let fallbackCommentId: string | undefined = undefined;
           try {
+            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
             const { data: lastComment } = await supabase
               .from('live_comments')
               .select('comment_id')
-              .eq('username', `@${igUsername}`)
+              .ilike('username', igUsername)
+              .gte('created_at', sevenDaysAgo)
               .order('created_at', { ascending: false })
               .limit(1)
               .maybeSingle();
             if (lastComment?.comment_id) fallbackCommentId = lastComment.comment_id;
           } catch {}
 
-          await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {
+          const igResp = await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -281,25 +310,25 @@ serve(async (req) => {
               fallbackCommentId,
             }),
           });
+          if (igResp.ok) return;
+
+          // IG falhou: marca para próximos blocos não tentarem mais e tenta fallback WA
+          const errBody = await igResp.text().catch(() => '');
+          console.warn(`[livete-start] IG send failed (${igResp.status}) for @${igUsername}, falling back to WhatsApp:`, errBody);
+          igFailed = true;
+          if (canFallbackToWhatsApp) {
+            await sendViaWhatsApp(text);
+          }
           return;
         }
-        if (metaPhoneNumberId) {
-          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, message: text, whatsappNumberId }),
-          });
-        } else {
-          await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone, message: text, whatsapp_number_id: whatsappNumberId }),
-          });
+        if (isInstagram && igFailed) {
+          if (canFallbackToWhatsApp) await sendViaWhatsApp(text);
+          return;
         }
-        await supabase.from('whatsapp_messages').insert({
-          phone, message: text, direction: 'outgoing', status: 'sent', whatsapp_number_id: whatsappNumberId,
-        });
+        // Canal preferido já é WhatsApp
+        await sendViaWhatsApp(text);
       };
+
 
       const humanDelay = (text: string) => {
         const base = Math.max(1500, text.length * 45);
