@@ -375,28 +375,118 @@ export function InstagramDMChat({
               <span>Sem janela ativa nem comentário recente. Aguarde o cliente comentar/enviar mensagem.</span>
             </div>
           )}
-          <div className="flex gap-2 items-end">
-            <Textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Digite sua mensagem..."
-              className="min-h-[60px] max-h-[120px] resize-none"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              disabled={sending || cannotSendDirectly}
-            />
-            <Button
-              onClick={handleSend}
-              disabled={!draft.trim() || sending || cannotSendDirectly}
-              className="bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90"
-            >
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
-          </div>
+          {recording ? (
+            <div className="flex items-center justify-between gap-2 p-3 rounded-lg border border-pink-500/30 bg-pink-500/10">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="relative flex h-3 w-3">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75"></span>
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-red-600"></span>
+                </span>
+                Gravando {recording === "audio" ? "áudio" : "vídeo"}…{" "}
+                <span className="font-mono text-xs text-muted-foreground">
+                  {String(Math.floor(recordSeconds / 60)).padStart(2, "0")}:
+                  {String(recordSeconds % 60).padStart(2, "0")}
+                </span>
+              </div>
+              <div className="flex gap-1">
+                <Button size="sm" variant="ghost" onClick={() => stopRecording(true)} title="Cancelar">
+                  <X className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => stopRecording(false)}
+                  className="bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90"
+                  title="Parar e enviar"
+                >
+                  <Square className="h-4 w-4 mr-1" /> Enviar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Botões de mídia */}
+              <div className="flex gap-1 mb-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={sending || uploading || cannotSendDirectly}
+                  title="Tirar foto agora"
+                >
+                  <Camera className="h-4 w-4 mr-1" /> Foto
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  onClick={() => videoInputRef.current?.click()}
+                  disabled={sending || uploading || cannotSendDirectly}
+                  title="Gravar vídeo com a câmera nativa"
+                >
+                  <Video className="h-4 w-4 mr-1" /> Vídeo
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  onClick={() => startRecording("audio")}
+                  disabled={sending || uploading || cannotSendDirectly}
+                  title="Gravar áudio na hora"
+                >
+                  <Mic className="h-4 w-4 mr-1" /> Áudio
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8"
+                  onClick={() => startRecording("video")}
+                  disabled={sending || uploading || cannotSendDirectly}
+                  title="Gravar vídeo na hora (webcam)"
+                >
+                  <Video className="h-4 w-4 mr-1" /> Gravar vídeo
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 ml-auto"
+                  onClick={() => galleryInputRef.current?.click()}
+                  disabled={sending || uploading || cannotSendDirectly}
+                  title="Anexar da galeria"
+                >
+                  <Paperclip className="h-4 w-4 mr-1" /> Galeria
+                </Button>
+              </div>
+
+              {/* Inputs ocultos */}
+              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelected} />
+              <input ref={videoInputRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={handleFileSelected} />
+              <input ref={galleryInputRef} type="file" accept="image/*,video/*,audio/*" className="hidden" onChange={handleFileSelected} />
+
+              <div className="flex gap-2 items-end">
+                <Textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Digite sua mensagem..."
+                  className="min-h-[60px] max-h-[120px] resize-none"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  disabled={sending || uploading || cannotSendDirectly}
+                />
+                <Button
+                  onClick={handleSend}
+                  disabled={!draft.trim() || sending || uploading || cannotSendDirectly}
+                  className="bg-gradient-to-r from-pink-500 to-purple-600 hover:opacity-90"
+                >
+                  {sending || uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
