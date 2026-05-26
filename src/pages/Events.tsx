@@ -208,6 +208,8 @@ const Events = () => {
         channel,
         channel_preference: channelPreference,
         default_store_id: defaultStoreId,
+        initial_message_enabled: initialMessageEnabled,
+        initial_message_blocks: initialMessageBlocks,
         ...metaTemplateFields,
       } as any);
     } else {
@@ -217,6 +219,8 @@ const Events = () => {
           channel,
           default_store_id: defaultStoreId,
           channel_preference: channelPreference,
+          initial_message_enabled: initialMessageEnabled,
+          initial_message_blocks: initialMessageBlocks,
           ...metaTemplateFields,
         };
         if (shippingValue) updates.default_shipping_cost = shippingValue;
