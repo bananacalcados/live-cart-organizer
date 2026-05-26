@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
         console.warn("[ig-dm-send] Unsupported audio format for Instagram:", mediaUrl);
         return new Response(JSON.stringify({
           error: "unsupported_audio_format",
-          message: "O Instagram não aceita áudio gravado neste navegador (webm/opus). Use Safari/iOS para gravar áudios para o Instagram, ou envie pelo WhatsApp.",
+          message: "O Instagram rejeitou um áudio em formato não suportado. O app deveria converter automaticamente para WAV antes do envio.",
         }), { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
