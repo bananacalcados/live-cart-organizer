@@ -208,6 +208,23 @@ serve(async (req) => {
       }
     };
 
+    const recentThreshold = new Date(Date.now() - 15000).toISOString();
+    let duplicateQuery = supabase
+      .from('whatsapp_messages')
+      .select('id, created_at')
+      .eq('phone', phone)
+      .eq('direction', 'outgoing')
+      .gte('created_at', recentThreshold)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    duplicateQuery = whatsappNumberId
+      ? duplicateQuery.eq('whatsapp_number_id', whatsappNumberId)
+      : duplicateQuery.is('whatsapp_number_id', null);
+
+    const { data: recentDuplicate } = await duplicateQuery;
+    const shouldSkipSend = Boolean(recentDuplicate && recentDuplicate.length > 0);
+
     if (shouldSkipSend) {
       console.log(`[livete-start] Duplicate start skipped for order ${orderId} / ${phone}`);
     } else if (useMetaTemplate) {
