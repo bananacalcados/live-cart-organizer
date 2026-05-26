@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
     // Busca campanhas ativas
     const { data: campaigns, error: campErr } = await supabase
       .from("live_campaigns")
-      .select("id, name, slug, trigger_phrase, ask_shoe_size, jess_enabled, whatsapp_number_id")
+      .select("id, name, slug, trigger_phrase, ask_shoe_size, jess_enabled, whatsapp_number_id, channel_preference")
       .eq("is_active", true);
 
     if (campErr) throw campErr;
