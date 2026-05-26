@@ -752,6 +752,31 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           >
             <MessagesSquare className="h-3.5 w-3.5" />
           </Button>
+          {order.customer?.instagram_handle && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-pink-500 hover:text-pink-600 hover:bg-pink-500/10"
+              onClick={(e) => { e.stopPropagation(); setShowIgChatDialog(true); }}
+              title="Abrir chat Instagram DM"
+            >
+              <Instagram className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      )}
+      {!order.customer?.whatsapp && order.customer?.instagram_handle && (
+        <div className="flex items-center gap-2 mb-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-pink-500 hover:text-pink-600 hover:bg-pink-500/10"
+            onClick={(e) => { e.stopPropagation(); setShowIgChatDialog(true); }}
+            title="Abrir chat Instagram DM"
+          >
+            <Instagram className="h-3.5 w-3.5" />
+          </Button>
+          <span className="text-xs text-muted-foreground">Apenas Instagram</span>
         </div>
       )}
 
