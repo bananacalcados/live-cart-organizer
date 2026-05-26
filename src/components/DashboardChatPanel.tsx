@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { MessageCircle, Send, Loader2, ArrowLeft, Phone } from "lucide-react";
+import { MessageCircle, Send, Loader2, ArrowLeft, Phone, Instagram } from "lucide-react";
+import { InstagramDMChat } from "./events/InstagramDMChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
