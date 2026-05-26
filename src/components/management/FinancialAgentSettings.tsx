@@ -45,7 +45,7 @@ export function FinancialAgentSettings() {
   };
 
   const loadUsers = async () => {
-    const { data } = await supabase.from("financial_agent_authorized_users").select("*").order("created_at", { ascending: false });
+    const { data } = await (supabase as any).from("financial_agent_authorized_users").select("*").order("created_at", { ascending: false });
     setUsers((data as any) || []);
   };
 
