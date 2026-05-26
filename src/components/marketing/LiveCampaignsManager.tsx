@@ -82,7 +82,28 @@ export default function LiveCampaignsManager() {
     ask_shoe_size: true,
     jess_enabled: true,
     jess_prompt: "",
+    channel_preference: "whatsapp",
   });
+
+  const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+
+  async function loadMetaTemplates(whatsappNumberId?: string | null) {
+    if (metaTemplates.length > 0) return;
+    setLoadingTemplates(true);
+    try {
+      const { data } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
+        body: { whatsappNumberId: whatsappNumberId || undefined },
+      });
+      const list = (data?.templates || []).filter((t: MetaTemplate) => t.status === "APPROVED");
+      setMetaTemplates(list);
+    } catch (e) {
+      toast.error("Erro carregando templates Meta");
+    } finally {
+      setLoadingTemplates(false);
+    }
+  }
+
 
   useEffect(() => { loadCampaigns(); }, []);
 
