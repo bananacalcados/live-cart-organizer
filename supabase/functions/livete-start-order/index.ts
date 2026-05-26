@@ -16,7 +16,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { orderId } = await req.json();
+    const { orderId, fallbackCommentId: requestFallbackCommentId } = await req.json();
     if (!orderId) {
       return new Response(JSON.stringify({ error: 'orderId required' }), {
         status: 400,
@@ -286,18 +286,20 @@ serve(async (req) => {
       const sendBlock = async (text: string) => {
         if (isInstagram && !igFailed) {
           // Buscar último comment_id desse usuário para fallback de private_reply (últimos 7 dias)
-          let fallbackCommentId: string | undefined = undefined;
+          let fallbackCommentId: string | undefined = requestFallbackCommentId || undefined;
           try {
-            const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-            const { data: lastComment } = await supabase
-              .from('live_comments')
-              .select('comment_id')
-              .ilike('username', igUsername)
-              .gte('created_at', sevenDaysAgo)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (lastComment?.comment_id) fallbackCommentId = lastComment.comment_id;
+            if (!fallbackCommentId) {
+              const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+              const { data: lastComment } = await supabase
+                .from('live_comments')
+                .select('comment_id')
+                .ilike('username', igUsername)
+                .gte('created_at', sevenDaysAgo)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              if (lastComment?.comment_id) fallbackCommentId = lastComment.comment_id;
+            }
           } catch {}
 
           const igResp = await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {

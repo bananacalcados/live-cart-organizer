@@ -48,9 +48,10 @@ interface OrderDialogDbProps {
   editingOrder?: DbOrder | null;
   eventId: string;
   prefillInstagram?: string;
+  prefillCommentId?: string;
 }
 
-export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram }: OrderDialogDbProps) {
+export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId }: OrderDialogDbProps) {
   const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, banCustomer, customers } = useCustomerStore();
   const { createOrder, updateOrder, findActiveOrderByCustomer, orders } = useDbOrderStore();
 
@@ -481,6 +482,13 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               notes: activeOrder.notes ? `${activeOrder.notes}\n${notes}` : notes 
             });
           }
+          if (prefillCommentId) {
+            await supabase
+              .from("live_comments")
+              .update({ order_id: activeOrder.id })
+              .eq("comment_id", prefillCommentId);
+            await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
+          }
           toast.success("Produtos adicionados ao pedido existente!");
         } else {
           const newOrder = await createOrder(eventId, newCustomer, localProducts);
@@ -510,6 +518,14 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
 
             if (Object.keys(extraUpdates).length > 0) {
               await updateOrder(newOrder.id, extraUpdates as Partial<DbOrder>);
+            }
+
+            if (prefillCommentId) {
+              await supabase
+                .from("live_comments")
+                .update({ order_id: newOrder.id })
+                .eq("comment_id", prefillCommentId);
+              await useDbOrderStore.getState().fetchOrdersByEvent(eventId);
             }
           }
         }

@@ -382,7 +382,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
 
             if (eventData?.automation_enabled) {
               supabase.functions.invoke('livete-start-order', {
-                body: { orderId },
+                body: { orderId, fallbackCommentId: order.latest_comment_id || undefined },
               }).then(({ error: liveteErr }) => {
                 if (liveteErr) console.error('🤖 [LIVETE] moveOrder error:', liveteErr);
                 else console.log('🤖 [LIVETE] Triggered via moveOrder for', orderId);
