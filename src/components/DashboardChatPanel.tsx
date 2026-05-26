@@ -379,7 +379,7 @@ export function DashboardChatPanel() {
       <div className="p-3 border-b border-border bg-card">
         <div className="flex items-center gap-2 mb-3">
           <MessageCircle className="h-5 w-5 text-[hsl(var(--stage-paid))]" />
-          <h3 className="font-bold text-sm text-foreground">Chat WhatsApp</h3>
+          <h3 className="font-bold text-sm text-foreground">Chat WhatsApp + Instagram</h3>
           {unansweredCount > 0 && (
             <Badge className="bg-destructive text-destructive-foreground text-xs font-bold ml-auto">
               {unansweredCount}
