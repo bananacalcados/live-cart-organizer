@@ -63,6 +63,7 @@ const Events = () => {
   const [shippingCost, setShippingCost] = useState("");
   const [selectedWhatsAppId, setSelectedWhatsAppId] = useState<string>("");
   const [channel, setChannel] = useState<string>("site");
+  const [channelPreference, setChannelPreference] = useState<string>("whatsapp");
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
