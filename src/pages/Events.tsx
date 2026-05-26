@@ -203,7 +203,8 @@ const Events = () => {
     };
     const defaultStoreId = STORE_BY_CHANNEL[channel] ?? null;
     
-    const metaTemplateFields = channelPreference === "meta_whatsapp"
+    const hasMeta = channelPreferences.includes("meta_whatsapp");
+    const metaTemplateFields = hasMeta
       ? {
           meta_template_name: metaTemplateName,
           meta_template_language: metaTemplateLanguage,
@@ -216,6 +217,9 @@ const Events = () => {
           meta_template_header_variable: null,
         };
 
+    // Primary channel kept for backward-compat (first selected)
+    const primaryChannel = channelPreferences[0] || channelPreference || "whatsapp";
+
     if (editingEvent) {
       await updateEvent(editingEvent, {
         name,
@@ -223,7 +227,9 @@ const Events = () => {
         default_shipping_cost: shippingValue ?? null,
         whatsapp_number_id: whatsappId,
         channel,
-        channel_preference: channelPreference,
+        channel_preference: primaryChannel,
+        channel_preferences: channelPreferences,
+        automation_enabled: automationEnabled,
         default_store_id: defaultStoreId,
         initial_message_enabled: initialMessageEnabled,
         initial_message_blocks: initialMessageBlocks,
@@ -235,7 +241,9 @@ const Events = () => {
         const updates: any = {
           channel,
           default_store_id: defaultStoreId,
-          channel_preference: channelPreference,
+          channel_preference: primaryChannel,
+          channel_preferences: channelPreferences,
+          automation_enabled: automationEnabled,
           initial_message_enabled: initialMessageEnabled,
           initial_message_blocks: initialMessageBlocks,
           ...metaTemplateFields,
