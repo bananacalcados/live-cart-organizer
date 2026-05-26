@@ -3886,6 +3886,7 @@ export type Database = {
           catalog_lead_page_id: string | null
           channel: Database["public"]["Enums"]["event_channel"]
           channel_preference: string
+          channel_preferences: string[]
           created_at: string
           default_shipping_cost: number | null
           default_store_id: string | null
@@ -3908,6 +3909,7 @@ export type Database = {
           catalog_lead_page_id?: string | null
           channel?: Database["public"]["Enums"]["event_channel"]
           channel_preference?: string
+          channel_preferences?: string[]
           created_at?: string
           default_shipping_cost?: number | null
           default_store_id?: string | null
@@ -3930,6 +3932,7 @@ export type Database = {
           catalog_lead_page_id?: string | null
           channel?: Database["public"]["Enums"]["event_channel"]
           channel_preference?: string
+          channel_preferences?: string[]
           created_at?: string
           default_shipping_cost?: number | null
           default_store_id?: string | null
