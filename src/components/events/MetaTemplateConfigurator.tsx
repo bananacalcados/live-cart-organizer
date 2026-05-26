@@ -198,30 +198,57 @@ export const MetaTemplateConfigurator = ({
               <div className="text-xs bg-background border rounded p-2 font-mono whitespace-pre-wrap">
                 {headerText}
               </div>
-              <Select
-                value={headerVariable || ""}
-                onValueChange={(val) =>
-                  onChange({ templateName, language, bodyVariables, headerVariable: val })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Escolha o token..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {AVAILABLE_TOKENS.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>
-                      <code className="text-xs">{t.value}</code> — {t.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {headerComponent && headerComponent.format !== "TEXT" && (
-            <div className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-              <AlertCircle className="h-3 w-3" />
-              Header com mídia ({headerComponent.format}) ainda não suportado nesta versão.
+              {(() => {
+                const isToken = !headerVariable || isTokenValue(headerVariable);
+                return (
+                  <div className="flex items-center gap-2">
+                    {isToken ? (
+                      <Select
+                        value={headerVariable || ""}
+                        onValueChange={(val) =>
+                          onChange({ templateName, language, bodyVariables, headerVariable: val })
+                        }
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Escolha o token..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AVAILABLE_TOKENS.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              <code className="text-xs">{t.value}</code> — {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        className="flex-1"
+                        placeholder="Digite o texto livre..."
+                        value={headerVariable || ""}
+                        onChange={(e) =>
+                          onChange({ templateName, language, bodyVariables, headerVariable: e.target.value })
+                        }
+                      />
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      title={isToken ? "Mudar para texto livre" : "Mudar para token/variável"}
+                      onClick={() =>
+                        onChange({
+                          templateName,
+                          language,
+                          bodyVariables,
+                          headerVariable: isToken ? " " : "",
+                        })
+                      }
+                    >
+                      {isToken ? <Type className="h-3 w-3" /> : <Variable className="h-3 w-3" />}
+                    </Button>
+                  </div>
+                );
+              })()}
             </div>
           )}
 
