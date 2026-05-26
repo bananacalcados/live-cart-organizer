@@ -265,6 +265,8 @@ const Events = () => {
     setSelectedWhatsAppId("");
     setChannel("site");
     setChannelPreference("whatsapp");
+    setChannelPreferences(["whatsapp"]);
+    setAutomationEnabled(true);
     setMetaTemplateName(null);
     setMetaTemplateLanguage("pt_BR");
     setMetaTemplateBodyVars([]);
@@ -281,7 +283,11 @@ const Events = () => {
     setShippingCost(event.default_shipping_cost?.toString() || "");
     setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
     setChannel((event as any).channel || "site");
-    setChannelPreference((event as any).channel_preference || "whatsapp");
+    const singular = (event as any).channel_preference || "whatsapp";
+    setChannelPreference(singular);
+    const prefsArr = ((event as any).channel_preferences as string[]) || [];
+    setChannelPreferences(prefsArr.length > 0 ? prefsArr : [singular]);
+    setAutomationEnabled((event as any).automation_enabled !== false);
     setMetaTemplateName((event as any).meta_template_name || null);
     setMetaTemplateLanguage((event as any).meta_template_language || "pt_BR");
     setMetaTemplateBodyVars(((event as any).meta_template_body_variables as string[]) || []);
