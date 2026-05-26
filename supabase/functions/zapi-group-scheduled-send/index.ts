@@ -429,8 +429,9 @@ serve(async (req) => {
         updatePayload.locked_until = null;
       } else {
         // Keep as 'sending' — cron will pick it up again (RPC now accepts sending+expired-lock)
+        // Short lock (15s) to prevent double-claim mid-batch, but allow next minute cron to continue.
         updatePayload.status = 'sending';
-        updatePayload.locked_until = new Date(Date.now() + 90_000).toISOString();
+        updatePayload.locked_until = new Date(Date.now() + 15_000).toISOString();
       }
 
       if (messageGroupId) {
