@@ -238,26 +238,48 @@ export const MetaTemplateConfigurator = ({
               <Label className="text-xs">
                 Mapeamento das variáveis ({bodyVarCount} {bodyVarCount === 1 ? "variável" : "variáveis"})
               </Label>
-              {Array.from({ length: bodyVarCount }).map((_, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <Badge variant="outline" className="font-mono">{`{{${i + 1}}}`}</Badge>
-                  <Select
-                    value={bodyVariables[i] || ""}
-                    onValueChange={(val) => setBodyVar(i, val)}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="Escolha o token..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AVAILABLE_TOKENS.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          <code className="text-xs">{t.value}</code> — {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              ))}
+              {Array.from({ length: bodyVarCount }).map((_, i) => {
+                const current = bodyVariables[i] || "";
+                const isToken = !current || isTokenValue(current);
+                return (
+                  <div key={i} className="flex items-center gap-2">
+                    <Badge variant="outline" className="font-mono">{`{{${i + 1}}}`}</Badge>
+                    {isToken ? (
+                      <Select
+                        value={current}
+                        onValueChange={(val) => setBodyVar(i, val)}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Escolha o token..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {AVAILABLE_TOKENS.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              <code className="text-xs">{t.value}</code> — {t.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        className="flex-1"
+                        placeholder="Digite o texto livre..."
+                        value={current}
+                        onChange={(e) => setBodyVar(i, e.target.value)}
+                      />
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      title={isToken ? "Mudar para texto livre" : "Mudar para token/variável"}
+                      onClick={() => setBodyVar(i, isToken ? " " : "")}
+                    >
+                      {isToken ? <Type className="h-3 w-3" /> : <Variable className="h-3 w-3" />}
+                    </Button>
+                  </div>
+                );
+              })}
             </div>
           )}
 
