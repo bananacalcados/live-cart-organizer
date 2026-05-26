@@ -208,16 +208,18 @@ const Events = () => {
     setShippingCost("");
     setSelectedWhatsAppId("");
     setChannel("site");
+    setChannelPreference("whatsapp");
     setEditingEvent(null);
   };
 
-  const handleEdit = (event: { id: string; name: string; description?: string; default_shipping_cost?: number; whatsapp_number_id?: string; channel?: string }) => {
+  const handleEdit = (event: { id: string; name: string; description?: string; default_shipping_cost?: number; whatsapp_number_id?: string; channel?: string; channel_preference?: string }) => {
     setEditingEvent(event.id);
     setName(event.name);
     setDescription(event.description || "");
     setShippingCost(event.default_shipping_cost?.toString() || "");
     setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
     setChannel((event as any).channel || "site");
+    setChannelPreference((event as any).channel_preference || "whatsapp");
     setDialogOpen(true);
   };
 
