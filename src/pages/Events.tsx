@@ -244,6 +244,8 @@ const Events = () => {
     setMetaTemplateLanguage("pt_BR");
     setMetaTemplateBodyVars([]);
     setMetaTemplateHeaderVar(null);
+    setInitialMessageEnabled(false);
+    setInitialMessageBlocks([]);
     setEditingEvent(null);
   };
 
