@@ -330,7 +330,7 @@ serve(async (req) => {
       order_id: orderId,
       phone,
       stage: initialStage,
-      message_out: shouldSkipSend ? null : firstMessage,
+      message_out: shouldSkipSend ? null : (useCustomInitialMessage ? initialMessageBlocks.join('\n\n') : defaultBlocks.join('\n\n')),
       ai_decision: shouldSkipSend ? 'start_skipped_duplicate' : (savedAddress ? 'confirm_existing_address' : 'ask_new_address'),
       tool_called: 'livete-start-order',
       response_time_ms: responseTime,
