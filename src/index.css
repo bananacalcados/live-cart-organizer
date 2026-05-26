@@ -209,13 +209,72 @@
 }
 
 /* ============================================================
-   EVENTS MODULE — Sophisticated Dark Theme
-   Deep navy/graphite base + cool neon accents (cyan, indigo,
-   amber, magenta). Force dark regardless of app theme.
+   EVENTS MODULE — Sophisticated Theme (Light + Dark)
+   Light = porcelain/silver base with deep indigo accents.
+   Dark  = deep navy/graphite base with same indigo accents.
    Scoped via .events-corporate wrapper on the page root.
    ============================================================ */
+
+/* -------- LIGHT (default) -------- */
 .events-corporate {
+  color-scheme: light;
+
+  --background: 220 30% 97%;
+  --foreground: 222 35% 12%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 222 35% 12%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 35% 12%;
+
+  --primary: 232 50% 38%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 220 20% 93%;
+  --secondary-foreground: 222 30% 18%;
+
+  --muted: 220 22% 95%;
+  --muted-foreground: 222 12% 42%;
+
+  --accent: 232 50% 38%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 70% 48%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 220 18% 88%;
+  --input: 220 18% 88%;
+  --ring: 232 50% 38%;
+  --radius: 0.75rem;
+
+  /* Sophisticated palette tokens (slightly toned down for light) */
+  --corp-indigo: 232 55% 42%;
+  --corp-indigo-deep: 232 55% 28%;
+  --corp-silver: 220 12% 60%;
+  --corp-graphite: 222 20% 30%;
+  --corp-violet: 265 50% 50%;
+  --corp-amber: 38 90% 50%;
+  --corp-emerald: 160 55% 38%;
+  --corp-magenta: 320 55% 48%;
+  --corp-rose: 350 65% 52%;
+
+  /* Chart series — used by EventsDashboard bar chart */
+  --evt-chart-1: 232 55% 32%;   /* deep indigo */
+  --evt-chart-2: 220 10% 62%;   /* silver / platinum */
+
+  --gradient-accent: linear-gradient(135deg, hsl(232 50% 28%) 0%, hsl(238 55% 38%) 55%, hsl(245 55% 48%) 100%);
+  --gradient-hero: linear-gradient(135deg, hsl(220 30% 96%) 0%, hsl(220 25% 92%) 100%);
+  --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 25% 98%) 100%);
+  --gradient-corp-header: linear-gradient(135deg, hsl(222 32% 10%) 0%, hsl(222 28% 14%) 60%, hsl(232 30% 22%) 100%);
+  --shadow-corp-card: 0 1px 2px hsl(222 30% 20% / 0.04), 0 8px 24px -16px hsl(222 30% 20% / 0.18);
+  --shadow-corp-glow: 0 10px 30px -10px hsl(232 55% 30% / 0.45);
+}
+
+/* -------- DARK -------- */
+.dark .events-corporate {
   color-scheme: dark;
+
   --background: 222 28% 8%;
   --foreground: 215 25% 94%;
 
@@ -225,9 +284,7 @@
   --popover: 222 26% 10%;
   --popover-foreground: 215 25% 94%;
 
-  /* Refined indigo primary (replaces bright cyan-blue) */
   --primary: 232 55% 62%;
-
   --primary-foreground: 222 40% 8%;
 
   --secondary: 222 20% 16%;
@@ -236,8 +293,7 @@
   --muted: 222 18% 14%;
   --muted-foreground: 215 12% 60%;
 
-  /* Cyan accent (replaces orange/green) */
-  --accent: 192 85% 55%;
+  --accent: 232 55% 62%;
   --accent-foreground: 222 40% 8%;
 
   --destructive: 0 75% 58%;
@@ -246,17 +302,19 @@
   --border: 222 18% 18%;
   --input: 222 18% 18%;
   --ring: 232 55% 62%;
-  --radius: 0.75rem;
 
-
-  /* Sophisticated palette tokens */
-  --corp-cyan: 192 85% 60%;
-  --corp-indigo: 230 80% 65%;
+  --corp-indigo: 230 70% 62%;
+  --corp-indigo-deep: 232 55% 38%;
+  --corp-silver: 220 12% 72%;
+  --corp-graphite: 222 18% 22%;
   --corp-violet: 265 70% 65%;
-  --corp-magenta: 320 70% 60%;
   --corp-amber: 38 95% 60%;
   --corp-emerald: 160 65% 50%;
+  --corp-magenta: 320 70% 60%;
   --corp-rose: 350 75% 62%;
+
+  --evt-chart-1: 232 60% 50%;   /* deep indigo (dark) */
+  --evt-chart-2: 220 12% 72%;   /* silver */
 
   --gradient-accent: linear-gradient(135deg, hsl(232 45% 22%) 0%, hsl(238 50% 32%) 55%, hsl(245 55% 42%) 100%);
   --gradient-hero: linear-gradient(135deg, hsl(222 30% 6%) 0%, hsl(222 26% 10%) 100%);
@@ -266,33 +324,35 @@
   --shadow-corp-glow: 0 10px 30px -10px hsl(238 60% 35% / 0.6);
 }
 
-/* Force same look in light mode too (sophisticated dark is the brand) */
-.events-corporate,
-.dark .events-corporate { color-scheme: dark; }
-
-/* Background canvas: deep navy + subtle aurora glows */
+/* -------- Canvas backgrounds (auto adapt via variables) -------- */
 .events-corporate {
   background:
-    radial-gradient(900px 500px at 85% -10%, hsl(var(--corp-cyan) / 0.07), transparent 60%),
+    radial-gradient(900px 500px at 85% -10%, hsl(var(--corp-indigo) / 0.08), transparent 60%),
     radial-gradient(800px 500px at -10% 110%, hsl(var(--corp-violet) / 0.06), transparent 60%),
-    radial-gradient(600px 400px at 50% 50%, hsl(var(--corp-indigo) / 0.03), transparent 70%),
     hsl(var(--background));
   color: hsl(var(--foreground));
 }
+.dark .events-corporate {
+  background:
+    radial-gradient(900px 500px at 85% -10%, hsl(var(--corp-indigo) / 0.07), transparent 60%),
+    radial-gradient(800px 500px at -10% 110%, hsl(var(--corp-violet) / 0.06), transparent 60%),
+    radial-gradient(600px 400px at 50% 50%, hsl(var(--corp-indigo) / 0.03), transparent 70%),
+    hsl(var(--background));
+}
 
-/* Header bar — graphite with thin cyan separator */
+/* Header bar — always dark/graphite for the "executive" feel */
 .events-corporate .corp-header {
   background: var(--gradient-corp-header);
   color: hsl(0 0% 100%);
   border-bottom: 1px solid hsl(var(--border));
-  box-shadow: 0 1px 0 hsl(0 0% 100% / 0.03) inset, 0 6px 24px -16px hsl(222 60% 0% / 0.6);
+  box-shadow: 0 1px 0 hsl(0 0% 100% / 0.03) inset, 0 6px 24px -16px hsl(222 60% 0% / 0.45);
   position: relative;
 }
 .events-corporate .corp-header::after {
   content: "";
   position: absolute;
   left: 0; right: 0; bottom: -1px; height: 1px;
-  background: linear-gradient(90deg, transparent, hsl(var(--corp-cyan) / 0.5), transparent);
+  background: linear-gradient(90deg, transparent, hsl(var(--corp-indigo) / 0.55), transparent);
 }
 .events-corporate .corp-header h1 {
   letter-spacing: 0.02em;
@@ -301,25 +361,25 @@
   background-clip: text;
   color: transparent;
 }
-.events-corporate .corp-header .text-accent { color: hsl(var(--corp-cyan)); }
+.events-corporate .corp-header .text-accent { color: hsl(var(--corp-indigo)); }
 .events-corporate .corp-header button { color: hsl(215 20% 88%); }
 .events-corporate .corp-header button:hover { background: hsl(0 0% 100% / 0.06); color: hsl(0 0% 100%); }
 
-/* CTA button — blue→cyan gradient with glow */
+/* CTA button — deep indigo gradient with glow */
 .events-corporate .btn-accent {
   background: var(--gradient-accent);
   color: hsl(220 30% 96%);
   font-weight: 600;
-  border: 1px solid hsl(238 40% 50% / 0.4);
-  box-shadow: var(--shadow-corp-glow), inset 0 1px 0 hsl(0 0% 100% / 0.08);
+  border: 1px solid hsl(232 40% 40% / 0.4);
+  box-shadow: var(--shadow-corp-glow), inset 0 1px 0 hsl(0 0% 100% / 0.1);
   transition: all 0.2s ease;
 }
 .events-corporate .btn-accent:hover {
-  filter: brightness(1.12);
+  filter: brightness(1.1);
   transform: translateY(-1px);
 }
 
-/* Cards — deep navy with hairline border + subtle inner highlight */
+/* Cards — gradient surface + hairline border */
 .events-corporate [class*="rounded-lg border"][class*="bg-card"],
 .events-corporate .card-corp {
   background: var(--gradient-card);
@@ -327,48 +387,50 @@
   box-shadow: var(--shadow-corp-card);
 }
 
-/* Tabs — graphite with cyan underline for active */
+/* Tabs */
 .events-corporate [role="tablist"] {
-  background: hsl(222 24% 10%);
+  background: hsl(var(--muted));
   border: 1px solid hsl(var(--border));
 }
 .events-corporate [role="tab"] { color: hsl(var(--muted-foreground)); }
 .events-corporate [role="tab"][data-state="active"] {
   background: transparent;
-  color: hsl(var(--corp-cyan));
-  box-shadow: inset 0 -2px 0 hsl(var(--corp-cyan));
+  color: hsl(var(--corp-indigo));
+  box-shadow: inset 0 -2px 0 hsl(var(--corp-indigo));
 }
 
-/* Inputs — darker, no harsh contrast */
+/* Inputs */
 .events-corporate input,
 .events-corporate textarea,
 .events-corporate select,
 .events-corporate [role="combobox"] {
-  background: hsl(222 24% 9%);
+  background: hsl(var(--card));
   border-color: hsl(var(--border));
   color: hsl(var(--foreground));
 }
+.dark .events-corporate input,
+.dark .events-corporate textarea,
+.dark .events-corporate select,
+.dark .events-corporate [role="combobox"] { background: hsl(222 24% 9%); }
 .events-corporate input::placeholder,
-.events-corporate textarea::placeholder { color: hsl(215 12% 45%); }
+.events-corporate textarea::placeholder { color: hsl(var(--muted-foreground) / 0.8); }
 
-/* Accent icon color */
-.events-corporate .text-accent { color: hsl(var(--corp-cyan)); }
+.events-corporate .text-accent { color: hsl(var(--corp-indigo)); }
 
-/* Numeric / stat emphasis — cycle cool neon hues for sibling cards */
+/* Stat values — neon cycle in dark, calmer in light */
 .events-corporate .stat-value { letter-spacing: -0.02em; font-weight: 700; }
 .events-corporate .stat-card:nth-child(5n+1) .stat-value { color: hsl(var(--corp-emerald)); }
 .events-corporate .stat-card:nth-child(5n+2) .stat-value { color: hsl(var(--corp-amber)); }
-.events-corporate .stat-card:nth-child(5n+3) .stat-value { color: hsl(var(--corp-cyan)); }
+.events-corporate .stat-card:nth-child(5n+3) .stat-value { color: hsl(var(--corp-indigo)); }
 .events-corporate .stat-card:nth-child(5n+4) .stat-value { color: hsl(var(--corp-magenta)); }
-.events-corporate .stat-card:nth-child(5n+5) .stat-value { color: hsl(var(--corp-indigo)); }
+.events-corporate .stat-card:nth-child(5n+5) .stat-value { color: hsl(var(--corp-violet)); }
 
-/* Section labels — small caps style */
 .events-corporate .section-label,
 .events-corporate [data-corp-label] {
   text-transform: uppercase;
   font-size: 0.7rem;
   letter-spacing: 0.12em;
-  color: hsl(215 12% 60%);
+  color: hsl(var(--muted-foreground));
   font-weight: 600;
 }
 
