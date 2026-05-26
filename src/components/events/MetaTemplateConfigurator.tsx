@@ -252,6 +252,13 @@ export const MetaTemplateConfigurator = ({
             </div>
           )}
 
+          {headerComponent && headerComponent.format !== "TEXT" && (
+            <div className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              Header com mídia ({headerComponent.format}) ainda não suportado nesta versão.
+            </div>
+          )}
+
           {/* Body */}
           <div className="space-y-2">
             <Label className="text-xs">Corpo do template</Label>
