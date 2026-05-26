@@ -205,7 +205,7 @@ Deno.serve(async (req) => {
     // Busca mensagens completas da sequência (ativas, ordenadas)
     const { data: messages } = await supabase
       .from("live_campaign_messages")
-      .select("id, sort_order, delay_seconds, message_type, content, media_url, caption")
+      .select("id, sort_order, delay_seconds, message_type, content, media_url, caption, meta_template_name")
       .eq("campaign_id", matched.id)
       .eq("is_active", true)
       .order("sort_order", { ascending: true });
