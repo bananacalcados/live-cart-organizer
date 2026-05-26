@@ -403,71 +403,98 @@ const Events = () => {
                        Mesmo eventos de loja física podem ter frete (clientes de outras cidades / mototaxi).
                      </p>
                    </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <Send className="h-4 w-4" />
-                        Canal de Disparo das Automações *
-                      </Label>
-                      <Select value={channelPreference} onValueChange={setChannelPreference}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o canal..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="whatsapp">📱 WhatsApp (Z-API)</SelectItem>
-                          <SelectItem value="instagram">📷 Instagram DM</SelectItem>
-                          <SelectItem value="meta_whatsapp">🟢 WhatsApp API Oficial (Meta Cloud)</SelectItem>
-                          <SelectItem value="auto">⚡ Automático (detecta pela origem)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        {channelPreference === "instagram"
-                          ? "Disparos via DM do Instagram (24h window do Meta). Recomendado para Lives no IG."
-                          : channelPreference === "meta_whatsapp"
-                          ? "WhatsApp oficial via Meta Cloud — usa templates aprovados, não sofre banimento."
-                          : channelPreference === "auto"
-                          ? "Sistema escolhe: Instagram se o lead veio do IG, senão WhatsApp Z-API."
-                          : "WhatsApp via Z-API. Risco de banimento se usado em larga escala."}
-                      </p>
-                    </div>
-                    {(channelPreference === "whatsapp" || channelPreference === "meta_whatsapp" || channelPreference === "auto") && (
-                      <div className="space-y-2">
-                        <Label className="flex items-center gap-2">
-                          <Phone className="h-4 w-4" />
-                          WhatsApp do Evento
+                    <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                      <div className="flex items-center justify-between">
+                        <Label className="flex items-center gap-2 m-0">
+                          <Send className="h-4 w-4" />
+                          Canais de Disparo das Automações *
                         </Label>
-                        <Select value={selectedWhatsAppId} onValueChange={setSelectedWhatsAppId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o número WhatsApp..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">Nenhum (padrão)</SelectItem>
-                            {whatsappNumbers.map(n => (
-                              <SelectItem key={n.id} value={n.id}>
-                                {n.label} ({n.phone_display})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          Número WhatsApp usado para disparos automáticos neste evento.
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {automationEnabled ? "Ativada" : "Desativada"}
+                          </span>
+                          <Switch
+                            checked={automationEnabled}
+                            onCheckedChange={setAutomationEnabled}
+                          />
+                        </div>
                       </div>
-                    )}
-                    {channelPreference === "meta_whatsapp" && (
-                      <MetaTemplateConfigurator
-                        whatsappNumberId={selectedWhatsAppId && selectedWhatsAppId !== "none" ? selectedWhatsAppId : null}
-                        templateName={metaTemplateName}
-                        language={metaTemplateLanguage}
-                        bodyVariables={metaTemplateBodyVars}
-                        headerVariable={metaTemplateHeaderVar}
-                        onChange={(next) => {
-                          setMetaTemplateName(next.templateName);
-                          setMetaTemplateLanguage(next.language);
-                          setMetaTemplateBodyVars(next.bodyVariables);
-                          setMetaTemplateHeaderVar(next.headerVariable);
-                        }}
-                      />
-                    )}
+                      <p className="text-xs text-muted-foreground">
+                        Selecione um ou mais canais. Quando mais de um for marcado, a mensagem inicial é disparada em todos ao mesmo tempo.
+                      </p>
+                      {[
+                        { id: "whatsapp", label: "📱 WhatsApp (Z-API)", hint: "Risco de banimento em larga escala." },
+                        { id: "instagram", label: "📷 Instagram DM", hint: "Janela de 24h do Meta. Ideal pra Lives no IG." },
+                        { id: "meta_whatsapp", label: "🟢 WhatsApp API Oficial (Meta Cloud)", hint: "Usa templates aprovados, não sofre banimento." },
+                      ].map((opt) => {
+                        const checked = channelPreferences.includes(opt.id);
+                        return (
+                          <label
+                            key={opt.id}
+                            className="flex items-start gap-3 cursor-pointer rounded-md border bg-background p-2 hover:bg-muted/50"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(v) => {
+                                setChannelPreferences((prev) => {
+                                  const next = v
+                                    ? Array.from(new Set([...prev, opt.id]))
+                                    : prev.filter((c) => c !== opt.id);
+                                  if (next.length > 0) setChannelPreference(next[0]);
+                                  return next;
+                                });
+                              }}
+                            />
+                            <div className="flex-1">
+                              <div className="text-sm font-medium">{opt.label}</div>
+                              <div className="text-xs text-muted-foreground">{opt.hint}</div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                      {channelPreferences.length === 0 && (
+                        <p className="text-xs text-destructive">Selecione pelo menos um canal.</p>
+                      )}
+                    </div>
+                     {(channelPreferences.includes("whatsapp") || channelPreferences.includes("meta_whatsapp")) && (
+                       <div className="space-y-2">
+                         <Label className="flex items-center gap-2">
+                           <Phone className="h-4 w-4" />
+                           WhatsApp do Evento
+                         </Label>
+                         <Select value={selectedWhatsAppId} onValueChange={setSelectedWhatsAppId}>
+                           <SelectTrigger>
+                             <SelectValue placeholder="Selecione o número WhatsApp..." />
+                           </SelectTrigger>
+                           <SelectContent>
+                             <SelectItem value="none">Nenhum (padrão)</SelectItem>
+                             {whatsappNumbers.map(n => (
+                               <SelectItem key={n.id} value={n.id}>
+                                 {n.label} ({n.phone_display})
+                               </SelectItem>
+                             ))}
+                           </SelectContent>
+                         </Select>
+                         <p className="text-xs text-muted-foreground">
+                           Número WhatsApp usado para disparos automáticos neste evento.
+                         </p>
+                       </div>
+                     )}
+                     {channelPreferences.includes("meta_whatsapp") && (
+                       <MetaTemplateConfigurator
+                         whatsappNumberId={selectedWhatsAppId && selectedWhatsAppId !== "none" ? selectedWhatsAppId : null}
+                         templateName={metaTemplateName}
+                         language={metaTemplateLanguage}
+                         bodyVariables={metaTemplateBodyVars}
+                         headerVariable={metaTemplateHeaderVar}
+                         onChange={(next) => {
+                           setMetaTemplateName(next.templateName);
+                           setMetaTemplateLanguage(next.language);
+                           setMetaTemplateBodyVars(next.bodyVariables);
+                           setMetaTemplateHeaderVar(next.headerVariable);
+                         }}
+                       />
+                     )}
                   <InitialMessageEditor
                     enabled={initialMessageEnabled}
                     blocks={initialMessageBlocks}
