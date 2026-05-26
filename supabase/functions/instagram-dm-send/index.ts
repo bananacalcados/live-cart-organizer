@@ -33,35 +33,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    // === Áudio: converter webm/opus → ogg/opus (IG não aceita webm) ===
+    // === Áudio: Instagram só aceita mp4/m4a/aac/wav. Webm/ogg/opus são rejeitados pela Meta. ===
     if (mediaUrl && String(mediaType || "").toLowerCase().startsWith("audio")) {
-      try {
-        const lower = String(mediaUrl).toLowerCase();
-        if (lower.includes(".webm") || lower.includes("webm")) {
-          console.log("[ig-dm-send] Transcoding webm→ogg for audio:", mediaUrl);
-          const r = await fetch(mediaUrl);
-          if (!r.ok) throw new Error(`fetch audio failed: ${r.status}`);
-          const bytes = new Uint8Array(await r.arrayBuffer());
-          if (isWebmContainer(bytes)) {
-            const ogg = webmToOgg(bytes);
-            const path = `instagram-dm/${cleanHandleForPath(username)}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.ogg`;
-            const up = await supabase.storage.from("chat-media").upload(path, ogg, {
-              contentType: "audio/ogg",
-              upsert: false,
-            });
-            if (up.error) throw up.error;
-            const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
-            mediaUrl = pub.publicUrl;
-            console.log("[ig-dm-send] Transcoded ogg url:", mediaUrl);
-          }
-        }
-      } catch (e: any) {
-        console.error("[ig-dm-send] audio transcode error:", e.message || e);
-        return new Response(JSON.stringify({ error: "audio_transcode_failed", details: e.message || String(e) }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      const lower = String(mediaUrl).toLowerCase();
+      const isUnsupportedAudio =
+        lower.includes(".webm") || lower.includes(".ogg") || lower.includes(".opus");
+      if (isUnsupportedAudio) {
+        console.warn("[ig-dm-send] Unsupported audio format for Instagram:", mediaUrl);
+        return new Response(JSON.stringify({
+          error: "unsupported_audio_format",
+          message: "O Instagram não aceita áudio gravado neste navegador (webm/opus). Use Safari/iOS para gravar áudios para o Instagram, ou envie pelo WhatsApp.",
+        }), { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
+
 
     // Monta payload (texto OU attachment de imagem/vídeo/áudio)
     const buildMessagePayload = () => {
