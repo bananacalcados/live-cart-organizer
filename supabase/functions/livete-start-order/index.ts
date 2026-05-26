@@ -44,41 +44,54 @@ serve(async (req) => {
       .eq('id', order.customer_id)
       .single();
 
-    if (!customer?.whatsapp) {
-      console.error('[livete-start] Customer has no WhatsApp:', order.customer_id);
-      return new Response(JSON.stringify({ error: 'Customer has no WhatsApp' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const rawPhone = customer.whatsapp.replace(/\D/g, '');
-    const phone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone;
-
+    // Resolve event channel preference + whatsapp number
+    let channelPreference: string = 'whatsapp';
     let whatsappNumberId: string | null = null;
     let metaPhoneNumberId: string | null = null;
 
     if (order.event_id) {
       const { data: eventData } = await supabase
         .from('events')
-        .select('whatsapp_number_id')
+        .select('whatsapp_number_id, channel_preference')
         .eq('id', order.event_id)
         .single();
 
+      if (eventData?.channel_preference) channelPreference = eventData.channel_preference;
+
       if (eventData?.whatsapp_number_id) {
         whatsappNumberId = eventData.whatsapp_number_id;
-
         const { data: wnData } = await supabase
           .from('whatsapp_numbers')
           .select('id, label, provider, phone_number_id')
           .eq('id', whatsappNumberId)
           .single();
-
         if (wnData?.provider === 'meta' && wnData?.phone_number_id) {
           metaPhoneNumberId = wnData.phone_number_id;
         }
       }
     }
+
+    const isInstagram = channelPreference === 'instagram';
+
+    if (isInstagram) {
+      if (!customer?.instagram_handle) {
+        console.error('[livete-start] Customer has no instagram_handle for IG channel:', order.customer_id);
+        return new Response(JSON.stringify({ error: 'Customer has no instagram_handle' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } else if (!customer?.whatsapp) {
+      console.error('[livete-start] Customer has no WhatsApp:', order.customer_id);
+      return new Response(JSON.stringify({ error: 'Customer has no WhatsApp' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const igUsername = (customer?.instagram_handle || '').replace(/^@/, '').trim().toLowerCase();
+    const rawPhone = (customer?.whatsapp || '').replace(/\D/g, '');
+    const phone = isInstagram
+      ? igUsername
+      : (rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone);
 
     let savedAddress: Record<string, string> | null = null;
     if (customer.id) {
@@ -186,6 +199,32 @@ serve(async (req) => {
     } else {
       // Anti-ban: envia 3 blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
       const sendBlock = async (text: string) => {
+        if (isInstagram) {
+          // Buscar último comment_id desse usuário para fallback de private_reply
+          let fallbackCommentId: string | undefined = undefined;
+          try {
+            const { data: lastComment } = await supabase
+              .from('live_comments')
+              .select('comment_id')
+              .eq('username', `@${igUsername}`)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (lastComment?.comment_id) fallbackCommentId = lastComment.comment_id;
+          } catch {}
+
+          await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: igUsername,
+              message: text,
+              eventId: order.event_id,
+              fallbackCommentId,
+            }),
+          });
+          return;
+        }
         if (metaPhoneNumberId) {
           await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
             method: 'POST',
