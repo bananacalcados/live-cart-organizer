@@ -24,6 +24,7 @@ import { format, subDays, startOfDay, endOfDay, startOfMonth, endOfMonth, startO
 import { toast } from "sonner";
 import { TeamProfilesManager } from "@/components/TeamProfilesManager";
 import { BankReconciliation } from "@/components/management/BankReconciliation";
+import { FinanceHub } from "@/components/management/FinanceHub";
 import { StrategyManager } from "@/components/management/StrategyManager";
 import { MarginFormation } from "@/components/management/MarginFormation";
 import { CrmDuplicates } from "@/components/management/CrmDuplicates";
@@ -1467,7 +1468,7 @@ export default function Management() {
 
               {/* Financeiro / Conciliação Bancária */}
               <TabsContent value="financeiro" className="space-y-4">
-                <BankReconciliation stores={stores} />
+                <FinanceHub stores={stores} />
               </TabsContent>
 
               {/* Equipe / Perfis */}
