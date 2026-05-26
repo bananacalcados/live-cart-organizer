@@ -100,6 +100,7 @@ export function DashboardChatPanel() {
     const convMap = new Map<string, { messages: any[]; unread: number; isGroup: boolean; phone: string; numberId: string | null }>();
 
     for (const msg of data) {
+      if (msg.channel === "instagram") continue; // tratado em bloco separado abaixo
       const convKey = `${msg.phone}__${msg.whatsapp_number_id || "none"}`;
       if (!convMap.has(convKey)) convMap.set(convKey, { messages: [], unread: 0, isGroup: msg.is_group || false, phone: msg.phone, numberId: msg.whatsapp_number_id || null });
       const entry = convMap.get(convKey)!;
