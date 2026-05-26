@@ -1179,6 +1179,54 @@ export type Database = {
           },
         ]
       }
+      bank_import_batches: {
+        Row: {
+          created_at: string
+          file_hash: string
+          file_name: string
+          id: string
+          imported_by: string | null
+          imported_via: string
+          rows_duplicated: number
+          rows_inserted: number
+          rows_matched: number
+          rows_needs_review: number
+          rows_total: number
+          source_type: string
+          summary: Json
+        }
+        Insert: {
+          created_at?: string
+          file_hash: string
+          file_name: string
+          id?: string
+          imported_by?: string | null
+          imported_via?: string
+          rows_duplicated?: number
+          rows_inserted?: number
+          rows_matched?: number
+          rows_needs_review?: number
+          rows_total?: number
+          source_type: string
+          summary?: Json
+        }
+        Update: {
+          created_at?: string
+          file_hash?: string
+          file_name?: string
+          id?: string
+          imported_by?: string | null
+          imported_via?: string
+          rows_duplicated?: number
+          rows_inserted?: number
+          rows_matched?: number
+          rows_needs_review?: number
+          rows_total?: number
+          source_type?: string
+          summary?: Json
+        }
+        Relationships: []
+      }
       bank_transactions: {
         Row: {
           ai_category_id: string | null
@@ -1511,6 +1559,106 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "group_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_flow_entries: {
+        Row: {
+          amount: number
+          attachment_url: string | null
+          bank_external_id: string | null
+          category_id: string | null
+          confidence: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          direction: string
+          entry_date: string
+          entry_datetime: string
+          external_id: string | null
+          external_source: string | null
+          id: string
+          metadata: Json
+          needs_review_reason: string | null
+          payment_method: string | null
+          pos_sale_id: string | null
+          source: string
+          source_ref_id: string | null
+          status: string
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          attachment_url?: string | null
+          bank_external_id?: string | null
+          category_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction: string
+          entry_date: string
+          entry_datetime?: string
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          metadata?: Json
+          needs_review_reason?: string | null
+          payment_method?: string | null
+          pos_sale_id?: string | null
+          source?: string
+          source_ref_id?: string | null
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          attachment_url?: string | null
+          bank_external_id?: string | null
+          category_id?: string | null
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          direction?: string
+          entry_date?: string
+          entry_datetime?: string
+          external_id?: string | null
+          external_source?: string | null
+          id?: string
+          metadata?: Json
+          needs_review_reason?: string | null
+          payment_method?: string | null
+          pos_sale_id?: string | null
+          source?: string
+          source_ref_id?: string | null
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_flow_entries_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "financial_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
             referencedColumns: ["id"]
           },
         ]
@@ -4914,6 +5062,120 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      financial_agent_audit: {
+        Row: {
+          action: string | null
+          attachment_hash: string | null
+          chat_id: number | null
+          created_at: string
+          direction: string
+          id: string
+          message: string | null
+          metadata: Json
+        }
+        Insert: {
+          action?: string | null
+          attachment_hash?: string | null
+          chat_id?: number | null
+          created_at?: string
+          direction: string
+          id?: string
+          message?: string | null
+          metadata?: Json
+        }
+        Update: {
+          action?: string | null
+          attachment_hash?: string | null
+          chat_id?: number | null
+          created_at?: string
+          direction?: string
+          id?: string
+          message?: string | null
+          metadata?: Json
+        }
+        Relationships: []
+      }
+      financial_agent_authorized_users: {
+        Row: {
+          active: boolean
+          chat_id: number
+          created_at: string
+          display_name: string | null
+          role: string
+          user_id: string | null
+        }
+        Insert: {
+          active?: boolean
+          chat_id: number
+          created_at?: string
+          display_name?: string | null
+          role?: string
+          user_id?: string | null
+        }
+        Update: {
+          active?: boolean
+          chat_id?: number
+          created_at?: string
+          display_name?: string | null
+          role?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      financial_agent_invite_tokens: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          token: string
+          used_at: string | null
+          used_by_chat_id: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          token: string
+          used_at?: string | null
+          used_by_chat_id?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          token?: string
+          used_at?: string | null
+          used_by_chat_id?: number | null
+        }
+        Relationships: []
+      }
+      financial_agent_sessions: {
+        Row: {
+          chat_id: number
+          expected_action: string | null
+          expires_at: string
+          pending_attachment: Json | null
+          state: Json
+          updated_at: string
+        }
+        Insert: {
+          chat_id: number
+          expected_action?: string | null
+          expires_at?: string
+          pending_attachment?: Json | null
+          state?: Json
+          updated_at?: string
+        }
+        Update: {
+          chat_id?: number
+          expected_action?: string | null
+          expires_at?: string
+          pending_attachment?: Json | null
+          state?: Json
+          updated_at?: string
+        }
+        Relationships: []
       }
       financial_categories: {
         Row: {
@@ -8453,6 +8715,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payment_method_fees: {
+        Row: {
+          acquirer: string
+          active: boolean
+          brand: string | null
+          created_at: string
+          days_to_receive: number
+          fee_pct: number
+          fixed_fee: number
+          id: string
+          installments: number
+          method: string
+          updated_at: string
+        }
+        Insert: {
+          acquirer?: string
+          active?: boolean
+          brand?: string | null
+          created_at?: string
+          days_to_receive?: number
+          fee_pct?: number
+          fixed_fee?: number
+          id?: string
+          installments?: number
+          method: string
+          updated_at?: string
+        }
+        Update: {
+          acquirer?: string
+          active?: boolean
+          brand?: string | null
+          created_at?: string
+          days_to_receive?: number
+          fee_pct?: number
+          fixed_fee?: number
+          id?: string
+          installments?: number
+          method?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       paypal_payments: {
         Row: {
