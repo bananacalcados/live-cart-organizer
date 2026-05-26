@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { webmToOgg, isWebmContainer } from "../_shared/webm-to-ogg.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,11 +24,43 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { username, message, eventId, fallbackCommentId, mediaUrl, mediaType } = await req.json();
+    const body = await req.json();
+    const { username, message, eventId, fallbackCommentId, mediaType } = body;
+    let { mediaUrl } = body;
     if (!username || (!message && !mediaUrl)) {
       return new Response(JSON.stringify({ error: "username and (message or mediaUrl) are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // === Áudio: converter webm/opus → ogg/opus (IG não aceita webm) ===
+    if (mediaUrl && String(mediaType || "").toLowerCase().startsWith("audio")) {
+      try {
+        const lower = String(mediaUrl).toLowerCase();
+        if (lower.includes(".webm") || lower.includes("webm")) {
+          console.log("[ig-dm-send] Transcoding webm→ogg for audio:", mediaUrl);
+          const r = await fetch(mediaUrl);
+          if (!r.ok) throw new Error(`fetch audio failed: ${r.status}`);
+          const bytes = new Uint8Array(await r.arrayBuffer());
+          if (isWebmContainer(bytes)) {
+            const ogg = webmToOgg(bytes);
+            const path = `instagram-dm/${cleanHandleForPath(username)}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.ogg`;
+            const up = await supabase.storage.from("chat-media").upload(path, ogg, {
+              contentType: "audio/ogg",
+              upsert: false,
+            });
+            if (up.error) throw up.error;
+            const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+            mediaUrl = pub.publicUrl;
+            console.log("[ig-dm-send] Transcoded ogg url:", mediaUrl);
+          }
+        }
+      } catch (e: any) {
+        console.error("[ig-dm-send] audio transcode error:", e.message || e);
+        return new Response(JSON.stringify({ error: "audio_transcode_failed", details: e.message || String(e) }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Monta payload (texto OU attachment de imagem/vídeo/áudio)
@@ -41,6 +74,10 @@ Deno.serve(async (req) => {
       }
       return { text: message };
     };
+
+    function cleanHandleForPath(u: string) {
+      return String(u).replace(/^@/, "").trim().toLowerCase().replace(/[^a-z0-9_.-]/g, "_");
+    }
 
     const cleanUsername = String(username).replace(/^@/, "").trim().toLowerCase();
 

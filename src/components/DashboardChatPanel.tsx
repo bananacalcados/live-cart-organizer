@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { MessageCircle, Send, Loader2, ArrowLeft, Phone } from "lucide-react";
+import { MessageCircle, Send, Loader2, ArrowLeft, Phone, Instagram } from "lucide-react";
+import { InstagramDMChat } from "./events/InstagramDMChat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -42,6 +43,7 @@ export function DashboardChatPanel() {
   const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
   const [chatContacts, setChatContacts] = useState<Record<string, string>>({});
   const [profilePics, setProfilePics] = useState<Record<string, string>>({});
+  const [selectedIgHandle, setSelectedIgHandle] = useState<string | null>(null);
   const fetchedPicsRef = useRef<Set<string>>(new Set());
 
   const { orders, setHasUnreadMessages } = useDbOrderStore();
@@ -98,6 +100,7 @@ export function DashboardChatPanel() {
     const convMap = new Map<string, { messages: any[]; unread: number; isGroup: boolean; phone: string; numberId: string | null }>();
 
     for (const msg of data) {
+      if (msg.channel === "instagram") continue; // tratado em bloco separado abaixo
       const convKey = `${msg.phone}__${msg.whatsapp_number_id || "none"}`;
       if (!convMap.has(convKey)) convMap.set(convKey, { messages: [], unread: 0, isGroup: msg.is_group || false, phone: msg.phone, numberId: msg.whatsapp_number_id || null });
       const entry = convMap.get(convKey)!;
@@ -143,6 +146,49 @@ export function DashboardChatPanel() {
         whatsapp_number_id: value.numberId,
         lastIncomingInstance,
       });
+    });
+
+    // ===== Conversas Instagram (channel='instagram') =====
+    // Agrupa por @handle (sender_name) já que phone aqui é o ig_user_id (numérico longo)
+    const igMap = new Map<string, { messages: any[]; unread: number; igUserId: string }>();
+    for (const msg of data) {
+      if (msg.channel !== "instagram") continue;
+      const rawHandle = (msg.sender_name || "").toString().trim().toLowerCase();
+      if (!rawHandle.startsWith("@")) continue;
+      const handle = rawHandle.replace(/^@/, "");
+      if (!handle) continue;
+      if (!igMap.has(handle)) igMap.set(handle, { messages: [], unread: 0, igUserId: msg.phone });
+      const e = igMap.get(handle)!;
+      e.messages.push(msg);
+      if (msg.direction === "incoming" && msg.status !== "read") e.unread++;
+    }
+
+    // Order match por instagram_handle
+    const orderByHandle = new Map<string, { stage?: string; customerId?: string }>();
+    for (const o of orders) {
+      const h = (o.customer?.instagram_handle || "").toString().trim().toLowerCase().replace(/^@/, "");
+      if (h) orderByHandle.set(h, { stage: o.stage, customerId: o.customer_id });
+    }
+
+    igMap.forEach((value, handle) => {
+      const orderData = orderByHandle.get(handle);
+      if (!orderData) return; // só conversas do evento atual
+      const lastMsg = value.messages[0];
+      convs.push({
+        phone: `ig:${handle}`,
+        lastMessage: lastMsg.message || (lastMsg.media_type ? `[${lastMsg.media_type}]` : ""),
+        lastMessageAt: new Date(lastMsg.created_at),
+        unreadCount: value.unread,
+        customerName: `@${handle}`,
+        isGroup: false,
+        hasUnansweredMessage: lastMsg.direction === "incoming",
+        stage: orderData.stage,
+        customerId: orderData.customerId,
+        whatsapp_number_id: null,
+        lastIncomingInstance: undefined,
+        isInstagram: true,
+        igHandle: handle,
+      } as any);
     });
 
     convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
@@ -333,7 +379,7 @@ export function DashboardChatPanel() {
       <div className="p-3 border-b border-border bg-card">
         <div className="flex items-center gap-2 mb-3">
           <MessageCircle className="h-5 w-5 text-[hsl(var(--stage-paid))]" />
-          <h3 className="font-bold text-sm text-foreground">Chat WhatsApp</h3>
+          <h3 className="font-bold text-sm text-foreground">Chat WhatsApp + Instagram</h3>
           {unansweredCount > 0 && (
             <Badge className="bg-destructive text-destructive-foreground text-xs font-bold ml-auto">
               {unansweredCount}
@@ -396,34 +442,45 @@ export function DashboardChatPanel() {
         ) : (
            <div className="divide-y divide-border">
             {filteredConversations.map(conv => {
+              const isIg = (conv as any).isInstagram;
+              const igHandle: string | undefined = (conv as any).igHandle;
               const phoneSuffix = conv.phone.replace(/\D/g, "").slice(-8);
               const orderData = orderPhoneMap.get(phoneSuffix);
-              const instagramHandle = orderData?.instagram || null;
+              const instagramHandle = isIg ? igHandle : (orderData?.instagram || null);
               const picUrl = profilePics[conv.phone];
 
               return (
                 <button
                   key={`${conv.phone}__${conv.whatsapp_number_id || "none"}`}
-                  onClick={() => handleSelectConversation(conv.phone, conv.whatsapp_number_id)}
+                  onClick={() => {
+                    if (isIg && igHandle) setSelectedIgHandle(igHandle);
+                    else handleSelectConversation(conv.phone, conv.whatsapp_number_id);
+                  }}
                   className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-start gap-2.5">
-                    <div className="flex-shrink-0 mt-0.5">
+                    <div className="flex-shrink-0 mt-0.5 relative">
                       <Avatar className="h-9 w-9">
                         {picUrl && <AvatarImage src={picUrl} alt={conv.customerName || conv.phone} />}
-                        <AvatarFallback className="bg-muted text-muted-foreground text-xs font-bold">
-                          {(conv.customerName || conv.phone)?.[0]?.toUpperCase() || "?"}
+                        <AvatarFallback className={cn("text-xs font-bold", isIg ? "bg-gradient-to-br from-pink-500 to-purple-600 text-white" : "bg-muted text-muted-foreground")}>
+                          {isIg ? <Instagram className="h-4 w-4" /> : ((conv.customerName || conv.phone)?.[0]?.toUpperCase() || "?")}
                         </AvatarFallback>
                       </Avatar>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                          <span className="text-sm font-semibold text-foreground truncate">
-                            {conv.phone}
-                          </span>
-                          {instagramHandle && (
-                            <span className="text-[11px] font-bold text-destructive truncate">@{instagramHandle.replace(/^@/, "")}</span>
+                          {isIg ? (
+                            <span className="text-sm font-semibold text-pink-500 truncate flex items-center gap-1">
+                              <Instagram className="h-3 w-3" /> @{igHandle}
+                            </span>
+                          ) : (
+                            <>
+                              <span className="text-sm font-semibold text-foreground truncate">{conv.phone}</span>
+                              {instagramHandle && (
+                                <span className="text-[11px] font-bold text-destructive truncate">@{instagramHandle.replace(/^@/, "")}</span>
+                              )}
+                            </>
                           )}
                         </div>
                         <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
@@ -454,6 +511,14 @@ export function DashboardChatPanel() {
           </div>
         )}
       </ScrollArea>
+      {selectedIgHandle && (
+        <InstagramDMChat
+          open={!!selectedIgHandle}
+          onOpenChange={(o) => { if (!o) setSelectedIgHandle(null); }}
+          username={selectedIgHandle}
+          eventId={currentEventId || undefined}
+        />
+      )}
     </div>
   );
 }
