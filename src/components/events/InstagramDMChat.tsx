@@ -41,11 +41,16 @@ export function InstagramDMChat({
 }: InstagramDMChatProps) {
   const [messages, setMessages] = useState<DMMessage[]>([]);
   const [igUserId, setIgUserId] = useState<string | null>(null);
+  const [discoveredCommentId, setDiscoveredCommentId] = useState<string | null>(null);
+  const [discoveredCommentInfo, setDiscoveredCommentInfo] = useState<{ when: string; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const handle = cleanHandle(username);
+
+  // commentId efetivo: prop tem prioridade, senão usa o auto-descoberto
+  const effectiveCommentId = fallbackCommentId || discoveredCommentId || undefined;
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
