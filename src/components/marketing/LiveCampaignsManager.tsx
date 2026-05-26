@@ -132,6 +132,7 @@ export default function LiveCampaignsManager() {
       ask_shoe_size: form.ask_shoe_size ?? true,
       jess_enabled: form.jess_enabled ?? true,
       jess_prompt: form.jess_prompt ?? null,
+      channel_preference: form.channel_preference ?? "whatsapp",
       slug,
     };
     if (editing) {
