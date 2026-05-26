@@ -74,6 +74,7 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
         .from('orders')
         .select(`
           *,
+          live_comments(comment_id, created_at),
           customer:customers(*)
         `)
         .eq('event_id', eventId)
@@ -81,7 +82,14 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
 
       if (error) throw error;
       
-      const orders = (data || []).map(mapDbOrder) as DbOrder[];
+      const orders = (data || []).map((row: any) => ({
+        ...mapDbOrder(row),
+        latest_comment_id: Array.isArray(row.live_comments) && row.live_comments.length > 0
+          ? row.live_comments
+              .slice()
+              .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]?.comment_id ?? null
+          : null,
+      })) as DbOrder[];
 
       set({ orders });
     } catch (error) {
