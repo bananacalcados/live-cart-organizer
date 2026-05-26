@@ -9,6 +9,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { SendWhatsAppDialog } from "./SendWhatsAppDialog";
 import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
+import { InstagramDMChat } from "./events/InstagramDMChat";
 import { SendToPOSDialog } from "./SendToPOSDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { Order } from "@/types/order";
