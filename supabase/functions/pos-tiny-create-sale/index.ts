@@ -264,7 +264,7 @@ serve(async (req) => {
       // completed/pending_sync for fresh sales that don't have such status yet.
       const { data: currentSale } = await supabase
         .from('pos_sales')
-        .select('status')
+        .select('status, customer_id, customer_name, customer_phone')
         .eq('id', sale_id)
         .maybeSingle();
       const preserveStatuses = new Set([
@@ -280,9 +280,9 @@ serve(async (req) => {
         .from('pos_sales')
         .update({
           seller_id: seller_id || null,
-          customer_id: customer?.id || null,
-          customer_name: customer?.name || null,
-          customer_phone: customer?.whatsapp || customer?.phone || null,
+          customer_id: customer?.id || currentSale?.customer_id || null,
+          customer_name: customer?.name || currentSale?.customer_name || null,
+          customer_phone: customer?.whatsapp || customer?.phone || currentSale?.customer_phone || null,
           payment_method: payment_method_name || null,
           tiny_order_id: tinyOrderId ? String(tinyOrderId) : null,
           tiny_order_number: tinyOrderNumber ? String(tinyOrderNumber) : null,
