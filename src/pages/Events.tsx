@@ -39,6 +39,7 @@ import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { MetaTemplateConfigurator } from "@/components/events/MetaTemplateConfigurator";
+import { InitialMessageEditor } from "@/components/events/InitialMessageEditor";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Phone } from "lucide-react";
 import { format } from "date-fns";
@@ -69,6 +70,8 @@ const Events = () => {
   const [metaTemplateLanguage, setMetaTemplateLanguage] = useState<string>("pt_BR");
   const [metaTemplateBodyVars, setMetaTemplateBodyVars] = useState<string[]>([]);
   const [metaTemplateHeaderVar, setMetaTemplateHeaderVar] = useState<string | null>(null);
+  const [initialMessageEnabled, setInitialMessageEnabled] = useState<boolean>(false);
+  const [initialMessageBlocks, setInitialMessageBlocks] = useState<string[]>([]);
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
@@ -205,6 +208,8 @@ const Events = () => {
         channel,
         channel_preference: channelPreference,
         default_store_id: defaultStoreId,
+        initial_message_enabled: initialMessageEnabled,
+        initial_message_blocks: initialMessageBlocks,
         ...metaTemplateFields,
       } as any);
     } else {
@@ -214,6 +219,8 @@ const Events = () => {
           channel,
           default_store_id: defaultStoreId,
           channel_preference: channelPreference,
+          initial_message_enabled: initialMessageEnabled,
+          initial_message_blocks: initialMessageBlocks,
           ...metaTemplateFields,
         };
         if (shippingValue) updates.default_shipping_cost = shippingValue;
@@ -237,6 +244,8 @@ const Events = () => {
     setMetaTemplateLanguage("pt_BR");
     setMetaTemplateBodyVars([]);
     setMetaTemplateHeaderVar(null);
+    setInitialMessageEnabled(false);
+    setInitialMessageBlocks([]);
     setEditingEvent(null);
   };
 
@@ -252,6 +261,8 @@ const Events = () => {
     setMetaTemplateLanguage((event as any).meta_template_language || "pt_BR");
     setMetaTemplateBodyVars(((event as any).meta_template_body_variables as string[]) || []);
     setMetaTemplateHeaderVar((event as any).meta_template_header_variable || null);
+    setInitialMessageEnabled(Boolean((event as any).initial_message_enabled));
+    setInitialMessageBlocks(((event as any).initial_message_blocks as string[]) || []);
     setDialogOpen(true);
   };
 
@@ -426,6 +437,14 @@ const Events = () => {
                         }}
                       />
                     )}
+                  <InitialMessageEditor
+                    enabled={initialMessageEnabled}
+                    blocks={initialMessageBlocks}
+                    onChange={(next) => {
+                      setInitialMessageEnabled(next.enabled);
+                      setInitialMessageBlocks(next.blocks);
+                    }}
+                  />
                   {editingEvent && (
                     <EventTeamSelector eventId={editingEvent} />
                   )}

@@ -3891,6 +3891,8 @@ export type Database = {
           default_store_id: string | null
           description: string | null
           id: string
+          initial_message_blocks: Json
+          initial_message_enabled: boolean
           is_active: boolean
           meta_template_body_variables: Json | null
           meta_template_header_variable: string | null
@@ -3911,6 +3913,8 @@ export type Database = {
           default_store_id?: string | null
           description?: string | null
           id?: string
+          initial_message_blocks?: Json
+          initial_message_enabled?: boolean
           is_active?: boolean
           meta_template_body_variables?: Json | null
           meta_template_header_variable?: string | null
@@ -3931,6 +3935,8 @@ export type Database = {
           default_store_id?: string | null
           description?: string | null
           id?: string
+          initial_message_blocks?: Json
+          initial_message_enabled?: boolean
           is_active?: boolean
           meta_template_body_variables?: Json | null
           meta_template_header_variable?: string | null

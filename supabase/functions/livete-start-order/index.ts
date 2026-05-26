@@ -44,7 +44,7 @@ serve(async (req) => {
       .eq('id', order.customer_id)
       .single();
 
-    // Resolve event channel preference + whatsapp number + meta template config
+    // Resolve event channel preference + whatsapp number + meta template config + initial message override
     let channelPreference: string = 'whatsapp';
     let whatsappNumberId: string | null = null;
     let metaPhoneNumberId: string | null = null;
@@ -52,11 +52,13 @@ serve(async (req) => {
     let metaTemplateLanguage: string = 'pt_BR';
     let metaTemplateBodyVars: string[] = [];
     let metaTemplateHeaderVar: string | null = null;
+    let initialMessageEnabled = false;
+    let initialMessageBlocks: string[] = [];
 
     if (order.event_id) {
       const { data: eventData } = await supabase
         .from('events')
-        .select('whatsapp_number_id, channel_preference, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable')
+        .select('whatsapp_number_id, channel_preference, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks')
         .eq('id', order.event_id)
         .single();
 
@@ -65,6 +67,8 @@ serve(async (req) => {
       metaTemplateLanguage = (eventData as any)?.meta_template_language || 'pt_BR';
       metaTemplateBodyVars = ((eventData as any)?.meta_template_body_variables as string[]) || [];
       metaTemplateHeaderVar = (eventData as any)?.meta_template_header_variable || null;
+      initialMessageEnabled = Boolean((eventData as any)?.initial_message_enabled);
+      initialMessageBlocks = (((eventData as any)?.initial_message_blocks as string[]) || []).filter((b) => typeof b === 'string' && b.trim().length > 0);
 
       if (eventData?.whatsapp_number_id) {
         whatsappNumberId = eventData.whatsapp_number_id;
@@ -144,14 +148,15 @@ serve(async (req) => {
     const firstName = (igHandle.replace(/^@/, '').split(/[._\s]/)[0] || '').trim();
     const displayName = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1) : igName;
 
-    const blockA = `Oii ${displayName}, já separamos seu pedido.`;
-    const blockB = checkoutLink;
-    const blockC = `Só clicar no link acima pra finalizar a compra. Seu produto já foi separado, mas precisa ser pago em 10 minutos, pra continuar reservado, OK?`;
+    const defaultBlocks = [
+      `Oii ${displayName}, já separamos seu pedido.`,
+      checkoutLink,
+      `Só clicar no link acima pra finalizar a compra. Seu produto já foi separado, mas precisa ser pago em 10 minutos, pra continuar reservado, OK?`,
+    ];
+
+    const useCustomInitialMessage = initialMessageEnabled && initialMessageBlocks.length > 0;
 
     const initialStage = savedAddress ? 'aguardando_pagamento' : 'endereco';
-
-    const messageParts = [blockA, blockB, blockC];
-    const firstMessage = messageParts.join('\n\n'); // só pra log/dedupe
 
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const sessionPayload = {
@@ -250,7 +255,7 @@ serve(async (req) => {
         console.error('[livete-start] meta-template-send failed:', tplResp.status, errBody);
       }
     } else {
-      // Anti-ban: envia 3 blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
+      // Anti-ban: envia blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
       const sendBlock = async (text: string) => {
         if (isInstagram) {
           // Buscar último comment_id desse usuário para fallback de private_reply
@@ -302,11 +307,22 @@ serve(async (req) => {
         return Math.max(1200, base + jitter);
       };
 
-      await sendBlock(blockA);
-      await new Promise(r => setTimeout(r, humanDelay(blockB)));
-      await sendBlock(blockB);
-      await new Promise(r => setTimeout(r, humanDelay(blockC)));
-      await sendBlock(blockC);
+      // Resolve variáveis em cada bloco (regex global pra capturar múltiplas ocorrências)
+      const renderBlock = (raw: string) =>
+        raw.replace(/\{[a-z_]+\}/gi, (match) => resolveToken(match));
+
+      const sourceBlocks = useCustomInitialMessage ? initialMessageBlocks : defaultBlocks;
+      const rendered = sourceBlocks.map(renderBlock).filter((t) => t.trim().length > 0);
+
+      console.log(`[livete-start] Sending ${rendered.length} initial blocks to ${phone} (custom=${useCustomInitialMessage})`);
+
+      for (let i = 0; i < rendered.length; i++) {
+        const text = rendered[i];
+        await sendBlock(text);
+        if (i < rendered.length - 1) {
+          await new Promise((r) => setTimeout(r, humanDelay(rendered[i + 1])));
+        }
+      }
     }
 
     const responseTime = Date.now() - startTime;
@@ -314,7 +330,7 @@ serve(async (req) => {
       order_id: orderId,
       phone,
       stage: initialStage,
-      message_out: shouldSkipSend ? null : firstMessage,
+      message_out: shouldSkipSend ? null : (useCustomInitialMessage ? initialMessageBlocks.join('\n\n') : defaultBlocks.join('\n\n')),
       ai_decision: shouldSkipSend ? 'start_skipped_duplicate' : (savedAddress ? 'confirm_existing_address' : 'ask_new_address'),
       tool_called: 'livete-start-order',
       response_time_ms: responseTime,
