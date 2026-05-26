@@ -237,19 +237,114 @@ serve(async (req) => {
     const { data: recentDuplicate } = await duplicateQuery;
     const shouldSkipSend = Boolean(recentDuplicate && recentDuplicate.length > 0);
 
-    if (shouldSkipSend) {
-      console.log(`[livete-start] Duplicate start skipped for order ${orderId} / ${phone}`);
-    } else if (useMetaTemplate) {
+    const waPhone = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone) : '';
+
+    const humanDelay = (text: string) => {
+      const base = Math.max(1500, text.length * 45);
+      const jitter = Math.floor(Math.random() * 800) - 400;
+      return Math.max(1200, base + jitter);
+    };
+
+    const renderBlock = (raw: string) =>
+      raw.replace(/\{[a-z_]+\}/gi, (match) => resolveToken(match));
+
+    const sourceBlocks = useCustomInitialMessage ? initialMessageBlocks : defaultBlocks;
+    const rendered = sourceBlocks.map(renderBlock).filter((t) => t.trim().length > 0);
+
+    // ---- Instagram dispatch (parallel to WA when both selected) ----
+    const dispatchInstagram = async () => {
+      if (!wantsInstagram || !igUsername) return;
+      let fallbackCommentId: string | undefined = requestFallbackCommentId || undefined;
+      try {
+        if (!fallbackCommentId) {
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+          let { data: lastComment } = await supabase
+            .from('live_comments')
+            .select('comment_id')
+            .eq('event_id', order.event_id)
+            .ilike('username', igUsername)
+            .gte('created_at', sevenDaysAgo)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (!lastComment?.comment_id) {
+            const { data: fallbackComment } = await supabase
+              .from('live_comments')
+              .select('comment_id')
+              .ilike('username', igUsername)
+              .gte('created_at', sevenDaysAgo)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            lastComment = fallbackComment;
+          }
+          if (lastComment?.comment_id) fallbackCommentId = lastComment.comment_id;
+        }
+      } catch {}
+
+      let igFailed = false;
+      for (let i = 0; i < rendered.length; i++) {
+        const text = rendered[i];
+        if (!igFailed) {
+          const igResp = await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: igUsername,
+              message: text,
+              eventId: order.event_id,
+              fallbackCommentId,
+            }),
+          });
+          if (!igResp.ok) {
+            const errBody = await igResp.text().catch(() => '');
+            console.warn(`[livete-start] IG send failed (${igResp.status}) for @${igUsername}:`, errBody);
+            igFailed = true;
+            // Fallback to WA only when IG was the ONLY selected channel
+            if (isInstagram && waPhone) {
+              await sendViaWhatsApp(text);
+            }
+          }
+        } else if (isInstagram && waPhone) {
+          await sendViaWhatsApp(text);
+        }
+        if (i < rendered.length - 1) {
+          await new Promise((r) => setTimeout(r, humanDelay(rendered[i + 1])));
+        }
+      }
+    };
+
+    // ---- WhatsApp helpers ----
+    const sendViaWhatsApp = async (text: string) => {
+      if (!waPhone) return;
+      if (metaPhoneNumberId) {
+        await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: waPhone, message: text, whatsappNumberId }),
+        });
+      } else {
+        await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: waPhone, message: text, whatsapp_number_id: whatsappNumberId }),
+        });
+      }
+      await supabase.from('whatsapp_messages').insert({
+        phone: waPhone, message: text, direction: 'outgoing', status: 'sent', whatsapp_number_id: whatsappNumberId,
+      });
+    };
+
+    const dispatchMetaTemplate = async () => {
+      if (!useMetaTemplate || !waPhone) return;
       const bodyParameters = metaTemplateBodyVars.map((t) => resolveToken(t));
       const headerParameter = metaTemplateHeaderVar ? resolveToken(metaTemplateHeaderVar) : undefined;
-      console.log(`[livete-start] Sending Meta template ${metaTemplateName} to ${phone}`, {
-        bodyParameters, headerParameter,
-      });
+      console.log(`[livete-start] Sending Meta template ${metaTemplateName} to ${waPhone}`, { bodyParameters, headerParameter });
       const tplResp = await fetch(`${supabaseUrl}/functions/v1/meta-template-send`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phone,
+          phone: waPhone,
           whatsappNumberId,
           templateName: metaTemplateName,
           language: metaTemplateLanguage,
@@ -261,121 +356,29 @@ serve(async (req) => {
         const errBody = await tplResp.text();
         console.error('[livete-start] meta-template-send failed:', tplResp.status, errBody);
       }
-    } else {
-      // Anti-ban: envia blocos separados com delays humanizados (max(1500ms, chars*45ms) + jitter ±400ms).
-      // Se canal preferido for Instagram mas não conseguir entregar (sem DM thread e sem comentário recente),
-      // faz fallback automático para WhatsApp quando o cliente tiver número.
-      const waPhone = rawPhone ? (rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone) : '';
-      const canFallbackToWhatsApp = !!waPhone;
-      let igFailed = false;
+    };
 
-      const sendViaWhatsApp = async (text: string) => {
-        if (!waPhone) return;
-        if (metaPhoneNumberId) {
-          await fetch(`${supabaseUrl}/functions/v1/meta-whatsapp-send`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: waPhone, message: text, whatsappNumberId }),
-          });
-        } else {
-          await fetch(`${supabaseUrl}/functions/v1/zapi-send-message`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: waPhone, message: text, whatsapp_number_id: whatsappNumberId }),
-          });
-        }
-        await supabase.from('whatsapp_messages').insert({
-          phone: waPhone, message: text, direction: 'outgoing', status: 'sent', whatsapp_number_id: whatsappNumberId,
-        });
-      };
-
-      const sendBlock = async (text: string) => {
-        if (isInstagram && !igFailed) {
-          // Buscar último comment_id desse usuário para fallback de private_reply (últimos 7 dias)
-          let fallbackCommentId: string | undefined = requestFallbackCommentId || undefined;
-          try {
-            if (!fallbackCommentId) {
-              const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-              let commentQuery = supabase
-                .from('live_comments')
-                .select('comment_id')
-                .eq('event_id', order.event_id)
-                .ilike('username', igUsername)
-                .gte('created_at', sevenDaysAgo)
-                .order('created_at', { ascending: false })
-                .limit(1);
-
-              let { data: lastComment } = await commentQuery.maybeSingle();
-
-              if (!lastComment?.comment_id) {
-                const { data: fallbackComment } = await supabase
-                  .from('live_comments')
-                  .select('comment_id')
-                  .ilike('username', igUsername)
-                  .gte('created_at', sevenDaysAgo)
-                  .order('created_at', { ascending: false })
-                  .limit(1)
-                  .maybeSingle();
-                lastComment = fallbackComment;
-              }
-
-              if (lastComment?.comment_id) fallbackCommentId = lastComment.comment_id;
-            }
-          } catch {}
-
-          const igResp = await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              username: igUsername,
-              message: text,
-              eventId: order.event_id,
-              fallbackCommentId,
-            }),
-          });
-          if (igResp.ok) return;
-
-          // IG falhou: marca para próximos blocos não tentarem mais e tenta fallback WA
-          const errBody = await igResp.text().catch(() => '');
-          console.warn(`[livete-start] IG send failed (${igResp.status}) for @${igUsername}, falling back to WhatsApp:`, errBody);
-          igFailed = true;
-          if (canFallbackToWhatsApp) {
-            await sendViaWhatsApp(text);
-          }
-          return;
-        }
-        if (isInstagram && igFailed) {
-          if (canFallbackToWhatsApp) await sendViaWhatsApp(text);
-          return;
-        }
-        // Canal preferido já é WhatsApp
-        await sendViaWhatsApp(text);
-      };
-
-
-      const humanDelay = (text: string) => {
-        const base = Math.max(1500, text.length * 45);
-        const jitter = Math.floor(Math.random() * 800) - 400;
-        return Math.max(1200, base + jitter);
-      };
-
-      // Resolve variáveis em cada bloco (regex global pra capturar múltiplas ocorrências)
-      const renderBlock = (raw: string) =>
-        raw.replace(/\{[a-z_]+\}/gi, (match) => resolveToken(match));
-
-      const sourceBlocks = useCustomInitialMessage ? initialMessageBlocks : defaultBlocks;
-      const rendered = sourceBlocks.map(renderBlock).filter((t) => t.trim().length > 0);
-
-      console.log(`[livete-start] Sending ${rendered.length} initial blocks to ${phone} (custom=${useCustomInitialMessage})`);
-
+    const dispatchZapiBlocks = async () => {
+      if (!wantsZapi || !waPhone) return;
+      console.log(`[livete-start] Sending ${rendered.length} Z-API blocks to ${waPhone} (custom=${useCustomInitialMessage})`);
       for (let i = 0; i < rendered.length; i++) {
-        const text = rendered[i];
-        await sendBlock(text);
+        await sendViaWhatsApp(rendered[i]);
         if (i < rendered.length - 1) {
           await new Promise((r) => setTimeout(r, humanDelay(rendered[i + 1])));
         }
       }
+    };
+
+    if (shouldSkipSend) {
+      console.log(`[livete-start] Duplicate start skipped for order ${orderId} / ${phone}`);
+    } else {
+      // Run all selected channels in parallel
+      await Promise.allSettled([
+        dispatchInstagram(),
+        useMetaTemplate ? dispatchMetaTemplate() : dispatchZapiBlocks(),
+      ]);
     }
+
 
     const responseTime = Date.now() - startTime;
     await supabase.from('ai_conversation_logs').insert({
