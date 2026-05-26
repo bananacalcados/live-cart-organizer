@@ -73,7 +73,7 @@ export function FinancialAgentSettings() {
   };
 
   const toggleUser = async (u: AuthorizedUser) => {
-    await supabase.from("financial_agent_authorized_users").update({ active: !u.active }).eq("id", u.id);
+    await (supabase as any).from("financial_agent_authorized_users").update({ active: !u.active }).eq("id", u.id);
     await loadUsers();
   };
 
