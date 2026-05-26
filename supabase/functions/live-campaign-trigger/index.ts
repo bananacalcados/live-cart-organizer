@@ -501,14 +501,23 @@ Deno.serve(async (req) => {
       }
     };
 
-    // Dispara em background — webhook responde imediatamente
-    // @ts-ignore - EdgeRuntime existe no runtime do Supabase
-    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
-      // @ts-ignore
-      EdgeRuntime.waitUntil(sendSequence());
+    // Para canais alternativos (Instagram ou Meta Template), delega ao cron live-campaign-dispatch
+    // que já trata as ramificações. Z-API continua com envio inline imediato.
+    const usesTemplate = messages.some((m: any) => !!m.meta_template_name);
+    const useInlineSender = resolvedChannel === "whatsapp" && !usesTemplate && pref !== "meta_whatsapp";
+
+    if (useInlineSender) {
+      // Dispara em background — webhook responde imediatamente
+      // @ts-ignore - EdgeRuntime existe no runtime do Supabase
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+        // @ts-ignore
+        EdgeRuntime.waitUntil(sendSequence());
+      } else {
+        // Fallback: deixa rodar sem await (não bloqueia)
+        sendSequence().catch((e) => console.error("[live-trigger] background error:", e));
+      }
     } else {
-      // Fallback: deixa rodar sem await (não bloqueia)
-      sendSequence().catch((e) => console.error("[live-trigger] background error:", e));
+      console.log(`[live-trigger] canal=${resolvedChannel} pref=${pref} usesTemplate=${usesTemplate} — delegando ao cron live-campaign-dispatch`);
     }
 
     return new Response(
@@ -517,7 +526,8 @@ Deno.serve(async (req) => {
         campaign: matched.slug,
         lead_id: leadId,
         dispatched: messages.length,
-        mode: "direct_send",
+        mode: useInlineSender ? "direct_send" : "cron_delegated",
+        channel: resolvedChannel,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
