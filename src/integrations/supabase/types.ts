@@ -8728,6 +8728,9 @@ export type Database = {
           id: string
           installments: number
           method: string
+          notes: string | null
+          product: string
+          receipt_schedule: string
           updated_at: string
         }
         Insert: {
@@ -8741,6 +8744,9 @@ export type Database = {
           id?: string
           installments?: number
           method: string
+          notes?: string | null
+          product?: string
+          receipt_schedule?: string
           updated_at?: string
         }
         Update: {
@@ -8754,6 +8760,9 @@ export type Database = {
           id?: string
           installments?: number
           method?: string
+          notes?: string | null
+          product?: string
+          receipt_schedule?: string
           updated_at?: string
         }
         Relationships: []
@@ -15361,6 +15370,36 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "fiscal_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      resolve_payment_fee: {
+        Args: {
+          p_acquirer: string
+          p_installments: number
+          p_method: string
+          p_product: string
+        }
+        Returns: {
+          acquirer: string
+          active: boolean
+          brand: string | null
+          created_at: string
+          days_to_receive: number
+          fee_pct: number
+          fixed_fee: number
+          id: string
+          installments: number
+          method: string
+          notes: string | null
+          product: string
+          receipt_schedule: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payment_method_fees"
           isOneToOne: true
           isSetofReturn: false
         }
