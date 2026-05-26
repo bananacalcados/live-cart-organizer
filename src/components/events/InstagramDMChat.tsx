@@ -349,7 +349,15 @@ export function InstagramDMChat({
                     {m.media_url && m.media_type?.startsWith("image") && (
                       <img src={m.media_url} alt="" className="rounded mb-1 max-w-full" />
                     )}
-                    <p className="whitespace-pre-wrap break-words">{m.message || (m.media_type ? `[${m.media_type}]` : "")}</p>
+                    {m.media_url && m.media_type?.startsWith("video") && (
+                      <video src={m.media_url} controls className="rounded mb-1 max-w-full" />
+                    )}
+                    {m.media_url && m.media_type?.startsWith("audio") && (
+                      <audio src={m.media_url} controls className="mb-1 w-full" />
+                    )}
+                    {(m.message || (!m.media_url && m.media_type)) && (
+                      <p className="whitespace-pre-wrap break-words">{m.message || `[${m.media_type}]`}</p>
+                    )}
                     <p className={`text-[10px] mt-1 ${isOut ? "text-white/70" : "text-muted-foreground"}`}>
                       {formatTime(m.created_at)}
                     </p>
