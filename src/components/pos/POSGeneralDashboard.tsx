@@ -101,10 +101,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
         supabase.from("pos_sales")
           .select("id, store_id, total, payment_method, shipping_cost, created_at, paid_at, status, sale_type, customer_id, customer_name, revenue_attribution, tiny_order_number, crediario_gateway")
           // mesma regra do dashboard da loja física:
-          // - somente vendas concluídas
+          // - inclui concluídas + pendentes de sync/retirada/pagas (igual aba Pedidos)
           // - exclui vendas com revenue_attribution = site_pickup_only
           // - usa paid_at quando existir, senão created_at
-          .eq("status", "completed")
+          .in("status", ["completed", "pending_sync", "pending_pickup", "paid"])
           .neq("revenue_attribution", "site_pickup_only")
           .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
           .limit(20000),
