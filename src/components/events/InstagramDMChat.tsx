@@ -450,9 +450,9 @@ export function InstagramDMChat({
                 <Info className="h-8 w-8 opacity-40" />
                 <p className="text-sm">Nenhuma mensagem ainda.</p>
                 <p className="text-xs">
-                  {fallbackCommentId
-                    ? "A primeira mensagem será enviada como Private Reply ao comentário."
-                    : "Aguardando o usuário iniciar conversa pra abrir a janela de 24h."}
+                  {effectiveCommentId
+                    ? "A primeira mensagem será enviada como Private Reply ao comentário recente."
+                    : "Aguardando o usuário comentar ou mandar DM pra abrir a janela."}
                 </p>
               </div>
             )}
