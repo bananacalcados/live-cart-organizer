@@ -209,102 +209,165 @@
 }
 
 /* ============================================================
-   EVENTS MODULE — Corporate Multinational Theme
-   Sober & cool palette: navy, steel blue, silver, graphite.
+   EVENTS MODULE — Sophisticated Dark Theme
+   Deep navy/graphite base + cool neon accents (cyan, indigo,
+   amber, magenta). Force dark regardless of app theme.
    Scoped via .events-corporate wrapper on the page root.
    ============================================================ */
 .events-corporate {
-  --background: 215 28% 96%;
-  --foreground: 220 35% 12%;
-  --card: 0 0% 100%;
-  --card-foreground: 220 35% 12%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 220 35% 12%;
-  --primary: 215 70% 32%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 215 20% 92%;
-  --secondary-foreground: 220 30% 18%;
-  --muted: 215 22% 94%;
-  --muted-foreground: 215 15% 42%;
-  --accent: 210 55% 42%;
-  --accent-foreground: 0 0% 100%;
-  --destructive: 358 65% 48%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 215 22% 86%;
-  --input: 215 22% 86%;
-  --ring: 215 70% 32%;
-  --radius: 0.5rem;
-  --gradient-accent: linear-gradient(135deg, hsl(215 70% 32%) 0%, hsl(210 65% 42%) 100%);
-  --gradient-hero: linear-gradient(135deg, hsl(220 40% 10%) 0%, hsl(215 35% 18%) 100%);
-  --gradient-card: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(215 28% 97%) 100%);
-  --gradient-corp-header: linear-gradient(135deg, hsl(220 45% 10%) 0%, hsl(215 55% 22%) 60%, hsl(210 60% 30%) 100%);
-  --shadow-corp-card: 0 1px 2px hsl(220 40% 10% / 0.04), 0 8px 24px -12px hsl(220 40% 10% / 0.14);
-  --shadow-corp-glow: 0 8px 24px -8px hsl(215 70% 32% / 0.35);
-}
+  color-scheme: dark;
+  --background: 222 28% 8%;
+  --foreground: 215 25% 94%;
 
-.dark .events-corporate {
-  --background: 220 25% 8%;
-  --foreground: 215 20% 94%;
-  --card: 220 22% 12%;
-  --card-foreground: 215 20% 94%;
-  --popover: 220 22% 12%;
-  --popover-foreground: 215 20% 94%;
-  --primary: 210 80% 58%;
-  --primary-foreground: 220 40% 8%;
-  --secondary: 220 18% 18%;
+  --card: 222 24% 11%;
+  --card-foreground: 215 25% 94%;
+
+  --popover: 222 26% 10%;
+  --popover-foreground: 215 25% 94%;
+
+  /* Cool blue primary */
+  --primary: 210 90% 60%;
+  --primary-foreground: 222 40% 8%;
+
+  --secondary: 222 20% 16%;
   --secondary-foreground: 215 20% 92%;
-  --muted: 220 18% 16%;
-  --muted-foreground: 215 15% 62%;
-  --accent: 210 65% 52%;
-  --accent-foreground: 0 0% 100%;
-  --border: 220 18% 22%;
-  --input: 220 18% 22%;
-  --ring: 210 80% 58%;
-  --gradient-accent: linear-gradient(135deg, hsl(210 80% 50%) 0%, hsl(215 70% 38%) 100%);
-  --gradient-card: linear-gradient(180deg, hsl(220 22% 13%) 0%, hsl(220 22% 11%) 100%);
-  --gradient-corp-header: linear-gradient(135deg, hsl(220 40% 6%) 0%, hsl(215 45% 14%) 60%, hsl(210 55% 22%) 100%);
+
+  --muted: 222 18% 14%;
+  --muted-foreground: 215 12% 60%;
+
+  /* Cyan accent (replaces orange/green) */
+  --accent: 192 85% 55%;
+  --accent-foreground: 222 40% 8%;
+
+  --destructive: 0 75% 58%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 222 18% 18%;
+  --input: 222 18% 18%;
+  --ring: 210 90% 60%;
+  --radius: 0.75rem;
+
+  /* Sophisticated palette tokens */
+  --corp-cyan: 192 85% 60%;
+  --corp-indigo: 230 80% 65%;
+  --corp-violet: 265 70% 65%;
+  --corp-magenta: 320 70% 60%;
+  --corp-amber: 38 95% 60%;
+  --corp-emerald: 160 65% 50%;
+  --corp-rose: 350 75% 62%;
+
+  --gradient-accent: linear-gradient(135deg, hsl(210 90% 55%) 0%, hsl(192 85% 50%) 100%);
+  --gradient-hero: linear-gradient(135deg, hsl(222 30% 6%) 0%, hsl(222 26% 10%) 100%);
+  --gradient-card: linear-gradient(180deg, hsl(222 24% 12%) 0%, hsl(222 24% 10%) 100%);
+  --gradient-corp-header: linear-gradient(135deg, hsl(222 32% 6%) 0%, hsl(222 28% 9%) 60%, hsl(222 26% 11%) 100%);
+  --shadow-corp-card: 0 1px 0 hsl(0 0% 100% / 0.04) inset, 0 12px 32px -16px hsl(222 60% 0% / 0.6);
+  --shadow-corp-glow: 0 8px 28px -8px hsl(210 90% 55% / 0.5);
 }
 
+/* Force same look in light mode too (sophisticated dark is the brand) */
+.events-corporate,
+.dark .events-corporate { color-scheme: dark; }
+
+/* Background canvas: deep navy + subtle aurora glows */
 .events-corporate {
   background:
-    radial-gradient(1200px 600px at 80% -10%, hsl(210 60% 40% / 0.08), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, hsl(215 60% 30% / 0.06), transparent 60%),
+    radial-gradient(900px 500px at 85% -10%, hsl(var(--corp-cyan) / 0.07), transparent 60%),
+    radial-gradient(800px 500px at -10% 110%, hsl(var(--corp-violet) / 0.06), transparent 60%),
+    radial-gradient(600px 400px at 50% 50%, hsl(var(--corp-indigo) / 0.03), transparent 70%),
     hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
+/* Header bar — graphite with thin cyan separator */
 .events-corporate .corp-header {
   background: var(--gradient-corp-header);
   color: hsl(0 0% 100%);
-  border-bottom: 1px solid hsl(215 50% 25% / 0.6);
-  box-shadow: 0 4px 24px -12px hsl(220 60% 10% / 0.4);
+  border-bottom: 1px solid hsl(var(--border));
+  box-shadow: 0 1px 0 hsl(0 0% 100% / 0.03) inset, 0 6px 24px -16px hsl(222 60% 0% / 0.6);
+  position: relative;
 }
-.events-corporate .corp-header h1 { letter-spacing: 0.02em; }
-.events-corporate .corp-header .text-accent { color: hsl(210 90% 70%); }
-.events-corporate .corp-header button { color: hsl(215 25% 92%); }
-.events-corporate .corp-header button:hover { background: hsl(0 0% 100% / 0.08); color: hsl(0 0% 100%); }
+.events-corporate .corp-header::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(var(--corp-cyan) / 0.5), transparent);
+}
+.events-corporate .corp-header h1 {
+  letter-spacing: 0.02em;
+  background: linear-gradient(180deg, hsl(0 0% 100%), hsl(215 20% 80%));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.events-corporate .corp-header .text-accent { color: hsl(var(--corp-cyan)); }
+.events-corporate .corp-header button { color: hsl(215 20% 88%); }
+.events-corporate .corp-header button:hover { background: hsl(0 0% 100% / 0.06); color: hsl(0 0% 100%); }
 
+/* CTA button — blue→cyan gradient with glow */
 .events-corporate .btn-accent {
   background: var(--gradient-accent);
-  color: hsl(0 0% 100%);
+  color: hsl(222 40% 8%);
+  font-weight: 600;
   box-shadow: var(--shadow-corp-glow);
   transition: all 0.2s ease;
 }
 .events-corporate .btn-accent:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.08);
   transform: translateY(-1px);
 }
 
-.events-corporate [role="tablist"] {
-  background: hsl(var(--muted) / 0.7);
-  border: 1px solid hsl(var(--border));
-}
-.events-corporate [role="tab"][data-state="active"] {
-  background: hsl(var(--card));
-  color: hsl(var(--primary));
-  box-shadow: inset 0 -2px 0 hsl(var(--primary));
+/* Cards — deep navy with hairline border + subtle inner highlight */
+.events-corporate [class*="rounded-lg border"][class*="bg-card"],
+.events-corporate .card-corp {
+  background: var(--gradient-card);
+  border-color: hsl(var(--border));
+  box-shadow: var(--shadow-corp-card);
 }
 
-.events-corporate .text-accent { color: hsl(var(--accent)); }
+/* Tabs — graphite with cyan underline for active */
+.events-corporate [role="tablist"] {
+  background: hsl(222 24% 10%);
+  border: 1px solid hsl(var(--border));
+}
+.events-corporate [role="tab"] { color: hsl(var(--muted-foreground)); }
+.events-corporate [role="tab"][data-state="active"] {
+  background: transparent;
+  color: hsl(var(--corp-cyan));
+  box-shadow: inset 0 -2px 0 hsl(var(--corp-cyan));
+}
+
+/* Inputs — darker, no harsh contrast */
+.events-corporate input,
+.events-corporate textarea,
+.events-corporate select,
+.events-corporate [role="combobox"] {
+  background: hsl(222 24% 9%);
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+.events-corporate input::placeholder,
+.events-corporate textarea::placeholder { color: hsl(215 12% 45%); }
+
+/* Accent icon color */
+.events-corporate .text-accent { color: hsl(var(--corp-cyan)); }
+
+/* Numeric / stat emphasis — cycle cool neon hues for sibling cards */
+.events-corporate .stat-value { letter-spacing: -0.02em; font-weight: 700; }
+.events-corporate .stat-card:nth-child(5n+1) .stat-value { color: hsl(var(--corp-emerald)); }
+.events-corporate .stat-card:nth-child(5n+2) .stat-value { color: hsl(var(--corp-amber)); }
+.events-corporate .stat-card:nth-child(5n+3) .stat-value { color: hsl(var(--corp-cyan)); }
+.events-corporate .stat-card:nth-child(5n+4) .stat-value { color: hsl(var(--corp-magenta)); }
+.events-corporate .stat-card:nth-child(5n+5) .stat-value { color: hsl(var(--corp-indigo)); }
+
+/* Section labels — small caps style */
+.events-corporate .section-label,
+.events-corporate [data-corp-label] {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: hsl(215 12% 60%);
+  font-weight: 600;
+}
 
 @layer utilities {
   .text-balance {
