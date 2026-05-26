@@ -23,12 +23,24 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { username, message, eventId, fallbackCommentId } = await req.json();
-    if (!username || !message) {
-      return new Response(JSON.stringify({ error: "username and message are required" }), {
+    const { username, message, eventId, fallbackCommentId, mediaUrl, mediaType } = await req.json();
+    if (!username || (!message && !mediaUrl)) {
+      return new Response(JSON.stringify({ error: "username and (message or mediaUrl) are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Monta payload (texto OU attachment de imagem/vídeo/áudio)
+    const buildMessagePayload = () => {
+      if (mediaUrl && mediaType) {
+        const t = String(mediaType).toLowerCase();
+        const attachType = t.startsWith("video") ? "video"
+          : t.startsWith("audio") ? "audio"
+          : "image";
+        return { attachment: { type: attachType, payload: { url: mediaUrl, is_reusable: false } } };
+      }
+      return { text: message };
+    };
 
     const cleanUsername = String(username).replace(/^@/, "").trim().toLowerCase();
 
