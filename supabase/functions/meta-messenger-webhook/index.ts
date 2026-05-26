@@ -75,23 +75,47 @@ serve(async (req) => {
         // another device or the Meta platform directly).
         if (event.message?.is_echo) {
           const mid = event.message?.mid;
-          if (mid) {
-            const { data: existing } = await supabase
-              .from('whatsapp_messages')
-              .select('id')
-              .eq('message_id', mid)
-              .limit(1);
-            if (existing && existing.length > 0) {
-              console.log(`Echo skipped (already exists): ${mid}`);
-              continue;
-            }
-          }
           const att = event.message?.attachments?.[0];
           const attType = att?.type || 'text';
           const attUrl = att?.payload?.url || null;
-          await supabase.from('whatsapp_messages').insert({
+          const echoMessage = event.message?.text || (att ? `[${attType}]` : '[media]');
+          if (mid) {
+            const { data: existing, error: existingError } = await supabase
+              .from('whatsapp_messages')
+              .select('id, media_url, media_type, sender_name')
+              .eq('message_id', mid)
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+            if (existingError) {
+              console.error('Error checking echo message:', existingError);
+            }
+
+            if (existing && existing.length > 0) {
+              const existingRow = existing[0];
+              const { error: updateError } = await supabase
+                .from('whatsapp_messages')
+                .update({
+                  phone: event.recipient?.id || '',
+                  message: echoMessage,
+                  status: 'sent',
+                  media_type: attType,
+                  media_url: attUrl,
+                })
+                .eq('id', existingRow.id);
+
+              if (updateError) {
+                console.error('Error upgrading echo message:', updateError);
+              } else {
+                console.log(`Echo upgraded with media metadata: ${mid}`);
+              }
+              continue;
+            }
+          }
+
+          const { error: insertEchoError } = await supabase.from('whatsapp_messages').insert({
             phone: event.recipient?.id || '',
-            message: event.message?.text || (att ? `[${attType}]` : null),
+            message: echoMessage,
             direction: 'outgoing',
             message_id: mid || null,
             status: 'sent',
@@ -100,6 +124,10 @@ serve(async (req) => {
             channel,
             is_group: false,
           });
+
+          if (insertEchoError) {
+            console.error('Error inserting echo message:', insertEchoError);
+          }
           continue;
         }
 
