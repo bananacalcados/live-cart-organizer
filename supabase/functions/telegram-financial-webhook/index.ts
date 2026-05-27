@@ -782,6 +782,8 @@ Deno.serve(async (req) => {
       "• <i>contas a pagar nos próximos 7 dias</i>\n" +
       "• <i>quantos pares tenho em estoque?</i>\n" +
       "• <i>fluxo de caixa por categoria do mês</i>\n" +
+      "• <i>saldo da conta Itaú</i> / <i>saldo de todas as contas</i>\n" +
+      "• <i>transferi R$ 500 do CAIXA Pérola pro Itaú hoje</i>\n" +
       "• Envie foto de comprovante (com legenda opcional) → eu categorizo e lanço\n" +
       "• /reset — limpa o histórico");
     return new Response(JSON.stringify({ ok: true }));
