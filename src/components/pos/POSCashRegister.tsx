@@ -235,6 +235,10 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     if (!register || !showMovement) return;
     const amount = parseFloat(movementAmount) || 0;
     if (amount <= 0) return;
+    if (!movementCounterpart) {
+      toast.error(showMovement === 'withdraw' ? 'Selecione o destino do dinheiro' : 'Selecione a origem do dinheiro');
+      return;
+    }
 
     const field = showMovement === 'withdraw' ? 'withdrawals' : 'deposits';
     const current = (register as any)[field] || 0;
@@ -246,7 +250,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
         .eq('id', register.id);
       if (error) throw error;
 
-      // Log individual movement with description
+      // Log individual movement with counterpart account (trigger creates transfer entries)
       await (supabase as any).from('pos_cash_movements').insert({
         cash_register_id: register.id,
         store_id: storeId,
@@ -254,12 +258,14 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
         type: showMovement,
         amount,
         description: movementNotes || null,
+        counterpart_bank_account_id: movementCounterpart,
       });
 
       setRegister(r => r ? { ...r, [field]: current + amount } : r);
       setShowMovement(null);
       setMovementAmount("");
       setMovementNotes("");
+      setMovementCounterpart("");
       loadMovements();
       toast.success(showMovement === 'withdraw' ? 'Sangria registrada!' : 'Reforço registrado!');
     } catch (e) {
@@ -267,6 +273,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
       toast.error("Erro ao registrar movimentação");
     }
   };
+
 
   // Receipt upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
