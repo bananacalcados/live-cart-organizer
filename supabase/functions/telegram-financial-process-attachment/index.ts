@@ -267,13 +267,37 @@ async function processBankStatement(
       import_batch_id: batchId,
     }));
 
+  // Pre-dedupe against existing fitids for this account (partial unique index
+  // on (bank_account_id, fitid) WHERE fitid IS NOT NULL can't be used by
+  // PostgREST ON CONFLICT, so we filter manually).
+  const incomingFitids = Array.from(new Set(rows.map((r) => r.fitid).filter(Boolean))) as string[];
+  let existingFitids = new Set<string>();
+  if (incomingFitids.length > 0) {
+    const { data: existing } = await supabase
+      .from("bank_transactions")
+      .select("fitid")
+      .eq("bank_account_id", top.id)
+      .in("fitid", incomingFitids);
+    existingFitids = new Set((existing || []).map((r: any) => r.fitid));
+  }
+
+  // Also dedupe within the batch by fitid (keep first occurrence)
+  const seenInBatch = new Set<string>();
+  const toInsert = rows.filter((r) => {
+    if (!r.fitid) return true; // no fitid = always insert (rare)
+    if (existingFitids.has(r.fitid)) return false;
+    if (seenInBatch.has(r.fitid)) return false;
+    seenInBatch.add(r.fitid);
+    return true;
+  });
+
   let inserted = 0;
   const insertedIds: string[] = [];
-  for (let i = 0; i < rows.length; i += 100) {
-    const chunk = rows.slice(i, i + 100);
+  for (let i = 0; i < toInsert.length; i += 100) {
+    const chunk = toInsert.slice(i, i + 100);
     const { data: ins, error } = await supabase
       .from("bank_transactions")
-      .upsert(chunk, { onConflict: "bank_account_id,fitid", ignoreDuplicates: true })
+      .insert(chunk)
       .select("id");
     if (error) {
       console.error("[statement] insert error", error);
