@@ -387,6 +387,61 @@ async function resolveStoreId(supabase: any, storeName?: string, storeId?: strin
   return data?.[0]?.id;
 }
 
+async function buildRecentImportContext(supabase: any, chatId: number, userText: string) {
+  const normalized = userText.toLowerCase();
+  const mentionsImport = ["extrato", "lançamento", "lancamento", "categoria", "categoriza", "classifica", "classificação", "classificacao", "import", "mercado pago", "santander", "transa"].some((term) => normalized.includes(term));
+  if (!mentionsImport) return "";
+
+  const { data: receipts } = await supabase
+    .from("financial_agent_receipts")
+    .select("created_at, status, extracted")
+    .eq("chat_id", String(chatId))
+    .order("created_at", { ascending: false })
+    .limit(3);
+
+  if (!receipts?.length) return "";
+
+  const latest = receipts.find((r: any) => r.status === "linked") || receipts[0];
+  const latestAccount = latest?.extracted?.account || null;
+  const latestImportedAt = latest?.created_at || null;
+
+  let accountId: string | null = null;
+  if (latestAccount) {
+    const { data: account } = await supabase.from("bank_accounts").select("id, name").ilike("name", `%${latestAccount}%`).limit(1).maybeSingle();
+    accountId = account?.id || null;
+  }
+
+  let entriesQuery = supabase
+    .from("cash_flow_entries")
+    .select("id, entry_date, direction, amount, description, status, confidence, bank_account_id, bank_external_id, category:financial_categories(name)")
+    .eq("external_source", "ofx_import")
+    .order("created_at", { ascending: false })
+    .limit(12);
+
+  if (accountId) entriesQuery = entriesQuery.eq("bank_account_id", accountId);
+  if (latestImportedAt) entriesQuery = entriesQuery.lte("created_at", latestImportedAt);
+
+  const { data: entries } = await entriesQuery;
+  const pending = (entries || []).filter((e: any) => ["pending_category", "needs_review", "ai_suggested"].includes(e.status));
+
+  const lines = (entries || []).slice(0, 6).map((e: any) => {
+    const categoryName = e.category?.name || "Sem categoria";
+    const directionLabel = e.direction === "in" ? "entrada" : "saída";
+    const amount = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(e.amount || 0));
+    return `- ${e.entry_date} | ${directionLabel} | ${amount} | ${e.description || "sem descrição"} | categoria: ${categoryName} | status: ${e.status}`;
+  });
+
+  return [
+    "CONTEXTO OPERACIONAL DE EXTRATOS:",
+    latestAccount ? `- Última conta importada neste chat: ${latestAccount}.` : "- Há importações recentes sem conta resolvida no contexto.",
+    latestImportedAt ? `- Última importação em: ${latestImportedAt}.` : null,
+    `- Lançamentos pendentes/revisão dessa importação: ${pending.length}.`,
+    lines.length ? `- Exemplos de lançamentos recentes:\n${lines.join("\n")}` : "- Não encontrei lançamentos recentes do extrato.",
+    "- Se o usuário pedir para conferir/importar/listar/categorizar extrato, você DEVE usar a ferramenta list_recent_imported_entries antes de responder.",
+    "- Quando houver lançamentos pendentes, oriente revisar as categorias e cite quais categorias foram sugeridas.",
+  ].filter(Boolean).join("\n");
+}
+
 async function runTool(supabase: any, name: string, args: any): Promise<unknown> {
   if (name === "list_stores") {
     const { data } = await supabase.from("pos_stores").select("id, name, is_active").order("name");
@@ -629,6 +684,69 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
     return { period: label, lancamentos: data };
   }
 
+  if (name === "list_recent_imported_entries") {
+    const limit = Math.min(Number(args.limit) || 10, 20);
+    let bankAccountId: string | null = null;
+
+    if (args.account_name) {
+      const account = await resolveBankAccount(supabase, undefined, args.account_name);
+      bankAccountId = account?.id || null;
+    }
+
+    let linkedReceiptQuery = supabase
+      .from("financial_agent_receipts")
+      .select("created_at, extracted")
+      .eq("status", "linked")
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    const { data: linkedReceipts } = await linkedReceiptQuery;
+    const matchedReceipt = (linkedReceipts || []).find((r: any) => {
+      if (!args.account_name) return true;
+      return (r.extracted?.account || "").toLowerCase().includes(String(args.account_name).toLowerCase());
+    }) || linkedReceipts?.[0];
+
+    if (!bankAccountId && matchedReceipt?.extracted?.account) {
+      const account = await resolveBankAccount(supabase, undefined, matchedReceipt.extracted.account);
+      bankAccountId = account?.id || null;
+    }
+
+    let q = supabase
+      .from("cash_flow_entries")
+      .select("id, entry_date, direction, amount, description, status, confidence, bank_account_id, category:financial_categories(name), bank_account:bank_accounts(name)")
+      .eq("external_source", "ofx_import")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (bankAccountId) q = q.eq("bank_account_id", bankAccountId);
+    if (args.pending_only) q = q.in("status", ["pending_category", "needs_review", "ai_suggested"]);
+
+    const { data, error } = await q;
+    if (error) return { error: error.message };
+
+    const rows = args.latest_only && matchedReceipt?.created_at
+      ? (data || []).filter((row: any) => new Date(row.entry_date).getTime() <= new Date(matchedReceipt.created_at).getTime()).slice(0, limit)
+      : (data || []);
+
+    return {
+      conta: matchedReceipt?.extracted?.account || ((rows[0] as any)?.bank_account?.name ?? null),
+      importado_em: matchedReceipt?.created_at || null,
+      qtd_lancamentos: rows.length,
+      pendentes: rows.filter((row: any) => ["pending_category", "needs_review", "ai_suggested"].includes(row.status)).length,
+      lancamentos: rows.map((row: any) => ({
+        id: row.id,
+        data: row.entry_date,
+        tipo: row.direction === "in" ? "entrada" : "saída",
+        valor_brl: Number(row.amount),
+        descricao: row.description,
+        categoria_sugerida: row.category?.name || null,
+        status: row.status,
+        confidence: row.confidence,
+      })),
+      instrucao: "Peça ao usuário para confirmar/ajustar a categorização dos lançamentos pendentes.",
+    };
+  }
+
   if (name === "get_cash_flow_summary") {
     const { from, to, label } = brDateRange(args.period);
     const by = args.by || "category";
@@ -745,6 +863,7 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
 async function handleConversation(supabase: any, chatId: number, userText: string): Promise<string> {
   const { data: sess } = await supabase.from("financial_agent_sessions").select("state").eq("chat_id", chatId).maybeSingle();
   const history: any[] = (sess?.state?.messages as any[]) || [];
+  const importContext = await buildRecentImportContext(supabase, chatId, userText);
 
   const system = {
     role: "system",
@@ -757,7 +876,10 @@ async function handleConversation(supabase: any, chatId: number, userText: strin
       "Para perguntas de vendas, use get_sales_summary (faturamento/ticket/qtd, com group_by_store ou group_by_seller), get_sales_by_seller (ranking de vendedoras), get_sales_by_payment_method (canal de pagamento), get_top_products (produtos mais vendidos). Aceita period ('today','yesterday','week','7d','30d','month') OU from+to (YYYY-MM-DD) para qualquer intervalo.",
       "Para inventário sempre use pos_products (fonte oficial).",
       "Contas bancárias: 'CAIXA Centro' / 'CAIXA Pérola' = dinheiro físico nos caixas das lojas; demais = bancos. Vendas em dinheiro do PDV alimentam o CAIXA da loja automaticamente. Para transferências (ex: pegou dinheiro do caixa e depositou no Itaú), use register_transfer.",
+      "Se o assunto for extrato/importação/categorização, nunca diga que não tem acesso ao arquivo ou ao contexto se houver dados recentes salvos no sistema — primeiro consulte list_recent_imported_entries.",
+      "Quando listar lançamentos importados, mostre as linhas principais e pergunte objetivamente se a categorização está correta ou se quer ajustar alguma.",
       "Se faltar contexto, pergunte 1 coisa só.",
+      importContext,
     ].join(" "),
   };
 
