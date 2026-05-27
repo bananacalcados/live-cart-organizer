@@ -1402,7 +1402,7 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
           ) : (
             <>
               {(() => {
-                const storeMetrics = stores.map(store => {
+                const storeMetrics = stores.filter(s => !s.is_simulation).map(store => {
                   const sfc = allStoreFixedCosts.filter(s => s.store_id === store.id && s.is_active);
                   const vc = allVariableCosts.filter(v => v.store_id === store.id && v.is_active);
                   const totalFixed = sfc.reduce((sum, s) => sum + s.amount, 0);
