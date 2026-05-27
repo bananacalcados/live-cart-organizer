@@ -180,6 +180,14 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
     }
 
+    // Bank statement (CSV/TXT/OFX) — parse and bulk import into bank_transactions
+    const isStatement = mime === "text/csv" || mime === "text/plain" || mime === "application/x-ofx"
+      || path.toLowerCase().endsWith(".csv") || path.toLowerCase().endsWith(".ofx");
+    if (isStatement) {
+      const result = await processBankStatement(supabase, bytes, mime, userCaption, chatId, receiptId);
+      return new Response(JSON.stringify(result), { headers: corsHeaders });
+    }
+
     const { data: ext, raw, model } = await extractWithAI(bytes, mime);
 
     if (!ext.is_receipt) {
