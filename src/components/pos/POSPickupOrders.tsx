@@ -233,10 +233,7 @@ export function POSPickupOrders({ storeId }: Props) {
           store_id: storeId,
           seller_id: selectedSeller || undefined,
           tiny_seller_id: sellers.find(s => s.id === selectedSeller)?.tiny_seller_id || undefined,
-          customer: {
-            name: processingOrder.customer_name,
-            whatsapp: processingOrder.customer_phone,
-          },
+          customer: undefined,
           items: processingOrder.items.map(item => ({
             sku: item.sku,
             name: item.product_name,
