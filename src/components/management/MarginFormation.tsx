@@ -510,14 +510,16 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
   };
 
   // Calculations
-  const totalFixedCosts = useMemo(() => {
+  const totalFixedCostsRaw = useMemo(() => {
     return storeFixedCosts.filter(s => s.is_active).reduce((sum, s) => sum + s.amount, 0);
   }, [storeFixedCosts]);
 
-  const totalVariablePercent = useMemo(() => {
+  const totalVariablePercentRaw = useMemo(() => {
     return variableCosts.filter(v => v.is_active).reduce((sum, v) => sum + v.percentage, 0);
   }, [variableCosts]);
 
+  const totalFixedCosts = isConsolidatedView ? consolidatedFixed : totalFixedCostsRaw;
+  const totalVariablePercent = isConsolidatedView ? consolidatedVariablePct : totalVariablePercentRaw;
   const contributionMarginPercent = 100 - totalVariablePercent;
   const breakEven = contributionMarginPercent > 0 ? totalFixedCosts / (contributionMarginPercent / 100) : 0;
 
