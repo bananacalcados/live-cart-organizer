@@ -123,9 +123,26 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ ok: true }));
   }
 
-  // Placeholder for next stage (parsers + AI categorization)
-  if (msg.photo || msg.document) {
-    await sendMessage(chatId, "📥 Anexo recebido. Processamento automático será ativado em breve (estou em construção).");
+  // Processa anexos via função dedicada (fire-and-forget)
+  let fileId: string | null = null;
+  let kind: string | null = null;
+  if (msg.photo && Array.isArray(msg.photo) && msg.photo.length > 0) {
+    fileId = msg.photo[msg.photo.length - 1].file_id; // maior resolução
+    kind = "photo";
+  } else if (msg.document) {
+    fileId = msg.document.file_id;
+    kind = "document";
+  }
+
+  if (fileId) {
+    fetch(`${SUPABASE_URL}/functions/v1/telegram-financial-process-attachment`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify({ chat_id: chatId, message_id: msg.message_id, file_id: fileId, kind }),
+    }).catch((e) => console.error("[webhook] process-attachment dispatch failed", e));
   } else if (text) {
     await sendMessage(chatId, "Comando não reconhecido. Use /help.");
   }

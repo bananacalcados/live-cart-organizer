@@ -263,3 +263,6 @@ verify_jwt = false
 
 [functions.telegram-financial-webhook]
 verify_jwt = false
+
+[functions.telegram-financial-process-attachment]
+verify_jwt = false
