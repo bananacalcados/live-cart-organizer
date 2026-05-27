@@ -97,6 +97,9 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
   // Movements (sangrias/reforços)
   const [movements, setMovements] = useState<CashMovement[]>([]);
   const [showMovements, setShowMovements] = useState(false);
+  const [counterpartAccounts, setCounterpartAccounts] = useState<{ id: string; name: string; account_type: string | null }[]>([]);
+  const [movementCounterpart, setMovementCounterpart] = useState<string>("");
+
 
   // Report
   const [showReport, setShowReport] = useState(false);
@@ -152,6 +155,20 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
       .order('created_at', { ascending: false });
     setMovements((data as CashMovement[]) || []);
   };
+
+  const loadCounterpartAccounts = async () => {
+    // CAIXA da loja não aparece (é a conta de origem/destino implícita)
+    const { data } = await (supabase as any)
+      .from('bank_accounts')
+      .select('id, name, account_type, store_id')
+      .eq('is_active', true)
+      .neq('account_type', 'caixa_loja')
+      .order('name');
+    setCounterpartAccounts((data || []) as any);
+  };
+
+  useEffect(() => { loadCounterpartAccounts(); }, []);
+
 
   const loadReportSales = async () => {
     if (!register) return;
@@ -218,6 +235,10 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     if (!register || !showMovement) return;
     const amount = parseFloat(movementAmount) || 0;
     if (amount <= 0) return;
+    if (!movementCounterpart) {
+      toast.error(showMovement === 'withdraw' ? 'Selecione o destino do dinheiro' : 'Selecione a origem do dinheiro');
+      return;
+    }
 
     const field = showMovement === 'withdraw' ? 'withdrawals' : 'deposits';
     const current = (register as any)[field] || 0;
@@ -229,7 +250,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
         .eq('id', register.id);
       if (error) throw error;
 
-      // Log individual movement with description
+      // Log individual movement with counterpart account (trigger creates transfer entries)
       await (supabase as any).from('pos_cash_movements').insert({
         cash_register_id: register.id,
         store_id: storeId,
@@ -237,12 +258,14 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
         type: showMovement,
         amount,
         description: movementNotes || null,
+        counterpart_bank_account_id: movementCounterpart,
       });
 
       setRegister(r => r ? { ...r, [field]: current + amount } : r);
       setShowMovement(null);
       setMovementAmount("");
       setMovementNotes("");
+      setMovementCounterpart("");
       loadMovements();
       toast.success(showMovement === 'withdraw' ? 'Sangria registrada!' : 'Reforço registrado!');
     } catch (e) {
@@ -250,6 +273,7 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
       toast.error("Erro ao registrar movimentação");
     }
   };
+
 
   // Receipt upload
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -701,6 +725,29 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
               <Label className="text-pos-white/70 text-xs">Valor</Label>
               <Input type="number" value={movementAmount} onChange={e => setMovementAmount(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
             </div>
+            <div>
+              <Label className="text-pos-white/70 text-xs">
+                {showMovement === 'withdraw' ? 'Destino do dinheiro' : 'Origem do dinheiro'}
+              </Label>
+              <Select value={movementCounterpart} onValueChange={setMovementCounterpart}>
+                <SelectTrigger className="h-12 bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                  <SelectValue placeholder={showMovement === 'withdraw' ? 'Para onde vai? (Cofre, Banco...)' : 'De onde veio? (Cofre, Banco...)'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {counterpartAccounts.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}{a.account_type === 'cofre' ? ' 🔒' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-pos-white/40 mt-1">
+                {showMovement === 'withdraw'
+                  ? 'O valor sai do CAIXA e entra na conta selecionada (transferência).'
+                  : 'O valor sai da conta selecionada e entra no CAIXA (transferência).'}
+              </p>
+            </div>
+
             <div>
               <Label className="text-pos-white/70 text-xs">Observação</Label>
               <Textarea value={movementNotes} onChange={e => setMovementNotes(e.target.value)} placeholder="Motivo..." className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
