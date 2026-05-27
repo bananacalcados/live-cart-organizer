@@ -124,6 +124,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
       category_id: editing.category_id,
       payment_method: editing.payment_method,
       store_id: editing.store_id,
+      status: editing.category_id ? "confirmed" : editing.status,
     }).eq("id", editing.id);
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
     toast({ title: "Salvo" });
