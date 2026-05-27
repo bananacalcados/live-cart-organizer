@@ -778,18 +778,16 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
         </Card>
       </div>
 
-      {isConsolidatedView ? (
-        <Card><CardContent className="pt-4 text-sm text-muted-foreground">
-          Visão consolidada das <strong>{realStores.length} lojas reais</strong>. Simulações não entram nesse cálculo. Para editar custos, selecione uma loja específica.
-        </CardContent></Card>
-      ) : (
-      <Tabs defaultValue="fixed" className="space-y-4">
+      <Tabs value={isConsolidatedView ? "consolidated" : undefined} defaultValue={isConsolidatedView ? "consolidated" : "fixed"} className="space-y-4"
+        onValueChange={() => { if (isConsolidatedView) loadConsolidated(); }}>
+        {!isConsolidatedView && (
         <TabsList>
           <TabsTrigger value="fixed">Custos Fixos</TabsTrigger>
           <TabsTrigger value="variable">Custos Variáveis</TabsTrigger>
           <TabsTrigger value="simulator">Simulador de Lucro</TabsTrigger>
           <TabsTrigger value="consolidated" onClick={() => loadConsolidated()}>Consolidado</TabsTrigger>
         </TabsList>
+        )}
 
         {/* Fixed Costs */}
         <TabsContent value="fixed" className="space-y-4">
@@ -1402,7 +1400,7 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
           ) : (
             <>
               {(() => {
-                const storeMetrics = stores.map(store => {
+                const storeMetrics = stores.filter(s => !s.is_simulation).map(store => {
                   const sfc = allStoreFixedCosts.filter(s => s.store_id === store.id && s.is_active);
                   const vc = allVariableCosts.filter(v => v.store_id === store.id && v.is_active);
                   const totalFixed = sfc.reduce((sum, s) => sum + s.amount, 0);
@@ -1435,22 +1433,23 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
                 const consolidatedVarCutPct = totalRevTarget > 0 ? avgVarPct - (totalReducedVarCostR$ / totalRevTarget) * 100 : 0;
 
                 // Build consolidated items for simulator
+                const realStoreIdSet = new Set(stores.filter(s => !s.is_simulation).map(s => s.id));
                 const consolidatedFixedItems = fixedCosts.map(fc => {
                   const totalAmount = allStoreFixedCosts
-                    .filter(s => s.fixed_cost_id === fc.id && s.is_active)
+                    .filter(s => s.fixed_cost_id === fc.id && s.is_active && realStoreIdSet.has(s.store_id))
                     .reduce((sum, s) => sum + s.amount, 0);
                   return { id: fc.id, name: fc.name, category: fc.category, amount: totalAmount };
                 }).filter(item => item.amount > 0);
 
                 // Build consolidated planned fixed cuts: sum R$ across stores for same fixed_cost_id
                 const consolidatedPlannedFixedCuts: Record<string, number> = {};
-                allFixedCuts.forEach(c => {
+                allFixedCuts.filter(c => realStoreIdSet.has(c.store_id)).forEach(c => {
                   consolidatedPlannedFixedCuts[c.fixed_cost_id] = (consolidatedPlannedFixedCuts[c.fixed_cost_id] || 0) + c.reduction_amount;
                 });
 
                 // Merge variable costs across stores (weighted average by revenue target)
                 const vcMap = new Map<string, { id: string; description: string; totalWeightedPct: number; totalRevenue: number }>();
-                allVariableCosts.filter(v => v.is_active).forEach(v => {
+                allVariableCosts.filter(v => v.is_active && realStoreIdSet.has(v.store_id)).forEach(v => {
                   const key = v.description.toLowerCase().trim();
                   const storeRev = stores.find(s => s.id === v.store_id)?.revenue_target ?? 0;
                   const existing = vcMap.get(key);
@@ -1467,7 +1466,7 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
 
                 // Build consolidated planned variable cuts: weighted by TOTAL revenue of that cost item (not just stores with cuts)
                 const vcCutMap = new Map<string, { totalWeightedCut: number; id: string }>();
-                allVariableCuts.forEach(c => {
+                allVariableCuts.filter(c => realStoreIdSet.has(c.store_id)).forEach(c => {
                   const vc = allVariableCosts.find(v => v.id === c.variable_cost_id);
                   if (!vc) return;
                   const key = vc.description.toLowerCase().trim();
@@ -1724,7 +1723,6 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
           )}
         </TabsContent>
       </Tabs>
-      )}
 
       {/* Create Simulation Store Dialog */}
       <Dialog open={showCreateSim} onOpenChange={setShowCreateSim}>
