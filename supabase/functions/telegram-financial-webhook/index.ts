@@ -663,6 +663,7 @@ async function handleConversation(supabase: any, chatId: number, userText: strin
       "Formate valores em BRL (R$ 1.234,56). Datas em pt-BR.",
       "Se o usuário citar nome de loja ou categoria, use list_stores/list_categories para resolver o id.",
       "Para inventário sempre use pos_products (fonte oficial).",
+      "Contas bancárias: 'CAIXA Centro' / 'CAIXA Pérola' = dinheiro físico nos caixas das lojas; demais = bancos. Vendas em dinheiro do PDV alimentam o CAIXA da loja automaticamente. Para transferências (ex: pegou dinheiro do caixa e depositou no Itaú), use register_transfer.",
       "Se faltar contexto, pergunte 1 coisa só.",
     ].join(" "),
   };
