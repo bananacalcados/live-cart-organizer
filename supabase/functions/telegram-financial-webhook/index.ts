@@ -150,8 +150,6 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
   if (name === "get_top_products") {
     const { from, to, label } = brDateRange(args.period);
     const limit = args.limit ?? 5;
-    const { data, error } = await supabase.rpc("noop_dummy_does_not_exist").select().limit(0);
-    // fallback: query manual
     const { data: items, error: e2 } = await supabase
       .from("pos_sale_items")
       .select("product_name, quantity, total_price, sale:pos_sales!inner(status, created_at)")
