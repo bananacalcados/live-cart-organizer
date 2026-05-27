@@ -148,12 +148,33 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
 
   const realStores = useMemo(() => stores.filter(s => !s.is_simulation), [stores]);
   const simulationStores = useMemo(() => stores.filter(s => s.is_simulation), [stores]);
+  const isConsolidatedView = selectedStore === "__all__";
   const currentStore = stores.find(s => s.id === selectedStore);
   const isCurrentSimulation = currentStore?.is_simulation ?? false;
 
   useEffect(() => {
+    if (isConsolidatedView) { loadConsolidated(); setLoading(false); return; }
     loadData();
   }, [selectedStore]);
+
+  // Consolidated KPIs (real stores only, exclude simulations)
+  const realStoreIds = useMemo(() => new Set(realStores.map(s => s.id)), [realStores]);
+  const consolidatedFixed = useMemo(() => {
+    return allStoreFixedCosts
+      .filter(s => s.is_active && realStoreIds.has(s.store_id))
+      .reduce((sum, s) => sum + Number(s.amount), 0);
+  }, [allStoreFixedCosts, realStoreIds]);
+  const consolidatedRevenue = useMemo(() => {
+    return realStores.reduce((sum, s) => sum + (s.revenue_target ?? 100000), 0);
+  }, [realStores]);
+  const consolidatedVariablePct = useMemo(() => {
+    if (consolidatedRevenue <= 0) return 0;
+    const totalVarValue = realStores.reduce((sum, s) => {
+      const pct = allVariableCosts.filter(v => v.is_active && v.store_id === s.id).reduce((a, v) => a + Number(v.percentage), 0);
+      return sum + (s.revenue_target ?? 100000) * (pct / 100);
+    }, 0);
+    return (totalVarValue / consolidatedRevenue) * 100;
+  }, [allVariableCosts, realStores, consolidatedRevenue]);
 
   const loadData = async () => {
     setLoading(true);
@@ -489,14 +510,16 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
   };
 
   // Calculations
-  const totalFixedCosts = useMemo(() => {
+  const totalFixedCostsRaw = useMemo(() => {
     return storeFixedCosts.filter(s => s.is_active).reduce((sum, s) => sum + s.amount, 0);
   }, [storeFixedCosts]);
 
-  const totalVariablePercent = useMemo(() => {
+  const totalVariablePercentRaw = useMemo(() => {
     return variableCosts.filter(v => v.is_active).reduce((sum, v) => sum + v.percentage, 0);
   }, [variableCosts]);
 
+  const totalFixedCosts = isConsolidatedView ? consolidatedFixed : totalFixedCostsRaw;
+  const totalVariablePercent = isConsolidatedView ? consolidatedVariablePct : totalVariablePercentRaw;
   const contributionMarginPercent = 100 - totalVariablePercent;
   const breakEven = contributionMarginPercent > 0 ? totalFixedCosts / (contributionMarginPercent / 100) : 0;
 
@@ -530,8 +553,8 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
     }));
   }, [variableCosts]);
 
-  const storeName = currentStore?.name || "Loja";
-  const storeRevenueTarget = currentStore?.revenue_target ?? 100000;
+  const storeName = isConsolidatedView ? "Todas as Lojas" : (currentStore?.name || "Loja");
+  const storeRevenueTarget = isConsolidatedView ? consolidatedRevenue : (currentStore?.revenue_target ?? 100000);
   const otherStores = stores.filter(s => s.id !== selectedStore);
 
 
@@ -668,8 +691,11 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
             )}
           </div>
           <Select value={selectedStore} onValueChange={s => { setSelectedStore(s); setEditingRevenueTarget(false); }}>
-            <SelectTrigger className="w-[220px]"><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
+            <SelectTrigger className="w-[240px]"><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
             <SelectContent>
+              {realStores.length > 1 && (
+                <SelectItem value="__all__">🏢 Todas as Lojas (Consolidado)</SelectItem>
+              )}
               {realStores.length > 0 && (
                 <>
                   <p className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">Lojas Reais</p>
@@ -684,6 +710,11 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
               )}
             </SelectContent>
           </Select>
+          {isConsolidatedView && (
+            <Badge variant="outline" className="gap-1 text-[10px] border-primary/50 text-primary">
+              🏢 Consolidado — somente leitura
+            </Badge>
+          )}
           {isCurrentSimulation && (
             <Badge variant="outline" className="gap-1 text-[10px] border-amber-500/50 text-amber-600">
               <FlaskConical className="h-3 w-3" /> Simulação
@@ -747,6 +778,11 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
         </Card>
       </div>
 
+      {isConsolidatedView ? (
+        <Card><CardContent className="pt-4 text-sm text-muted-foreground">
+          Visão consolidada das <strong>{realStores.length} lojas reais</strong>. Simulações não entram nesse cálculo. Para editar custos, selecione uma loja específica.
+        </CardContent></Card>
+      ) : (
       <Tabs defaultValue="fixed" className="space-y-4">
         <TabsList>
           <TabsTrigger value="fixed">Custos Fixos</TabsTrigger>
@@ -1688,6 +1724,7 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
           )}
         </TabsContent>
       </Tabs>
+      )}
 
       {/* Create Simulation Store Dialog */}
       <Dialog open={showCreateSim} onOpenChange={setShowCreateSim}>

@@ -4,7 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/hooks/use-toast";
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Wallet, Plus } from "lucide-react";
 
 interface Entry {
   id: string;
@@ -35,6 +39,11 @@ export function CashFlowDashboard({ stores }: { stores: Store[] }) {
   const [cats, setCats] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manual, setManual] = useState<{ date: string; direction: "in" | "out"; amount: string; description: string; category_id: string; store_id: string; payment_method: string }>(
+    { date: new Date().toISOString().slice(0, 10), direction: "out", amount: "", description: "", category_id: "", store_id: "", payment_method: "" }
+  );
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -51,6 +60,32 @@ export function CashFlowDashboard({ stores }: { stores: Store[] }) {
     setLoading(false);
   };
   useEffect(() => { load(); }, [from, to, storeFilter, ledger]);
+
+  const saveManual = async () => {
+    const amt = Number(manual.amount.replace(",", "."));
+    if (!amt || amt <= 0) return toast({ title: "Valor inválido", variant: "destructive" });
+    if (!manual.description.trim()) return toast({ title: "Descrição obrigatória", variant: "destructive" });
+    setSaving(true);
+    const { error } = await supabase.from("cash_flow_entries").insert({
+      entry_date: manual.date,
+      direction: manual.direction,
+      amount: amt,
+      description: manual.description.trim(),
+      category_id: manual.category_id || null,
+      store_id: manual.store_id || null,
+      payment_method: manual.payment_method || null,
+      source: "manual",
+      status: "confirmed",
+      ledger,
+      confidence: 1,
+    });
+    setSaving(false);
+    if (error) return toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+    toast({ title: "Lançamento criado" });
+    setManualOpen(false);
+    setManual({ ...manual, amount: "", description: "" });
+    load();
+  };
 
   const rootCatOf = (id: string | null): { id: string; name: string } => {
     if (!id) return { id: "__none__", name: "Sem categoria" };
@@ -121,6 +156,10 @@ export function CashFlowDashboard({ stores }: { stores: Store[] }) {
               </button>
             </div>
           </div>
+          <div className="flex-1" />
+          <Button onClick={() => setManualOpen(true)} size="sm" className="gap-1 h-9">
+            <Plus className="h-4 w-4" /> Novo Lançamento
+          </Button>
         </CardContent>
       </Card>
 
@@ -220,6 +259,72 @@ export function CashFlowDashboard({ stores }: { stores: Store[] }) {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Novo Lançamento — {ledger === "faturamento" ? "Faturamento" : "Realidade"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setManual({ ...manual, direction: "in", category_id: "" })}
+                className={`h-10 rounded-md border text-sm font-medium ${manual.direction === "in" ? "bg-emerald-500 text-white border-emerald-500" : "bg-background hover:bg-muted"}`}>
+                Entrada
+              </button>
+              <button type="button" onClick={() => setManual({ ...manual, direction: "out", category_id: "" })}
+                className={`h-10 rounded-md border text-sm font-medium ${manual.direction === "out" ? "bg-destructive text-white border-destructive" : "bg-background hover:bg-muted"}`}>
+                Saída
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground">Data</label>
+                <Input type="date" value={manual.date} onChange={(e) => setManual({ ...manual, date: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Valor (R$)</label>
+                <Input inputMode="decimal" placeholder="0,00" value={manual.amount} onChange={(e) => setManual({ ...manual, amount: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Descrição</label>
+              <Textarea rows={2} value={manual.description} onChange={(e) => setManual({ ...manual, description: e.target.value })} placeholder="Ex.: Pagamento de fornecedor X" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Categoria</label>
+              <Select value={manual.category_id || "__none__"} onValueChange={(v) => setManual({ ...manual, category_id: v === "__none__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sem categoria</SelectItem>
+                  {cats.filter((c) => c.type === (manual.direction === "in" ? "income" : "expense"))
+                    .sort((a, b) => (a.parent_id ? 1 : 0) - (b.parent_id ? 1 : 0) || a.name.localeCompare(b.name))
+                    .map((c) => <SelectItem key={c.id} value={c.id}>{c.parent_id ? `  → ${c.name}` : c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground">Loja</label>
+                <Select value={manual.store_id || "__none__"} onValueChange={(v) => setManual({ ...manual, store_id: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">—</SelectItem>
+                    {stores.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Forma de pagamento</label>
+                <Input value={manual.payment_method} onChange={(e) => setManual({ ...manual, payment_method: e.target.value })} placeholder="Dinheiro, PIX…" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setManualOpen(false)}>Cancelar</Button>
+            <Button onClick={saveManual} disabled={saving}>{saving ? "Salvando…" : "Salvar lançamento"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
