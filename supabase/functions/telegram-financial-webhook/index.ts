@@ -386,23 +386,45 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
   }
 
   if (name === "get_sales_summary") {
-    const { from, to, label } = brDateRange(args.period);
-    const fromISO = `${from}T03:00:00Z`;
-    const toISO = `${to}T26:59:59Z`;
+    const { label, fromISO, toISO } = brDateRange(args.period, args.from, args.to);
     const resolvedStoreId = await resolveStoreId(supabase, args.store_name, args.store_id);
     const storeIds = resolvedStoreId ? [resolvedStoreId] : PHYSICAL_STORE_IDS;
-    const sales = await fetchPosSales(supabase, fromISO, toISO, storeIds);
+    let sellerId: string | undefined = args.seller_id;
+    if (!sellerId && args.seller_name) {
+      const { data } = await supabase.from("pos_sellers").select("id").ilike("name", `%${args.seller_name}%`).limit(1);
+      sellerId = data?.[0]?.id;
+    }
+    let sales = await fetchPosSales(supabase, fromISO, toISO, storeIds);
+    if (sellerId) sales = sales.filter((r) => r.seller_id === sellerId);
 
     if (args.group_by_store) {
       const { data: stores } = await supabase.from("pos_stores").select("id, name").in("id", storeIds);
-      const byStore: Record<string, { nome: string; total: number; qtd: number }> = {};
-      for (const s of stores || []) byStore[s.id] = { nome: s.name, total: 0, qtd: 0 };
+      const byStore: Record<string, { nome: string; total: number; qtd: number; ticket_medio_brl: number }> = {};
+      for (const s of stores || []) byStore[s.id] = { nome: s.name, total: 0, qtd: 0, ticket_medio_brl: 0 };
       for (const r of sales) {
-        if (!byStore[r.store_id]) byStore[r.store_id] = { nome: "?", total: 0, qtd: 0 };
+        if (!byStore[r.store_id]) byStore[r.store_id] = { nome: "?", total: 0, qtd: 0, ticket_medio_brl: 0 };
         byStore[r.store_id].total += Number(r.total || 0);
         byStore[r.store_id].qtd += 1;
       }
+      for (const k of Object.keys(byStore)) byStore[k].ticket_medio_brl = byStore[k].qtd ? byStore[k].total / byStore[k].qtd : 0;
       return { periodo: label, por_loja: byStore };
+    }
+
+    if (args.group_by_seller) {
+      const sellerIds = [...new Set(sales.map((s) => s.seller_id).filter(Boolean))];
+      const { data: sellers } = await supabase.from("pos_sellers").select("id, name, store_id").in("id", sellerIds.length ? sellerIds : ["00000000-0000-0000-0000-000000000000"]);
+      const sellerMap: Record<string, { nome: string; store_id: string | null }> = {};
+      for (const s of sellers || []) sellerMap[s.id] = { nome: s.name, store_id: s.store_id };
+      const agg: Record<string, { nome: string; qtd: number; total: number; ticket_medio_brl: number }> = {};
+      for (const r of sales) {
+        const key = r.seller_id || "sem_vendedora";
+        const nome = sellerMap[r.seller_id]?.nome || (r.seller_id ? "?" : "Sem vendedora");
+        const cur = agg[key] || { nome, qtd: 0, total: 0, ticket_medio_brl: 0 };
+        cur.qtd += 1; cur.total += Number(r.total || 0);
+        agg[key] = cur;
+      }
+      const linhas = Object.values(agg).map((v) => ({ ...v, ticket_medio_brl: v.qtd ? v.total / v.qtd : 0 })).sort((a, b) => b.total - a.total);
+      return { periodo: label, por_vendedora: linhas };
     }
 
     const total = sales.reduce((s, r) => s + Number(r.total || 0), 0);
@@ -410,16 +432,36 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
     return {
       periodo: label,
       loja_filtrada: resolvedStoreId || "todas físicas",
+      vendedora_filtrada: sellerId || null,
       faturamento_brl: total,
       qtd_vendas: count,
       ticket_medio_brl: count ? total / count : 0,
     };
   }
 
+  if (name === "get_sales_by_seller") {
+    const { label, fromISO, toISO } = brDateRange(args.period, args.from, args.to);
+    const resolvedStoreId = await resolveStoreId(supabase, args.store_name, args.store_id);
+    const storeIds = resolvedStoreId ? [resolvedStoreId] : PHYSICAL_STORE_IDS;
+    const sales = await fetchPosSales(supabase, fromISO, toISO, storeIds);
+    const sellerIds = [...new Set(sales.map((s) => s.seller_id).filter(Boolean))];
+    const { data: sellers } = await supabase.from("pos_sellers").select("id, name, store_id").in("id", sellerIds.length ? sellerIds : ["00000000-0000-0000-0000-000000000000"]);
+    const sellerMap: Record<string, { nome: string }> = {};
+    for (const s of sellers || []) sellerMap[s.id] = { nome: s.name };
+    const agg: Record<string, { nome: string; qtd: number; total: number }> = {};
+    for (const r of sales) {
+      const key = r.seller_id || "sem_vendedora";
+      const nome = sellerMap[r.seller_id]?.nome || (r.seller_id ? "?" : "Sem vendedora");
+      const cur = agg[key] || { nome, qtd: 0, total: 0 };
+      cur.qtd += 1; cur.total += Number(r.total || 0);
+      agg[key] = cur;
+    }
+    const ranking = Object.values(agg).map((v) => ({ ...v, ticket_medio_brl: v.qtd ? v.total / v.qtd : 0 })).sort((a, b) => b.total - a.total).slice(0, args.limit ?? 20);
+    return { periodo: label, ranking };
+  }
+
   if (name === "get_sales_by_payment_method") {
-    const { from, to, label } = brDateRange(args.period);
-    const fromISO = `${from}T03:00:00Z`;
-    const toISO = `${to}T26:59:59Z`;
+    const { label, fromISO, toISO } = brDateRange(args.period, args.from, args.to);
     const resolvedStoreId = await resolveStoreId(supabase, undefined, args.store_id);
     const storeIds = resolvedStoreId ? [resolvedStoreId] : PHYSICAL_STORE_IDS;
     const sales = await fetchPosSales(supabase, fromISO, toISO, storeIds);
