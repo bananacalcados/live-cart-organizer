@@ -209,20 +209,26 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
   }
   if (name === "get_top_products") {
     const { from, to, label } = brDateRange(args.period);
+    const fromISO = `${from}T03:00:00Z`;
+    const toISO = `${to}T26:59:59Z`;
     const limit = args.limit ?? 5;
-    const { data: items, error: e2 } = await supabase
-      .from("pos_sale_items")
-      .select("product_name, quantity, total_price, sale:pos_sales!inner(status, created_at)")
-      .gte("sale.created_at", `${from}T03:00:00Z`).lte("sale.created_at", `${to}T26:59:59Z`)
-      .eq("sale.status", "completed")
-      .limit(2000);
-    if (e2) return { error: e2.message };
+    const sales = await fetchPosSales(supabase, fromISO, toISO);
+    const saleIds = sales.map((s) => s.id);
+    if (saleIds.length === 0) return { period: label, top: [] };
+    // Chunk in 500s to avoid URL length issues
+    const all: any[] = [];
+    for (let i = 0; i < saleIds.length; i += 500) {
+      const chunk = saleIds.slice(i, i + 500);
+      const { data } = await supabase.from("pos_sale_items")
+        .select("product_name, quantity, total_price").in("sale_id", chunk);
+      all.push(...(data || []));
+    }
     const agg = new Map<string, { qtd: number; receita: number }>();
-    for (const it of items || []) {
-      const k = (it as any).product_name || "?";
+    for (const it of all) {
+      const k = it.product_name || "?";
       const cur = agg.get(k) || { qtd: 0, receita: 0 };
-      cur.qtd += Number((it as any).quantity || 0);
-      cur.receita += Number((it as any).total_price || 0);
+      cur.qtd += Number(it.quantity || 0);
+      cur.receita += Number(it.total_price || 0);
       agg.set(k, cur);
     }
     const top = [...agg.entries()].map(([nome, v]) => ({ nome, ...v })).sort((a, b) => b.receita - a.receita).slice(0, limit);
