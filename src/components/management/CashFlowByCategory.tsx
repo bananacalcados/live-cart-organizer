@@ -35,6 +35,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
   const [from, setFrom] = useState(firstDay);
   const [to, setTo] = useState(today.toISOString().slice(0, 10));
   const [storeFilter, setStoreFilter] = useState("all");
+  const [ledger, setLedger] = useState<"faturamento" | "realidade">("faturamento");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [cats, setCats] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
