@@ -1445,7 +1445,7 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
 
                 // Build consolidated planned fixed cuts: sum R$ across stores for same fixed_cost_id
                 const consolidatedPlannedFixedCuts: Record<string, number> = {};
-                allFixedCuts.forEach(c => {
+                allFixedCuts.filter(c => realStoreIdSet.has(c.store_id)).forEach(c => {
                   consolidatedPlannedFixedCuts[c.fixed_cost_id] = (consolidatedPlannedFixedCuts[c.fixed_cost_id] || 0) + c.reduction_amount;
                 });
 
