@@ -185,9 +185,11 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     setTogglingAiPause(false);
   };
 
-  // ── Detect provider for selected number ──
+  // ── Detect provider for the instance bound to this conversation ──
   const isZapiProvider = () => {
-    const num = getSelectedNumber();
+    const num = boundNumber
+      ?? (effectiveNumberId ? numbers.find(n => n.id === effectiveNumberId) : null)
+      ?? getSelectedNumber();
     return num?.provider === 'zapi';
   };
 
