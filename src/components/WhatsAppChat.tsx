@@ -200,7 +200,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
     try {
       const { data, error } = await supabase.functions.invoke('zapi-send-message', {
-        body: { phone: phoneNumber, message, whatsapp_number_id: selectedNumberId },
+        body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
       });
       if (error) return { success: false, error: error.message };
       if (data?.success) return { success: true, messageId: data?.data?.zapiMessageId };
@@ -232,7 +232,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           type,
           mediaUrl,
           caption,
-          whatsappNumberId: selectedNumberId,
+          whatsappNumberId: effectiveNumberId,
         }),
       });
       const data = await res.json();
@@ -258,7 +258,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         // Z-API media send
         try {
           const { data, error } = await supabase.functions.invoke('zapi-send-media', {
-            body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: selectedNumberId },
+            body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
           });
           if (error) return { success: false, error: error.message };
           if (data?.success) {
@@ -423,7 +423,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           media_type: selectedMedia.type,
           media_url: mediaUrl,
           message_id: result.messageId || null,
-          whatsapp_number_id: selectedNumberId || null,
+          whatsapp_number_id: effectiveNumberId || null,
           sender_user_id: currentUserId || null,
         });
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
@@ -471,7 +471,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         direction: 'outgoing',
         status: 'sent',
         message_id: result.messageId || null,
-        whatsapp_number_id: selectedNumberId || null,
+        whatsapp_number_id: effectiveNumberId || null,
         sender_user_id: currentUserId || null,
       });
       // Deactivate any active AI session so AI doesn't respond while operator is chatting
@@ -512,7 +512,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           phone,
           messageId: msg.message_id,
           dbMessageId: msg.id,
-          whatsapp_number_id: (msg as any).whatsapp_number_id || selectedNumberId,
+          whatsapp_number_id: (msg as any).whatsapp_number_id || effectiveNumberId,
         },
       });
 
@@ -630,7 +630,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           phone: normalizedPhone,
           templateName: template.name,
           language: template.language,
-          whatsappNumberId: selectedNumberId,
+          whatsappNumberId: effectiveNumberId,
           components: components.length > 0 ? components : undefined,
         }),
       });
@@ -645,7 +645,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           direction: 'outgoing',
           status: 'sent',
           message_id: result.messageId,
-          whatsapp_number_id: selectedNumberId || null,
+          whatsapp_number_id: effectiveNumberId || null,
           sender_user_id: currentUserId || null,
         });
         toast.success('Template enviado!');
@@ -716,7 +716,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     } catch (error) {
       toast.error('Não foi possível acessar o microfone.');
     }
-  }, [phone, normalizedPhone, order.id, updateOrder, selectedNumberId]);
+  }, [phone, normalizedPhone, order.id, updateOrder, effectiveNumberId]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
