@@ -8,7 +8,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 interface AuthorizedUser {
-  id: string;
   chat_id: string;
   display_name: string | null;
   role: string;
@@ -73,13 +72,13 @@ export function FinancialAgentSettings() {
   };
 
   const toggleUser = async (u: AuthorizedUser) => {
-    await (supabase as any).from("financial_agent_authorized_users").update({ active: !u.active }).eq("id", u.id);
+    await (supabase as any).from("financial_agent_authorized_users").update({ active: !u.active }).eq("chat_id", u.chat_id);
     await loadUsers();
   };
 
   const removeUser = async (u: AuthorizedUser) => {
     if (!confirm(`Remover ${u.display_name || u.chat_id}?`)) return;
-    await (supabase as any).from("financial_agent_authorized_users").delete().eq("id", u.id);
+    await (supabase as any).from("financial_agent_authorized_users").delete().eq("chat_id", u.chat_id);
     await loadUsers();
   };
 
@@ -146,7 +145,7 @@ export function FinancialAgentSettings() {
           ) : (
             <div className="space-y-1">
               {users.map((u) => (
-                <div key={u.id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
+                <div key={u.chat_id} className="flex items-center gap-2 rounded-md border p-2 text-sm">
                   <div className="flex-1">
                     <div className="font-medium">{u.display_name || "(sem nome)"}</div>
                     <div className="text-xs text-muted-foreground">chat_id: {u.chat_id} · {u.role}</div>
