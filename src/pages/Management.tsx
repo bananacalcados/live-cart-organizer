@@ -95,6 +95,7 @@ const CHART_COLORS = [
 
 const CENTRO_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
 const PEROLA_ID = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
+const TINY_SHOPIFY_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 const PHYSICAL_STORE_IDS = [CENTRO_ID, PEROLA_ID];
 
 const AUTO_REFRESH_MS = 60_000; // 1 minute
@@ -1020,58 +1021,57 @@ export default function Management() {
   }, [fetchData]);
 
   // --- Computed ---
-  // NOTE: Online (Shopify) revenue agora vem da MESMA fonte do dashboard do PDV:
-  // pos_sales com sale_type='online'. tiny_synced_orders é usado apenas para
-  // mostrar o status de sincronização do Tiny no header.
+  // O módulo Gestão agora segue a MESMA visão do Dashboard Geral do PDV:
+  // agrupamento por store_id, sem misturar vendas online de Centro/Pérola dentro de Tiny Shopify.
 
-  const physicalPosSales = useMemo(
-    () => posSales.filter((s: any) => s.sale_type !== "online" && s.sale_type !== "live"),
-    [posSales]
-  );
-  const onlinePosSales = useMemo(
-    () => posSales.filter((s: any) => s.sale_type === "online"),
-    [posSales]
-  );
-  const physicalPosItems = useMemo(
-    () => posSaleItems.filter((i: any) => i.sale_type !== "online" && i.sale_type !== "live"),
-    [posSaleItems]
-  );
-  const onlinePosItems = useMemo(
-    () => posSaleItems.filter((i: any) => i.sale_type === "online"),
-    [posSaleItems]
+  const managedStoreIds = useMemo(
+    () => [CENTRO_ID, PEROLA_ID, TINY_SHOPIFY_ID],
+    []
   );
 
-  // Apply storeFilter (only relevant to physical stores)
-  const filteredPosSales = useMemo(() => {
-    if (storeFilter === "all") return physicalPosSales;
-    return physicalPosSales.filter((s: any) => s.store_id === storeFilter);
-  }, [physicalPosSales, storeFilter]);
-
-  const filteredPosItems = useMemo(() => {
-    if (storeFilter === "all") return physicalPosItems;
-    return physicalPosItems.filter((i: any) => i.store_id === storeFilter);
-  }, [physicalPosItems, storeFilter]);
-
-  // Online sales só aparecem quando "all" (não pertencem a Centro/Perola)
-  const filteredOnlineSales = useMemo(
-    () => (storeFilter === "all" ? onlinePosSales : []),
-    [onlinePosSales, storeFilter]
+  const managedSales = useMemo(
+    () => posSales.filter((s: any) => managedStoreIds.includes(s.store_id)),
+    [posSales, managedStoreIds]
   );
-  const filteredOnlineItems = useMemo(
-    () => (storeFilter === "all" ? onlinePosItems : []),
-    [onlinePosItems, storeFilter]
+  const managedItems = useMemo(
+    () => posSaleItems.filter((i: any) => managedStoreIds.includes(i.store_id)),
+    [posSaleItems, managedStoreIds]
   );
 
-  // Per-store KPIs
-  const centroSales = physicalPosSales.filter(s => s.store_id === CENTRO_ID);
-  const perolaSales = physicalPosSales.filter(s => s.store_id === PEROLA_ID);
+  const filteredSales = useMemo(() => {
+    if (storeFilter === "all") return managedSales;
+    return managedSales.filter((s: any) => s.store_id === storeFilter);
+  }, [managedSales, storeFilter]);
+
+  const filteredItems = useMemo(() => {
+    if (storeFilter === "all") return managedItems;
+    return managedItems.filter((i: any) => i.store_id === storeFilter);
+  }, [managedItems, storeFilter]);
+
+  const getStoreSales = useCallback(
+    (storeId: string) => managedSales.filter((s: any) => s.store_id === storeId),
+    [managedSales]
+  );
+  const getStoreItems = useCallback(
+    (storeId: string) => managedItems.filter((i: any) => i.store_id === storeId),
+    [managedItems]
+  );
+
+  const centroSales = getStoreSales(CENTRO_ID);
+  const perolaSales = getStoreSales(PEROLA_ID);
+  const tinyShopifySales = getStoreSales(TINY_SHOPIFY_ID);
+
+  const centroItems = getStoreItems(CENTRO_ID);
+  const perolaItems = getStoreItems(PEROLA_ID);
+
   const centroRevenue = centroSales.reduce((s, v) => s + Number(v.total || 0), 0);
   const perolaRevenue = perolaSales.reduce((s, v) => s + Number(v.total || 0), 0);
+  const shopifyRevenue = tinyShopifySales.reduce((s, v) => s + Number(v.total || 0), 0);
+
   const centroDiscount = centroSales.reduce((s, v) => s + Number(v.discount || 0), 0);
   const perolaDiscount = perolaSales.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const shopifyDiscount = tinyShopifySales.reduce((s, v) => s + Number(v.discount || 0), 0);
 
-  const centroItems = physicalPosItems.filter(i => i.store_id === CENTRO_ID);
-  const perolaItems = physicalPosItems.filter(i => i.store_id === PEROLA_ID);
   const centroItemsSold = centroItems.reduce((s, v) => s + (v.quantity || 0), 0);
   const perolaItemsSold = perolaItems.reduce((s, v) => s + (v.quantity || 0), 0);
   const centroTicket = centroSales.length > 0 ? centroRevenue / centroSales.length : 0;
@@ -1079,64 +1079,53 @@ export default function Management() {
   const centroItemsPerSale = centroSales.length > 0 ? centroItemsSold / centroSales.length : 0;
   const perolaItemsPerSale = perolaSales.length > 0 ? perolaItemsSold / perolaSales.length : 0;
 
-  const physicalRevenue = filteredPosSales.reduce((s, v) => s + Number(v.total || 0), 0);
-  const physicalDiscount = filteredPosSales.reduce((s, v) => s + Number(v.discount || 0), 0);
-  const physicalOrders = filteredPosSales.length;
-  const physicalItemsSold = filteredPosItems.reduce((s, v) => s + (v.quantity || 0), 0);
-
-  const shopifyRevenue = filteredOnlineSales.reduce((s, v) => s + Number(v.total || 0), 0);
-  const shopifyDiscount = filteredOnlineSales.reduce((s, v) => s + Number(v.discount || 0), 0);
-  const shopifyOrders = filteredOnlineSales.length;
+  const totalRevenue = filteredSales.reduce((s, v) => s + Number(v.total || 0), 0);
+  const totalOrders = filteredSales.length;
+  const totalDiscount = filteredSales.reduce((s, v) => s + Number(v.discount || 0), 0);
+  const shopifyOrders = tinyShopifySales.length;
   const shopifyTicket = shopifyOrders > 0 ? shopifyRevenue / shopifyOrders : 0;
-
-  const totalRevenue = physicalRevenue + shopifyRevenue;
-  const totalOrders = physicalOrders + shopifyOrders;
-  const totalDiscount = physicalDiscount + shopifyDiscount;
 
   // Payment methods
   const paymentBreakdown = useMemo(() => {
     const map = new Map<string, number>();
-    filteredPosSales.forEach(s => {
-      const m = s.payment_method || "Outros";
-      map.set(m, (map.get(m) || 0) + Number(s.total));
-    });
-    filteredOnlineSales.forEach(s => {
-      const m = s.payment_method || "Online";
-      map.set(m, (map.get(m) || 0) + Number(s.total));
+    filteredSales.forEach(s => {
+      const method = s.payment_method || "Outros";
+      map.set(method, (map.get(method) || 0) + Number(s.total || 0));
     });
     return [...map.entries()].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [filteredPosSales, filteredOnlineSales]);
+  }, [filteredSales]);
 
   // Daily trend
   const dailyTrend = useMemo(() => {
     const map = new Map<string, { centro: number; perola: number; shopify: number }>();
-    const add = (s: any, key: "centro" | "perola" | "shopify") => {
-      const dateRef = s.paid_at || s.created_at;
+    const add = (sale: any, key: "centro" | "perola" | "shopify") => {
+      const dateRef = sale.paid_at || sale.created_at;
       if (!dateRef) return;
       const day = format(new Date(dateRef), "dd/MM");
-      const cur = map.get(day) || { centro: 0, perola: 0, shopify: 0 };
-      cur[key] += Number(s.total || 0);
-      map.set(day, cur);
+      const current = map.get(day) || { centro: 0, perola: 0, shopify: 0 };
+      current[key] += Number(sale.total || 0);
+      map.set(day, current);
     };
-    physicalPosSales.forEach(s => {
-      if (s.store_id === CENTRO_ID) add(s, "centro");
-      else if (s.store_id === PEROLA_ID) add(s, "perola");
-    });
-    onlinePosSales.forEach(s => add(s, "shopify"));
+
+    centroSales.forEach(s => add(s, "centro"));
+    perolaSales.forEach(s => add(s, "perola"));
+    tinyShopifySales.forEach(s => add(s, "shopify"));
+
     return [...map.entries()]
       .map(([date, v]) => ({ date, ...v, total: v.centro + v.perola + v.shopify }))
       .sort((a, b) => a.date.localeCompare(b.date));
-  }, [physicalPosSales, onlinePosSales]);
+  }, [centroSales, perolaSales, tinyShopifySales]);
 
   // Store comparison
   const storeComparison = useMemo(() => {
-    const results: { name: string; revenue: number; orders: number }[] = [];
-    results.push({ name: "Loja Centro", revenue: centroRevenue, orders: centroSales.length });
-    results.push({ name: "Loja Perola", revenue: perolaRevenue, orders: perolaSales.length });
-    const onlineRev = onlinePosSales.reduce((s, v) => s + Number(v.total || 0), 0);
-    results.push({ name: "Shopify (Online)", revenue: onlineRev, orders: onlinePosSales.length });
+    const results: { name: string; revenue: number; orders: number }[] = [
+      { name: "Loja Centro", revenue: centroRevenue, orders: centroSales.length },
+      { name: "Loja Perola", revenue: perolaRevenue, orders: perolaSales.length },
+      { name: "Tiny Shopify", revenue: shopifyRevenue, orders: tinyShopifySales.length },
+    ];
+
     return results.filter(s => s.orders > 0).sort((a, b) => b.revenue - a.revenue);
-  }, [centroRevenue, perolaRevenue, centroSales, perolaSales, onlinePosSales]);
+  }, [centroRevenue, centroSales.length, perolaRevenue, perolaSales.length, shopifyRevenue, tinyShopifySales.length]);
 
   // ABC Curve data — todos os itens de pos_sale_items (físico + online)
   const abcSaleItems = useMemo(() => {
