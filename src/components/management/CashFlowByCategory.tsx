@@ -201,6 +201,19 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
               </SelectContent>
             </Select>
           </div>
+          <div>
+            <label className="text-xs text-muted-foreground block">Livro</label>
+            <div className="inline-flex rounded-md border h-9 overflow-hidden">
+              <button type="button" onClick={() => setLedger("faturamento")}
+                className={`px-3 text-xs font-medium ${ledger === "faturamento" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                Faturamento
+              </button>
+              <button type="button" onClick={() => setLedger("realidade")}
+                className={`px-3 text-xs font-medium border-l ${ledger === "realidade" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                Realidade
+              </button>
+            </div>
+          </div>
           <div className="flex-1" />
           <div className="text-right">
             <div className="text-xs text-muted-foreground">Entradas</div>
