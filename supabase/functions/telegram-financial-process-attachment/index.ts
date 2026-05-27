@@ -33,6 +33,11 @@ async function downloadTelegramFile(fileId: string): Promise<{ bytes: Uint8Array
   const mime = ext === "pdf" ? "application/pdf"
     : ext === "png" ? "image/png"
     : ext === "webp" ? "image/webp"
+    : ext === "csv" ? "text/csv"
+    : ext === "txt" ? "text/plain"
+    : ext === "ofx" || ext === "qfx" ? "application/x-ofx"
+    : ext === "xls" ? "application/vnd.ms-excel"
+    : ext === "xlsx" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     : "image/jpeg";
   return { bytes, mime, path };
 }
