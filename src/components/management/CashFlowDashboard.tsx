@@ -156,6 +156,10 @@ export function CashFlowDashboard({ stores }: { stores: Store[] }) {
               </button>
             </div>
           </div>
+          <div className="flex-1" />
+          <Button onClick={() => setManualOpen(true)} size="sm" className="gap-1 h-9">
+            <Plus className="h-4 w-4" /> Novo Lançamento
+          </Button>
         </CardContent>
       </Card>
 
