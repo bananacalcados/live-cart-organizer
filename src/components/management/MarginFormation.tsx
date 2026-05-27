@@ -1435,9 +1435,10 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
                 const consolidatedVarCutPct = totalRevTarget > 0 ? avgVarPct - (totalReducedVarCostR$ / totalRevTarget) * 100 : 0;
 
                 // Build consolidated items for simulator
+                const realStoreIdSet = new Set(stores.filter(s => !s.is_simulation).map(s => s.id));
                 const consolidatedFixedItems = fixedCosts.map(fc => {
                   const totalAmount = allStoreFixedCosts
-                    .filter(s => s.fixed_cost_id === fc.id && s.is_active)
+                    .filter(s => s.fixed_cost_id === fc.id && s.is_active && realStoreIdSet.has(s.store_id))
                     .reduce((sum, s) => sum + s.amount, 0);
                   return { id: fc.id, name: fc.name, category: fc.category, amount: totalAmount };
                 }).filter(item => item.amount > 0);
