@@ -142,7 +142,7 @@ export function CashFlowDashboard({ stores }: { stores: Store[] }) {
 
       {/* DRE */}
       <Card>
-        <CardHeader><CardTitle className="text-base">DRE — {ledger === "faturamento" ? "Faturamento" : "Realidade"}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Fluxo de Caixa — {ledger === "faturamento" ? "Faturamento" : "Realidade"}</CardTitle></CardHeader>
         <CardContent>
           {loading ? (
             <div className="text-center py-8 text-muted-foreground text-sm">Carregando…</div>
