@@ -346,7 +346,7 @@ async function resolveBankAccount(supabase: any, id?: string, name?: string): Pr
 }
 
 async function fetchPosSales(supabase: any, fromISO: string, toISO: string, storeIds: string[]): Promise<any[]> {
-  const select = "id, store_id, total, paid_at, created_at, status, payment_method, revenue_attribution";
+  const select = "id, store_id, seller_id, total, paid_at, created_at, status, payment_method, revenue_attribution";
   const a = await supabase.from("pos_sales").select(select)
     .in("status", POS_REVENUE_STATUSES).in("store_id", storeIds)
     .not("paid_at", "is", null).gte("paid_at", fromISO).lte("paid_at", toISO).limit(10000);
