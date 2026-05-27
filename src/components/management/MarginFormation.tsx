@@ -780,12 +780,14 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
 
       <Tabs value={isConsolidatedView ? "consolidated" : undefined} defaultValue={isConsolidatedView ? "consolidated" : "fixed"} className="space-y-4"
         onValueChange={() => { if (isConsolidatedView) loadConsolidated(); }}>
+        {!isConsolidatedView && (
         <TabsList>
           <TabsTrigger value="fixed">Custos Fixos</TabsTrigger>
           <TabsTrigger value="variable">Custos Variáveis</TabsTrigger>
           <TabsTrigger value="simulator">Simulador de Lucro</TabsTrigger>
           <TabsTrigger value="consolidated" onClick={() => loadConsolidated()}>Consolidado</TabsTrigger>
         </TabsList>
+        )}
 
         {/* Fixed Costs */}
         <TabsContent value="fixed" className="space-y-4">
