@@ -672,20 +672,22 @@ export default function Management() {
 
   const fetchPosSales = async (startISO: string, endISO: string) => {
     const PAGE_SIZE = 1000;
+    const REVENUE_STATUSES = ["completed", "paid", "pending_sync", "pending_pickup"];
     let allSales: any[] = [];
     let allItems: any[] = [];
 
-    // Fetch completed sales with paid_at in range
+    const cols = "id, store_id, total, discount, subtotal, payment_method, paid_at, status, created_at, sale_type, revenue_attribution";
+
+    // Fetch sales with paid_at in range (all stores — physical + online)
     let from = 0;
     let hasMore = true;
     while (hasMore) {
       const { data, error } = await supabase.from("pos_sales")
-        .select("id, store_id, total, discount, subtotal, payment_method, paid_at, status, created_at")
-        .in("status", ["completed", "paid"])
+        .select(cols)
+        .in("status", REVENUE_STATUSES)
         .not("paid_at", "is", null)
         .gte("paid_at", startISO)
         .lte("paid_at", endISO)
-        .in("store_id", PHYSICAL_STORE_IDS)
         .range(from, from + PAGE_SIZE - 1);
       if (error) throw error;
       allSales = allSales.concat(data || []);
@@ -693,23 +695,25 @@ export default function Management() {
       from += PAGE_SIZE;
     }
 
-    // Also fetch completed sales WITHOUT paid_at (use created_at as fallback)
+    // Also fetch sales WITHOUT paid_at (use created_at as fallback)
     from = 0;
     hasMore = true;
     while (hasMore) {
       const { data, error } = await supabase.from("pos_sales")
-        .select("id, store_id, total, discount, subtotal, payment_method, paid_at, status, created_at")
-        .in("status", ["completed", "paid"])
+        .select(cols)
+        .in("status", REVENUE_STATUSES)
         .is("paid_at", null)
         .gte("created_at", startISO)
         .lte("created_at", endISO)
-        .in("store_id", PHYSICAL_STORE_IDS)
         .range(from, from + PAGE_SIZE - 1);
       if (error) throw error;
       allSales = allSales.concat(data || []);
       hasMore = (data?.length || 0) === PAGE_SIZE;
       from += PAGE_SIZE;
     }
+
+    // Exclude site_pickup_only (matches POS Dashboard logic)
+    allSales = allSales.filter((s: any) => s.revenue_attribution !== "site_pickup_only");
 
     // Deduplicate by id (in case of overlap)
     const seenIds = new Set<string>();
