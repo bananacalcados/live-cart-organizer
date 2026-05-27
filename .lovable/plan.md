@@ -1,68 +1,96 @@
-## Fase A — Completar ferramentas do Agente IA (Telegram)
+# Plano: Plano de Contas inteligente + Contas Bancárias + Refresh otimizado
 
-Edita `supabase/functions/telegram-financial-webhook/index.ts` para adicionar/parametrizar tools:
+## 1. Reestruturar Plano de Contas (Vendas)
 
-1. **`get_sales_summary`** — adiciona `store_id` E `store_name` (resolve nome → id via `pos_stores`), e `group_by_store` opcional (retorna breakdown por loja).
-2. **`get_sales_by_payment_method`** — novo. Agrupa `pos_sales.payment_method` por período/loja, retorna `{metodo, qtd, total}[]`.
-3. **`get_physical_cash_by_store`** — novo. Lê `pos_cash_registers` (caixas abertos) e retorna dinheiro físico em espécie por loja.
-4. **`get_accounts_payable`** — novo. Lê `tiny_accounts_payable` com filtros `from`, `to`, `status` (`pendente`/`pago`/`vencido`/`all`), agrupa por dia. Variante implícita "hoje" via período.
-5. **`get_inventory_summary`** — novo. Lê `pos_products` (fonte oficial). Retorna por loja: pares (SUM stock), valor total (SUM stock*price), ticket médio (AVG price), e total geral. Aceita `store_id` opcional.
+Você está certo: ter `Vendas PDV` e `Vendas Site` lado a lado com `Vendas Live / Loja Física / Marketplace` confunde a IA. Vou reorganizar em **2 raízes claras por origem do dado**, com **subcategorias por método de pagamento**:
 
-Mantém regras do POS Dashboard já alinhadas.
+```text
+ENTRADAS
+└── Vendas
+    ├── Vendas PDV (origem: pos_sales)
+    │   ├── Dinheiro
+    │   ├── PIX
+    │   ├── Débito
+    │   ├── Crédito à vista
+    │   ├── Crédito parcelado
+    │   ├── Crediário
+    │   └── Outros
+    └── Vendas Site (origem: Shopify/Tiny)
+        ├── PIX
+        ├── Cartão
+        ├── Boleto
+        └── Outros
+```
 
-## Fase B — Fluxo de Caixa categorizado (Módulo Gestão > Financeiro)
+Removo `Vendas Live`, `Vendas Loja Física`, `Vendas Marketplace`, `Vendas Site` (duplicada). Live continua identificável dentro de Vendas Site (pedidos vindos do checkout transparente) e dentro de Vendas PDV (`channel='live'`).
 
-### B1. Banco de dados (migração)
-- **Seed `financial_categories`** com plano de contas Banana Calçados (hierárquico, calçados+acessórios):
-  - Entradas: Vendas Loja Física, Vendas Online, Crediário Recebido, Devoluções de Fornecedor, Outras Receitas.
-  - Saídas: 
-    - Compras: Calçados, Acessórios, Embalagens.
-    - Marketing: Carro de Som, Anúncios Online (Meta/Google), Influencers, Material Gráfico, Eventos.
-    - Operacional: Aluguel, Energia, Água, Internet, Telefonia, Limpeza.
-    - Pessoal: Salários, Comissões, Benefícios, Pró-labore.
-    - Logística: Frete, Combustível, Manutenção Veículo.
-    - Impostos e Taxas: Simples Nacional, Taxas Bancárias, Tarifas Maquininha.
-    - Financeiro: Empréstimos, Juros, IOF.
-    - Outras Despesas.
-- **Tabela `cash_flow_entries`** já existe e tem `metadata jsonb` + `description text` — usaremos `description` para o texto livre do usuário (ex: "Pago ao Victor") e `metadata.notes` para histórico se precisar.
-- **Nova view `cash_flow_entries_enriched`** (opcional) joinando categoria e loja para listagens.
+### Como puxar método de pagamento por origem
 
-### B2. UI no Módulo Gestão > Aba Financeiro
-Cria `src/components/management/CashFlowCategorized.tsx` (e integra ao `FinanceHub.tsx`):
+- **PDV**: `pos_sales.payment_method` já existe → agregação direta.
+- **Site (Shopify)**: hoje o pedido chega só com "Checkout Transparente". Solução:
+  1. No envio do pedido pra Shopify (edge function de criação) adicionar `**note_attributes**` com `{ name: "payment_method", value: "pix|card|boleto|..." }` — Shopify suporta nativamente e o valor volta no payload do pedido.
+  2. Opcionalmente também adicionar **tags** (`payment:pix`) pra facilitar filtros visuais no admin Shopify.
+  3. Ao puxar via Tiny/Shopify webhook, ler `note_attributes` e gravar em coluna `payment_method` no `tiny_synced_orders` (ou similar).
+- Isso é o mesmo padrão que você vai replicar no outro projeto do site.
 
-- **Topo**: seletor de período (mês atual / mês anterior / custom).
-- **Plano de Contas (CRUD)**: árvore hierárquica de categorias. Botões: adicionar categoria/subcategoria, editar nome, desativar. Drag-to-reparent opcional (fase futura).
-- **Fluxo de Caixa do período**:
-  - Tabela agregada por categoria (entradas/saídas) com totais e saldo.
-  - **Click numa linha de categoria** → drawer/expansão listando cada lançamento individual (data, valor, descrição/observação do usuário, método pagamento, loja, anexo).
-  - Em cada lançamento: botão editar (categoria, descrição, valor, data), excluir, ver anexo.
-- **Resumo lateral**: entradas totais, saídas totais, saldo líquido, top 5 categorias de saída.
+## 2. Confronto da Realidade (Caixa Lógico vs Caixa Real)
 
-### B3. Agente IA — captura de descrição livre
-No `telegram-financial-process-attachment` (e webhook):
-- Quando o usuário envia comprovante **com legenda (caption)** → caption vai pra `cash_flow_entries.description`.
-- Quando envia **só a imagem** → após processar e categorizar, o bot responde: "✅ Categorizei em Marketing > Carro de Som — R$ 600. Quer adicionar uma observação? (responda com o texto ou /skip)" e fica aguardando próxima mensagem (estado salvo em `financial_agent_sessions.expected_action = 'awaiting_description:<entry_id>'`). A próxima mensagem de texto vira `description` daquele lançamento.
-- Adiciona tools conversacionais:
-  - `register_expense({amount, category_id|category_name, description, payment_method?, store_id?, date?})` — cria lançamento manualmente sem anexo.
-  - `register_income(...)` análogo.
-  - `update_entry_description({entry_id, description})` — para edição posterior por chat.
-  - `get_cash_flow_summary({period, by:'category'|'store'})` — agrega entradas confirmadas.
+Criar conceito de **2 livros paralelos** com conciliação:
 
-### B4. Categorização automática
-- IA do `process-attachment` recebe lista de categorias ativas + descrição do anexo e escolhe `category_id`. Salva `confidence`. Se < 0.7, `status='needs_review'` (já existe).
+- **Livro Operacional** (o que o sistema diz): `cash_flow_entries` com `source IN ('pos_sale','shopify','telegram_receipt','manual')`. É o "esperado".
+- **Livro Bancário** (o que de fato entrou/saiu): novas linhas `source='bank_statement'` importadas de OFX/XLSX/CSV pelo agente do Telegram.
+- **Match / Divergência**: rotina que compara por valor + data (±2 dias) e classifica:
+  - `matched` (bateu) → conciliado.
+  - `bank_only` (só no banco, sem venda) → entrada extra, investigar.
+  - `book_only` (só no sistema, sem banco) → 🚨 possível **fraude/venda fantasma** ou taxa de cartão pendente.
+- UI nova em Gestão > Financeiro > **Conciliação**: 3 colunas (Sistema | Banco | Divergências) com ações pra marcar "taxa de cartão", "venda cancelada", "investigar".
 
-## Detalhes técnicos relevantes
-- Tabelas reutilizadas: `pos_products`, `pos_stores`, `pos_cash_registers`, `tiny_accounts_payable`, `pos_sales`, `cash_flow_entries`, `financial_categories`, `financial_agent_receipts`, `financial_agent_sessions`.
-- Sem novas tabelas; só seed de categorias + possível view.
-- GRANTs já existentes nas tabelas (não estamos criando novas).
-- Edge functions afetadas: `telegram-financial-webhook`, `telegram-financial-process-attachment`.
-- Frontend: `src/components/management/FinanceHub.tsx` (adiciona aba/seção), novo `CashFlowCategorized.tsx`, novo `CategoryTreeEditor.tsx`.
+## 3. Contas Bancárias + Transferências
 
-## Ordem de execução proposta
-1. Migração seed do plano de contas.
-2. Fase A (5 tools) — entrega rápida e testável no Telegram.
-3. UI do Fluxo de Caixa categorizado + CRUD de categorias.
-4. Captura de descrição livre + tools de registro manual no agente.
-5. Categorização automática refinada no process-attachment.
+Nova tabela `bank_accounts` (nome, banco, agência, conta, tipo, saldo_inicial, ativo).
 
-Pergunta antes de começar: o plano de contas acima cobre o que você precisa, ou prefere me passar a estrutura exata que usa hoje (ou que gostaria de usar)? Posso começar com esse default e você ajusta depois pelo CRUD.
+Adicionar a `cash_flow_entries`:
+
+- `bank_account_id` (de onde saiu / pra onde entrou)
+- `transfer_pair_id` (uuid que liga as 2 pernas de uma transferência interna)
+- `is_transfer` (boolean) — transferências **não entram no resultado**, só movem saldo.
+
+Saldo de cada conta = `saldo_inicial + SUM(entradas) - SUM(saídas)` filtrado por `bank_account_id`, ignorando `is_transfer=true` no DRE mas considerando no saldo.
+
+**Novas ferramentas do agente Telegram:**
+
+- `register_transfer(from_account, to_account, amount, date, description)` — cria as 2 pernas atômicas com mesmo `transfer_pair_id`.
+- `get_bank_balance(account?)` — saldo atual de uma ou todas as contas.
+- Ao receber comprovante, prompt: "Saiu de qual conta? Entrou em qual?" (se o agente não identificar pelo banco/recebedor).
+
+**UI**: nova aba **Contas Bancárias** em Gestão > Financeiro (CRUD + saldo atual + extrato por conta).
+
+## 4. Refresh do Gestão (performance)
+
+Diagnóstico atual: a página tem `setInterval` que dispara reload do estado raiz → causa re-mount e perda da aba.
+
+Correções:
+
+- **Trocar full-refresh por refetch granular**: cada card/tab cuida do seu próprio fetch (já é o padrão, mas o pai está disparando). Remover o interval do componente pai.
+- **Aumentar intervalo de 1min → 5min** (configurável).
+- **Refetch on focus** (quando volta pra aba) ao invés de interval agressivo.
+- Manter `defaultValue` da aba em estado (URL search param `?tab=...`) para que mesmo se houver reload, a aba selecionada persiste.
+- **Custo atual**: 1 refresh/min × ~8 queries pesadas × usuários ativos = pode estar custando bem. Com 5min + tab-isolated fetches, queda de ~80%.
+
+## 5. Implementação técnica (ordem)
+
+1. **Migration**: novas tabelas `bank_accounts`, colunas `bank_account_id/transfer_pair_id/is_transfer` em `cash_flow_entries`. Limpar seed antigo do plano de contas e re-seed com nova estrutura.
+2. **Edge functions** `telegram-financial-webhook`: novas tools `register_transfer`, `get_bank_balance`, `import_bank_statement` (OFX/XLSX/CSV). Atualizar `categorizeEntry` para usar a nova árvore.
+3. **Frontend**:
+  - `CategoriesManager` — sem mudança (já é genérico).
+  - `BankAccountsManager.tsx` — novo CRUD.
+  - `BankReconciliation` — expandir para mostrar livro operacional × bancário.
+  - `Management.tsx` — remover interval global, mover para por-componente com `staleTime: 5min`.
+4. **Shopify**: ajustar a função que cria pedido para enviar `note_attributes.payment_method`. Documentar pra você replicar no outro projeto.
+
+## Perguntas antes de executar
+
+1. **Métodos de pagamento do PDV** — devo seguir a lista que está em `pos_sales.payment_method` no banco hoje, ou você quer definir uma lista fixa (dinheiro, pix, débito, crédito à vista, crédito parcelado, crediário)? 
+2. **Contas bancárias iniciais** — quer cadastrar manualmente depois, ou já me passa nomes (ex: "Itaú PJ", "Bradesco PJ", "Caixa loja Pérola") pra eu fazer seed?
+3. **Tempo de refresh** — 5 minutos está bom, ou prefere 10?
+4. **Confronto da Realidade** — tudo bem começar **sem importação de OFX** (só XLSX/CSV via agente IA, com o agente extraindo as linhas), e adicionar parser OFX nativo num segundo passo?

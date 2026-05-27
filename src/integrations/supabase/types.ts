@@ -1139,6 +1139,7 @@ export type Database = {
           bank_name: string | null
           created_at: string
           id: string
+          initial_balance: number
           is_active: boolean
           name: string
           notes: string | null
@@ -1151,6 +1152,7 @@ export type Database = {
           bank_name?: string | null
           created_at?: string
           id?: string
+          initial_balance?: number
           is_active?: boolean
           name: string
           notes?: string | null
@@ -1163,6 +1165,7 @@ export type Database = {
           bank_name?: string | null
           created_at?: string
           id?: string
+          initial_balance?: number
           is_active?: boolean
           name?: string
           notes?: string | null
@@ -1567,6 +1570,7 @@ export type Database = {
         Row: {
           amount: number
           attachment_url: string | null
+          bank_account_id: string | null
           bank_external_id: string | null
           category_id: string | null
           confidence: number | null
@@ -1579,19 +1583,24 @@ export type Database = {
           external_id: string | null
           external_source: string | null
           id: string
+          is_transfer: boolean
           metadata: Json
           needs_review_reason: string | null
           payment_method: string | null
           pos_sale_id: string | null
+          reconciled_with_id: string | null
+          reconciliation_status: string | null
           source: string
           source_ref_id: string | null
           status: string
           store_id: string | null
+          transfer_pair_id: string | null
           updated_at: string
         }
         Insert: {
           amount: number
           attachment_url?: string | null
+          bank_account_id?: string | null
           bank_external_id?: string | null
           category_id?: string | null
           confidence?: number | null
@@ -1604,19 +1613,24 @@ export type Database = {
           external_id?: string | null
           external_source?: string | null
           id?: string
+          is_transfer?: boolean
           metadata?: Json
           needs_review_reason?: string | null
           payment_method?: string | null
           pos_sale_id?: string | null
+          reconciled_with_id?: string | null
+          reconciliation_status?: string | null
           source?: string
           source_ref_id?: string | null
           status?: string
           store_id?: string | null
+          transfer_pair_id?: string | null
           updated_at?: string
         }
         Update: {
           amount?: number
           attachment_url?: string | null
+          bank_account_id?: string | null
           bank_external_id?: string | null
           category_id?: string | null
           confidence?: number | null
@@ -1629,17 +1643,28 @@ export type Database = {
           external_id?: string | null
           external_source?: string | null
           id?: string
+          is_transfer?: boolean
           metadata?: Json
           needs_review_reason?: string | null
           payment_method?: string | null
           pos_sale_id?: string | null
+          reconciled_with_id?: string | null
+          reconciliation_status?: string | null
           source?: string
           source_ref_id?: string | null
           status?: string
           store_id?: string | null
+          transfer_pair_id?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "cash_flow_entries_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cash_flow_entries_category_id_fkey"
             columns: ["category_id"]
@@ -1652,6 +1677,13 @@ export type Database = {
             columns: ["pos_sale_id"]
             isOneToOne: false
             referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_flow_entries_reconciled_with_id_fkey"
+            columns: ["reconciled_with_id"]
+            isOneToOne: false
+            referencedRelation: "cash_flow_entries"
             referencedColumns: ["id"]
           },
           {

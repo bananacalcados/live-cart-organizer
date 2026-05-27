@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
   BarChart3, Home, TrendingUp, DollarSign, Package, ShoppingCart, Store,
@@ -98,7 +98,7 @@ const PEROLA_ID = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
 const TINY_SHOPIFY_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 const PHYSICAL_STORE_IDS = [CENTRO_ID, PEROLA_ID];
 
-const AUTO_REFRESH_MS = 60_000; // 1 minute
+const AUTO_REFRESH_MS = 300_000; // 5 minutes — reduz custo e evita rerenders frequentes
 
 type Period = "today" | "7d" | "30d" | "month" | "last_month" | "custom";
 
@@ -618,6 +618,7 @@ function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt, onR
 
 export default function Management() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [period, setPeriod] = useState<Period>("30d");
   const [customFrom, setCustomFrom] = useState(() => format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [customTo, setCustomTo] = useState(() => format(new Date(), 'yyyy-MM-dd'));
@@ -1255,7 +1256,11 @@ export default function Management() {
               <KPICard title="Descontos" value={fmt(totalDiscount)} icon={ArrowDownRight} variant="destructive" sub={`${totalRevenue > 0 ? ((totalDiscount / (totalRevenue + totalDiscount)) * 100).toFixed(1) : 0}% do bruto`} />
             </div>
 
-            <Tabs defaultValue="overview" className="space-y-4">
+            <Tabs
+              value={searchParams.get("tab") || "overview"}
+              onValueChange={(v) => setSearchParams((prev) => { const n = new URLSearchParams(prev); n.set("tab", v); return n; }, { replace: true })}
+              className="space-y-4"
+            >
               <TabsList>
                 <TabsTrigger value="overview">Visão Geral</TabsTrigger>
                 <TabsTrigger value="products">Produtos</TabsTrigger>
