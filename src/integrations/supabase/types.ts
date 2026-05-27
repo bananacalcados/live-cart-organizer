@@ -8922,31 +8922,37 @@ export type Database = {
         Row: {
           amount: number
           cash_register_id: string
+          counterpart_bank_account_id: string | null
           created_at: string
           description: string | null
           id: string
           seller_id: string | null
           store_id: string
+          transfer_pair_id: string | null
           type: string
         }
         Insert: {
           amount: number
           cash_register_id: string
+          counterpart_bank_account_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
           seller_id?: string | null
           store_id: string
+          transfer_pair_id?: string | null
           type: string
         }
         Update: {
           amount?: number
           cash_register_id?: string
+          counterpart_bank_account_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
           seller_id?: string | null
           store_id?: string
+          transfer_pair_id?: string | null
           type?: string
         }
         Relationships: [
@@ -8955,6 +8961,13 @@ export type Database = {
             columns: ["cash_register_id"]
             isOneToOne: false
             referencedRelation: "pos_cash_registers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_cash_movements_counterpart_bank_account_id_fkey"
+            columns: ["counterpart_bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
             referencedColumns: ["id"]
           },
         ]
