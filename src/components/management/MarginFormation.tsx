@@ -1451,7 +1451,7 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
 
                 // Merge variable costs across stores (weighted average by revenue target)
                 const vcMap = new Map<string, { id: string; description: string; totalWeightedPct: number; totalRevenue: number }>();
-                allVariableCosts.filter(v => v.is_active).forEach(v => {
+                allVariableCosts.filter(v => v.is_active && realStoreIdSet.has(v.store_id)).forEach(v => {
                   const key = v.description.toLowerCase().trim();
                   const storeRev = stores.find(s => s.id === v.store_id)?.revenue_target ?? 0;
                   const existing = vcMap.get(key);
