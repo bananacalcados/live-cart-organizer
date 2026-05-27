@@ -1235,7 +1235,7 @@ export type Database = {
           ai_category_id: string | null
           ai_confidence: number | null
           amount: number
-          bank_account_id: string
+          bank_account_id: string | null
           category_id: string | null
           classification_status: string
           created_at: string
@@ -1253,7 +1253,7 @@ export type Database = {
           ai_category_id?: string | null
           ai_confidence?: number | null
           amount: number
-          bank_account_id: string
+          bank_account_id?: string | null
           category_id?: string | null
           classification_status?: string
           created_at?: string
@@ -1271,7 +1271,7 @@ export type Database = {
           ai_category_id?: string | null
           ai_confidence?: number | null
           amount?: number
-          bank_account_id?: string
+          bank_account_id?: string | null
           category_id?: string | null
           classification_status?: string
           created_at?: string
