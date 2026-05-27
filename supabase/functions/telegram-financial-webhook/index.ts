@@ -35,19 +35,28 @@ async function sendMessage(chatId: number | string, text: string, extra: Record<
   if (!res.ok) console.error("[telegram] sendMessage failed", res.status, await res.text());
 }
 
-function brDateRange(period: string): { from: string; to: string; label: string } {
+function brDateRange(period: string, customFrom?: string, customTo?: string): { from: string; to: string; fromISO: string; toISO: string; label: string } {
   const now = new Date();
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
   const todayBR = fmt.format(now);
   const d = new Date(todayBR + "T00:00:00-03:00");
   const addDays = (base: Date, n: number) => new Date(base.getTime() + n * 86400000).toISOString().slice(0, 10);
+  // Cobertura UTC do dia BR (UTC-3): from = dayT03:00:00Z, to = (day+1)T02:59:59.999Z
+  const toBounds = (fromDay: string, toDay: string, label: string) => {
+    const fromISO = `${fromDay}T03:00:00.000Z`;
+    const next = addDays(new Date(toDay + "T00:00:00-03:00"), 1);
+    const toISO = `${next}T02:59:59.999Z`;
+    return { from: fromDay, to: toDay, fromISO, toISO, label };
+  };
+  if (customFrom && customTo) return toBounds(customFrom, customTo, `${customFrom} a ${customTo}`);
   switch (period) {
-    case "yesterday": { const y = addDays(d, -1); return { from: y, to: y, label: "ontem" }; }
-    case "7d": return { from: addDays(d, -6), to: todayBR, label: "últimos 7 dias" };
-    case "30d": return { from: addDays(d, -29), to: todayBR, label: "últimos 30 dias" };
-    case "month": { const first = todayBR.slice(0, 8) + "01"; return { from: first, to: todayBR, label: "mês atual" }; }
+    case "yesterday": { const y = addDays(d, -1); return toBounds(y, y, "ontem"); }
+    case "7d": return toBounds(addDays(d, -6), todayBR, "últimos 7 dias");
+    case "week": return toBounds(addDays(d, -6), todayBR, "últimos 7 dias");
+    case "30d": return toBounds(addDays(d, -29), todayBR, "últimos 30 dias");
+    case "month": { const first = todayBR.slice(0, 8) + "01"; return toBounds(first, todayBR, "mês atual"); }
     case "today":
-    default: return { from: todayBR, to: todayBR, label: "hoje" };
+    default: return toBounds(todayBR, todayBR, "hoje");
   }
 }
 
