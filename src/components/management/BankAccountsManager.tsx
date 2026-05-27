@@ -132,11 +132,21 @@ export function BankAccountsManager({ stores }: { stores: Store[] }) {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-2 flex-wrap">
           <CardTitle className="text-base flex items-center gap-2">
             <Landmark className="h-4 w-4" /> Contas Bancárias
           </CardTitle>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <div className="inline-flex rounded-md border h-8 overflow-hidden">
+              <button type="button" onClick={() => setLedger("faturamento")}
+                className={`px-2.5 text-[11px] font-medium ${ledger === "faturamento" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                Faturamento
+              </button>
+              <button type="button" onClick={() => setLedger("realidade")}
+                className={`px-2.5 text-[11px] font-medium border-l ${ledger === "realidade" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                Realidade
+              </button>
+            </div>
             <Button size="sm" variant="outline" onClick={() => setTransfer({})}>
               <ArrowLeftRight className="h-3.5 w-3.5 mr-1" /> Transferência
             </Button>
