@@ -259,6 +259,72 @@ export function CashFlowDashboard({ stores }: { stores: Store[] }) {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={manualOpen} onOpenChange={setManualOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Novo Lançamento — {ledger === "faturamento" ? "Faturamento" : "Realidade"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setManual({ ...manual, direction: "in", category_id: "" })}
+                className={`h-10 rounded-md border text-sm font-medium ${manual.direction === "in" ? "bg-emerald-500 text-white border-emerald-500" : "bg-background hover:bg-muted"}`}>
+                Entrada
+              </button>
+              <button type="button" onClick={() => setManual({ ...manual, direction: "out", category_id: "" })}
+                className={`h-10 rounded-md border text-sm font-medium ${manual.direction === "out" ? "bg-destructive text-white border-destructive" : "bg-background hover:bg-muted"}`}>
+                Saída
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground">Data</label>
+                <Input type="date" value={manual.date} onChange={(e) => setManual({ ...manual, date: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Valor (R$)</label>
+                <Input inputMode="decimal" placeholder="0,00" value={manual.amount} onChange={(e) => setManual({ ...manual, amount: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Descrição</label>
+              <Textarea rows={2} value={manual.description} onChange={(e) => setManual({ ...manual, description: e.target.value })} placeholder="Ex.: Pagamento de fornecedor X" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Categoria</label>
+              <Select value={manual.category_id || "__none__"} onValueChange={(v) => setManual({ ...manual, category_id: v === "__none__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Sem categoria</SelectItem>
+                  {cats.filter((c) => c.type === (manual.direction === "in" ? "income" : "expense"))
+                    .sort((a, b) => (a.parent_id ? 1 : 0) - (b.parent_id ? 1 : 0) || a.name.localeCompare(b.name))
+                    .map((c) => <SelectItem key={c.id} value={c.id}>{c.parent_id ? `  → ${c.name}` : c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground">Loja</label>
+                <Select value={manual.store_id || "__none__"} onValueChange={(v) => setManual({ ...manual, store_id: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">—</SelectItem>
+                    {stores.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Forma de pagamento</label>
+                <Input value={manual.payment_method} onChange={(e) => setManual({ ...manual, payment_method: e.target.value })} placeholder="Dinheiro, PIX…" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setManualOpen(false)}>Cancelar</Button>
+            <Button onClick={saveManual} disabled={saving}>{saving ? "Salvando…" : "Salvar lançamento"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
