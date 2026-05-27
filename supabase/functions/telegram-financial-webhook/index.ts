@@ -569,11 +569,11 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
   }
 
   if (name === "get_top_products") {
-    const { from, to, label } = brDateRange(args.period);
-    const fromISO = `${from}T03:00:00Z`;
-    const toISO = `${to}T26:59:59Z`;
-    const limit = args.limit ?? 5;
-    const sales = await fetchPosSales(supabase, fromISO, toISO, PHYSICAL_STORE_IDS);
+    const { label, fromISO, toISO } = brDateRange(args.period, args.from, args.to);
+    const limit = args.limit ?? 10;
+    const resolvedStoreId = await resolveStoreId(supabase, undefined, args.store_id);
+    const storeIds = resolvedStoreId ? [resolvedStoreId] : PHYSICAL_STORE_IDS;
+    const sales = await fetchPosSales(supabase, fromISO, toISO, storeIds);
     const saleIds = sales.map((s) => s.id);
     if (saleIds.length === 0) return { period: label, top: [] };
     const all: any[] = [];
