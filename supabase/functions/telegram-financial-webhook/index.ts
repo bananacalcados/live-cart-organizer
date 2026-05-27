@@ -256,7 +256,60 @@ const tools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "list_bank_accounts",
+      description: "Lista contas bancárias ativas (inclui CAIXAs das lojas físicas). Use para resolver nome → id antes de transferências.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_bank_balance",
+      description: "Saldo atual de uma conta específica ou de todas. Saldo = saldo_inicial + entradas - saídas (transferências internas contam no saldo).",
+      parameters: {
+        type: "object",
+        properties: {
+          account_id: { type: "string", description: "(opcional) UUID da conta" },
+          account_name: { type: "string", description: "(opcional) Nome aproximado (ex: 'CAIXA Pérola', 'Itaú')" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "register_transfer",
+      description: "Registra transferência entre 2 contas (ex: 'tirei R$ 500 do CAIXA Pérola e depositei no Itaú'). Cria duas pernas atômicas (saída + entrada) marcadas como is_transfer=true — não impactam DRE, só movem saldo.",
+      parameters: {
+        type: "object",
+        properties: {
+          from_account_id: { type: "string" },
+          from_account_name: { type: "string", description: "(alternativa) Nome aproximado da conta de origem" },
+          to_account_id: { type: "string" },
+          to_account_name: { type: "string", description: "(alternativa) Nome aproximado da conta de destino" },
+          amount: { type: "number" },
+          date: { type: "string", description: "YYYY-MM-DD; default hoje" },
+          description: { type: "string", description: "Observação livre" },
+        },
+        required: ["amount"],
+      },
+    },
+  },
 ];
+
+async function resolveBankAccount(supabase: any, id?: string, name?: string): Promise<{ id: string; name: string } | null> {
+  if (id) {
+    const { data } = await supabase.from("bank_accounts").select("id, name").eq("id", id).maybeSingle();
+    return data || null;
+  }
+  if (!name) return null;
+  const { data } = await supabase.from("bank_accounts").select("id, name")
+    .eq("is_active", true).ilike("name", `%${name}%`).limit(1);
+  return data?.[0] || null;
+}
 
 async function fetchPosSales(supabase: any, fromISO: string, toISO: string, storeIds: string[]): Promise<any[]> {
   const select = "id, store_id, total, paid_at, created_at, status, payment_method, revenue_attribution";
