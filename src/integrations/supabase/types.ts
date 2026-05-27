@@ -5150,6 +5150,75 @@ export type Database = {
         }
         Relationships: []
       }
+      financial_agent_receipts: {
+        Row: {
+          ai_model: string | null
+          ai_raw: string | null
+          cash_flow_entry_id: string | null
+          chat_id: string
+          created_at: string
+          duplicate_of: string | null
+          error: string | null
+          extracted: Json
+          id: string
+          mime_type: string | null
+          status: string
+          storage_path: string | null
+          telegram_file_id: string | null
+          telegram_message_id: number | null
+          updated_at: string
+        }
+        Insert: {
+          ai_model?: string | null
+          ai_raw?: string | null
+          cash_flow_entry_id?: string | null
+          chat_id: string
+          created_at?: string
+          duplicate_of?: string | null
+          error?: string | null
+          extracted?: Json
+          id?: string
+          mime_type?: string | null
+          status?: string
+          storage_path?: string | null
+          telegram_file_id?: string | null
+          telegram_message_id?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ai_model?: string | null
+          ai_raw?: string | null
+          cash_flow_entry_id?: string | null
+          chat_id?: string
+          created_at?: string
+          duplicate_of?: string | null
+          error?: string | null
+          extracted?: Json
+          id?: string
+          mime_type?: string | null
+          status?: string
+          storage_path?: string | null
+          telegram_file_id?: string | null
+          telegram_message_id?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_agent_receipts_cash_flow_entry_id_fkey"
+            columns: ["cash_flow_entry_id"]
+            isOneToOne: false
+            referencedRelation: "cash_flow_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_agent_receipts_duplicate_of_fkey"
+            columns: ["duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "cash_flow_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_agent_sessions: {
         Row: {
           chat_id: number
