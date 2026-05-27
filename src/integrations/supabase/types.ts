@@ -15452,6 +15452,10 @@ export type Database = {
       }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
+      pos_sale_to_faturamento: {
+        Args: { p_sale_id: string }
+        Returns: undefined
+      }
       product_name_key: { Args: { p_name: string }; Returns: string }
       recalc_customer_metrics: {
         Args: { p_customer_id: string }
