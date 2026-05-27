@@ -278,7 +278,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
                   {e.payment_method && <Badge variant="outline" className="text-[10px]">{e.payment_method}</Badge>}
                   <Badge variant="outline" className="text-[10px]">{storeName(e.store_id)}</Badge>
                   <Badge variant="outline" className="text-[10px]">{e.source}</Badge>
-                  {e.status === "pending_category" && <Badge variant="secondary" className="text-[10px]">revisar</Badge>}
+                  {(e.status === "pending_category" || e.status === "needs_review" || e.status === "ai_suggested") && <Badge variant="secondary" className="text-[10px]">revisar categoria</Badge>}
                 </div>
               </div>
             ))}
