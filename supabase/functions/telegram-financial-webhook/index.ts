@@ -113,14 +113,22 @@ Deno.serve(async (req) => {
   }
 
   // Help
-  if (text === "/help" || text === "/start") {
+  if (text === "/help") {
     await sendMessage(chatId,
       "<b>Agente Financeiro</b>\n" +
+      "• Pergunte: <i>quanto vendi hoje?</i>, <i>quanto tenho em caixa?</i>, <i>top produtos da semana</i>\n" +
       "• Envie foto/PDF de comprovante → categorizo e lanço\n" +
       "• Envie XLSX/OFX/CSV → importo e concilio\n" +
       "• /pendentes — lançamentos aguardando revisão\n" +
-      "• /resumo — fluxo de caixa do dia",
+      "• /resumo — fluxo de caixa do dia\n" +
+      "• /reset — limpa o histórico da conversa",
     );
+    return new Response(JSON.stringify({ ok: true }));
+  }
+
+  if (text === "/reset") {
+    await supabase.from("financial_agent_sessions").upsert({ chat_id: chatId, state: {}, expected_action: null });
+    await sendMessage(chatId, "🧹 Histórico limpo.");
     return new Response(JSON.stringify({ ok: true }));
   }
 
@@ -144,9 +152,27 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({ chat_id: chatId, message_id: msg.message_id, file_id: fileId, kind }),
     }).catch((e) => console.error("[webhook] process-attachment dispatch failed", e));
-  } else if (text) {
-    await sendMessage(chatId, "Comando não reconhecido. Use /help.");
+    return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
+
+  // Conversa livre: deixa a IA responder com ferramentas financeiras
+  if (text) {
+    // typing indicator
+    fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendChatAction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, action: "typing" }),
+    }).catch(() => {});
+
+    try {
+      const reply = await handleConversation(supabase, chatId, text);
+      await sendMessage(chatId, reply || "(sem resposta)");
+    } catch (e) {
+      console.error("[ai] conversation failed", e);
+      await sendMessage(chatId, "⚠️ Falhei ao consultar agora. Tenta de novo em alguns segundos.");
+    }
+  }
+
 
   return new Response(JSON.stringify({ ok: true }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
