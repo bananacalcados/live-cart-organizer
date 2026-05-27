@@ -1468,7 +1468,7 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
 
                 // Build consolidated planned variable cuts: weighted by TOTAL revenue of that cost item (not just stores with cuts)
                 const vcCutMap = new Map<string, { totalWeightedCut: number; id: string }>();
-                allVariableCuts.forEach(c => {
+                allVariableCuts.filter(c => realStoreIdSet.has(c.store_id)).forEach(c => {
                   const vc = allVariableCosts.find(v => v.id === c.variable_cost_id);
                   if (!vc) return;
                   const key = vc.description.toLowerCase().trim();
