@@ -823,8 +823,17 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       {/* WhatsApp Number Selector */}
       <div className="px-3 py-1.5 bg-[#064E46] flex items-center gap-2">
         <Phone className="h-3.5 w-3.5 text-white/70" />
-        <WhatsAppNumberSelector className="h-7 text-xs flex-1 bg-white/10 border-white/20 text-white [&>span]:text-white" />
+        {boundNumber ? (
+          <div className="h-7 text-xs flex-1 bg-white/10 border border-white/20 text-white rounded px-2 flex items-center gap-2">
+            <span className="opacity-70">Vinculado a esta conversa:</span>
+            <span className="font-medium truncate">{boundNumber.label}</span>
+            <span className="opacity-60">({boundNumber.phone_display})</span>
+          </div>
+        ) : (
+          <WhatsAppNumberSelector className="h-7 text-xs flex-1 bg-white/10 border-white/20 text-white [&>span]:text-white" />
+        )}
       </div>
+
 
       {/* Messages Area */}
       <div 
