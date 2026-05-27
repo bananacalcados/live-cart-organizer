@@ -79,16 +79,38 @@ const tools = [
     type: "function",
     function: {
       name: "get_sales_summary",
-      description: "Faturamento, qtd vendas e ticket médio por período. Pode filtrar por loja (store_id ou store_name) ou agrupar por loja (group_by_store=true).",
+      description: "Faturamento, qtd vendas e ticket médio por período. Filtra por loja (store_id/store_name), por vendedora (seller_id/seller_name) ou agrupa (group_by_store / group_by_seller).",
       parameters: {
         type: "object",
         properties: {
-          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"] },
-          store_id: { type: "string", description: "(opcional) UUID da loja" },
-          store_name: { type: "string", description: "(opcional) Nome da loja; resolvido via list_stores" },
-          group_by_store: { type: "boolean", description: "Se true, retorna breakdown por loja" },
+          period: { type: "string", enum: ["today", "yesterday", "week", "7d", "30d", "month"] },
+          from: { type: "string", description: "(opcional) YYYY-MM-DD - sobrescreve period" },
+          to: { type: "string", description: "(opcional) YYYY-MM-DD - sobrescreve period" },
+          store_id: { type: "string" },
+          store_name: { type: "string" },
+          seller_id: { type: "string" },
+          seller_name: { type: "string" },
+          group_by_store: { type: "boolean" },
+          group_by_seller: { type: "boolean" },
         },
-        required: ["period"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_sales_by_seller",
+      description: "Ranking de vendas por vendedora em um período. Retorna nome, qtd vendas, faturamento e ticket médio.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["today", "yesterday", "week", "7d", "30d", "month"] },
+          from: { type: "string" },
+          to: { type: "string" },
+          store_id: { type: "string" },
+          store_name: { type: "string" },
+          limit: { type: "number" },
+        },
       },
     },
   },
@@ -100,10 +122,11 @@ const tools = [
       parameters: {
         type: "object",
         properties: {
-          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"] },
+          period: { type: "string", enum: ["today", "yesterday", "week", "7d", "30d", "month"] },
+          from: { type: "string" },
+          to: { type: "string" },
           store_id: { type: "string" },
         },
-        required: ["period"],
       },
     },
   },
