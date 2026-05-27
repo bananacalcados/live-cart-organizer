@@ -356,9 +356,29 @@ async function resolveBankAccount(supabase: any, id?: string, name?: string): Pr
     return data || null;
   }
   if (!name) return null;
-  const { data } = await supabase.from("bank_accounts").select("id, name")
+  // Try exact substring first
+  const exact = await supabase.from("bank_accounts").select("id, name")
     .eq("is_active", true).ilike("name", `%${name}%`).limit(1);
-  return data?.[0] || null;
+  if (exact.data?.[0]) return exact.data[0];
+  // Token-tolerant fallback: match accounts whose name contains ALL tokens (order-insensitive)
+  const tokens = String(name).toLowerCase().split(/\s+/).filter((t) => t.length >= 3);
+  if (tokens.length === 0) return null;
+  const { data: all } = await supabase.from("bank_accounts").select("id, name, bank_name").eq("is_active", true);
+  const matches = (all || []).filter((a: any) => {
+    const hay = `${a.name || ""} ${a.bank_name || ""}`.toLowerCase();
+    return tokens.every((t) => hay.includes(t));
+  });
+  if (matches.length === 1) return { id: matches[0].id, name: matches[0].name };
+  // If multiple, prefer the one matching the most tokens / longest name overlap
+  return matches[0] ? { id: matches[0].id, name: matches[0].name } : null;
+}
+
+function nameMatchesTokens(haystack: string | null | undefined, query: string): boolean {
+  if (!haystack) return false;
+  const hay = haystack.toLowerCase();
+  const tokens = query.toLowerCase().split(/\s+/).filter((t) => t.length >= 3);
+  if (tokens.length === 0) return hay.includes(query.toLowerCase());
+  return tokens.every((t) => hay.includes(t));
 }
 
 async function fetchPosSales(supabase: any, fromISO: string, toISO: string, storeIds: string[]): Promise<any[]> {
@@ -704,8 +724,8 @@ async function runTool(supabase: any, name: string, args: any, context?: { chatI
     const { data: linkedReceipts } = await linkedReceiptQuery;
     const matchedReceipt = (linkedReceipts || []).find((r: any) => {
       if (!args.account_name) return true;
-      return (r.extracted?.account || "").toLowerCase().includes(String(args.account_name).toLowerCase());
-    }) || linkedReceipts?.[0];
+      return nameMatchesTokens(r.extracted?.account, String(args.account_name));
+    }) || (args.account_name ? null : linkedReceipts?.[0]);
 
     if (!bankAccountId && matchedReceipt?.extracted?.account) {
       const account = await resolveBankAccount(supabase, undefined, matchedReceipt.extracted.account);
