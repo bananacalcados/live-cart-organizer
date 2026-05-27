@@ -148,12 +148,33 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
 
   const realStores = useMemo(() => stores.filter(s => !s.is_simulation), [stores]);
   const simulationStores = useMemo(() => stores.filter(s => s.is_simulation), [stores]);
+  const isConsolidatedView = selectedStore === "__all__";
   const currentStore = stores.find(s => s.id === selectedStore);
   const isCurrentSimulation = currentStore?.is_simulation ?? false;
 
   useEffect(() => {
+    if (isConsolidatedView) { loadConsolidated(); setLoading(false); return; }
     loadData();
   }, [selectedStore]);
+
+  // Consolidated KPIs (real stores only, exclude simulations)
+  const realStoreIds = useMemo(() => new Set(realStores.map(s => s.id)), [realStores]);
+  const consolidatedFixed = useMemo(() => {
+    return allStoreFixedCosts
+      .filter(s => s.is_active && realStoreIds.has(s.store_id))
+      .reduce((sum, s) => sum + Number(s.amount), 0);
+  }, [allStoreFixedCosts, realStoreIds]);
+  const consolidatedRevenue = useMemo(() => {
+    return realStores.reduce((sum, s) => sum + (s.revenue_target ?? 100000), 0);
+  }, [realStores]);
+  const consolidatedVariablePct = useMemo(() => {
+    if (consolidatedRevenue <= 0) return 0;
+    const totalVarValue = realStores.reduce((sum, s) => {
+      const pct = allVariableCosts.filter(v => v.is_active && v.store_id === s.id).reduce((a, v) => a + Number(v.percentage), 0);
+      return sum + (s.revenue_target ?? 100000) * (pct / 100);
+    }, 0);
+    return (totalVarValue / consolidatedRevenue) * 100;
+  }, [allVariableCosts, realStores, consolidatedRevenue]);
 
   const loadData = async () => {
     setLoading(true);
