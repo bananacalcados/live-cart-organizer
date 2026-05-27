@@ -881,29 +881,50 @@ async function runTool(supabase: any, name: string, args: any, context?: { chatI
       }
     }
 
-    let q = supabase.from("cash_flow_entries")
-      .select("id, entry_date, direction, amount, description, status, ledger, payment_method, bank_account_id, category_id, category:financial_categories(name), bank_account:bank_accounts(name)", { count: "exact" })
-      .in("status", ["confirmed", "reconciled", "pending_category", "needs_review", "ai_suggested"])
-      .order("entry_date", { ascending: false })
-      .range(offset, offset + limit - 1);
+    const ascending = String(args.order || "").toLowerCase() === "asc";
 
-    if (fromDate) q = q.gte("entry_date", fromDate);
-    if (toDate) q = q.lte("entry_date", toDate);
-    if (args.direction && args.direction !== "any") q = q.eq("direction", args.direction);
-    if (args.ledger && args.ledger !== "any") q = q.eq("ledger", args.ledger);
-    if (noCategory) q = q.is("category_id", null);
-    else q = q.in("category_id", categoryIds);
+    const buildQuery = (ledgerFilter: string | null) => {
+      let q = supabase.from("cash_flow_entries")
+        .select("id, entry_date, direction, amount, description, status, ledger, payment_method, bank_account_id, category_id, category:financial_categories(name), bank_account:bank_accounts(name)", { count: "exact" })
+        .in("status", ["confirmed", "reconciled", "pending_category", "needs_review", "ai_suggested"])
+        .order("entry_date", { ascending })
+        .range(offset, offset + limit - 1);
+      if (fromDate) q = q.gte("entry_date", fromDate);
+      if (toDate) q = q.lte("entry_date", toDate);
+      if (args.direction && args.direction !== "any") q = q.eq("direction", args.direction);
+      if (ledgerFilter) q = q.eq("ledger", ledgerFilter);
+      if (noCategory) q = q.is("category_id", null);
+      else q = q.in("category_id", categoryIds);
+      return q;
+    };
 
-    const { data, error, count } = await q;
+    const requestedLedger = args.ledger && args.ledger !== "any" ? args.ledger : null;
+    const { data, error, count } = await buildQuery(requestedLedger);
     if (error) return { error: error.message };
+
+    // Cross-ledger awareness: if 0 found in requested ledger, check the other one and report
+    let cross_ledger_info: any = null;
+    if (requestedLedger && (count || 0) === 0) {
+      const otherLedger = requestedLedger === "faturamento" ? "realidade" : "faturamento";
+      const { count: otherCount } = await buildQuery(otherLedger);
+      if ((otherCount || 0) > 0) {
+        cross_ledger_info = {
+          aviso: `Nenhum lançamento em '${requestedLedger}', mas existem ${otherCount} no livro '${otherLedger}'.`,
+          livro_alternativo: otherLedger,
+          total_no_outro_livro: otherCount,
+        };
+      }
+    }
 
     return {
       categoria: resolvedLabel,
       periodo: period,
+      livro_pesquisado: requestedLedger || "ambos",
       total_encontrados: count || 0,
       retornados: data?.length || 0,
       offset,
       proxima_pagina_offset: (data?.length || 0) === limit ? offset + limit : null,
+      cross_ledger_info,
       lancamentos: (data || []).map((row: any) => ({
         id: row.id,
         data: row.entry_date,
@@ -916,7 +937,9 @@ async function runTool(supabase: any, name: string, args: any, context?: { chatI
         conta: row.bank_account?.name || null,
         metodo: row.payment_method,
       })),
-      instrucao: "Liste os lançamentos para o usuário e pergunte para qual categoria ele quer mover cada um (ou em lote). Use update_entry_category para aplicar.",
+      instrucao: cross_ledger_info
+        ? `IMPORTANTE: avise o usuário que não há lançamentos no livro pedido, mas existem ${cross_ledger_info.total_no_outro_livro} no livro '${cross_ledger_info.livro_alternativo}'. Já liste-os automaticamente chamando novamente list_entries_by_category com ledger='${cross_ledger_info.livro_alternativo}' em vez de só perguntar.`
+        : "Liste os lançamentos para o usuário e pergunte para qual categoria ele quer mover cada um (ou em lote). Use update_entry_category para aplicar.",
     };
   }
 
