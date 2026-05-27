@@ -141,6 +141,173 @@ function fmtBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
+function decodeText(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder("iso-8859-1").decode(bytes);
+  }
+}
+
+function normalize(s: string): string {
+  return (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+async function extractStatementWithAI(text: string): Promise<{ transactions: any[]; bank_hint: string | null }> {
+  const truncated = text.length > 60000 ? text.slice(0, 60000) : text;
+  const prompt = `Você extrai transações de um extrato bancário brasileiro (CSV, OFX ou texto).
+Retorne JSON estrito:
+{
+  "bank_hint": "<nome do banco/instituição se identificado, ex: Mercado Pago, Santander, Caixa, Itau, etc>" | null,
+  "transactions": [
+    {
+      "date": "YYYY-MM-DD",
+      "description": "<descrição limpa>",
+      "memo": "<info extra como id de referência>" | null,
+      "amount": <number positivo>,
+      "type": "credit" | "debit",
+      "fitid": "<id único da transação se disponível>" | null
+    }
+  ]
+}
+
+Regras:
+- "credit" = entrada (dinheiro entrou); "debit" = saída (dinheiro saiu).
+- "amount" SEMPRE positivo. Use "type" pra direção.
+- Ignore linhas de saldo, cabeçalhos, totalizadores.
+- Datas brasileiras (DD-MM-YYYY ou DD/MM/YYYY) devem virar YYYY-MM-DD.
+- Valores como "1.234,56" são R$ 1234.56.
+
+Extrato:
+\`\`\`
+${truncated}
+\`\`\``;
+
+  const json = await callAI([{ role: "user", content: prompt }], {
+    response_format: { type: "json_object" },
+  });
+  const raw = json.choices?.[0]?.message?.content ?? "{}";
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+      bank_hint: parsed.bank_hint || null,
+    };
+  } catch {
+    return { transactions: [], bank_hint: null };
+  }
+}
+
+async function processBankStatement(
+  supabase: any,
+  bytes: Uint8Array,
+  _mime: string,
+  caption: string | null,
+  chatId: string,
+  receiptId: string,
+) {
+  await sendMessage(chatId, "📊 Lendo extrato bancário... isso pode levar alguns segundos.");
+
+  const text = decodeText(bytes);
+  const { data: accounts } = await supabase.from("bank_accounts").select("id, name");
+  if (!accounts || accounts.length === 0) {
+    await supabase.from("financial_agent_receipts").update({
+      status: "failed", error: "Nenhuma conta bancária cadastrada",
+    }).eq("id", receiptId);
+    await sendMessage(chatId, "❌ Nenhuma conta bancária cadastrada no sistema. Cadastre antes de importar extratos.");
+    return { ok: false };
+  }
+
+  // Extract transactions via AI
+  const { transactions, bank_hint } = await extractStatementWithAI(text);
+
+  if (!transactions.length) {
+    await supabase.from("financial_agent_receipts").update({
+      status: "failed", error: "Nenhuma transação extraída",
+    }).eq("id", receiptId);
+    await sendMessage(chatId, "🤔 Não consegui extrair transações desse arquivo. Verifique o formato.");
+    return { ok: false };
+  }
+
+  // Match bank account: caption + bank_hint vs account names
+  const searchStr = normalize(`${caption || ""} ${bank_hint || ""}`);
+  const accountMatches = (accounts as any[]).map((a) => {
+    const tokens = normalize(a.name).split(/\s+/).filter(Boolean);
+    const score = tokens.reduce((acc, t) => acc + (searchStr.includes(t) ? 1 : 0), 0);
+    return { ...a, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const top = accountMatches[0];
+  if (!top || top.score === 0) {
+    await supabase.from("financial_agent_receipts").update({
+      status: "failed",
+      error: "Conta bancária não identificada",
+      extracted: { transactions, bank_hint, caption },
+    }).eq("id", receiptId);
+    const list = (accounts as any[]).map((a) => `• ${a.name}`).join("\n");
+    await sendMessage(chatId,
+      `🏦 Extrato com ${transactions.length} transações lido, mas não identifiquei a conta. ` +
+      `Reenvie com legenda contendo o nome da conta:\n\n${list}`);
+    return { ok: false };
+  }
+
+  // Insert transactions
+  const batchId = `tg_${receiptId}`;
+  const rows = transactions
+    .filter((t) => t.date && t.amount != null && t.description)
+    .map((t) => ({
+      bank_account_id: top.id,
+      transaction_date: t.date,
+      description: String(t.description).slice(0, 500),
+      memo: t.memo ? String(t.memo).slice(0, 500) : null,
+      amount: Math.abs(Number(t.amount)),
+      type: t.type === "credit" ? "credit" : "debit",
+      fitid: t.fitid ? String(t.fitid) : null,
+      classification_status: "pending",
+      import_batch_id: batchId,
+    }));
+
+  let inserted = 0;
+  const insertedIds: string[] = [];
+  for (let i = 0; i < rows.length; i += 100) {
+    const chunk = rows.slice(i, i + 100);
+    const { data: ins, error } = await supabase
+      .from("bank_transactions")
+      .upsert(chunk, { onConflict: "bank_account_id,fitid", ignoreDuplicates: true })
+      .select("id");
+    if (error) {
+      console.error("[statement] insert error", error);
+    } else if (ins) {
+      inserted += ins.length;
+      insertedIds.push(...ins.map((r: any) => r.id));
+    }
+  }
+
+  await supabase.from("financial_agent_receipts").update({
+    status: "linked",
+    extracted: { bank_hint, account: top.name, count: transactions.length, inserted },
+  }).eq("id", receiptId);
+
+  // Kick off async AI classification (fire and forget)
+  if (insertedIds.length > 0) {
+    fetch(`${SUPABASE_URL}/functions/v1/ai-classify-transactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({ transaction_ids: insertedIds }),
+    }).catch((e) => console.error("[statement] classify dispatch failed", e));
+  }
+
+  const skipped = transactions.length - inserted;
+  await sendMessage(chatId,
+    `✅ <b>Extrato importado</b>\n` +
+    `Conta: <b>${top.name}</b>\n` +
+    `Transações novas: <b>${inserted}</b>\n` +
+    (skipped > 0 ? `Duplicadas/ignoradas: ${skipped}\n` : "") +
+    `\n🤖 Categorização automática em andamento. Revise no painel de Lançamentos.`);
+
+  return { ok: true, inserted };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
