@@ -714,7 +714,7 @@ async function runTool(supabase: any, name: string, args: any, context?: { chatI
 
     let q = supabase
       .from("cash_flow_entries")
-      .select("id, entry_date, direction, amount, description, status, confidence, bank_account_id, category:financial_categories(name), bank_account:bank_accounts(name)")
+      .select("id, entry_date, direction, amount, description, status, confidence, bank_account_id, created_at, category:financial_categories(name), bank_account:bank_accounts(name)")
       .eq("external_source", "ofx_import")
       .order("created_at", { ascending: false })
       .limit(limit);
@@ -726,7 +726,7 @@ async function runTool(supabase: any, name: string, args: any, context?: { chatI
     if (error) return { error: error.message };
 
     const rows = args.latest_only && matchedReceipt?.created_at
-      ? (data || []).filter((row: any) => !matchedReceipt?.created_at || true).slice(0, limit)
+      ? (data || []).filter((row: any) => new Date(row.created_at).getTime() >= new Date(matchedReceipt.created_at).getTime()).slice(0, limit)
       : (data || []);
 
     return {
