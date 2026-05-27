@@ -58,7 +58,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [from, to, storeFilter]);
+  useEffect(() => { load(); }, [from, to, storeFilter, ledger]);
 
   const catName = (id: string | null) => id ? (cats.find((c) => c.id === id)?.name || "—") : "Sem categoria";
   const catParent = (id: string | null) => {
