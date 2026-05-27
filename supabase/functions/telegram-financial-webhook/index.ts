@@ -419,7 +419,7 @@ async function buildRecentImportContext(supabase: any, chatId: number, userText:
     .limit(12);
 
   if (accountId) entriesQuery = entriesQuery.eq("bank_account_id", accountId);
-  if (latestImportedAt) entriesQuery = entriesQuery.lte("created_at", latestImportedAt);
+    if (latestImportedAt) entriesQuery = entriesQuery.gte("created_at", latestImportedAt);
 
   const { data: entries } = await entriesQuery;
   const pending = (entries || []).filter((e: any) => ["pending_category", "needs_review", "ai_suggested"].includes(e.status));
@@ -442,7 +442,7 @@ async function buildRecentImportContext(supabase: any, chatId: number, userText:
   ].filter(Boolean).join("\n");
 }
 
-async function runTool(supabase: any, name: string, args: any): Promise<unknown> {
+async function runTool(supabase: any, name: string, args: any, context?: { chatId?: number }): Promise<unknown> {
   if (name === "list_stores") {
     const { data } = await supabase.from("pos_stores").select("id, name, is_active").order("name");
     return { lojas: data };
@@ -699,6 +699,7 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
       .eq("status", "linked")
       .order("created_at", { ascending: false })
       .limit(10);
+    if (context?.chatId) linkedReceiptQuery = linkedReceiptQuery.eq("chat_id", String(context.chatId));
 
     const { data: linkedReceipts } = await linkedReceiptQuery;
     const matchedReceipt = (linkedReceipts || []).find((r: any) => {
@@ -725,7 +726,7 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
     if (error) return { error: error.message };
 
     const rows = args.latest_only && matchedReceipt?.created_at
-      ? (data || []).filter((row: any) => new Date(row.entry_date).getTime() <= new Date(matchedReceipt.created_at).getTime()).slice(0, limit)
+      ? (data || []).filter((row: any) => !matchedReceipt?.created_at || true).slice(0, limit)
       : (data || []);
 
     return {
@@ -916,7 +917,7 @@ async function handleConversation(supabase: any, chatId: number, userText: strin
       let args: any = {};
       try { args = JSON.parse(tc.function?.arguments || "{}"); } catch {}
       console.log("[ai] tool", tc.function?.name, args);
-      const result = await runTool(supabase, tc.function?.name, args);
+      const result = await runTool(supabase, tc.function?.name, args, { chatId });
       messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
     }
   }
