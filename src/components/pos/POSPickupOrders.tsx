@@ -227,9 +227,16 @@ export function POSPickupOrders({ storeId }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
         body: JSON.stringify({
+          // CRITICAL: pass sale_id to UPDATE the existing live pos_sales row
+          // instead of creating a duplicate "physical" row sharing the same tiny_order_id.
+          sale_id: processingOrder.id,
           store_id: storeId,
           seller_id: selectedSeller || undefined,
           tiny_seller_id: sellers.find(s => s.id === selectedSeller)?.tiny_seller_id || undefined,
+          customer: {
+            name: processingOrder.customer_name,
+            whatsapp: processingOrder.customer_phone,
+          },
           items: processingOrder.items.map(item => ({
             sku: item.sku,
             name: item.product_name,
