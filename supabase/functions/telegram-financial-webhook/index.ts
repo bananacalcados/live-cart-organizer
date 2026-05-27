@@ -320,6 +320,7 @@ const tools = [
           ledger: { type: "string", enum: ["faturamento", "realidade", "any"], description: "Default 'any'" },
           limit: { type: "number", description: "Default 50, máx 200" },
           offset: { type: "number", description: "Para paginar" },
+          order: { type: "string", enum: ["asc", "desc"], description: "Ordem por data. Default 'desc'. Use 'asc' para ordem cronológica/numérica crescente." },
         },
         required: ["category_name"],
       },
