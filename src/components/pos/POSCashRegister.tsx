@@ -97,6 +97,9 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
   // Movements (sangrias/reforços)
   const [movements, setMovements] = useState<CashMovement[]>([]);
   const [showMovements, setShowMovements] = useState(false);
+  const [counterpartAccounts, setCounterpartAccounts] = useState<{ id: string; name: string; account_type: string | null }[]>([]);
+  const [movementCounterpart, setMovementCounterpart] = useState<string>("");
+
 
   // Report
   const [showReport, setShowReport] = useState(false);
