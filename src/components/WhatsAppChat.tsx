@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,7 @@ interface Message {
   media_url?: string;
   error_code?: string | null;
   error_message?: string | null;
+  whatsapp_number_id?: string | null;
 }
 
 interface MediaAttachment {
@@ -108,7 +109,23 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [togglingAiPause, setTogglingAiPause] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
-  const { selectedNumberId, fetchNumbers, getSelectedNumber } = useWhatsAppNumberStore();
+  const { selectedNumberId, fetchNumbers, getSelectedNumber, numbers } = useWhatsAppNumberStore();
+
+  // ── Bind chat to the instance of the existing conversation ──
+  // Prevents the bug where sends silently switch to whichever instance
+  // is globally selected in the WhatsAppNumberSelector.
+  const boundNumberId = useMemo<string | null>(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const id = messages[i]?.whatsapp_number_id;
+      if (id) return id;
+    }
+    return null;
+  }, [messages]);
+  const effectiveNumberId = boundNumberId || selectedNumberId || null;
+  const boundNumber = useMemo(
+    () => (boundNumberId ? numbers.find(n => n.id === boundNumberId) ?? null : null),
+    [boundNumberId, numbers]
+  );
 
   // Meta templates state
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
@@ -168,9 +185,11 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     setTogglingAiPause(false);
   };
 
-  // ── Detect provider for selected number ──
+  // ── Detect provider for the instance bound to this conversation ──
   const isZapiProvider = () => {
-    const num = getSelectedNumber();
+    const num = boundNumber
+      ?? (effectiveNumberId ? numbers.find(n => n.id === effectiveNumberId) : null)
+      ?? getSelectedNumber();
     return num?.provider === 'zapi';
   };
 
@@ -181,7 +200,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
     try {
       const { data, error } = await supabase.functions.invoke('zapi-send-message', {
-        body: { phone: phoneNumber, message, whatsapp_number_id: selectedNumberId },
+        body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
       });
       if (error) return { success: false, error: error.message };
       if (data?.success) return { success: true, messageId: data?.data?.zapiMessageId };
@@ -213,7 +232,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           type,
           mediaUrl,
           caption,
-          whatsappNumberId: selectedNumberId,
+          whatsappNumberId: effectiveNumberId,
         }),
       });
       const data = await res.json();
@@ -239,7 +258,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         // Z-API media send
         try {
           const { data, error } = await supabase.functions.invoke('zapi-send-media', {
-            body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: selectedNumberId },
+            body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
           });
           if (error) return { success: false, error: error.message };
           if (data?.success) {
@@ -404,7 +423,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           media_type: selectedMedia.type,
           media_url: mediaUrl,
           message_id: result.messageId || null,
-          whatsapp_number_id: selectedNumberId || null,
+          whatsapp_number_id: effectiveNumberId || null,
           sender_user_id: currentUserId || null,
         });
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
@@ -452,7 +471,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         direction: 'outgoing',
         status: 'sent',
         message_id: result.messageId || null,
-        whatsapp_number_id: selectedNumberId || null,
+        whatsapp_number_id: effectiveNumberId || null,
         sender_user_id: currentUserId || null,
       });
       // Deactivate any active AI session so AI doesn't respond while operator is chatting
@@ -493,7 +512,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           phone,
           messageId: msg.message_id,
           dbMessageId: msg.id,
-          whatsapp_number_id: (msg as any).whatsapp_number_id || selectedNumberId,
+          whatsapp_number_id: (msg as any).whatsapp_number_id || effectiveNumberId,
         },
       });
 
@@ -611,7 +630,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           phone: normalizedPhone,
           templateName: template.name,
           language: template.language,
-          whatsappNumberId: selectedNumberId,
+          whatsappNumberId: effectiveNumberId,
           components: components.length > 0 ? components : undefined,
         }),
       });
@@ -626,7 +645,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           direction: 'outgoing',
           status: 'sent',
           message_id: result.messageId,
-          whatsapp_number_id: selectedNumberId || null,
+          whatsapp_number_id: effectiveNumberId || null,
           sender_user_id: currentUserId || null,
         });
         toast.success('Template enviado!');
@@ -697,7 +716,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     } catch (error) {
       toast.error('Não foi possível acessar o microfone.');
     }
-  }, [phone, normalizedPhone, order.id, updateOrder, selectedNumberId]);
+  }, [phone, normalizedPhone, order.id, updateOrder, effectiveNumberId]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
@@ -804,8 +823,17 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       {/* WhatsApp Number Selector */}
       <div className="px-3 py-1.5 bg-[#064E46] flex items-center gap-2">
         <Phone className="h-3.5 w-3.5 text-white/70" />
-        <WhatsAppNumberSelector className="h-7 text-xs flex-1 bg-white/10 border-white/20 text-white [&>span]:text-white" />
+        {boundNumber ? (
+          <div className="h-7 text-xs flex-1 bg-white/10 border border-white/20 text-white rounded px-2 flex items-center gap-2">
+            <span className="opacity-70">Vinculado a esta conversa:</span>
+            <span className="font-medium truncate">{boundNumber.label}</span>
+            <span className="opacity-60">({boundNumber.phone_display})</span>
+          </div>
+        ) : (
+          <WhatsAppNumberSelector className="h-7 text-xs flex-1 bg-white/10 border-white/20 text-white [&>span]:text-white" />
+        )}
       </div>
+
 
       {/* Messages Area */}
       <div 
