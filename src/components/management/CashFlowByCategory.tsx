@@ -48,6 +48,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
     let q = supabase.from("cash_flow_entries").select("*")
       .gte("entry_date", from).lte("entry_date", to)
       .in("status", ["confirmed", "reconciled", "pending_category"])
+      .eq("ledger", ledger)
       .order("entry_date", { ascending: false }).limit(5000);
     if (storeFilter !== "all") q = q.eq("store_id", storeFilter);
     const { data } = await q;
