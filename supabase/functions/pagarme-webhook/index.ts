@@ -2,20 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 
-async function autoCreateShopifyOrder(_supabase: any, orderId: string, source: string, supabaseUrl: string, supabaseKey: string) {
-  try {
-    if (source !== "orders") return;
-    console.log(`[AUTO-SHOPIFY] Creating Shopify order for ${source} ${orderId}...`);
-    const res = await fetch(`${supabaseUrl}/functions/v1/shopify-create-order`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseKey}` },
-      body: JSON.stringify({ orderId }),
-    });
-    const data = await res.json();
-    console.log(`[AUTO-SHOPIFY] Result:`, JSON.stringify(data).substring(0, 500));
-  } catch (err: any) {
-    console.error(`[AUTO-SHOPIFY] Error (non-blocking):`, err.message || err);
-  }
+// REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
+// Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações
+// (eventos site, eventos loja, pagamentos via PIX/cartão, webhooks de gateway).
+async function autoCreateShopifyOrder(_supabase: any, orderId: string, source: string, _supabaseUrl: string, _supabaseKey: string) {
+  console.log(`[AUTO-SHOPIFY] DISABLED — skip ${source} ${orderId}`);
+  return;
 }
 
 const ALLOWED_ORIGINS = [

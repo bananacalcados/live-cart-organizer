@@ -368,18 +368,11 @@ export default function CustomerRegister() {
         // Create pos_sales entry for pickup
         await createPickupSale(order, reg.id, fullName, cleanWhatsapp);
       } else {
-        // Standard flow: Create Shopify draft order
-        const { data: draftData, error: draftError } = await supabase.functions.invoke(
-          "shopify-create-draft-order",
-          { body: { registrationId: reg.id } }
-        );
-
-        if (draftError) {
-          console.error("Draft order error:", draftError);
-          toast.error("Cadastro salvo, mas houve um erro ao criar o pedido na Shopify");
-        } else if (draftData?.draftOrderName) {
-          setDraftOrderName(draftData.draftOrderName);
-        }
+        // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
+        // Criação automática de pedidos/drafts na Shopify está DESABILITADA
+        // em TODAS as situações (eventos site, eventos loja, PIX, cartão).
+        // A criação deve ser feita manualmente pelos botões "Criar na Shopify".
+        console.log("[shopify-create-draft-order] DISABLED — skipping auto draft for reg", reg.id);
       }
 
       setSubmitted(true);
