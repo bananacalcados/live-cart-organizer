@@ -55,17 +55,25 @@ function brDateRange(period: string): { from: string; to: string; label: string 
   }
 }
 
+// Mesmas regras do POS Dashboard / Management
+const POS_REVENUE_STATUSES = ["completed", "paid", "pending_sync", "pending_pickup"];
+const TINY_APPROVED_STATUSES = ["Faturado", "Aprovado", "Preparando envio", "Pronto para envio", "Enviado", "Entregue", "Não entregue"];
+const CENTRO_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
+const PEROLA_ID = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
+const PHYSICAL_STORE_IDS = [CENTRO_ID, PEROLA_ID];
+
 const tools = [
   {
     type: "function",
     function: {
       name: "get_sales_summary",
-      description: "Resumo de vendas POS (faturamento, ticket médio, qtd vendas) por período. Considera apenas status='completed'.",
+      description: "Faturamento, qtd vendas e ticket médio por período e canal. 'pos' = lojas físicas (pos_sales). 'online' = Shopify/Tiny (tiny_synced_orders). 'all' = soma os dois (padrão). Replica regra do dashboard.",
       parameters: {
         type: "object",
         properties: {
-          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"], description: "Período" },
-          store_id: { type: "string", description: "(opcional) UUID da loja" },
+          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"] },
+          channel: { type: "string", enum: ["all", "pos", "online"], description: "Default 'all'" },
+          store_id: { type: "string", description: "(opcional) UUID da loja física para filtrar canal POS" },
         },
         required: ["period"],
       },
@@ -83,7 +91,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_top_products",
-      description: "Top produtos mais vendidos por receita em um período.",
+      description: "Top produtos mais vendidos por receita em um período (apenas POS físico).",
       parameters: {
         type: "object",
         properties: {
@@ -113,7 +121,7 @@ const tools = [
     type: "function",
     function: {
       name: "list_stores",
-      description: "Lista lojas (id + nome). Use quando o usuário citar uma loja por nome.",
+      description: "Lista lojas físicas (id + nome). Use quando o usuário citar uma loja por nome.",
       parameters: { type: "object", properties: {} },
     },
   },
@@ -127,16 +135,68 @@ const tools = [
   },
 ];
 
+async function fetchPosSales(supabase: any, fromISO: string, toISO: string, storeId?: string): Promise<any[]> {
+  const stores = storeId ? [storeId] : PHYSICAL_STORE_IDS;
+  const select = "id, store_id, total, paid_at, created_at, status, sale_type, revenue_attribution, event_id";
+  // paid_at no range
+  const a = await supabase.from("pos_sales").select(select)
+    .in("status", POS_REVENUE_STATUSES).in("store_id", stores)
+    .not("paid_at", "is", null).gte("paid_at", fromISO).lte("paid_at", toISO).limit(5000);
+  // paid_at NULL + created_at no range
+  const b = await supabase.from("pos_sales").select(select)
+    .in("status", POS_REVENUE_STATUSES).in("store_id", stores)
+    .is("paid_at", null).gte("created_at", fromISO).lte("created_at", toISO).limit(5000);
+  const seen = new Set<string>();
+  const merged: any[] = [];
+  for (const r of [...(a.data || []), ...(b.data || [])]) {
+    if (seen.has(r.id)) continue;
+    seen.add(r.id);
+    if (r.revenue_attribution === "site_pickup_only") continue;
+    merged.push(r);
+  }
+  return merged;
+}
+
+async function fetchTinyOrders(supabase: any, fromDate: string, toDate: string): Promise<any[]> {
+  const { data } = await supabase.from("tiny_synced_orders")
+    .select("id, store_id, total, order_date, status, payment_method")
+    .gte("order_date", fromDate).lte("order_date", toDate)
+    .in("status", TINY_APPROVED_STATUSES).limit(5000);
+  return data || [];
+}
+
 async function runTool(supabase: any, name: string, args: any): Promise<unknown> {
   if (name === "get_sales_summary") {
     const { from, to, label } = brDateRange(args.period);
-    let q = supabase.from("pos_sales").select("total, store_id").eq("status", "completed").gte("created_at", `${from}T03:00:00Z`).lte("created_at", `${to}T26:59:59Z`);
-    if (args.store_id) q = q.eq("store_id", args.store_id);
-    const { data, error } = await q;
-    if (error) return { error: error.message };
-    const total = (data || []).reduce((s: number, r: any) => s + Number(r.total || 0), 0);
-    const count = (data || []).length;
-    return { period: label, faturamento_brl: total, qtd_vendas: count, ticket_medio_brl: count ? total / count : 0 };
+    const fromISO = `${from}T03:00:00Z`;
+    const toISO = `${to}T26:59:59Z`;
+    const channel: "all" | "pos" | "online" = args.channel || "all";
+
+    let posTotal = 0, posCount = 0, onlineTotal = 0, onlineCount = 0;
+    if (channel === "all" || channel === "pos") {
+      const pos = await fetchPosSales(supabase, fromISO, toISO, args.store_id);
+      posTotal = pos.reduce((s, r) => s + Number(r.total || 0), 0);
+      posCount = pos.length;
+    }
+    if ((channel === "all" || channel === "online") && !args.store_id) {
+      const tiny = await fetchTinyOrders(supabase, from, to);
+      onlineTotal = tiny.reduce((s: number, r: any) => s + Number(r.total || 0), 0);
+      onlineCount = tiny.length;
+    }
+    const total = posTotal + onlineTotal;
+    const count = posCount + onlineCount;
+    return {
+      periodo: label,
+      canal: channel,
+      faturamento_total_brl: total,
+      qtd_vendas: count,
+      ticket_medio_brl: count ? total / count : 0,
+      detalhe: {
+        pos_fisico: { faturamento_brl: posTotal, qtd: posCount },
+        online_shopify_tiny: { faturamento_brl: onlineTotal, qtd: onlineCount },
+      },
+      regra: "POS: status in (completed,paid,pending_sync,pending_pickup), filtra por paid_at OU created_at quando paid_at é null, exclui revenue_attribution='site_pickup_only', apenas lojas físicas (Centro+Pérola). Online: tiny_synced_orders com status aprovado.",
+    };
   }
   if (name === "get_cash_position") {
     const { data: banks } = await supabase.from("bank_accounts").select("name, balance").eq("is_active", true);
@@ -149,20 +209,26 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
   }
   if (name === "get_top_products") {
     const { from, to, label } = brDateRange(args.period);
+    const fromISO = `${from}T03:00:00Z`;
+    const toISO = `${to}T26:59:59Z`;
     const limit = args.limit ?? 5;
-    const { data: items, error: e2 } = await supabase
-      .from("pos_sale_items")
-      .select("product_name, quantity, total_price, sale:pos_sales!inner(status, created_at)")
-      .gte("sale.created_at", `${from}T03:00:00Z`).lte("sale.created_at", `${to}T26:59:59Z`)
-      .eq("sale.status", "completed")
-      .limit(2000);
-    if (e2) return { error: e2.message };
+    const sales = await fetchPosSales(supabase, fromISO, toISO);
+    const saleIds = sales.map((s) => s.id);
+    if (saleIds.length === 0) return { period: label, top: [] };
+    // Chunk in 500s to avoid URL length issues
+    const all: any[] = [];
+    for (let i = 0; i < saleIds.length; i += 500) {
+      const chunk = saleIds.slice(i, i + 500);
+      const { data } = await supabase.from("pos_sale_items")
+        .select("product_name, quantity, total_price").in("sale_id", chunk);
+      all.push(...(data || []));
+    }
     const agg = new Map<string, { qtd: number; receita: number }>();
-    for (const it of items || []) {
-      const k = (it as any).product_name || "?";
+    for (const it of all) {
+      const k = it.product_name || "?";
       const cur = agg.get(k) || { qtd: 0, receita: 0 };
-      cur.qtd += Number((it as any).quantity || 0);
-      cur.receita += Number((it as any).total_price || 0);
+      cur.qtd += Number(it.quantity || 0);
+      cur.receita += Number(it.total_price || 0);
       agg.set(k, cur);
     }
     const top = [...agg.entries()].map(([nome, v]) => ({ nome, ...v })).sort((a, b) => b.receita - a.receita).slice(0, limit);
