@@ -156,6 +156,20 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
     setMovements((data as CashMovement[]) || []);
   };
 
+  const loadCounterpartAccounts = async () => {
+    // CAIXA da loja não aparece (é a conta de origem/destino implícita)
+    const { data } = await (supabase as any)
+      .from('bank_accounts')
+      .select('id, name, account_type, store_id')
+      .eq('is_active', true)
+      .neq('account_type', 'caixa_loja')
+      .order('name');
+    setCounterpartAccounts((data || []) as any);
+  };
+
+  useEffect(() => { loadCounterpartAccounts(); }, []);
+
+
   const loadReportSales = async () => {
     if (!register) return;
     setLoadingReport(true);
