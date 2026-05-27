@@ -724,8 +724,8 @@ async function runTool(supabase: any, name: string, args: any, context?: { chatI
     const { data: linkedReceipts } = await linkedReceiptQuery;
     const matchedReceipt = (linkedReceipts || []).find((r: any) => {
       if (!args.account_name) return true;
-      return (r.extracted?.account || "").toLowerCase().includes(String(args.account_name).toLowerCase());
-    }) || linkedReceipts?.[0];
+      return nameMatchesTokens(r.extracted?.account, String(args.account_name));
+    }) || (args.account_name ? null : linkedReceipts?.[0]);
 
     if (!bankAccountId && matchedReceipt?.extracted?.account) {
       const account = await resolveBankAccount(supabase, undefined, matchedReceipt.extracted.account);
