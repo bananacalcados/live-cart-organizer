@@ -309,6 +309,41 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "list_entries_by_category",
+      description: "Lista lançamentos do fluxo de caixa filtrando por nome de categoria (busca parcial, case-insensitive), período, direção (in/out) e livro (faturamento/realidade). Use quando o usuário quiser revisar/recategorizar lançamentos de uma categoria específica como 'Transferência entre Contas', 'Despesas Fixas', etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          category_name: { type: "string", description: "Nome (parcial) da categoria, ex: 'Transferência entre Contas'. Use 'sem categoria' para lançamentos sem categoria." },
+          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month", "all"], description: "Default '30d'" },
+          direction: { type: "string", enum: ["in", "out", "any"], description: "Default 'any'" },
+          ledger: { type: "string", enum: ["faturamento", "realidade", "any"], description: "Default 'any'" },
+          limit: { type: "number", description: "Default 50, máx 200" },
+          offset: { type: "number", description: "Para paginar" },
+        },
+        required: ["category_name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_entry_category",
+      description: "Atualiza a categoria de um lançamento do fluxo de caixa. Use após o usuário confirmar a nova categoria. Aceita category_id direto ou category_name (será resolvido).",
+      parameters: {
+        type: "object",
+        properties: {
+          entry_id: { type: "string" },
+          category_id: { type: "string" },
+          category_name: { type: "string" },
+        },
+        required: ["entry_id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "list_bank_accounts",
       description: "Lista contas bancárias ativas (inclui CAIXAs das lojas físicas). Use para resolver nome → id antes de transferências.",
       parameters: { type: "object", properties: {} },
