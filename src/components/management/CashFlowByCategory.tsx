@@ -330,3 +330,68 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
     </div>
   );
 }
+
+function CategoryCombobox({ categories, value, onChange }: {
+  categories: Category[];
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const labelOf = (id: string | null) => {
+    if (!id) return "Sem categoria";
+    const c = categories.find((x) => x.id === id);
+    if (!c) return "Sem categoria";
+    if (!c.parent_id) return c.name;
+    const parent = categories.find((p) => p.id === c.parent_id);
+    return parent ? `${parent.name} → ${c.name}` : c.name;
+  };
+  const searchTextOf = (c: Category) => {
+    const parent = c.parent_id ? categories.find((p) => p.id === c.parent_id)?.name : "";
+    return `${parent} ${c.name}`.trim();
+  };
+  // Sort: parents first, then children grouped under parents
+  const sorted = [...categories].sort((a, b) => {
+    const aRoot = a.parent_id ? categories.find((c) => c.id === a.parent_id)?.name || "" : a.name;
+    const bRoot = b.parent_id ? categories.find((c) => c.id === b.parent_id)?.name || "" : b.name;
+    if (aRoot !== bRoot) return aRoot.localeCompare(bRoot);
+    if (!a.parent_id && b.parent_id) return -1;
+    if (a.parent_id && !b.parent_id) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
+          <span className="truncate">{labelOf(value)}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Pesquisar categoria…" />
+          <CommandList className="max-h-[300px]">
+            <CommandEmpty>Nenhuma categoria encontrada.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem value="sem categoria" onSelect={() => { onChange(null); setOpen(false); }}>
+                <Check className={cn("mr-2 h-4 w-4", !value ? "opacity-100" : "opacity-0")} />
+                Sem categoria
+              </CommandItem>
+              {sorted.map((c) => (
+                <CommandItem
+                  key={c.id}
+                  value={searchTextOf(c) + " " + c.id}
+                  onSelect={() => { onChange(c.id); setOpen(false); }}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", value === c.id ? "opacity-100" : "opacity-0")} />
+                  <span className={c.parent_id ? "pl-4 text-sm" : "font-medium"}>
+                    {c.parent_id ? `→ ${c.name}` : c.name}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
