@@ -83,13 +83,14 @@ Deno.serve(async (req) => {
       await sendMessage(chatId, "🔒 Acesso restrito. Use <code>/start &lt;token&gt;</code> com um token de convite gerado no painel.");
       return new Response(JSON.stringify({ ok: true }));
     }
-    const { data: invite } = await supabase
+    const { data: invite, error: invErr } = await supabase
       .from("financial_agent_invite_tokens")
       .select("id, expires_at, used_at")
       .eq("token", token)
       .maybeSingle();
+    console.log("[telegram] /start token lookup", JSON.stringify({ token, invite, invErr }));
     if (!invite || invite.used_at || new Date(invite.expires_at).getTime() < Date.now()) {
-      await sendMessage(chatId, "❌ Token inválido ou expirado.");
+      await sendMessage(chatId, `❌ Token inválido ou expirado. debug: found=${!!invite} used=${invite?.used_at ?? "no"} exp=${invite?.expires_at ?? "n/a"} err=${invErr?.message ?? "none"}`);
       return new Response(JSON.stringify({ ok: true }));
     }
     await supabase.from("financial_agent_authorized_users").insert({
