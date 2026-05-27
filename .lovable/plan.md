@@ -1,158 +1,68 @@
+## Fase A — Completar ferramentas do Agente IA (Telegram)
 
-# Plano v2 — Agente Financeiro no Telegram + Conciliação Mercado Pago
+Edita `supabase/functions/telegram-financial-webhook/index.ts` para adicionar/parametrizar tools:
 
-Sim, todas as melhorias são viáveis. Telegram inclusive resolve dois problemas de uma vez: zero risco de banimento e **autenticação nativa por `chat_id`** (você libera só a sua conta — quem não estiver na whitelist é ignorado).
+1. **`get_sales_summary`** — adiciona `store_id` E `store_name` (resolve nome → id via `pos_stores`), e `group_by_store` opcional (retorna breakdown por loja).
+2. **`get_sales_by_payment_method`** — novo. Agrupa `pos_sales.payment_method` por período/loja, retorna `{metodo, qtd, total}[]`.
+3. **`get_physical_cash_by_store`** — novo. Lê `pos_cash_registers` (caixas abertos) e retorna dinheiro físico em espécie por loja.
+4. **`get_accounts_payable`** — novo. Lê `tiny_accounts_payable` com filtros `from`, `to`, `status` (`pendente`/`pago`/`vencido`/`all`), agrupa por dia. Variante implícita "hoje" via período.
+5. **`get_inventory_summary`** — novo. Lê `pos_products` (fonte oficial). Retorna por loja: pares (SUM stock), valor total (SUM stock*price), ticket médio (AVG price), e total geral. Aceita `store_id` opcional.
 
-Inspecionei os 2 arquivos do Mercado Pago que você enviou:
+Mantém regras do POS Dashboard já alinhadas.
 
-- **`collection-*.xlsx`** (extrato de vendas / "Releases"): 60+ colunas. Importantes: `date_created`, `date_approved`, `date_released`, `operation_id` (ID único MP), `external_reference` (aqui dá pra cravar nosso `pos_sale_id`!), `transaction_amount`, `mercadopago_fee`, `net_received_amount`, `installments`, `payment_type`, `franchise` (bandeira), `pos_id`, `store_id`.
-- **`account_statement-*.xlsx`** (extrato da conta MP): `RELEASE_DATE`, `TRANSACTION_TYPE`, `REFERENCE_ID`, `TRANSACTION_NET_AMOUNT`, `PARTIAL_BALANCE`. Saldos inicial/final no topo.
+## Fase B — Fluxo de Caixa categorizado (Módulo Gestão > Financeiro)
 
-Cada um cobre um lado diferente da conciliação, e juntos formam a trilha completa: **PDV → Adquirente (collection) → Conta (account_statement)**.
+### B1. Banco de dados (migração)
+- **Seed `financial_categories`** com plano de contas Banana Calçados (hierárquico, calçados+acessórios):
+  - Entradas: Vendas Loja Física, Vendas Online, Crediário Recebido, Devoluções de Fornecedor, Outras Receitas.
+  - Saídas: 
+    - Compras: Calçados, Acessórios, Embalagens.
+    - Marketing: Carro de Som, Anúncios Online (Meta/Google), Influencers, Material Gráfico, Eventos.
+    - Operacional: Aluguel, Energia, Água, Internet, Telefonia, Limpeza.
+    - Pessoal: Salários, Comissões, Benefícios, Pró-labore.
+    - Logística: Frete, Combustível, Manutenção Veículo.
+    - Impostos e Taxas: Simples Nacional, Taxas Bancárias, Tarifas Maquininha.
+    - Financeiro: Empréstimos, Juros, IOF.
+    - Outras Despesas.
+- **Tabela `cash_flow_entries`** já existe e tem `metadata jsonb` + `description text` — usaremos `description` para o texto livre do usuário (ex: "Pago ao Victor") e `metadata.notes` para histórico se precisar.
+- **Nova view `cash_flow_entries_enriched`** (opcional) joinando categoria e loja para listagens.
 
----
+### B2. UI no Módulo Gestão > Aba Financeiro
+Cria `src/components/management/CashFlowCategorized.tsx` (e integra ao `FinanceHub.tsx`):
 
-## 1. Canal: Telegram (substitui WhatsApp)
+- **Topo**: seletor de período (mês atual / mês anterior / custom).
+- **Plano de Contas (CRUD)**: árvore hierárquica de categorias. Botões: adicionar categoria/subcategoria, editar nome, desativar. Drag-to-reparent opcional (fase futura).
+- **Fluxo de Caixa do período**:
+  - Tabela agregada por categoria (entradas/saídas) com totais e saldo.
+  - **Click numa linha de categoria** → drawer/expansão listando cada lançamento individual (data, valor, descrição/observação do usuário, método pagamento, loja, anexo).
+  - Em cada lançamento: botão editar (categoria, descrição, valor, data), excluir, ver anexo.
+- **Resumo lateral**: entradas totais, saídas totais, saldo líquido, top 5 categorias de saída.
 
-- Conector **Telegram** via Bot API (já temos guia nativo no projeto).
-- Tabela `financial_agent_authorized_users(chat_id, role, created_at)` — **whitelist**. Qualquer `chat_id` fora dela recebe "Acesso negado." e a mensagem é descartada (e logada).
-- Comando `/start <token-de-convite-único>` para auto-cadastro inicial (token gerado por você na UI e expira em 10 min).
-- Bot token via `secrets--add_secret` + `setWebhook` com `secret_token` (validação HMAC já no padrão do projeto).
-- Mensagens, anexos e respostas trafegam via Edge Function `telegram-financial-webhook`.
+### B3. Agente IA — captura de descrição livre
+No `telegram-financial-process-attachment` (e webhook):
+- Quando o usuário envia comprovante **com legenda (caption)** → caption vai pra `cash_flow_entries.description`.
+- Quando envia **só a imagem** → após processar e categorizar, o bot responde: "✅ Categorizei em Marketing > Carro de Som — R$ 600. Quer adicionar uma observação? (responda com o texto ou /skip)" e fica aguardando próxima mensagem (estado salvo em `financial_agent_sessions.expected_action = 'awaiting_description:<entry_id>'`). A próxima mensagem de texto vira `description` daquele lançamento.
+- Adiciona tools conversacionais:
+  - `register_expense({amount, category_id|category_name, description, payment_method?, store_id?, date?})` — cria lançamento manualmente sem anexo.
+  - `register_income(...)` análogo.
+  - `update_entry_description({entry_id, description})` — para edição posterior por chat.
+  - `get_cash_flow_summary({period, by:'category'|'store'})` — agrega entradas confirmadas.
 
-## 2. Anexos suportados pelo agente
+### B4. Categorização automática
+- IA do `process-attachment` recebe lista de categorias ativas + descrição do anexo e escolhe `category_id`. Salva `confidence`. Se < 0.7, `status='needs_review'` (já existe).
 
-| Tipo | Uso | Como processamos |
-|---|---|---|
-| Foto/PDF de comprovante avulso | Lançamento manual de saída/entrada | OCR via `_shared/media-understanding.ts` (Claude vision) → JSON `{amount,date,beneficiary,doc,line_digitavel}` |
-| **XLSX collection MP** | Importar vendas de cartão recebidas | Parser específico → loop em linhas `status=approved` |
-| **XLSX account_statement MP** | Importar entradas/saídas da conta | Parser específico → loop em linhas |
-| CSV genérico | Outros bancos | Parser tolerante (vírgula/ponto-vírgula, header detect) |
-| OFX | Padrão bancário | lib `ofx-js` no edge function |
+## Detalhes técnicos relevantes
+- Tabelas reutilizadas: `pos_products`, `pos_stores`, `pos_cash_registers`, `tiny_accounts_payable`, `pos_sales`, `cash_flow_entries`, `financial_categories`, `financial_agent_receipts`, `financial_agent_sessions`.
+- Sem novas tabelas; só seed de categorias + possível view.
+- GRANTs já existentes nas tabelas (não estamos criando novas).
+- Edge functions afetadas: `telegram-financial-webhook`, `telegram-financial-process-attachment`.
+- Frontend: `src/components/management/FinanceHub.tsx` (adiciona aba/seção), novo `CashFlowCategorized.tsx`, novo `CategoryTreeEditor.tsx`.
 
-O bot detecta o tipo pelo MIME + heurística de cabeçalho (ex.: header com `INITIAL_BALANCE` = account_statement MP; `operation_id`+`net_received_amount` = collection MP).
+## Ordem de execução proposta
+1. Migração seed do plano de contas.
+2. Fase A (5 tools) — entrega rápida e testável no Telegram.
+3. UI do Fluxo de Caixa categorizado + CRUD de categorias.
+4. Captura de descrição livre + tools de registro manual no agente.
+5. Categorização automática refinada no process-attachment.
 
-## 3. Deduplicação — a parte crítica
-
-A regra-mãe: **toda linha importada precisa de uma chave externa única**. Criamos:
-
-```
-cash_flow_entries.external_source   text  -- 'mp_collection' | 'mp_account' | 'ofx_xxx' | 'manual_receipt' | 'pos_sale'
-cash_flow_entries.external_id       text  -- chave única do provedor
-UNIQUE (external_source, external_id)
-```
-
-Por canal:
-
-| Fonte | `external_id` |
-|---|---|
-| Collection MP | `operation_id` (já é único e imutável no MP) |
-| Account statement MP | `REFERENCE_ID` (sempre presente) |
-| OFX | `FITID` |
-| Comprovante avulso (foto/PDF) | hash SHA-256 do arquivo + valor + data |
-| Venda PDV | `pos_sales.id` |
-
-Assim, **reenviar o mesmo arquivo 10 vezes não duplica nada** — o `INSERT ... ON CONFLICT DO NOTHING` no `UNIQUE` resolve.
-
-### Dedup também entre fontes diferentes (o caso que você levantou)
-
-Cenário: você manda foto do PIX hoje, e amanhã manda o extrato da conta — o mesmo PIX aparece nos dois.
-
-Estratégia em 2 camadas:
-
-1. **Match automático** ao importar account_statement: para cada linha do extrato, procurar `cash_flow_entries` com:
-   - mesmo `direction`, mesmo `amount`,
-   - `entry_date` dentro de ±2 dias úteis,
-   - status ≠ `reconciled`.
-   - Se achar **1 match** → não cria nova entry; atualiza a existente marcando `status='reconciled'`, `bank_external_id=<REFERENCE_ID>`. (Vira "casamento".)
-   - Se achar **>1 match** → cria entry como `status='needs_review'` e o bot pergunta no Telegram qual delas casa.
-   - Se achar **0 match** → cria nova entry normal (lançamento que você não tinha registrado).
-
-2. **Match manual via bot**: comando `/conciliar` lista pendências.
-
-Esse mesmo mecanismo cobre conciliar **collection MP ↔ pos_sales** (próxima seção).
-
-## 4. Conciliação PDV ↔ Cartão (collection MP)
-
-Aqui está o ouro: o MP exporta `external_reference` para cada venda. Vamos passar a **gravar `pos_sales.id` nesse campo** quando a venda for cartão MP (alteração pequena na edge function que cria a cobrança / chama a maquininha). A partir daí, conciliação fica trivial:
-
-```
-match = collection.external_reference == pos_sales.id
-```
-
-Para vendas antigas (sem `external_reference`) ou maquininha que não permita gravar, fallback escalonado:
-
-1. Mesmo dia + mesmo valor bruto + mesma bandeira + mesmas parcelas → match automático (confiança alta).
-2. Mesmo dia + mesmo valor → match sugerido (confiança média) → bot pergunta no Telegram.
-3. Sem match → fica em `unmatched_card_receivables` e aparece num painel "Recebíveis órfãos".
-
-Cada `collection` linha vira **2 lançamentos** no fluxo:
-- Entrada: `net_received_amount` (o que cai de fato).
-- Saída: `mercadopago_fee + financing_fee` na categoria "Taxas de cartão > Mercado Pago".
-
-E ligamos via FK ao `pos_sale_id` quando casou — assim você consegue ver no dashboard "venda bruta no PDV vs líquido recebido vs taxa paga" por venda.
-
-## 5. Tabelas finais
-
-```
-cash_flow_entries
-  id, tenant_id, store_id, entry_date, direction, amount,
-  category_id, payment_method, description, attachment_url,
-  source, external_source, external_id, source_ref_id,
-  pos_sale_id (nullable FK), bank_external_id, status,
-  confidence, needs_review_reason, created_by, created_at
-  UNIQUE (external_source, external_id)
-
-bank_import_batches
-  id, file_name, file_hash, source_type, rows_total,
-  rows_inserted, rows_duplicated, rows_matched, rows_needs_review,
-  imported_by, created_at
-
-financial_agent_authorized_users (chat_id, role)
-financial_agent_sessions (chat_id, last_attachment_id, expected_action, expires_at)
-payment_method_fees (method, brand, installments, fee_pct, days_to_receive)
-unmatched_card_receivables (view)
-```
-
-## 6. Fluxo de uso típico (já com tudo plugado)
-
-```
-Você → [PDF de boleto pago] "luz da pérola"
-Bot  → "Energia Elétrica · Loja Pérola · R$ 842,30 (08/06)
-        Categoria: Despesas Operacionais > Energia. Confirmar? 1✅ 2✏️ 3❌"
-Você → 1
-Bot  → "Lançado ✅"
-
-(2 dias depois)
-Você → [collection-XXXX.xlsx]
-Bot  → "📥 142 vendas MP · 138 conciliadas c/ PDV · 3 órfãs · 1 duplicada (ignorada)
-        Taxa total: R$ 487,20 lançada em 'Taxas cartão'.
-        Ver órfãs? /orfas"
-
-(no mesmo dia)  
-Você → [account_statement-XXXX.xlsx]
-Bot  → "📊 56 movimentos · 54 já existiam (conciliados) · 2 novos lançados
-        ⚠️ 1 saída de R$ 842,30 do dia 08/06 bateu com 'Luz Pérola' — marquei como conciliada."
-```
-
-## 7. Segurança (resumo)
-
-1. Whitelist obrigatória de `chat_id`.
-2. `secret_token` no webhook (assinado com SHA-256 do bot key).
-3. Rate limit por `chat_id` (10 msg/min).
-4. Bucket `financial-receipts` privado, signed URL 7 dias.
-5. Logs `financial_agent_audit` (entrada, ação, hash do arquivo) — para auditoria.
-6. RLS em todas as tabelas por `tenant_id`.
-
-## 8. Ordem de execução revisada
-
-1. **Schema** (tabelas acima + UNIQUE + bucket).
-2. **Trigger PDV → cash_flow_entries** (vendas + sangria/suprimento) e **gravar `pos_sales.id` em `external_reference` MP**.
-3. **Dashboard de Fluxo de Caixa + DRE** em Administração (já dá valor sem o Telegram).
-4. **Parsers**: collection MP, account_statement MP, OFX, CSV genérico, OCR de comprovante.
-5. **Motor de dedup/conciliação** (regra `(external_source, external_id)` + matcher fuzzy ±2d).
-6. **Bot Telegram** + whitelist + webhook + estados de conversa.
-7. **Categorização IA** reaproveitando `ai-classify-transactions`.
-8. **Painel "Recebíveis órfãos"** + tela de conciliação manual.
-
-Se aprovar, começo pela **Etapa 1+2** (gera valor imediato e prepara o terreno) e na sequência ataco os parsers MP + bot Telegram. Confirma?
+Pergunta antes de começar: o plano de contas acima cobre o que você precisa, ou prefere me passar a estrutura exata que usa hoje (ou que gostaria de usar)? Posso começar com esse default e você ajusta depois pelo CRUD.
