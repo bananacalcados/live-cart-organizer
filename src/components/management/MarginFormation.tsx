@@ -553,8 +553,8 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
     }));
   }, [variableCosts]);
 
-  const storeName = currentStore?.name || "Loja";
-  const storeRevenueTarget = currentStore?.revenue_target ?? 100000;
+  const storeName = isConsolidatedView ? "Todas as Lojas" : (currentStore?.name || "Loja");
+  const storeRevenueTarget = isConsolidatedView ? consolidatedRevenue : (currentStore?.revenue_target ?? 100000);
   const otherStores = stores.filter(s => s.id !== selectedStore);
 
 
