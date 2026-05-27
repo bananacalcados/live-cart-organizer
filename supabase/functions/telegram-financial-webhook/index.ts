@@ -34,6 +34,223 @@ async function sendMessage(chatId: number, text: string, extra: Record<string, u
   if (!res.ok) console.error("[telegram] sendMessage failed", res.status, await res.text());
 }
 
+// ---------- Conversational AI ----------
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY")!;
+const AI_MODEL = "google/gemini-3-flash-preview";
+
+function brDateRange(period: string): { from: string; to: string; label: string } {
+  // Computa datas em America/Sao_Paulo
+  const now = new Date();
+  const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
+  const todayBR = fmt.format(now); // YYYY-MM-DD
+  const d = new Date(todayBR + "T00:00:00-03:00");
+  const addDays = (base: Date, n: number) => new Date(base.getTime() + n * 86400000).toISOString().slice(0, 10);
+  switch (period) {
+    case "yesterday": { const y = addDays(d, -1); return { from: y, to: y, label: "ontem" }; }
+    case "7d": return { from: addDays(d, -6), to: todayBR, label: "últimos 7 dias" };
+    case "30d": return { from: addDays(d, -29), to: todayBR, label: "últimos 30 dias" };
+    case "month": { const first = todayBR.slice(0, 8) + "01"; return { from: first, to: todayBR, label: "mês atual" }; }
+    case "today":
+    default: return { from: todayBR, to: todayBR, label: "hoje" };
+  }
+}
+
+const tools = [
+  {
+    type: "function",
+    function: {
+      name: "get_sales_summary",
+      description: "Resumo de vendas POS (faturamento, ticket médio, qtd vendas) por período. Considera apenas status='completed'.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"], description: "Período" },
+          store_id: { type: "string", description: "(opcional) UUID da loja" },
+        },
+        required: ["period"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_cash_position",
+      description: "Posição de caixa: saldo bancário total + entradas/saídas do fluxo confirmadas hoje.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_top_products",
+      description: "Top produtos mais vendidos por receita em um período.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"] },
+          limit: { type: "number", description: "Default 5" },
+        },
+        required: ["period"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_recent_expenses",
+      description: "Lista lançamentos de saída do fluxo de caixa (mais recentes).",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"] },
+          limit: { type: "number", description: "Default 10" },
+        },
+        required: ["period"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_stores",
+      description: "Lista lojas (id + nome). Use quando o usuário citar uma loja por nome.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_pending_crediario",
+      description: "Resumo de crediário pendente (a receber): qtd + valor total.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+];
+
+async function runTool(supabase: any, name: string, args: any): Promise<unknown> {
+  if (name === "get_sales_summary") {
+    const { from, to, label } = brDateRange(args.period);
+    let q = supabase.from("pos_sales").select("total, store_id").eq("status", "completed").gte("created_at", `${from}T03:00:00Z`).lte("created_at", `${to}T26:59:59Z`);
+    if (args.store_id) q = q.eq("store_id", args.store_id);
+    const { data, error } = await q;
+    if (error) return { error: error.message };
+    const total = (data || []).reduce((s: number, r: any) => s + Number(r.total || 0), 0);
+    const count = (data || []).length;
+    return { period: label, faturamento_brl: total, qtd_vendas: count, ticket_medio_brl: count ? total / count : 0 };
+  }
+  if (name === "get_cash_position") {
+    const { data: banks } = await supabase.from("bank_accounts").select("name, balance").eq("is_active", true);
+    const saldoBanco = (banks || []).reduce((s: number, b: any) => s + Number(b.balance || 0), 0);
+    const today = brDateRange("today").from;
+    const { data: flow } = await supabase.from("cash_flow_entries").select("direction, amount").eq("entry_date", today).in("status", ["confirmed", "reconciled"]);
+    const entradas = (flow || []).filter((e: any) => e.direction === "in").reduce((s: number, e: any) => s + Number(e.amount), 0);
+    const saidas = (flow || []).filter((e: any) => e.direction === "out").reduce((s: number, e: any) => s + Number(e.amount), 0);
+    return { saldo_bancos_brl: saldoBanco, contas: banks, entradas_hoje_brl: entradas, saidas_hoje_brl: saidas, liquido_hoje_brl: entradas - saidas };
+  }
+  if (name === "get_top_products") {
+    const { from, to, label } = brDateRange(args.period);
+    const limit = args.limit ?? 5;
+    const { data, error } = await supabase.rpc("noop_dummy_does_not_exist").select().limit(0);
+    // fallback: query manual
+    const { data: items, error: e2 } = await supabase
+      .from("pos_sale_items")
+      .select("product_name, quantity, total_price, sale:pos_sales!inner(status, created_at)")
+      .gte("sale.created_at", `${from}T03:00:00Z`).lte("sale.created_at", `${to}T26:59:59Z`)
+      .eq("sale.status", "completed")
+      .limit(2000);
+    if (e2) return { error: e2.message };
+    const agg = new Map<string, { qtd: number; receita: number }>();
+    for (const it of items || []) {
+      const k = (it as any).product_name || "?";
+      const cur = agg.get(k) || { qtd: 0, receita: 0 };
+      cur.qtd += Number((it as any).quantity || 0);
+      cur.receita += Number((it as any).total_price || 0);
+      agg.set(k, cur);
+    }
+    const top = [...agg.entries()].map(([nome, v]) => ({ nome, ...v })).sort((a, b) => b.receita - a.receita).slice(0, limit);
+    return { period: label, top };
+  }
+  if (name === "list_recent_expenses") {
+    const { from, to, label } = brDateRange(args.period);
+    const { data, error } = await supabase
+      .from("cash_flow_entries")
+      .select("entry_date, amount, description, payment_method, category:financial_categories(name)")
+      .eq("direction", "out").gte("entry_date", from).lte("entry_date", to)
+      .order("entry_datetime", { ascending: false }).limit(args.limit ?? 10);
+    if (error) return { error: error.message };
+    return { period: label, lancamentos: data };
+  }
+  if (name === "list_stores") {
+    const { data } = await supabase.from("pos_stores").select("id, name").order("name");
+    return { lojas: data };
+  }
+  if (name === "get_pending_crediario") {
+    const { data, error } = await supabase
+      .from("pos_sales").select("total")
+      .eq("status", "completed").eq("crediario_status", "pending").not("crediario_due_date", "is", null);
+    if (error) return { error: error.message };
+    const total = (data || []).reduce((s: number, r: any) => s + Number(r.total || 0), 0);
+    return { qtd: data?.length || 0, valor_total_brl: total };
+  }
+  return { error: `tool desconhecida: ${name}` };
+}
+
+async function handleConversation(supabase: any, chatId: number, userText: string): Promise<string> {
+  // Carrega histórico
+  const { data: sess } = await supabase.from("financial_agent_sessions").select("state").eq("chat_id", chatId).maybeSingle();
+  const history: any[] = (sess?.state?.messages as any[]) || [];
+
+  const system = {
+    role: "system",
+    content: [
+      "Você é o assistente financeiro da Banana Calçados no Telegram.",
+      "Tom: direto ao ponto, no máximo 4 linhas, 1-2 emojis no máximo. Sem rodeios.",
+      "Use as ferramentas para responder com dados reais — nunca invente números.",
+      "Formate valores em BRL (R$ 1.234,56). Datas em pt-BR.",
+      "Se faltar contexto (ex: qual loja), pergunte 1 coisa só.",
+    ].join(" "),
+  };
+
+  const messages: any[] = [system, ...history.slice(-12), { role: "user", content: userText }];
+
+  for (let step = 0; step < 5; step++) {
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${LOVABLE_API_KEY}` },
+      body: JSON.stringify({ model: AI_MODEL, messages, tools, tool_choice: "auto" }),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      console.error("[ai] gateway error", res.status, t);
+      if (res.status === 429) return "⚠️ Muitas requisições ao agente. Tenta de novo em 1 min.";
+      if (res.status === 402) return "⚠️ Créditos de IA esgotados. Adicione créditos no workspace.";
+      throw new Error(`gateway ${res.status}`);
+    }
+    const json = await res.json();
+    const choice = json.choices?.[0];
+    const message = choice?.message;
+    if (!message) throw new Error("sem mensagem da IA");
+    messages.push(message);
+
+    const toolCalls = message.tool_calls;
+    if (!toolCalls || toolCalls.length === 0) {
+      const final = message.content || "(vazio)";
+      const newHistory = [...history, { role: "user", content: userText }, { role: "assistant", content: final }].slice(-20);
+      await supabase.from("financial_agent_sessions").upsert({ chat_id: chatId, state: { messages: newHistory }, updated_at: new Date().toISOString() });
+      return final;
+    }
+
+    for (const tc of toolCalls) {
+      let args: any = {};
+      try { args = JSON.parse(tc.function?.arguments || "{}"); } catch {}
+      console.log("[ai] tool", tc.function?.name, args);
+      const result = await runTool(supabase, tc.function?.name, args);
+      messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
+    }
+  }
+  return "⚠️ Não consegui concluir após várias tentativas.";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
