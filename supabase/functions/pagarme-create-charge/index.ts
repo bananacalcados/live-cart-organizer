@@ -68,25 +68,11 @@ async function notifyPaymentConfirmedLocal(orderId: string, gateway: string, tra
   }
 }
 
-async function autoCreateShopifyOrder(orderId: string, source: "orders" | "pos_sales", supabaseUrl: string, supabaseKey: string) {
-  if (source !== "orders") return;
-
-  try {
-    console.log(`[AUTO-SHOPIFY] Creating Shopify order for ${source} ${orderId}...`);
-    const response = await fetch(`${supabaseUrl}/functions/v1/shopify-create-order`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${supabaseKey}`,
-      },
-      body: JSON.stringify({ orderId }),
-    });
-
-    const data = await response.json();
-    console.log(`[AUTO-SHOPIFY] Result:`, JSON.stringify(data).substring(0, 500));
-  } catch (error) {
-    console.error("[AUTO-SHOPIFY] Error (non-blocking):", error);
-  }
+// REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
+// Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações.
+async function autoCreateShopifyOrder(orderId: string, source: "orders" | "pos_sales", _supabaseUrl: string, _supabaseKey: string) {
+  console.log(`[AUTO-SHOPIFY] DISABLED — skip ${source} ${orderId}`);
+  return;
 }
 
 interface CardData {

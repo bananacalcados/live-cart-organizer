@@ -253,9 +253,9 @@ serve(async (req) => {
           .eq("id", payment.order_id)
           .maybeSingle();
 
+        // REGRA DE NEGÓCIO: criação automática na Shopify DESABILITADA (manual apenas).
         if (fullOrder) {
-          // Create Shopify order
-          await createShopifyOrder(fullOrder, fullOrder.customer, supabase);
+          console.log("[AUTO-SHOPIFY] DISABLED — skip paypal order", payment.order_id);
         }
 
         console.log("Order marked as paid:", payment.order_id);
