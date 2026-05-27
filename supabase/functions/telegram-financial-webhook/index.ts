@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
   // Whitelist check
   const { data: authUser } = await supabase
     .from("financial_agent_authorized_users")
-    .select("id, display_name, active")
+    .select("chat_id, display_name, active")
     .eq("chat_id", String(chatId))
     .eq("active", true)
     .maybeSingle();
@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
     }
     const { data: invite, error: invErr } = await supabase
       .from("financial_agent_invite_tokens")
-      .select("id, expires_at, used_at")
+      .select("token, expires_at, used_at")
       .eq("token", token)
       .maybeSingle();
     console.log("[telegram] /start token lookup", JSON.stringify({ token, invite, invErr }));
@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
     await supabase.from("financial_agent_invite_tokens").update({
       used_at: new Date().toISOString(),
       used_by_chat_id: String(chatId),
-    }).eq("id", invite.id);
+    }).eq("token", invite.token);
     await sendMessage(chatId, `✅ Cadastrado, ${fromName}! Pode mandar comprovantes/extratos a qualquer momento.`);
     return new Response(JSON.stringify({ ok: true }));
   }

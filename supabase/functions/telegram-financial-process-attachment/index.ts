@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
     // Whitelist re-check
     const { data: authUser } = await supabase
       .from("financial_agent_authorized_users")
-      .select("id, active").eq("chat_id", chatId).eq("active", true).maybeSingle();
+      .select("chat_id, active").eq("chat_id", chatId).eq("active", true).maybeSingle();
     if (!authUser) return new Response("unauthorized", { status: 403 });
 
     // 1) Download
