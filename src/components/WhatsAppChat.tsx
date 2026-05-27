@@ -109,7 +109,23 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [togglingAiPause, setTogglingAiPause] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
-  const { selectedNumberId, fetchNumbers, getSelectedNumber } = useWhatsAppNumberStore();
+  const { selectedNumberId, fetchNumbers, getSelectedNumber, numbers } = useWhatsAppNumberStore();
+
+  // ── Bind chat to the instance of the existing conversation ──
+  // Prevents the bug where sends silently switch to whichever instance
+  // is globally selected in the WhatsAppNumberSelector.
+  const boundNumberId = useMemo<string | null>(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const id = messages[i]?.whatsapp_number_id;
+      if (id) return id;
+    }
+    return null;
+  }, [messages]);
+  const effectiveNumberId = boundNumberId || selectedNumberId || null;
+  const boundNumber = useMemo(
+    () => (boundNumberId ? numbers.find(n => n.id === boundNumberId) ?? null : null),
+    [boundNumberId, numbers]
+  );
 
   // Meta templates state
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
