@@ -618,6 +618,7 @@ function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt, onR
 
 export default function Management() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [period, setPeriod] = useState<Period>("30d");
   const [customFrom, setCustomFrom] = useState(() => format(subDays(new Date(), 30), 'yyyy-MM-dd'));
   const [customTo, setCustomTo] = useState(() => format(new Date(), 'yyyy-MM-dd'));
