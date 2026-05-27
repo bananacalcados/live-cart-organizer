@@ -35,6 +35,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
   const [from, setFrom] = useState(firstDay);
   const [to, setTo] = useState(today.toISOString().slice(0, 10));
   const [storeFilter, setStoreFilter] = useState("all");
+  const [ledger, setLedger] = useState<"faturamento" | "realidade">("faturamento");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [cats, setCats] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +48,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
     let q = supabase.from("cash_flow_entries").select("*")
       .gte("entry_date", from).lte("entry_date", to)
       .in("status", ["confirmed", "reconciled", "pending_category"])
+      .eq("ledger", ledger)
       .order("entry_date", { ascending: false }).limit(5000);
     if (storeFilter !== "all") q = q.eq("store_id", storeFilter);
     const { data } = await q;
@@ -56,7 +58,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [from, to, storeFilter]);
+  useEffect(() => { load(); }, [from, to, storeFilter, ledger]);
 
   const catName = (id: string | null) => id ? (cats.find((c) => c.id === id)?.name || "—") : "Sem categoria";
   const catParent = (id: string | null) => {
@@ -198,6 +200,19 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
                 {stores.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block">Livro</label>
+            <div className="inline-flex rounded-md border h-9 overflow-hidden">
+              <button type="button" onClick={() => setLedger("faturamento")}
+                className={`px-3 text-xs font-medium ${ledger === "faturamento" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                Faturamento
+              </button>
+              <button type="button" onClick={() => setLedger("realidade")}
+                className={`px-3 text-xs font-medium border-l ${ledger === "realidade" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                Realidade
+              </button>
+            </div>
           </div>
           <div className="flex-1" />
           <div className="text-right">

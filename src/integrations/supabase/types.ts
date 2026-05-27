@@ -1584,6 +1584,7 @@ export type Database = {
           external_source: string | null
           id: string
           is_transfer: boolean
+          ledger: Database["public"]["Enums"]["ledger_book"]
           metadata: Json
           needs_review_reason: string | null
           payment_method: string | null
@@ -1614,6 +1615,7 @@ export type Database = {
           external_source?: string | null
           id?: string
           is_transfer?: boolean
+          ledger?: Database["public"]["Enums"]["ledger_book"]
           metadata?: Json
           needs_review_reason?: string | null
           payment_method?: string | null
@@ -1644,6 +1646,7 @@ export type Database = {
           external_source?: string | null
           id?: string
           is_transfer?: boolean
+          ledger?: Database["public"]["Enums"]["ledger_book"]
           metadata?: Json
           needs_review_reason?: string | null
           payment_method?: string | null
@@ -15677,6 +15680,7 @@ export type Database = {
         | "concluido"
         | "recusado"
         | "cancelado"
+      ledger_book: "faturamento" | "realidade"
       pos_revenue_attribution: "store" | "site_pickup_only"
       regime_tributario:
         | "simples_nacional"
@@ -15830,6 +15834,7 @@ export const Constants = {
         "recusado",
         "cancelado",
       ],
+      ledger_book: ["faturamento", "realidade"],
       pos_revenue_attribution: ["store", "site_pickup_only"],
       regime_tributario: [
         "simples_nacional",
