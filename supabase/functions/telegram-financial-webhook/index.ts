@@ -177,10 +177,12 @@ const tools = [
       parameters: {
         type: "object",
         properties: {
-          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"] },
+          period: { type: "string", enum: ["today", "yesterday", "week", "7d", "30d", "month"] },
+          from: { type: "string" },
+          to: { type: "string" },
+          store_id: { type: "string" },
           limit: { type: "number" },
         },
-        required: ["period"],
       },
     },
   },
