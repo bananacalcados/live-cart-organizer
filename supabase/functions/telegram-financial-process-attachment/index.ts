@@ -293,17 +293,44 @@ async function processBankStatement(
 
   let inserted = 0;
   const insertedIds: string[] = [];
+  const insertedRows: any[] = [];
   for (let i = 0; i < toInsert.length; i += 100) {
     const chunk = toInsert.slice(i, i + 100);
     const { data: ins, error } = await supabase
       .from("bank_transactions")
       .insert(chunk)
-      .select("id");
+      .select("id, transaction_date, amount, type, description, memo, fitid");
     if (error) {
       console.error("[statement] insert error", error);
     } else if (ins) {
       inserted += ins.length;
       insertedIds.push(...ins.map((r: any) => r.id));
+      insertedRows.push(...ins);
+    }
+  }
+
+  // Mirror each bank_transaction into cash_flow_entries (ledger='realidade')
+  // so they appear in the "Lançamentos" tab and update the account balance.
+  if (insertedRows.length > 0) {
+    const cfeRows = insertedRows.map((r: any) => ({
+      bank_account_id: top.id,
+      store_id: top.store_id || null,
+      entry_date: r.transaction_date,
+      direction: r.type === "credit" ? "in" : "out",
+      amount: Math.abs(Number(r.amount)),
+      description: r.description,
+      source: "bank_statement",
+      external_source: "ofx_import",
+      external_id: r.id, // link 1:1 with bank_transactions.id
+      bank_external_id: r.fitid || null,
+      status: "pending_category",
+      ledger: "realidade",
+      metadata: { bank_transaction_id: r.id, memo: r.memo, batch: batchId },
+    }));
+    for (let i = 0; i < cfeRows.length; i += 100) {
+      const chunk = cfeRows.slice(i, i + 100);
+      const { error: cfeErr } = await supabase.from("cash_flow_entries").insert(chunk);
+      if (cfeErr) console.error("[statement] cash_flow_entries insert error", cfeErr);
     }
   }
 
@@ -321,13 +348,17 @@ async function processBankStatement(
     }).catch((e) => console.error("[statement] classify dispatch failed", e));
   }
 
+
   const skipped = transactions.length - inserted;
   await sendMessage(chatId,
     `✅ <b>Extrato importado</b>\n` +
     `Conta: <b>${top.name}</b>\n` +
     `Transações novas: <b>${inserted}</b>\n` +
     (skipped > 0 ? `Duplicadas/ignoradas: ${skipped}\n` : "") +
-    `\n🤖 Categorização automática em andamento. Revise no painel de Lançamentos.`);
+    `\n🤖 Categorizando automaticamente... ` +
+    `Cada lançamento já aparece na aba <b>Lançamentos</b> como <i>"pendente de categoria"</i>. ` +
+    `Confirme a classificação de cada um por lá. ✏️`);
+
 
   return { ok: true, inserted };
 }

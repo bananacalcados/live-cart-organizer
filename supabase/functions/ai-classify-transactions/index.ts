@@ -200,6 +200,16 @@ Responda APENAS com o JSON via tool call. Para cada transação, retorne categor
               ai_confidence: cls.confidence,
               classification_status: 'ai_suggested',
             }).eq('id', tx.id);
+
+            // Mirror the suggestion onto the linked cash_flow_entry (if any),
+            // so it shows up categorized in the "Lançamentos" tab pending review.
+            await supabase.from('cash_flow_entries').update({
+              category_id: cls.category_id,
+              confidence: cls.confidence,
+              status: cls.confidence >= 0.85 ? 'needs_review' : 'pending_category',
+              needs_review_reason: 'Sugestão automática — confirmar categoria',
+            }).eq('external_source', 'ofx_import').eq('external_id', tx.id);
+
             classified++;
           }
         }
