@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowDownRight, ArrowUpRight, TrendingUp, TrendingDown, Wallet } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Wallet } from "lucide-react";
 
 interface Entry {
   id: string;
@@ -18,113 +17,207 @@ interface Entry {
   status: string;
   store_id: string | null;
   category_id: string | null;
+  ledger: "faturamento" | "realidade";
 }
-
+interface Category { id: string; name: string; parent_id: string | null; type: "income" | "expense"; }
 interface Store { id: string; name: string; }
 
 const fmt = (n: number) => n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export function CashFlowDashboard({ stores }: { stores: Store[] }) {
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(true);
   const today = new Date();
   const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
   const [from, setFrom] = useState(firstDay);
   const [to, setTo] = useState(today.toISOString().slice(0, 10));
   const [storeFilter, setStoreFilter] = useState("all");
-  const [categoryNames, setCategoryNames] = useState<Record<string, string>>({});
+  const [ledger, setLedger] = useState<"faturamento" | "realidade">("faturamento");
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [cats, setCats] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const load = async () => {
     setLoading(true);
     let q = supabase.from("cash_flow_entries").select("*")
       .gte("entry_date", from).lte("entry_date", to)
-      .order("entry_date", { ascending: false }).limit(1000);
+      .in("status", ["confirmed", "reconciled", "pending_category"])
+      .eq("ledger", ledger)
+      .order("entry_date", { ascending: false }).limit(5000);
     if (storeFilter !== "all") q = q.eq("store_id", storeFilter);
     const { data } = await q;
     setEntries((data as Entry[]) || []);
-    const { data: cats } = await supabase.from("financial_categories").select("id,name");
-    setCategoryNames(Object.fromEntries((cats || []).map((c: any) => [c.id, c.name])));
+    const { data: c } = await supabase.from("financial_categories").select("id,name,parent_id,type");
+    setCats((c as Category[]) || []);
     setLoading(false);
   };
+  useEffect(() => { load(); }, [from, to, storeFilter, ledger]);
 
-  useEffect(() => { load(); }, [from, to, storeFilter]);
+  const rootCatOf = (id: string | null): { id: string; name: string } => {
+    if (!id) return { id: "__none__", name: "Sem categoria" };
+    let cur = cats.find((c) => c.id === id);
+    while (cur?.parent_id) cur = cats.find((c) => c.id === cur!.parent_id);
+    return { id: cur?.id || "__none__", name: cur?.name || "Sem categoria" };
+  };
+  const catName = (id: string | null) => id ? (cats.find((c) => c.id === id)?.name || "—") : "Sem categoria";
 
-  const totals = useMemo(() => {
-    const inc = entries.filter(e => e.direction === "in").reduce((s, e) => s + Number(e.amount), 0);
-    const out = entries.filter(e => e.direction === "out").reduce((s, e) => s + Number(e.amount), 0);
-    return { inc, out, net: inc - out };
-  }, [entries]);
+  const groups = useMemo(() => {
+    const build = (dir: "in" | "out") => {
+      const filtered = entries.filter((e) => e.direction === dir);
+      const m = new Map<string, { id: string; name: string; total: number; subs: Map<string, { id: string; name: string; total: number; count: number }> }>();
+      for (const e of filtered) {
+        const r = rootCatOf(e.category_id);
+        const g = m.get(r.id) || { id: r.id, name: r.name, total: 0, subs: new Map() };
+        g.total += Number(e.amount);
+        const sk = e.category_id || "__none__";
+        const s = g.subs.get(sk) || { id: sk, name: catName(e.category_id), total: 0, count: 0 };
+        s.total += Number(e.amount); s.count += 1;
+        g.subs.set(sk, s);
+        m.set(r.id, g);
+      }
+      return [...m.values()].sort((a, b) => b.total - a.total);
+    };
+    return { in: build("in"), out: build("out") };
+  }, [entries, cats]);
 
-  const storeName = (id: string | null) => stores.find(s => s.id === id)?.name || "—";
+  const totalIn = useMemo(() => groups.in.reduce((s, g) => s + g.total, 0), [groups]);
+  const totalOut = useMemo(() => groups.out.reduce((s, g) => s + g.total, 0), [groups]);
+  const net = totalIn - totalOut;
+
+  const toggle = (k: string) => {
+    const n = new Set(expanded);
+    n.has(k) ? n.delete(k) : n.add(k);
+    setExpanded(n);
+  };
+
+  // Saldo acumulado: começa em totalIn, vai diminuindo a cada grupo de saída
+  let running = totalIn;
 
   return (
     <div className="space-y-4">
+      {/* Filtros */}
+      <Card>
+        <CardContent className="pt-4 flex flex-wrap items-end gap-3">
+          <div><label className="text-xs text-muted-foreground">De</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" /></div>
+          <div><label className="text-xs text-muted-foreground">Até</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" /></div>
+          <div><label className="text-xs text-muted-foreground">Loja</label>
+            <Select value={storeFilter} onValueChange={setStoreFilter}>
+              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas</SelectItem>
+                {stores.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block">Livro</label>
+            <div className="inline-flex rounded-md border h-9 overflow-hidden">
+              <button type="button" onClick={() => setLedger("faturamento")}
+                className={`px-3 text-xs font-medium ${ledger === "faturamento" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                Faturamento
+              </button>
+              <button type="button" onClick={() => setLedger("realidade")}
+                className={`px-3 text-xs font-medium border-l ${ledger === "realidade" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                Realidade
+              </button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <Card><CardContent className="pt-6 flex items-center justify-between">
-          <div><p className="text-sm text-muted-foreground">Entradas</p><p className="text-2xl font-bold text-emerald-600">{fmt(totals.inc)}</p></div>
+          <div><p className="text-sm text-muted-foreground">Entradas</p><p className="text-2xl font-bold text-emerald-600">{fmt(totalIn)}</p></div>
           <TrendingUp className="h-8 w-8 text-emerald-500/50" />
         </CardContent></Card>
         <Card><CardContent className="pt-6 flex items-center justify-between">
-          <div><p className="text-sm text-muted-foreground">Saídas</p><p className="text-2xl font-bold text-destructive">{fmt(totals.out)}</p></div>
+          <div><p className="text-sm text-muted-foreground">Saídas</p><p className="text-2xl font-bold text-destructive">{fmt(totalOut)}</p></div>
           <TrendingDown className="h-8 w-8 text-destructive/50" />
         </CardContent></Card>
         <Card><CardContent className="pt-6 flex items-center justify-between">
-          <div><p className="text-sm text-muted-foreground">Saldo do período</p><p className={`text-2xl font-bold ${totals.net >= 0 ? "text-emerald-600" : "text-destructive"}`}>{fmt(totals.net)}</p></div>
+          <div><p className="text-sm text-muted-foreground">Saldo do período</p><p className={`text-2xl font-bold ${net >= 0 ? "text-emerald-600" : "text-destructive"}`}>{fmt(net)}</p></div>
           <Wallet className="h-8 w-8 text-muted-foreground/50" />
         </CardContent></Card>
       </div>
 
+      {/* DRE */}
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Lançamentos</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex gap-2 flex-wrap items-end">
-            <div><label className="text-xs text-muted-foreground">De</label><Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="h-9 w-40" /></div>
-            <div><label className="text-xs text-muted-foreground">Até</label><Input type="date" value={to} onChange={e => setTo(e.target.value)} className="h-9 w-40" /></div>
-            <div><label className="text-xs text-muted-foreground">Loja</label>
-              <Select value={storeFilter} onValueChange={setStoreFilter}>
-                <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+        <CardHeader><CardTitle className="text-base">DRE — {ledger === "faturamento" ? "Faturamento" : "Realidade"}</CardTitle></CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">Carregando…</div>
+          ) : (
+            <div className="space-y-1 text-sm">
+              {/* ENTRADAS */}
+              <div className="flex items-center gap-2 py-2 px-2 bg-emerald-500/10 rounded font-semibold text-emerald-700 dark:text-emerald-400 uppercase text-xs tracking-wide">
+                Entradas
+              </div>
+              {groups.in.length === 0 && <div className="py-2 px-4 text-muted-foreground text-xs">Nenhuma entrada no período.</div>}
+              {groups.in.map((g) => {
+                const k = `in:${g.id}`;
+                const open = expanded.has(k);
+                const subs = [...g.subs.values()].sort((a, b) => b.total - a.total);
+                return (
+                  <div key={k}>
+                    <div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer" onClick={() => toggle(k)}>
+                      {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      <span className="flex-1">{g.name}</span>
+                      <span className="font-medium text-emerald-600">{fmt(g.total)}</span>
+                    </div>
+                    {open && subs.map((s) => (
+                      <div key={`${k}:${s.id}`} className="flex items-center gap-2 py-1 px-2 ml-7 text-xs">
+                        <span className="flex-1 text-muted-foreground">{s.name}</span>
+                        <Badge variant="outline" className="text-[10px]">{s.count}</Badge>
+                        <span className="text-emerald-600">{fmt(s.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              <div className="flex items-center gap-2 py-2 px-2 mt-1 border-t font-semibold text-emerald-700 dark:text-emerald-400">
+                <span className="flex-1">TOTAL ENTRADAS</span>
+                <span>{fmt(totalIn)}</span>
+              </div>
 
-          <div className="rounded-md border max-h-[500px] overflow-auto">
-            <Table>
-              <TableHeader className="sticky top-0 bg-background">
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Loja</TableHead>
-                  <TableHead>Categoria</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>Método</TableHead>
-                  <TableHead>Origem</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading && <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Carregando…</TableCell></TableRow>}
-                {!loading && entries.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Nenhum lançamento no período.</TableCell></TableRow>}
-                {entries.map(e => (
-                  <TableRow key={e.id}>
-                    <TableCell className="whitespace-nowrap text-xs">{new Date(e.entry_date).toLocaleDateString("pt-BR")}</TableCell>
-                    <TableCell className="text-xs">{storeName(e.store_id)}</TableCell>
-                    <TableCell className="text-xs">{e.category_id ? categoryNames[e.category_id] || "—" : "—"}</TableCell>
-                    <TableCell className="text-xs max-w-[300px] truncate">{e.description}</TableCell>
-                    <TableCell className="text-xs">{e.payment_method}</TableCell>
-                    <TableCell className="text-xs"><Badge variant="outline" className="text-[10px]">{e.source}</Badge></TableCell>
-                    <TableCell className={`text-right font-medium whitespace-nowrap ${e.direction === "in" ? "text-emerald-600" : "text-destructive"}`}>
-                      {e.direction === "in" ? <ArrowUpRight className="inline h-3 w-3" /> : <ArrowDownRight className="inline h-3 w-3" />} {fmt(Number(e.amount))}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+              {/* SAÍDAS com saldo acumulado por categoria */}
+              <div className="flex items-center gap-2 py-2 px-2 bg-destructive/10 rounded font-semibold text-destructive uppercase text-xs tracking-wide mt-3">
+                Saídas
+              </div>
+              {groups.out.length === 0 && <div className="py-2 px-4 text-muted-foreground text-xs">Nenhuma saída no período.</div>}
+              {groups.out.map((g) => {
+                const k = `out:${g.id}`;
+                const open = expanded.has(k);
+                const subs = [...g.subs.values()].sort((a, b) => b.total - a.total);
+                running -= g.total;
+                const saldoAposGrupo = running;
+                return (
+                  <div key={k}>
+                    <div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer" onClick={() => toggle(k)}>
+                      {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                      <span className="flex-1">{g.name}</span>
+                      <span className="font-medium text-destructive w-32 text-right">- {fmt(g.total)}</span>
+                      <span className={`font-semibold w-32 text-right text-xs ${saldoAposGrupo >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+                        = {fmt(saldoAposGrupo)}
+                      </span>
+                    </div>
+                    {open && subs.map((s) => (
+                      <div key={`${k}:${s.id}`} className="flex items-center gap-2 py-1 px-2 ml-7 text-xs">
+                        <span className="flex-1 text-muted-foreground">{s.name}</span>
+                        <Badge variant="outline" className="text-[10px]">{s.count}</Badge>
+                        <span className="text-destructive w-32 text-right">- {fmt(s.total)}</span>
+                        <span className="w-32" />
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+
+              <div className={`flex items-center gap-2 py-2.5 px-2 mt-2 border-t-2 font-bold ${net >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}>
+                <span className="flex-1 uppercase text-sm">Saldo Final</span>
+                <span className="text-base">{fmt(net)}</span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -9749,6 +9749,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          settlement_bank_account_id: string | null
           sort_order: number
           store_id: string
         }
@@ -9757,6 +9758,7 @@ export type Database = {
           id: string
           is_active?: boolean
           name: string
+          settlement_bank_account_id?: string | null
           sort_order?: number
           store_id: string
         }
@@ -9765,10 +9767,18 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          settlement_bank_account_id?: string | null
           sort_order?: number
           store_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "pos_payment_methods_settlement_bank_account_id_fkey"
+            columns: ["settlement_bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pos_payment_methods_store_id_fkey"
             columns: ["store_id"]

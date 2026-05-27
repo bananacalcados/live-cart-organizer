@@ -31,6 +31,8 @@ export function BankAccountsManager({ stores }: { stores: Store[] }) {
   const [editing, setEditing] = useState<Partial<BankAccount> | null>(null);
   const [transfer, setTransfer] = useState<{ from?: string; to?: string; amount?: string; date?: string; description?: string } | null>(null);
 
+  const [ledger, setLedger] = useState<"faturamento" | "realidade">("realidade");
+
   const load = async () => {
     setLoading(true);
     const { data } = await supabase.from("bank_accounts" as any).select("*").order("name");
@@ -40,8 +42,9 @@ export function BankAccountsManager({ stores }: { stores: Store[] }) {
     if (accs.length) {
       const { data: entries } = await supabase
         .from("cash_flow_entries")
-        .select("bank_account_id, direction, amount")
-        .in("bank_account_id", accs.map((a) => a.id));
+        .select("bank_account_id, direction, amount, ledger")
+        .in("bank_account_id", accs.map((a) => a.id))
+        .eq("ledger", ledger);
       const agg: Record<string, { in: number; out: number }> = {};
       (entries || []).forEach((e: any) => {
         const id = e.bank_account_id;
@@ -53,7 +56,7 @@ export function BankAccountsManager({ stores }: { stores: Store[] }) {
     }
     setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [ledger]);
 
   const currentBalance = (a: BankAccount) =>
     Number(a.initial_balance || 0) + (balances[a.id]?.in || 0) - (balances[a.id]?.out || 0);
@@ -129,11 +132,21 @@ export function BankAccountsManager({ stores }: { stores: Store[] }) {
   return (
     <div className="space-y-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-2 flex-wrap">
           <CardTitle className="text-base flex items-center gap-2">
             <Landmark className="h-4 w-4" /> Contas Bancárias
           </CardTitle>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <div className="inline-flex rounded-md border h-8 overflow-hidden">
+              <button type="button" onClick={() => setLedger("faturamento")}
+                className={`px-2.5 text-[11px] font-medium ${ledger === "faturamento" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                Faturamento
+              </button>
+              <button type="button" onClick={() => setLedger("realidade")}
+                className={`px-2.5 text-[11px] font-medium border-l ${ledger === "realidade" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                Realidade
+              </button>
+            </div>
             <Button size="sm" variant="outline" onClick={() => setTransfer({})}>
               <ArrowLeftRight className="h-3.5 w-3.5 mr-1" /> Transferência
             </Button>
