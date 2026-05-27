@@ -742,7 +742,7 @@ export default function Management() {
               const totalQty = saleItems.reduce((s, it) => s + (it.quantity || 1), 0);
               itemPrice = (Number(sale.total || 0) / totalQty) * (item.quantity || 1);
             }
-            return { ...item, total_price: itemPrice, store_id: sale?.store_id || "" };
+            return { ...item, total_price: itemPrice, store_id: sale?.store_id || "", sale_type: sale?.sale_type || null };
           });
           allItems = allItems.concat(enriched);
         }
