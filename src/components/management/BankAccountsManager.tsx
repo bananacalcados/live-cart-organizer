@@ -221,9 +221,9 @@ export function BankAccountsManager({ stores }: { stores: Store[] }) {
                 <div className="text-xs text-muted-foreground">Saldo atual</div>
                 <div className={`text-sm font-bold ${currentBalance(a) < 0 ? "text-destructive" : ""}`}>{fmt(currentBalance(a))}</div>
               </div>
-              <Button size="sm" variant="ghost" onClick={() => setEditing(a)}><Pencil className="h-3.5 w-3.5" /></Button>
-              <Button size="sm" variant="ghost" onClick={() => toggleActive(a)}>
-                <Badge variant={a.is_active ? "default" : "outline"} className="text-[10px]">{a.is_active ? "on" : "off"}</Badge>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(a)} title="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
+              <Button size="sm" variant={a.is_active ? "outline" : "secondary"} onClick={() => toggleActive(a)} title={a.is_active ? "Desativar conta" : "Reativar conta"}>
+                {a.is_active ? "Desativar" : "Reativar"}
               </Button>
               <Button size="sm" variant="ghost" className="text-destructive" onClick={() => del(a)}><Trash2 className="h-3.5 w-3.5" /></Button>
             </div>
