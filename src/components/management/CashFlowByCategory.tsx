@@ -47,7 +47,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
     setLoading(true);
     let q = supabase.from("cash_flow_entries").select("*")
       .gte("entry_date", from).lte("entry_date", to)
-      .in("status", ["confirmed", "reconciled", "pending_category"])
+      .in("status", ["confirmed", "reconciled", "pending_category", "needs_review", "ai_suggested"])
       .eq("ledger", ledger)
       .order("entry_date", { ascending: false }).limit(5000);
     if (storeFilter !== "all") q = q.eq("store_id", storeFilter);
@@ -124,6 +124,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
       category_id: editing.category_id,
       payment_method: editing.payment_method,
       store_id: editing.store_id,
+      status: editing.category_id ? "confirmed" : editing.status,
     }).eq("id", editing.id);
     if (error) return toast({ title: "Erro", description: error.message, variant: "destructive" });
     toast({ title: "Salvo" });
@@ -278,7 +279,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
                   {e.payment_method && <Badge variant="outline" className="text-[10px]">{e.payment_method}</Badge>}
                   <Badge variant="outline" className="text-[10px]">{storeName(e.store_id)}</Badge>
                   <Badge variant="outline" className="text-[10px]">{e.source}</Badge>
-                  {e.status === "pending_category" && <Badge variant="secondary" className="text-[10px]">revisar</Badge>}
+                  {(e.status === "pending_category" || e.status === "needs_review" || e.status === "ai_suggested") && <Badge variant="secondary" className="text-[10px]">revisar categoria</Badge>}
                 </div>
               </div>
             ))}
