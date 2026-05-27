@@ -303,14 +303,12 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
               <div><label className="text-xs text-muted-foreground">Descrição / observação</label>
                 <Input value={editing.description || ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} /></div>
               <div><label className="text-xs text-muted-foreground">Categoria</label>
-                <Select value={editing.category_id || "__none__"} onValueChange={(v) => setEditing({ ...editing, category_id: v === "__none__" ? null : v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Sem categoria</SelectItem>
-                    {cats.filter((c) => c.type === (editing.direction === "in" ? "income" : "expense"))
-                      .map((c) => <SelectItem key={c.id} value={c.id}>{c.parent_id ? `  → ${c.name}` : c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select></div>
+                <CategoryCombobox
+                  categories={cats.filter((c) => c.type === (editing.direction === "in" ? "income" : "expense"))}
+                  value={editing.category_id}
+                  onChange={(v) => setEditing({ ...editing, category_id: v })}
+                />
+              </div>
               <div><label className="text-xs text-muted-foreground">Loja</label>
                 <Select value={editing.store_id || "__none__"} onValueChange={(v) => setEditing({ ...editing, store_id: v === "__none__" ? null : v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
