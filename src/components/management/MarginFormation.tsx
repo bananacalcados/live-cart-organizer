@@ -778,12 +778,8 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
         </Card>
       </div>
 
-      {isConsolidatedView ? (
-        <Card><CardContent className="pt-4 text-sm text-muted-foreground">
-          Visão consolidada das <strong>{realStores.length} lojas reais</strong>. Simulações não entram nesse cálculo. Para editar custos, selecione uma loja específica.
-        </CardContent></Card>
-      ) : (
-      <Tabs defaultValue="fixed" className="space-y-4">
+      <Tabs value={isConsolidatedView ? "consolidated" : undefined} defaultValue={isConsolidatedView ? "consolidated" : "fixed"} className="space-y-4"
+        onValueChange={() => { if (isConsolidatedView) loadConsolidated(); }}>
         <TabsList>
           <TabsTrigger value="fixed">Custos Fixos</TabsTrigger>
           <TabsTrigger value="variable">Custos Variáveis</TabsTrigger>
