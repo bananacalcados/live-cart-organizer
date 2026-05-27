@@ -22,8 +22,10 @@ export function FinanceHub({ stores }: { stores: Store[] }) {
         <TabsTrigger value="fees" className="gap-1"><Percent className="h-3.5 w-3.5" />Taxas</TabsTrigger>
         <TabsTrigger value="agent" className="gap-1"><Bot className="h-3.5 w-3.5" />Agente IA</TabsTrigger>
       </TabsList>
-      <TabsContent value="categorized"><CashFlowByCategory stores={stores} /></TabsContent>
-      <TabsContent value="cashflow"><CashFlowDashboard stores={stores} /></TabsContent>
+      {/* Regra de negócio: a aba Lançamentos precisa continuar usando CashFlowByCategory,
+          porque é nela que existe drilldown e edição de entradas/saídas. */}
+      <TabsContent value="categorized"><CashFlowDashboard stores={stores} /></TabsContent>
+      <TabsContent value="cashflow"><CashFlowByCategory stores={stores} /></TabsContent>
       <TabsContent value="categories"><CategoriesManager /></TabsContent>
       <TabsContent value="banks"><BankAccountsManager stores={stores} /></TabsContent>
       <TabsContent value="reconciliation"><BankReconciliation stores={stores} /></TabsContent>
