@@ -1721,7 +1721,6 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
           )}
         </TabsContent>
       </Tabs>
-      )}
 
       {/* Create Simulation Store Dialog */}
       <Dialog open={showCreateSim} onOpenChange={setShowCreateSim}>
