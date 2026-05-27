@@ -726,6 +726,29 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
               <Input type="number" value={movementAmount} onChange={e => setMovementAmount(e.target.value)} placeholder="0,00" className="text-lg h-12 bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
             </div>
             <div>
+              <Label className="text-pos-white/70 text-xs">
+                {showMovement === 'withdraw' ? 'Destino do dinheiro' : 'Origem do dinheiro'}
+              </Label>
+              <Select value={movementCounterpart} onValueChange={setMovementCounterpart}>
+                <SelectTrigger className="h-12 bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                  <SelectValue placeholder={showMovement === 'withdraw' ? 'Para onde vai? (Cofre, Banco...)' : 'De onde veio? (Cofre, Banco...)'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {counterpartAccounts.map(a => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}{a.account_type === 'cofre' ? ' 🔒' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-pos-white/40 mt-1">
+                {showMovement === 'withdraw'
+                  ? 'O valor sai do CAIXA e entra na conta selecionada (transferência).'
+                  : 'O valor sai da conta selecionada e entra no CAIXA (transferência).'}
+              </p>
+            </div>
+
+            <div>
               <Label className="text-pos-white/70 text-xs">Observação</Label>
               <Textarea value={movementNotes} onChange={e => setMovementNotes(e.target.value)} placeholder="Motivo..." className="bg-pos-white/5 border-pos-orange/30 text-pos-white focus:border-pos-orange" />
             </div>
