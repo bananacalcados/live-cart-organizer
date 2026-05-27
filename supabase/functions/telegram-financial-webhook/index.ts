@@ -848,6 +848,93 @@ async function runTool(supabase: any, name: string, args: any, context?: { chatI
     return { ok: true, entry_id: data.id, mensagem: `${direction === "in" ? "Entrada" : "Saída"} de R$ ${args.amount} registrada${categoryId ? "" : " (sem categoria)"}.` };
   }
 
+  if (name === "list_entries_by_category") {
+    const limit = Math.min(Number(args.limit) || 50, 200);
+    const offset = Math.max(Number(args.offset) || 0, 0);
+    const period = args.period || "30d";
+    let fromDate: string | null = null;
+    let toDate: string | null = null;
+    if (period !== "all") {
+      const r = brDateRange(period);
+      fromDate = r.from; toDate = r.to;
+    }
+
+    const rawName = String(args.category_name || "").trim();
+    const noCategory = /^sem\s+categoria$/i.test(rawName) || rawName === "";
+    let categoryIds: string[] = [];
+    let resolvedLabel = "Sem categoria";
+
+    if (!noCategory) {
+      // Match category by name (parcial). Also include children whose parent matches.
+      const { data: cats } = await supabase.from("financial_categories")
+        .select("id, name, parent_id").eq("is_active", true);
+      const matched = (cats || []).filter((c: any) => nameMatchesTokens(c.name, rawName));
+      const matchedIds = new Set<string>(matched.map((c: any) => c.id));
+      // Include direct children of matched roots
+      for (const c of cats || []) {
+        if (c.parent_id && matchedIds.has(c.parent_id)) matchedIds.add(c.id);
+      }
+      categoryIds = [...matchedIds];
+      resolvedLabel = matched.map((m: any) => m.name).slice(0, 3).join(", ") || rawName;
+      if (categoryIds.length === 0) {
+        return { error: `Nenhuma categoria encontrada com '${rawName}'.` };
+      }
+    }
+
+    let q = supabase.from("cash_flow_entries")
+      .select("id, entry_date, direction, amount, description, status, ledger, payment_method, bank_account_id, category_id, category:financial_categories(name), bank_account:bank_accounts(name)", { count: "exact" })
+      .in("status", ["confirmed", "reconciled", "pending_category", "needs_review", "ai_suggested"])
+      .order("entry_date", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (fromDate) q = q.gte("entry_date", fromDate);
+    if (toDate) q = q.lte("entry_date", toDate);
+    if (args.direction && args.direction !== "any") q = q.eq("direction", args.direction);
+    if (args.ledger && args.ledger !== "any") q = q.eq("ledger", args.ledger);
+    if (noCategory) q = q.is("category_id", null);
+    else q = q.in("category_id", categoryIds);
+
+    const { data, error, count } = await q;
+    if (error) return { error: error.message };
+
+    return {
+      categoria: resolvedLabel,
+      periodo: period,
+      total_encontrados: count || 0,
+      retornados: data?.length || 0,
+      offset,
+      proxima_pagina_offset: (data?.length || 0) === limit ? offset + limit : null,
+      lancamentos: (data || []).map((row: any) => ({
+        id: row.id,
+        data: row.entry_date,
+        tipo: row.direction === "in" ? "entrada" : "saída",
+        valor_brl: Number(row.amount),
+        descricao: row.description,
+        categoria_atual: row.category?.name || "Sem categoria",
+        livro: row.ledger,
+        status: row.status,
+        conta: row.bank_account?.name || null,
+        metodo: row.payment_method,
+      })),
+      instrucao: "Liste os lançamentos para o usuário e pergunte para qual categoria ele quer mover cada um (ou em lote). Use update_entry_category para aplicar.",
+    };
+  }
+
+  if (name === "update_entry_category") {
+    let categoryId: string | null = args.category_id || null;
+    if (!categoryId && args.category_name) {
+      const { data: cats } = await supabase.from("financial_categories")
+        .select("id, name").eq("is_active", true).ilike("name", `%${args.category_name}%`).limit(1);
+      categoryId = cats?.[0]?.id || null;
+      if (!categoryId) return { error: `Categoria '${args.category_name}' não encontrada.` };
+    }
+    const { error } = await supabase.from("cash_flow_entries")
+      .update({ category_id: categoryId, status: categoryId ? "confirmed" : "pending_category" })
+      .eq("id", args.entry_id);
+    if (error) return { error: error.message };
+    return { ok: true, entry_id: args.entry_id, category_id: categoryId };
+  }
+
   if (name === "update_entry_description") {
     const { error } = await supabase.from("cash_flow_entries")
       .update({ description: args.description }).eq("id", args.entry_id);
