@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     console.log("[telegram] /start token lookup", JSON.stringify({ token, invite, invErr }));
     if (!invite || invite.used_at || new Date(invite.expires_at).getTime() < Date.now()) {
-      await sendMessage(chatId, `❌ Token inválido ou expirado. debug: found=${!!invite} used=${invite?.used_at ?? "no"} exp=${invite?.expires_at ?? "n/a"} err=${invErr?.message ?? "none"}`);
+      await sendMessage(chatId, "❌ Token inválido ou expirado. Gere um novo no painel.");
       return new Response(JSON.stringify({ ok: true }));
     }
     await supabase.from("financial_agent_authorized_users").insert({
