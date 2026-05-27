@@ -292,7 +292,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
 
       {/* Edit dialog */}
       <Sheet open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-        <SheetContent className="w-full sm:max-w-md">
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
           <SheetHeader><SheetTitle>Editar lançamento</SheetTitle></SheetHeader>
           {editing && (
             <div className="mt-4 space-y-3">
