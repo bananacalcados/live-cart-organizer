@@ -212,6 +212,22 @@ const tools = [
   {
     type: "function",
     function: {
+      name: "list_recent_imported_entries",
+      description: "Lista lançamentos importados recentemente via extrato bancário, com categoria sugerida/status para revisão. Use quando o usuário falar de extrato, lançamentos importados, categorização, pendências ou transações ignoradas.",
+      parameters: {
+        type: "object",
+        properties: {
+          account_name: { type: "string", description: "(opcional) Nome aproximado da conta importada, ex: 'Mercado Pago Daniel'" },
+          latest_only: { type: "boolean", description: "Se true, considera apenas a última importação compatível" },
+          pending_only: { type: "boolean", description: "Se true, traz apenas lançamentos ainda pendentes de revisão/categoria" },
+          limit: { type: "number", description: "Quantidade máxima de lançamentos retornados" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_cash_flow_summary",
       description: "Fluxo de caixa categorizado: entradas e saídas agrupadas por categoria ou por loja em um período.",
       parameters: {
