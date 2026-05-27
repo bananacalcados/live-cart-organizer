@@ -35,19 +35,28 @@ async function sendMessage(chatId: number | string, text: string, extra: Record<
   if (!res.ok) console.error("[telegram] sendMessage failed", res.status, await res.text());
 }
 
-function brDateRange(period: string): { from: string; to: string; label: string } {
+function brDateRange(period: string, customFrom?: string, customTo?: string): { from: string; to: string; fromISO: string; toISO: string; label: string } {
   const now = new Date();
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
   const todayBR = fmt.format(now);
   const d = new Date(todayBR + "T00:00:00-03:00");
   const addDays = (base: Date, n: number) => new Date(base.getTime() + n * 86400000).toISOString().slice(0, 10);
+  // Cobertura UTC do dia BR (UTC-3): from = dayT03:00:00Z, to = (day+1)T02:59:59.999Z
+  const toBounds = (fromDay: string, toDay: string, label: string) => {
+    const fromISO = `${fromDay}T03:00:00.000Z`;
+    const next = addDays(new Date(toDay + "T00:00:00-03:00"), 1);
+    const toISO = `${next}T02:59:59.999Z`;
+    return { from: fromDay, to: toDay, fromISO, toISO, label };
+  };
+  if (customFrom && customTo) return toBounds(customFrom, customTo, `${customFrom} a ${customTo}`);
   switch (period) {
-    case "yesterday": { const y = addDays(d, -1); return { from: y, to: y, label: "ontem" }; }
-    case "7d": return { from: addDays(d, -6), to: todayBR, label: "últimos 7 dias" };
-    case "30d": return { from: addDays(d, -29), to: todayBR, label: "últimos 30 dias" };
-    case "month": { const first = todayBR.slice(0, 8) + "01"; return { from: first, to: todayBR, label: "mês atual" }; }
+    case "yesterday": { const y = addDays(d, -1); return toBounds(y, y, "ontem"); }
+    case "7d": return toBounds(addDays(d, -6), todayBR, "últimos 7 dias");
+    case "week": return toBounds(addDays(d, -6), todayBR, "últimos 7 dias");
+    case "30d": return toBounds(addDays(d, -29), todayBR, "últimos 30 dias");
+    case "month": { const first = todayBR.slice(0, 8) + "01"; return toBounds(first, todayBR, "mês atual"); }
     case "today":
-    default: return { from: todayBR, to: todayBR, label: "hoje" };
+    default: return toBounds(todayBR, todayBR, "hoje");
   }
 }
 
@@ -70,16 +79,38 @@ const tools = [
     type: "function",
     function: {
       name: "get_sales_summary",
-      description: "Faturamento, qtd vendas e ticket médio por período. Pode filtrar por loja (store_id ou store_name) ou agrupar por loja (group_by_store=true).",
+      description: "Faturamento, qtd vendas e ticket médio por período. Filtra por loja (store_id/store_name), por vendedora (seller_id/seller_name) ou agrupa (group_by_store / group_by_seller).",
       parameters: {
         type: "object",
         properties: {
-          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"] },
-          store_id: { type: "string", description: "(opcional) UUID da loja" },
-          store_name: { type: "string", description: "(opcional) Nome da loja; resolvido via list_stores" },
-          group_by_store: { type: "boolean", description: "Se true, retorna breakdown por loja" },
+          period: { type: "string", enum: ["today", "yesterday", "week", "7d", "30d", "month"] },
+          from: { type: "string", description: "(opcional) YYYY-MM-DD - sobrescreve period" },
+          to: { type: "string", description: "(opcional) YYYY-MM-DD - sobrescreve period" },
+          store_id: { type: "string" },
+          store_name: { type: "string" },
+          seller_id: { type: "string" },
+          seller_name: { type: "string" },
+          group_by_store: { type: "boolean" },
+          group_by_seller: { type: "boolean" },
         },
-        required: ["period"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_sales_by_seller",
+      description: "Ranking de vendas por vendedora em um período. Retorna nome, qtd vendas, faturamento e ticket médio.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["today", "yesterday", "week", "7d", "30d", "month"] },
+          from: { type: "string" },
+          to: { type: "string" },
+          store_id: { type: "string" },
+          store_name: { type: "string" },
+          limit: { type: "number" },
+        },
       },
     },
   },
@@ -91,10 +122,11 @@ const tools = [
       parameters: {
         type: "object",
         properties: {
-          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"] },
+          period: { type: "string", enum: ["today", "yesterday", "week", "7d", "30d", "month"] },
+          from: { type: "string" },
+          to: { type: "string" },
           store_id: { type: "string" },
         },
-        required: ["period"],
       },
     },
   },
@@ -145,10 +177,12 @@ const tools = [
       parameters: {
         type: "object",
         properties: {
-          period: { type: "string", enum: ["today", "yesterday", "7d", "30d", "month"] },
+          period: { type: "string", enum: ["today", "yesterday", "week", "7d", "30d", "month"] },
+          from: { type: "string" },
+          to: { type: "string" },
+          store_id: { type: "string" },
           limit: { type: "number" },
         },
-        required: ["period"],
       },
     },
   },
@@ -312,7 +346,7 @@ async function resolveBankAccount(supabase: any, id?: string, name?: string): Pr
 }
 
 async function fetchPosSales(supabase: any, fromISO: string, toISO: string, storeIds: string[]): Promise<any[]> {
-  const select = "id, store_id, total, paid_at, created_at, status, payment_method, revenue_attribution";
+  const select = "id, store_id, seller_id, total, paid_at, created_at, status, payment_method, revenue_attribution";
   const a = await supabase.from("pos_sales").select(select)
     .in("status", POS_REVENUE_STATUSES).in("store_id", storeIds)
     .not("paid_at", "is", null).gte("paid_at", fromISO).lte("paid_at", toISO).limit(10000);
@@ -352,23 +386,45 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
   }
 
   if (name === "get_sales_summary") {
-    const { from, to, label } = brDateRange(args.period);
-    const fromISO = `${from}T03:00:00Z`;
-    const toISO = `${to}T26:59:59Z`;
+    const { label, fromISO, toISO } = brDateRange(args.period, args.from, args.to);
     const resolvedStoreId = await resolveStoreId(supabase, args.store_name, args.store_id);
     const storeIds = resolvedStoreId ? [resolvedStoreId] : PHYSICAL_STORE_IDS;
-    const sales = await fetchPosSales(supabase, fromISO, toISO, storeIds);
+    let sellerId: string | undefined = args.seller_id;
+    if (!sellerId && args.seller_name) {
+      const { data } = await supabase.from("pos_sellers").select("id").ilike("name", `%${args.seller_name}%`).limit(1);
+      sellerId = data?.[0]?.id;
+    }
+    let sales = await fetchPosSales(supabase, fromISO, toISO, storeIds);
+    if (sellerId) sales = sales.filter((r) => r.seller_id === sellerId);
 
     if (args.group_by_store) {
       const { data: stores } = await supabase.from("pos_stores").select("id, name").in("id", storeIds);
-      const byStore: Record<string, { nome: string; total: number; qtd: number }> = {};
-      for (const s of stores || []) byStore[s.id] = { nome: s.name, total: 0, qtd: 0 };
+      const byStore: Record<string, { nome: string; total: number; qtd: number; ticket_medio_brl: number }> = {};
+      for (const s of stores || []) byStore[s.id] = { nome: s.name, total: 0, qtd: 0, ticket_medio_brl: 0 };
       for (const r of sales) {
-        if (!byStore[r.store_id]) byStore[r.store_id] = { nome: "?", total: 0, qtd: 0 };
+        if (!byStore[r.store_id]) byStore[r.store_id] = { nome: "?", total: 0, qtd: 0, ticket_medio_brl: 0 };
         byStore[r.store_id].total += Number(r.total || 0);
         byStore[r.store_id].qtd += 1;
       }
+      for (const k of Object.keys(byStore)) byStore[k].ticket_medio_brl = byStore[k].qtd ? byStore[k].total / byStore[k].qtd : 0;
       return { periodo: label, por_loja: byStore };
+    }
+
+    if (args.group_by_seller) {
+      const sellerIds = [...new Set(sales.map((s) => s.seller_id).filter(Boolean))];
+      const { data: sellers } = await supabase.from("pos_sellers").select("id, name, store_id").in("id", sellerIds.length ? sellerIds : ["00000000-0000-0000-0000-000000000000"]);
+      const sellerMap: Record<string, { nome: string; store_id: string | null }> = {};
+      for (const s of sellers || []) sellerMap[s.id] = { nome: s.name, store_id: s.store_id };
+      const agg: Record<string, { nome: string; qtd: number; total: number; ticket_medio_brl: number }> = {};
+      for (const r of sales) {
+        const key = r.seller_id || "sem_vendedora";
+        const nome = sellerMap[r.seller_id]?.nome || (r.seller_id ? "?" : "Sem vendedora");
+        const cur = agg[key] || { nome, qtd: 0, total: 0, ticket_medio_brl: 0 };
+        cur.qtd += 1; cur.total += Number(r.total || 0);
+        agg[key] = cur;
+      }
+      const linhas = Object.values(agg).map((v) => ({ ...v, ticket_medio_brl: v.qtd ? v.total / v.qtd : 0 })).sort((a, b) => b.total - a.total);
+      return { periodo: label, por_vendedora: linhas };
     }
 
     const total = sales.reduce((s, r) => s + Number(r.total || 0), 0);
@@ -376,16 +432,36 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
     return {
       periodo: label,
       loja_filtrada: resolvedStoreId || "todas físicas",
+      vendedora_filtrada: sellerId || null,
       faturamento_brl: total,
       qtd_vendas: count,
       ticket_medio_brl: count ? total / count : 0,
     };
   }
 
+  if (name === "get_sales_by_seller") {
+    const { label, fromISO, toISO } = brDateRange(args.period, args.from, args.to);
+    const resolvedStoreId = await resolveStoreId(supabase, args.store_name, args.store_id);
+    const storeIds = resolvedStoreId ? [resolvedStoreId] : PHYSICAL_STORE_IDS;
+    const sales = await fetchPosSales(supabase, fromISO, toISO, storeIds);
+    const sellerIds = [...new Set(sales.map((s) => s.seller_id).filter(Boolean))];
+    const { data: sellers } = await supabase.from("pos_sellers").select("id, name, store_id").in("id", sellerIds.length ? sellerIds : ["00000000-0000-0000-0000-000000000000"]);
+    const sellerMap: Record<string, { nome: string }> = {};
+    for (const s of sellers || []) sellerMap[s.id] = { nome: s.name };
+    const agg: Record<string, { nome: string; qtd: number; total: number }> = {};
+    for (const r of sales) {
+      const key = r.seller_id || "sem_vendedora";
+      const nome = sellerMap[r.seller_id]?.nome || (r.seller_id ? "?" : "Sem vendedora");
+      const cur = agg[key] || { nome, qtd: 0, total: 0 };
+      cur.qtd += 1; cur.total += Number(r.total || 0);
+      agg[key] = cur;
+    }
+    const ranking = Object.values(agg).map((v) => ({ ...v, ticket_medio_brl: v.qtd ? v.total / v.qtd : 0 })).sort((a, b) => b.total - a.total).slice(0, args.limit ?? 20);
+    return { periodo: label, ranking };
+  }
+
   if (name === "get_sales_by_payment_method") {
-    const { from, to, label } = brDateRange(args.period);
-    const fromISO = `${from}T03:00:00Z`;
-    const toISO = `${to}T26:59:59Z`;
+    const { label, fromISO, toISO } = brDateRange(args.period, args.from, args.to);
     const resolvedStoreId = await resolveStoreId(supabase, undefined, args.store_id);
     const storeIds = resolvedStoreId ? [resolvedStoreId] : PHYSICAL_STORE_IDS;
     const sales = await fetchPosSales(supabase, fromISO, toISO, storeIds);
@@ -493,11 +569,11 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
   }
 
   if (name === "get_top_products") {
-    const { from, to, label } = brDateRange(args.period);
-    const fromISO = `${from}T03:00:00Z`;
-    const toISO = `${to}T26:59:59Z`;
-    const limit = args.limit ?? 5;
-    const sales = await fetchPosSales(supabase, fromISO, toISO, PHYSICAL_STORE_IDS);
+    const { label, fromISO, toISO } = brDateRange(args.period, args.from, args.to);
+    const limit = args.limit ?? 10;
+    const resolvedStoreId = await resolveStoreId(supabase, undefined, args.store_id);
+    const storeIds = resolvedStoreId ? [resolvedStoreId] : PHYSICAL_STORE_IDS;
+    const sales = await fetchPosSales(supabase, fromISO, toISO, storeIds);
     const saleIds = sales.map((s) => s.id);
     if (saleIds.length === 0) return { period: label, top: [] };
     const all: any[] = [];
@@ -661,7 +737,8 @@ async function handleConversation(supabase: any, chatId: number, userText: strin
       "Tom: direto ao ponto, no máximo 4 linhas, 1-2 emojis no máximo. Sem rodeios.",
       "Use as ferramentas para responder com dados reais — nunca invente números.",
       "Formate valores em BRL (R$ 1.234,56). Datas em pt-BR.",
-      "Se o usuário citar nome de loja ou categoria, use list_stores/list_categories para resolver o id.",
+      "Se o usuário citar nome de loja, vendedora ou categoria, use list_stores/list_categories (ou seller_name no get_sales_*) para resolver o id.",
+      "Para perguntas de vendas, use get_sales_summary (faturamento/ticket/qtd, com group_by_store ou group_by_seller), get_sales_by_seller (ranking de vendedoras), get_sales_by_payment_method (canal de pagamento), get_top_products (produtos mais vendidos). Aceita period ('today','yesterday','week','7d','30d','month') OU from+to (YYYY-MM-DD) para qualquer intervalo.",
       "Para inventário sempre use pos_products (fonte oficial).",
       "Contas bancárias: 'CAIXA Centro' / 'CAIXA Pérola' = dinheiro físico nos caixas das lojas; demais = bancos. Vendas em dinheiro do PDV alimentam o CAIXA da loja automaticamente. Para transferências (ex: pegou dinheiro do caixa e depositou no Itaú), use register_transfer.",
       "Se faltar contexto, pergunte 1 coisa só.",
