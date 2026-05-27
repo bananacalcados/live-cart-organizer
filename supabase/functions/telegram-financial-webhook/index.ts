@@ -589,6 +589,64 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
     return { ok: true };
   }
 
+  if (name === "list_bank_accounts") {
+    const { data } = await supabase.from("bank_accounts")
+      .select("id, name, bank_name, account_type, store_id, initial_balance, is_active")
+      .eq("is_active", true).order("name");
+    return { contas: data };
+  }
+
+  if (name === "get_bank_balance") {
+    let ids: string[] = [];
+    let accs: any[] = [];
+    if (args.account_id || args.account_name) {
+      const acc = await resolveBankAccount(supabase, args.account_id, args.account_name);
+      if (!acc) return { error: "Conta não encontrada" };
+      ids = [acc.id];
+    }
+    let q = supabase.from("bank_accounts").select("id, name, bank_name, account_type, initial_balance, store_id").eq("is_active", true);
+    if (ids.length) q = q.in("id", ids);
+    const { data: rows } = await q.order("name");
+    accs = rows || [];
+    if (!accs.length) return { contas: [], total_brl: 0 };
+    const { data: entries } = await supabase.from("cash_flow_entries")
+      .select("bank_account_id, direction, amount")
+      .in("bank_account_id", accs.map((a) => a.id));
+    const agg: Record<string, { in: number; out: number }> = {};
+    for (const e of entries || []) {
+      const id = e.bank_account_id; if (!id) continue;
+      agg[id] = agg[id] || { in: 0, out: 0 };
+      agg[id][e.direction as "in" | "out"] += Number(e.amount || 0);
+    }
+    const contas = accs.map((a) => {
+      const saldo = Number(a.initial_balance || 0) + (agg[a.id]?.in || 0) - (agg[a.id]?.out || 0);
+      return { id: a.id, nome: a.name, banco: a.bank_name, tipo: a.account_type, saldo_brl: saldo };
+    });
+    const total = contas.reduce((s, c) => s + c.saldo_brl, 0);
+    return { contas, total_brl: total };
+  }
+
+  if (name === "register_transfer") {
+    const from = await resolveBankAccount(supabase, args.from_account_id, args.from_account_name);
+    const to = await resolveBankAccount(supabase, args.to_account_id, args.to_account_name);
+    if (!from) return { error: "Conta de origem não identificada. Use list_bank_accounts." };
+    if (!to) return { error: "Conta de destino não identificada. Use list_bank_accounts." };
+    if (from.id === to.id) return { error: "Origem e destino devem ser diferentes." };
+    const amt = Number(args.amount);
+    if (!amt || amt <= 0) return { error: "Valor inválido" };
+    const date = args.date || brDateRange("today").from;
+    const pair = crypto.randomUUID();
+    const desc = args.description || "Transferência entre contas";
+    const { error } = await supabase.from("cash_flow_entries").insert([
+      { entry_date: date, direction: "out", amount: amt, description: `${desc} → ${to.name}`,
+        source: "transfer", is_transfer: true, transfer_pair_id: pair, bank_account_id: from.id, status: "confirmed", confidence: 1 },
+      { entry_date: date, direction: "in", amount: amt, description: `${desc} ← ${from.name}`,
+        source: "transfer", is_transfer: true, transfer_pair_id: pair, bank_account_id: to.id, status: "confirmed", confidence: 1 },
+    ]);
+    if (error) return { error: error.message };
+    return { ok: true, mensagem: `Transferência R$ ${amt} de ${from.name} → ${to.name} registrada.` };
+  }
+
   return { error: `tool desconhecida: ${name}` };
 }
 
