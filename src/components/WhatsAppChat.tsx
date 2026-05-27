@@ -44,6 +44,7 @@ interface Message {
   media_url?: string;
   error_code?: string | null;
   error_message?: string | null;
+  whatsapp_number_id?: string | null;
 }
 
 interface MediaAttachment {
