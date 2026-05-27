@@ -43,7 +43,7 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
   const [cats, setCats] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [drilldownKey, setDrilldownKey] = useState<{ direction: "in" | "out"; categoryId: string | null; label: string } | null>(null);
+  const [drilldownKey, setDrilldownKey] = useState<{ direction: "in" | "out"; categoryId: string | null; label: string; mode: "root" | "leaf" } | null>(null);
   const [editing, setEditing] = useState<Entry | null>(null);
 
   const load = async () => {
@@ -114,7 +114,9 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
     if (!drilldownKey) return [];
     return entries.filter((e) =>
       e.direction === drilldownKey.direction &&
-      (drilldownKey.categoryId === null ? !e.category_id : e.category_id === drilldownKey.categoryId)
+      (drilldownKey.mode === "root"
+        ? (drilldownKey.categoryId === null ? !e.category_id : rootCatOf(e.category_id).id === drilldownKey.categoryId)
+        : (drilldownKey.categoryId === null ? !e.category_id : e.category_id === drilldownKey.categoryId))
     ).sort((a, b) => b.entry_date.localeCompare(a.entry_date));
   }, [entries, drilldownKey]);
 
@@ -164,15 +166,30 @@ export function CashFlowByCategory({ stores }: { stores: Store[] }) {
               const subs = [...root.subs.values()].sort((a, b) => b.total - a.total);
               return (
                 <div key={k}>
-                  <div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer" onClick={() => toggle(k)}>
-                    {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    <span className="flex-1 text-sm font-medium">{root.name}</span>
-                    <span className={`text-sm font-semibold ${color}`}>{fmt(root.total)}</span>
+                  <div className="flex items-center gap-2 rounded hover:bg-muted/50">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 shrink-0 p-0"
+                      onClick={() => toggle(k)}
+                      title={open ? "Recolher" : "Expandir"}
+                    >
+                      {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </Button>
+                    <button
+                      type="button"
+                      className="flex flex-1 items-center gap-2 py-1.5 pr-2 text-left"
+                      onClick={() => setDrilldownKey({ direction: dir, categoryId: root.id, label: root.name, mode: "root" })}
+                    >
+                      <span className="flex-1 text-sm font-medium">{root.name}</span>
+                      <span className={`text-sm font-semibold ${color}`}>{fmt(root.total)}</span>
+                    </button>
                   </div>
                   {open && subs.map((s) => (
                     <div key={`${k}:${s.id || "_"}`}
                       className="flex items-center gap-2 py-1 px-2 ml-6 text-sm rounded hover:bg-muted cursor-pointer"
-                      onClick={() => setDrilldownKey({ direction: dir, categoryId: s.id, label: s.name })}>
+                      onClick={() => setDrilldownKey({ direction: dir, categoryId: s.id, label: s.name, mode: "leaf" })}>
                       <span className="flex-1 text-muted-foreground">{s.name}</span>
                       <Badge variant="outline" className="text-[10px]">{s.count}</Badge>
                       <span className={color}>{fmt(s.total)}</span>
