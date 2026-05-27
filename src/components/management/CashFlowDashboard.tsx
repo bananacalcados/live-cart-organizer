@@ -39,6 +39,11 @@ export function CashFlowDashboard({ stores }: { stores: Store[] }) {
   const [cats, setCats] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manual, setManual] = useState<{ date: string; direction: "in" | "out"; amount: string; description: string; category_id: string; store_id: string; payment_method: string }>(
+    { date: new Date().toISOString().slice(0, 10), direction: "out", amount: "", description: "", category_id: "", store_id: "", payment_method: "" }
+  );
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -55,6 +60,32 @@ export function CashFlowDashboard({ stores }: { stores: Store[] }) {
     setLoading(false);
   };
   useEffect(() => { load(); }, [from, to, storeFilter, ledger]);
+
+  const saveManual = async () => {
+    const amt = Number(manual.amount.replace(",", "."));
+    if (!amt || amt <= 0) return toast({ title: "Valor inválido", variant: "destructive" });
+    if (!manual.description.trim()) return toast({ title: "Descrição obrigatória", variant: "destructive" });
+    setSaving(true);
+    const { error } = await supabase.from("cash_flow_entries").insert({
+      entry_date: manual.date,
+      direction: manual.direction,
+      amount: amt,
+      description: manual.description.trim(),
+      category_id: manual.category_id || null,
+      store_id: manual.store_id || null,
+      payment_method: manual.payment_method || null,
+      source: "manual",
+      status: "confirmed",
+      ledger,
+      confidence: 1,
+    });
+    setSaving(false);
+    if (error) return toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+    toast({ title: "Lançamento criado" });
+    setManualOpen(false);
+    setManual({ ...manual, amount: "", description: "" });
+    load();
+  };
 
   const rootCatOf = (id: string | null): { id: string; name: string } => {
     if (!id) return { id: "__none__", name: "Sem categoria" };
