@@ -355,7 +355,10 @@ async function processBankStatement(
     `Conta: <b>${top.name}</b>\n` +
     `Transações novas: <b>${inserted}</b>\n` +
     (skipped > 0 ? `Duplicadas/ignoradas: ${skipped}\n` : "") +
-    `\n🤖 Categorização automática em andamento. Revise no painel de Lançamentos.`);
+    `\n🤖 Categorizando automaticamente... ` +
+    `Cada lançamento já aparece na aba <b>Lançamentos</b> como <i>"pendente de categoria"</i>. ` +
+    `Confirme a classificação de cada um por lá. ✏️`);
+
 
   return { ok: true, inserted };
 }
