@@ -256,7 +256,60 @@ const tools = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "list_bank_accounts",
+      description: "Lista contas bancárias ativas (inclui CAIXAs das lojas físicas). Use para resolver nome → id antes de transferências.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_bank_balance",
+      description: "Saldo atual de uma conta específica ou de todas. Saldo = saldo_inicial + entradas - saídas (transferências internas contam no saldo).",
+      parameters: {
+        type: "object",
+        properties: {
+          account_id: { type: "string", description: "(opcional) UUID da conta" },
+          account_name: { type: "string", description: "(opcional) Nome aproximado (ex: 'CAIXA Pérola', 'Itaú')" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "register_transfer",
+      description: "Registra transferência entre 2 contas (ex: 'tirei R$ 500 do CAIXA Pérola e depositei no Itaú'). Cria duas pernas atômicas (saída + entrada) marcadas como is_transfer=true — não impactam DRE, só movem saldo.",
+      parameters: {
+        type: "object",
+        properties: {
+          from_account_id: { type: "string" },
+          from_account_name: { type: "string", description: "(alternativa) Nome aproximado da conta de origem" },
+          to_account_id: { type: "string" },
+          to_account_name: { type: "string", description: "(alternativa) Nome aproximado da conta de destino" },
+          amount: { type: "number" },
+          date: { type: "string", description: "YYYY-MM-DD; default hoje" },
+          description: { type: "string", description: "Observação livre" },
+        },
+        required: ["amount"],
+      },
+    },
+  },
 ];
+
+async function resolveBankAccount(supabase: any, id?: string, name?: string): Promise<{ id: string; name: string } | null> {
+  if (id) {
+    const { data } = await supabase.from("bank_accounts").select("id, name").eq("id", id).maybeSingle();
+    return data || null;
+  }
+  if (!name) return null;
+  const { data } = await supabase.from("bank_accounts").select("id, name")
+    .eq("is_active", true).ilike("name", `%${name}%`).limit(1);
+  return data?.[0] || null;
+}
 
 async function fetchPosSales(supabase: any, fromISO: string, toISO: string, storeIds: string[]): Promise<any[]> {
   const select = "id, store_id, total, paid_at, created_at, status, payment_method, revenue_attribution";
@@ -536,6 +589,64 @@ async function runTool(supabase: any, name: string, args: any): Promise<unknown>
     return { ok: true };
   }
 
+  if (name === "list_bank_accounts") {
+    const { data } = await supabase.from("bank_accounts")
+      .select("id, name, bank_name, account_type, store_id, initial_balance, is_active")
+      .eq("is_active", true).order("name");
+    return { contas: data };
+  }
+
+  if (name === "get_bank_balance") {
+    let ids: string[] = [];
+    let accs: any[] = [];
+    if (args.account_id || args.account_name) {
+      const acc = await resolveBankAccount(supabase, args.account_id, args.account_name);
+      if (!acc) return { error: "Conta não encontrada" };
+      ids = [acc.id];
+    }
+    let q = supabase.from("bank_accounts").select("id, name, bank_name, account_type, initial_balance, store_id").eq("is_active", true);
+    if (ids.length) q = q.in("id", ids);
+    const { data: rows } = await q.order("name");
+    accs = rows || [];
+    if (!accs.length) return { contas: [], total_brl: 0 };
+    const { data: entries } = await supabase.from("cash_flow_entries")
+      .select("bank_account_id, direction, amount")
+      .in("bank_account_id", accs.map((a) => a.id));
+    const agg: Record<string, { in: number; out: number }> = {};
+    for (const e of entries || []) {
+      const id = e.bank_account_id; if (!id) continue;
+      agg[id] = agg[id] || { in: 0, out: 0 };
+      agg[id][e.direction as "in" | "out"] += Number(e.amount || 0);
+    }
+    const contas = accs.map((a) => {
+      const saldo = Number(a.initial_balance || 0) + (agg[a.id]?.in || 0) - (agg[a.id]?.out || 0);
+      return { id: a.id, nome: a.name, banco: a.bank_name, tipo: a.account_type, saldo_brl: saldo };
+    });
+    const total = contas.reduce((s, c) => s + c.saldo_brl, 0);
+    return { contas, total_brl: total };
+  }
+
+  if (name === "register_transfer") {
+    const from = await resolveBankAccount(supabase, args.from_account_id, args.from_account_name);
+    const to = await resolveBankAccount(supabase, args.to_account_id, args.to_account_name);
+    if (!from) return { error: "Conta de origem não identificada. Use list_bank_accounts." };
+    if (!to) return { error: "Conta de destino não identificada. Use list_bank_accounts." };
+    if (from.id === to.id) return { error: "Origem e destino devem ser diferentes." };
+    const amt = Number(args.amount);
+    if (!amt || amt <= 0) return { error: "Valor inválido" };
+    const date = args.date || brDateRange("today").from;
+    const pair = crypto.randomUUID();
+    const desc = args.description || "Transferência entre contas";
+    const { error } = await supabase.from("cash_flow_entries").insert([
+      { entry_date: date, direction: "out", amount: amt, description: `${desc} → ${to.name}`,
+        source: "transfer", is_transfer: true, transfer_pair_id: pair, bank_account_id: from.id, status: "confirmed", confidence: 1 },
+      { entry_date: date, direction: "in", amount: amt, description: `${desc} ← ${from.name}`,
+        source: "transfer", is_transfer: true, transfer_pair_id: pair, bank_account_id: to.id, status: "confirmed", confidence: 1 },
+    ]);
+    if (error) return { error: error.message };
+    return { ok: true, mensagem: `Transferência R$ ${amt} de ${from.name} → ${to.name} registrada.` };
+  }
+
   return { error: `tool desconhecida: ${name}` };
 }
 
@@ -552,6 +663,7 @@ async function handleConversation(supabase: any, chatId: number, userText: strin
       "Formate valores em BRL (R$ 1.234,56). Datas em pt-BR.",
       "Se o usuário citar nome de loja ou categoria, use list_stores/list_categories para resolver o id.",
       "Para inventário sempre use pos_products (fonte oficial).",
+      "Contas bancárias: 'CAIXA Centro' / 'CAIXA Pérola' = dinheiro físico nos caixas das lojas; demais = bancos. Vendas em dinheiro do PDV alimentam o CAIXA da loja automaticamente. Para transferências (ex: pegou dinheiro do caixa e depositou no Itaú), use register_transfer.",
       "Se faltar contexto, pergunte 1 coisa só.",
     ].join(" "),
   };
@@ -670,6 +782,8 @@ Deno.serve(async (req) => {
       "• <i>contas a pagar nos próximos 7 dias</i>\n" +
       "• <i>quantos pares tenho em estoque?</i>\n" +
       "• <i>fluxo de caixa por categoria do mês</i>\n" +
+      "• <i>saldo da conta Itaú</i> / <i>saldo de todas as contas</i>\n" +
+      "• <i>transferi R$ 500 do CAIXA Pérola pro Itaú hoje</i>\n" +
       "• Envie foto de comprovante (com legenda opcional) → eu categorizo e lanço\n" +
       "• /reset — limpa o histórico");
     return new Response(JSON.stringify({ ok: true }));
