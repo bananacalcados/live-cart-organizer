@@ -103,20 +103,20 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
     setIsSending(true);
     setNewMessage("");
     try {
-      if (sendVia === 'meta' && selectedNumberId) {
+      if (sendVia === 'meta' && effectiveNumberId) {
         const { error } = await supabase.functions.invoke('meta-whatsapp-send', {
-          body: { phone: sendPhone, message: text, whatsapp_number_id: selectedNumberId },
+          body: { phone: sendPhone, message: text, whatsapp_number_id: effectiveNumberId },
         });
         if (error) throw error;
       } else {
         const { error } = await supabase.functions.invoke('zapi-send-message', {
-          body: { phone: sendPhone, message: text, whatsapp_number_id: selectedNumberId },
+          body: { phone: sendPhone, message: text, whatsapp_number_id: effectiveNumberId },
         });
         if (error) throw error;
       }
       await supabase.from('whatsapp_messages').insert({
         phone: sendPhone, message: text, direction: 'outgoing', status: 'sent',
-        whatsapp_number_id: selectedNumberId || null,
+        whatsapp_number_id: effectiveNumberId || null,
         sender_user_id: currentUserId || null,
       });
       loadMessages();
