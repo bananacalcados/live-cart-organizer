@@ -148,9 +148,9 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
         const file = new File([blob], `audio-${Date.now()}.${ext}`, { type: ct });
         const url = await uploadMediaToStorage(file);
         if (url) {
-          const result = await sendMedia(phone, url, 'audio');
+          const result = await sendMedia(phone, url, 'audio', undefined, effectiveNumberId || undefined);
           if (result.success) {
-            await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: '[audio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: url, sender_user_id: currentUserId || null });
+            await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: '[audio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: url, whatsapp_number_id: effectiveNumberId || null, sender_user_id: currentUserId || null });
             loadMessages();
           }
         }
