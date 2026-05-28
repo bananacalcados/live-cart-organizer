@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Search, Users, MessageCircle, Wifi, CheckSquare, PhoneOff, Send,
-  Radio, Bell, Bot, CheckCircle2, Archive, Megaphone
+  Radio, Bell, Bot, CheckCircle2, Archive, Megaphone, Eye
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
