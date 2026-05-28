@@ -1,20 +1,19 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, X, Loader2, MessageCircle, Phone, Image, Video, Mic, MicOff, Paperclip, FileText, Check, CheckCheck, AlertCircle, Clock, ExternalLink } from "lucide-react";
+import { Send, X, Loader2, MessageCircle, Image, Video, Mic, Paperclip, FileText, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { useZapi } from "@/hooks/useZapi";
 import { supabase } from "@/integrations/supabase/client";
-import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { MessageStatusIcon } from "@/components/chat/MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
+import { useConversationInstance } from "@/hooks/useConversationInstance";
+import { useChatMessages } from "@/hooks/chat/useChatMessages";
+import { useChatSender } from "@/hooks/chat/useChatSender";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 
 interface LiveWhatsAppChatDialogProps {
   open: boolean;
@@ -33,6 +32,7 @@ interface WaMessage {
   media_type?: string;
   media_url?: string;
   created_at: string;
+  whatsapp_number_id?: string | null;
 }
 
 interface MetaTemplate {
@@ -44,13 +44,10 @@ interface MetaTemplate {
 }
 
 export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerPhone, cartSummary }: LiveWhatsAppChatDialogProps) {
-  const [messages, setMessages] = useState<WaMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { sendMessage: zapiSendMessage } = useZapi();
   const { fetchNumbers, getSelectedNumber } = useWhatsAppNumberStore();
+  const currentUserId = useCurrentUserId();
 
   // Media state
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -73,26 +70,21 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
   const [selectedTemplate, setSelectedTemplate] = useState<MetaTemplate | null>(null);
   const [templateVars, setTemplateVars] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    if (open) {
-      fetchNumbers();
-      loadMessages();
-    }
-  }, [open, viewerPhone]);
+  useEffect(() => { if (open) fetchNumbers(); }, [open, fetchNumbers]);
 
-  // Broadcast-based new-message notification (postgres_changes removed for CPU).
-  useWaMessageBroadcast((payload) => {
-    if (!open || !viewerPhone) return;
-    if (payload?.phone !== viewerPhone) return;
-    loadMessages();
-  });
+  // Mensagens unificadas (carrega, broadcast e polling de status)
+  const { messages, isLoading: loading, refresh: loadMessages } = useChatMessages(
+    open ? viewerPhone : null,
+    undefined,
+  );
 
-  // Status (✓✓) refresh: refetch every 15s while open.
-  useEffect(() => {
-    if (!open || !viewerPhone) return;
-    const interval = setInterval(() => loadMessages(), 15000);
-    return () => clearInterval(interval);
-  }, [open, viewerPhone]);
+  // Trava na instância vinculada à conversa (regra do sistema)
+  const { effectiveNumberId, effectiveNumber, boundNumber, isLocked } = useConversationInstance(
+    viewerPhone,
+    { messages: messages as never },
+  );
+
+  const { sendText, sendMedia, sendAudio, isSending } = useChatSender();
 
   // Auto-scroll
   useEffect(() => {
@@ -101,48 +93,27 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
     }
   }, [messages]);
 
-  const loadMessages = async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from("whatsapp_messages")
-      .select("*")
-      .eq("phone", viewerPhone)
-      .order("created_at", { ascending: true })
-      .limit(100);
-    setMessages((data as WaMessage[]) || []);
-    setLoading(false);
+  // Provider efetivo: prioriza o vinculado à conversa; fallback no seletor global.
+  const resolveProvider = (): 'meta' | 'zapi' => {
+    const num = effectiveNumber || getSelectedNumber();
+    return num?.provider === 'meta' ? 'meta' : 'zapi';
   };
 
   const handleSend = async () => {
     if (!newMessage.trim() || isSending) return;
     const text = newMessage.trim();
-    setIsSending(true);
     setNewMessage("");
-    try {
-      const selectedNum = getSelectedNumber();
-      if (selectedNum?.provider === "meta") {
-        const { error } = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: viewerPhone, message: text, whatsappNumberId: selectedNum.id },
-        });
-        if (error) throw error;
-      } else {
-        const result = await zapiSendMessage(viewerPhone, text);
-        if (!result.success) throw new Error(result.error);
-      }
-      await supabase.from("whatsapp_messages").insert({
-        phone: viewerPhone,
-        message: text,
-        direction: "outgoing",
-        status: "sent",
-        whatsapp_number_id: getSelectedNumber()?.provider === "meta" ? getSelectedNumber()?.id : null,
-      });
+    const result = await sendText({
+      phone: viewerPhone,
+      message: text,
+      route: { channel: 'whatsapp', provider: resolveProvider(), numberId: effectiveNumberId || null },
+      senderUserId: currentUserId || null,
+    });
+    if (result.success) {
       toast.success("Mensagem enviada!");
-    } catch (err: any) {
-      console.error("Error sending:", err);
-      toast.error("Erro ao enviar mensagem");
+      loadMessages();
+    } else {
       setNewMessage(text);
-    } finally {
-      setIsSending(false);
     }
   };
 
@@ -168,29 +139,17 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
       else if (file.type.startsWith("video/")) mediaType = "video";
       else if (file.type.startsWith("audio/")) mediaType = "audio";
 
-      const selectedNum = getSelectedNumber();
-      if (selectedNum?.provider === "meta") {
-        const { error } = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: viewerPhone, message: "", type: mediaType, mediaUrl: publicUrl, whatsappNumberId: selectedNum.id },
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: viewerPhone, mediaUrl: publicUrl, mediaType, caption: "", whatsapp_number_id: selectedNum?.id },
-        });
-        if (error) throw error;
-      }
-
-      await supabase.from("whatsapp_messages").insert({
+      const result = await sendMedia({
         phone: viewerPhone,
-        message: mediaType === "image" ? "📷 Imagem" : mediaType === "video" ? "🎥 Vídeo" : mediaType === "audio" ? "🎤 Áudio" : "📎 Documento",
-        direction: "outgoing",
-        status: "sent",
-        media_type: mediaType,
-        media_url: publicUrl,
-        whatsapp_number_id: selectedNum?.id || null,
+        mediaUrl: publicUrl,
+        mediaType,
+        route: { channel: 'whatsapp', provider: resolveProvider(), numberId: effectiveNumberId || null },
+        senderUserId: currentUserId || null,
       });
-      toast.success(`${mediaType === "image" ? "Imagem" : mediaType === "video" ? "Vídeo" : "Arquivo"} enviado!`);
+      if (result.success) {
+        toast.success(`${mediaType === "image" ? "Imagem" : mediaType === "video" ? "Vídeo" : "Arquivo"} enviado!`);
+        loadMessages();
+      }
     } catch (err: any) {
       console.error("Error sending media:", err);
       toast.error("Erro ao enviar mídia");
@@ -226,29 +185,16 @@ export function LiveWhatsAppChatDialog({ open, onOpenChange, viewerName, viewerP
           const publicUrl = await uploadMediaToStorage(file);
           if (!publicUrl) throw new Error("Upload falhou");
 
-          const selectedNum = getSelectedNumber();
-          if (selectedNum?.provider === "meta") {
-            const { error } = await supabase.functions.invoke("meta-whatsapp-send", {
-              body: { phone: viewerPhone, message: "", type: "audio", mediaUrl: publicUrl, whatsappNumberId: selectedNum.id },
-            });
-            if (error) throw error;
-          } else {
-            const { error } = await supabase.functions.invoke("zapi-send-media", {
-              body: { phone: viewerPhone, mediaUrl: publicUrl, mediaType: "audio", caption: "", whatsapp_number_id: selectedNum?.id },
-            });
-            if (error) throw error;
-          }
-
-          await supabase.from("whatsapp_messages").insert({
+          const result = await sendAudio({
             phone: viewerPhone,
-            message: "🎤 Áudio",
-            direction: "outgoing",
-            status: "sent",
-            media_type: "audio",
-            media_url: publicUrl,
-            whatsapp_number_id: selectedNum?.id || null,
+            mediaUrl: publicUrl,
+            route: { channel: 'whatsapp', provider: resolveProvider(), numberId: effectiveNumberId || null },
+            senderUserId: currentUserId || null,
           });
-          toast.success("Áudio enviado!");
+          if (result.success) {
+            toast.success("Áudio enviado!");
+            loadMessages();
+          }
         } catch (err: any) {
           console.error("Error sending audio:", err);
           toast.error("Erro ao enviar áudio");
