@@ -181,7 +181,13 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
           <p className="text-sm font-medium truncate">{customerName}</p>
           <p className="text-[10px] opacity-80 truncate">{ticketSubject} · {phone}</p>
         </div>
-        <WhatsAppNumberSelector />
+        {isLocked && boundNumber ? (
+          <div className="text-xs text-muted-foreground border rounded px-2 py-1.5 bg-muted/40">
+            🔒 Vinculado: <span className="font-medium text-foreground">{boundNumber.label}</span>
+          </div>
+        ) : (
+          <WhatsAppNumberSelector />
+        )}
         
       </div>
 
