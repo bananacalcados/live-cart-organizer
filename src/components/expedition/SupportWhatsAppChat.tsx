@@ -47,7 +47,7 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
   const inputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const { sendMessage, sendMedia, isLoading: isSending } = useZapi();
-  const { selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+  const { fetchNumbers } = useWhatsAppNumberStore();
 
   // Recording
   const [isRecording, setIsRecording] = useState(false);
