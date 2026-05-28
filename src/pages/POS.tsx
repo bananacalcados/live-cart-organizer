@@ -277,18 +277,7 @@ export default function POS() {
 
       {/* Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Floating exit button for WhatsApp full-screen */}
-        {isWhatsAppFull && !isMobile && (
-          <button
-            onClick={() => setSection("dashboard")}
-            className="absolute top-3 right-3 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-pos-black/90 backdrop-blur text-white text-xs font-medium shadow-lg hover:bg-pos-black border border-white/10 transition-all"
-            title="Sair (ESC)"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Sair do WhatsApp
-            <kbd className="ml-1 px-1.5 py-0.5 text-[9px] rounded bg-white/10 border border-white/20">ESC</kbd>
-          </button>
-        )}
+        {/* Exit full-screen WhatsApp button is now rendered inside POSWhatsApp header (left side). */}
         {section === "dashboard" && (
           <POSDashboard
             storeId={selectedStore}
@@ -317,7 +306,7 @@ export default function POS() {
         {section === "returns" && <POSExchanges storeId={selectedStore} />}
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
         
-        {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} />}
+        {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} onExitFullScreen={!isMobile ? () => setSection("dashboard") : undefined} />}
         {section === "online" && <POSOnlineHub storeId={selectedStore} sellers={sellers} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
         {section === "pickups" && <POSPickupOrders storeId={selectedStore} />}

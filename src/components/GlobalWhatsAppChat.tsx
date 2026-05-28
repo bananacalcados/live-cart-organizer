@@ -126,7 +126,11 @@ export function GlobalWhatsAppChat() {
 
       if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
 
-      const { convs, phoneMessages } = mapRowsToConvs(regularResult.data || []);
+      const isCommentMessage = (msg?: string | null) =>
+        !!msg && /^(💬\s*Coment[áa]rio|\[ig_post\]|\[ig_reel\])/i.test(msg.trim());
+      const filteredRows = (regularResult.data || []).filter((row: any) => !isCommentMessage(row.last_message));
+
+      const { convs, phoneMessages } = mapRowsToConvs(filteredRows);
       convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
       setConversations(enrichConversations(convs, phoneMessages));
     };

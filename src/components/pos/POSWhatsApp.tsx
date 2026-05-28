@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft } from "lucide-react";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -44,6 +44,7 @@ import { TeamChatPanel } from "@/components/chat/TeamChatPanel";
 interface Props {
   storeId: string;
   initialFilter?: "unanswered" | "new";
+  onExitFullScreen?: () => void;
 }
 
 interface CrmCustomerData {
@@ -61,7 +62,7 @@ interface CrmCustomerData {
   }[];
 }
 
-export function POSWhatsApp({ storeId, initialFilter }: Props) {
+export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props) {
   const currentUserId = useCurrentUserId();
   const sender = useChatSender();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -572,6 +573,13 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
       let allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
 
+      // Hide Instagram comment-only conversations (Live/Post/Reel comments) — chat should show DMs only
+      const isCommentMessage = (msg?: string | null) => {
+        if (!msg) return false;
+        return /^(💬\s*Coment[áa]rio|\[ig_post\]|\[ig_reel\])/i.test(msg.trim());
+      };
+      allRows = allRows.filter((row: any) => !isCommentMessage(row.last_message));
+
       // Client-side filter by store's assigned WhatsApp numbers (when more than 1)
       if (storeNumberIds.length > 1) {
         allRows = allRows.filter((row: any) => {
@@ -1030,8 +1038,22 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
               <ChevronLeft className="h-5 w-5" />
             </Button>
           )}
-          <MessageCircle className="h-5 w-5 text-white" />
-          <span className="font-bold text-white">WhatsApp</span>
+          {onExitFullScreen ? (
+            <button
+              onClick={onExitFullScreen}
+              title="Sair (ESC)"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#054d44] text-xs font-semibold shadow-sm transition-all"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Sair do WhatsApp
+              <kbd className="ml-1 px-1.5 py-0.5 text-[9px] rounded bg-[#054d44]/10 border border-[#054d44]/20 text-[#054d44]">ESC</kbd>
+            </button>
+          ) : (
+            <>
+              <MessageCircle className="h-5 w-5 text-white" />
+              <span className="font-bold text-white">WhatsApp</span>
+            </>
+          )}
           {selectedSellerName && (
             <Badge className="bg-white/20 text-white border-0 text-[10px]">{selectedSellerName}</Badge>
           )}
