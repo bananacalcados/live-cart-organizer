@@ -342,6 +342,12 @@ export function ConversationList({
                     <Send className="h-3 w-3" />Enviar ({selectedPhones.size})
                   </Button>
                 )}
+                {onBulkMarkRead && (
+                  <Button variant="secondary" size="sm" className="h-7 text-[11px] gap-1" disabled={selectedPhones.size === 0}
+                    onClick={() => { onBulkMarkRead(Array.from(selectedPhones)); exitSelectMode(); }}>
+                    <Eye className="h-3 w-3" />Marcar lida ({selectedPhones.size})
+                  </Button>
+                )}
                 <Button variant="destructive" size="sm" className="h-7 text-[11px] gap-1" disabled={selectedPhones.size === 0}
                   onClick={() => { onBulkFinish(Array.from(selectedPhones)); exitSelectMode(); }}>
                   <PhoneOff className="h-3 w-3" />Finalizar ({selectedPhones.size})
