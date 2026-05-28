@@ -379,7 +379,7 @@ export function ConversationList({
             </div>
           ) : (
             <div>
-              {filteredConversations.map((conv) => (
+              {visibleConversations.map((conv) => (
                 <button
                   key={conv.conversationKey || conv.phone}
                   onClick={() => {
