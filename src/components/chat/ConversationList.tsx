@@ -187,6 +187,28 @@ export function ConversationList({
   };
   const exitSelectMode = () => { setSelectMode(false); setSelectedPhones(new Set()); };
 
+  // Reset visible window when filters change so users always start from the top
+  useEffect(() => {
+    setVisibleLimit(60);
+  }, [chatFilter, statusFilter, instanceFilter, searchQuery, liveFilterActive]);
+
+  const visibleConversations = filteredConversations.slice(0, visibleLimit);
+  const hasMore = filteredConversations.length > visibleConversations.length;
+
+  // Infinite scroll sentinel
+  useEffect(() => {
+    if (!hasMore || !sentinelRef.current) return;
+    const el = sentinelRef.current;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setVisibleLimit((n) => n + 60);
+      }
+    }, { rootMargin: '300px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, visibleLimit, filteredConversations.length]);
+
+
   // Native-style pill
   const Pill = ({ label, active, count, onClick, badge }: { label: string; active: boolean; count?: number; onClick: () => void; badge?: boolean }) => (
     <button
