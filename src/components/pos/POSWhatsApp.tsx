@@ -1122,7 +1122,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         {/* Conversation List */}
         <div className={cn(
           "flex flex-col min-h-0 overflow-hidden border-r border-[#e9edef] dark:border-[#313d45]",
-          selectedPhone ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
+          (selectedPhone || teamChatActive) ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
         )}>
           <ConversationList
             conversations={multiInstanceFilter.length > 0
@@ -1168,11 +1168,21 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             liveCount={liveCount}
             isLiveCustomer={isLiveCustomer}
             liveStageMap={liveStageByPhone}
+            teamChatActive={teamChatActive}
+            onTeamChatClick={() => {
+              setTeamChatActive(true);
+              setSelectedPhone(null);
+              setSelectedConvKey(null);
+              setSelectedConvNumberId(null);
+              setSelectedConvChannel(null);
+            }}
           />
         </div>
 
-        {/* Chat View */}
-        {selectedPhone ? (
+        {/* Team Chat Panel takes precedence */}
+        {teamChatActive ? (
+          <TeamChatPanel onBack={() => setTeamChatActive(false)} />
+        ) : selectedPhone ? (
           <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
             {/* Contact Header Bar */}
             <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
