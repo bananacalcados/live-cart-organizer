@@ -145,8 +145,10 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       setPhysicalRevenue(physical.reduce((sum, s) => sum + (s.total || 0), 0));
       setPhysicalSalesCount(physical.length);
 
-      // Faturamento Live: qualquer venda com event_id (independente do sale_type)
-      const liveSales = completedSales.filter((s: any) => s.event_id);
+      // Faturamento Live: venda com event_id E efetivamente paga (paid_at preenchido).
+      // Status como `pending_pickup` podem existir sem pagamento confirmado (aguardando retirada),
+      // por isso exigimos paid_at para garantir que é receita realmente recebida.
+      const liveSales = completedSales.filter((s: any) => s.event_id && s.paid_at);
       setLiveRevenue(liveSales.reduce((sum, s) => sum + (s.total || 0), 0));
       setLiveSalesCount(liveSales.length);
 
