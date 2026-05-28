@@ -38,6 +38,7 @@ import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import { BulkMessageDialog, BulkRecipient } from "@/components/chat/BulkMessageDialog";
 import { useChatSender, type SendRoute } from "@/hooks/chat/useChatSender";
+import { useChatMessages } from "@/hooks/chat/useChatMessages";
 
 interface Props {
   storeId: string;
@@ -68,7 +69,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { messages, setMessages, refresh: refreshMessages } = useChatMessages(selectedPhone, selectedConvNumberId);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -595,20 +596,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, filterByAssignment, mapRowsToConvs, waMsgTick]);
 
-  // New WhatsApp messages broadcast (postgres_changes removed for CPU).
+  // Bump conversation list when any new WA message arrives (messages of the open chat
+  // are handled internally by useChatMessages above).
   useWaMessageBroadcast(() => {
     setWaMsgTick((t) => t + 1);
-    if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
   });
-
-  // Status (✓✓) refresh: refetch open chat every 15s.
-  useEffect(() => {
-    if (!selectedPhone) return;
-    const interval = setInterval(() => {
-      loadMessages(selectedPhone, selectedConvNumberId);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [selectedPhone, selectedConvNumberId]);
 
   // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
   // This handles cross-device realtime updates without disrupting the current UI
@@ -628,22 +620,11 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     });
   }, [finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones]);
 
-  const loadMessages = async (phone: string, numberId?: string | null) => {
-    let query = supabase
-      .from("whatsapp_messages")
-      .select("*")
-      .eq("phone", phone)
-      .order("created_at", { ascending: true });
-    
-    if (numberId) {
-      query = query.eq("whatsapp_number_id", numberId);
-    } else if (numberId === null) {
-      query = query.is("whatsapp_number_id", null);
-    }
-    
-    const { data } = await query;
-    setMessages(data || []);
-  };
+  // Backwards-compat shim: legacy call sites pass (phone, numberId) but the new hook
+  // re-loads automatically when selectedPhone/selectedConvNumberId change. We expose
+  // refresh() for explicit post-send refetches.
+  const loadMessages = (_phone?: string, _numberId?: string | null) => refreshMessages();
+
 
   const getSelectedChannel = () => {
     if (selectedConvChannel) return selectedConvChannel;
