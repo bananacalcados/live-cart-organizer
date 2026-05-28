@@ -181,30 +181,25 @@ export function MassTemplateDispatcher() {
   const startPolling = (dispatchId: string) => {
     if (pollingRef.current) clearInterval(pollingRef.current);
     pollingRef.current = setInterval(async () => {
-      const [{ data: dispatch }, sentRes, failedRes, pendingRes] = await Promise.all([
-        supabase
-          .from('dispatch_history')
-          .select('status, total_recipients')
-          .eq('id', dispatchId)
-          .single(),
-        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true }).eq('dispatch_id', dispatchId).eq('status', 'sent'),
-        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true }).eq('dispatch_id', dispatchId).eq('status', 'failed'),
-        supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true }).eq('dispatch_id', dispatchId).eq('status', 'pending'),
-      ]);
+      const { data: dispatch } = await supabase
+        .from('dispatch_history')
+        .select('status, total_recipients, sent_count, failed_count')
+        .eq('id', dispatchId)
+        .single();
 
       if (!dispatch) return;
 
-      const sent = sentRes.count || 0;
-      const failed = failedRes.count || 0;
-      const pending = pendingRes.count || 0;
+      const sent = dispatch.sent_count || 0;
+      const failed = dispatch.failed_count || 0;
+      const total = dispatch.total_recipients || sent + failed;
 
       setSendProgress({
         sent,
-        total: dispatch.total_recipients || sent + failed + pending,
+        total,
         failed,
       });
 
-      if (dispatch.status === 'completed' || dispatch.status === 'cancelled' || dispatch.status === 'failed' || pending === 0) {
+      if (dispatch.status === 'completed' || dispatch.status === 'cancelled' || dispatch.status === 'failed' || (total > 0 && sent + failed >= total)) {
         if (pollingRef.current) clearInterval(pollingRef.current);
         pollingRef.current = null;
         setIsSending(false);
@@ -214,7 +209,7 @@ export function MassTemplateDispatcher() {
         else if (dispatch.status === 'failed') toast.error("Disparo falhou");
         else toast.success("✅ Disparo concluído em background!");
       }
-    }, 3000);
+    }, 5000);
   };
 
   useEffect(() => {
@@ -981,22 +976,16 @@ export function MassTemplateDispatcher() {
       setActiveDispatchId(dispatchId);
       startPolling(dispatchId);
 
-      const res = await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/dispatch-mass-send`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ dispatchId }),
+      const { data, error } = await supabase.functions.invoke('vps-dispatch-proxy', {
+        body: { dispatchId },
       });
-      const data = await res.json().catch(() => ({}));
 
-      if (!res.ok || data?.error) {
+      if (error || data?.error) {
         await supabase
           .from('dispatch_history')
           .update({ status: 'failed', processing_batch: false } as any)
           .eq('id', dispatchId);
-        toast.error(`Erro ao iniciar disparo: ${data?.error || 'falha no backend'}`);
+        toast.error(`Erro ao iniciar disparo: ${data?.error || error?.message || 'falha no backend'}`);
         return;
       }
 
