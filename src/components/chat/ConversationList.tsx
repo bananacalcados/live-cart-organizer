@@ -71,6 +71,7 @@ export function ConversationList({
   selectedConversationKey,
   onBulkFinish,
   onBulkMessage,
+  onBulkMarkRead,
   liveFilterActive,
   onLiveFilterToggle,
   liveCount,
