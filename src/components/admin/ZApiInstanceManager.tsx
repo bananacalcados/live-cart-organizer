@@ -26,6 +26,8 @@ interface ZApiInstance {
   zapi_token: string | null;
   zapi_client_token: string | null;
   created_at: string;
+  is_online: boolean | null;
+  last_health_check: string | null;
 }
 
 export function ZApiInstanceManager() {
