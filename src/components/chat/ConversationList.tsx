@@ -481,6 +481,19 @@ export function ConversationList({
                   </div>
                 </button>
               ))}
+              {hasMore && (
+                <div
+                  ref={sentinelRef}
+                  className="py-4 text-center text-[11px] text-[#475360] dark:text-[#667781]"
+                >
+                  Carregando mais conversas… ({visibleConversations.length}/{filteredConversations.length})
+                </div>
+              )}
+              {!hasMore && filteredConversations.length > 20 && (
+                <div className="py-4 text-center text-[10px] text-[#475360]/60 dark:text-[#667781]/60">
+                  Fim · {filteredConversations.length} conversas
+                </div>
+              )}
             </div>
           )}
         </ScrollArea>
