@@ -73,7 +73,7 @@ export function GroupsVipManager() {
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
   const [showCreateCampaign, setShowCreateCampaign] = useState(false);
   const [newCampaignName, setNewCampaignName] = useState("");
-  const [newCampaignSpeed, setNewCampaignSpeed] = useState("normal");
+  const [newCampaignSpeed, setNewCampaignSpeed] = useState("slow");
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [settingsGroup, setSettingsGroup] = useState<WhatsAppGroup | null>(null);
@@ -314,18 +314,14 @@ export function GroupsVipManager() {
           <DialogHeader><DialogTitle>Nova Campanha</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <Input placeholder="Nome da campanha" value={newCampaignName} onChange={e => setNewCampaignName(e.target.value)} />
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Velocidade padrão de envio</p>
-              <Select value={newCampaignSpeed} onValueChange={setNewCampaignSpeed}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="slow">🐢 Lento (8-15s)</SelectItem>
-                  <SelectItem value="normal">⚡ Normal (3-8s)</SelectItem>
-                  <SelectItem value="fast">🚀 Rápido (1-3s)</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-xs space-y-1">
+              <p className="font-medium">🐢 Modo Humano (padrão)</p>
+              <p className="text-muted-foreground leading-relaxed">
+                Envio sequencial: todos os blocos em um grupo, depois pula pro próximo.<br />
+                • 8–15s entre blocos • 45–90s entre grupos • pausa longa a cada 3 grupos
+              </p>
+              <p className="text-muted-foreground">Reduz drasticamente risco de banimento da Meta.</p>
             </div>
-            <p className="text-[10px] text-muted-foreground">Você poderá selecionar os grupos dentro da campanha</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateCampaign(false)}>Cancelar</Button>

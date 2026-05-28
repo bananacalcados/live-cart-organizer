@@ -1,102 +1,80 @@
-# Refatoração do Motor de Disparo em Massa
+# Redesign do Disparador de Grupos VIPs — Estilo Humano Real
 
-## Problema atual
-O disparo hoje depende de uma **cadeia recursiva de Edge Functions** (uma chama a próxima via HTTP). Quando qualquer chamada falha, atrasa ou estoura timeout, a cadeia quebra e o disparo trava — exigindo "orphan recovery" via cron a cada poucos minutos. Resultado: disparos lentos, com gaps e travamentos recorrentes.
+## Nova lógica de disparo (round-robin por bloco)
 
-## Solução: Worker assíncrono com lock no banco
+Em vez de "todos os blocos de um grupo, depois próximo grupo", invertemos:
 
-Trocar o modelo "função chama função" por um modelo **fila + workers concorrentes + lease lock**, padrão usado por sistemas de jobs robustos (Sidekiq, BullMQ, Inngest).
-
-### Arquitetura
-
-```text
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│ Frontend cria   │──▶ │ dispatch_history │ ◀──│ Cron a cada 30s │
-│ dispatch        │    │ status=pending   │    │ aciona workers  │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                  ┌──────────────────────────┐
-                  │ dispatch_jobs (fila)     │
-                  │ • dispatch_id            │
-                  │ • contact_id             │
-                  │ • status (pending/       │
-                  │   leased/sent/failed)    │
-                  │ • lease_until            │
-                  │ • attempts               │
-                  └──────────────────────────┘
-                              │
-            ┌─────────────────┼─────────────────┐
-            ▼                 ▼                 ▼
-        Worker 1          Worker 2          Worker N
-       (Edge Fn)         (Edge Fn)         (Edge Fn)
-            │                 │                 │
-            └─────────────────┴─────────────────┘
-                              ▼
-                       Meta / Z-API
+```
+Bloco 1 → Grupo A   [delay entre blocos: 8–15s]
+Bloco 2 → Grupo A   [delay entre blocos: 8–15s]
+Bloco 3 → Grupo A   [delay entre GRUPOS: 45–90s]
+Bloco 1 → Grupo B   [delay entre blocos: 8–15s]
+Bloco 2 → Grupo B
+...
+[a cada 3 grupos completos: pausa longa 120–180s]
 ```
 
-## Componentes
+Ou seja: **sequencial puro, 1 mensagem por vez para a Meta**, exatamente como um humano faria. Nada de paralelismo, nada de rajada simultânea.
 
-### 1. Tabela `dispatch_jobs` (nova)
-Uma linha por destinatário. Substitui o estado implícito que hoje vive em vários lugares.
-- Campos: `dispatch_id`, `phone`, `contact_id`, `payload (jsonb)`, `status`, `lease_until`, `worker_id`, `attempts`, `last_error`, `sent_at`
-- Índice em `(status, lease_until)` para o claim ser O(log n)
+## Tolerância a falhas
 
-### 2. Função SQL `claim_dispatch_jobs(worker_id, batch_size)`
-- `SELECT ... FOR UPDATE SKIP LOCKED` (padrão de fila no Postgres)
-- Marca lote como `leased` com `lease_until = now() + 60s`
-- Garante que **dois workers nunca pegam o mesmo job** sem precisar de locks aplicacionais
+- Se um bloco falhar em um grupo: **retry 1x naquele mesmo grupo/bloco** (após 10s).
+- Se falhar de novo: marca aquele bloco/grupo como `failed`, **pula pro próximo bloco do mesmo grupo** (não interrompe a campanha).
+- Ao final: relatório completo com lista `{grupo, bloco, erro, tentativas}` para reenvio manual seletivo.
 
-### 3. Edge Function `dispatch-worker` (nova)
-- Roda em loop interno por até 50s (limite seguro abaixo do timeout)
-- A cada iteração: claim 20 jobs → envia em paralelo → marca como `sent`/`failed`
-- Se um envio falha, incrementa `attempts`; após 3 tentativas marca como `failed` permanente
-- Não chama a si mesma. Não chama outras funções. Só faz envio.
+## Persistência (nova tabela)
 
-### 4. Cron `dispatch-orchestrator` (a cada 30s)
-- Verifica quantos disparos têm jobs pendentes
-- Dispara **N workers em paralelo** via `pg_net.http_post` (fire-and-forget)
-- N proporcional à fila pendente (ex: 1 worker por 200 jobs, máx 10)
-- Como worker tem lease, mesmo se o cron dispara workers demais, eles competem sem duplicar envio
+`group_campaign_block_dispatches`:
+- `campaign_id`, `group_db_id`, `group_id` (whatsapp), `group_name`
+- `block_index` (ordem do bloco na campanha), `block_type` (text/image/audio/poll), `content`/`media_url`/`caption`
+- `status` (pending/sent/failed), `attempts`, `error_message`, `sent_at`, `whatsapp_number_id`
 
-### 5. Função `enqueue_dispatch_jobs(dispatch_id)`
-Chamada quando frontend cria disparo. Faz `INSERT ... SELECT` em massa de `dispatch_targets` → `dispatch_jobs`. Operação única no banco, sem HTTP.
+Permite ver no painel exatamente o que falhou onde, e ter botão **"Reenviar apenas falhas"** que cria uma nova execução só dos `failed`.
 
-### 6. Limpeza dos caminhos antigos
-- Remove a cadeia recursiva de `dispatch-mass-send` (chamar próximo lote)
-- Remove "orphan recovery" do cron — não é mais necessário
-- `vps-dispatch-proxy` continua existindo apenas como atalho do frontend para enfileirar
+## Defaults de delays
 
-## Por que isso é definitivo
+- Entre blocos do mesmo grupo: **8–15s aleatório**
+- Entre grupos (após último bloco): **45–90s aleatório**
+- A cada **3 grupos**: pausa longa **120–180s**
+- Modo único: **SLOW** (remove fast/medium da UI).
 
-| Causa de travamento hoje | Como o novo modelo resolve |
-|---|---|
-| Função A chama B via HTTP e B demora | Não existe mais cadeia; cada worker é independente |
-| Worker morre no meio do lote | Lease expira em 60s, outro worker pega os jobs órfãos |
-| Cron de "orphan recovery" cria sobreposição | SKIP LOCKED impede que dois workers peguem o mesmo job |
-| UI precisa estar aberta | Cron roda no banco, independe do frontend |
-| Polling de count() pesado | UI lê só `dispatch_history` (1 row) |
+## Status online/offline das instâncias Z-API
 
-## Plano de execução
+1. Nova edge function `zapi-instance-health-check`: itera todas as instâncias ativas, chama `/status` da Z-API, atualiza `whatsapp_numbers.is_online` e `last_health_check`.
+2. Cron a cada **2 minutos**.
+3. UI: badge verde "🟢 Online" / vermelho "🔴 Offline" ao lado do nome da instância no:
+   - Seletor de instância (Grupos VIPs, Chat, etc.)
+   - `ZApiInstanceManager` (admin)
+4. Ao tentar enviar por instância offline: **bloqueia antes da chamada** com toast claro "Instância X está desconectada. Reconecte ou escolha outra."
 
-1. **Migração SQL**: criar `dispatch_jobs`, índices, função `claim_dispatch_jobs`, função `enqueue_dispatch_jobs`
-2. **Edge Function `dispatch-worker`**: loop com claim → envio Meta/Z-API → mark done
-3. **Edge Function `dispatch-orchestrator`** + cron pg_cron a cada 30s
-4. **Refatorar `vps-dispatch-proxy`**: passa a só chamar `enqueue_dispatch_jobs` + acordar 1 worker imediatamente
-5. **Aposentar lógica recursiva** em `dispatch-mass-send` (mantém função só para compat de envio individual se ainda usada)
-6. **Backfill do disparo atual** (`32b74cf9...`): script que move os ~4.474 pendentes pra `dispatch_jobs` para já se beneficiar do novo motor
-7. **Validação**: rodar um disparo de teste pequeno e medir throughput; ajustar concorrência
+## Migração de schema
 
-## Detalhes técnicos chave
+```sql
+ALTER TABLE whatsapp_numbers
+  ADD COLUMN is_online BOOLEAN DEFAULT NULL,
+  ADD COLUMN last_health_check TIMESTAMPTZ;
 
-- `FOR UPDATE SKIP LOCKED` no claim — sem deadlock, sem duplicação
-- Workers usam `Promise.allSettled` em batches de 20 (respeita rate-limit Meta de ~80/s)
-- Backoff exponencial entre attempts (1min, 5min, 15min)
-- `lease_until` permite recuperação automática sem cron de recovery
-- Throughput esperado: 10 workers × 20 jobs × 2s/lote ≈ **100 envios/s sustentado** (vs ~10-15/s hoje com gaps)
+CREATE TABLE group_campaign_block_dispatches (...);
+-- GRANTs + RLS para authenticated/service_role
+-- Index em (campaign_id, status), (campaign_id, group_db_id, block_index)
+```
 
-## Fora de escopo
-- Não toco em UI do MassTemplateDispatcher além do que já foi feito
-- Não toco em lógicas de segmentação, cooldown ou filtros de público
-- Não toco em outras automações (broadcast VIP, follow-up, etc) — só no motor de envio em massa
+## Arquivos a tocar
+
+**Backend:**
+- `supabase/migrations/...` — nova tabela + colunas em whatsapp_numbers
+- `supabase/functions/zapi-instance-health-check/index.ts` (nova)
+- `supabase/functions/zapi-group-campaign-execute/index.ts` — reescrever lógica round-robin por bloco + retry + health-check antes de enviar
+- Cron via `supabase--insert` (pg_cron a cada 2min)
+
+**Frontend:**
+- `src/components/marketing/` — painel de campanha VIP: remover seletor de velocidade, mostrar progresso por bloco/grupo, botão "Reenviar falhas"
+- `src/components/admin/ZApiInstanceManager.tsx` — badge online/offline
+- Seletor de instância nos disparos — badge + bloqueio se offline
+
+## Pontos abertos para confirmar
+
+1. **Retry**: 1 retry é suficiente, ou prefere 2?
+2. **Pausa longa a cada 3 grupos**: confirmar 120–180s aleatório.
+3. **Bloco do tipo enquete (poll)**: confirmar se o Z-API que vocês usam suporta envio de poll em grupo (ou se tratamos como texto formatado).
+4. **Health-check Z-API**: ok rodar a cada 2 minutos? (custo: 1 chamada por instância a cada 2min, irrelevante.)

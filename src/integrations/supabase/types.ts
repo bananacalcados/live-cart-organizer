@@ -5697,6 +5697,63 @@ export type Database = {
           },
         ]
       }
+      group_campaign_block_dispatches: {
+        Row: {
+          attempts: number
+          block_order: number
+          block_type: string | null
+          campaign_id: string | null
+          created_at: string
+          error_message: string | null
+          group_db_id: string
+          group_name: string | null
+          group_zapi_id: string
+          id: string
+          message_group_id: string | null
+          scheduled_message_id: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          attempts?: number
+          block_order?: number
+          block_type?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          group_db_id: string
+          group_name?: string | null
+          group_zapi_id: string
+          id?: string
+          message_group_id?: string | null
+          scheduled_message_id: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          attempts?: number
+          block_order?: number
+          block_type?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          group_db_id?: string
+          group_name?: string | null
+          group_zapi_id?: string
+          id?: string
+          message_group_id?: string | null
+          scheduled_message_id?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       group_campaign_messages: {
         Row: {
           campaign_id: string
@@ -14529,10 +14586,13 @@ export type Database = {
           ai_paused: boolean
           business_account_id: string | null
           created_at: string
+          health_check_error: string | null
           id: string
           is_active: boolean
           is_default: boolean
+          is_online: boolean | null
           label: string
+          last_health_check: string | null
           phone_display: string
           phone_number_id: string | null
           provider: string
@@ -14546,10 +14606,13 @@ export type Database = {
           ai_paused?: boolean
           business_account_id?: string | null
           created_at?: string
+          health_check_error?: string | null
           id?: string
           is_active?: boolean
           is_default?: boolean
+          is_online?: boolean | null
           label: string
+          last_health_check?: string | null
           phone_display: string
           phone_number_id?: string | null
           provider?: string
@@ -14563,10 +14626,13 @@ export type Database = {
           ai_paused?: boolean
           business_account_id?: string | null
           created_at?: string
+          health_check_error?: string | null
           id?: string
           is_active?: boolean
           is_default?: boolean
+          is_online?: boolean | null
           label?: string
+          last_health_check?: string | null
           phone_display?: string
           phone_number_id?: string | null
           provider?: string
