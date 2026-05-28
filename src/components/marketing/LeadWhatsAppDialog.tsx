@@ -43,8 +43,9 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [sendVia, setSendVia] = useState<'zapi' | 'meta'>('meta');
-  const { numbers: metaNumbers, selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+  const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
   const currentUserId = useCurrentUserId();
+  const { effectiveNumberId, boundNumber, isLocked } = useConversationInstance(phone, { messages });
 
   const cleanPhone = phone?.replace(/\D/g, '') || '';
   // Build phone variants: raw, with DDI 55, without DDI 55
