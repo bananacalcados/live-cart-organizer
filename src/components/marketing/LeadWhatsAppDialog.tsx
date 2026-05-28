@@ -147,7 +147,15 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
           <span className="text-muted-foreground">Enviar via:</span>
           <button onClick={() => setSendVia('zapi')} className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'zapi' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>Z-API</button>
           <button onClick={() => setSendVia('meta')} className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'meta' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>Meta API</button>
-          {sendVia === 'meta' && metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" />}
+          {sendVia === 'meta' && (
+            isLocked && boundNumber ? (
+              <div className="text-[10px] text-muted-foreground border rounded px-2 py-1 bg-muted/40 flex-1 truncate">
+                🔒 {boundNumber.label}
+              </div>
+            ) : (
+              metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" />
+            )
+          )}
         </div>
 
         {/* Messages */}
