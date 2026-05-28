@@ -412,12 +412,13 @@ serve(async (req) => {
             // ── Also save into live_comments for active IG live event ──
             // This is what enables the Private Reply auto-discovery in the DM modal.
             try {
+              // Critério: o evento marcado como "Live em curso agora" (live_active_until > now()).
+              // Esse flag é ligado manualmente na UI e expira em 8h.
               const { data: activeEvent } = await supabase
                 .from('events')
                 .select('id, name')
-                .eq('is_active', true)
-                .eq('channel_preference', 'instagram')
-                .order('updated_at', { ascending: false })
+                .gt('live_active_until', new Date().toISOString())
+                .order('live_active_until', { ascending: false })
                 .limit(1)
                 .maybeSingle();
 
