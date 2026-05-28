@@ -1178,6 +1178,22 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               setBulkMessageRecipients(recs);
               setShowBulkMessageDialog(true);
             }}
+            onBulkMarkRead={async (phones) => {
+              if (!phones.length) return;
+              try {
+                const { error } = await supabase
+                  .from('whatsapp_messages')
+                  .update({ status: 'read' })
+                  .in('phone', phones)
+                  .eq('direction', 'incoming')
+                  .or('status.is.null,status.neq.read');
+                if (error) throw error;
+                toast.success(`${phones.length} conversa(s) marcada(s) como lida`);
+              } catch (e) {
+                console.error('bulk mark read error', e);
+                toast.error('Erro ao marcar como lida');
+              }
+            }}
             hasActiveSupport={hasActiveSupport}
             supportFilterActive={supportFilterActive}
             onSupportFilterToggle={() => setSupportFilterActive(prev => !prev)}
