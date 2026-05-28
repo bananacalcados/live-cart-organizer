@@ -1,88 +1,102 @@
-# Solução Definitiva: Conversa por (telefone + instância)
+# Refatoração do Motor de Disparo em Massa
 
-## Objetivo
+## Problema atual
+O disparo hoje depende de uma **cadeia recursiva de Edge Functions** (uma chama a próxima via HTTP). Quando qualquer chamada falha, atrasa ou estoura timeout, a cadeia quebra e o disparo trava — exigindo "orphan recovery" via cron a cada poucos minutos. Resultado: disparos lentos, com gaps e travamentos recorrentes.
 
-Eliminar de vez o bug de troca silenciosa de instância. Cada par `(telefone, whatsapp_number_id)` é uma **conversa independente** em todo o sistema. A instância de envio NUNCA é decidida pelo seletor global — sempre vem da conversa aberta.
+## Solução: Worker assíncrono com lock no banco
 
----
+Trocar o modelo "função chama função" por um modelo **fila + workers concorrentes + lease lock**, padrão usado por sistemas de jobs robustos (Sidekiq, BullMQ, Inngest).
 
-## Camada 1 — Modelo de dados
-
-1. **Migration**
-   - Adicionar coluna `whatsapp_number_id uuid` em `chat_contacts` (se ainda não existir como obrigatória).
-   - Trocar UNIQUE de `chat_contacts.phone` para UNIQUE `(phone, whatsapp_number_id)`.
-   - Índice composto em `whatsapp_messages (phone, whatsapp_number_id, created_at desc)`.
-   - Função SQL `public.get_conversation_instance(p_phone text)` que retorna o `whatsapp_number_id` da última mensagem incoming daquele telefone (usado como autoridade para guard).
-
-2. **Backfill**
-   - Para `chat_contacts` sem `whatsapp_number_id`, popular com a instância da última mensagem do telefone. Se não houver, manter `null` (legado).
-
----
-
-## Camada 2 — Edge functions (guard de envio)
-
-Tanto `meta-whatsapp-send` quanto `zapi-send-message` recebem um guard:
-
-```
-1. Se request veio com whatsapp_number_id → usar esse.
-2. Buscar a última mensagem incoming do telefone:
-   - Se existir e tiver whatsapp_number_id diferente → 409 STRICT_MISMATCH
-     (a menos que header X-Force-Instance: true seja passado, para casos justificados).
-3. Se nenhum whatsapp_number_id veio E não há histórico → usar default da instância.
-```
-
-Já existe a regra `instance-routing-strict-validation` na memória — esta é a implementação formal dela em edge functions.
-
----
-
-## Camada 3 — Frontend
-
-1. **Hook compartilhado `useConversationInstance(phone)`**
-   - Retorna `{ boundNumberId, boundNumber, isLocked }` derivado de mensagens.
-   - Centraliza a lógica que já está no `POSWhatsApp` e no `WhatsAppChat` corrigido nesta sessão.
-
-2. **Lista de conversas: uma linha por (phone, instance)**
-   - Em `ConversationList` (POS já faz via `conversationKey`).
-   - Em `WhatsAppChat` (eventos): se o `order.whatsapp` tem histórico em 2 instâncias, abrir a da `events.whatsapp_number_id` do pedido; caso contrário, a última.
-   - Badge da instância visível em cada item, mesmo telefone aparece duas vezes se realmente conversou em duas instâncias.
-
-3. **WhatsAppNumberSelector**
-   - Em chat aberto: vira **read-only** mostrando a instância vinculada (já fiz isso no `WhatsAppChat`).
-   - Vira filtro de listagem apenas; nunca decide envio.
-
-4. **Eventos**
-   - Ao criar um pedido a partir de um evento, gravar `latest_message.whatsapp_number_id = event.whatsapp_number_id` para que o chat já abra travado na instância correta desde a 1ª mensagem.
-
----
-
-## Camada 4 — Limpeza
-
-- Remover toda referência a `selectedNumberId` em paths de envio (`WhatsAppChat`, `SendWhatsAppDialog`, `LeadWhatsAppDialog`, `SupportWhatsAppChat`, etc.). Substituir por `effectiveNumberId` vindo do hook.
-- Memory note novo: `mem://features/whatsapp/conversation-by-instance-architecture` consolidando a regra.
-
----
-
-## Ordem de execução (PRs incrementais)
+### Arquitetura
 
 ```text
-PR1  Hook useConversationInstance + aplicar em WhatsAppChat, SendWhatsAppDialog,
-     LeadWhatsAppDialog, SupportWhatsAppChat (frontend-only, zero risco de DB)
-PR2  Migration: índice composto + função get_conversation_instance + backfill
-PR3  Guard nas edge functions meta-whatsapp-send e zapi-send-message
-PR4  UNIQUE composta em chat_contacts + ajuste de inserts duplicados existentes
-PR5  Memory update + remover dead code do seletor global em paths de envio
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│ Frontend cria   │──▶ │ dispatch_history │ ◀──│ Cron a cada 30s │
+│ dispatch        │    │ status=pending   │    │ aciona workers  │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                              │
+                              ▼
+                  ┌──────────────────────────┐
+                  │ dispatch_jobs (fila)     │
+                  │ • dispatch_id            │
+                  │ • contact_id             │
+                  │ • status (pending/       │
+                  │   leased/sent/failed)    │
+                  │ • lease_until            │
+                  │ • attempts               │
+                  └──────────────────────────┘
+                              │
+            ┌─────────────────┼─────────────────┐
+            ▼                 ▼                 ▼
+        Worker 1          Worker 2          Worker N
+       (Edge Fn)         (Edge Fn)         (Edge Fn)
+            │                 │                 │
+            └─────────────────┴─────────────────┘
+                              ▼
+                       Meta / Z-API
 ```
 
-## Riscos e mitigações
+## Componentes
 
-- **Risco**: Conversas legadas sem `whatsapp_number_id` quebrando guard → guard só rejeita quando há **conflito explícito**, não quando o histórico é `null`.
-- **Risco**: Cliente que migra de instância (ex: a loja troca z-api) → header `X-Force-Instance: true` em um botão admin "Trocar instância desta conversa".
-- **Risco**: UNIQUE composta falhar com duplicados existentes → backfill primeiro, depois UNIQUE com `NOT VALID` + validação.
+### 1. Tabela `dispatch_jobs` (nova)
+Uma linha por destinatário. Substitui o estado implícito que hoje vive em vários lugares.
+- Campos: `dispatch_id`, `phone`, `contact_id`, `payload (jsonb)`, `status`, `lease_until`, `worker_id`, `attempts`, `last_error`, `sent_at`
+- Índice em `(status, lease_until)` para o claim ser O(log n)
 
----
+### 2. Função SQL `claim_dispatch_jobs(worker_id, batch_size)`
+- `SELECT ... FOR UPDATE SKIP LOCKED` (padrão de fila no Postgres)
+- Marca lote como `leased` com `lease_until = now() + 60s`
+- Garante que **dois workers nunca pegam o mesmo job** sem precisar de locks aplicacionais
 
-## O que NÃO faz parte (intencional)
+### 3. Edge Function `dispatch-worker` (nova)
+- Roda em loop interno por até 50s (limite seguro abaixo do timeout)
+- A cada iteração: claim 20 jobs → envia em paralelo → marca como `sent`/`failed`
+- Se um envio falha, incrementa `attempts`; após 3 tentativas marca como `failed` permanente
+- Não chama a si mesma. Não chama outras funções. Só faz envio.
 
-- Não mexe na unificação dos 5 chats em `<UnifiedWhatsAppChat />` (continua sendo o próximo passo após este).
-- Não toca em IG/Messenger (já são naturalmente por instância Meta).
-- Não migra histórico antigo para "splitar" conversas que misturaram instâncias — só impede que novos envios continuem misturando.
+### 4. Cron `dispatch-orchestrator` (a cada 30s)
+- Verifica quantos disparos têm jobs pendentes
+- Dispara **N workers em paralelo** via `pg_net.http_post` (fire-and-forget)
+- N proporcional à fila pendente (ex: 1 worker por 200 jobs, máx 10)
+- Como worker tem lease, mesmo se o cron dispara workers demais, eles competem sem duplicar envio
+
+### 5. Função `enqueue_dispatch_jobs(dispatch_id)`
+Chamada quando frontend cria disparo. Faz `INSERT ... SELECT` em massa de `dispatch_targets` → `dispatch_jobs`. Operação única no banco, sem HTTP.
+
+### 6. Limpeza dos caminhos antigos
+- Remove a cadeia recursiva de `dispatch-mass-send` (chamar próximo lote)
+- Remove "orphan recovery" do cron — não é mais necessário
+- `vps-dispatch-proxy` continua existindo apenas como atalho do frontend para enfileirar
+
+## Por que isso é definitivo
+
+| Causa de travamento hoje | Como o novo modelo resolve |
+|---|---|
+| Função A chama B via HTTP e B demora | Não existe mais cadeia; cada worker é independente |
+| Worker morre no meio do lote | Lease expira em 60s, outro worker pega os jobs órfãos |
+| Cron de "orphan recovery" cria sobreposição | SKIP LOCKED impede que dois workers peguem o mesmo job |
+| UI precisa estar aberta | Cron roda no banco, independe do frontend |
+| Polling de count() pesado | UI lê só `dispatch_history` (1 row) |
+
+## Plano de execução
+
+1. **Migração SQL**: criar `dispatch_jobs`, índices, função `claim_dispatch_jobs`, função `enqueue_dispatch_jobs`
+2. **Edge Function `dispatch-worker`**: loop com claim → envio Meta/Z-API → mark done
+3. **Edge Function `dispatch-orchestrator`** + cron pg_cron a cada 30s
+4. **Refatorar `vps-dispatch-proxy`**: passa a só chamar `enqueue_dispatch_jobs` + acordar 1 worker imediatamente
+5. **Aposentar lógica recursiva** em `dispatch-mass-send` (mantém função só para compat de envio individual se ainda usada)
+6. **Backfill do disparo atual** (`32b74cf9...`): script que move os ~4.474 pendentes pra `dispatch_jobs` para já se beneficiar do novo motor
+7. **Validação**: rodar um disparo de teste pequeno e medir throughput; ajustar concorrência
+
+## Detalhes técnicos chave
+
+- `FOR UPDATE SKIP LOCKED` no claim — sem deadlock, sem duplicação
+- Workers usam `Promise.allSettled` em batches de 20 (respeita rate-limit Meta de ~80/s)
+- Backoff exponencial entre attempts (1min, 5min, 15min)
+- `lease_until` permite recuperação automática sem cron de recovery
+- Throughput esperado: 10 workers × 20 jobs × 2s/lote ≈ **100 envios/s sustentado** (vs ~10-15/s hoje com gaps)
+
+## Fora de escopo
+- Não toco em UI do MassTemplateDispatcher além do que já foi feito
+- Não toco em lógicas de segmentação, cooldown ou filtros de público
+- Não toco em outras automações (broadcast VIP, follow-up, etc) — só no motor de envio em massa
