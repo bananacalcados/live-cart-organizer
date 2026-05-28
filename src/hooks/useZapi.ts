@@ -15,6 +15,16 @@ interface SendMessageResult {
 
 type MediaType = 'image' | 'audio' | 'video' | 'document';
 
+/**
+ * @deprecated Este hook está depreciado. Use os hooks padronizados do motor de chat:
+ * - useChatMessages (mensagens + polling de status)
+ * - useChatSender (envio com broadcast)
+ * - useConversationInstance (bloqueio de instância por conversa)
+ *
+ * Os módulos de Leads, Suporte e Eventos já foram migrados.
+ * Os consumidores restantes (Chat, WhatsAppChat, LiveSessionManager, SendWhatsAppDialog)
+ * serão migrados oportunisticamente quando forem editados.
+ */
 export function useZapi() {
   const [isLoading, setIsLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ZapiStatus | null>(null);
