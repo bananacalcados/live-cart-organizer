@@ -102,9 +102,9 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
     const tempId = `temp-${Date.now()}`;
     setMessages(prev => [...prev, { id: tempId, phone: normalizedPhone, message: text, direction: 'outgoing', message_id: null, status: 'sending', created_at: new Date().toISOString() }]);
 
-    const result = await sendMessage(phone, text);
+    const result = await sendMessage(phone, text, effectiveNumberId || undefined);
     if (result.success) {
-      await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: text, direction: 'outgoing', status: 'sent', sender_user_id: currentUserId || null });
+      await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: text, direction: 'outgoing', status: 'sent', whatsapp_number_id: effectiveNumberId || null, sender_user_id: currentUserId || null });
       setMessages(prev => prev.filter(m => m.id !== tempId));
     } else {
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
