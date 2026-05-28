@@ -272,15 +272,36 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
           <h2 className="text-lg font-bold">Comentários do Instagram</h2>
           <Badge className="bg-pink-600/30 text-pink-200">{comments.length}</Badge>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSoundEnabled(!soundEnabled)}
-          className="text-foreground hover:bg-muted h-8 w-8"
-          title={soundEnabled ? "Desativar som" : "Ativar som"}
-        >
-          {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={isLiveActive ? "default" : "outline"}
+            size="sm"
+            onClick={toggleLiveActive}
+            disabled={togglingLive}
+            className={`h-8 text-xs gap-1.5 ${
+              isLiveActive
+                ? "bg-red-600 hover:bg-red-700 text-white border-red-700 animate-pulse"
+                : "border-dashed"
+            }`}
+            title={
+              isLiveActive
+                ? `Ativa até ${liveActiveUntil?.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                : "Marcar este evento como a Live que está rodando agora"
+            }
+          >
+            <Radio className="h-3.5 w-3.5" />
+            {isLiveActive ? "AO VIVO" : "Ativar Live"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="text-foreground hover:bg-muted h-8 w-8"
+            title={soundEnabled ? "Desativar som" : "Ativar som"}
+          >
+            {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 mb-3 flex-wrap">
