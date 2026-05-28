@@ -118,7 +118,13 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
             <span className="text-xs">({order.instagramHandle})</span>
           </div>
 
-          <WhatsAppNumberSelector className="h-9 text-xs" />
+          {isLocked && boundNumber ? (
+            <div className="text-xs text-muted-foreground border rounded px-2 py-1.5 bg-muted/40">
+              🔒 Vinculado a esta conversa: <span className="font-medium text-foreground">{boundNumber.label}</span>
+            </div>
+          ) : (
+            <WhatsAppNumberSelector className="h-9 text-xs" />
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="message">Mensagem</Label>
