@@ -173,6 +173,16 @@ export default function POS() {
     return () => { supabase.removeChannel(channel); };
   }, [selectedStore]);
 
+  // ESC key exits full-screen WhatsApp (kept before early returns to preserve hook order)
+  useEffect(() => {
+    if (section !== "whatsapp") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSection("dashboard");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [section]);
+
   if (!selectedStore) {
     return <POSStoreSelector onSelect={setSelectedStore} />;
   }
@@ -181,24 +191,12 @@ export default function POS() {
     return <POSGeneralDashboard onBack={() => setSelectedStore("")} />;
   }
 
-
-
   // Mobile: show priority tabs in bottom bar, rest in "more" menu
   const primarySections = SECTIONS.filter(s => s.priority);
   const secondarySections = SECTIONS.filter(s => !s.priority);
 
   // Full-screen mode for WhatsApp
   const isWhatsAppFull = section === "whatsapp";
-
-  // ESC key exits full-screen WhatsApp
-  useEffect(() => {
-    if (!isWhatsAppFull) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSection("dashboard");
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [isWhatsAppFull]);
 
   return (
     <div className="h-screen flex flex-col md:flex-row bg-pos-black">
