@@ -4,7 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink } from "lucide-react";
+import { Instagram, ShoppingCart, HelpCircle, MessageSquare, Sparkles, Volume2, VolumeX, ExternalLink, Radio } from "lucide-react";
+import { toast } from "sonner";
 
 interface LiveComment {
   id: string;
@@ -47,8 +48,52 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filter, setFilter] = useState<"all" | "orders" | "carts">("all");
   const [recentlyHighlighted, setRecentlyHighlighted] = useState<Set<string>>(new Set());
+  const [liveActiveUntil, setLiveActiveUntil] = useState<Date | null>(null);
+  const [togglingLive, setTogglingLive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const cartByHandleRef = useRef<Map<string, CartCustomerMatch>>(new Map());
+
+  const isLiveActive = !!liveActiveUntil && liveActiveUntil.getTime() > Date.now();
+
+  // Load current live_active_until + poll every 60s so the "expira em Xh" stays accurate
+  const refreshLiveStatus = useCallback(async () => {
+    if (!eventId) return;
+    const { data } = await supabase
+      .from("events")
+      .select("live_active_until")
+      .eq("id", eventId)
+      .maybeSingle();
+    setLiveActiveUntil(data?.live_active_until ? new Date(data.live_active_until) : null);
+  }, [eventId]);
+
+  useEffect(() => {
+    refreshLiveStatus();
+    const t = setInterval(refreshLiveStatus, 60000);
+    return () => clearInterval(t);
+  }, [refreshLiveStatus]);
+
+  const toggleLiveActive = useCallback(async () => {
+    if (!eventId || togglingLive) return;
+    setTogglingLive(true);
+    try {
+      if (isLiveActive) {
+        const { error } = await supabase.rpc("clear_event_live_active", { p_event_id: eventId });
+        if (error) throw error;
+        toast.success("Live desativada para este evento");
+      } else {
+        const { data, error } = await supabase.rpc("set_event_live_active", { p_event_id: eventId });
+        if (error) throw error;
+        toast.success("Live ativada — expira em 8h");
+        if (data) setLiveActiveUntil(new Date(data));
+      }
+      await refreshLiveStatus();
+    } catch (e: any) {
+      toast.error("Erro ao alternar Live: " + (e?.message || "desconhecido"));
+    } finally {
+      setTogglingLive(false);
+    }
+  }, [eventId, isLiveActive, togglingLive, refreshLiveStatus]);
+
 
   useEffect(() => {
     cartByHandleRef.current = cartByHandle;
@@ -227,15 +272,36 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
           <h2 className="text-lg font-bold">Comentários do Instagram</h2>
           <Badge className="bg-pink-600/30 text-pink-200">{comments.length}</Badge>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSoundEnabled(!soundEnabled)}
-          className="text-foreground hover:bg-muted h-8 w-8"
-          title={soundEnabled ? "Desativar som" : "Ativar som"}
-        >
-          {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant={isLiveActive ? "default" : "outline"}
+            size="sm"
+            onClick={toggleLiveActive}
+            disabled={togglingLive}
+            className={`h-8 text-xs gap-1.5 ${
+              isLiveActive
+                ? "bg-red-600 hover:bg-red-700 text-white border-red-700 animate-pulse"
+                : "border-dashed"
+            }`}
+            title={
+              isLiveActive
+                ? `Ativa até ${liveActiveUntil?.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+                : "Marcar este evento como a Live que está rodando agora"
+            }
+          >
+            <Radio className="h-3.5 w-3.5" />
+            {isLiveActive ? "AO VIVO" : "Ativar Live"}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="text-foreground hover:bg-muted h-8 w-8"
+            title={soundEnabled ? "Desativar som" : "Ativar som"}
+          >
+            {soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 mb-3 flex-wrap">
