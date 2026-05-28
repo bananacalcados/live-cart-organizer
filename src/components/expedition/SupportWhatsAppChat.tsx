@@ -1,37 +1,21 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useWaMessageBroadcast } from '@/hooks/useWaMessageBroadcast';
-import { useZapi } from '@/hooks/useZapi';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useCurrentUserId } from '@/hooks/useCurrentUserId';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Send, Mic, X, Square, ArrowLeft, Paperclip, Image } from 'lucide-react';
+import { Send, Mic, X, ArrowLeft, Paperclip } from 'lucide-react';
 import { EmojiPickerButton } from '../EmojiPickerButton';
 import { uploadMediaToStorage } from '../MediaAttachmentPicker';
 import { WhatsAppNumberSelector } from '../WhatsAppNumberSelector';
 import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
 import { useConversationInstance } from '@/hooks/useConversationInstance';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MessageStatusIcon } from '../chat/MessageStatusIcon';
 import { WhatsAppMediaAttachment } from '../chat/WhatsAppMediaAttachment';
-
-interface Message {
-  id: string;
-  phone: string;
-  message: string;
-  direction: 'incoming' | 'outgoing';
-  message_id: string | null;
-  status: string | null;
-  created_at: string;
-  media_type?: string;
-  media_url?: string;
-  whatsapp_number_id?: string | null;
-}
+import { useChatMessages } from '@/hooks/chat/useChatMessages';
+import { useChatSender } from '@/hooks/chat/useChatSender';
 
 interface SupportWhatsAppChatProps {
   phone: string;
@@ -42,13 +26,10 @@ interface SupportWhatsAppChatProps {
 
 export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClose }: SupportWhatsAppChatProps) {
   const currentUserId = useCurrentUserId();
-  const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const { sendMessage, sendMedia, isLoading: isSending } = useZapi();
   const { fetchNumbers } = useWhatsAppNumberStore();
 
   // Recording
@@ -62,33 +43,21 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
 
   const rawPhone = phone.replace(/\D/g, '');
   const normalizedPhone = rawPhone.startsWith('55') ? rawPhone : '55' + rawPhone;
-  const phoneWithoutCountry = rawPhone.startsWith('55') ? rawPhone.slice(2) : rawPhone;
-  const phoneWithout9 = phoneWithoutCountry.length === 11 && phoneWithoutCountry.charAt(2) === '9'
-    ? phoneWithoutCountry.slice(0, 2) + phoneWithoutCountry.slice(3) : null;
-  const phoneVariations = [normalizedPhone, rawPhone, phoneWithoutCountry, phoneWithout9, phoneWithout9 ? '55' + phoneWithout9 : null].filter(Boolean) as string[];
+  const phoneVariations = useMemo(() => {
+    const phoneWithoutCountry = rawPhone.startsWith('55') ? rawPhone.slice(2) : rawPhone;
+    const phoneWithout9 = phoneWithoutCountry.length === 11 && phoneWithoutCountry.charAt(2) === '9'
+      ? phoneWithoutCountry.slice(0, 2) + phoneWithoutCountry.slice(3) : null;
+    return [normalizedPhone, rawPhone, phoneWithoutCountry, phoneWithout9, phoneWithout9 ? '55' + phoneWithout9 : null].filter(Boolean) as string[];
+  }, [rawPhone, normalizedPhone]);
 
-  const { effectiveNumberId, boundNumber, isLocked } = useConversationInstance(normalizedPhone, { messages });
+  const { messages, isLoading, refresh: loadMessages } = useChatMessages(
+    normalizedPhone,
+    undefined,
+    { phoneVariations },
+  );
 
-  const loadMessages = useCallback(async () => {
-    const { data } = await supabase
-      .from('whatsapp_messages')
-      .select('*')
-      .in('phone', phoneVariations)
-      .order('created_at', { ascending: true });
-    setMessages((data as Message[]) || []);
-    setIsLoading(false);
-  }, [normalizedPhone]);
-
-  useEffect(() => {
-    loadMessages();
-  }, [normalizedPhone, loadMessages]);
-
-  // Broadcast-based new-message notification (postgres_changes removed for CPU).
-  useWaMessageBroadcast((payload) => {
-    if (!payload?.phone || !phoneVariations.includes(payload.phone)) return;
-    loadMessages();
-  });
-
+  const { effectiveNumberId, boundNumber, isLocked } = useConversationInstance(normalizedPhone, { messages: messages as never });
+  const { sendText, sendMedia, sendAudio, isSending } = useChatSender();
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -98,17 +67,14 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
     if (isSending || !newMessage.trim()) return;
     const text = newMessage.trim();
     setNewMessage('');
-
-    const tempId = `temp-${Date.now()}`;
-    setMessages(prev => [...prev, { id: tempId, phone: normalizedPhone, message: text, direction: 'outgoing', message_id: null, status: 'sending', created_at: new Date().toISOString() }]);
-
-    const result = await sendMessage(phone, text, effectiveNumberId || undefined);
-    if (result.success) {
-      await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: text, direction: 'outgoing', status: 'sent', whatsapp_number_id: effectiveNumberId || null, sender_user_id: currentUserId || null });
-      setMessages(prev => prev.filter(m => m.id !== tempId));
-    } else {
-      setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
-    }
+    const result = await sendText({
+      phone: normalizedPhone,
+      message: text,
+      route: { channel: 'whatsapp', provider: 'zapi', numberId: effectiveNumberId || null },
+      senderUserId: currentUserId || null,
+    });
+    if (result.success) loadMessages();
+    else setNewMessage(text);
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,13 +86,15 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
     const mediaType = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'document';
     toast.info('Enviando arquivo...');
     const url = await uploadMediaToStorage(file);
-    if (url) {
-      const result = await sendMedia(phone, url, mediaType as any, undefined, effectiveNumberId || undefined);
-      if (result.success) {
-        await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: `[${mediaType}]`, direction: 'outgoing', status: 'sent', media_type: mediaType, media_url: url, whatsapp_number_id: effectiveNumberId || null, sender_user_id: currentUserId || null });
-        loadMessages();
-      }
-    }
+    if (!url) return;
+    const result = await sendMedia({
+      phone: normalizedPhone,
+      mediaUrl: url,
+      mediaType: mediaType as 'image' | 'video' | 'document',
+      route: { channel: 'whatsapp', provider: 'zapi', numberId: effectiveNumberId || null },
+      senderUserId: currentUserId || null,
+    });
+    if (result.success) loadMessages();
   };
 
   const startRecording = useCallback(async () => {
@@ -148,11 +116,13 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
         const file = new File([blob], `audio-${Date.now()}.${ext}`, { type: ct });
         const url = await uploadMediaToStorage(file);
         if (url) {
-          const result = await sendMedia(phone, url, 'audio', undefined, effectiveNumberId || undefined);
-          if (result.success) {
-            await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: '[audio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: url, whatsapp_number_id: effectiveNumberId || null, sender_user_id: currentUserId || null });
-            loadMessages();
-          }
+          const result = await sendAudio({
+            phone: normalizedPhone,
+            mediaUrl: url,
+            route: { channel: 'whatsapp', provider: 'zapi', numberId: effectiveNumberId || null },
+            senderUserId: currentUserId || null,
+          });
+          if (result.success) loadMessages();
         }
         setIsRecording(false); setRecordingTime(0);
       };
@@ -160,7 +130,7 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
       setIsRecording(true); setRecordingTime(0);
       timerRef.current = window.setInterval(() => setRecordingTime(prev => prev + 1), 1000);
     } catch { toast.error('Não foi possível acessar o microfone.'); }
-  }, [phone, normalizedPhone, sendMedia, loadMessages]);
+  }, [normalizedPhone, sendAudio, loadMessages, effectiveNumberId, currentUserId]);
 
   const stopRecording = useCallback(() => { mediaRecorderRef.current?.state === 'recording' && mediaRecorderRef.current.stop(); }, []);
   const cancelRecording = useCallback(() => {
