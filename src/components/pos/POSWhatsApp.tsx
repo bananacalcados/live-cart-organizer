@@ -1031,8 +1031,22 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               <ChevronLeft className="h-5 w-5" />
             </Button>
           )}
-          <MessageCircle className="h-5 w-5 text-white" />
-          <span className="font-bold text-white">WhatsApp</span>
+          {onExitFullScreen ? (
+            <button
+              onClick={onExitFullScreen}
+              title="Sair (ESC)"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/95 hover:bg-white text-[#054d44] text-xs font-semibold shadow-sm transition-all"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Sair do WhatsApp
+              <kbd className="ml-1 px-1.5 py-0.5 text-[9px] rounded bg-[#054d44]/10 border border-[#054d44]/20 text-[#054d44]">ESC</kbd>
+            </button>
+          ) : (
+            <>
+              <MessageCircle className="h-5 w-5 text-white" />
+              <span className="font-bold text-white">WhatsApp</span>
+            </>
+          )}
           {selectedSellerName && (
             <Badge className="bg-white/20 text-white border-0 text-[10px]">{selectedSellerName}</Badge>
           )}
