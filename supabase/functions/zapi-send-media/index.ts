@@ -37,6 +37,17 @@ serve(async (req) => {
       );
     }
 
+    const isGroupId = phone.includes('@') || phone.includes('-') || phone.replace(/\D/g, '').startsWith('120');
+    if (!isGroupId) {
+      const guard = await checkInstanceGuard({ req, phone, whatsappNumberId: whatsapp_number_id });
+      if (!guard.ok) {
+        return new Response(JSON.stringify(guard.body), {
+          status: 409,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     const { instanceId, token, clientToken } = await resolveZApiCredentials(whatsapp_number_id);
     console.log('Resolved credentials - instanceId:', instanceId, 'clientToken prefix:', clientToken?.slice(0, 6));
 
