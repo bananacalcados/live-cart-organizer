@@ -80,7 +80,11 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
   const [influencedRevenue, setInfluencedRevenue] = useState(0);
   const [taskWhatsAppPhone, setTaskWhatsAppPhone] = useState<string | null>(null);
-  const revenueStatuses = ["completed", "pending_sync", "pending_pickup", "paid"];
+  // PAGO É PAGO: contabiliza apenas pedidos efetivamente pagos.
+  // `pending_pickup` é "aguardando pagamento na retirada" (paid_at sempre null) — NÃO conta como receita.
+  // Status de fulfillment (awaiting_shipping/mototaxi/pickup/concluido/enviado) ficam em `db_orders.stage`,
+  // não em `pos_sales.status`, então mover um card no kanban NÃO remove a venda paga do dashboard.
+  const revenueStatuses = ["completed", "pending_sync", "paid"];
 
   const loadAlerts = async () => {
     const [conversationRes, supportRes, interStoreRes, stockRes] = await Promise.all([
