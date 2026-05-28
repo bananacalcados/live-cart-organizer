@@ -159,9 +159,10 @@ export function ConversationList({
   const archivedCount = conversations.filter(c => c.isArchived).length;
   const dispatchCount = conversations.filter(c => c.isDispatchOnly && !c.isArchived).length;
 
-  // Instance tabs
-  const instanceCounts: Record<string, number> = { all: conversations.filter(c => !c.isArchived).length };
-  for (const c of conversations.filter(c => !c.isArchived)) {
+  // Instance tabs — count matches what 'all' filter renders (open conversations only)
+  const openConvs = conversations.filter(c => !c.isArchived && !c.isFinished && !c.isDispatchOnly);
+  const instanceCounts: Record<string, number> = { all: openConvs.length };
+  for (const c of openConvs) {
     if (c.whatsapp_number_id) {
       instanceCounts[c.whatsapp_number_id] = (instanceCounts[c.whatsapp_number_id] || 0) + 1;
     }
