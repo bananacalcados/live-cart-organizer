@@ -4093,6 +4093,7 @@ export type Database = {
           initial_message_blocks: Json
           initial_message_enabled: boolean
           is_active: boolean
+          live_active_until: string | null
           meta_template_body_variables: Json | null
           meta_template_header_variable: string | null
           meta_template_language: string | null
@@ -4116,6 +4117,7 @@ export type Database = {
           initial_message_blocks?: Json
           initial_message_enabled?: boolean
           is_active?: boolean
+          live_active_until?: string | null
           meta_template_body_variables?: Json | null
           meta_template_header_variable?: string | null
           meta_template_language?: string | null
@@ -4139,6 +4141,7 @@ export type Database = {
           initial_message_blocks?: Json
           initial_message_enabled?: boolean
           is_active?: boolean
+          live_active_until?: string | null
           meta_template_body_variables?: Json | null
           meta_template_header_variable?: string | null
           meta_template_language?: string | null
@@ -15088,6 +15091,10 @@ export type Database = {
           recipient_name: string
         }[]
       }
+      clear_event_live_active: {
+        Args: { p_event_id: string }
+        Returns: undefined
+      }
       copy_trigger_messages: {
         Args: { p_source_trigger_id: string; p_target_trigger_id: string }
         Returns: number
@@ -15643,6 +15650,7 @@ export type Database = {
         Args: { p_account_id: string }
         Returns: boolean
       }
+      set_event_live_active: { Args: { p_event_id: string }; Returns: string }
       set_fiscal_sequence_start: {
         Args: {
           p_ambiente: string
