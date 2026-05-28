@@ -1,21 +1,21 @@
-import { useState, useEffect, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useEffect, useMemo } from "react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Send, Loader2, MessageSquare } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { toast } from "sonner";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
 import { useConversationInstance } from "@/hooks/useConversationInstance";
+import { useChatMessages } from "@/hooks/chat/useChatMessages";
+import { useChatSender } from "@/hooks/chat/useChatSender";
 
 interface LeadWhatsAppDialogProps {
   open: boolean;
@@ -24,108 +24,58 @@ interface LeadWhatsAppDialogProps {
   leadName?: string;
 }
 
-interface WaMessage {
-  id: string;
-  phone: string;
-  message: string;
-  direction: string;
-  created_at: string;
-  media_type?: string;
-  media_url?: string;
-  status?: string;
-  whatsapp_number_id?: string;
-  sender_name?: string;
-}
-
 export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: LeadWhatsAppDialogProps) {
-  const [messages, setMessages] = useState<WaMessage[]>([]);
-  const [loading, setLoading] = useState(false);
   const [newMessage, setNewMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
   const [sendVia, setSendVia] = useState<'zapi' | 'meta'>('meta');
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
   const currentUserId = useCurrentUserId();
-  const { effectiveNumberId, boundNumber, isLocked } = useConversationInstance(phone, { messages });
 
   const cleanPhone = phone?.replace(/\D/g, '') || '';
-  // Build phone variants: raw, with DDI 55, without DDI 55
-  const phoneVariants = (() => {
+  const phoneVariants = useMemo(() => {
     if (!cleanPhone) return [];
     const variants = new Set<string>();
     variants.add(cleanPhone);
     if (cleanPhone.startsWith('55') && cleanPhone.length >= 12) {
-      variants.add(cleanPhone.slice(2)); // without DDI
+      variants.add(cleanPhone.slice(2));
     } else {
-      variants.add('55' + cleanPhone); // with DDI
+      variants.add('55' + cleanPhone);
     }
     return [...variants];
-  })();
+  }, [cleanPhone]);
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
-  const loadMessages = useCallback(async () => {
-    if (phoneVariants.length === 0) return;
-    setLoading(true);
-    try {
-      const { data } = await supabase
-        .from('whatsapp_messages')
-        .select('*')
-        .in('phone', phoneVariants)
-        .order('created_at', { ascending: true });
-      setMessages(data || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [phoneVariants.join(',')]); // eslint-disable-line
+  // Mensagens: usa o hook unificado. Sem filtro por numberId (queremos histórico cross-instância no Leads).
+  const { messages, isLoading: loading, refresh: loadMessages } = useChatMessages(
+    open ? cleanPhone : null,
+    undefined,
+    { phoneVariations: phoneVariants },
+  );
 
-  useEffect(() => {
-    if (open && phoneVariants.length > 0) {
-      loadMessages();
-    }
-  }, [open, phoneVariants.join(','), loadMessages]); // eslint-disable-line
+  const { effectiveNumberId, boundNumber, isLocked } = useConversationInstance(phone, { messages: messages as never });
+  const { sendText, isSending } = useChatSender();
 
-  // Broadcast-based notification (postgres_changes removed for CPU).
-  useWaMessageBroadcast((payload) => {
-    if (!open) return;
-    if (!payload?.phone || !phoneVariants.includes(payload.phone)) return;
-    loadMessages();
-  });
-
-
-  // Determine which phone format exists in messages for sending
-  const sendPhone = messages.length > 0 ? messages[0].phone : (cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone);
+  // Telefone de envio: usa o formato que já existe no histórico, ou injeta DDI 55 como fallback.
+  const sendPhone = messages.length > 0
+    ? (messages[0] as { phone: string }).phone
+    : (cleanPhone.startsWith('55') ? cleanPhone : '55' + cleanPhone);
 
   const handleSend = async () => {
     if (!newMessage.trim() || !cleanPhone || isSending) return;
     const text = newMessage.trim();
-    setIsSending(true);
     setNewMessage("");
-    try {
-      if (sendVia === 'meta' && effectiveNumberId) {
-        const { error } = await supabase.functions.invoke('meta-whatsapp-send', {
-          body: { phone: sendPhone, message: text, whatsapp_number_id: effectiveNumberId },
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.functions.invoke('zapi-send-message', {
-          body: { phone: sendPhone, message: text, whatsapp_number_id: effectiveNumberId },
-        });
-        if (error) throw error;
-      }
-      await supabase.from('whatsapp_messages').insert({
-        phone: sendPhone, message: text, direction: 'outgoing', status: 'sent',
-        whatsapp_number_id: effectiveNumberId || null,
-        sender_user_id: currentUserId || null,
-      });
-      loadMessages();
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao enviar mensagem");
-    } finally {
-      setIsSending(false);
-    }
+    const result = await sendText({
+      phone: sendPhone,
+      message: text,
+      route: {
+        channel: 'whatsapp',
+        provider: sendVia,
+        numberId: effectiveNumberId || null,
+      },
+      senderUserId: currentUserId || null,
+    });
+    if (result.success) loadMessages();
+    else setNewMessage(text); // restaura em caso de erro
   };
 
   return (
@@ -172,35 +122,41 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
             </div>
           ) : (
             <div className="space-y-1.5">
-              {messages.map(msg => (
-                <div key={msg.id} className={cn("flex", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
-                  <div className={cn(
-                    "max-w-[80%] rounded-lg px-3 py-1.5 text-sm",
-                    msg.direction === 'outgoing'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted'
-                  )}>
-                    <WhatsAppMediaAttachment
-                      mediaUrl={msg.media_url}
-                      mediaType={msg.media_type}
-                      message={msg.message}
-                      direction={msg.direction}
-                      imageClassName="rounded max-w-full max-h-48 mb-1"
-                      audioClassName="max-w-full mb-1"
-                      pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
-                    />
-                    <p className="whitespace-pre-wrap break-words">{msg.message}</p>
-                    <div className={cn("flex items-center gap-1 mt-0.5", msg.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
-                      <span className="text-[10px] opacity-60">
-                        {format(new Date(msg.created_at), "dd/MM HH:mm", { locale: ptBR })}
-                      </span>
-                      {msg.direction === 'outgoing' && msg.status && (
-                        <Badge variant="outline" className="text-[8px] px-1 py-0 h-3 border-current opacity-50">{msg.status}</Badge>
-                      )}
+              {messages.map((msg) => {
+                const m = msg as {
+                  id: string; direction: string; created_at: string; status?: string;
+                  media_url?: string; media_type?: string; message: string;
+                };
+                return (
+                  <div key={m.id} className={cn("flex", m.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
+                    <div className={cn(
+                      "max-w-[80%] rounded-lg px-3 py-1.5 text-sm",
+                      m.direction === 'outgoing'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted'
+                    )}>
+                      <WhatsAppMediaAttachment
+                        mediaUrl={m.media_url}
+                        mediaType={m.media_type}
+                        message={m.message}
+                        direction={m.direction}
+                        imageClassName="rounded max-w-full max-h-48 mb-1"
+                        audioClassName="max-w-full mb-1"
+                        pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
+                      />
+                      <p className="whitespace-pre-wrap break-words">{m.message}</p>
+                      <div className={cn("flex items-center gap-1 mt-0.5", m.direction === 'outgoing' ? 'justify-end' : 'justify-start')}>
+                        <span className="text-[10px] opacity-60">
+                          {format(new Date(m.created_at), "dd/MM HH:mm", { locale: ptBR })}
+                        </span>
+                        {m.direction === 'outgoing' && m.status && (
+                          <Badge variant="outline" className="text-[8px] px-1 py-0 h-3 border-current opacity-50">{m.status}</Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </ScrollArea>
