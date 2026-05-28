@@ -253,21 +253,44 @@ export function ZApiInstanceManager() {
                           : <Badge variant="secondary">Inativo</Badge>}
                       </TableCell>
                       <TableCell>
-                        {conn?.tested ? (
-                          conn.connected
-                            ? <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 gap-1"><Wifi className="h-3 w-3" /> Online</Badge>
-                            : <Badge variant="destructive" className="gap-1"><WifiOff className="h-3 w-3" /> Offline</Badge>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 text-xs"
-                            disabled={testingId === inst.id}
-                            onClick={() => testConnection(inst)}
-                          >
-                            {testingId === inst.id ? "Testando..." : "Testar"}
-                          </Button>
-                        )}
+                        {(() => {
+                          // Prioridade: teste manual recente > dado persistido do cron
+                          const manual = conn?.tested ? conn.connected : null;
+                          const persisted = inst.is_online;
+                          const effective = manual !== null ? manual : persisted;
+                          const stale = inst.last_health_check
+                            ? (Date.now() - new Date(inst.last_health_check).getTime()) > 5 * 60_000
+                            : true;
+                          if (effective === true) {
+                            return (
+                              <div className="flex items-center gap-1">
+                                <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 gap-1">
+                                  <Wifi className="h-3 w-3" /> Online
+                                </Badge>
+                                <Button variant="ghost" size="sm" className="h-7 text-[10px] px-1" disabled={testingId === inst.id} onClick={() => testConnection(inst)}>
+                                  {testingId === inst.id ? "..." : "↻"}
+                                </Button>
+                              </div>
+                            );
+                          }
+                          if (effective === false) {
+                            return (
+                              <div className="flex items-center gap-1">
+                                <Badge variant="destructive" className="gap-1">
+                                  <WifiOff className="h-3 w-3" /> Offline
+                                </Badge>
+                                <Button variant="ghost" size="sm" className="h-7 text-[10px] px-1" disabled={testingId === inst.id} onClick={() => testConnection(inst)}>
+                                  {testingId === inst.id ? "..." : "↻"}
+                                </Button>
+                              </div>
+                            );
+                          }
+                          return (
+                            <Button variant="outline" size="sm" className="h-7 text-xs" disabled={testingId === inst.id} onClick={() => testConnection(inst)}>
+                              {testingId === inst.id ? "Testando..." : "Testar"}
+                            </Button>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
