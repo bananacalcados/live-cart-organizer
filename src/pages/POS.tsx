@@ -306,7 +306,7 @@ export default function POS() {
         {section === "returns" && <POSExchanges storeId={selectedStore} />}
         {section === "requests" && <POSInterStoreRequests storeId={selectedStore} />}
         
-        {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} />}
+        {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} onExitFullScreen={!isMobile ? () => setSection("dashboard") : undefined} />}
         {section === "online" && <POSOnlineHub storeId={selectedStore} sellers={sellers} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
         {section === "pickups" && <POSPickupOrders storeId={selectedStore} />}
