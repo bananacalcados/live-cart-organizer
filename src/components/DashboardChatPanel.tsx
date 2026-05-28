@@ -90,69 +90,64 @@ export function DashboardChatPanel() {
   }, [orders]);
 
   const loadConversations = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("whatsapp_messages")
-      .select("*")
-      .order("created_at", { ascending: false });
+    // Regular WhatsApp conversations: use RPC summary (no full table scan).
+    const [{ data: rpcRows, error: rpcErr }, igResult] = await Promise.all([
+      supabase.rpc('get_conversations', { p_number_id: null, p_dispatch_only: false }),
+      // Instagram conversations stay on a scoped direct query (channel='instagram')
+      // because they need handle-level aggregation that the RPC doesn't do.
+      supabase
+        .from("whatsapp_messages")
+        .select("phone, message, media_type, direction, status, created_at, sender_name, whatsapp_number_id, is_group, channel")
+        .eq("channel", "instagram")
+        .order("created_at", { ascending: false })
+        .limit(500),
+    ]);
 
-    if (error || !data) return;
-
-    const convMap = new Map<string, { messages: any[]; unread: number; isGroup: boolean; phone: string; numberId: string | null }>();
-
-    for (const msg of data) {
-      if (msg.channel === "instagram") continue; // tratado em bloco separado abaixo
-      const convKey = `${msg.phone}__${msg.whatsapp_number_id || "none"}`;
-      if (!convMap.has(convKey)) convMap.set(convKey, { messages: [], unread: 0, isGroup: msg.is_group || false, phone: msg.phone, numberId: msg.whatsapp_number_id || null });
-      const entry = convMap.get(convKey)!;
-      entry.messages.push(msg);
-      if (msg.direction === "incoming" && msg.status !== "read") entry.unread++;
-      if (msg.is_group) entry.isGroup = true;
-    }
+    if (rpcErr) { console.error("Error loading conversations:", rpcErr); return; }
 
     const convs: Conversation[] = [];
     const phoneMessages = new Map<string, { direction: string }[]>();
 
-    convMap.forEach((value, convKey) => {
-      const phone = value.phone;
+    // ===== WhatsApp from RPC =====
+    for (const row of (rpcRows || []) as any[]) {
+      const phone = row.phone as string;
       const phoneSuffix = phone.replace(/\D/g, "").slice(-8);
       const orderData = orderPhoneMap.get(phoneSuffix);
+      // Only include conversations that have orders in the current event
+      if (!orderData) continue;
 
-      // Only include conversations that have orders in current event
-      if (!orderData) return;
+      const rowNumberId = row.whatsapp_number_id || null;
+      const convKey = `${phone}__${rowNumberId || "none"}`;
+      const isGroup = !!row.is_group || phone.includes("@g.us") || phone.includes("-");
+      const matchedNumber = rowNumberId ? metaNumbers.find(n => n.id === rowNumberId) : null;
+      const lastIncomingInstance: "zapi" | "meta" | undefined =
+        row.direction === "incoming"
+          ? (matchedNumber?.provider === "meta" ? "meta" : "zapi")
+          : undefined;
 
-      const lastMsg = value.messages[0];
-      const isGroup = value.isGroup || phone.includes("@g.us") || phone.includes("-");
-      const lastIncoming = value.messages.find((m: any) => m.direction === "incoming");
-      const lastIncomingInstance: "zapi" | "meta" | undefined = (() => {
-        if (!lastIncoming) return undefined;
-        if (!lastIncoming.whatsapp_number_id) return "zapi";
-        const matchedNumber = metaNumbers.find(n => n.id === lastIncoming.whatsapp_number_id);
-        if (matchedNumber) return (matchedNumber.provider === "meta" ? "meta" : "zapi") as "zapi" | "meta";
-        return "zapi";
-      })();
-
-      phoneMessages.set(convKey, value.messages.map((m: any) => ({ direction: m.direction })));
+      const msgs: { direction: string }[] = [{ direction: row.direction }];
+      if (row.has_outgoing && row.direction === "incoming") msgs.push({ direction: "outgoing" });
+      phoneMessages.set(convKey, msgs);
 
       convs.push({
         phone,
-        lastMessage: lastMsg.message,
-        lastMessageAt: new Date(lastMsg.created_at),
-        unreadCount: value.unread,
-        customerName: chatContacts[phone] || orderData.instagram,
+        lastMessage: row.last_message,
+        lastMessageAt: new Date(row.last_message_at),
+        unreadCount: Number(row.unread_count),
+        customerName: chatContacts[phone] || orderData.instagram || row.sender_name || undefined,
         isGroup,
-        hasUnansweredMessage: lastMsg.direction === "incoming",
+        hasUnansweredMessage: row.direction === "incoming",
         stage: orderData.stage,
         customerId: orderData.customerId,
-        whatsapp_number_id: value.numberId,
+        whatsapp_number_id: rowNumberId,
         lastIncomingInstance,
       });
-    });
+    }
 
-    // ===== Conversas Instagram (channel='instagram') =====
-    // Agrupa por @handle (sender_name) já que phone aqui é o ig_user_id (numérico longo)
+    // ===== Instagram conversations (aggregated by @handle) =====
+    const igData = igResult.data || [];
     const igMap = new Map<string, { messages: any[]; unread: number; igUserId: string }>();
-    for (const msg of data) {
-      if (msg.channel !== "instagram") continue;
+    for (const msg of igData as any[]) {
       const rawHandle = (msg.sender_name || "").toString().trim().toLowerCase();
       if (!rawHandle.startsWith("@")) continue;
       const handle = rawHandle.replace(/^@/, "");
@@ -163,7 +158,6 @@ export function DashboardChatPanel() {
       if (msg.direction === "incoming" && msg.status !== "read") e.unread++;
     }
 
-    // Order match por instagram_handle
     const orderByHandle = new Map<string, { stage?: string; customerId?: string }>();
     for (const o of orders) {
       const h = (o.customer?.instagram_handle || "").toString().trim().toLowerCase().replace(/^@/, "");
@@ -172,7 +166,7 @@ export function DashboardChatPanel() {
 
     igMap.forEach((value, handle) => {
       const orderData = orderByHandle.get(handle);
-      if (!orderData) return; // só conversas do evento atual
+      if (!orderData) return;
       const lastMsg = value.messages[0];
       convs.push({
         phone: `ig:${handle}`,
@@ -211,7 +205,7 @@ export function DashboardChatPanel() {
         }
       }).catch(() => {});
     }
-  }, [orderPhoneMap, chatContacts, metaNumbers, enrichConversations]);
+  }, [orderPhoneMap, chatContacts, metaNumbers, enrichConversations, orders, profilePics]);
 
   useEffect(() => {
     loadConversations();

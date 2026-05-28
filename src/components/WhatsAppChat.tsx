@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useZapi } from "@/hooks/useZapi";
+import { useConversationInstance } from "@/hooks/useConversationInstance";
 import { normalizeBRPhone, buildPhoneVariations } from "@/lib/phoneUtils";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -112,20 +113,13 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const { selectedNumberId, fetchNumbers, getSelectedNumber, numbers } = useWhatsAppNumberStore();
 
   // ── Bind chat to the instance of the existing conversation ──
-  // Prevents the bug where sends silently switch to whichever instance
-  // is globally selected in the WhatsAppNumberSelector.
-  const boundNumberId = useMemo<string | null>(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const id = messages[i]?.whatsapp_number_id;
-      if (id) return id;
-    }
-    return null;
-  }, [messages]);
-  const effectiveNumberId = boundNumberId || selectedNumberId || null;
-  const boundNumber = useMemo(
-    () => (boundNumberId ? numbers.find(n => n.id === boundNumberId) ?? null : null),
-    [boundNumberId, numbers]
-  );
+  // Centralized in useConversationInstance: prevents the bug where sends
+  // silently switch to whichever instance is globally selected.
+  const {
+    boundNumberId,
+    boundNumber,
+    effectiveNumberId,
+  } = useConversationInstance(order.whatsapp, { messages });
 
   // Meta templates state
   const [showTemplateDialog, setShowTemplateDialog] = useState(false);
@@ -154,25 +148,38 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     setTogglingAiPause(true);
     try {
       const newPaused = !aiPaused;
-      const customerPhone = order.whatsapp || '';
-      
-      // Call external API
-      try {
+      const customerPhone = (order.whatsapp || '').replace(/\D/g, '');
+
+      // Sync with automation_ai_sessions (same mechanism POS / cooldown uses).
+      // Pause = deactivate any active session for this phone.
+      // Resume = reactivate the most recent session (if any) for this phone.
+      if (customerPhone) {
+        const variants = new Set<string>([customerPhone]);
+        if (customerPhone.startsWith('55') && customerPhone.length >= 12) variants.add(customerPhone.slice(2));
+        else variants.add('55' + customerPhone);
+
         if (newPaused) {
-          await fetch('https://api.bananacalcados.com.br/ia/pausar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ telefone: customerPhone, motivo: 'manual_vendedora', permanente: false }),
-          });
+          await supabase
+            .from('automation_ai_sessions')
+            .update({ is_active: false })
+            .in('phone', [...variants])
+            .eq('is_active', true);
         } else {
-          await fetch('https://api.bananacalcados.com.br/ia/retomar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ telefone: customerPhone }),
-          });
+          // Reactivate the latest session for this phone (if any exists).
+          const { data: latest } = await supabase
+            .from('automation_ai_sessions')
+            .select('id')
+            .in('phone', [...variants])
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (latest?.id) {
+            await supabase
+              .from('automation_ai_sessions')
+              .update({ is_active: true, updated_at: new Date().toISOString() })
+              .eq('id', latest.id);
+          }
         }
-      } catch (apiErr) {
-        console.error('Erro ao chamar API externa de IA:', apiErr);
       }
 
       await updateOrder(order.id, {
@@ -181,7 +188,10 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       } as any);
       setAiPaused(newPaused);
       toast.success(newPaused ? 'IA pausada para este pedido' : 'IA retomada');
-    } catch { toast.error('Erro ao alterar pausa da IA'); }
+    } catch (err) {
+      console.error('Erro ao alterar pausa da IA:', err);
+      toast.error('Erro ao alterar pausa da IA');
+    }
     setTogglingAiPause(false);
   };
 
