@@ -16,6 +16,7 @@ import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { EventStockAlerts } from "@/components/events/EventStockAlerts";
 import { EventCartsPanel } from "@/components/events/EventCartsPanel";
 import { LiveCommentsHistory } from "@/components/events/LiveCommentsHistory";
+import { LiveActiveToggleButton } from "@/components/events/LiveActiveToggleButton";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -149,6 +150,7 @@ const Index = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <LiveActiveToggleButton eventId={currentEventId} />
                 <OrderReportDialog orders={orders} />
                 <Button
                   variant="ghost"
