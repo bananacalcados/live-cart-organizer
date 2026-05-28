@@ -38,6 +38,7 @@ import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import { BulkMessageDialog, BulkRecipient } from "@/components/chat/BulkMessageDialog";
 import { useChatSender, type SendRoute } from "@/hooks/chat/useChatSender";
+import { useChatMessages } from "@/hooks/chat/useChatMessages";
 
 interface Props {
   storeId: string;
