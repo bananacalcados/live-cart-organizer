@@ -65,6 +65,8 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
     ? phoneWithoutCountry.slice(0, 2) + phoneWithoutCountry.slice(3) : null;
   const phoneVariations = [normalizedPhone, rawPhone, phoneWithoutCountry, phoneWithout9, phoneWithout9 ? '55' + phoneWithout9 : null].filter(Boolean) as string[];
 
+  const { effectiveNumberId, boundNumber, isLocked } = useConversationInstance(normalizedPhone, { messages });
+
   const loadMessages = useCallback(async () => {
     const { data } = await supabase
       .from('whatsapp_messages')
