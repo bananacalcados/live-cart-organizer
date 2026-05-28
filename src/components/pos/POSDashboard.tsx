@@ -80,7 +80,11 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
   const [influencedRevenue, setInfluencedRevenue] = useState(0);
   const [taskWhatsAppPhone, setTaskWhatsAppPhone] = useState<string | null>(null);
-  const revenueStatuses = ["completed", "pending_sync", "pending_pickup", "paid"];
+  // PAGO É PAGO: contabiliza apenas pedidos efetivamente pagos.
+  // `pending_pickup` é "aguardando pagamento na retirada" (paid_at sempre null) — NÃO conta como receita.
+  // Status de fulfillment (awaiting_shipping/mototaxi/pickup/concluido/enviado) ficam em `db_orders.stage`,
+  // não em `pos_sales.status`, então mover um card no kanban NÃO remove a venda paga do dashboard.
+  const revenueStatuses = ["completed", "pending_sync", "paid"];
 
   const loadAlerts = async () => {
     const [conversationRes, supportRes, interStoreRes, stockRes] = await Promise.all([
@@ -145,10 +149,11 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       setPhysicalRevenue(physical.reduce((sum, s) => sum + (s.total || 0), 0));
       setPhysicalSalesCount(physical.length);
 
-      // Faturamento Live: venda com event_id E efetivamente paga (paid_at preenchido).
-      // Status como `pending_pickup` podem existir sem pagamento confirmado (aguardando retirada),
-      // por isso exigimos paid_at para garantir que é receita realmente recebida.
-      const liveSales = completedSales.filter((s: any) => s.event_id && s.paid_at);
+      // Faturamento Live: vendas pagas vinculadas a um evento.
+      // `completedSales` já está filtrado pelos status pagos (completed/paid/pending_sync),
+      // então não precisamos exigir paid_at aqui — pedidos `completed` legados sem paid_at
+      // também são vendas pagas legítimas.
+      const liveSales = completedSales.filter((s: any) => s.event_id);
       setLiveRevenue(liveSales.reduce((sum, s) => sum + (s.total || 0), 0));
       setLiveSalesCount(liveSales.length);
 

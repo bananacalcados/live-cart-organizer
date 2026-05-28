@@ -214,8 +214,10 @@ export function POSDailySales({ storeId }: Props) {
 
       const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details, tracking_code";
       
-      // Query 1: Sales created in date range (pending, online_pending, failed, etc.)
-      // Query 2: Sales PAID in date range (paid/completed) — appear on payment date
+      // Query 1: Sales created in date range that NÃO foram pagas (pending/online_pending/failed/pending_pickup)
+      //   - pending_pickup = aguardando pagamento na retirada (paid_at sempre null) → entra aqui pela data de criação
+      // Query 2: Sales PAGAS no período (paid/completed/pending_sync) — aparecem pela data de pagamento
+      //   - PAGO É PAGO: status de fulfillment ficam em db_orders.stage, não removem a venda daqui
       const [createdRes, paidRes, sellersRes, goalsRes] = await Promise.all([
         supabase
           .from("pos_sales")
@@ -223,13 +225,13 @@ export function POSDailySales({ storeId }: Props) {
           .eq("store_id", storeId)
           .gte("created_at", start.toISOString())
           .lte("created_at", end.toISOString())
-          .not("status", "in", '("paid","completed","pending_sync","pending_pickup")')
+          .not("status", "in", '("paid","completed","pending_sync")')
           .order("created_at", { ascending: false }),
         supabase
           .from("pos_sales")
           .select(selectFields)
           .eq("store_id", storeId)
-          .in("status", ["paid", "completed", "pending_sync", "pending_pickup"])
+          .in("status", ["paid", "completed", "pending_sync"])
           .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`)
           .order("created_at", { ascending: false }),
         supabase
@@ -651,8 +653,10 @@ export function POSDailySales({ storeId }: Props) {
   // Status filter for tabs
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'awaiting_payment' | 'not_approved'>('all');
 
-  const completedSales = sales.filter((s) => s.status === "completed" || s.status === "pending_sync" || s.status === "pending_pickup" || s.status === "paid");
-  const awaitingPaymentSales = sales.filter((s) => s.status === "online_pending");
+  // PAGO É PAGO: completedSales = somente vendas efetivamente pagas (completed/paid/pending_sync).
+  // pending_pickup é "aguardando pagamento na retirada" e entra em awaitingPaymentSales.
+  const completedSales = sales.filter((s) => s.status === "completed" || s.status === "pending_sync" || s.status === "paid");
+  const awaitingPaymentSales = sales.filter((s) => s.status === "online_pending" || s.status === "pending_pickup");
   const notApprovedSales = sales.filter((s) => ["payment_failed", "payment_declined", "cancelled"].includes(s.status));
 
   // KPI data source based on active filter
