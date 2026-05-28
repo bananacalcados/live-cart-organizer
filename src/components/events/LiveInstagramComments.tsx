@@ -48,8 +48,52 @@ export function LiveInstagramComments({ eventId, onOpenOrder }: LiveInstagramCom
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filter, setFilter] = useState<"all" | "orders" | "carts">("all");
   const [recentlyHighlighted, setRecentlyHighlighted] = useState<Set<string>>(new Set());
+  const [liveActiveUntil, setLiveActiveUntil] = useState<Date | null>(null);
+  const [togglingLive, setTogglingLive] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const cartByHandleRef = useRef<Map<string, CartCustomerMatch>>(new Map());
+
+  const isLiveActive = !!liveActiveUntil && liveActiveUntil.getTime() > Date.now();
+
+  // Load current live_active_until + poll every 60s so the "expira em Xh" stays accurate
+  const refreshLiveStatus = useCallback(async () => {
+    if (!eventId) return;
+    const { data } = await supabase
+      .from("events")
+      .select("live_active_until")
+      .eq("id", eventId)
+      .maybeSingle();
+    setLiveActiveUntil(data?.live_active_until ? new Date(data.live_active_until) : null);
+  }, [eventId]);
+
+  useEffect(() => {
+    refreshLiveStatus();
+    const t = setInterval(refreshLiveStatus, 60000);
+    return () => clearInterval(t);
+  }, [refreshLiveStatus]);
+
+  const toggleLiveActive = useCallback(async () => {
+    if (!eventId || togglingLive) return;
+    setTogglingLive(true);
+    try {
+      if (isLiveActive) {
+        const { error } = await supabase.rpc("clear_event_live_active", { p_event_id: eventId });
+        if (error) throw error;
+        toast.success("Live desativada para este evento");
+      } else {
+        const { data, error } = await supabase.rpc("set_event_live_active", { p_event_id: eventId });
+        if (error) throw error;
+        toast.success("Live ativada — expira em 8h");
+        if (data) setLiveActiveUntil(new Date(data));
+      }
+      await refreshLiveStatus();
+    } catch (e: any) {
+      toast.error("Erro ao alternar Live: " + (e?.message || "desconhecido"));
+    } finally {
+      setTogglingLive(false);
+    }
+  }, [eventId, isLiveActive, togglingLive, refreshLiveStatus]);
+
 
   useEffect(() => {
     cartByHandleRef.current = cartByHandle;
