@@ -653,8 +653,10 @@ export function POSDailySales({ storeId }: Props) {
   // Status filter for tabs
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'awaiting_payment' | 'not_approved'>('all');
 
-  const completedSales = sales.filter((s) => s.status === "completed" || s.status === "pending_sync" || s.status === "pending_pickup" || s.status === "paid");
-  const awaitingPaymentSales = sales.filter((s) => s.status === "online_pending");
+  // PAGO É PAGO: completedSales = somente vendas efetivamente pagas (completed/paid/pending_sync).
+  // pending_pickup é "aguardando pagamento na retirada" e entra em awaitingPaymentSales.
+  const completedSales = sales.filter((s) => s.status === "completed" || s.status === "pending_sync" || s.status === "paid");
+  const awaitingPaymentSales = sales.filter((s) => s.status === "online_pending" || s.status === "pending_pickup");
   const notApprovedSales = sales.filter((s) => ["payment_failed", "payment_declined", "cancelled"].includes(s.status));
 
   // KPI data source based on active filter
