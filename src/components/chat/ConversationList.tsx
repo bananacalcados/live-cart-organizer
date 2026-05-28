@@ -36,6 +36,7 @@ interface ConversationListProps {
   selectedConversationKey?: string | null;
   onBulkFinish?: (phones: string[]) => void;
   onBulkMessage?: (phones: string[]) => void;
+  onBulkMarkRead?: (phones: string[]) => void;
   hasActiveSupport?: (phone: string) => boolean;
   supportFilterActive?: boolean;
   onSupportFilterToggle?: () => void;
