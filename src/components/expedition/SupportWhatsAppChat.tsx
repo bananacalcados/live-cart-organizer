@@ -30,6 +30,7 @@ interface Message {
   created_at: string;
   media_type?: string;
   media_url?: string;
+  whatsapp_number_id?: string | null;
 }
 
 interface SupportWhatsAppChatProps {
