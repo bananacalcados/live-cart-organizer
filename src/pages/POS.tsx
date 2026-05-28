@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
   ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3, SearchX,
-  Menu, X, Package, Globe, Lock, Loader2, CreditCard, Flame, Truck, Users
+  Menu, X, Package, Globe, Lock, Loader2, CreditCard, Flame, Truck, Users, ArrowLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
