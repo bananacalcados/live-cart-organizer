@@ -121,9 +121,9 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
     toast.info('Enviando arquivo...');
     const url = await uploadMediaToStorage(file);
     if (url) {
-      const result = await sendMedia(phone, url, mediaType as any);
+      const result = await sendMedia(phone, url, mediaType as any, undefined, effectiveNumberId || undefined);
       if (result.success) {
-        await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: `[${mediaType}]`, direction: 'outgoing', status: 'sent', media_type: mediaType, media_url: url, sender_user_id: currentUserId || null });
+        await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: `[${mediaType}]`, direction: 'outgoing', status: 'sent', media_type: mediaType, media_url: url, whatsapp_number_id: effectiveNumberId || null, sender_user_id: currentUserId || null });
         loadMessages();
       }
     }
