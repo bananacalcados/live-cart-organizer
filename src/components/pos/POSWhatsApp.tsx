@@ -44,6 +44,7 @@ import { TeamChatPanel } from "@/components/chat/TeamChatPanel";
 interface Props {
   storeId: string;
   initialFilter?: "unanswered" | "new";
+  onExitFullScreen?: () => void;
 }
 
 interface CrmCustomerData {
