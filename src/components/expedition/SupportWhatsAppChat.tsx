@@ -15,6 +15,7 @@ import { EmojiPickerButton } from '../EmojiPickerButton';
 import { uploadMediaToStorage } from '../MediaAttachmentPicker';
 import { WhatsAppNumberSelector } from '../WhatsAppNumberSelector';
 import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
+import { useConversationInstance } from '@/hooks/useConversationInstance';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MessageStatusIcon } from '../chat/MessageStatusIcon';
 import { WhatsAppMediaAttachment } from '../chat/WhatsAppMediaAttachment';
@@ -29,6 +30,7 @@ interface Message {
   created_at: string;
   media_type?: string;
   media_url?: string;
+  whatsapp_number_id?: string | null;
 }
 
 interface SupportWhatsAppChatProps {
@@ -47,7 +49,7 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
   const inputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const { sendMessage, sendMedia, isLoading: isSending } = useZapi();
-  const { selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+  const { fetchNumbers } = useWhatsAppNumberStore();
 
   // Recording
   const [isRecording, setIsRecording] = useState(false);
@@ -64,6 +66,8 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
   const phoneWithout9 = phoneWithoutCountry.length === 11 && phoneWithoutCountry.charAt(2) === '9'
     ? phoneWithoutCountry.slice(0, 2) + phoneWithoutCountry.slice(3) : null;
   const phoneVariations = [normalizedPhone, rawPhone, phoneWithoutCountry, phoneWithout9, phoneWithout9 ? '55' + phoneWithout9 : null].filter(Boolean) as string[];
+
+  const { effectiveNumberId, boundNumber, isLocked } = useConversationInstance(normalizedPhone, { messages });
 
   const loadMessages = useCallback(async () => {
     const { data } = await supabase
@@ -98,9 +102,9 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
     const tempId = `temp-${Date.now()}`;
     setMessages(prev => [...prev, { id: tempId, phone: normalizedPhone, message: text, direction: 'outgoing', message_id: null, status: 'sending', created_at: new Date().toISOString() }]);
 
-    const result = await sendMessage(phone, text);
+    const result = await sendMessage(phone, text, effectiveNumberId || undefined);
     if (result.success) {
-      await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: text, direction: 'outgoing', status: 'sent', sender_user_id: currentUserId || null });
+      await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: text, direction: 'outgoing', status: 'sent', whatsapp_number_id: effectiveNumberId || null, sender_user_id: currentUserId || null });
       setMessages(prev => prev.filter(m => m.id !== tempId));
     } else {
       setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'failed' } : m));
@@ -117,9 +121,9 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
     toast.info('Enviando arquivo...');
     const url = await uploadMediaToStorage(file);
     if (url) {
-      const result = await sendMedia(phone, url, mediaType as any);
+      const result = await sendMedia(phone, url, mediaType as any, undefined, effectiveNumberId || undefined);
       if (result.success) {
-        await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: `[${mediaType}]`, direction: 'outgoing', status: 'sent', media_type: mediaType, media_url: url, sender_user_id: currentUserId || null });
+        await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: `[${mediaType}]`, direction: 'outgoing', status: 'sent', media_type: mediaType, media_url: url, whatsapp_number_id: effectiveNumberId || null, sender_user_id: currentUserId || null });
         loadMessages();
       }
     }
@@ -144,9 +148,9 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
         const file = new File([blob], `audio-${Date.now()}.${ext}`, { type: ct });
         const url = await uploadMediaToStorage(file);
         if (url) {
-          const result = await sendMedia(phone, url, 'audio');
+          const result = await sendMedia(phone, url, 'audio', undefined, effectiveNumberId || undefined);
           if (result.success) {
-            await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: '[audio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: url, sender_user_id: currentUserId || null });
+            await supabase.from('whatsapp_messages').insert({ phone: normalizedPhone, message: '[audio]', direction: 'outgoing', status: 'sent', media_type: 'audio', media_url: url, whatsapp_number_id: effectiveNumberId || null, sender_user_id: currentUserId || null });
             loadMessages();
           }
         }
@@ -177,7 +181,13 @@ export function SupportWhatsAppChat({ phone, customerName, ticketSubject, onClos
           <p className="text-sm font-medium truncate">{customerName}</p>
           <p className="text-[10px] opacity-80 truncate">{ticketSubject} · {phone}</p>
         </div>
-        <WhatsAppNumberSelector />
+        {isLocked && boundNumber ? (
+          <div className="text-xs text-muted-foreground border rounded px-2 py-1.5 bg-muted/40">
+            🔒 Vinculado: <span className="font-medium text-foreground">{boundNumber.label}</span>
+          </div>
+        ) : (
+          <WhatsAppNumberSelector />
+        )}
         
       </div>
 

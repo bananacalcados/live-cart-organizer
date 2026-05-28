@@ -15,6 +15,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
+import { useConversationInstance } from "@/hooks/useConversationInstance";
 
 interface LeadWhatsAppDialogProps {
   open: boolean;
@@ -42,8 +43,9 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [sendVia, setSendVia] = useState<'zapi' | 'meta'>('meta');
-  const { numbers: metaNumbers, selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
+  const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
   const currentUserId = useCurrentUserId();
+  const { effectiveNumberId, boundNumber, isLocked } = useConversationInstance(phone, { messages });
 
   const cleanPhone = phone?.replace(/\D/g, '') || '';
   // Build phone variants: raw, with DDI 55, without DDI 55
@@ -101,20 +103,20 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
     setIsSending(true);
     setNewMessage("");
     try {
-      if (sendVia === 'meta' && selectedNumberId) {
+      if (sendVia === 'meta' && effectiveNumberId) {
         const { error } = await supabase.functions.invoke('meta-whatsapp-send', {
-          body: { phone: sendPhone, message: text, whatsapp_number_id: selectedNumberId },
+          body: { phone: sendPhone, message: text, whatsapp_number_id: effectiveNumberId },
         });
         if (error) throw error;
       } else {
         const { error } = await supabase.functions.invoke('zapi-send-message', {
-          body: { phone: sendPhone, message: text, whatsapp_number_id: selectedNumberId },
+          body: { phone: sendPhone, message: text, whatsapp_number_id: effectiveNumberId },
         });
         if (error) throw error;
       }
       await supabase.from('whatsapp_messages').insert({
         phone: sendPhone, message: text, direction: 'outgoing', status: 'sent',
-        whatsapp_number_id: selectedNumberId || null,
+        whatsapp_number_id: effectiveNumberId || null,
         sender_user_id: currentUserId || null,
       });
       loadMessages();
@@ -145,7 +147,15 @@ export function LeadWhatsAppDialog({ open, onOpenChange, phone, leadName }: Lead
           <span className="text-muted-foreground">Enviar via:</span>
           <button onClick={() => setSendVia('zapi')} className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'zapi' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>Z-API</button>
           <button onClick={() => setSendVia('meta')} className={`px-2 py-0.5 rounded-full transition-colors ${sendVia === 'meta' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}>Meta API</button>
-          {sendVia === 'meta' && metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" />}
+          {sendVia === 'meta' && (
+            isLocked && boundNumber ? (
+              <div className="text-[10px] text-muted-foreground border rounded px-2 py-1 bg-muted/40 flex-1 truncate">
+                🔒 {boundNumber.label}
+              </div>
+            ) : (
+              metaNumbers.length > 1 && <WhatsAppNumberSelector className="h-7 text-xs flex-1" />
+            )
+          )}
         </div>
 
         {/* Messages */}

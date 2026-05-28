@@ -18,6 +18,7 @@ import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { useTemplateStore, applyTemplateVariables } from "@/stores/templateStore";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
+import { useConversationInstance } from "@/hooks/useConversationInstance";
 
 interface SendWhatsAppDialogProps {
   open: boolean;
@@ -27,9 +28,11 @@ interface SendWhatsAppDialogProps {
 
 export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDialogProps) {
   const { sendMessage, isLoading } = useZapi();
-  const { fetchNumbers, selectedNumberId } = useWhatsAppNumberStore();
+  const { fetchNumbers } = useWhatsAppNumberStore();
   const { getTemplatesByStage, fetchTemplates, templates } = useTemplateStore();
   const currentUserId = useCurrentUserId();
+  const normalizedPhone = order.whatsapp ? normalizeBRPhone(order.whatsapp) : null;
+  const { effectiveNumberId, boundNumber, isLocked } = useConversationInstance(normalizedPhone);
 
   useEffect(() => {
     if (open) {
@@ -83,7 +86,7 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
     if (!order.whatsapp) return;
     
     const phone = normalizeBRPhone(order.whatsapp);
-    const result = await sendMessage(phone, message, selectedNumberId || undefined);
+    const result = await sendMessage(phone, message, effectiveNumberId || undefined);
     if (result.success) {
       // Persist message to whatsapp_messages so it appears in the chat
       await supabase.from('whatsapp_messages').insert({
@@ -91,7 +94,7 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
         message,
         direction: 'outgoing',
         status: 'sent',
-        whatsapp_number_id: selectedNumberId || null,
+        whatsapp_number_id: effectiveNumberId || null,
         sender_user_id: currentUserId || null,
       });
       onOpenChange(false);
@@ -115,7 +118,13 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
             <span className="text-xs">({order.instagramHandle})</span>
           </div>
 
-          <WhatsAppNumberSelector className="h-9 text-xs" />
+          {isLocked && boundNumber ? (
+            <div className="text-xs text-muted-foreground border rounded px-2 py-1.5 bg-muted/40">
+              🔒 Vinculado a esta conversa: <span className="font-medium text-foreground">{boundNumber.label}</span>
+            </div>
+          ) : (
+            <WhatsAppNumberSelector className="h-9 text-xs" />
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="message">Mensagem</Label>

@@ -15133,6 +15133,7 @@ export type Database = {
           new_count: number
         }[]
       }
+      get_conversation_instance: { Args: { p_phone: string }; Returns: string }
       get_conversations: {
         Args: { p_dispatch_only?: boolean; p_number_id?: string }
         Returns: {

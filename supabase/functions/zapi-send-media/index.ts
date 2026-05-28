@@ -2,10 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
 import { webmToOgg, isWebmContainer } from "../_shared/webm-to-ogg.ts";
+import { checkInstanceGuard } from "../_shared/instance-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-force-instance',
 };
 
 function uint8ToBase64(bytes: Uint8Array): string {
@@ -34,6 +35,17 @@ serve(async (req) => {
         JSON.stringify({ error: 'Phone, mediaUrl and mediaType are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    const isGroupId = phone.includes('@') || phone.includes('-') || phone.replace(/\D/g, '').startsWith('120');
+    if (!isGroupId) {
+      const guard = await checkInstanceGuard({ req, phone, whatsappNumberId: whatsapp_number_id });
+      if (!guard.ok) {
+        return new Response(JSON.stringify(guard.body), {
+          status: 409,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     const { instanceId, token, clientToken } = await resolveZApiCredentials(whatsapp_number_id);

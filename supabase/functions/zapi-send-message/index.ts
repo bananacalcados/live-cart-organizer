@@ -1,9 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { resolveZApiCredentials } from "../_shared/zapi-credentials.ts";
+import { checkInstanceGuard } from "../_shared/instance-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, x-force-instance',
 };
 
 serve(async (req) => {
@@ -19,6 +20,19 @@ serve(async (req) => {
         JSON.stringify({ error: 'Phone and message are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Instance guard: don't allow sending through the wrong instance.
+    // Skip for group sends (groups are bound to a single instance by nature).
+    const isGroupId = phone.includes('@') || phone.includes('-') || phone.replace(/\D/g, '').startsWith('120');
+    if (!isGroupId) {
+      const guard = await checkInstanceGuard({ req, phone, whatsappNumberId: whatsapp_number_id });
+      if (!guard.ok) {
+        return new Response(JSON.stringify(guard.body), {
+          status: 409,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     console.log(`Sending message to ${phone}, whatsapp_number_id=${whatsapp_number_id}`);
