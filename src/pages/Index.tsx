@@ -150,6 +150,7 @@ const Index = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <LiveActiveToggleButton eventId={currentEventId} />
                 <OrderReportDialog orders={orders} />
                 <Button
                   variant="ghost"
