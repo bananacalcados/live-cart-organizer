@@ -512,6 +512,13 @@ export function ConversationList({
         </div>
       )}
 
+      {/* Pinned Team Chat (always on top) */}
+      {onTeamChatClick && (
+        <div className="flex-shrink-0">
+          <TeamChatPinnedItem isActive={!!teamChatActive} onClick={onTeamChatClick} />
+        </div>
+      )}
+
       {/* Conversations */}
       <ScrollArea className="flex-1" style={{ minHeight: 0 }}>
         {filteredConversations.length === 0 ? (
