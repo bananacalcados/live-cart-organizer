@@ -1,5 +1,8 @@
 import { useState, useMemo } from "react";
-import { Search, Phone, Users, MessageCircle, Filter, Wifi, Link2, CheckSquare, Square, PhoneOff, HeadphonesIcon, Send, Radio } from "lucide-react";
+import {
+  Search, Users, MessageCircle, Wifi, CheckSquare, PhoneOff, Send,
+  Radio, Bell, Bot, CheckCircle2, Archive, Megaphone
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -10,16 +13,8 @@ import { cn } from "@/lib/utils";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "./ChatTypes";
-import { STAGES } from "@/types/order";
 import { WhatsAppNumber } from "@/stores/whatsappNumberStore";
 import { TeamChatPinnedItem } from "./TeamChatPinnedItem";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -45,34 +40,17 @@ interface ConversationListProps {
   supportFilterActive?: boolean;
   onSupportFilterToggle?: () => void;
   supportCount?: number;
-  /** Map of phone → tags array for tag filtering */
   contactTagsMap?: Record<string, string[]>;
-  /** Currently selected tag filters */
   selectedTagFilters?: string[];
-  /** Callback when tag filters change */
   onSelectedTagFiltersChange?: (tags: string[]) => void;
-  /** Live (event) filter */
   liveFilterActive?: boolean;
   onLiveFilterToggle?: () => void;
   liveCount?: number;
   isLiveCustomer?: (phone: string) => boolean;
   liveStageMap?: Record<string, { stageTitle: string; eventName?: string; color?: string }>;
-  /** Team chat pinned at top */
   teamChatActive?: boolean;
   onTeamChatClick?: () => void;
 }
-
-const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel: string }[] = [
-  { value: 'all', label: 'Todas', shortLabel: 'Todas' },
-  { value: 'not_started', label: 'Não Iniciadas', shortLabel: 'Novas' },
-  { value: 'ai_transferred', label: 'Transferidas pela IA', shortLabel: 'IA 🤖' },
-  { value: 'awaiting_reply', label: 'Aguardando Resposta', shortLabel: 'Aguard.' },
-  { value: 'awaiting_customer', label: 'Follow Up', shortLabel: 'Follow Up 🔄' },
-  { value: 'dispatch', label: 'Disparos', shortLabel: 'Disparos 📢' },
-  { value: 'awaiting_payment', label: 'Aguardando Pagamento', shortLabel: 'Pgto 💰' },
-  { value: 'finished', label: 'Finalizadas', shortLabel: 'Finaliz.' },
-  { value: 'archived', label: 'Arquivadas', shortLabel: 'Arquiv. 📦' },
-];
 
 export function ConversationList({
   conversations,
@@ -81,8 +59,6 @@ export function ConversationList({
   onSelectConversation,
   chatFilter,
   onChatFilterChange,
-  stageFilter,
-  onStageFilterChange,
   instanceFilter,
   onInstanceFilterChange,
   statusFilter,
@@ -94,13 +70,6 @@ export function ConversationList({
   selectedConversationKey,
   onBulkFinish,
   onBulkMessage,
-  hasActiveSupport,
-  supportFilterActive,
-  onSupportFilterToggle,
-  supportCount,
-  contactTagsMap = {},
-  selectedTagFilters = [],
-  onSelectedTagFiltersChange,
   liveFilterActive,
   onLiveFilterToggle,
   liveCount,
@@ -111,15 +80,6 @@ export function ConversationList({
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
-
-  // Compute all unique tags from the map
-  const allUniqueTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    for (const tags of Object.values(contactTagsMap)) {
-      if (tags) for (const t of tags) tagSet.add(t);
-    }
-    return Array.from(tagSet).sort();
-  }, [contactTagsMap]);
 
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) return format(date, 'HH:mm', { locale: ptBR });
@@ -132,6 +92,20 @@ export function ConversationList({
     return name.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
   };
 
+  // Helper: clear all "rail/live" specials when picking a native pill
+  const pickNativePill = (status: ConversationStatusFilter, chat: ChatFilter) => {
+    if (liveFilterActive && onLiveFilterToggle) onLiveFilterToggle();
+    onStatusFilterChange(status);
+    onChatFilterChange(chat);
+  };
+
+  // Helper for rail icon click — toggles status filter
+  const pickRailStatus = (status: ConversationStatusFilter) => {
+    if (liveFilterActive && onLiveFilterToggle) onLiveFilterToggle();
+    if (chatFilter !== 'all') onChatFilterChange('all');
+    onStatusFilterChange(statusFilter === status ? 'all' : status);
+  };
+
   // Apply filters
   const filteredConversations = conversations
     .filter(c => {
@@ -140,18 +114,11 @@ export function ConversationList({
       return true;
     })
     .filter(c => {
-      if (stageFilter !== 'all' && c.stage !== stageFilter) return false;
-      return true;
-    })
-    .filter(c => {
       if (instanceFilter === 'all') return true;
-      // When filtering by a specific instance ID, match that ID exactly
-      // Also include NULL messages only under 'all' tab, not under specific instances
       return c.whatsapp_number_id === instanceFilter;
     })
     .filter(c => {
       if (statusFilter === 'all') {
-        // "Todas" hides archived, finished, and dispatch-only conversations
         return !c.isArchived && !c.isFinished && !c.isDispatchOnly;
       }
       if (statusFilter === 'dispatch') return c.isDispatchOnly && !c.isArchived;
@@ -163,24 +130,8 @@ export function ConversationList({
       return c.conversationStatus === statusFilter;
     })
     .filter(c => {
-      // Support filter
-      if (supportFilterActive && hasActiveSupport) {
-        return hasActiveSupport(c.phone);
-      }
+      if (liveFilterActive && isLiveCustomer) return isLiveCustomer(c.phone);
       return true;
-    })
-    .filter(c => {
-      // Live (event) filter
-      if (liveFilterActive && isLiveCustomer) {
-        return isLiveCustomer(c.phone);
-      }
-      return true;
-    })
-    .filter(c => {
-      // Tag filter (AND logic)
-      if (selectedTagFilters.length === 0) return true;
-      const tags = contactTagsMap[c.phone] || [];
-      return selectedTagFilters.every(t => tags.includes(t));
     })
     .filter(c => {
       const cleanedQuery = searchQuery.replace(/\D/g, '');
@@ -189,463 +140,318 @@ export function ConversationList({
       return nameMatch || phoneMatch || (searchQuery === '');
     });
 
-  const contactsCount = conversations.filter(c => !c.isGroup).length;
-  const groupsCount = conversations.filter(c => c.isGroup).length;
-
-  // Count per status
-  const statusCounts: Record<ConversationStatusFilter, number> = {
-    all: conversations.filter(c => !c.isArchived && !c.isFinished && !c.isDispatchOnly).length,
-    not_started: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'not_started').length,
-    ai_transferred: conversations.filter(c => c.isAiTransferred && !c.isFinished && !c.isArchived).length,
-    awaiting_reply: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_reply').length,
-    awaiting_customer: conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_customer').length,
-    dispatch: conversations.filter(c => c.isDispatchOnly && !c.isArchived).length,
-    awaiting_payment: conversations.filter(c => c.isAwaitingPayment && !c.isArchived).length,
-    finished: conversations.filter(c => c.isFinished && !c.isArchived).length,
-    archived: conversations.filter(c => c.isArchived).length,
-  };
-
-  // Total unread incoming messages waiting on the human across the "Aguardando Resposta" bucket.
-  // Used to visually highlight the tab so operators don't miss new messages from customers
-  // who already have prior outgoing history (which prevents them from going to "Novas").
-  const awaitingReplyUnread = conversations.reduce((sum, c) => {
+  const groupsCount = conversations.filter(c => c.isGroup && !c.isArchived && !c.isFinished).length;
+  const newCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'not_started').length;
+  const unreadCount = conversations.reduce((sum, c) => {
     if (c.isFinished || c.isArchived || c.isDispatchOnly) return sum;
     if (c.conversationStatus !== 'awaiting_reply') return sum;
     return sum + (c.unreadCount || 0);
   }, 0);
 
-  // Count per instance (for tabs)
+  // Rail counts
+  const followUpCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_customer').length;
+  const aiCount = conversations.filter(c => c.isAiTransferred && !c.isFinished && !c.isArchived).length;
+  const finishedCount = conversations.filter(c => c.isFinished && !c.isArchived).length;
+  const archivedCount = conversations.filter(c => c.isArchived).length;
+  const dispatchCount = conversations.filter(c => c.isDispatchOnly && !c.isArchived).length;
+
+  // Instance tabs
   const instanceCounts: Record<string, number> = { all: conversations.filter(c => !c.isArchived).length };
   for (const c of conversations.filter(c => !c.isArchived)) {
     if (c.whatsapp_number_id) {
       instanceCounts[c.whatsapp_number_id] = (instanceCounts[c.whatsapp_number_id] || 0) + 1;
     }
-    // Don't count NULL as a separate "zapi" bucket - those are orphan messages
   }
-
-  // Build instance tabs
   const instanceTabs: { value: string; label: string; count: number }[] = [
     { value: 'all', label: 'Todas', count: instanceCounts['all'] || 0 },
   ];
-  // Add individual number tabs
   for (const num of metaNumbers) {
-    const count = instanceCounts[num.id] || 0;
-    instanceTabs.push({ value: num.id, label: num.label, count });
+    instanceTabs.push({ value: num.id, label: num.label, count: instanceCounts[num.id] || 0 });
   }
 
   const togglePhone = (phone: string) => {
     setSelectedPhones(prev => {
       const next = new Set(prev);
-      if (next.has(phone)) next.delete(phone);
-      else next.add(phone);
+      if (next.has(phone)) next.delete(phone); else next.add(phone);
       return next;
     });
   };
-
   const toggleAll = () => {
-    if (selectedPhones.size === filteredConversations.length) {
-      setSelectedPhones(new Set());
-    } else {
-      setSelectedPhones(new Set(filteredConversations.map(c => c.phone)));
-    }
+    if (selectedPhones.size === filteredConversations.length) setSelectedPhones(new Set());
+    else setSelectedPhones(new Set(filteredConversations.map(c => c.phone)));
   };
+  const exitSelectMode = () => { setSelectMode(false); setSelectedPhones(new Set()); };
 
-  const exitSelectMode = () => {
-    setSelectMode(false);
-    setSelectedPhones(new Set());
-  };
+  // Native-style pill
+  const Pill = ({ label, active, count, onClick, badge }: { label: string; active: boolean; count?: number; onClick: () => void; badge?: boolean }) => (
+    <button
+      onClick={onClick}
+      className={cn(
+        "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5",
+        active
+          ? "bg-[#00a884] text-white"
+          : "bg-[#d6dde2] dark:bg-[#202c33] text-[#3b4a52] dark:text-[#8696a0] hover:bg-[#c3cdd4] dark:hover:bg-[#2a3942]"
+      )}
+    >
+      {label}
+      {typeof count === 'number' && count > 0 && (
+        <span className={cn(
+          "text-[10px] px-1.5 py-0 rounded-full",
+          active ? "bg-white/25" : (badge ? "bg-amber-500 text-white animate-pulse" : "bg-black/10 dark:bg-white/10")
+        )}>{count}</span>
+      )}
+    </button>
+  );
+
+  // Rail icon button
+  const RailBtn = ({ icon: Icon, label, active, count, onClick, accent }: {
+    icon: typeof Bell; label: string; active: boolean; count: number; onClick: () => void; accent?: string;
+  }) => (
+    <button
+      onClick={onClick}
+      title={label}
+      className={cn(
+        "relative w-12 h-12 rounded-xl flex items-center justify-center transition-all group",
+        active
+          ? (accent || "bg-[#00a884] text-white shadow-lg")
+          : "text-white/55 hover:bg-white/10 hover:text-white"
+      )}
+    >
+      <Icon className="h-5 w-5" />
+      {count > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center border border-[#0b1419]">
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+      <span className="pointer-events-none absolute left-full ml-2 px-2 py-1 rounded-md bg-[#0b1419] text-white text-[11px] font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-50 shadow-xl">
+        {label}
+      </span>
+    </button>
+  );
+
+  // Native pill state
+  const allActive = statusFilter === 'all' && chatFilter !== 'groups' && !liveFilterActive;
+  const newActive = statusFilter === 'not_started' && !liveFilterActive;
+  const unreadActive = statusFilter === 'awaiting_reply' && !liveFilterActive;
+  const groupsActive = chatFilter === 'groups';
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white dark:bg-[#111b21]">{/* Search */}
-      <div className="p-2 border-b border-[#e9edef] dark:border-[#313d45] space-y-2 flex-shrink-0 bg-white dark:bg-[#111b21]">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#54656f]" />
-          <Input
-            placeholder="Buscar conversas..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-9 h-9 bg-[#f0f2f5] dark:bg-[#202c33] border-0 rounded-lg"
-          />
+    <div className="flex-1 flex min-h-0 overflow-hidden bg-[#e4e8eb] dark:bg-[#0b1419]">
+      {/* === Dark Rail (left) === */}
+      <div className="w-14 flex-shrink-0 bg-[#0b1419] flex flex-col items-center py-3 gap-1 border-r border-black/40">
+        <RailBtn icon={Bell} label="Follow Up" active={statusFilter === 'awaiting_customer'} count={followUpCount} onClick={() => pickRailStatus('awaiting_customer')} accent="bg-blue-500 text-white" />
+        <RailBtn icon={Radio} label="Pedidos da Live" active={!!liveFilterActive} count={liveCount || 0} onClick={() => onLiveFilterToggle?.()} accent="bg-fuchsia-500 text-white" />
+        <RailBtn icon={Bot} label="IA Transferiu" active={statusFilter === 'ai_transferred'} count={aiCount} onClick={() => pickRailStatus('ai_transferred')} accent="bg-orange-500 text-white" />
+        <RailBtn icon={CheckCircle2} label="Finalizadas" active={statusFilter === 'finished'} count={finishedCount} onClick={() => pickRailStatus('finished')} accent="bg-emerald-600 text-white" />
+        <RailBtn icon={Archive} label="Arquivadas" active={statusFilter === 'archived'} count={archivedCount} onClick={() => pickRailStatus('archived')} accent="bg-zinc-500 text-white" />
+        <RailBtn icon={Megaphone} label="Disparos" active={statusFilter === 'dispatch'} count={dispatchCount} onClick={() => pickRailStatus('dispatch')} accent="bg-violet-500 text-white" />
+      </div>
+
+      {/* === Main column === */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
+        {/* WhatsApp-style header */}
+        <div className="px-4 pt-4 pb-2 bg-[#d6dde2] dark:bg-[#1a2329] flex-shrink-0">
+          <h1 className="text-[22px] font-bold text-[#1a2329] dark:text-white tracking-tight mb-3">
+            WhatsApp
+            <span className="ml-2 text-xs font-semibold text-[#00a884]">{instanceCounts['all'] || 0}</span>
+          </h1>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#3b4a52] dark:text-[#8696a0]" />
+            <Input
+              placeholder="Pesquisar"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-9 h-9 bg-white/80 dark:bg-[#0b1419] border-0 rounded-full text-sm"
+            />
+          </div>
         </div>
 
-        {/* Instance filter tabs (above status tabs) */}
-        {instanceTabs.length > 1 && (
-          <div className="flex gap-1 overflow-x-auto pb-1">
+        {/* Native filter pills */}
+        <div className="px-3 py-2.5 bg-[#d6dde2] dark:bg-[#1a2329] flex gap-2 overflow-x-auto flex-shrink-0">
+          <Pill label="Todas" active={allActive} onClick={() => pickNativePill('all', 'all')} />
+          <Pill label="Novas" active={newActive} count={newCount} onClick={() => pickNativePill('not_started', 'all')} />
+          <Pill label="Não lidas" active={unreadActive} count={unreadCount} badge={unreadCount > 0 && !unreadActive} onClick={() => pickNativePill('awaiting_reply', 'all')} />
+          <Pill label="Grupos" active={groupsActive} count={groupsCount} onClick={() => pickNativePill('all', 'groups')} />
+        </div>
+
+        {/* Instance tabs (only when multiple) */}
+        {instanceTabs.length > 2 && (
+          <div className="px-3 py-1.5 bg-[#dde2e7] dark:bg-[#111b21] flex gap-1 overflow-x-auto flex-shrink-0 border-b border-[#c3cdd4] dark:border-[#1f2c34]">
             {instanceTabs.map(tab => (
               <button
                 key={tab.value}
                 onClick={() => onInstanceFilterChange(tab.value)}
                 className={cn(
-                  "px-2 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap transition-colors flex-shrink-0 flex items-center gap-1",
+                  "px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap transition-colors flex items-center gap-1 flex-shrink-0",
                   instanceFilter === tab.value
                     ? "bg-[#075e54] text-white"
-                    : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
+                    : "bg-white/60 dark:bg-[#202c33] text-[#3b4a52] dark:text-[#8696a0] hover:bg-white"
                 )}
               >
-                <Wifi className="h-3 w-3" />
+                <Wifi className="h-2.5 w-2.5" />
                 {tab.label}
-                <span className={cn(
-                  "text-[9px] px-1 rounded-full",
-                  instanceFilter === tab.value ? "bg-white/20" : "bg-black/10 dark:bg-white/10"
-                )}>
-                  {tab.count}
-                </span>
+                <span className={cn("text-[9px] px-1 rounded-full", instanceFilter === tab.value ? "bg-white/20" : "bg-black/10 dark:bg-white/10")}>{tab.count}</span>
               </button>
             ))}
           </div>
         )}
 
-        {/* Status filter tabs */}
-        <div className="flex gap-1 overflow-x-auto pb-1">
-          {STATUS_TABS.map(tab => {
-            const isActive = !liveFilterActive && statusFilter === tab.value;
-            const highlightUnread = tab.value === 'awaiting_reply' && awaitingReplyUnread > 0 && !isActive;
-            const node = (
-              <button
-                key={tab.value}
-                onClick={() => {
-                  if (liveFilterActive && onLiveFilterToggle) onLiveFilterToggle();
-                  onStatusFilterChange(tab.value);
-                }}
-                className={cn(
-                  "px-2 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors flex-shrink-0 inline-flex items-center gap-1",
-                  isActive
-                    ? "bg-[#00a884] text-white"
-                    : highlightUnread
-                      ? "bg-amber-500 text-white animate-pulse ring-2 ring-amber-300"
-                      : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
-                )}
-              >
-                {tab.shortLabel}
-                {statusCounts[tab.value] > 0 && (
-                  <span className="text-[9px] opacity-80">({statusCounts[tab.value]})</span>
-                )}
-                {highlightUnread && (
-                  <span className="ml-0.5 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-white text-amber-600 text-[9px] font-bold">
-                    {awaitingReplyUnread}
-                  </span>
-                )}
-              </button>
-            );
-            // Inject Live tab between Follow Up and Disparos
-            if (tab.value === 'dispatch' && onLiveFilterToggle) {
-              return (
-                <span key={`${tab.value}-with-live`} className="contents">
-                  <button
-                    key="live-tab"
-                    onClick={onLiveFilterToggle}
-                    className={cn(
-                      "px-2 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors flex-shrink-0 flex items-center gap-1",
-                      liveFilterActive
-                        ? "bg-fuchsia-500 text-white"
-                        : "bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-300 hover:bg-fuchsia-500/25"
-                    )}
-                    title="Mostrar apenas conversas que possuem card de pedido em uma Live ativa"
-                  >
-                    <Radio className="h-3 w-3" />
-                    Pedidos da Live
-                    {(liveCount || 0) > 0 && (
-                      <span className="ml-0.5 text-[9px] opacity-80">({liveCount})</span>
-                    )}
-                  </button>
-                  {node}
+        {/* Bulk action bar */}
+        {onBulkFinish && (
+          <div className="px-2 py-1.5 border-b border-[#c3cdd4] dark:border-[#1f2c34] flex items-center gap-2 flex-shrink-0 bg-[#dde2e7] dark:bg-[#111b21]">
+            {selectMode ? (
+              <>
+                <Checkbox
+                  checked={selectedPhones.size === filteredConversations.length && filteredConversations.length > 0}
+                  onCheckedChange={toggleAll}
+                  className="h-4 w-4"
+                />
+                <span className="text-[11px] text-[#3b4a52] dark:text-[#8696a0] flex-1">
+                  {selectedPhones.size} selecionada{selectedPhones.size !== 1 ? 's' : ''}
                 </span>
-              );
-            }
-            return node;
-          })}
-        </div>
-
-        {/* Tag filter chips */}
-        {allUniqueTags.length > 0 && onSelectedTagFiltersChange && (
-          <div className="flex gap-1.5 overflow-x-auto pb-1 whitespace-nowrap">
-            {selectedTagFilters.length > 0 && (
-              <button
-                onClick={() => onSelectedTagFiltersChange([])}
-                className="px-2 py-1 rounded-full text-[10px] font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 flex-shrink-0 transition-colors"
-              >
-                ✕ Limpar
-              </button>
+                {onBulkMessage && (
+                  <Button variant="default" size="sm" className="h-7 text-[11px] gap-1" disabled={selectedPhones.size === 0}
+                    onClick={() => onBulkMessage(Array.from(selectedPhones))}>
+                    <Send className="h-3 w-3" />Enviar ({selectedPhones.size})
+                  </Button>
+                )}
+                <Button variant="destructive" size="sm" className="h-7 text-[11px] gap-1" disabled={selectedPhones.size === 0}
+                  onClick={() => { onBulkFinish(Array.from(selectedPhones)); exitSelectMode(); }}>
+                  <PhoneOff className="h-3 w-3" />Finalizar ({selectedPhones.size})
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={exitSelectMode}>Cancelar</Button>
+              </>
+            ) : (
+              <Button variant="ghost" size="sm" className="h-7 text-[11px] gap-1 text-[#3b4a52] dark:text-[#8696a0]"
+                onClick={() => setSelectMode(true)}>
+                <CheckSquare className="h-3.5 w-3.5" />Selecionar
+              </Button>
             )}
-            {allUniqueTags.map(tag => {
-              const isSelected = selectedTagFilters.includes(tag);
-              return (
+          </div>
+        )}
+
+        {/* Pinned Team Chat */}
+        {onTeamChatClick && (
+          <div className="flex-shrink-0 bg-[#e4e8eb] dark:bg-[#0b1419]">
+            <TeamChatPinnedItem isActive={!!teamChatActive} onClick={onTeamChatClick} />
+          </div>
+        )}
+
+        {/* Conversations */}
+        <ScrollArea className="flex-1 bg-[#e4e8eb] dark:bg-[#0b1419]" style={{ minHeight: 0 }}>
+          {filteredConversations.length === 0 ? (
+            <div className="p-8 text-center text-[#3b4a52] dark:text-[#667781]">
+              <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p>Nenhuma conversa encontrada</p>
+            </div>
+          ) : (
+            <div>
+              {filteredConversations.map((conv) => (
                 <button
-                  key={tag}
+                  key={conv.conversationKey || conv.phone}
                   onClick={() => {
-                    if (isSelected) {
-                      onSelectedTagFiltersChange(selectedTagFilters.filter(t => t !== tag));
-                    } else {
-                      onSelectedTagFiltersChange([...selectedTagFilters, tag]);
-                    }
+                    if (selectMode) togglePhone(conv.phone);
+                    else onSelectConversation(conv.phone, conv.whatsapp_number_id);
                   }}
                   className={cn(
-                    "px-3 py-1 rounded-full text-[11px] font-medium flex-shrink-0 transition-colors",
-                    isSelected
-                      ? "bg-[#00a884] text-white"
-                      : "bg-[#1a2228] text-gray-400 hover:bg-[#2a3942]"
+                    "w-full px-3 py-3 flex items-center gap-3 hover:bg-[#dde2e7] dark:hover:bg-[#202c33] transition-colors text-left border-b border-[#cfd6dc]/60 dark:border-[#1f2c34]",
+                    conv.hasUnansweredMessage && "bg-[#c7e9c0]/40 dark:bg-[#005c4b]/20",
+                    (selectedConversationKey ? selectedConversationKey === conv.conversationKey : selectedPhone === conv.phone) && "bg-[#cfd6dc] dark:bg-[#2a3942]",
+                    selectMode && selectedPhones.has(conv.phone) && "bg-[#00a884]/15"
                   )}
                 >
-                  {tag}
-                </button>
-              );
-            })}
-          </div>
-        )}
+                  {selectMode && (
+                    <Checkbox
+                      checked={selectedPhones.has(conv.phone)}
+                      className="h-4 w-4 flex-shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                      onCheckedChange={() => togglePhone(conv.phone)}
+                    />
+                  )}
 
-        <div className="flex gap-1">
-          {(['all', 'contacts', 'groups'] as const).map(f => (
-            <button
-              key={f}
-              onClick={() => onChatFilterChange(f)}
-              className={cn(
-                "flex-1 px-2 py-1 rounded text-[10px] font-medium transition-colors",
-                chatFilter === f
-                  ? "bg-[#00a884]/20 text-[#00a884]"
-                  : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0]"
-              )}
-            >
-              {f === 'all' ? 'Todas' : f === 'contacts' ? (
-                <span className="flex items-center justify-center gap-1"><Phone className="h-3 w-3" />{contactsCount}</span>
-              ) : (
-                <span className="flex items-center justify-center gap-1"><Users className="h-3 w-3" />{groupsCount}</span>
-              )}
-            </button>
-          ))}
-        </div>
+                  <Avatar className="h-12 w-12 flex-shrink-0">
+                    {contactPhotos[conv.phone] ? <AvatarImage src={contactPhotos[conv.phone]} /> : null}
+                    <AvatarFallback className={cn(
+                      "text-white text-sm font-bold",
+                      conv.isGroup ? "bg-[#00a884]" : "bg-[#9aa6ad] text-white"
+                    )}>
+                      {conv.isGroup ? <Users className="h-6 w-6" /> : getInitials(conv.customerName)}
+                    </AvatarFallback>
+                  </Avatar>
 
-        {/* Support filter */}
-        {onSupportFilterToggle && (
-          <button
-            onClick={onSupportFilterToggle}
-            className={cn(
-              "w-full flex items-center gap-2 px-2 py-1.5 rounded text-[10px] font-medium transition-colors",
-              supportFilterActive
-                ? "bg-orange-500/20 text-orange-400"
-                : "bg-[#f0f2f5] dark:bg-[#202c33] text-[#54656f] dark:text-[#8696a0] hover:bg-[#e9edef] dark:hover:bg-[#2a3942]"
-            )}
-          >
-            <HeadphonesIcon className="h-3 w-3" />
-            Suporte Ativo
-            {(supportCount || 0) > 0 && (
-              <span className="ml-auto text-[9px] opacity-80">({supportCount})</span>
-            )}
-          </button>
-        )}
-
-
-        {/* Stage filter */}
-        <Select value={stageFilter} onValueChange={onStageFilterChange}>
-          <SelectTrigger className="h-8 text-xs bg-[#f0f2f5] dark:bg-[#202c33] border-0">
-            <Filter className="h-3 w-3 mr-2" />
-            <SelectValue placeholder="Filtrar por etapa" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas as etapas</SelectItem>
-            {STAGES.map(stage => (
-              <SelectItem key={stage.id} value={stage.id}>
-                <div className="flex items-center gap-2">
-                  <div className={cn("w-2 h-2 rounded-full", stage.color)} />
-                  {stage.title}
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Bulk action bar */}
-      {onBulkFinish && (
-        <div className="px-2 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] flex items-center gap-2 flex-shrink-0 bg-white dark:bg-[#111b21]">
-          {selectMode ? (
-            <>
-              <Checkbox
-                checked={selectedPhones.size === filteredConversations.length && filteredConversations.length > 0}
-                onCheckedChange={toggleAll}
-                className="h-4 w-4"
-              />
-              <span className="text-[11px] text-muted-foreground flex-1">
-                {selectedPhones.size} selecionada{selectedPhones.size !== 1 ? 's' : ''}
-              </span>
-              {onBulkMessage && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="h-7 text-[11px] gap-1"
-                  disabled={selectedPhones.size === 0}
-                  onClick={() => {
-                    onBulkMessage(Array.from(selectedPhones));
-                  }}
-                >
-                  <Send className="h-3 w-3" />
-                  Enviar ({selectedPhones.size})
-                </Button>
-              )}
-              <Button
-                variant="destructive"
-                size="sm"
-                className="h-7 text-[11px] gap-1"
-                disabled={selectedPhones.size === 0}
-                onClick={() => {
-                  onBulkFinish(Array.from(selectedPhones));
-                  exitSelectMode();
-                }}
-              >
-                <PhoneOff className="h-3 w-3" />
-                Finalizar ({selectedPhones.size})
-              </Button>
-              <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={exitSelectMode}>
-                Cancelar
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-[11px] gap-1 text-muted-foreground"
-              onClick={() => setSelectMode(true)}
-            >
-              <CheckSquare className="h-3.5 w-3.5" />
-              Selecionar
-            </Button>
-          )}
-        </div>
-      )}
-
-      {/* Pinned Team Chat (always on top) */}
-      {onTeamChatClick && (
-        <div className="flex-shrink-0">
-          <TeamChatPinnedItem isActive={!!teamChatActive} onClick={onTeamChatClick} />
-        </div>
-      )}
-
-      {/* Conversations */}
-      <ScrollArea className="flex-1" style={{ minHeight: 0 }}>
-        {filteredConversations.length === 0 ? (
-          <div className="p-8 text-center text-[#667781]">
-            <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>Nenhuma conversa encontrada</p>
-          </div>
-        ) : (
-          <div>
-            {filteredConversations.map((conv) => (
-              <button
-                key={conv.conversationKey || conv.phone}
-                onClick={() => {
-                  if (selectMode) {
-                    togglePhone(conv.phone);
-                  } else {
-                    onSelectConversation(conv.phone, conv.whatsapp_number_id);
-                  }
-                }}
-                className={cn(
-                  "w-full px-3 py-3 flex items-center gap-3 hover:bg-[#f5f6f6] dark:hover:bg-[#202c33] transition-colors text-left border-b border-[#e9edef] dark:border-[#313d45]",
-                  conv.hasUnansweredMessage && "bg-[#d9fdd3]/30 dark:bg-[#005c4b]/20",
-                  (selectedConversationKey ? selectedConversationKey === conv.conversationKey : selectedPhone === conv.phone) && "bg-[#f0f2f5] dark:bg-[#2a3942]",
-                  selectMode && selectedPhones.has(conv.phone) && "bg-[#00a884]/10"
-                )}
-              >
-                {/* Checkbox in select mode */}
-                {selectMode && (
-                  <Checkbox
-                    checked={selectedPhones.has(conv.phone)}
-                    className="h-4 w-4 flex-shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                    onCheckedChange={() => togglePhone(conv.phone)}
-                  />
-                )}
-
-                {/* Avatar with photo */}
-                <Avatar className="h-12 w-12 flex-shrink-0">
-                  {contactPhotos[conv.phone] ? (
-                    <AvatarImage src={contactPhotos[conv.phone]} />
-                  ) : null}
-                  <AvatarFallback className={cn(
-                    "text-white text-sm font-bold",
-                    conv.isGroup ? "bg-[#00a884]" : "bg-[#dfe5e7] text-[#54656f]"
-                  )}>
-                    {conv.isGroup ? (
-                      <Users className="h-6 w-6" />
-                    ) : (
-                      getInitials(conv.customerName)
-                    )}
-                  </AvatarFallback>
-                </Avatar>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <div className="flex flex-col min-w-0 flex-1">
-                      <div className="flex items-center gap-1 min-w-0">
-                        <span className="font-medium text-[15px] text-[#111b21] dark:text-[#e9edef] truncate">
-                          {conv.customerName || contactNames[conv.phone] || conv.phone}
-                        </span>
-                        {conv.hasOtherInstances && (
-                          <span className="text-[9px] text-orange-400 flex-shrink-0" title={conv.otherInstanceLabels?.join(', ') || 'Outra instância'}>
-                            🔗 {conv.otherInstanceLabels?.length ? `+${conv.otherInstanceLabels.length}` : ''}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="font-medium text-[15px] text-[#0b1419] dark:text-[#e9edef] truncate">
+                            {conv.customerName || contactNames[conv.phone] || conv.phone}
+                          </span>
+                          {conv.hasOtherInstances && (
+                            <span className="text-[9px] text-orange-500 flex-shrink-0" title={conv.otherInstanceLabels?.join(', ') || 'Outra instância'}>
+                              🔗 {conv.otherInstanceLabels?.length ? `+${conv.otherInstanceLabels.length}` : ''}
+                            </span>
+                          )}
+                        </div>
+                        {(conv.customerName || contactNames[conv.phone]) && (
+                          <span className="text-[11px] text-[#475360] dark:text-[#667781] truncate">{conv.phone}</span>
+                        )}
+                        {liveStageMap[conv.phone] && (
+                          <span className="mt-0.5 inline-flex items-center gap-1 self-start px-1.5 py-[1px] rounded text-[9px] font-semibold bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-400 border border-fuchsia-400/40">
+                            <Radio className="h-2.5 w-2.5" />
+                            LIVE · {liveStageMap[conv.phone].stageTitle}
+                            {liveStageMap[conv.phone].eventName ? ` · ${liveStageMap[conv.phone].eventName}` : ''}
                           </span>
                         )}
                       </div>
-                      {(conv.customerName || contactNames[conv.phone]) && (
-                        <span className="text-[11px] text-[#667781] truncate">{conv.phone}</span>
-                      )}
-                      {liveStageMap[conv.phone] && (
-                        <span className="mt-0.5 inline-flex items-center gap-1 self-start px-1.5 py-[1px] rounded text-[9px] font-semibold bg-fuchsia-500/15 text-fuchsia-600 dark:text-fuchsia-400 border border-fuchsia-400/30">
-                          <Radio className="h-2.5 w-2.5" />
-                          LIVE · {liveStageMap[conv.phone].stageTitle}
-                          {liveStageMap[conv.phone].eventName ? ` · ${liveStageMap[conv.phone].eventName}` : ''}
-                        </span>
-                      )}
+                      <span className={cn(
+                        "text-xs flex-shrink-0",
+                        conv.hasUnansweredMessage ? "text-[#00a884] font-medium" : "text-[#475360] dark:text-[#667781]"
+                      )}>
+                        {formatConversationTime(conv.lastMessageAt)}
+                      </span>
                     </div>
-                    <span className={cn(
-                      "text-xs flex-shrink-0",
-                      conv.hasUnansweredMessage ? "text-[#00a884] font-medium" : "text-[#667781]"
-                    )}>
-                      {formatConversationTime(conv.lastMessageAt)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm text-[#667781] truncate flex-1">
-                      {conv.lastMessage}
-                    </p>
-                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {conv.isAiTransferred && (
-                        <Badge className="text-[8px] px-1 py-0 leading-tight bg-orange-500/20 text-orange-500 border-orange-400/40 hover:bg-orange-500/30">
-                          🤖 IA transferiu
-                        </Badge>
-                      )}
-                      {conv.channel === 'instagram' && (
-                        <Badge className="text-[8px] px-1 py-0 leading-tight bg-pink-500/20 text-pink-400 border-pink-400/30 hover:bg-pink-500/30">
-                          📷 Instagram
-                        </Badge>
-                      )}
-                      {conv.channel === 'messenger' && (
-                        <Badge className="text-[8px] px-1 py-0 leading-tight bg-blue-500/20 text-blue-400 border-blue-400/30 hover:bg-blue-500/30">
-                          💬 Messenger
-                        </Badge>
-                      )}
-                      {!conv.channel && conv.instanceLabel && (
-                        <Badge variant="outline" className={cn(
-                          "text-[8px] px-1 py-0 leading-tight",
-                          conv.whatsapp_number_id 
-                            ? "text-blue-500 border-blue-300" 
-                            : "text-green-500 border-green-300"
-                        )}>
-                          {conv.instanceLabel}
-                        </Badge>
-                      )}
-                      {conv.unreadCount > 0 && (
-                        <span className="h-5 min-w-5 px-1 rounded-full bg-[#00a884] text-white text-xs flex items-center justify-center font-bold">
-                          {conv.unreadCount}
-                        </span>
-                      )}
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm text-[#475360] dark:text-[#8696a0] truncate flex-1">
+                        {conv.lastMessage}
+                      </p>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {conv.isAiTransferred && (
+                          <Badge className="text-[8px] px-1 py-0 leading-tight bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-400/40 hover:bg-orange-500/30">
+                            🤖 IA transferiu
+                          </Badge>
+                        )}
+                        {conv.channel === 'instagram' && (
+                          <Badge className="text-[8px] px-1 py-0 leading-tight bg-pink-500/20 text-pink-600 dark:text-pink-400 border-pink-400/30 hover:bg-pink-500/30">
+                            📷 Instagram
+                          </Badge>
+                        )}
+                        {conv.channel === 'messenger' && (
+                          <Badge className="text-[8px] px-1 py-0 leading-tight bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-400/30 hover:bg-blue-500/30">
+                            💬 Messenger
+                          </Badge>
+                        )}
+                        {!conv.channel && conv.instanceLabel && (
+                          <Badge variant="outline" className={cn(
+                            "text-[8px] px-1 py-0 leading-tight",
+                            conv.whatsapp_number_id ? "text-blue-600 border-blue-400" : "text-green-600 border-green-400"
+                          )}>
+                            {conv.instanceLabel}
+                          </Badge>
+                        )}
+                        {conv.unreadCount > 0 && (
+                          <span className="h-5 min-w-5 px-1 rounded-full bg-[#00a884] text-white text-xs flex items-center justify-center font-bold">
+                            {conv.unreadCount}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </ScrollArea>
+                </button>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   Store, Home, ShoppingCart, DollarSign, RotateCcw, MessageSquare,
   ArrowRightLeft, Settings, Trophy, Phone, Bell, BarChart3, SearchX,
-  Menu, X, Package, Globe, Lock, Loader2, CreditCard, Flame, Truck, Users
+  Menu, X, Package, Globe, Lock, Loader2, CreditCard, Flame, Truck, Users, ArrowLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -187,10 +187,23 @@ export default function POS() {
   const primarySections = SECTIONS.filter(s => s.priority);
   const secondarySections = SECTIONS.filter(s => !s.priority);
 
+  // Full-screen mode for WhatsApp
+  const isWhatsAppFull = section === "whatsapp";
+
+  // ESC key exits full-screen WhatsApp
+  useEffect(() => {
+    if (!isWhatsAppFull) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSection("dashboard");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isWhatsAppFull]);
+
   return (
     <div className="h-screen flex flex-col md:flex-row bg-pos-black">
-      {/* Desktop Sidebar */}
-      {!isMobile && (
+      {/* Desktop Sidebar — hidden in WhatsApp full-screen */}
+      {!isMobile && !isWhatsAppFull && (
         <div
           className="w-16 lg:w-56 flex flex-col border-r border-white/5"
           style={{ background: "var(--gradient-pos-sidebar)" }}
@@ -265,7 +278,19 @@ export default function POS() {
       )}
 
       {/* Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+        {/* Floating exit button for WhatsApp full-screen */}
+        {isWhatsAppFull && !isMobile && (
+          <button
+            onClick={() => setSection("dashboard")}
+            className="absolute top-3 right-3 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-pos-black/90 backdrop-blur text-white text-xs font-medium shadow-lg hover:bg-pos-black border border-white/10 transition-all"
+            title="Sair (ESC)"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Sair do WhatsApp
+            <kbd className="ml-1 px-1.5 py-0.5 text-[9px] rounded bg-white/10 border border-white/20">ESC</kbd>
+          </button>
+        )}
         {section === "dashboard" && (
           <POSDashboard
             storeId={selectedStore}
