@@ -3432,31 +3432,46 @@ export type Database = {
       }
       dispatch_recipients: {
         Row: {
+          attempts: number
           created_at: string
           dispatch_id: string
           id: string
+          last_error: string | null
+          lease_until: string | null
           message_wamid: string | null
           phone: string
           recipient_name: string | null
+          sent_at: string | null
           status: string | null
+          worker_id: string | null
         }
         Insert: {
+          attempts?: number
           created_at?: string
           dispatch_id: string
           id?: string
+          last_error?: string | null
+          lease_until?: string | null
           message_wamid?: string | null
           phone: string
           recipient_name?: string | null
+          sent_at?: string | null
           status?: string | null
+          worker_id?: string | null
         }
         Update: {
+          attempts?: number
           created_at?: string
           dispatch_id?: string
           id?: string
+          last_error?: string | null
+          lease_until?: string | null
           message_wamid?: string | null
           phone?: string
           recipient_name?: string | null
+          sent_at?: string | null
           status?: string | null
+          worker_id?: string | null
         }
         Relationships: [
           {
@@ -15059,6 +15074,20 @@ export type Database = {
         }[]
       }
       check_order_paid: { Args: { p_order_id: string }; Returns: boolean }
+      claim_dispatch_jobs: {
+        Args: {
+          p_batch_size?: number
+          p_dispatch_id: string
+          p_lease_seconds?: number
+          p_worker_id: string
+        }
+        Returns: {
+          attempts: number
+          id: string
+          phone: string
+          recipient_name: string
+        }[]
+      }
       copy_trigger_messages: {
         Args: { p_source_trigger_id: string; p_target_trigger_id: string }
         Returns: number
@@ -15086,6 +15115,7 @@ export type Database = {
       extract_base_product_name: { Args: { p_name: string }; Returns: string }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       extract_phone_suffix8: { Args: { phone_input: string }; Returns: string }
+      finalize_completed_dispatches: { Args: never; Returns: number }
       find_or_create_unified_customer: {
         Args: {
           p_cpf?: string
@@ -15216,6 +15246,13 @@ export type Database = {
           message_group_id: string
           scheduled_at: string
           status: string
+        }[]
+      }
+      get_dispatches_with_pending: {
+        Args: { p_limit?: number }
+        Returns: {
+          dispatch_id: string
+          pending_count: number
         }[]
       }
       get_inventory_summary: {
