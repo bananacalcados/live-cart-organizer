@@ -251,41 +251,19 @@ serve(async (req) => {
       );
     }
 
-    // INSTANCE GUARD: bloqueia envio quando a instância requisitada não bate com
-    // a instância da última mensagem incoming desse telefone. Permite override
-    // via header X-Force-Instance: true (uso administrativo).
-    const forceInstance = req.headers.get('x-force-instance') === 'true';
-    if (whatsappNumberId && !forceInstance) {
-      const phoneDigits = phone.replace(/\D/g, '');
-      const phoneVariants = [phoneDigits];
-      if (phoneDigits.startsWith('55') && phoneDigits.length >= 12) phoneVariants.push(phoneDigits.slice(2));
-      else phoneVariants.push('55' + phoneDigits);
-
-      const { data: lastIncoming } = await supabase
-        .from('whatsapp_messages')
-        .select('whatsapp_number_id')
-        .in('phone', phoneVariants)
-        .eq('direction', 'incoming')
-        .not('whatsapp_number_id', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const lastIncomingId = (lastIncoming as any)?.whatsapp_number_id;
-      if (lastIncomingId && lastIncomingId !== whatsappNumberId) {
-        console.warn('[meta-whatsapp-send] BLOCKED instance mismatch', {
-          phone, requested: whatsappNumberId, lastIncoming: lastIncomingId,
-        });
-        return new Response(
-          JSON.stringify({
-            error: 'INSTANCE_MISMATCH',
-            message: 'A instância requisitada não corresponde à instância da última mensagem recebida desse contato. Use a conversa correta ou envie X-Force-Instance: true.',
-            requested_instance: whatsappNumberId,
-            bound_instance: lastIncomingId,
-          }),
-          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    // INSTANCE GUARD
+    const guard = await checkInstanceGuard({
+      req,
+      phone,
+      whatsappNumberId: whatsappNumberId,
+      supabaseUrl,
+      supabaseKey,
+    });
+    if (!guard.ok) {
+      return new Response(JSON.stringify(guard.body), {
+        status: 409,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const { phoneNumberId, accessToken } = await getCredentials(supabase, whatsappNumberId);
