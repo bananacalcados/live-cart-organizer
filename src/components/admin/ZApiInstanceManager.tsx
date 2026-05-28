@@ -55,7 +55,7 @@ export function ZApiInstanceManager() {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers")
-      .select("id, label, phone_display, provider, is_active, is_default, zapi_instance_id, zapi_token, zapi_client_token, created_at")
+      .select("id, label, phone_display, provider, is_active, is_default, zapi_instance_id, zapi_token, zapi_client_token, created_at, is_online, last_health_check")
       .eq("provider", "zapi")
       .order("created_at", { ascending: true });
 
