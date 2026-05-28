@@ -187,10 +187,23 @@ export default function POS() {
   const primarySections = SECTIONS.filter(s => s.priority);
   const secondarySections = SECTIONS.filter(s => !s.priority);
 
+  // Full-screen mode for WhatsApp
+  const isWhatsAppFull = section === "whatsapp";
+
+  // ESC key exits full-screen WhatsApp
+  useEffect(() => {
+    if (!isWhatsAppFull) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSection("dashboard");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isWhatsAppFull]);
+
   return (
     <div className="h-screen flex flex-col md:flex-row bg-pos-black">
-      {/* Desktop Sidebar */}
-      {!isMobile && (
+      {/* Desktop Sidebar — hidden in WhatsApp full-screen */}
+      {!isMobile && !isWhatsAppFull && (
         <div
           className="w-16 lg:w-56 flex flex-col border-r border-white/5"
           style={{ background: "var(--gradient-pos-sidebar)" }}
