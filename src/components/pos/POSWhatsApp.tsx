@@ -69,7 +69,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
   const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
-  // messages state now lives in useChatMessages (declared below, after selectedConvNumberId)
+  const { messages, setMessages, refresh: refreshMessages } = useChatMessages(selectedPhone, selectedConvNumberId);
   const [newMessage, setNewMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
