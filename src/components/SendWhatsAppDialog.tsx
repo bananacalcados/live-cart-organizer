@@ -86,7 +86,7 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
     if (!order.whatsapp) return;
     
     const phone = normalizeBRPhone(order.whatsapp);
-    const result = await sendMessage(phone, message, selectedNumberId || undefined);
+    const result = await sendMessage(phone, message, effectiveNumberId || undefined);
     if (result.success) {
       // Persist message to whatsapp_messages so it appears in the chat
       await supabase.from('whatsapp_messages').insert({
@@ -94,7 +94,7 @@ export function SendWhatsAppDialog({ open, onOpenChange, order }: SendWhatsAppDi
         message,
         direction: 'outgoing',
         status: 'sent',
-        whatsapp_number_id: selectedNumberId || null,
+        whatsapp_number_id: effectiveNumberId || null,
         sender_user_id: currentUserId || null,
       });
       onOpenChange(false);
