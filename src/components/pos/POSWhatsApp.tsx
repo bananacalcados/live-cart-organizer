@@ -37,6 +37,7 @@ import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import { BulkMessageDialog, BulkRecipient } from "@/components/chat/BulkMessageDialog";
+import { useChatSender, type SendRoute } from "@/hooks/chat/useChatSender";
 
 interface Props {
   storeId: string;
@@ -60,6 +61,7 @@ interface CrmCustomerData {
 
 export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const currentUserId = useCurrentUserId();
+  const sender = useChatSender();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [waMsgTick, setWaMsgTick] = useState(0);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
@@ -693,29 +695,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     };
   };
 
-  const sendViaMessenger = async (
-    recipientId: string,
-    message: string,
-    channel: "messenger" | "instagram" = "instagram",
-    type: "text" | "image" | "video" | "audio" | "file" = "text",
-    mediaUrl?: string,
-    whatsappNumberId?: string | null,
-  ) => {
-    const metaNumberId = whatsappNumberId
-      ?? conversationBoundNumber?.id
-      ?? storeNumbers.find((n) => n.provider === "meta")?.id
-      ?? null;
-    const { data, error } = await supabase.functions.invoke("meta-messenger-send", {
-      body: { recipientId, message, channel, type, mediaUrl, whatsapp_number_id: metaNumberId },
-    });
 
-    if (error) throw error;
-    if (data?.success === false) {
-      throw new Error(data?.error || `Erro ao enviar mensagem via ${channel}`);
-    }
 
-    return { messageId: data?.messageId || null };
-  };
 
   const normalizePhoneKey = (phone: string | null | undefined) => String(phone || '').replace(/\D/g, '').slice(-8);
 
@@ -763,83 +744,61 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedPhone || isSending) return;
-    const messageText = newMessage.trim();
+  // Build SendRoute compatible with useChatSender
+  const buildSendRoute = (): SendRoute | null => {
     const selectedChannel = getSelectedChannel();
     const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
-    const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
-    const sendRoute = getCurrentSendRoute();
+    const internal = getCurrentSendRoute();
+    if (!internal) return null;
+    return {
+      channel: useMessenger ? (selectedChannel as "instagram" | "messenger") : "whatsapp",
+      provider: internal.provider,
+      numberId: internal.numberId,
+    };
+  };
 
-    if (!sendRoute) {
-      toast.error("Selecione a instância correta desta conversa antes de enviar.");
-      return;
-    }
-
-    if (useMessenger && !sendRoute.numberId) {
-      toast.error("Nenhuma conta Meta disponível para esta conversa.");
-      return;
-    }
-
-    setIsSending(true);
-    setNewMessage("");
-
-    try {
-      let metaMessageId: string | null = null;
-      if (useMessenger) {
-        const result = await sendViaMessenger(selectedPhone, messageText, messengerChannel, "text", undefined, sendRoute.numberId);
-        metaMessageId = result.messageId;
-      } else if (sendRoute.provider === "meta") {
-        const res = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: sendRoute.numberId },
-        });
-        if (res.error) throw res.error;
-        metaMessageId = res.data?.messageId || null;
-      } else {
-        const { error } = await supabase.functions.invoke("zapi-send-message", {
-          body: { phone: selectedPhone, message: messageText, whatsapp_number_id: sendRoute.numberId, quotedMessageId: quotedMessage?.message_id },
-        });
-        if (error) throw error;
-      }
-
-      await reopenConversation(selectedPhone);
-
-      await supabase.from("whatsapp_messages").insert({
-        phone: selectedPhone,
-        message: messageText,
-        direction: "outgoing",
-        status: "sent",
-        whatsapp_number_id: useMessenger ? null : sendRoute.numberId,
-        message_id: metaMessageId,
-        channel: useMessenger ? messengerChannel : 'whatsapp',
-        quoted_message_id: quotedMessage?.message_id || null,
-        sender_user_id: sellerLinkedUserId || currentUserId || null,
-        sender_name: selectedSellerName || null,
-      } as any);
-
-      await supabase
-        .from("automation_ai_sessions")
-        .update({ is_active: false })
-        .eq("phone", selectedPhone)
-        .eq("is_active", true);
-
+  const buildSendHooks = () => ({
+    onBeforeSend: async (phone: string) => {
+      await reopenConversation(phone);
+    },
+    onAfterSend: async (phone: string) => {
       if (selectedSellerId) {
         await supabase.from("chat_seller_assignments")
           .update({ first_reply_at: new Date().toISOString() } as any)
-          .eq("phone", selectedPhone)
+          .eq("phone", phone)
           .eq("seller_id", selectedSellerId)
           .is("first_reply_at", null);
       }
+      resolveAiTransfer(phone);
+    },
+  });
 
-      // Mark AI handoff as picked up by human
-      resolveAiTransfer(selectedPhone);
-
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedPhone || isSending) return;
+    const messageText = newMessage.trim();
+    const route = buildSendRoute();
+    if (!route) {
+      toast.error("Selecione a instância correta desta conversa antes de enviar.");
+      return;
+    }
+    setIsSending(true);
+    setNewMessage("");
+    try {
+      const result = await sender.sendText({
+        phone: selectedPhone,
+        message: messageText,
+        route,
+        quotedMessageId: quotedMessage?.message_id || null,
+        senderUserId: sellerLinkedUserId || currentUserId || null,
+        senderName: selectedSellerName || null,
+        hooks: buildSendHooks(),
+      });
+      if (!result.success) {
+        setNewMessage(messageText);
+        return;
+      }
       setQuotedMessage(null);
       loadMessages(selectedPhone, selectedConvNumberId);
-    } catch (error) {
-      console.error("Error sending:", error);
-      setNewMessage(messageText);
-      toast.error("Erro ao enviar mensagem");
     } finally {
       setIsSending(false);
     }
@@ -847,59 +806,27 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
   const handleSendAudio = async (audioUrl: string) => {
     if (!selectedPhone) return;
-    const selectedChannel = getSelectedChannel();
-    const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
-    const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
-    const sendRoute = getCurrentSendRoute();
-
-    if (!sendRoute) {
+    const route = buildSendRoute();
+    if (!route) {
       toast.error("Selecione a instância correta desta conversa antes de enviar.");
       return;
     }
-
-    if (useMessenger && !sendRoute.numberId) {
-      toast.error("Nenhuma conta Meta disponível para esta conversa.");
-      return;
-    }
-
     setIsSending(true);
     try {
-      await reopenConversation(selectedPhone);
-
-      let audioMsgId: string | null = null;
-      if (useMessenger) {
-        const result = await sendViaMessenger(selectedPhone, "[áudio]", messengerChannel, "audio", audioUrl, sendRoute.numberId);
-        audioMsgId = result.messageId;
-      } else if (sendRoute.provider === "meta") {
-        const res = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: selectedPhone, message: "[áudio]", whatsapp_number_id: sendRoute.numberId, media_url: audioUrl, media_type: "audio" },
-        });
-        if (res.error) throw res.error;
-        audioMsgId = res.data?.messageId || null;
-      } else {
-        const { data: zRes, error } = await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: audioUrl, mediaType: "audio", whatsapp_number_id: sendRoute.numberId, quotedMessageId: quotedMessage?.message_id },
-        });
-        if (error) throw error;
-        audioMsgId = zRes?.messageId || zRes?.data?.messageId || zRes?.data?.zaapId || zRes?.data?.id || null;
+      const result = await sender.sendAudio({
+        phone: selectedPhone,
+        mediaUrl: audioUrl,
+        route,
+        quotedMessageId: quotedMessage?.message_id || null,
+        senderUserId: sellerLinkedUserId || currentUserId || null,
+        senderName: selectedSellerName || null,
+        hooks: buildSendHooks(),
+      });
+      if (result.success) {
+        setQuotedMessage(null);
+        loadMessages(selectedPhone, selectedConvNumberId);
+        toast.success("Áudio enviado!");
       }
-
-      const { error: insertErr } = await supabase.from("whatsapp_messages").insert({
-        phone: selectedPhone, message: "[áudio]", direction: "outgoing", status: "sent", media_type: "audio", media_url: audioUrl,
-        message_id: audioMsgId,
-        whatsapp_number_id: useMessenger ? null : sendRoute.numberId,
-        channel: useMessenger ? messengerChannel : 'whatsapp',
-        quoted_message_id: quotedMessage?.message_id || null,
-        sender_user_id: sellerLinkedUserId || currentUserId || null,
-        sender_name: selectedSellerName || null,
-      } as any);
-      if (insertErr) console.error("Erro ao salvar áudio no banco:", insertErr);
-      resolveAiTransfer(selectedPhone);
-      setQuotedMessage(null);
-      loadMessages(selectedPhone, selectedConvNumberId);
-      toast.success("Áudio enviado!");
-    } catch (error) {
-      toast.error("Erro ao enviar áudio");
     } finally {
       setIsSending(false);
     }
@@ -907,71 +834,34 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
 
   const handleSendMedia = async (mediaUrl: string, mediaType: string, caption?: string) => {
     if (!selectedPhone) return;
-    const selectedChannel = getSelectedChannel();
-    const useMessenger = selectedChannel === "instagram" || selectedChannel === "messenger";
-    const messengerChannel = (selectedChannel as "instagram" | "messenger") || "instagram";
-    const sendRoute = getCurrentSendRoute();
-
-    if (!sendRoute) {
+    const route = buildSendRoute();
+    if (!route) {
       toast.error("Selecione a instância correta desta conversa antes de enviar.");
       return;
     }
-
-    if (useMessenger && !sendRoute.numberId) {
-      toast.error("Nenhuma conta Meta disponível para esta conversa.");
-      return;
-    }
-
     setIsSending(true);
     try {
-      await reopenConversation(selectedPhone);
-
-      const msgText = caption || `[${mediaType}]`;
-      let mediaMsgId: string | null = null;
-
-      if (useMessenger) {
-        const result = await sendViaMessenger(
-          selectedPhone,
-          msgText,
-          messengerChannel,
-          mediaType === "document" ? "file" : mediaType as "image" | "video" | "audio",
-          mediaUrl,
-          sendRoute.numberId,
-        );
-        mediaMsgId = result.messageId;
-      } else if (sendRoute.provider === "meta") {
-        const res = await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: selectedPhone, message: msgText, whatsapp_number_id: sendRoute.numberId, media_url: mediaUrl, media_type: mediaType },
-        });
-        if (res.error) throw res.error;
-        mediaMsgId = res.data?.messageId || null;
-      } else {
-        const { data: zRes, error } = await supabase.functions.invoke("zapi-send-media", {
-          body: { phone: selectedPhone, mediaUrl: mediaUrl, mediaType: mediaType, caption, whatsapp_number_id: sendRoute.numberId, quotedMessageId: quotedMessage?.message_id },
-        });
-        if (error) throw error;
-        mediaMsgId = zRes?.data?.messageId || zRes?.data?.zaapId || zRes?.data?.id || null;
+      const result = await sender.sendMedia({
+        phone: selectedPhone,
+        mediaUrl,
+        mediaType,
+        caption,
+        route,
+        quotedMessageId: quotedMessage?.message_id || null,
+        senderUserId: sellerLinkedUserId || currentUserId || null,
+        senderName: selectedSellerName || null,
+        hooks: buildSendHooks(),
+      });
+      if (result.success) {
+        setQuotedMessage(null);
+        loadMessages(selectedPhone, selectedConvNumberId);
+        toast.success("Mídia enviada!");
       }
-
-      await supabase.from("whatsapp_messages").insert({
-        phone: selectedPhone, message: msgText, direction: "outgoing", status: "sent", media_type: mediaType, media_url: mediaUrl,
-        message_id: mediaMsgId,
-        whatsapp_number_id: useMessenger ? null : sendRoute.numberId,
-        channel: useMessenger ? messengerChannel : 'whatsapp',
-        quoted_message_id: quotedMessage?.message_id || null,
-        sender_user_id: sellerLinkedUserId || currentUserId || null,
-        sender_name: selectedSellerName || null,
-      } as any);
-      resolveAiTransfer(selectedPhone);
-      setQuotedMessage(null);
-      loadMessages(selectedPhone, selectedConvNumberId);
-      toast.success("Mídia enviada!");
-    } catch (error) {
-      toast.error("Erro ao enviar mídia");
     } finally {
       setIsSending(false);
     }
   };
+
 
   const handleDeleteMessage = async (msg: any) => {
     if (!selectedPhone) throw new Error('No phone selected');
