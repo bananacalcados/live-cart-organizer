@@ -573,6 +573,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
       let allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
 
+      // Hide Instagram comment-only conversations (Live/Post/Reel comments) — chat should show DMs only
+      const isCommentMessage = (msg?: string | null) => {
+        if (!msg) return false;
+        return /^(💬\s*Coment[áa]rio|\[ig_post\]|\[ig_reel\])/i.test(msg.trim());
+      };
+      allRows = allRows.filter((row: any) => !isCommentMessage(row.last_message));
+
       // Client-side filter by store's assigned WhatsApp numbers (when more than 1)
       if (storeNumberIds.length > 1) {
         allRows = allRows.filter((row: any) => {
