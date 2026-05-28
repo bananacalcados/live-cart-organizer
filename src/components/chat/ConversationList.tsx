@@ -82,6 +82,8 @@ export function ConversationList({
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
+  const [visibleLimit, setVisibleLimit] = useState(60);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) return format(date, 'HH:mm', { locale: ptBR });
