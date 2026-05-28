@@ -695,29 +695,8 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     };
   };
 
-  const sendViaMessenger = async (
-    recipientId: string,
-    message: string,
-    channel: "messenger" | "instagram" = "instagram",
-    type: "text" | "image" | "video" | "audio" | "file" = "text",
-    mediaUrl?: string,
-    whatsappNumberId?: string | null,
-  ) => {
-    const metaNumberId = whatsappNumberId
-      ?? conversationBoundNumber?.id
-      ?? storeNumbers.find((n) => n.provider === "meta")?.id
-      ?? null;
-    const { data, error } = await supabase.functions.invoke("meta-messenger-send", {
-      body: { recipientId, message, channel, type, mediaUrl, whatsapp_number_id: metaNumberId },
-    });
 
-    if (error) throw error;
-    if (data?.success === false) {
-      throw new Error(data?.error || `Erro ao enviar mensagem via ${channel}`);
-    }
 
-    return { messageId: data?.messageId || null };
-  };
 
   const normalizePhoneKey = (phone: string | null | undefined) => String(phone || '').replace(/\D/g, '').slice(-8);
 
