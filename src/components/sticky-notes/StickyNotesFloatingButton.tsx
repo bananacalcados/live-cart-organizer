@@ -11,20 +11,21 @@ import { StickyNoteCard } from "./StickyNoteCard";
 const HIDE_ON = ["/login", "/checkout", "/register", "/lp/", "/live", "/cat/", "/evento/", "/vip/", "/r/", "/typebot/", "/l/", "/banana-verao", "/dose-tripla", "/checkout-loja", "/livete-anotador"];
 
 export function StickyNotesFloatingButton() {
-  const { isAdmin, ready } = useIsAdmin();
   const location = useLocation();
+  const shouldHide = location.pathname === "/" || HIDE_ON.some((p) => location.pathname === p || location.pathname.startsWith(p + "/") || location.pathname.startsWith(p));
+  const { isAdmin, ready } = useIsAdmin(!shouldHide);
   const [open, setOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (shouldHide) return;
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id || null));
-  }, []);
+  }, [shouldHide]);
 
   const { notes, create, update, remove, focus } = useStickyNotes(!!userId && isAdmin && open, userId);
 
   if (!ready || !isAdmin) return null;
-  if (location.pathname === "/") return null; // Home já tem o quadro
-  if (HIDE_ON.some((p) => location.pathname === p || location.pathname.startsWith(p + "/") || location.pathname.startsWith(p))) {
+  if (shouldHide) {
     return null;
   }
 
