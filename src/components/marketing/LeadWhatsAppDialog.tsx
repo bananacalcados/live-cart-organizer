@@ -15,6 +15,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { WhatsAppMediaAttachment } from "@/components/chat/WhatsAppMediaAttachment";
+import { useConversationInstance } from "@/hooks/useConversationInstance";
 
 interface LeadWhatsAppDialogProps {
   open: boolean;
