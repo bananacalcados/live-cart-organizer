@@ -283,7 +283,7 @@ export default function POS() {
         {isWhatsAppFull && !isMobile && (
           <button
             onClick={() => setSection("dashboard")}
-            className="absolute top-3 left-3 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-pos-black/90 backdrop-blur text-white text-xs font-medium shadow-lg hover:bg-pos-black border border-white/10 transition-all"
+            className="absolute top-3 right-3 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-pos-black/90 backdrop-blur text-white text-xs font-medium shadow-lg hover:bg-pos-black border border-white/10 transition-all"
             title="Sair (ESC)"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
