@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export function useIsAdmin() {
+export function useIsAdmin(enabled: boolean = true) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    if (!enabled) {
+      setIsAdmin(false);
+      setReady(false);
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -17,7 +23,7 @@ export function useIsAdmin() {
       setReady(true);
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [enabled]);
 
   return { isAdmin, ready };
 }

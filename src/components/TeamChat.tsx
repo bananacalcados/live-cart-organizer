@@ -23,6 +23,8 @@ interface PollOption {
 
 export function TeamChat() {
   const location = useLocation();
+  const p = location.pathname;
+  const shouldHide = p === '/pos' || p === '/expedition' || p.startsWith('/expedition') || p === '/live' || p === '/live-consumidor' || p.startsWith('/live-ortopedicos') || p.startsWith('/banana-') || p.startsWith('/lp/') || p.startsWith('/cat/') || p.startsWith('/evento/') || p.startsWith('/checkout') || p.startsWith('/checkout-loja/') || p.startsWith('/vip/') || p.startsWith('/dose-tripla') || p.startsWith('/catalogo/') || p.startsWith('/l/') || p.startsWith('/register/') || p.startsWith('/live/') || p.startsWith('/typebot/') || p.startsWith('/r/');
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -39,6 +41,7 @@ export function TeamChat() {
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (shouldHide) return;
     const detectName = async () => {
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -90,9 +93,10 @@ export function TeamChat() {
       }
     };
     detectName();
-  }, []);
+  }, [shouldHide]);
 
   useEffect(() => {
+    if (shouldHide) return;
     if (!isOpen) return;
     loadMessages();
     const channel = supabase
@@ -107,9 +111,10 @@ export function TeamChat() {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [isOpen]);
+  }, [isOpen, shouldHide]);
 
   useEffect(() => {
+    if (shouldHide) return;
     if (!isOpen) {
       const channel = supabase
         .channel('team-chat-unread')
@@ -121,7 +126,7 @@ export function TeamChat() {
     } else {
       setUnreadCount(0);
     }
-  }, [isOpen]);
+  }, [isOpen, shouldHide]);
 
   const loadMessages = async () => {
     const { data } = await supabase
@@ -221,8 +226,7 @@ export function TeamChat() {
   };
 
   // Hide on POS page (has its own chat), landing pages, checkout pages, and VIP redirect pages
-  const p = location.pathname;
-  if (p === '/pos' || p === '/expedition' || p.startsWith('/expedition') || p === '/live' || p === '/live-consumidor' || p.startsWith('/live-ortopedicos') || p.startsWith('/banana-') || p.startsWith('/lp/') || p.startsWith('/cat/') || p.startsWith('/evento/') || p.startsWith('/checkout') || p.startsWith('/checkout-loja/') || p.startsWith('/vip/') || p.startsWith('/dose-tripla') || p.startsWith('/catalogo/') || p.startsWith('/l/') || p.startsWith('/register/') || p.startsWith('/live/') || p.startsWith('/typebot/') || p.startsWith('/r/')) return null;
+  if (shouldHide) return null;
 
   if (!isOpen) {
     return (

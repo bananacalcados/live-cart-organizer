@@ -440,19 +440,16 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
         .update({ status: 'sending', started_at: new Date().toISOString(), completed_at: null } as any)
         .eq('id', dispatchId);
 
-      const res = await fetch(`https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1/dispatch-mass-send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-        body: JSON.stringify({ dispatchId }),
+      const { data, error } = await supabase.functions.invoke('vps-dispatch-proxy', {
+        body: { dispatchId },
       });
-      const data = await res.json().catch(() => ({}));
 
-      if (!res.ok || data?.error) {
+      if (error || data?.error) {
         await supabase
           .from('dispatch_history')
           .update({ status: 'scheduled_paused', processing_batch: false, started_at: null } as any)
           .eq('id', dispatchId);
-        throw new Error(data?.error || 'Falha ao iniciar disparo');
+        throw new Error(data?.error || error?.message || 'Falha ao iniciar disparo');
       }
 
       toast.success("🚀 Disparo iniciado!");
