@@ -100,11 +100,12 @@ export function POSGeneralDashboard({ onBack }: Props) {
         supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
         supabase.from("pos_sales")
           .select("id, store_id, total, payment_method, shipping_cost, created_at, paid_at, status, sale_type, customer_id, customer_name, revenue_attribution, tiny_order_number, crediario_gateway")
-          // mesma regra do dashboard da loja física:
-          // - inclui concluídas + pendentes de sync/retirada/pagas (igual aba Pedidos)
-          // - exclui vendas com revenue_attribution = site_pickup_only
-          // - usa paid_at quando existir, senão created_at
-          .in("status", ["completed", "pending_sync", "pending_pickup", "paid"])
+          // PAGO É PAGO: somente vendas efetivamente pagas (completed/paid/pending_sync).
+          // `pending_pickup` é aguardando pagamento na retirada (paid_at null) — não é receita.
+          // Status de fulfillment (envio/mototaxi/retirada/enviado) ficam em db_orders.stage,
+          // então mover card no kanban NÃO remove a venda paga deste dashboard.
+          // - usa paid_at quando existir, senão created_at (vendas físicas legadas)
+          .in("status", ["completed", "pending_sync", "paid"])
           .neq("revenue_attribution", "site_pickup_only")
           .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
           .limit(20000),
