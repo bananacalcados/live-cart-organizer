@@ -106,7 +106,7 @@ export function TeamChatPanel({ onBack }: Props) {
         message: type === 'image' ? '📷 Foto' : '🎵 Áudio',
         channel: 'general',
         message_type: type,
-        metadata: { url: urlData.publicUrl, fileName: file.name },
+        metadata: { url: urlData.publicUrl, fileName: file.name } as any,
       });
     } catch (err) {
       console.error(err);
@@ -128,7 +128,7 @@ export function TeamChatPanel({ onBack }: Props) {
       message: pollQuestion.trim(),
       channel: 'general',
       message_type: 'poll',
-      metadata: { options },
+      metadata: { options } as any,
     });
     setPollQuestion('');
     setPollOptions(['', '']);
@@ -142,7 +142,7 @@ export function TeamChatPanel({ onBack }: Props) {
     options.forEach(o => { o.votes = o.votes.filter(v => v !== senderName); });
     options[optionIndex].votes.push(senderName);
     await supabase.from('team_chat_messages')
-      .update({ metadata: { ...msg.metadata, options } })
+      .update({ metadata: { ...msg.metadata, options } as any })
       .eq('id', msgId);
   };
 
