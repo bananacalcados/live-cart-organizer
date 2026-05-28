@@ -48,8 +48,9 @@ export function useTeamChatUnread(senderName: string, isActive: boolean) {
     const channel = supabase
       .channel('team-chat-unread-watch')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'team_chat_messages' }, (payload) => {
-        const msg = payload.new as LastMessageSnapshot;
-        if (msg.channel !== undefined && (payload.new as any).channel !== 'general') return;
+        const raw = payload.new as any;
+        if (raw.channel && raw.channel !== 'general') return;
+        const msg = raw as LastMessageSnapshot;
         setLastMessage(msg);
         const isFromMe = msg.sender_name === senderName;
         if (!isFromMe) {
