@@ -529,7 +529,16 @@ export function ChatView({
       {customerInfoPanel}
 
       {/* Messages */}
-      <ScrollArea className="flex-1 bg-[#e5ddd5] dark:bg-[#0b141a]" style={{ minHeight: 0 }}>
+      <ScrollArea
+        className="flex-1 bg-[#d9d2c4] dark:bg-[#0b141a]"
+        style={{
+          minHeight: 0,
+          backgroundImage:
+            "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'><g fill='none' stroke='%23000' stroke-opacity='0.07' stroke-width='1.2'><circle cx='30' cy='40' r='10'/><path d='M70 30 q10 -10 20 0 t20 0'/><path d='M150 25 l8 0 l4 8 l-4 8 l-8 0 l-4 -8 z'/><path d='M180 60 q8 8 0 16 q-8 -8 0 -16'/><circle cx='40' cy='110' r='6'/><path d='M85 100 l14 0 l-7 12 z'/><path d='M130 95 q12 8 0 20'/><path d='M175 110 l10 -10 l10 10 l-10 10 z'/><circle cx='30' cy='180' r='8'/><path d='M70 175 q10 10 20 0'/><path d='M125 175 l14 0 l-7 14 z'/><path d='M170 170 q10 10 0 20 q-10 -10 0 -20'/></g></svg>\")",
+          backgroundRepeat: "repeat",
+          backgroundSize: "220px 220px",
+        }}
+      >
         <div className="p-3 w-full max-w-full overflow-hidden">
           {messages.map((msg, idx) => {
             const isOutgoing = msg.direction === 'outgoing';

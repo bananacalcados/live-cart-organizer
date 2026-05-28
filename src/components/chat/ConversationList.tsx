@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Search, Users, MessageCircle, Wifi, CheckSquare, PhoneOff, Send,
-  Radio, Bell, Bot, CheckCircle2, Archive, Megaphone
+  Radio, Bell, Bot, CheckCircle2, Archive, Megaphone, Eye
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ interface ConversationListProps {
   selectedConversationKey?: string | null;
   onBulkFinish?: (phones: string[]) => void;
   onBulkMessage?: (phones: string[]) => void;
+  onBulkMarkRead?: (phones: string[]) => void;
   hasActiveSupport?: (phone: string) => boolean;
   supportFilterActive?: boolean;
   onSupportFilterToggle?: () => void;
@@ -70,6 +71,7 @@ export function ConversationList({
   selectedConversationKey,
   onBulkFinish,
   onBulkMessage,
+  onBulkMarkRead,
   liveFilterActive,
   onLiveFilterToggle,
   liveCount,
@@ -80,6 +82,8 @@ export function ConversationList({
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
+  const [visibleLimit, setVisibleLimit] = useState(60);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) return format(date, 'HH:mm', { locale: ptBR });
@@ -155,9 +159,10 @@ export function ConversationList({
   const archivedCount = conversations.filter(c => c.isArchived).length;
   const dispatchCount = conversations.filter(c => c.isDispatchOnly && !c.isArchived).length;
 
-  // Instance tabs
-  const instanceCounts: Record<string, number> = { all: conversations.filter(c => !c.isArchived).length };
-  for (const c of conversations.filter(c => !c.isArchived)) {
+  // Instance tabs — count matches what 'all' filter renders (open conversations only)
+  const openConvs = conversations.filter(c => !c.isArchived && !c.isFinished && !c.isDispatchOnly);
+  const instanceCounts: Record<string, number> = { all: openConvs.length };
+  for (const c of openConvs) {
     if (c.whatsapp_number_id) {
       instanceCounts[c.whatsapp_number_id] = (instanceCounts[c.whatsapp_number_id] || 0) + 1;
     }
@@ -181,6 +186,28 @@ export function ConversationList({
     else setSelectedPhones(new Set(filteredConversations.map(c => c.phone)));
   };
   const exitSelectMode = () => { setSelectMode(false); setSelectedPhones(new Set()); };
+
+  // Reset visible window when filters change so users always start from the top
+  useEffect(() => {
+    setVisibleLimit(60);
+  }, [chatFilter, statusFilter, instanceFilter, searchQuery, liveFilterActive]);
+
+  const visibleConversations = filteredConversations.slice(0, visibleLimit);
+  const hasMore = filteredConversations.length > visibleConversations.length;
+
+  // Infinite scroll sentinel
+  useEffect(() => {
+    if (!hasMore || !sentinelRef.current) return;
+    const el = sentinelRef.current;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setVisibleLimit((n) => n + 60);
+      }
+    }, { rootMargin: '300px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, visibleLimit, filteredConversations.length]);
+
 
   // Native-style pill
   const Pill = ({ label, active, count, onClick, badge }: { label: string; active: boolean; count?: number; onClick: () => void; badge?: boolean }) => (
@@ -315,6 +342,12 @@ export function ConversationList({
                     <Send className="h-3 w-3" />Enviar ({selectedPhones.size})
                   </Button>
                 )}
+                {onBulkMarkRead && (
+                  <Button variant="secondary" size="sm" className="h-7 text-[11px] gap-1" disabled={selectedPhones.size === 0}
+                    onClick={() => { onBulkMarkRead(Array.from(selectedPhones)); exitSelectMode(); }}>
+                    <Eye className="h-3 w-3" />Marcar lida ({selectedPhones.size})
+                  </Button>
+                )}
                 <Button variant="destructive" size="sm" className="h-7 text-[11px] gap-1" disabled={selectedPhones.size === 0}
                   onClick={() => { onBulkFinish(Array.from(selectedPhones)); exitSelectMode(); }}>
                   <PhoneOff className="h-3 w-3" />Finalizar ({selectedPhones.size})
@@ -346,7 +379,7 @@ export function ConversationList({
             </div>
           ) : (
             <div>
-              {filteredConversations.map((conv) => (
+              {visibleConversations.map((conv) => (
                 <button
                   key={conv.conversationKey || conv.phone}
                   onClick={() => {
@@ -448,6 +481,19 @@ export function ConversationList({
                   </div>
                 </button>
               ))}
+              {hasMore && (
+                <div
+                  ref={sentinelRef}
+                  className="py-4 text-center text-[11px] text-[#475360] dark:text-[#667781]"
+                >
+                  Carregando mais conversas… ({visibleConversations.length}/{filteredConversations.length})
+                </div>
+              )}
+              {!hasMore && filteredConversations.length > 20 && (
+                <div className="py-4 text-center text-[10px] text-[#475360]/60 dark:text-[#667781]/60">
+                  Fim · {filteredConversations.length} conversas
+                </div>
+              )}
             </div>
           )}
         </ScrollArea>
