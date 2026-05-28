@@ -39,6 +39,7 @@ import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import { BulkMessageDialog, BulkRecipient } from "@/components/chat/BulkMessageDialog";
 import { useChatSender, type SendRoute } from "@/hooks/chat/useChatSender";
 import { useChatMessages } from "@/hooks/chat/useChatMessages";
+import { TeamChatPanel } from "@/components/chat/TeamChatPanel";
 
 interface Props {
   storeId: string;
@@ -65,6 +66,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const sender = useChatSender();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [waMsgTick, setWaMsgTick] = useState(0);
+  const [teamChatActive, setTeamChatActive] = useState(false);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
