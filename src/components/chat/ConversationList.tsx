@@ -12,6 +12,7 @@ import { ptBR } from "date-fns/locale";
 import { Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "./ChatTypes";
 import { STAGES } from "@/types/order";
 import { WhatsAppNumber } from "@/stores/whatsappNumberStore";
+import { TeamChatPinnedItem } from "./TeamChatPinnedItem";
 import {
   Select,
   SelectContent,
@@ -56,6 +57,9 @@ interface ConversationListProps {
   liveCount?: number;
   isLiveCustomer?: (phone: string) => boolean;
   liveStageMap?: Record<string, { stageTitle: string; eventName?: string; color?: string }>;
+  /** Team chat pinned at top */
+  teamChatActive?: boolean;
+  onTeamChatClick?: () => void;
 }
 
 const STATUS_TABS: { value: ConversationStatusFilter; label: string; shortLabel: string }[] = [
@@ -102,6 +106,8 @@ export function ConversationList({
   liveCount,
   isLiveCustomer,
   liveStageMap = {},
+  teamChatActive,
+  onTeamChatClick,
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
@@ -503,6 +509,13 @@ export function ConversationList({
               Selecionar
             </Button>
           )}
+        </div>
+      )}
+
+      {/* Pinned Team Chat (always on top) */}
+      {onTeamChatClick && (
+        <div className="flex-shrink-0">
+          <TeamChatPinnedItem isActive={!!teamChatActive} onClick={onTeamChatClick} />
         </div>
       )}
 

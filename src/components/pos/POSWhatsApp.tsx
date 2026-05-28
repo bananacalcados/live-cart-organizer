@@ -39,6 +39,7 @@ import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import { BulkMessageDialog, BulkRecipient } from "@/components/chat/BulkMessageDialog";
 import { useChatSender, type SendRoute } from "@/hooks/chat/useChatSender";
 import { useChatMessages } from "@/hooks/chat/useChatMessages";
+import { TeamChatPanel } from "@/components/chat/TeamChatPanel";
 
 interface Props {
   storeId: string;
@@ -65,6 +66,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
   const sender = useChatSender();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [waMsgTick, setWaMsgTick] = useState(0);
+  const [teamChatActive, setTeamChatActive] = useState(false);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [selectedConvNumberId, setSelectedConvNumberId] = useState<string | null>(null);
   const [selectedConvKey, setSelectedConvKey] = useState<string | null>(null);
@@ -689,6 +691,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
     }) || null;
     const conversationChannel = selectedConversation?.channel || null;
 
+    setTeamChatActive(false);
     setQuotedMessage(null);
     setSelectedPhone(phone);
     setSelectedConvNumberId(whatsappNumberId ?? null);
@@ -1119,7 +1122,7 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
         {/* Conversation List */}
         <div className={cn(
           "flex flex-col min-h-0 overflow-hidden border-r border-[#e9edef] dark:border-[#313d45]",
-          selectedPhone ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
+          (selectedPhone || teamChatActive) ? "hidden md:flex md:w-[35%] lg:w-[30%]" : "flex-1"
         )}>
           <ConversationList
             conversations={multiInstanceFilter.length > 0
@@ -1165,11 +1168,21 @@ export function POSWhatsApp({ storeId, initialFilter }: Props) {
             liveCount={liveCount}
             isLiveCustomer={isLiveCustomer}
             liveStageMap={liveStageByPhone}
+            teamChatActive={teamChatActive}
+            onTeamChatClick={() => {
+              setTeamChatActive(true);
+              setSelectedPhone(null);
+              setSelectedConvKey(null);
+              setSelectedConvNumberId(null);
+              setSelectedConvChannel(null);
+            }}
           />
         </div>
 
-        {/* Chat View */}
-        {selectedPhone ? (
+        {/* Team Chat Panel takes precedence */}
+        {teamChatActive ? (
+          <TeamChatPanel onBack={() => setTeamChatActive(false)} />
+        ) : selectedPhone ? (
           <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
             {/* Contact Header Bar */}
             <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
