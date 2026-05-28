@@ -27,7 +27,7 @@ interface WaMessage {
   id: string;
   phone: string;
   message: string;
-  direction: "incoming" | "outgoing";
+  direction: string;
   status: string;
   media_type?: string;
   media_url?: string;
