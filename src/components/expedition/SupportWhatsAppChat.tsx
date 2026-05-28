@@ -15,6 +15,7 @@ import { EmojiPickerButton } from '../EmojiPickerButton';
 import { uploadMediaToStorage } from '../MediaAttachmentPicker';
 import { WhatsAppNumberSelector } from '../WhatsAppNumberSelector';
 import { useWhatsAppNumberStore } from '@/stores/whatsappNumberStore';
+import { useConversationInstance } from '@/hooks/useConversationInstance';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MessageStatusIcon } from '../chat/MessageStatusIcon';
 import { WhatsAppMediaAttachment } from '../chat/WhatsAppMediaAttachment';
