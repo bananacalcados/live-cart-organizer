@@ -1,10 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { webmToOgg, isWebmContainer, isOggContainer } from "../_shared/webm-to-ogg.ts";
+import { checkInstanceGuard } from "../_shared/instance-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-force-instance',
 };
 
 interface InteractiveButton {
