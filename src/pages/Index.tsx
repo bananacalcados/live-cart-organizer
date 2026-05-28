@@ -16,6 +16,7 @@ import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
 import { EventStockAlerts } from "@/components/events/EventStockAlerts";
 import { EventCartsPanel } from "@/components/events/EventCartsPanel";
 import { LiveCommentsHistory } from "@/components/events/LiveCommentsHistory";
+import { LiveActiveToggleButton } from "@/components/events/LiveActiveToggleButton";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
