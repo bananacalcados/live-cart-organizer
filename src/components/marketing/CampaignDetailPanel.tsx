@@ -89,6 +89,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [showMessageForm, setShowMessageForm] = useState(false);
   const [editingMessage, setEditingMessage] = useState<ScheduledMessage | null>(null);
   const [isSending, setIsSending] = useState<string | null>(null);
+  const [dispatchRefreshKey, setDispatchRefreshKey] = useState(0);
   const [newSlug, setNewSlug] = useState("");
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [newVarName, setNewVarName] = useState("");
