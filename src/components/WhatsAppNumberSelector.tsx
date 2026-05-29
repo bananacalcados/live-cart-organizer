@@ -11,8 +11,10 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 
 interface WhatsAppNumberSelectorProps {
   className?: string;
-  /** Filter numbers by provider (e.g. 'zapi' or 'meta'). Shows all if omitted. */
+  /** Filter numbers by a single provider (e.g. 'zapi' or 'meta'). Shows all if omitted. */
   filterProvider?: string;
+  /** Filter numbers by a set of providers (e.g. ['zapi','wasender']). Takes precedence over filterProvider. */
+  allowedProviders?: string[];
   value?: string | null;
   onValueChange?: (id: string) => void;
   autoSelect?: boolean;
@@ -22,6 +24,7 @@ interface WhatsAppNumberSelectorProps {
 export function WhatsAppNumberSelector({
   className,
   filterProvider,
+  allowedProviders,
   value,
   onValueChange,
   autoSelect = true,
@@ -36,9 +39,12 @@ export function WhatsAppNumberSelector({
   }, [numbers.length, fetchNumbers]);
 
   const filtered = useMemo(() => {
+    if (allowedProviders && allowedProviders.length > 0) {
+      return numbers.filter(n => allowedProviders.includes(n.provider || 'meta'));
+    }
     if (!filterProvider) return numbers;
     return numbers.filter(n => (n.provider || 'meta') === filterProvider);
-  }, [numbers, filterProvider]);
+  }, [numbers, filterProvider, allowedProviders]);
 
   const currentValue = value ?? selectedNumberId;
 
