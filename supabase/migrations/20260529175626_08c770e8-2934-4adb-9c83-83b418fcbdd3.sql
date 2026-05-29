@@ -1,0 +1,2 @@
+ALTER TABLE public.group_campaign_block_dispatches REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.group_campaign_block_dispatches;
