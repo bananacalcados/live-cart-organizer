@@ -142,6 +142,26 @@ serve(async (req) => {
         }
       }
 
+      // Localização e contato recebidos → renderiza como texto/link no chat
+      let extraText: string | null = null;
+      if (!mediaType) {
+        const loc = rawMessage.locationMessage as Record<string, any> | undefined;
+        if (loc && (loc.degreesLatitude != null || loc.degreesLongitude != null)) {
+          const lat = loc.degreesLatitude;
+          const lng = loc.degreesLongitude;
+          const name = asString(loc.name);
+          extraText =
+            `📍 ${name ? name + "\n" : ""}https://maps.google.com/?q=${lat},${lng}`;
+        }
+        const contact =
+          (rawMessage.contactMessage as Record<string, any> | undefined) ||
+          (rawMessage.contactsArrayMessage as Record<string, any> | undefined);
+        if (contact) {
+          const dn = asString(contact.displayName) || "Contato";
+          extraText = `👤 ${dn}`;
+        }
+      }
+
       // Monta payload no formato canônico do zapi-webhook
       const zPayload: Record<string, unknown> = {
         phone: cleanedPhone,
@@ -150,6 +170,7 @@ serve(async (req) => {
         messageId,
         senderName: pushName,
       };
+
 
       if (mediaType && mediaObjKey) {
         // Tenta decriptar para obter URL pública
