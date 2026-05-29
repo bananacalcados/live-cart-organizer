@@ -159,6 +159,11 @@ export function useConversationEnrichment() {
         next.delete(phoneKey);
         return next;
       });
+      setFinishedAtByPhone(prev => {
+        const next = new Map(prev);
+        next.delete(phoneKey);
+        return next;
+      });
       throw error;
     }
 
