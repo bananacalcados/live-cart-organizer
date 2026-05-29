@@ -1,99 +1,58 @@
+## Objetivo
 
-# WaSender — Análise da API e Plano de Implementação Completo
+Permitir que campanhas de Grupos VIP sejam enviadas tanto via **Z-API** quanto via **WaSender**, escolhendo automaticamente o canal conforme o `provider` da instância (`whatsapp_numbers`) — **sem alterar** a lógica de disparo humano.
 
-## 1. O que a documentação da WaSender permite (mapa completo)
+## Regra de disparo (preservada exatamente)
 
-A WaSender expõe **um único endpoint de envio** (`POST /api/send-message`) que aceita o tipo pelo formato do corpo, mais vários endpoints de gestão. Tudo abaixo é suportado pela API:
+A cadência atual já segue sua regra e será mantida sem mudanças:
+- Cada **bloco** de mensagem é um disparo independente.
+- Delay entre blocos: 8–15s.
+- Só passa para o **próximo grupo** depois de terminar **todos os blocos** do grupo atual.
+- Delay entre grupos: 45–90s (depois de concluir o grupo anterior).
+- Pausa longa de 120–180s a cada 3 grupos completos.
+- Retry de 1x após 10s por bloco que falhar; falhou de novo → marca o bloco como `failed` e segue.
 
-**Mensagens**
-- Texto, Imagem, Vídeo, Áudio, Documento, Sticker (.webp)
-- Cartão de contato (`contact`), Localização (`location`)
-- Enquete/Poll (multi-seleção)
-- Mensagem citada / reply
-- Menções em grupo (`@participante`)
-- "Ver uma vez" (view once)
-- Editar mensagem, Apagar mensagem (para todos), Marcar como lida (tique azul)
-- Info da mensagem, Reenviar falha
-- Upload de mídia (`/api/upload`) e Decrypt de mídia recebida (`/api/decrypt-media`)
+```text
+Grupo A: Bloco1 -> (delay 8-15s) -> Bloco2 -> (delay) -> Bloco3
+         -> (delay 45-90s entre grupos)
+Grupo B: Bloco1 -> (delay) -> Bloco2 ...
+         -> (a cada 3 grupos: pausa 120-180s)
+```
 
-**Sessões**
-- Criar, listar, detalhe, atualizar, status, deletar, **restart**, connect, disconnect, QR code, regenerar API key
-- Logs de mensagens e de sessão
-- **Checar se número está no WhatsApp** (`/api/on-whatsapp/{phone}`)
-- Info do usuário da sessão
-- **Presença** (`/api/send-presence-update`) → "digitando…", "gravando áudio…"
+Nada nesse loop muda. A única alteração é **para onde** cada bloco é enviado.
 
-**Contatos**
-- Listar todos, info de contato, foto de perfil, bloquear/desbloquear, criar/atualizar contato, LID↔telefone
+## O que muda
 
-**Grupos**
-- Criar, listar todos, metadata, participantes (listar/adicionar/remover/promover/rebaixar), foto, configurações (assunto, descrição, modo anúncio/restrito), link de convite, info de convite, aceitar convite, sair, enviar mensagem + menções
+### 1. `supabase/functions/zapi-group-scheduled-send/index.ts`
+- Carregar o `provider` da instância resolvida (`resolvedNumberId`) uma vez no início (já buscamos `whatsapp_numbers` na validação de online — incluir `provider` ali).
+- Em `sendBlockOnce`, rotear conforme o provider:
+  - **zapi** → continua chamando `zapi-send-group-message` (comportamento atual, inalterado).
+  - **wasender** → chamar as funções WaSender correspondentes, passando o **JID do grupo** (`group.group_id`) como `to`/`phone` e o `whatsapp_number_id`:
+    - texto → `wasender-groups` (action `sendMessage`, com `mentions` quando `mention_all`) ou `wasender-send-message`.
+    - imagem/vídeo/áudio/documento → `wasender-send-media`.
+    - enquete (poll) → `wasender-send-extra` (kind `poll`).
+- Normalizar a resposta de sucesso/erro das funções WaSender para o mesmo formato `{ ok, error }` que o loop já espera (sem tocar no retry/delays).
 
-**Canais/Comunidades**
-- Enviar mensagem em canal
+### 2. Validação de instância online (multi-provider)
+- O bloco atual só aborta quando `provider === 'zapi' && is_online === false`. Para WaSender, manter o envio normalmente (a checagem de saúde Z-API não se aplica). Sem checagem extra nesta rodada — se a sessão WaSender estiver desconectada, o próprio erro de envio aciona o retry/`failed` já existente.
 
-**Webhooks (eventos recebidos)**
-- `messages.received` / `messages.upsert` (entrada), `messages.update` (status ✓✓), `message.sent`
-- `session.status`, `qrcode.updated`
-- `contacts.update` / `contacts.upsert`
-- `groups.upsert`, `group.update`, `group.participants.update`
-- `chats.upsert` / `chats.update` / `chats.delete`
+### 3. Menções "todos" em grupo (mention_all)
+- WaSender: usar `wasender-groups` action `sendMessage` com `mentions` (já suportado pela função). Quando `mention_all` estiver ativo e não houver lista pronta, enviar sem mentions (fallback seguro) para não travar o disparo.
 
-## 2. O que JÁ temos implementado hoje
-- Envio de **texto, imagem, vídeo, áudio, documento** (`wasender-send-message` / `wasender-send-media`)
-- Gestão de sessão (create, connect, qrcode, status, disconnect, delete) + UI de QR Code
-- Webhook que recebe texto e mídia, descriptografa via `decrypt-media`, e encaminha no formato canônico para o `zapi-webhook` (reaproveita IA, leads, dedup, NPS)
-- Roteamento de envio pelo provider `wasender` no `useChatSender`
+## Detalhes técnicos
 
-## 3. Lacunas (o que falta para atender seu pedido)
+- A função `wasender-send-message`/`wasender-send-media`/`wasender-send-extra` já preservam JIDs de grupo (`@g.us`, `120...`) intactos em `formatPhone`, então o mesmo `group.group_id` usado pela Z-API funciona como destino.
+- `instance-guard` não bloqueia grupos (já há bypass para `isGroupId`), então os envios em grupo passam sem conflito de instância.
+- O `group-send-guard` (pausa global de grupos) continua respeitado, pois vive no loop principal, não no envio.
+- Tracking em `group_campaign_block_dispatches` permanece igual (status/attempts/error por bloco), independente do provider.
 
-| Recurso | Status |
-|---|---|
-| Enviar contato | ❌ falta |
-| Enviar localização | ❌ falta |
-| Enviar enquete (poll) | ❌ falta |
-| Reply / citar mensagem | ❌ falta (campo não enviado) |
-| Sticker | ⚠️ parcial (recebe, não envia) |
-| Presença "digitando/gravando" | ❌ falta |
-| Editar / apagar / marcar lida | ❌ falta |
-| Checar número no WhatsApp | ❌ falta |
-| **Grupos VIP via WaSender** | ❌ hoje é só Z-API |
-| **Mídia recebida persistente no chat** | ⚠️ **risco crítico** |
+## Fora de escopo
 
-### ⚠️ Ponto crítico: persistência de mídia no chat
-A `decrypt-media` da WaSender retorna uma `publicUrl` **válida por apenas 1 hora**. Hoje o webhook salva essa URL direto em `whatsapp_messages.media_url`. Resultado: imagens, vídeos, áudios e documentos **aparecem no chat agora, mas quebram depois de 1 hora**. Para o usuário "ver, assistir e ouvir quando precisar", precisamos **baixar a mídia e re-hospedar no Storage do projeto** (URL permanente), igual ao padrão usado para WhatsApp.
+- UI de seleção de provider para grupos (a campanha já resolve a instância via `whatsapp_number_id`/`campaign.whatsapp_number_id`).
+- Sincronização da lista de grupos WaSender (já coberta por `wasender-groups` action `list`, se necessário em rodada futura).
 
-## 4. Plano de implementação
+## Validação
 
-### Fase A — Persistência de mídia (prioridade máxima)
-1. Criar bucket público `whatsapp-media` (migration) com policies de leitura pública e escrita via service role.
-2. No `wasender-webhook`: após obter a `publicUrl` da `decrypt-media`, baixar o arquivo e fazer upload no bucket; salvar a URL permanente em `media_url`. Fallback para a URL temporária se o upload falhar.
-3. Validar que imagem/vídeo/áudio/documento renderizam no chat via `WhatsAppMediaAttachment` (já existe e suporta todos os tipos, inclusive áudio com player e PDF inline).
-
-### Fase B — Novos tipos de envio
-4. Estender `wasender-send-media` para **sticker** (`stickerUrl`).
-5. Adicionar **reply/quoted** no `wasender-send-message` (campo de mensagem citada).
-6. Criar `wasender-send-extra` (ou estender as funções) para **contato** (`contact`), **localização** (`location`) e **enquete** (`poll`).
-7. Expor esses tipos no front (`useChatSender` + UI do chat: anexar contato/localização/enquete).
-
-### Fase C — Recursos de conversa
-8. `wasender-presence` → "digitando…/gravando…" (chamar ao abrir conversa / ao gravar áudio).
-9. `wasender-message-actions` → editar, apagar, marcar como lida; ligar aos controles já existentes no chat (que hoje usam Z-API).
-10. `wasender-check-number` → checar se número existe no WhatsApp (útil em campanhas).
-
-### Fase D — Grupos e VIP via WaSender
-11. `wasender-groups` cobrindo: listar, metadata, participantes (add/remove/promote/demote), settings, foto, link de convite, criar grupo, enviar em grupo + menções.
-12. Tornar os fluxos de **Grupos VIP** provider-aware: hoje `cron-check-vip-groups`, `zapi-send-group-message`, `zapi-group-campaign-execute` chamam Z-API direto. Adicionar ramo `wasender` que respeita as regras de disparo VIP já existentes (sequencial puro, retry por bloco, pausa a cada 3 grupos, abort se instância offline).
-
-### Fase E — Webhooks adicionais
-13. Tratar no `wasender-webhook`: `message.sent`, `qrcode.updated` (atualiza QR na UI em tempo real), `group.participants.update` / `group.update` (sincroniza contagem/membros VIP), `contacts.update`.
-
-## 5. Detalhes técnicos
-- Endpoint de envio único: `POST {WASENDER_BASE}/send-message` com `Authorization: Bearer <api_key da sessão>`. Corpo por tipo: `text`, `imageUrl/videoUrl/audioUrl/documentUrl/stickerUrl`, `contact:{name,phone}`, `location:{latitude,longitude,name,address}`, `poll:{...}`, e campo de quoted para reply.
-- Gestão (sessão/grupos/contatos) usa o **PAT global** (`WASENDER_API_TOKEN`) via `wasenderPAT()` para sessões, e a **api_key da sessão** para grupos/contatos/envio.
-- Manter o `instance-guard` (HTTP 409 INSTANCE_MISMATCH) em todos os envios — regra de conversa travada por (telefone+instância).
-- Registrar novas funções com `verify_jwt = false` no `config.toml` (webhook é externo).
-- Reaproveitar `WhatsAppMediaAttachment` no chat (sem mudança de UI necessária para exibir mídia).
-
-## 6. Confirmação que preciso de você
-Antes de implementar, quero confirmar o escopo desta rodada, porque é grande. Por padrão proponho fazer **Fase A + Fase B** primeiro (resolve a persistência de mídia e adiciona contato/localização/enquete/sticker/reply), e depois seguimos para grupos/VIP e ações de mensagem. Se preferir tudo de uma vez, eu faço — só será uma entrega maior.
+- Deploy de `zapi-group-scheduled-send`.
+- Testar uma campanha de teste apontando para instância WaSender com 2+ grupos e 2+ blocos, confirmando nos logs: blocos sequenciais com delay, troca de grupo só após último bloco, delay entre grupos, e registros em `group_campaign_block_dispatches`.
+- Confirmar que campanhas em instância Z-API continuam idênticas.
