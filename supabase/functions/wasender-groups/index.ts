@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveWasenderCredentials, WASENDER_BASE } from "../_shared/wasender-credentials.ts";
+import { resolveWasenderCredentials, WASENDER_BASE, formatWasenderJid } from "../_shared/wasender-credentials.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,7 +50,7 @@ serve(async (req) => {
       return { ok: res.ok, status: res.status, data };
     };
 
-    const jid = body.groupJid as string | undefined;
+    const jid = body.groupJid ? formatWasenderJid(String(body.groupJid)) : undefined;
     let r: { ok: boolean; status: number; data: any };
 
     switch (action) {

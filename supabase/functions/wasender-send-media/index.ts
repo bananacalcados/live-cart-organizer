@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveWasenderCredentials, WASENDER_BASE } from "../_shared/wasender-credentials.ts";
+import { resolveWasenderCredentials, WASENDER_BASE, formatWasenderJid } from "../_shared/wasender-credentials.ts";
 import { checkInstanceGuard } from "../_shared/instance-guard.ts";
 import { webmToOgg, isWebmContainer, isOggContainer } from "../_shared/webm-to-ogg.ts";
 
@@ -60,13 +60,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-force-instance",
 };
 
-function formatPhone(phone: string): string {
-  if (phone.includes("@") || phone.includes("-")) return phone;
-  let digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("120")) return digits;
-  if (digits.length >= 10 && digits.length <= 11) digits = "55" + digits;
-  return digits;
-}
+// (normalização de JID centralizada em formatWasenderJid)
 
 /** Mapeia o tipo de mídia para o campo de URL esperado pela WaSender. */
 function mediaField(
@@ -113,7 +107,7 @@ serve(async (req) => {
     }
 
     const { apiKey } = await resolveWasenderCredentials(whatsapp_number_id);
-    const to = formatPhone(phone);
+    const to = formatWasenderJid(phone);
 
     // Áudio: remux WebM→OGG/Opus para o WhatsApp reproduzir corretamente.
     let finalMediaUrl = mediaUrl;

@@ -31,6 +31,7 @@ import { ScheduledMessageForm, type ScheduledMessageData } from "./ScheduledMess
 import { CampaignBulkSettings } from "./CampaignBulkSettings";
 import { CampaignDashboard } from "./CampaignDashboard";
 import { VipStrategyPanel } from "./VipStrategyPanel";
+import { GroupDispatchErrorsPanel } from "./GroupDispatchErrorsPanel";
 
 interface CampaignDetailPanelProps {
   campaignId: string;
@@ -88,6 +89,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [showMessageForm, setShowMessageForm] = useState(false);
   const [editingMessage, setEditingMessage] = useState<ScheduledMessage | null>(null);
   const [isSending, setIsSending] = useState<string | null>(null);
+  const [dispatchRefreshKey, setDispatchRefreshKey] = useState(0);
   const [newSlug, setNewSlug] = useState("");
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [newVarName, setNewVarName] = useState("");
@@ -480,10 +482,17 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       });
       const result = await res.json();
       if (result.success) {
-        if (result.complete) {
-          toast.success(`Enviada! ${result.sentCount}/${result.total} grupos`);
+        const failed = Number(result.batchFailed ?? 0);
+        const sent = Number(result.batchSent ?? 0);
+        const total = Number(result.totalGroups ?? 0);
+        if (failed > 0) {
+          toast.error(
+            `Disparo com falhas: ${failed} grupo(s) não receberam. Veja "envios com erro" na campanha.`,
+          );
+        } else if (result.complete) {
+          toast.success(`Enviada! ${sent}/${total} grupos`);
         } else {
-          toast.success(`Iniciado! ${result.processed}/${result.total} grupos enviados, restante será processado automaticamente`);
+          toast.success(`Iniciado! ${result.processed ?? sent}/${total} grupos enviados, restante será processado automaticamente`);
         }
       } else if (res.status === 409 || result.status === 'sending') {
         toast.info('O disparo já foi iniciado e continuará automaticamente.');
@@ -492,6 +501,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       } else {
         toast.error(result.error || "Erro ao enviar");
       }
+      setDispatchRefreshKey((k) => k + 1);
       fetchMessages();
     } catch { toast.error("Erro ao enviar"); }
     finally {
@@ -902,6 +912,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           {/* MESSAGES TAB */}
           <TabsContent value="messages" className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">MENSAGENS ({messages.length})</p>
+            <GroupDispatchErrorsPanel campaignId={campaignId} refreshKey={dispatchRefreshKey} />
             {messages.length === 0 ? (
               <Card><CardContent className="py-8 text-center">
                 <Send className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
