@@ -441,6 +441,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
           status: "paid",
           paid_at: new Date().toISOString(),
           payment_gateway: "mercadopago",
+          payment_method: "PIX",
           notes: `🔔 Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
         })
         .eq("id", sale.id);
