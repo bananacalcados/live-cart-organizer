@@ -878,6 +878,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       });
       if (result.success) {
         setQuotedMessage(null);
+        appendOptimistic(caption || `[${mediaType}]`, { media_type: mediaType, media_url: mediaUrl, message_id: result.messageId });
         loadMessages(selectedPhone, selectedConvNumberId);
         toast.success("Mídia enviada!");
       }
