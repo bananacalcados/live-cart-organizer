@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power } from "lucide-react";
+import QRCode from "react-qr-code";
 
 interface WaSenderInstance {
   id: string;
