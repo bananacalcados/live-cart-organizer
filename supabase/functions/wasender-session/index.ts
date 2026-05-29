@@ -92,7 +92,7 @@ serve(async (req) => {
           method: "POST",
           body: {
             name: String(label).trim(),
-            phone_number: String(phone).trim(),
+            phone_number: phoneE164,
             account_protection: true,
             log_messages: true,
             read_incoming_messages: false,
