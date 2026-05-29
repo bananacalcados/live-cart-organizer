@@ -14598,7 +14598,9 @@ export type Database = {
           provider: string
           updated_at: string
           wasender_api_key: string | null
+          wasender_last_qr: string | null
           wasender_phone_number: string | null
+          wasender_qr_updated_at: string | null
           wasender_session_id: number | null
           wasender_webhook_secret: string | null
           zapi_client_token: string | null
@@ -14622,7 +14624,9 @@ export type Database = {
           provider?: string
           updated_at?: string
           wasender_api_key?: string | null
+          wasender_last_qr?: string | null
           wasender_phone_number?: string | null
+          wasender_qr_updated_at?: string | null
           wasender_session_id?: number | null
           wasender_webhook_secret?: string | null
           zapi_client_token?: string | null
@@ -14646,7 +14650,9 @@ export type Database = {
           provider?: string
           updated_at?: string
           wasender_api_key?: string | null
+          wasender_last_qr?: string | null
           wasender_phone_number?: string | null
+          wasender_qr_updated_at?: string | null
           wasender_session_id?: number | null
           wasender_webhook_secret?: string | null
           zapi_client_token?: string | null
