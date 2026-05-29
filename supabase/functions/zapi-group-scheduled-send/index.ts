@@ -130,6 +130,9 @@ serve(async (req) => {
     const resolvedNumberId = msg.whatsapp_number_id || campaign.whatsapp_number_id || null;
     const messageGroupId = msg.message_group_id;
 
+    // Provider da instância (zapi | wasender). Default zapi para compatibilidade.
+    let instanceProvider = "zapi";
+
     // ===== Validate instance is online =====
     if (resolvedNumberId) {
       const { data: inst } = await supabase
@@ -137,6 +140,8 @@ serve(async (req) => {
         .select("id, label, is_online, provider")
         .eq("id", resolvedNumberId)
         .maybeSingle();
+
+      if (inst?.provider) instanceProvider = inst.provider;
 
       if (inst && inst.provider === "zapi" && inst.is_online === false) {
         // Trigger immediate re-check to avoid stale data
