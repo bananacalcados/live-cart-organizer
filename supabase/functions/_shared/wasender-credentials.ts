@@ -21,6 +21,57 @@ export function getServiceClient() {
   return createClient(supabaseUrl, serviceKey);
 }
 
+const MEDIA_EXT: Record<string, string> = {
+  image: "jpg",
+  video: "mp4",
+  audio: "ogg",
+  document: "bin",
+  sticker: "webp",
+};
+
+/**
+ * Baixa a mídia de uma URL temporária da WaSender (válida ~1h) e re-hospeda
+ * no bucket público `whatsapp-media`, devolvendo uma URL permanente.
+ * Em caso de falha, devolve a URL original como fallback.
+ */
+export async function rehostMedia(
+  tempUrl: string,
+  mediaType: string,
+  hintFileName?: string | null,
+): Promise<string> {
+  try {
+    const res = await fetch(tempUrl);
+    if (!res.ok) return tempUrl;
+    const contentType = res.headers.get("content-type") || "application/octet-stream";
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.byteLength === 0) return tempUrl;
+
+    // Extensão: tenta pelo fileName, depois pelo tipo
+    let ext = MEDIA_EXT[mediaType] || "bin";
+    if (hintFileName && hintFileName.includes(".")) {
+      ext = hintFileName.split(".").pop()!.toLowerCase().replace(/[^a-z0-9]/g, "") || ext;
+    } else {
+      const ctExt = contentType.split("/")[1]?.split(";")[0]?.replace(/[^a-z0-9]/g, "");
+      if (ctExt) ext = ctExt;
+    }
+
+    const path = `wasender/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
+    const supabase = getServiceClient();
+    const { error } = await supabase.storage
+      .from("whatsapp-media")
+      .upload(path, buf, { contentType, upsert: false });
+    if (error) {
+      console.error("[rehostMedia] upload falhou:", error.message);
+      return tempUrl;
+    }
+    const { data } = supabase.storage.from("whatsapp-media").getPublicUrl(path);
+    return data?.publicUrl || tempUrl;
+  } catch (e) {
+    console.error("[rehostMedia] erro:", (e as Error).message);
+    return tempUrl;
+  }
+}
+
 export interface WasenderSendCreds {
   /** API key da sessão (Bearer) usada para enviar mensagens. */
   apiKey: string;
