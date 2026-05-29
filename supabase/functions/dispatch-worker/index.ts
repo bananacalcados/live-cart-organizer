@@ -290,16 +290,19 @@ serve(async (req) => {
         }
       }
 
-      // Persist outcomes in parallel batches
-      const writes: Promise<any>[] = [];
-      for (const s of sentRows) {
-        writes.push(
-          supabase.from('dispatch_recipients').update({
-            status: 'sent', message_wamid: s.wamid, sent_at: new Date().toISOString(), lease_until: null,
-          }).eq('id', s.id),
-        );
-        // Side-effect: log to whatsapp_messages (fire-and-forget)
-        supabase.from('whatsapp_messages').insert({
+      // Persist outcomes using BULK operations to avoid exhausting the DB
+      // connection pool (per-row UPDATEs + fire-and-forget inserts were the main
+      // cause of the system-wide slowdown during mass dispatches).
+      const persistOps: Promise<any>[] = [];
+
+      // 1. Mark sent rows in a SINGLE statement (unnest of ids + wamids).
+      if (sentRows.length > 0) {
+        const ids = sentRows.map((s) => s.id);
+        const wamids = sentRows.map((s) => s.wamid || '');
+        persistOps.push(supabase.rpc('mark_dispatch_sent', { p_ids: ids, p_wamids: wamids }));
+
+        // Log to whatsapp_messages in ONE batched insert (awaited, not orphaned).
+        const messageRows = sentRows.map((s) => ({
           phone: s.phone,
           message: s.rendered || `[Template: ${dispatch.template_name}]`,
           direction: 'outgoing',
@@ -309,29 +312,37 @@ serve(async (req) => {
           whatsapp_number_id: dispatch.whatsapp_number_id,
           is_mass_dispatch: true,
           source: 'broadcast',
-        }).then(() => {});
+        }));
+        persistOps.push(supabase.from('whatsapp_messages').insert(messageRows));
       }
-      for (const f of failedRows) {
-        // The claim already incremented attempts; mark as failed only if exhausted
-        writes.push(
+
+      // 2. Failed rows: exhausted attempts -> 'failed', otherwise back to 'pending'.
+      const exhaustedIds = failedRows.map((f) => f.id);
+      if (exhaustedIds.length > 0) {
+        const firstErr = failedRows[0]?.error || 'unknown';
+        persistOps.push(
           supabase.from('dispatch_recipients').update({
-            status: 'failed', last_error: f.error || 'unknown', lease_until: null,
-          }).eq('id', f.id).gte('attempts', 3),
+            status: 'failed', last_error: firstErr, lease_until: null,
+          }).in('id', exhaustedIds).gte('attempts', 3),
         );
-        // Otherwise return to pending so another worker can retry
-        writes.push(
+        persistOps.push(
           supabase.from('dispatch_recipients').update({
-            status: 'pending', last_error: f.error || 'unknown', lease_until: null,
-          }).eq('id', f.id).lt('attempts', 3),
+            status: 'pending', last_error: firstErr, lease_until: null,
+          }).in('id', exhaustedIds).lt('attempts', 3),
         );
       }
-      for (let i = 0; i < writes.length; i += 30) await Promise.all(writes.slice(i, i + 30));
+
+      await Promise.all(persistOps);
 
       totalSent += sentRows.length;
       totalFailed += failedRows.length;
     }
 
-    // Refresh aggregate counts (single query each)
+    // Refresh aggregate counts (single query each). NOTE: the worker NEVER marks
+    // the dispatch 'completed' itself — finalization is owned solely by the cron
+    // RPC finalize_completed_dispatches(), which only closes a dispatch once ALL
+    // recipients have been inserted. This eliminates the premature-completion race
+    // that left thousands of recipients orphaned in 'pending'.
     const [{ count: sCount }, { count: fCount }, { count: pCount }] = await Promise.all([
       supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
         .eq('dispatch_id', dispatchId).in('status', ['sent', 'delivered', 'read']),
@@ -341,11 +352,9 @@ serve(async (req) => {
         .eq('dispatch_id', dispatchId).in('status', ['pending', 'leased']),
     ]);
 
-    const isDone = (pCount || 0) === 0;
     await supabase.from('dispatch_history').update({
       sent_count: sCount || 0,
       failed_count: fCount || 0,
-      ...(isDone ? { status: 'completed', completed_at: new Date().toISOString(), processing_batch: false } : {}),
     }).eq('id', dispatchId);
 
     return new Response(JSON.stringify({
