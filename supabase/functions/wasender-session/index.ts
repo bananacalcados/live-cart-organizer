@@ -76,7 +76,7 @@ serve(async (req) => {
             provider: "wasender",
             is_active: true,
             is_default: false,
-            wasender_phone_number: String(phone).replace(/\D/g, ""),
+            wasender_phone_number: phoneDigits,
           })
           .select("id")
           .single();
