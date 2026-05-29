@@ -934,7 +934,10 @@ export function MassTemplateDispatcher() {
           rendered_message: renderedMessage || null,
           variables_config: variables as any,
           force_resend: forceResend,
-          status: 'sending',
+          // Create in a HOLDING status first. The dispatch must NOT be visible to
+          // the orchestrator/worker until every recipient row is inserted, otherwise
+          // a partial set could be picked up (and prematurely finalized).
+          status: 'scheduled_paused',
           template_components: selectedTemplate.components as any,
           has_dynamic_vars: hasDynamicVars,
           header_media_url: headerMediaUrl || null,
@@ -944,7 +947,9 @@ export function MassTemplateDispatcher() {
         .single();
       dispatchId = dispatchData?.id || null;
 
-      // Save recipients in batches
+      // Save recipients SEQUENTIALLY in batches of 500. Firing all batches at once
+      // (Promise.all) opened dozens of concurrent connections and was a primary
+      // cause of the DB connection-pool exhaustion that froze the whole system.
       if (dispatchId) {
         const recipientRows = phones.map(p => ({
           dispatch_id: dispatchId!,
@@ -952,11 +957,19 @@ export function MassTemplateDispatcher() {
           recipient_name: recipientMap.get(p)?.name || null,
           status: 'pending',
         }));
-        const recipientBatches = [];
         for (let i = 0; i < recipientRows.length; i += 500) {
-          recipientBatches.push(supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 500)));
+          const { error: insErr } = await supabase
+            .from('dispatch_recipients')
+            .insert(recipientRows.slice(i, i + 500));
+          if (insErr) throw insErr;
         }
-        await Promise.all(recipientBatches);
+
+        // Only NOW activate the dispatch — all recipients are guaranteed inserted.
+        const { error: actErr } = await supabase
+          .from('dispatch_history')
+          .update({ status: 'sending', started_at: new Date().toISOString(), processing_batch: false } as any)
+          .eq('id', dispatchId);
+        if (actErr) throw actErr;
       }
     } catch (err) {
       console.error('Error saving dispatch history:', err);
