@@ -130,6 +130,9 @@ serve(async (req) => {
     const resolvedNumberId = msg.whatsapp_number_id || campaign.whatsapp_number_id || null;
     const messageGroupId = msg.message_group_id;
 
+    // Provider da instância (zapi | wasender). Default zapi para compatibilidade.
+    let instanceProvider = "zapi";
+
     // ===== Validate instance is online =====
     if (resolvedNumberId) {
       const { data: inst } = await supabase
@@ -137,6 +140,8 @@ serve(async (req) => {
         .select("id, label, is_online, provider")
         .eq("id", resolvedNumberId)
         .maybeSingle();
+
+      if (inst?.provider) instanceProvider = inst.provider;
 
       if (inst && inst.provider === "zapi" && inst.is_online === false) {
         // Trigger immediate re-check to avoid stale data
@@ -225,8 +230,71 @@ serve(async (req) => {
       return result.replace(/\{\{nome_grupo\}\}/g, groupName);
     };
 
+    // Helper genérico de invocação de função → normaliza para { ok, error }
+    async function callFn(fnName: string, body: Record<string, unknown>) {
+      const r = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => ({}));
+      const ok = r.ok && data?.success !== false && !data?.error;
+      return { ok, error: ok ? null : (data?.error || data?.data?.error || `http_${r.status}`) };
+    }
+
+    // Envia um único bloco a um grupo via WaSender (texto/mídia/enquete)
+    async function sendBlockWasender(block: any, group: { id: string; group_id: string; name: string }) {
+      const content = replaceVars(block.message_content || "", group.name);
+
+      // Enquete
+      if (block.message_type === "poll" && Array.isArray(block.poll_options) && block.poll_options.length >= 2) {
+        return callFn("wasender-send-extra", {
+          kind: "poll",
+          phone: group.group_id,
+          whatsapp_number_id: resolvedNumberId,
+          poll: {
+            name: content || "Enquete",
+            options: block.poll_options,
+            selectableCount: block.poll_max_options && block.poll_max_options > 0 ? block.poll_max_options : 1,
+          },
+        });
+      }
+
+      // Mídia (image | video | audio | document | sticker)
+      if (block.message_type !== "text" && block.media_url) {
+        return callFn("wasender-send-media", {
+          phone: group.group_id,
+          mediaUrl: block.media_url,
+          mediaType: block.message_type,
+          caption: content,
+          whatsapp_number_id: resolvedNumberId,
+        });
+      }
+
+      // Texto (com menções "todos" via wasender-groups quando aplicável)
+      if (block.mention_all) {
+        return callFn("wasender-groups", {
+          action: "sendMessage",
+          groupJid: group.group_id,
+          message: content,
+          whatsapp_number_id: resolvedNumberId,
+        });
+      }
+      return callFn("wasender-send-message", {
+        phone: group.group_id,
+        message: content,
+        whatsapp_number_id: resolvedNumberId,
+      });
+    }
+
     // Helper: send a single block, with 1 retry on failure
     async function sendBlockOnce(block: any, group: { id: string; group_id: string; name: string }) {
+      // Roteamento por provider da instância
+      if (instanceProvider === "wasender") {
+        return sendBlockWasender(block, group);
+      }
+
+      // ===== Z-API (comportamento original) =====
       const body: Record<string, unknown> = {
         groupId: group.group_id,
         mentionAll: block.mention_all || false,
@@ -247,17 +315,7 @@ serve(async (req) => {
         body.type = "text";
         body.message = content;
       }
-      const r = await fetch(`${supabaseUrl}/functions/v1/zapi-send-group-message`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await r.json().catch(() => ({}));
-      const ok = r.ok && data?.success !== false && !data?.error;
-      return {
-        ok,
-        error: ok ? null : (data?.error || data?.data?.error || `http_${r.status}`),
-      };
+      return callFn("zapi-send-group-message", body);
     }
 
     async function sendBlockWithRetry(block: any, group: { id: string; group_id: string; name: string }) {
