@@ -34,6 +34,7 @@ import { InstagramReferralCard } from "./InstagramReferralCard";
 import { QuickReplyPicker } from "./QuickReplyPicker";
 import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
 import { AiTransferBanner } from "./AiTransferBanner";
+import { ChatExtraSender } from "./ChatExtraSender";
 
 interface ChatViewProps {
   messages: Message[];
