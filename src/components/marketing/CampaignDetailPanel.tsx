@@ -156,13 +156,20 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   }, [campaignId]);
 
   const handleCampaignNumberChange = useCallback(async (id: string) => {
-    const { error } = await supabase
-      .from('group_campaigns')
-      .update({ whatsapp_number_id: id } as any)
-      .eq('id', campaignId);
-
-    if (error) {
-      toast.error('Erro ao atualizar instância WhatsApp');
+    try {
+      const { error } = await withNetworkRetry(async () =>
+        await supabase
+          .from('group_campaigns')
+          .update({ whatsapp_number_id: id } as any)
+          .eq('id', campaignId),
+      );
+      if (error) throw error;
+    } catch (e) {
+      toast.error(
+        isTransientNetworkError(e)
+          ? 'Falha de conexão ao trocar a instância. Tente novamente.'
+          : 'Erro ao atualizar instância WhatsApp',
+      );
       return;
     }
 
