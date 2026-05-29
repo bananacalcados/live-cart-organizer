@@ -33,6 +33,35 @@ import { CampaignDashboard } from "./CampaignDashboard";
 import { VipStrategyPanel } from "./VipStrategyPanel";
 import { GroupDispatchErrorsPanel } from "./GroupDispatchErrorsPanel";
 
+/** Detecta falhas transitórias de rede ("Load failed"/"Failed to fetch"/timeout). */
+const isTransientNetworkError = (e: unknown): boolean => {
+  const msg = (e instanceof Error ? e.message : String(e || "")).toLowerCase();
+  return (
+    msg.includes("load failed") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("network") ||
+    msg.includes("timeout") ||
+    msg.includes("aborted")
+  );
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Reexecuta `fn` em falhas transitórias de rede (até `tries` tentativas). */
+async function withNetworkRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (!isTransientNetworkError(e) || i === tries - 1) throw e;
+      await sleep(800 * (i + 1));
+    }
+  }
+  throw lastErr;
+}
+
 interface CampaignDetailPanelProps {
   campaignId: string;
   onBack: () => void;
@@ -127,13 +156,20 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   }, [campaignId]);
 
   const handleCampaignNumberChange = useCallback(async (id: string) => {
-    const { error } = await supabase
-      .from('group_campaigns')
-      .update({ whatsapp_number_id: id } as any)
-      .eq('id', campaignId);
-
-    if (error) {
-      toast.error('Erro ao atualizar instância WhatsApp');
+    try {
+      const { error } = await withNetworkRetry(async () =>
+        await supabase
+          .from('group_campaigns')
+          .update({ whatsapp_number_id: id } as any)
+          .eq('id', campaignId),
+      );
+      if (error) throw error;
+    } catch (e) {
+      toast.error(
+        isTransientNetworkError(e)
+          ? 'Falha de conexão ao trocar a instância. Tente novamente.'
+          : 'Erro ao atualizar instância WhatsApp',
+      );
       return;
     }
 
@@ -376,10 +412,12 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           offset++;
         }
       }
-      const { data: insertedRows, error } = await supabase
-        .from('group_campaign_scheduled_messages')
-        .insert(allInserts as any)
-        .select('id, block_order');
+      const { data: insertedRows, error } = await withNetworkRetry(async () =>
+        await supabase
+          .from('group_campaign_scheduled_messages')
+          .insert(allInserts as any)
+          .select('id, block_order'),
+      );
       if (error) throw error;
 
       const orderedInserted = (insertedRows || []).sort((a: any, b: any) => (a.block_order ?? 0) - (b.block_order ?? 0));
@@ -474,13 +512,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     sendingMessageIdsRef.current.add(messageId);
     if (!auto) setIsSending(messageId);
     try {
-      // Trigger first batch — cron will continue remaining batches automatically
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-scheduled-send`, {
-        method: 'POST',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scheduledMessageId: messageId }),
-      });
-      const result = await res.json();
+      // Trigger first batch — cron will continue remaining batches automatically.
+      // Retry on transient network failures ("Load failed") to survive instability.
+      const res = await withNetworkRetry(() =>
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-scheduled-send`, {
+          method: 'POST',
+          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scheduledMessageId: messageId }),
+        }),
+      );
+      const result = await res.json().catch(() => ({}));
       if (result.success) {
         const failed = Number(result.batchFailed ?? 0);
         const sent = Number(result.batchSent ?? 0);
@@ -499,11 +540,17 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       } else if (result.status === 'sent') {
         toast.info('Esse disparo já foi concluído.');
       } else {
-        toast.error(result.error || "Erro ao enviar");
+        toast.error(result.error || `Erro ao enviar (HTTP ${res.status})`);
       }
       setDispatchRefreshKey((k) => k + 1);
       fetchMessages();
-    } catch { toast.error("Erro ao enviar"); }
+    } catch (e) {
+      toast.error(
+        isTransientNetworkError(e)
+          ? 'Falha de conexão ao disparar. Verifique sua internet e tente novamente.'
+          : `Erro ao enviar: ${e instanceof Error ? e.message : 'desconhecido'}`,
+      );
+    }
     finally {
       sendingMessageIdsRef.current.delete(messageId);
       if (!auto) setIsSending(null);
