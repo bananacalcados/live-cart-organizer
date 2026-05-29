@@ -1,58 +1,66 @@
 ## Objetivo
 
-Permitir que campanhas de Grupos VIP sejam enviadas tanto via **Z-API** quanto via **WaSender**, escolhendo automaticamente o canal conforme o `provider` da instância (`whatsapp_numbers`) — **sem alterar** a lógica de disparo humano.
+Concluir a integração WaSender com **(E)** o tratamento dos webhooks que ainda faltam e **(F)** os botões de **Contato**, **Localização** e **Enquete** na tela de chat — cujos backends (`wasender-send-extra`) já existem mas não têm UI.
 
-## Regra de disparo (preservada exatamente)
+---
 
-A cadência atual já segue sua regra e será mantida sem mudanças:
-- Cada **bloco** de mensagem é um disparo independente.
-- Delay entre blocos: 8–15s.
-- Só passa para o **próximo grupo** depois de terminar **todos os blocos** do grupo atual.
-- Delay entre grupos: 45–90s (depois de concluir o grupo anterior).
-- Pausa longa de 120–180s a cada 3 grupos completos.
-- Retry de 1x após 10s por bloco que falhar; falhou de novo → marca o bloco como `failed` e segue.
+## Parte E — Webhooks adicionais
 
-```text
-Grupo A: Bloco1 -> (delay 8-15s) -> Bloco2 -> (delay) -> Bloco3
-         -> (delay 45-90s entre grupos)
-Grupo B: Bloco1 -> (delay) -> Bloco2 ...
-         -> (a cada 3 grupos: pausa 120-180s)
-```
+Arquivo: `supabase/functions/wasender-webhook/index.ts` (acrescentar novos blocos `if (event === ...)` antes do `return ok()` final, sem mexer no que já funciona).
 
-Nada nesse loop muda. A única alteração é **para onde** cada bloco é enviado.
+1. **`qrcode.updated`**
+   - Extrai o QR do payload (`data.qrCode` / `data.qr`).
+   - Persiste em `whatsapp_numbers` (coluna nova `wasender_last_qr` + `wasender_qr_updated_at`) para que o Admin possa exibir o QR em tempo real via Realtime, eliminando parte do polling atual.
 
-## O que muda
+2. **`session.status` (reforço)**
+   - Já tratado, mas adicionar mapeamento dos estados `need_scan`/`disconnected` para `is_online=false` e limpar `wasender_last_qr` quando `connected`.
 
-### 1. `supabase/functions/zapi-group-scheduled-send/index.ts`
-- Carregar o `provider` da instância resolvida (`resolvedNumberId`) uma vez no início (já buscamos `whatsapp_numbers` na validação de online — incluir `provider` ali).
-- Em `sendBlockOnce`, rotear conforme o provider:
-  - **zapi** → continua chamando `zapi-send-group-message` (comportamento atual, inalterado).
-  - **wasender** → chamar as funções WaSender correspondentes, passando o **JID do grupo** (`group.group_id`) como `to`/`phone` e o `whatsapp_number_id`:
-    - texto → `wasender-groups` (action `sendMessage`, com `mentions` quando `mention_all`) ou `wasender-send-message`.
-    - imagem/vídeo/áudio/documento → `wasender-send-media`.
-    - enquete (poll) → `wasender-send-extra` (kind `poll`).
-- Normalizar a resposta de sucesso/erro das funções WaSender para o mesmo formato `{ ok, error }` que o loop já espera (sem tocar no retry/delays).
+3. **`groups.update` e `groups.participants.update`**
+   - Quando o grupo é um grupo VIP conhecido, atualiza metadados (nome/assunto e contagem/lista de participantes) na tabela de grupos VIP correspondente, mantendo os dados de disparo sincronizados.
+   - Eventos de grupos desconhecidos → apenas `log` + `ok()` (sem erro).
 
-### 2. Validação de instância online (multi-provider)
-- O bloco atual só aborta quando `provider === 'zapi' && is_online === false`. Para WaSender, manter o envio normalmente (a checagem de saúde Z-API não se aplica). Sem checagem extra nesta rodada — se a sessão WaSender estiver desconectada, o próprio erro de envio aciona o retry/`failed` já existente.
+4. **`contacts.update` / `contacts.upsert`**
+   - Atualiza o `push_name`/nome de exibição em `chat_contacts` (match por telefone com sufixo de 8 dígitos, conforme regra de normalização do projeto), para que a lista de conversas mostre o nome correto.
 
-### 3. Menções "todos" em grupo (mention_all)
-- WaSender: usar `wasender-groups` action `sendMessage` com `mentions` (já suportado pela função). Quando `mention_all` estiver ativo e não houver lista pronta, enviar sem mentions (fallback seguro) para não travar o disparo.
+5. Todos os eventos continuam respondendo **HTTP 200** sempre (regra atual: nunca deixar a WaSender reenviar em loop). Validação de assinatura (`x-webhook-signature`) permanece igual.
 
-## Detalhes técnicos
+**Migração de banco (se necessária):** adicionar colunas `wasender_last_qr text` e `wasender_qr_updated_at timestamptz` em `whatsapp_numbers`. Antes de criar, confirmo no schema se já existe coluna equivalente para QR; se existir, reaproveito.
 
-- A função `wasender-send-message`/`wasender-send-media`/`wasender-send-extra` já preservam JIDs de grupo (`@g.us`, `120...`) intactos em `formatPhone`, então o mesmo `group.group_id` usado pela Z-API funciona como destino.
-- `instance-guard` não bloqueia grupos (já há bypass para `isGroupId`), então os envios em grupo passam sem conflito de instância.
-- O `group-send-guard` (pausa global de grupos) continua respeitado, pois vive no loop principal, não no envio.
-- Tracking em `group_campaign_block_dispatches` permanece igual (status/attempts/error por bloco), independente do provider.
+---
 
-## Fora de escopo
+## Parte F — Botões no chat (Contato, Localização, Enquete)
 
-- UI de seleção de provider para grupos (a campanha já resolve a instância via `whatsapp_number_id`/`campaign.whatsapp_number_id`).
-- Sincronização da lista de grupos WaSender (já coberta por `wasender-groups` action `list`, se necessário em rodada futura).
+Estes recursos hoje só têm backend em `wasender-send-extra` (WaSender). Z-API não possui função equivalente, então os botões só aparecem/funcionam para conversas em instância **WaSender**; para Z-API ficam ocultos.
+
+1. **Novo componente** `src/components/chat/ChatExtraSender.tsx`
+   - Recebe `phone`, `whatsappNumberId`, `provider` e callback `onSent`.
+   - Renderiza um `Popover`/`DropdownMenu` com 3 itens: **Contato**, **Localização**, **Enquete**.
+   - Cada item abre um `Dialog` com os campos:
+     - **Contato:** nome + telefone.
+     - **Localização:** latitude + longitude (+ nome/endereço opcional). Botão "usar minha localização" via `navigator.geolocation`.
+     - **Enquete:** pergunta + 2–12 opções (campos dinâmicos) + seleção única/múltipla.
+   - Ao confirmar, chama `supabase.functions.invoke('wasender-send-extra', { body: { kind, phone, whatsapp_number_id, contact|location|poll } })`.
+   - Após sucesso: insere a mensagem outgoing em `whatsapp_messages` (texto descritivo: `👤 nome`, `📍 link maps`, `📊 pergunta`) para aparecer no histórico, e pausa a IA via `automation_ai_sessions.is_active=false` (regra do projeto — nunca endpoint externo).
+
+2. **Integração no `ChatView.tsx`**
+   - Adicionar prop opcional `onExtraSent?: () => void` e renderizar `<ChatExtraSender>` dentro do mesmo `Popover` do clipe (Paperclip), ao lado de Foto/Vídeo/Arquivo, **somente** quando o provider da conversa for `wasender`.
+   - O provider vem de `conversation.whatsapp_number_id` → resolvido pelo componente (consulta leve a `whatsapp_numbers.provider`) ou via campo já disponível em `conversation`.
+
+3. **Parents** (`POSWhatsApp`, `GlobalWhatsAppChat`, `DashboardChatPanel`)
+   - Passar `onExtraSent={() => loadMessages(...)}` para recarregar o histórico após envio. Sem outras mudanças de lógica.
+
+---
 
 ## Validação
 
-- Deploy de `zapi-group-scheduled-send`.
-- Testar uma campanha de teste apontando para instância WaSender com 2+ grupos e 2+ blocos, confirmando nos logs: blocos sequenciais com delay, troca de grupo só após último bloco, delay entre grupos, e registros em `group_campaign_block_dispatches`.
-- Confirmar que campanhas em instância Z-API continuam idênticas.
+- Deploy de `wasender-webhook` e `wasender-send-extra` (já existe).
+- Simular cada evento novo via `curl_edge_functions` no webhook e conferir efeitos no banco (QR salvo, nome de contato atualizado, grupo VIP sincronizado).
+- No chat de uma instância WaSender: enviar contato, localização e enquete; confirmar que aparecem no histórico e chegam no WhatsApp.
+- Confirmar que conversas Z-API **não** mostram os botões extras e que nada do fluxo atual quebrou.
+
+---
+
+## Fora de escopo
+
+- Equivalentes de contato/localização/enquete para Z-API (não há API).
+- Substituir totalmente o polling de QR (apenas complementar com Realtime).

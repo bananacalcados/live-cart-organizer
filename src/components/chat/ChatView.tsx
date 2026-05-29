@@ -34,6 +34,7 @@ import { InstagramReferralCard } from "./InstagramReferralCard";
 import { QuickReplyPicker } from "./QuickReplyPicker";
 import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
 import { AiTransferBanner } from "./AiTransferBanner";
+import { ChatExtraSender } from "./ChatExtraSender";
 
 interface ChatViewProps {
   messages: Message[];
@@ -52,6 +53,8 @@ interface ChatViewProps {
   quotedMessage?: QuotedMessageData | null;
   onQuoteMessage?: (data: QuotedMessageData) => void;
   onCancelQuote?: () => void;
+  /** Recarrega o histórico após envio de contato/localização/enquete (WaSender). */
+  onExtraSent?: () => void;
 }
 
 const PREDEFINED_TAGS = [
@@ -81,6 +84,7 @@ export function ChatView({
   quotedMessage,
   onQuoteMessage,
   onCancelQuote,
+  onExtraSent,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -881,6 +885,13 @@ export function ChatView({
                   </div>
                 </PopoverContent>
               </Popover>
+            )}
+            {conversation && (
+              <ChatExtraSender
+                phone={conversation.phone}
+                whatsappNumberId={conversation.whatsapp_number_id}
+                onSent={onExtraSent}
+              />
             )}
             <textarea
               placeholder="Digite uma mensagem..."

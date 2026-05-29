@@ -361,6 +361,7 @@ export function DashboardChatPanel() {
           onSendAudio={handleSendAudio}
           onBack={() => setSelectedPhone(null)}
           isSending={isSending}
+          onExtraSent={() => { if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId); }}
         />
       </div>
     );

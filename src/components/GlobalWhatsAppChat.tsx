@@ -413,6 +413,7 @@ export function GlobalWhatsAppChat() {
             toast.success("Conversa finalizada");
           }}
           isSending={isSending}
+          onExtraSent={() => { if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId); }}
         />
       )}
     </div>
