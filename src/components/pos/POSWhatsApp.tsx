@@ -680,7 +680,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
     return {
       channel: "whatsapp" as const,
-      provider: number.provider === "meta" ? "meta" as const : "zapi" as const,
+      provider:
+        number.provider === "meta"
+          ? ("meta" as const)
+          : number.provider === "wasender"
+            ? ("wasender" as const)
+            : ("zapi" as const),
       number,
       numberId: number.id,
     };
