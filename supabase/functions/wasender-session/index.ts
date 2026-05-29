@@ -20,6 +20,7 @@ const WEBHOOK_EVENTS = [
   "message.sent",
   "messages.upsert",
   "messages.update",
+  "message-receipt.update",
   "session.status",
   "qrcode.updated",
   "groups.update",
