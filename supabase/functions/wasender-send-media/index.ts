@@ -1,6 +1,58 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { resolveWasenderCredentials, WASENDER_BASE } from "../_shared/wasender-credentials.ts";
 import { checkInstanceGuard } from "../_shared/instance-guard.ts";
+import { webmToOgg, isWebmContainer, isOggContainer } from "../_shared/webm-to-ogg.ts";
+
+/**
+ * Garante que o áudio enviado ao WaSender seja um OGG/Opus válido.
+ * Navegadores (Chrome) gravam audio/webm;codecs=opus, que o WhatsApp
+ * reproduz "sem som". Fazemos o remux WebM→OGG e re-hospedamos o arquivo
+ * num bucket público, devolvendo a nova URL. Em caso de falha, devolve a
+ * URL original como fallback.
+ */
+async function ensureOggAudioUrl(mediaUrl: string): Promise<string> {
+  try {
+    if (mediaUrl.startsWith("data:")) return mediaUrl;
+    const resp = await fetch(mediaUrl);
+    if (!resp.ok) return mediaUrl;
+    const original = new Uint8Array(await resp.arrayBuffer());
+    if (original.byteLength === 0) return mediaUrl;
+
+    let oggBytes: Uint8Array;
+    if (isOggContainer(original)) {
+      // Já é OGG — re-hospeda apenas para garantir content-type correto.
+      oggBytes = original;
+    } else if (isWebmContainer(original)) {
+      oggBytes = webmToOgg(original);
+    } else {
+      // Formato desconhecido — tenta remux mesmo assim, senão usa original.
+      try {
+        oggBytes = webmToOgg(original);
+      } catch {
+        return mediaUrl;
+      }
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceKey);
+    const path = `wasender/audio/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.ogg`;
+    const { error } = await supabase.storage
+      .from("whatsapp-media")
+      .upload(path, oggBytes, { contentType: "audio/ogg", upsert: false });
+    if (error) {
+      console.error("[wasender-send-media] upload OGG falhou:", error.message);
+      return mediaUrl;
+    }
+    const { data } = supabase.storage.from("whatsapp-media").getPublicUrl(path);
+    console.log(`[wasender-send-media] Áudio remuxado para OGG (${oggBytes.length} bytes)`);
+    return data?.publicUrl || mediaUrl;
+  } catch (e) {
+    console.error("[wasender-send-media] ensureOggAudioUrl erro:", (e as Error).message);
+    return mediaUrl;
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,9 +115,15 @@ serve(async (req) => {
     const { apiKey } = await resolveWasenderCredentials(whatsapp_number_id);
     const to = formatPhone(phone);
 
+    // Áudio: remux WebM→OGG/Opus para o WhatsApp reproduzir corretamente.
+    let finalMediaUrl = mediaUrl;
+    if ((mediaType || "document") === "audio") {
+      finalMediaUrl = await ensureOggAudioUrl(mediaUrl);
+    }
+
     const payload: Record<string, unknown> = { to };
     if (caption) payload.text = caption;
-    payload[mediaField(mediaType || "document")] = mediaUrl;
+    payload[mediaField(mediaType || "document")] = finalMediaUrl;
 
     const res = await fetch(`${WASENDER_BASE}/send-message`, {
       method: "POST",
