@@ -925,32 +925,8 @@ serve(async (req) => {
                 cep: (addr.zipCode || "").replace(/\D/g, ""),
               };
 
-              const paymentMethodLabel = params.installments > 1
-                ? `Cartão de Crédito ${params.installments}x`
-                : "Cartão de Crédito";
-
-              const tinyPayload = {
-                store_id: resolvedStoreId,
-                sale_id: params.orderId,
-                customer: tinyCustomer,
-                items: tinyItems,
-                payment_method_name: paymentMethodLabel,
-                notes: `Checkout online - ${result.gateway}`,
-              };
-
-              const tinyRes = await fetch(
-                `${supabaseUrl}/functions/v1/pos-tiny-create-sale`,
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${supabaseKey}`,
-                  },
-                  body: JSON.stringify(tinyPayload),
-                }
-              );
-              const tinyData = await tinyRes.json();
-              console.log(`[AUTO-TINY] Result:`, JSON.stringify(tinyData).substring(0, 500));
+              // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
+              console.log(`[AUTO-TINY] skipped — Tiny push is manual only now`);
             } else {
               console.log(`[AUTO-TINY] No sale items found for ${params.orderId}`);
             }
