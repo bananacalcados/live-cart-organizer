@@ -269,7 +269,7 @@ serve(async (req) => {
     }
 
     // ── groups.update / groups.participants.update → sincroniza grupos conhecidos ──
-    if (event === "groups.update" || event === "groups.participants.update" || event.startsWith("groups")) {
+    if (event === "groups.update" || event === "group-participants.update" || event === "groups.participants.update" || event.startsWith("group")) {
       try {
         // O payload pode trazer um objeto ou uma lista de grupos
         const rawGroups: any[] = Array.isArray((data as any)?.groups)
