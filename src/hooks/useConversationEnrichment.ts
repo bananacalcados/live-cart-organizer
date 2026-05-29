@@ -33,6 +33,11 @@ export function useConversationEnrichment() {
       const { data, error } = await supabase
         .from('chat_finished_conversations')
         .select('phone, finished_at')
+        // Stable ordering is REQUIRED: without it, .range() pagination over
+        // thousands of rows can drop/duplicate rows between pages, causing a
+        // just-finished conversation to silently disappear from the map and
+        // pop back into its original tab.
+        .order('phone', { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
 
       if (error || !data || data.length === 0) break;
@@ -125,13 +130,22 @@ export function useConversationEnrichment() {
     extras?: { saleValue?: number; saleCurrency?: string; triggerId?: string | null; whatsappNumberId?: string | null }
   ) => {
     const phoneKey = normalizePhoneKey(phone);
+    const finishedAtIso = new Date().toISOString();
     if (phoneKey) {
       setFinishedPhones(prev => new Set([...prev, phoneKey]));
+      // Keep the timestamp map in sync too — enrichConversations reads this map
+      // (not the Set) to decide isFinished, so it MUST be updated optimistically
+      // or the conversation reverts on the next list refresh.
+      setFinishedAtByPhone(prev => {
+        const next = new Map(prev);
+        next.set(phoneKey, finishedAtIso);
+        return next;
+      });
     }
 
     const { error } = await supabase.from('chat_finished_conversations').upsert({
       phone,
-      finished_at: new Date().toISOString(),
+      finished_at: finishedAtIso,
       finish_reason: reason || null,
       seller_id: sellerId || null,
       sale_value: extras?.saleValue ?? null,
@@ -142,6 +156,11 @@ export function useConversationEnrichment() {
     if (error && phoneKey) {
       setFinishedPhones(prev => {
         const next = new Set(prev);
+        next.delete(phoneKey);
+        return next;
+      });
+      setFinishedAtByPhone(prev => {
+        const next = new Map(prev);
         next.delete(phoneKey);
         return next;
       });
@@ -194,9 +213,15 @@ export function useConversationEnrichment() {
 
   const reopenConversation = useCallback(async (phone: string) => {
     const phoneKey = normalizePhoneKey(phone);
+    const prevFinishedAt = phoneKey ? finishedAtByPhone.get(phoneKey) : undefined;
     if (phoneKey) {
       setFinishedPhones(prev => {
         const next = new Set(prev);
+        next.delete(phoneKey);
+        return next;
+      });
+      setFinishedAtByPhone(prev => {
+        const next = new Map(prev);
         next.delete(phoneKey);
         return next;
       });
@@ -206,9 +231,16 @@ export function useConversationEnrichment() {
 
     if (error && phoneKey) {
       setFinishedPhones(prev => new Set([...prev, phoneKey]));
+      if (prevFinishedAt) {
+        setFinishedAtByPhone(prev => {
+          const next = new Map(prev);
+          next.set(phoneKey, prevFinishedAt);
+          return next;
+        });
+      }
       throw error;
     }
-  }, []);
+  }, [finishedAtByPhone]);
 
   const archiveConversation = useCallback(async (phone: string, archivedBy?: string) => {
     await supabase.from('chat_archived_conversations').upsert({
