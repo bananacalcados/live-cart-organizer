@@ -505,13 +505,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     sendingMessageIdsRef.current.add(messageId);
     if (!auto) setIsSending(messageId);
     try {
-      // Trigger first batch — cron will continue remaining batches automatically
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-scheduled-send`, {
-        method: 'POST',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scheduledMessageId: messageId }),
-      });
-      const result = await res.json();
+      // Trigger first batch — cron will continue remaining batches automatically.
+      // Retry on transient network failures ("Load failed") to survive instability.
+      const res = await withNetworkRetry(() =>
+        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-scheduled-send`, {
+          method: 'POST',
+          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scheduledMessageId: messageId }),
+        }),
+      );
+      const result = await res.json().catch(() => ({}));
       if (result.success) {
         const failed = Number(result.batchFailed ?? 0);
         const sent = Number(result.batchSent ?? 0);
@@ -530,11 +533,17 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       } else if (result.status === 'sent') {
         toast.info('Esse disparo já foi concluído.');
       } else {
-        toast.error(result.error || "Erro ao enviar");
+        toast.error(result.error || `Erro ao enviar (HTTP ${res.status})`);
       }
       setDispatchRefreshKey((k) => k + 1);
       fetchMessages();
-    } catch { toast.error("Erro ao enviar"); }
+    } catch (e) {
+      toast.error(
+        isTransientNetworkError(e)
+          ? 'Falha de conexão ao disparar. Verifique sua internet e tente novamente.'
+          : `Erro ao enviar: ${e instanceof Error ? e.message : 'desconhecido'}`,
+      );
+    }
     finally {
       sendingMessageIdsRef.current.delete(messageId);
       if (!auto) setIsSending(null);
