@@ -820,6 +820,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         return;
       }
       setQuotedMessage(null);
+      appendOptimistic(messageText, { message_id: result.messageId });
       loadMessages(selectedPhone, selectedConvNumberId);
     } finally {
       setIsSending(false);
