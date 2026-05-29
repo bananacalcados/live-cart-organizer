@@ -15546,6 +15546,10 @@ export type Database = {
           whatsapp: string
         }[]
       }
+      mark_dispatch_sent: {
+        Args: { p_ids: string[]; p_wamids: string[] }
+        Returns: undefined
+      }
       mark_lead_as_paid: { Args: { p_whatsapp: string }; Returns: undefined }
       merge_duplicate_zoppy_customers: {
         Args: never
