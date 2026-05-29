@@ -6,6 +6,38 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 export const WASENDER_BASE = "https://www.wasenderapi.com/api";
 
 /**
+ * Normaliza um destino (telefone OU grupo) para um JID WhatsApp válido,
+ * que é o formato exigido pela WaSender no campo `to`.
+ *
+ * - Grupos no formato Z-API (`120363...-group`) ou IDs de grupo crus que começam
+ *   com `120` viram `120363...@g.us`.
+ * - JIDs já completos (contêm `@`) são mantidos.
+ * - Telefones individuais são normalizados para dígitos com DDI 55 (BR).
+ *
+ * Sem isso a WaSender rejeita o envio com:
+ *   "The to must be a valid WhatsApp JID (User, Group, or Channel format)."
+ */
+export function formatWasenderJid(target: string): string {
+  if (!target) return target;
+
+  // Já é um JID completo (grupo @g.us, usuário @s.whatsapp.net, canal, etc.)
+  if (target.includes("@")) return target;
+
+  const digits = target.replace(/\D/g, "");
+
+  // Grupo: sufixo "-group" (formato Z-API) ou ID de grupo cru (começa com 120)
+  const isGroup = target.endsWith("-group") || /^120\d{5,}$/.test(digits);
+  if (isGroup) {
+    return `${digits}@g.us`;
+  }
+
+  // Telefone individual: garante DDI 55 para números BR sem código de país
+  let phone = digits;
+  if (phone.length >= 10 && phone.length <= 11) phone = "55" + phone;
+  return phone;
+}
+
+/**
  * Personal Access Token (PAT) global da conta WaSender.
  * Usado para gerenciar sessões (criar/conectar/qrcode/status/excluir).
  */
