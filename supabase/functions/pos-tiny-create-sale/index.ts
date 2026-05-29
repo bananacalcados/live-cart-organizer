@@ -151,9 +151,11 @@ serve(async (req) => {
       return null;
     };
 
-    // Try to create order in Tiny ERP (skip when store has disable_tiny_orders = true)
+    // Tiny push only happens when explicitly requested (push_tiny === true) and
+    // the store does not have disable_tiny_orders. Otherwise we only persist the
+    // local pos_sales record.
     if (skipTiny) {
-      console.log(`[pos-tiny-create-sale] store ${store_id} has disable_tiny_orders=true — skipping Tiny push`);
+      console.log(`[pos-tiny-create-sale] Tiny push skipped for store ${store_id} (push_tiny=${wantTiny}, disable_tiny_orders=${!!(store as any)?.disable_tiny_orders})`);
       tinyFailed = false;
     } else try {
       const orderItems = items.map((item: any) => ({ ...item, codigo: item.sku || '' }));
