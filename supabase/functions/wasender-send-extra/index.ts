@@ -75,14 +75,16 @@ serve(async (req) => {
         ...(location.address ? { address: location.address } : {}),
       };
     } else if (kind === "poll") {
-      if (!poll?.name || !Array.isArray(poll?.options) || poll.options.length < 2) {
-        return new Response(JSON.stringify({ error: "poll.name e ao menos 2 poll.options são obrigatórios" }), {
+      const pollQuestion = poll?.question || poll?.name;
+      if (!pollQuestion || !Array.isArray(poll?.options) || poll.options.length < 2) {
+        return new Response(JSON.stringify({ error: "poll.question e ao menos 2 poll.options são obrigatórios" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      // WaSender exige o campo "question" (não "name")
       payload.poll = {
-        name: poll.name,
+        question: pollQuestion,
         options: poll.options,
         selectableCount: poll.selectableCount ?? 1,
       };
