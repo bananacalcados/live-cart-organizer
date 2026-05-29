@@ -53,6 +53,8 @@ interface ChatViewProps {
   quotedMessage?: QuotedMessageData | null;
   onQuoteMessage?: (data: QuotedMessageData) => void;
   onCancelQuote?: () => void;
+  /** Recarrega o histórico após envio de contato/localização/enquete (WaSender). */
+  onExtraSent?: () => void;
 }
 
 const PREDEFINED_TAGS = [
