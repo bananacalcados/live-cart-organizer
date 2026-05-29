@@ -59,8 +59,8 @@ serve(async (req) => {
       .eq('id', store_id)
       .single();
 
-    const skipTiny = !!(store as any)?.disable_tiny_orders;
-    if (!skipTiny && !store?.tiny_token) throw new Error('Store token not configured');
+    const skipTiny = !wantTiny || !!(store as any)?.disable_tiny_orders;
+    if (wantTiny && !skipTiny && !store?.tiny_token) throw new Error('Store token not configured');
 
     const token = store?.tiny_token;
     const subtotal = items.reduce((s: number, i: any) => s + (i.price * i.quantity), 0);
