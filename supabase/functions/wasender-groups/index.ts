@@ -54,9 +54,55 @@ serve(async (req) => {
     let r: { ok: boolean; status: number; data: any };
 
     switch (action) {
-      case "list":
+      case "list": {
         r = await call(`/groups`);
+        // Sincroniza para a tabela whatsapp_groups (mesmo formato do zapi-list-groups)
+        if (r.ok && body.syncToDb) {
+          try {
+            const list: any[] = Array.isArray(r.data?.data)
+              ? r.data.data
+              : Array.isArray(r.data)
+                ? r.data
+                : [];
+            const instanceId = String(body.whatsapp_number_id || "wasender");
+            const rows = list
+              .map((g: any) => {
+                const groupId = g.jid || g.id || g.remoteJid || g.groupId;
+                if (!groupId) return null;
+                const participants = Array.isArray(g.participants)
+                  ? g.participants.length
+                  : (g.participantsCount ?? g.size ?? 0);
+                return {
+                  group_id: String(groupId),
+                  name: g.subject || g.name || "Sem nome",
+                  description: g.desc || g.description || null,
+                  photo_url: g.imgUrl || g.pictureUrl || g.profilePicUrl || null,
+                  participant_count: participants,
+                  is_admin: Boolean(g.isAdmin || g.imAdmin),
+                  instance_id: instanceId,
+                  last_synced_at: new Date().toISOString(),
+                };
+              })
+              .filter(Boolean) as any[];
+
+            if (rows.length > 0) {
+              const supabase = createClient(
+                Deno.env.get("SUPABASE_URL")!,
+                Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+              );
+              const { error } = await supabase
+                .from("whatsapp_groups")
+                .upsert(rows, { onConflict: "group_id,instance_id", ignoreDuplicates: false });
+              if (error) console.error("[wasender-groups] sync error:", error.message);
+              else console.log(`[wasender-groups] synced ${rows.length} groups`);
+              return json({ success: true, data: r.data, total: rows.length });
+            }
+          } catch (e) {
+            console.error("[wasender-groups] syncToDb falhou:", (e as Error).message);
+          }
+        }
         break;
+      }
       case "metadata":
         if (!jid) return json({ error: "groupJid obrigatório" }, 400);
         r = await call(`/groups/${jid}/metadata`);
