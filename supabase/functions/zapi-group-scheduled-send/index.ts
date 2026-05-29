@@ -419,6 +419,23 @@ serve(async (req) => {
         newlySentIds.push(group.id);
         totalGroupsDoneSoFar++;
 
+        // ===== Persistência INCREMENTAL + renovação da trava =====
+        // Grava sent_group_ids assim que o grupo é concluído (não só no finally).
+        // Isso garante que, se a trava expirar e o cron re-assumir o disparo,
+        // este grupo NÃO será reenviado (evita duplicação nos grupos VIP).
+        try {
+          const persistSentIds = [...alreadySentGroupIds, ...newlySentIds];
+          await supabase
+            .from("group_campaign_scheduled_messages")
+            .update({
+              sent_group_ids: persistSentIds,
+              locked_until: new Date(Date.now() + 120_000).toISOString(),
+            })
+            .eq(messageGroupId ? "message_group_id" : "id", messageGroupId || scheduledMessageId);
+        } catch (persistErr) {
+          console.error("Falha ao persistir progresso incremental:", persistErr);
+        }
+
         // Delay BETWEEN GROUPS (not after last)
         if (gi < pendingGroups.length - 1) {
           await sleep(rand(INTER_GROUP_DELAY_MIN_MS, INTER_GROUP_DELAY_MAX_MS));
