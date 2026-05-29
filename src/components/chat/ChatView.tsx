@@ -84,6 +84,7 @@ export function ChatView({
   quotedMessage,
   onQuoteMessage,
   onCancelQuote,
+  onExtraSent,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
