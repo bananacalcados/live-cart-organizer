@@ -770,6 +770,31 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     },
   });
 
+  // Insere a mensagem recém-enviada na lista local imediatamente (otimista),
+  // garantindo que TUDO que enviamos (texto/áudio/mídia) apareça na hora,
+  // mesmo antes do refresh do banco.
+  const appendOptimistic = (
+    text: string,
+    extra?: { media_type?: string; media_url?: string; message_id?: string | null },
+  ) => {
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `optimistic-${Date.now()}`,
+        phone: selectedPhone!,
+        message: text,
+        direction: "outgoing",
+        status: "sent",
+        created_at: new Date().toISOString(),
+        whatsapp_number_id: buildSendRoute()?.numberId ?? selectedConvNumberId ?? undefined,
+        message_id: extra?.message_id ?? undefined,
+        sender_name: selectedSellerName || undefined,
+        ...(extra?.media_type ? { media_type: extra.media_type } : {}),
+        ...(extra?.media_url ? { media_url: extra.media_url } : {}),
+      } as Message,
+    ]);
+  };
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedPhone || isSending) return;
     const messageText = newMessage.trim();
