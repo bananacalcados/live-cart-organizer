@@ -11,6 +11,20 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+// Eventos do webhook que a sessão WaSender deve assinar.
+// Inclui mensagens (received/upsert), status, QR, grupos e contatos.
+const WEBHOOK_EVENTS = [
+  "messages.received",
+  "messages.upsert",
+  "messages.update",
+  "session.status",
+  "qrcode.updated",
+  "groups.update",
+  "groups.participants.update",
+  "contacts.update",
+  "contacts.upsert",
+];
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
