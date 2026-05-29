@@ -886,6 +886,13 @@ export function ChatView({
                 </PopoverContent>
               </Popover>
             )}
+            {conversation && (
+              <ChatExtraSender
+                phone={conversation.phone}
+                whatsappNumberId={conversation.whatsapp_number_id}
+                onSent={onExtraSent}
+              />
+            )}
             <textarea
               placeholder="Digite uma mensagem..."
               value={newMessage}
