@@ -107,7 +107,7 @@ export function GroupsVipManager() {
 
   useEffect(() => { fetchGroups(); fetchCampaigns(); }, [fetchGroups, fetchCampaigns]);
 
-  const { selectedNumberId } = useWhatsAppNumberStore();
+
 
   const syncGroups = async () => {
     setIsSyncing(true);
