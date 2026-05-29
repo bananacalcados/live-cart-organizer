@@ -213,9 +213,15 @@ export function useConversationEnrichment() {
 
   const reopenConversation = useCallback(async (phone: string) => {
     const phoneKey = normalizePhoneKey(phone);
+    const prevFinishedAt = phoneKey ? finishedAtByPhone.get(phoneKey) : undefined;
     if (phoneKey) {
       setFinishedPhones(prev => {
         const next = new Set(prev);
+        next.delete(phoneKey);
+        return next;
+      });
+      setFinishedAtByPhone(prev => {
+        const next = new Map(prev);
         next.delete(phoneKey);
         return next;
       });
@@ -225,9 +231,16 @@ export function useConversationEnrichment() {
 
     if (error && phoneKey) {
       setFinishedPhones(prev => new Set([...prev, phoneKey]));
+      if (prevFinishedAt) {
+        setFinishedAtByPhone(prev => {
+          const next = new Map(prev);
+          next.set(phoneKey, prevFinishedAt);
+          return next;
+        });
+      }
       throw error;
     }
-  }, []);
+  }, [finishedAtByPhone]);
 
   const archiveConversation = useCallback(async (phone: string, archivedBy?: string) => {
     await supabase.from('chat_archived_conversations').upsert({
