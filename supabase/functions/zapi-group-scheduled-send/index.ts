@@ -468,7 +468,9 @@ serve(async (req) => {
         updatePayload.locked_until = null;
       } else {
         updatePayload.status = "sending";
-        updatePayload.locked_until = new Date(Date.now() + 20_000).toISOString();
+        // Se houve adiamento (pausa longa), respeita o atraso via lock no futuro.
+        // Caso contrário (time guard), retoma rápido para o cron continuar.
+        updatePayload.locked_until = new Date(deferUntilMs ?? (Date.now() + 5_000)).toISOString();
       }
 
       if (messageGroupId) {
