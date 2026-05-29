@@ -912,6 +912,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           {/* MESSAGES TAB */}
           <TabsContent value="messages" className="space-y-2">
             <p className="text-xs font-medium text-muted-foreground">MENSAGENS ({messages.length})</p>
+            <GroupDispatchErrorsPanel campaignId={campaignId} refreshKey={dispatchRefreshKey} />
             {messages.length === 0 ? (
               <Card><CardContent className="py-8 text-center">
                 <Send className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
