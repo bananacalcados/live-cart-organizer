@@ -15,14 +15,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ===== Defaults humanizados =====
-const INTER_BLOCK_DELAY_MIN_MS = 8_000;
-const INTER_BLOCK_DELAY_MAX_MS = 15_000;
-const INTER_GROUP_DELAY_MIN_MS = 45_000;
-const INTER_GROUP_DELAY_MAX_MS = 90_000;
-const LONG_PAUSE_EVERY_N_GROUPS = 3;
-const LONG_PAUSE_MIN_MS = 120_000;
-const LONG_PAUSE_MAX_MS = 180_000;
+// ===== Defaults humanizados (reduzidos: mais leves p/ o sistema, sem travar) =====
+const INTER_BLOCK_DELAY_MIN_MS = 4_000;
+const INTER_BLOCK_DELAY_MAX_MS = 8_000;
+const INTER_GROUP_DELAY_MIN_MS = 12_000;
+const INTER_GROUP_DELAY_MAX_MS = 25_000;
+const LONG_PAUSE_EVERY_N_GROUPS = 5;
+const LONG_PAUSE_MIN_MS = 40_000;
+const LONG_PAUSE_MAX_MS = 70_000;
 const RETRY_DELAY_MS = 10_000;
 
 // Tempo máximo de execução por invocação (cron volta a chamar depois)
@@ -365,15 +365,18 @@ serve(async (req) => {
     let pausedDuringRun: string | null = null;
     // groups completed so far across the WHOLE message-group (for long-pause cadence)
     let totalGroupsDoneSoFar = alreadySentGroupIds.length;
+    // Se precisarmos esperar (pausa longa) além do orçamento desta invocação,
+    // marcamos o lock no futuro e DEIXAMOS o cron retomar — sem dormir segurando recursos.
+    let deferUntilMs: number | null = null;
 
     try {
       for (let gi = 0; gi < pendingGroups.length; gi++) {
         const group = pendingGroups[gi];
 
-        // Time guard
+        // Time guard — para e deixa o cron retomar imediatamente (lock curto no finally)
         const remaining = MAX_FUNCTION_TIME_MS - (Date.now() - functionStartTime);
         if (remaining < TIME_GUARD_MS) {
-          console.warn(`Time guard: ${remaining}ms left — stopping batch`);
+          console.warn(`Time guard: ${remaining}ms left — stopping batch (cron retoma)`);
           break;
         }
 
@@ -388,19 +391,6 @@ serve(async (req) => {
           .single();
         const currentSentIds: string[] = freshMsg?.sent_group_ids || [];
         if (currentSentIds.includes(group.id)) continue;
-
-        // Long pause every N groups (based on total done across the message-group)
-        if (totalGroupsDoneSoFar > 0 && totalGroupsDoneSoFar % LONG_PAUSE_EVERY_N_GROUPS === 0) {
-          const longPause = rand(LONG_PAUSE_MIN_MS, LONG_PAUSE_MAX_MS);
-          console.log(`Long pause after ${totalGroupsDoneSoFar} groups: ${Math.round(longPause / 1000)}s`);
-          // Renew lock first
-          await supabase.from("group_campaign_scheduled_messages")
-            .update({ locked_until: new Date(Date.now() + longPause + 60_000).toISOString() })
-            .eq(messageGroupId ? "message_group_id" : "id", messageGroupId || scheduledMessageId);
-          await sleep(longPause);
-          // After long pause, check time budget; cron will continue if needed
-          if (MAX_FUNCTION_TIME_MS - (Date.now() - functionStartTime) < TIME_GUARD_MS) break;
-        }
 
         // Send all blocks to this group, sequentially
         let groupHadAnyFail = false;
@@ -436,9 +426,24 @@ serve(async (req) => {
           console.error("Falha ao persistir progresso incremental:", persistErr);
         }
 
-        // Delay BETWEEN GROUPS (not after last)
-        if (gi < pendingGroups.length - 1) {
-          await sleep(rand(INTER_GROUP_DELAY_MIN_MS, INTER_GROUP_DELAY_MAX_MS));
+        // ===== Ritmo APÓS um envio real (evita o stall de pausa-no-início) =====
+        const isLast = gi === pendingGroups.length - 1;
+        if (!isLast) {
+          const isLongPause = totalGroupsDoneSoFar % LONG_PAUSE_EVERY_N_GROUPS === 0;
+          const delayMs = isLongPause
+            ? rand(LONG_PAUSE_MIN_MS, LONG_PAUSE_MAX_MS)
+            : rand(INTER_GROUP_DELAY_MIN_MS, INTER_GROUP_DELAY_MAX_MS);
+
+          const budgetLeft = MAX_FUNCTION_TIME_MS - (Date.now() - functionStartTime);
+          // Se o atraso cabe no orçamento desta invocação, dorme em processo.
+          // Senão, ADIA: grava o lock no futuro e encerra; o cron retoma após expirar.
+          if (delayMs + TIME_GUARD_MS < budgetLeft) {
+            await sleep(delayMs);
+          } else {
+            deferUntilMs = Date.now() + delayMs;
+            console.log(`Adiando ${Math.round(delayMs / 1000)}s (cron retoma) após ${totalGroupsDoneSoFar} grupos`);
+            break;
+          }
         }
       }
     } catch (e) {
@@ -463,7 +468,9 @@ serve(async (req) => {
         updatePayload.locked_until = null;
       } else {
         updatePayload.status = "sending";
-        updatePayload.locked_until = new Date(Date.now() + 20_000).toISOString();
+        // Se houve adiamento (pausa longa), respeita o atraso via lock no futuro.
+        // Caso contrário (time guard), retoma rápido para o cron continuar.
+        updatePayload.locked_until = new Date(deferUntilMs ?? (Date.now() + 5_000)).toISOString();
       }
 
       if (messageGroupId) {
