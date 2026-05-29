@@ -278,3 +278,18 @@ verify_jwt = false
 
 [functions.wasender-send-media]
 verify_jwt = false
+
+[functions.wasender-send-extra]
+verify_jwt = false
+
+[functions.wasender-message-actions]
+verify_jwt = false
+
+[functions.wasender-presence]
+verify_jwt = false
+
+[functions.wasender-check-number]
+verify_jwt = false
+
+[functions.wasender-groups]
+verify_jwt = false
