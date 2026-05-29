@@ -254,33 +254,41 @@ serve(async (req) => {
     // ---- Instagram dispatch (parallel to WA when both selected) ----
     const dispatchInstagram = async () => {
       if (!wantsInstagram || !igUsername) return;
-      let fallbackCommentId: string | undefined = requestFallbackCommentId || undefined;
+      // Reúne vários comment_ids recentes do cliente (mais novos primeiro).
+      // Um comentário de Live só aceita UM private_reply e pode ficar inelegível,
+      // então passamos uma lista para o instagram-dm-send tentar em sequência.
+      const commentIds: string[] = [];
+      if (requestFallbackCommentId) commentIds.push(requestFallbackCommentId);
       try {
-        if (!fallbackCommentId) {
-          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-          let { data: lastComment } = await supabase
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: eventComments } = await supabase
+          .from('live_comments')
+          .select('comment_id')
+          .eq('event_id', order.event_id)
+          .ilike('username', igUsername)
+          .gte('created_at', sevenDaysAgo)
+          .order('created_at', { ascending: false })
+          .limit(5);
+        for (const c of (eventComments || [])) {
+          if (c?.comment_id) commentIds.push(c.comment_id);
+        }
+        if (commentIds.length === 0) {
+          const { data: anyComments } = await supabase
             .from('live_comments')
             .select('comment_id')
-            .eq('event_id', order.event_id)
             .ilike('username', igUsername)
             .gte('created_at', sevenDaysAgo)
             .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (!lastComment?.comment_id) {
-            const { data: fallbackComment } = await supabase
-              .from('live_comments')
-              .select('comment_id')
-              .ilike('username', igUsername)
-              .gte('created_at', sevenDaysAgo)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            lastComment = fallbackComment;
+            .limit(5);
+          for (const c of (anyComments || [])) {
+            if (c?.comment_id) commentIds.push(c.comment_id);
           }
-          if (lastComment?.comment_id) fallbackCommentId = lastComment.comment_id;
         }
-      } catch {}
+      } catch (e) {
+        console.warn('[livete-start] failed to gather comment_ids:', e);
+      }
+      const fallbackCommentIds = Array.from(new Set(commentIds));
+      const fallbackCommentId = fallbackCommentIds[0];
 
       let igFailed = false;
       for (let i = 0; i < rendered.length; i++) {
@@ -294,6 +302,7 @@ serve(async (req) => {
               message: text,
               eventId: order.event_id,
               fallbackCommentId,
+              fallbackCommentIds,
             }),
           });
           if (!igResp.ok) {

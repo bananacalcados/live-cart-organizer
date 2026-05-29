@@ -25,8 +25,20 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { username, message, eventId, fallbackCommentId, mediaType } = body;
+    const { username, message, eventId, fallbackCommentId, fallbackCommentIds, mediaType } = body;
     let { mediaUrl } = body;
+
+    // Lista de comment_ids candidatos para private_reply (mais recentes primeiro).
+    // Um comentário de Live só aceita UM private_reply e pode ficar inelegível;
+    // por isso tentamos vários em sequência até um funcionar.
+    const commentIdCandidates: string[] = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(fallbackCommentIds) ? fallbackCommentIds : []),
+          fallbackCommentId,
+        ].filter((c): c is string => typeof c === "string" && c.trim().length > 0),
+      ),
+    );
     if (!username || (!message && !mediaUrl)) {
       return new Response(JSON.stringify({ error: "username and (message or mediaUrl) are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -95,6 +107,29 @@ Deno.serve(async (req) => {
     let metaResponse: any = null;
     let usedMethod: "direct_dm" | "private_reply" = "direct_dm";
 
+    // Tenta private_reply em sequência sobre todos os comment_ids candidatos.
+    // Retorna { ok, data } do primeiro que funcionar, ou o último erro.
+    const tryPrivateReply = async (): Promise<{ ok: boolean; data: any; commentId: string | null }> => {
+      let lastData: any = null;
+      let lastId: string | null = null;
+      for (const cid of commentIdCandidates) {
+        const r = await fetch(`${META_API}/me/messages`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            recipient: { comment_id: cid },
+            message: buildMessagePayload(),
+          }),
+        });
+        const data = await r.json();
+        if (r.ok) return { ok: true, data, commentId: cid };
+        console.warn(`[ig-dm-send] private_reply failed for @${cleanUsername} comment ${cid}:`, JSON.stringify(data));
+        lastData = data;
+        lastId = cid;
+      }
+      return { ok: false, data: lastData, commentId: lastId };
+    };
+
     // Tenta DM direto se tem o user ID
     if (link?.ig_user_id) {
       const res = await fetch(`${META_API}/me/messages`, {
@@ -109,20 +144,13 @@ Deno.serve(async (req) => {
       metaResponse = await res.json();
       if (!res.ok) {
         console.warn(`[ig-dm-send] Direct DM failed for @${cleanUsername}, trying private_reply. Error:`, JSON.stringify(metaResponse));
-        if (fallbackCommentId) {
-          const r2 = await fetch(`${META_API}/me/messages`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              recipient: { comment_id: fallbackCommentId },
-              message: buildMessagePayload(),
-            }),
-          });
-          metaResponse = await r2.json();
+        if (commentIdCandidates.length) {
+          const pr = await tryPrivateReply();
+          metaResponse = pr.data;
           usedMethod = "private_reply";
-          if (!r2.ok) {
+          if (!pr.ok) {
             return new Response(JSON.stringify({ error: "Both direct DM and private_reply failed", details: metaResponse }), {
-              status: r2.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
           }
         } else {
@@ -132,20 +160,13 @@ Deno.serve(async (req) => {
           }), { status: res.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         }
       }
-    } else if (fallbackCommentId) {
-      const r = await fetch(`${META_API}/me/messages`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          recipient: { comment_id: fallbackCommentId },
-          message: buildMessagePayload(),
-        }),
-      });
-      metaResponse = await r.json();
+    } else if (commentIdCandidates.length) {
+      const pr = await tryPrivateReply();
+      metaResponse = pr.data;
       usedMethod = "private_reply";
-      if (!r.ok) {
+      if (!pr.ok) {
         return new Response(JSON.stringify({ error: "private_reply failed", details: metaResponse }), {
-          status: r.status, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     } else {
