@@ -23,7 +23,7 @@ serve(async (req) => {
   }
 
   try {
-    const { phone, message, whatsapp_number_id } = await req.json();
+    const { phone, message, whatsapp_number_id, quotedMessageId } = await req.json();
     if (!phone || !message) {
       return new Response(JSON.stringify({ error: "Phone and message are required" }), {
         status: 400,
