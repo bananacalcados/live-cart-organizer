@@ -33,6 +33,11 @@ export function useConversationEnrichment() {
       const { data, error } = await supabase
         .from('chat_finished_conversations')
         .select('phone, finished_at')
+        // Stable ordering is REQUIRED: without it, .range() pagination over
+        // thousands of rows can drop/duplicate rows between pages, causing a
+        // just-finished conversation to silently disappear from the map and
+        // pop back into its original tab.
+        .order('phone', { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
 
       if (error || !data || data.length === 0) break;
