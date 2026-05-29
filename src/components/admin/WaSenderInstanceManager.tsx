@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power } from "lucide-react";
+import QRCode from "react-qr-code";
 
 interface WaSenderInstance {
   id: string;
@@ -334,11 +335,19 @@ export function WaSenderInstanceManager() {
             ) : qrCode ? (
               <>
                 <div className="bg-white p-3 rounded-lg">
-                  <img
-                    src={qrCode.startsWith("data:") ? qrCode : `data:image/png;base64,${qrCode}`}
-                    alt="QR Code WhatsApp"
-                    className="w-56 h-56"
-                  />
+                  {qrCode.startsWith("data:") || /^[A-Za-z0-9+/=]{100,}$/.test(qrCode) ? (
+                    <img
+                      src={qrCode.startsWith("data:") ? qrCode : `data:image/png;base64,${qrCode}`}
+                      alt="QR Code WhatsApp"
+                      className="w-56 h-56"
+                    />
+                  ) : (
+                    <QRCode
+                      value={qrCode.includes("#") ? qrCode.split("#").pop()! : qrCode}
+                      size={224}
+                      className="w-56 h-56"
+                    />
+                  )}
                 </div>
                 <p className="text-sm text-center text-muted-foreground">
                   Abra o WhatsApp → Aparelhos conectados → Conectar aparelho e escaneie o código.
