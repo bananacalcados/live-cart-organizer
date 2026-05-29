@@ -162,6 +162,23 @@ export function WaSenderInstanceManager() {
     setQrCode(null);
   };
 
+  const repairEvents = async (inst: WaSenderInstance) => {
+    setActingId(inst.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("wasender-session", {
+        body: { action: "update_events", whatsapp_number_id: inst.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "✅ Webhook atualizado", description: "Eventos de mensagens, grupos e contatos reativados." });
+    } catch (e) {
+      toast({ title: "Erro ao reparar webhook", description: (e as Error).message, variant: "destructive" });
+    }
+    setActingId(null);
+  };
+
+
+
   const checkStatus = async (inst: WaSenderInstance) => {
     setActingId(inst.id);
     try {
