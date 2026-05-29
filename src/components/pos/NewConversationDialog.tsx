@@ -388,7 +388,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
             )}
 
             {/* Normal Message */}
-            {(sendVia === "zapi" || (sendVia === "meta" && messageType === "normal")) && (
+            {(sendVia === "zapi" || sendVia === "wasender" || (sendVia === "meta" && messageType === "normal")) && (
               <div>
                 <Label className="text-xs">Mensagem</Label>
                 <Textarea
