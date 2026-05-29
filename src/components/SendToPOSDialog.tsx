@@ -202,6 +202,10 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
         const storeName = STORES.find(s => s.id === selectedStore)?.name || "";
         await supabase.functions.invoke("pos-tiny-create-sale", {
           body: {
+            // CRITICAL: pass sale_id so pos-tiny-create-sale UPDATES the live
+            // pos_sales row created above instead of INSERTING a duplicate
+            // "physical" row that shares the same tiny_order_id.
+            sale_id: sale.id,
             store_id: selectedStore,
             customer: {
               name: customerName,
@@ -219,6 +223,7 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
             })),
             payment_method_name: "Venda Live - Retirada",
             seller_id: sellerId,
+            discount: discountAmount > 0 ? discountAmount : undefined,
             notes: `Venda da Live - Retirada ${storeName}${isSiteChannel ? " (Site)" : ""}`,
           },
         });

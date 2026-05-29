@@ -441,6 +441,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
           status: "paid",
           paid_at: new Date().toISOString(),
           payment_gateway: "mercadopago",
+          payment_method: "PIX",
           notes: `🔔 Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
         })
         .eq("id", sale.id);
@@ -805,6 +806,9 @@ async function updateSale(
         status: "paid",
         paid_at: new Date().toISOString(),
         payment_gateway: "vindi",
+        // Only set when not already classified, so we don't clobber a more
+        // specific method recorded at checkout.
+        payment_method: sale.payment_method || "Cartão de Crédito",
         notes: `🔔 Webhook VINDI: aprovado (${tokenTransaction})`,
         vindi_transaction_id: String(tokenTransaction),
       } as any)

@@ -261,6 +261,7 @@ serve(async (req) => {
             status: "paid",
             paid_at: new Date().toISOString(),
             payment_gateway: "pagarme",
+            payment_method: (sale as any).payment_method || "Cartão de Crédito",
             pagarme_order_id: String(ourOrderId),
             notes: `🔔 Webhook Pagar.me: pago (${transactionId})`,
           })

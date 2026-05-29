@@ -283,7 +283,9 @@ serve(async (req) => {
           customer_id: customer?.id || currentSale?.customer_id || null,
           customer_name: customer?.name || currentSale?.customer_name || null,
           customer_phone: customer?.whatsapp || customer?.phone || currentSale?.customer_phone || null,
-          payment_method: payment_method_name || null,
+          // Only set payment_method when a value is provided — NEVER overwrite an
+          // existing real method (e.g. "PIX"/"Cartão") with null.
+          ...(payment_method_name ? { payment_method: payment_method_name } : {}),
           tiny_order_id: tinyOrderId ? String(tinyOrderId) : null,
           tiny_order_number: tinyOrderNumber ? String(tinyOrderNumber) : null,
           status: nextStatus,
