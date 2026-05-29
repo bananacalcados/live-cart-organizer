@@ -294,7 +294,11 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     mediaUrl?: string,
     caption?: string,
   ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
-    if (isZapiProvider()) {
+    const provider = getProvider();
+    if (provider === 'wasender') {
+      return sendViaWasender(phoneNumber, message, type, mediaUrl, caption);
+    }
+    if (provider === 'zapi') {
       if (type !== 'text' && mediaUrl) {
         // Z-API media send
         try {
