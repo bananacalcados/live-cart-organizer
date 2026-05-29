@@ -12,9 +12,17 @@ serve(async (req) => {
   }
 
   try {
-    const { store_id, sale_id, seller_id, tiny_seller_id, customer, items, payment_method_id, payment_method_name, discount, notes } = await req.json();
+    const { store_id, sale_id, seller_id, tiny_seller_id, customer, items, payment_method_id, payment_method_name, discount, notes, push_tiny } = await req.json();
     if (!store_id) throw new Error('store_id is required');
     if (!items || items.length === 0) throw new Error('items is required');
+
+    // Tiny ERP push is now MANUAL ONLY. The order is only sent to Tiny when the
+    // caller explicitly requests it with push_tiny === true (the "Enviar/Reenviar
+    // ao Tiny" button). Every other flow (webhooks, event routing, checkout,
+    // POS sale finalization) just creates/updates the local pos_sales record and
+    // skips Tiny. This keeps the function able to create the order in Tiny while
+    // disabling all automatic pushes.
+    const wantTiny = push_tiny === true;
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
