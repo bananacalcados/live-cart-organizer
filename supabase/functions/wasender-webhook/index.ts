@@ -218,7 +218,7 @@ serve(async (req) => {
         };
         if (caption) zPayload.text = caption;
       } else {
-        zPayload.text = messageBody;
+        zPayload.text = extraText || messageBody;
       }
 
       // Reaproveita TODA a lógica existente (dedup, roteamento IA, leads, campanhas, NPS)
