@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { WASENDER_BASE } from "../_shared/wasender-credentials.ts";
+import { WASENDER_BASE, rehostMedia } from "../_shared/wasender-credentials.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -142,6 +142,26 @@ serve(async (req) => {
         }
       }
 
+      // Localização e contato recebidos → renderiza como texto/link no chat
+      let extraText: string | null = null;
+      if (!mediaType) {
+        const loc = rawMessage.locationMessage as Record<string, any> | undefined;
+        if (loc && (loc.degreesLatitude != null || loc.degreesLongitude != null)) {
+          const lat = loc.degreesLatitude;
+          const lng = loc.degreesLongitude;
+          const name = asString(loc.name);
+          extraText =
+            `📍 ${name ? name + "\n" : ""}https://maps.google.com/?q=${lat},${lng}`;
+        }
+        const contact =
+          (rawMessage.contactMessage as Record<string, any> | undefined) ||
+          (rawMessage.contactsArrayMessage as Record<string, any> | undefined);
+        if (contact) {
+          const dn = asString(contact.displayName) || "Contato";
+          extraText = `👤 ${dn}`;
+        }
+      }
+
       // Monta payload no formato canônico do zapi-webhook
       const zPayload: Record<string, unknown> = {
         phone: cleanedPhone,
@@ -150,6 +170,7 @@ serve(async (req) => {
         messageId,
         senderName: pushName,
       };
+
 
       if (mediaType && mediaObjKey) {
         // Tenta decriptar para obter URL pública
@@ -172,6 +193,14 @@ serve(async (req) => {
         }
         if (!publicUrl) publicUrl = asString(mediaObj?.url);
 
+        const fileName = asString(mediaObj?.fileName);
+
+        // Re-hospeda a mídia (a URL da WaSender expira em ~1h) para que o chat
+        // mostre imagens/vídeos/áudios/documentos de forma permanente.
+        if (publicUrl) {
+          publicUrl = await rehostMedia(publicUrl, mediaType, fileName);
+        }
+
         const caption = asString(mediaObj?.caption) || messageBody || null;
         const mapKeyToField: Record<string, string> = {
           image: "image",
@@ -185,11 +214,11 @@ serve(async (req) => {
           url: publicUrl,
           [`${field}Url`]: publicUrl,
           caption,
-          fileName: asString(mediaObj?.fileName),
+          fileName,
         };
         if (caption) zPayload.text = caption;
       } else {
-        zPayload.text = messageBody;
+        zPayload.text = extraText || messageBody;
       }
 
       // Reaproveita TODA a lógica existente (dedup, roteamento IA, leads, campanhas, NPS)

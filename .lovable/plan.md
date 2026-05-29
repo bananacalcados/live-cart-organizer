@@ -1,64 +1,99 @@
-## Resumo / é possível?
 
-Sim, é totalmente possível — e a continuidade do histórico é o ponto mais tranquilo da implementação.
+# WaSender — Análise da API e Plano de Implementação Completo
 
-No nosso sistema, todo o histórico de WhatsApp vive na tabela `whatsapp_messages`, indexado principalmente pelo **telefone do contato** (`phone`), não pelo provedor. O chat carrega a conversa por telefone (com variações de 8/9 dígitos), independente de ter vindo por Z-API, Meta ou WaSender. Ou seja: se você usar os **mesmos números** no WaSender, as conversas antigas continuam aparecendo normalmente no mesmo chat.
+## 1. O que a documentação da WaSender permite (mapa completo)
 
-O único cuidado é a regra atual "conversa = telefone + instância" (cada conversa fica travada à instância da última mensagem). Para garantir histórico + envio sem conflito, ao migrar um número de Z-API para WaSender vamos **reaproveitar a mesma linha** em `whatsapp_numbers` (mesmo `id`), apenas trocando o provider e as credenciais. Assim todas as mensagens passadas continuam vinculadas àquela instância e o envio novo sai pelo WaSender, sem "vazamento" entre instâncias.
+A WaSender expõe **um único endpoint de envio** (`POST /api/send-message`) que aceita o tipo pelo formato do corpo, mais vários endpoints de gestão. Tudo abaixo é suportado pela API:
 
-## Como o WaSenderAPI funciona (da documentação)
+**Mensagens**
+- Texto, Imagem, Vídeo, Áudio, Documento, Sticker (.webp)
+- Cartão de contato (`contact`), Localização (`location`)
+- Enquete/Poll (multi-seleção)
+- Mensagem citada / reply
+- Menções em grupo (`@participante`)
+- "Ver uma vez" (view once)
+- Editar mensagem, Apagar mensagem (para todos), Marcar como lida (tique azul)
+- Info da mensagem, Reenviar falha
+- Upload de mídia (`/api/upload`) e Decrypt de mídia recebida (`/api/decrypt-media`)
 
-- **Autenticação**: um **Personal Access Token (PAT)** da conta gerencia sessões; cada sessão recebe seu próprio **API Key** (usado para enviar mensagens) e um **webhook_secret**.
-- **Sessões = instâncias**:
-  - `POST /api/whatsapp-sessions` (PAT) cria a sessão → retorna `id`, `api_key`, `webhook_secret`.
-  - `POST /api/whatsapp-sessions/{id}/connect` (PAT) → `{ status: "NEED_SCAN", qrCode }` (string do QR, expira ~45s).
-  - `GET /api/whatsapp-sessions/{id}/qrcode` (PAT) → QR fresco.
-  - `GET .../status`, `disconnect`, `delete`, `restart`.
-- **Envio**: `POST /api/send-message` com `Authorization: Bearer <API_KEY_DA_SESSÃO>`, body `{ to, text, imageUrl|videoUrl|documentUrl|audioUrl }`.
-- **Webhook**: configurado por sessão; eventos `messages.received`, `messages.update`, `session.status`. Verificação via header `X-Webhook-Signature` == `webhook_secret`. Payload: `data.messages.{ key:{id,fromMe,remoteJid,cleanedSenderPn,cleanedParticipantPn}, messageBody, message:{...} }`.
+**Sessões**
+- Criar, listar, detalhe, atualizar, status, deletar, **restart**, connect, disconnect, QR code, regenerar API key
+- Logs de mensagens e de sessão
+- **Checar se número está no WhatsApp** (`/api/on-whatsapp/{phone}`)
+- Info do usuário da sessão
+- **Presença** (`/api/send-presence-update`) → "digitando…", "gravando áudio…"
 
-## Plano de implementação
+**Contatos**
+- Listar todos, info de contato, foto de perfil, bloquear/desbloquear, criar/atualizar contato, LID↔telefone
 
-### 1. Banco de dados (migration)
-Adicionar à tabela `whatsapp_numbers` as colunas do WaSender:
-- `wasender_session_id` (int), `wasender_api_key` (text, key de envio da sessão), `wasender_webhook_secret` (text), `wasender_phone_number` (text).
-- Manter `provider` aceitando o novo valor `'wasender'`.
+**Grupos**
+- Criar, listar todos, metadata, participantes (listar/adicionar/remover/promover/rebaixar), foto, configurações (assunto, descrição, modo anúncio/restrito), link de convite, info de convite, aceitar convite, sair, enviar mensagem + menções
 
-O PAT da conta fica como secret global (`WASENDER_API_TOKEN`), não por linha.
+**Canais/Comunidades**
+- Enviar mensagem em canal
 
-### 2. Secret
-Solicitar `WASENDER_API_TOKEN` (Personal Access Token, em Settings → Personal Access Token no painel WaSender).
+**Webhooks (eventos recebidos)**
+- `messages.received` / `messages.upsert` (entrada), `messages.update` (status ✓✓), `message.sent`
+- `session.status`, `qrcode.updated`
+- `contacts.update` / `contacts.upsert`
+- `groups.upsert`, `group.update`, `group.participants.update`
+- `chats.upsert` / `chats.update` / `chats.delete`
 
-### 3. Edge functions novas
-- `wasender-session`: ações `create | connect | qrcode | status | disconnect | delete` usando o PAT. No `create`, já configura `webhook_url` apontando para `wasender-webhook?number_id=<id>` e salva `api_key`/`webhook_secret` na linha.
-- `wasender-webhook`: valida `X-Webhook-Signature`, trata `messages.received` (texto e mídia, usando `cleanedSenderPn`/`messageBody`), `messages.update` (status ✓✓) e `session.status` (online/offline). Normaliza telefone (mesma lógica BR/9º dígito do `zapi-webhook`), faz dedup de outgoing/incoming, insere em `whatsapp_messages` com o `whatsapp_number_id` resolvido pela sessão, e chama `routeMessage` (IA/cooldown) igual ao Z-API.
-- `wasender-send-message` e `wasender-send-media`: enviam via `/api/send-message` com a API key da sessão; reaproveitam o `instance-guard` (trava por conversa) exatamente como o Z-API.
+## 2. O que JÁ temos implementado hoje
+- Envio de **texto, imagem, vídeo, áudio, documento** (`wasender-send-message` / `wasender-send-media`)
+- Gestão de sessão (create, connect, qrcode, status, disconnect, delete) + UI de QR Code
+- Webhook que recebe texto e mídia, descriptografa via `decrypt-media`, e encaminha no formato canônico para o `zapi-webhook` (reaproveita IA, leads, dedup, NPS)
+- Roteamento de envio pelo provider `wasender` no `useChatSender`
 
-### 4. Frontend — gerenciador de instâncias com QR
-- Novo `WaSenderInstanceManager` (espelha o `ZApiInstanceManager`), na mesma área admin de instâncias:
-  - Criar instância (nome + telefone), botão **Conectar** que chama `connect`, exibe o **QR Code dentro do app** (render do `qrCode` com lib de QR), com polling de status e refresh automático do QR quando expira.
-  - Status online/offline, desconectar, excluir.
-  - Opção "Migrar número existente do Z-API para WaSender" que converte a linha no lugar (preserva histórico e o vínculo de instância).
+## 3. Lacunas (o que falta para atender seu pedido)
 
-### 5. Roteamento de envio (chat unificado)
-- Estender o tipo de provider para incluir `'wasender'`.
-- Em `useChatSender` e no `WhatsAppChat.sendMessage`, adicionar o ramo: se `provider === 'wasender'` → `wasender-send-message`/`wasender-send-media`. Meta e Z-API permanecem intactos.
-- A escolha de instância continua via `useConversationInstance` (sem mudança de regra).
+| Recurso | Status |
+|---|---|
+| Enviar contato | ❌ falta |
+| Enviar localização | ❌ falta |
+| Enviar enquete (poll) | ❌ falta |
+| Reply / citar mensagem | ❌ falta (campo não enviado) |
+| Sticker | ⚠️ parcial (recebe, não envia) |
+| Presença "digitando/gravando" | ❌ falta |
+| Editar / apagar / marcar lida | ❌ falta |
+| Checar número no WhatsApp | ❌ falta |
+| **Grupos VIP via WaSender** | ❌ hoje é só Z-API |
+| **Mídia recebida persistente no chat** | ⚠️ **risco crítico** |
 
-### 6. Continuidade de histórico
-- Conversas são carregadas por telefone → histórico antigo (Z-API/Meta) aparece automaticamente.
-- Migração in-place (mesmo `id` da linha) mantém o vínculo conversa↔instância para envios futuros sem `INSTANCE_MISMATCH`.
+### ⚠️ Ponto crítico: persistência de mídia no chat
+A `decrypt-media` da WaSender retorna uma `publicUrl` **válida por apenas 1 hora**. Hoje o webhook salva essa URL direto em `whatsapp_messages.media_url`. Resultado: imagens, vídeos, áudios e documentos **aparecem no chat agora, mas quebram depois de 1 hora**. Para o usuário "ver, assistir e ouvir quando precisar", precisamos **baixar a mídia e re-hospedar no Storage do projeto** (URL permanente), igual ao padrão usado para WhatsApp.
 
-## Detalhes técnicos / pontos de atenção
+## 4. Plano de implementação
 
-```text
-Envio:   UI → useChatSender/WhatsAppChat → (provider) → wasender-send-* → WaSender /api/send-message
-Recebe:  WaSender → wasender-webhook?number_id=ID → whatsapp_messages → broadcast → chat
-```
+### Fase A — Persistência de mídia (prioridade máxima)
+1. Criar bucket público `whatsapp-media` (migration) com policies de leitura pública e escrita via service role.
+2. No `wasender-webhook`: após obter a `publicUrl` da `decrypt-media`, baixar o arquivo e fazer upload no bucket; salvar a URL permanente em `media_url`. Fallback para a URL temporária se o upload falhar.
+3. Validar que imagem/vídeo/áudio/documento renderizam no chat via `WhatsAppMediaAttachment` (já existe e suporta todos os tipos, inclusive áudio com player e PDF inline).
 
-- O WaSender pode entregar `remoteJid` como LID (`@lid`); usaremos sempre `cleanedSenderPn`/`cleanedParticipantPn` (reaproveitando a lógica de resolução de LID já existente no `zapi-webhook`).
-- Mídia recebida pode vir criptografada; usaremos o endpoint `POST /api/decrypt-media` do WaSender para obter URL pública antes de salvar.
-- O webhook responde sempre `200 OK` rápido (assíncrono no processamento de IA), como já fazemos.
-- Nenhuma alteração nos fluxos Z-API/Meta existentes — WaSender é aditivo.
+### Fase B — Novos tipos de envio
+4. Estender `wasender-send-media` para **sticker** (`stickerUrl`).
+5. Adicionar **reply/quoted** no `wasender-send-message` (campo de mensagem citada).
+6. Criar `wasender-send-extra` (ou estender as funções) para **contato** (`contact`), **localização** (`location`) e **enquete** (`poll`).
+7. Expor esses tipos no front (`useChatSender` + UI do chat: anexar contato/localização/enquete).
 
-Confirmando: posso seguir com este plano? Assim que aprovar, começo pela migration + secret e depois as edge functions e a tela de QR.
+### Fase C — Recursos de conversa
+8. `wasender-presence` → "digitando…/gravando…" (chamar ao abrir conversa / ao gravar áudio).
+9. `wasender-message-actions` → editar, apagar, marcar como lida; ligar aos controles já existentes no chat (que hoje usam Z-API).
+10. `wasender-check-number` → checar se número existe no WhatsApp (útil em campanhas).
+
+### Fase D — Grupos e VIP via WaSender
+11. `wasender-groups` cobrindo: listar, metadata, participantes (add/remove/promote/demote), settings, foto, link de convite, criar grupo, enviar em grupo + menções.
+12. Tornar os fluxos de **Grupos VIP** provider-aware: hoje `cron-check-vip-groups`, `zapi-send-group-message`, `zapi-group-campaign-execute` chamam Z-API direto. Adicionar ramo `wasender` que respeita as regras de disparo VIP já existentes (sequencial puro, retry por bloco, pausa a cada 3 grupos, abort se instância offline).
+
+### Fase E — Webhooks adicionais
+13. Tratar no `wasender-webhook`: `message.sent`, `qrcode.updated` (atualiza QR na UI em tempo real), `group.participants.update` / `group.update` (sincroniza contagem/membros VIP), `contacts.update`.
+
+## 5. Detalhes técnicos
+- Endpoint de envio único: `POST {WASENDER_BASE}/send-message` com `Authorization: Bearer <api_key da sessão>`. Corpo por tipo: `text`, `imageUrl/videoUrl/audioUrl/documentUrl/stickerUrl`, `contact:{name,phone}`, `location:{latitude,longitude,name,address}`, `poll:{...}`, e campo de quoted para reply.
+- Gestão (sessão/grupos/contatos) usa o **PAT global** (`WASENDER_API_TOKEN`) via `wasenderPAT()` para sessões, e a **api_key da sessão** para grupos/contatos/envio.
+- Manter o `instance-guard` (HTTP 409 INSTANCE_MISMATCH) em todos os envios — regra de conversa travada por (telefone+instância).
+- Registrar novas funções com `verify_jwt = false` no `config.toml` (webhook é externo).
+- Reaproveitar `WhatsAppMediaAttachment` no chat (sem mudança de UI necessária para exibir mídia).
+
+## 6. Confirmação que preciso de você
+Antes de implementar, quero confirmar o escopo desta rodada, porque é grande. Por padrão proponho fazer **Fase A + Fase B** primeiro (resolve a persistência de mídia e adiciona contato/localização/enquete/sticker/reply), e depois seguimos para grupos/VIP e ações de mensagem. Se preferir tudo de uma vez, eu faço — só será uma entrega maior.

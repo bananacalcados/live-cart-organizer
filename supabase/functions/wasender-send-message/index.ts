@@ -23,7 +23,7 @@ serve(async (req) => {
   }
 
   try {
-    const { phone, message, whatsapp_number_id } = await req.json();
+    const { phone, message, whatsapp_number_id, quotedMessageId } = await req.json();
     if (!phone || !message) {
       return new Response(JSON.stringify({ error: "Phone and message are required" }), {
         status: 400,
@@ -46,10 +46,13 @@ serve(async (req) => {
     const { apiKey } = await resolveWasenderCredentials(whatsapp_number_id);
     const to = formatPhone(phone);
 
+    const payload: Record<string, unknown> = { to, text: message };
+    if (quotedMessageId) payload.quotedMessageId = quotedMessageId;
+
     const res = await fetch(`${WASENDER_BASE}/send-message`, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ to, text: message }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json().catch(() => null);
 

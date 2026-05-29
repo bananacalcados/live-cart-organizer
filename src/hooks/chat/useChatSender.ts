@@ -141,6 +141,7 @@ export function useChatSender() {
                 phone,
                 message: text,
                 whatsapp_number_id: route.numberId,
+                quotedMessageId: quotedMessageId || undefined,
               };
           const { data, error } = await supabase.functions.invoke(fnName, { body });
           if (error) throw error;
