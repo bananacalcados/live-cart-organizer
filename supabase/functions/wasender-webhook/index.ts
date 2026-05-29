@@ -121,13 +121,17 @@ serve(async (req) => {
       event === "messages.receipt.update"
     ) {
       // O payload pode vir como objeto único ou lista (Baileys).
+      // IMPORTANTE: o objeto de update tem o formato { update: { status }, key: { id, fromMe } }.
+      // NÃO usar `data.update` como entry — isso perde o `key.id` e nenhum ticket é atualizado.
       const entries: any[] = Array.isArray((data as any)?.messages)
         ? (data as any).messages
-        : Array.isArray(data)
-          ? (data as any)
-          : [(data as any)?.messages || (data as any)?.update || data];
+        : Array.isArray((data as any)?.updates)
+          ? (data as any).updates
+          : Array.isArray(data)
+            ? (data as any)
+            : [data];
 
-      // Baileys: status numérico 1=pending 2=server_ack(sent) 3=delivery_ack(delivered) 4=read 5=played
+      // Baileys: status numérico 0=error 1=pending 2=server_ack(sent) 3=delivery_ack(delivered) 4=read 5=played
       const numMap: Record<string, string> = {
         "2": "sent",
         "3": "delivered",
@@ -146,12 +150,22 @@ serve(async (req) => {
 
       for (const upd of entries) {
         if (!upd) continue;
+        // O `key` pode estar no próprio entry ou no `data` (payload de objeto único).
+        const keyObj = upd?.key || (data as any)?.key || {};
         const id =
-          asString(upd?.key?.id) || asString(upd?.id) || asString((data as any)?.id);
+          asString(keyObj?.id) ||
+          asString(upd?.key?.id) ||
+          asString(upd?.id) ||
+          asString((data as any)?.id);
         if (!id) continue;
 
+        // Só aplicamos receipts às NOSSAS mensagens enviadas (fromMe). Receipts de
+        // mensagens recebidas (fromMe:false) não devem mexer no status do que recebemos.
+        const fromMe = keyObj?.fromMe;
+        if (fromMe === false) continue;
+
         const rawStatus =
-          upd?.update?.status ?? upd?.status ?? (data as any)?.status;
+          upd?.update?.status ?? upd?.status ?? (data as any)?.update?.status ?? (data as any)?.status;
         // Receipts (message-receipt.update) muitas vezes só trazem readTimestamp.
         const receipt = upd?.receipt || (data as any)?.receipt;
         let mapped: string | null = null;
