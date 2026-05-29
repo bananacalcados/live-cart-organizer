@@ -437,14 +437,8 @@ export default function CustomerRegister() {
 
       if (itemsError) throw itemsError;
 
-      // Send to Tiny ERP of the pickup store
-      try {
-        await supabase.functions.invoke("pos-tiny-create-sale", {
-          body: { saleId: sale.id },
-        });
-      } catch (tinyErr) {
-        console.error("Tiny ERP error (non-blocking):", tinyErr);
-      }
+      // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button in the POS).
+      // The pickup sale is saved locally above; no automatic Tiny push happens here.
 
       toast.success("Pedido de retirada criado com sucesso!");
     } catch (error) {

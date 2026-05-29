@@ -1156,39 +1156,8 @@ export default function StoreCheckout() {
       customer_id: customerId,
     } as any).eq("id", saleData.id);
 
-    // Create Tiny order — pass sale_id so it updates existing instead of creating duplicate
-    try {
-      await supabase.functions.invoke("pos-tiny-create-sale", {
-        body: {
-          store_id: saleData.store_id,
-          sale_id: saleData.id,
-          customer: {
-            name: customerForm.fullName,
-            cpf: customerForm.cpf.replace(/\D/g, ""),
-            email: customerForm.email,
-            whatsapp: customerForm.whatsapp.replace(/\D/g, ""),
-            address: customerForm.address,
-            addressNumber: customerForm.addressNumber,
-            complement: customerForm.complement,
-            neighborhood: customerForm.neighborhood,
-            cep: customerForm.cep.replace(/\D/g, ""),
-            city: customerForm.city,
-            state: customerForm.state,
-          },
-          items: saleData.items.map(i => ({
-            sku: i.sku,
-            name: i.name,
-            variant: i.variant,
-            quantity: i.quantity,
-            price: i.price,
-          })),
-          payment_method_name: "Checkout Online",
-          notes: `Checkout Loja - ${saleData.store_name}`,
-        },
-      });
-    } catch (e) {
-      console.error("Tiny order creation failed:", e);
-    }
+    // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button in the POS).
+    // The sale is saved locally above; no automatic Tiny push happens here.
   }, [saleData, customerForm]);
 
   if (loading) {
