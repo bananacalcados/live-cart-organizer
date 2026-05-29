@@ -31,6 +31,7 @@ import { ScheduledMessageForm, type ScheduledMessageData } from "./ScheduledMess
 import { CampaignBulkSettings } from "./CampaignBulkSettings";
 import { CampaignDashboard } from "./CampaignDashboard";
 import { VipStrategyPanel } from "./VipStrategyPanel";
+import { GroupDispatchErrorsPanel } from "./GroupDispatchErrorsPanel";
 
 interface CampaignDetailPanelProps {
   campaignId: string;
