@@ -20,12 +20,37 @@ serve(async (req) => {
       });
     }
 
-    const { instanceId, token, clientToken } = await resolveZApiCredentials(whatsapp_number_id);
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
+
+    // Profile pictures are non-critical: when no instance is provided and the
+    // route is ambiguous (multiple active Z-API numbers), just fall back to the
+    // first active Z-API number instead of failing the whole request.
+    let resolvedNumberId = whatsapp_number_id ?? null;
+    if (!resolvedNumberId) {
+      const { data: firstActive } = await supabase
+        .from('whatsapp_numbers')
+        .select('id')
+        .eq('provider', 'zapi')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      resolvedNumberId = (firstActive as any)?.id ?? null;
+    }
+
+    let creds: { instanceId: string; token: string; clientToken: string };
+    try {
+      creds = await resolveZApiCredentials(resolvedNumberId);
+    } catch (e) {
+      console.warn('zapi-profile-picture: could not resolve credentials, skipping', e);
+      return new Response(JSON.stringify({ success: true, photos: {} }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const { instanceId, token, clientToken } = creds;
 
     const results: Record<string, string> = {};
     const batch = phones.slice(0, 20);
