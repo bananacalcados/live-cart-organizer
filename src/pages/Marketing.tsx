@@ -479,17 +479,11 @@ export default function Marketing() {
   };
 
   useEffect(() => {
-    loadedTabsRef.current.add(activeTab);
-    void loadTabData(activeTab);
-
-    return () => stopLeadBackfillPolling();
-  }, [activeTab, loadTabData, stopLeadBackfillPolling]);
-
-  useEffect(() => {
     if (loadedTabsRef.current.has(activeTab)) return;
     loadedTabsRef.current.add(activeTab);
     void loadTabData(activeTab);
-  }, [activeTab, loadTabData]);
+    return () => stopLeadBackfillPolling();
+  }, [activeTab, loadTabData, stopLeadBackfillPolling]);
 
   // Fetch store/seller mapping for filters
   useEffect(() => {
