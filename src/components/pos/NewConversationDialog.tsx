@@ -40,7 +40,7 @@ interface LeadData {
 export function NewConversationDialog({ open, onOpenChange, onConversationCreated }: Props) {
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
-  const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
+  const [sendVia, setSendVia] = useState<"zapi" | "meta" | "wasender">("zapi");
   const [messageType, setMessageType] = useState<"normal" | "template">("normal");
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
