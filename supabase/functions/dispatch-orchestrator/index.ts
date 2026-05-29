@@ -13,8 +13,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const MAX_WORKERS_PER_DISPATCH = 10;
-const JOBS_PER_WORKER = 200; // 1 worker covers ~200 pending jobs in 50s
+const MAX_WORKERS_PER_DISPATCH = 5; // lowered from 10 to avoid DB connection-pool saturation
+const JOBS_PER_WORKER = 300; // 1 worker covers ~300 pending jobs in 50s
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
