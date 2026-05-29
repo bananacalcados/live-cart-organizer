@@ -1389,6 +1389,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               quotedMessage={quotedMessage}
               onQuoteMessage={setQuotedMessage}
               onCancelQuote={() => setQuotedMessage(null)}
+              onExtraSent={() => loadMessages(selectedPhone, selectedConvNumberId)}
             />
           </div>
         ) : (
