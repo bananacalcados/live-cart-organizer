@@ -60,6 +60,13 @@ serve(async (req) => {
           return json({ error: "label e phone são obrigatórios" }, 400);
         }
 
+        // Normaliza telefone para E.164 (WaSender exige número válido com +DDI)
+        const phoneDigits = String(phone).replace(/\D/g, "");
+        if (phoneDigits.length < 10) {
+          return json({ error: "Telefone inválido. Use o formato com DDI, ex: 5533999990000" }, 400);
+        }
+        const phoneE164 = `+${phoneDigits}`;
+
         // 1) cria a linha local primeiro para termos o id (usado no webhook_url)
         const { data: row, error: insErr } = await supabase
           .from("whatsapp_numbers")
@@ -69,7 +76,7 @@ serve(async (req) => {
             provider: "wasender",
             is_active: true,
             is_default: false,
-            wasender_phone_number: String(phone).replace(/\D/g, ""),
+            wasender_phone_number: phoneDigits,
           })
           .select("id")
           .single();
@@ -85,7 +92,7 @@ serve(async (req) => {
           method: "POST",
           body: {
             name: String(label).trim(),
-            phone_number: String(phone).trim(),
+            phone_number: phoneE164,
             account_protection: true,
             log_messages: true,
             read_incoming_messages: false,
