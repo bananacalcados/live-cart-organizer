@@ -17,7 +17,9 @@ function formatPhone(phone: string): string {
 }
 
 /** Mapeia o tipo de mídia para o campo de URL esperado pela WaSender. */
-function mediaField(mediaType: string): "imageUrl" | "videoUrl" | "audioUrl" | "documentUrl" {
+function mediaField(
+  mediaType: string,
+): "imageUrl" | "videoUrl" | "audioUrl" | "documentUrl" | "stickerUrl" {
   switch (mediaType) {
     case "image":
       return "imageUrl";
@@ -25,6 +27,8 @@ function mediaField(mediaType: string): "imageUrl" | "videoUrl" | "audioUrl" | "
       return "videoUrl";
     case "audio":
       return "audioUrl";
+    case "sticker":
+      return "stickerUrl";
     default:
       return "documentUrl";
   }
