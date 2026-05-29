@@ -243,6 +243,7 @@ export default function Marketing() {
    const [includedPresetIds, setIncludedPresetIds] = useState<string[]>([]);
    const [presetOpsOpen, setPresetOpsOpen] = useState(false);
    const [tagFilter, setTagFilter] = useState<string>("all");
+  const loadedTabsRef = useRef<Set<string>>(new Set());
 
   // ─── Fetch data ──────────────────────────────
 
@@ -375,6 +376,32 @@ export default function Marketing() {
     }, 2000);
   }, [fetchLeadBackfillStatus, stopLeadBackfillPolling]);
 
+  const loadTabData = useCallback(async (tab: string) => {
+    switch (tab) {
+      case 'calendar':
+      case 'attribution':
+      case 'live_campaigns':
+        await fetchCampaigns();
+        break;
+      case 'customers':
+        await fetchCustomers();
+        break;
+      case 'landing_pages':
+        await fetchLandingPages();
+        break;
+      case 'leads': {
+        await fetchLeads();
+        const job = await fetchLeadBackfillStatus({ silent: true }).catch(() => undefined);
+        if (job?.status === 'processing') {
+          startLeadBackfillPolling();
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }, [fetchCampaigns, fetchCustomers, fetchLandingPages, fetchLeads, fetchLeadBackfillStatus, startLeadBackfillPolling]);
+
   const handleStartLeadBackfill = useCallback(async () => {
     if (!confirm('Isso vai cadastrar retroativamente todos os contatos orgânicos dos últimos 3 meses como leads. Continuar?')) return;
 
@@ -452,20 +479,11 @@ export default function Marketing() {
   };
 
   useEffect(() => {
-    fetchCustomers();
-    fetchCampaigns();
-    fetchLandingPages();
-    fetchLeads();
-    fetchLeadBackfillStatus({ silent: true })
-      .then((job) => {
-        if (job?.status === 'processing') {
-          startLeadBackfillPolling();
-        }
-      })
-      .catch(() => undefined);
-
+    if (loadedTabsRef.current.has(activeTab)) return;
+    loadedTabsRef.current.add(activeTab);
+    void loadTabData(activeTab);
     return () => stopLeadBackfillPolling();
-  }, [fetchCustomers, fetchCampaigns, fetchLandingPages, fetchLeads, fetchLeadBackfillStatus, startLeadBackfillPolling, stopLeadBackfillPolling]);
+  }, [activeTab, loadTabData, stopLeadBackfillPolling]);
 
   // Fetch store/seller mapping for filters
   useEffect(() => {

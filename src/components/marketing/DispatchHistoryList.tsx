@@ -196,91 +196,24 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
         });
       }
 
-      // For each dispatch, get live stats from whatsapp_messages + dispatch_recipients fallback
-      const enriched = await Promise.all(data.map(async (d: any) => {
-        // Get recipients with their status from dispatch_recipients
-        const { data: recs } = await supabase
-          .from('dispatch_recipients')
-          .select('phone, status')
-          .eq('dispatch_id', d.id);
-
-        if (!recs || recs.length === 0) {
-          return { ...d, stats: { delivered: 0, read: 0, sent: 0, failed: 0, total: 0, dispatched: d.sent_count || 0, interactions: 0 } };
-        }
-
-        const phones = recs.map((r: any) => {
-          let p = r.phone.replace(/\D/g, '');
-          if (!p.startsWith('55')) p = '55' + p;
-          return p;
-        });
-
-        // Start with dispatch_recipients status as baseline
-        const statusRank: Record<string, number> = { failed: 0, sent: 1, delivered: 2, read: 3 };
-        const phoneStatus = new Map<string, string>();
-        for (let i = 0; i < recs.length; i++) {
-          let p = recs[i].phone.replace(/\D/g, '');
-          if (!p.startsWith('55')) p = '55' + p;
-          if (recs[i].status) phoneStatus.set(p, recs[i].status);
-        }
-
-        // FIX: Use created_at (dispatch creation) instead of started_at (last lock timestamp)
-        const startTime = new Date(d.created_at);
-        startTime.setMinutes(startTime.getMinutes() - 2);
-        const endTime = d.completed_at
-          ? new Date(new Date(d.completed_at).getTime() + 24 * 60 * 60 * 1000)
-          : new Date();
-
-        // Overlay whatsapp_messages status (higher rank wins)
-        let interactionCount = 0;
-        for (let i = 0; i < phones.length; i += 100) {
-          const batch = phones.slice(i, i + 100);
-          const { data: msgs } = await supabase
-            .from('whatsapp_messages')
-            .select('phone, status')
-            .eq('direction', 'outgoing')
-            .in('phone', batch)
-            .gte('created_at', startTime.toISOString())
-            .lte('created_at', endTime.toISOString());
-          if (msgs) {
-            for (const msg of msgs) {
-              const current = phoneStatus.get(msg.phone);
-              if (!current || (statusRank[msg.status] || 0) > (statusRank[current] || 0)) {
-                phoneStatus.set(msg.phone, msg.status);
-              }
-            }
-          }
-
-          // Count interactions (incoming replies from these phones after dispatch)
-          const { count: replies } = await supabase
-            .from('whatsapp_messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('direction', 'incoming')
-            .in('phone', batch)
-            .gte('created_at', startTime.toISOString())
-            .lte('created_at', endTime.toISOString());
-          interactionCount += replies || 0;
-        }
-
-        const stats = {
-          delivered: 0, read: 0, sent: 0, failed: 0,
-          total: phones.length,
-          dispatched: d.sent_count || 0,
-          interactions: interactionCount,
-        };
-        for (const [, status] of phoneStatus) {
-          if (status === 'delivered') stats.delivered++;
-          else if (status === 'read') stats.read++;
-          else if (status === 'sent') stats.sent++;
-          else if (status === 'failed') stats.failed++;
-        }
-
+      const enriched = data.map((d: any) => {
+        const dispatched = d.sent_count || 0;
+        const failed = d.failed_count || 0;
         return {
           ...d,
           whatsapp_instance_label: numberMap.get(d.whatsapp_number_id)?.label || null,
           whatsapp_phone_display: numberMap.get(d.whatsapp_number_id)?.phone_display || null,
-          stats,
+          stats: {
+            delivered: 0,
+            read: 0,
+            sent: Math.max(0, dispatched - failed),
+            failed,
+            total: d.total_recipients || dispatched + failed,
+            dispatched,
+            interactions: 0,
+          },
         };
-      }));
+      });
 
       setDispatches(enriched);
     } catch (err) {
@@ -335,14 +268,6 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
 
     return () => { supabase.removeChannel(channel); };
   }, []);
-
-  // Auto-refresh while any dispatch is actively sending (fallback if realtime drops)
-  useEffect(() => {
-    const hasActive = dispatches.some(d => d.status === 'sending');
-    if (!hasActive) return;
-    const interval = setInterval(() => { loadHistory(); }, 5000);
-    return () => clearInterval(interval);
-  }, [dispatches, loadHistory]);
 
   const openDetail = async (dispatch: DispatchRecord) => {
     setSelectedDispatch(dispatch);

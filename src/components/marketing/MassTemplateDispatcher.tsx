@@ -98,6 +98,7 @@ export function MassTemplateDispatcher() {
   const [leads, setLeads] = useState<any[]>([]);
   const [ravenaCustomers, setRavenaCustomers] = useState<any[]>([]);
   const [isLoadingAudience, setIsLoadingAudience] = useState(false);
+  const [audienceLoaded, setAudienceLoaded] = useState(false);
 
   // CRM Filters (same as RFM tab)
   const [rfmFilter, setRfmFilter] = useState<string>("all");
@@ -233,10 +234,6 @@ export function MassTemplateDispatcher() {
   useEffect(() => {
     if (selectedNumber) fetchTemplates();
   }, [selectedNumber]);
-
-  useEffect(() => {
-    fetchAudience();
-  }, []);
 
   // Fetch store/seller mapping
   useEffect(() => {
@@ -465,6 +462,7 @@ export function MassTemplateDispatcher() {
         ravFrom += 1000;
       }
       setRavenaCustomers(allRavena);
+      setAudienceLoaded(true);
     } catch (err) { console.error(err); toast.error("Erro ao carregar audiência"); }
     finally { setIsLoadingAudience(false); }
   };
@@ -1430,7 +1428,7 @@ export function MassTemplateDispatcher() {
               </span>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">
-                  {filteredRecipients.length} disponíveis
+                  {audienceLoaded ? `${filteredRecipients.length} disponíveis` : 'Audiência não carregada'}
                 </Badge>
                 <Badge className="text-xs bg-primary">
                   {selectedCount} selecionados
@@ -1727,7 +1725,11 @@ export function MassTemplateDispatcher() {
                     Nenhum destinatário encontrado com os filtros atuais
                   </div>
                 ) : (
-                  filteredRecipients.slice(0, 500).map(r => (
+                  !audienceLoaded ? (
+                    <div className="text-center py-8 text-muted-foreground text-xs">
+                      Clique em atualizar para carregar a audiência desta campanha
+                    </div>
+                  ) : filteredRecipients.slice(0, 500).map(r => (
                     <div
                       key={r.phone}
                       className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted/50 rounded text-xs"
