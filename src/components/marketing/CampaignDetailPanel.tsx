@@ -405,8 +405,8 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           offset++;
         }
       }
-      const { data: insertedRows, error } = await withNetworkRetry(() =>
-        supabase
+      const { data: insertedRows, error } = await withNetworkRetry(async () =>
+        await supabase
           .from('group_campaign_scheduled_messages')
           .insert(allInserts as any)
           .select('id, block_order'),
