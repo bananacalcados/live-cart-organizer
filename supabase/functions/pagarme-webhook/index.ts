@@ -270,7 +270,7 @@ serve(async (req) => {
         else {
           updated = true;
           console.log(`pos_sales ${sale.id} marked as paid via webhook`);
-          await autoCreateTinyOrder(supabase, sale.id, supabaseUrl, supabaseKey);
+          // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
         }
       } else if (isFailed && sale.status === "online_pending") {
         const { error } = await supabase

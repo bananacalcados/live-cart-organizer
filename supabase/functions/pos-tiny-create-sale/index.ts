@@ -12,9 +12,17 @@ serve(async (req) => {
   }
 
   try {
-    const { store_id, sale_id, seller_id, tiny_seller_id, customer, items, payment_method_id, payment_method_name, discount, notes } = await req.json();
+    const { store_id, sale_id, seller_id, tiny_seller_id, customer, items, payment_method_id, payment_method_name, discount, notes, push_tiny } = await req.json();
     if (!store_id) throw new Error('store_id is required');
     if (!items || items.length === 0) throw new Error('items is required');
+
+    // Tiny ERP push is now MANUAL ONLY. The order is only sent to Tiny when the
+    // caller explicitly requests it with push_tiny === true (the "Enviar/Reenviar
+    // ao Tiny" button). Every other flow (webhooks, event routing, checkout,
+    // POS sale finalization) just creates/updates the local pos_sales record and
+    // skips Tiny. This keeps the function able to create the order in Tiny while
+    // disabling all automatic pushes.
+    const wantTiny = push_tiny === true;
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -51,8 +59,8 @@ serve(async (req) => {
       .eq('id', store_id)
       .single();
 
-    const skipTiny = !!(store as any)?.disable_tiny_orders;
-    if (!skipTiny && !store?.tiny_token) throw new Error('Store token not configured');
+    const skipTiny = !wantTiny || !!(store as any)?.disable_tiny_orders;
+    if (wantTiny && !skipTiny && !store?.tiny_token) throw new Error('Store token not configured');
 
     const token = store?.tiny_token;
     const subtotal = items.reduce((s: number, i: any) => s + (i.price * i.quantity), 0);
@@ -143,9 +151,11 @@ serve(async (req) => {
       return null;
     };
 
-    // Try to create order in Tiny ERP (skip when store has disable_tiny_orders = true)
+    // Tiny push only happens when explicitly requested (push_tiny === true) and
+    // the store does not have disable_tiny_orders. Otherwise we only persist the
+    // local pos_sales record.
     if (skipTiny) {
-      console.log(`[pos-tiny-create-sale] store ${store_id} has disable_tiny_orders=true — skipping Tiny push`);
+      console.log(`[pos-tiny-create-sale] Tiny push skipped for store ${store_id} (push_tiny=${wantTiny}, disable_tiny_orders=${!!(store as any)?.disable_tiny_orders})`);
       tinyFailed = false;
     } else try {
       const orderItems = items.map((item: any) => ({ ...item, codigo: item.sku || '' }));

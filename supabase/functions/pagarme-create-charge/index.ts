@@ -891,73 +891,8 @@ serve(async (req) => {
         }
         else console.log(`pos_sales ${params.orderId} updated to paid`);
 
-        // ── AUTO-CREATE TINY ORDER ──
-        if (resolvedStoreId) {
-          try {
-            console.log(`[AUTO-TINY] Creating Tiny order for sale ${params.orderId}...`);
-            const { data: saleItems } = await supabase
-              .from("pos_sale_items")
-              .select("*")
-              .eq("sale_id", params.orderId);
-
-            if (saleItems && saleItems.length > 0) {
-              const tinyItems = saleItems.map((it: any) => ({
-                sku: it.sku || "",
-                name: it.product_name,
-                variant: it.variant_name || null,
-                quantity: it.quantity,
-                price: Number(it.unit_price),
-                barcode: it.barcode || null,
-                tiny_id: it.tiny_product_id || null,
-              }));
-
-              const addr = params.billingAddress || {} as any;
-              const tinyCustomer: any = {
-                name: params.customer.name,
-                cpf: params.customer.cpf,
-                email: params.customer.email,
-                whatsapp: params.customer.phone,
-                address: addr.street || "",
-                addressNumber: addr.number || "",
-                neighborhood: addr.neighborhood || "",
-                city: addr.city || "",
-                state: addr.state || "",
-                cep: (addr.zipCode || "").replace(/\D/g, ""),
-              };
-
-              const paymentMethodLabel = params.installments > 1
-                ? `Cartão de Crédito ${params.installments}x`
-                : "Cartão de Crédito";
-
-              const tinyPayload = {
-                store_id: resolvedStoreId,
-                sale_id: params.orderId,
-                customer: tinyCustomer,
-                items: tinyItems,
-                payment_method_name: paymentMethodLabel,
-                notes: `Checkout online - ${result.gateway}`,
-              };
-
-              const tinyRes = await fetch(
-                `${supabaseUrl}/functions/v1/pos-tiny-create-sale`,
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${supabaseKey}`,
-                  },
-                  body: JSON.stringify(tinyPayload),
-                }
-              );
-              const tinyData = await tinyRes.json();
-              console.log(`[AUTO-TINY] Result:`, JSON.stringify(tinyData).substring(0, 500));
-            } else {
-              console.log(`[AUTO-TINY] No sale items found for ${params.orderId}`);
-            }
-          } catch (tinyErr) {
-            console.error(`[AUTO-TINY] Error (non-blocking):`, tinyErr);
-          }
-        }
+        // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
+        // The payment confirmation above is all the webhook/charge flow does now.
       }
       console.log(`${orderSource} ${params.orderId} paid via ${result.gateway}`);
     }

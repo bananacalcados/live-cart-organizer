@@ -291,41 +291,10 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     await processPayment("pickup");
   };
 
-  const createTinyOrder = async () => {
-    try {
-      const sellerObj = sellers.find(s => s.id === selectedSeller);
-      const { data } = await supabase.functions.invoke("pos-tiny-create-sale", {
-        body: {
-          store_id: storeId,
-          seller_id: selectedSeller,
-          tiny_seller_id: sellerObj?.tiny_seller_id || null,
-          customer: linkedCustomer ? {
-            name: linkedCustomer.name,
-            cpf: linkedCustomer.cpf,
-            email: linkedCustomer.email,
-            whatsapp: linkedCustomer.whatsapp,
-            address: linkedCustomer.address,
-            cep: linkedCustomer.cep,
-            city: linkedCustomer.city,
-            state: linkedCustomer.state,
-          } : undefined,
-          items: cart.map(c => ({
-            sku: c.sku,
-            name: c.title,
-            variant: c.variantLabel,
-            quantity: c.quantity,
-            price: c.price,
-          })),
-          payment_method_name: "Venda Online",
-          notes: deliveryNotes || undefined,
-        },
-      });
-      return data;
-    } catch (e) {
-      console.error("Tiny order creation failed:", e);
-      return null;
-    }
-  };
+  // Tiny order creation is now MANUAL ONLY. The online sale is persisted directly
+  // by this component; pushing to Tiny is done later via the "Enviar/Reenviar ao
+  // Tiny" button in the POS daily sales view.
+
 
   const ensureCrmOrder = async (): Promise<string | null> => {
     try {
@@ -536,15 +505,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         setShowLinkDialog(true);
       }
 
-      // Create Tiny order for delivery, PayPal and PIX
-      if (gateway === "delivery" || gateway === "paypal" || gateway === "pix") {
-        const tinyResult = await createTinyOrder();
-        if (tinyResult?.success) {
-          console.log("Tiny order created:", tinyResult.tiny_order_id);
-        } else {
-          console.warn("Tiny order failed (sale saved locally):", tinyResult?.error);
-        }
-      }
+      // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
+      // The online sale is already saved locally above; no automatic Tiny push.
 
       // Transfer stock: source store -> Site
       for (const item of cart) {

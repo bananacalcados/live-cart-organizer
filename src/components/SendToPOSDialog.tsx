@@ -197,39 +197,8 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
 
       if (itemsError) throw itemsError;
 
-      // 4) Create Tiny ERP order (best-effort)
-      try {
-        const storeName = STORES.find(s => s.id === selectedStore)?.name || "";
-        await supabase.functions.invoke("pos-tiny-create-sale", {
-          body: {
-            // CRITICAL: pass sale_id so pos-tiny-create-sale UPDATES the live
-            // pos_sales row created above instead of INSERTING a duplicate
-            // "physical" row that shares the same tiny_order_id.
-            sale_id: sale.id,
-            store_id: selectedStore,
-            customer: {
-              name: customerName,
-              whatsapp: whatsapp,
-              cpf: cpf,
-              email: email,
-              address: shippingAddress,
-            },
-            items: order.products.map(p => ({
-              sku: p.sku || "",
-              name: p.title,
-              variant: p.variant,
-              quantity: p.quantity,
-              price: p.price,
-            })),
-            payment_method_name: "Venda Live - Retirada",
-            seller_id: sellerId,
-            discount: discountAmount > 0 ? discountAmount : undefined,
-            notes: `Venda da Live - Retirada ${storeName}${isSiteChannel ? " (Site)" : ""}`,
-          },
-        });
-      } catch (tinyErr) {
-        console.warn("Tiny order creation failed (sale saved locally):", tinyErr);
-      }
+      // 4) Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny"
+      // button in the POS). The pos_sales row was created above; no automatic Tiny push.
 
       // 5) Update CRM order with POS sale reference
       await supabase

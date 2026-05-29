@@ -504,6 +504,9 @@ export function POSDailySales({ storeId }: Props) {
           Authorization: `Bearer ${SUPABASE_KEY}`,
         },
         body: JSON.stringify({
+          // Manual Tiny push: update the existing sale and actually send to Tiny.
+          sale_id: sale.id,
+          push_tiny: true,
           store_id: storeId,
           seller_id: sale.seller_id || undefined,
           tiny_seller_id: tinySellerId,

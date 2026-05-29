@@ -276,53 +276,8 @@ serve(async (req) => {
             transaction_id: String(paymentId),
           } as any).then(() => {});
 
-          // Create Tiny order if we have items and store data
-          try {
-            const { data: items } = await supabase
-              .from("pos_sale_items")
-              .select("*")
-              .eq("sale_id", orderId);
-
-            if (items && items.length > 0) {
-              const storeName = (sale.store as any)?.name || "Loja";
-              await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/pos-tiny-create-sale`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-                },
-                body: JSON.stringify({
-                  store_id: sale.store_id,
-                  sale_id: orderId,
-                  customer: {
-                    name: customerName || "Cliente PIX",
-                    cpf: customerCpf,
-                    email: customerEmail,
-                    whatsapp: customerPhone,
-                    address: pd.customer_address || "",
-                    addressNumber: pd.customer_address_number || "",
-                    complement: pd.customer_complement || "",
-                    neighborhood: pd.customer_neighborhood || "",
-                    cep: (pd.customer_cep || "").replace(/\D/g, ""),
-                    city: pd.customer_city || "",
-                    state: pd.customer_state || "",
-                  },
-                  items: items.map((it: any) => ({
-                    sku: it.sku || "",
-                    name: it.product_name || "",
-                    variant: it.variant_name || "",
-                    quantity: it.quantity,
-                    price: Number(it.unit_price),
-                  })),
-                  payment_method_name: "PIX Mercado Pago",
-                  notes: `PIX Checkout Loja - ${storeName}`,
-                }),
-              });
-              console.log("Tiny order creation triggered for pos_sale:", orderId);
-            }
-          } catch (tinyErr) {
-            console.error("Tiny order creation failed:", tinyErr);
-          }
+          // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
+          // The payment confirmation above is all this flow does now.
         }
       }
     }

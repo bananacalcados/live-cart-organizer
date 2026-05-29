@@ -809,11 +809,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       });
       const data = await resp.json();
       if (data.success) {
-        if (data.tiny_failed) {
-          toast.warning("Venda salva localmente! Tiny ERP indisponível — sincronize depois manualmente.");
-        } else {
-          toast.success("Venda criada no Tiny ERP!");
-        }
+        // Tiny push is MANUAL ONLY now — the sale is saved locally; use the
+        // "Enviar/Reenviar ao Tiny" button later if you want to push it.
+        toast.success("Venda finalizada!");
         setSaleResult(data);
         setStep("invoice");
 

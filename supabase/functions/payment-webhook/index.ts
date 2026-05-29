@@ -451,7 +451,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       } else {
         console.log(`[mercadopago] pos_sale ${sale.id} marked as paid via webhook`);
         updated = true;
-        await autoCreateTinyOrder(supabase, sale.id, supabaseUrl, supabaseKey);
+        // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
       }
     } else {
       console.log(`[mercadopago] No order found for mercadopago_payment_id=${mpIdStr}`);
@@ -816,8 +816,7 @@ async function updateSale(
     if (error) { console.error("Error updating pos_sales:", error); return false; }
     console.log(`pos_sales ${saleId} marked as paid via VINDI webhook`);
     console.log(`[vindi] Vinculado vindi_transaction_id=${tokenTransaction} ao pedido ${saleId}`);
-    // Auto-create Tiny order
-    await autoCreateTinyOrder(supabase, saleId, supabaseUrl, supabaseKey);
+    // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
     return true;
   } else if (isFailed && (sale.status === "online_pending" || sale.status === "paid" || sale.status === "completed")) {
     const { error } = await supabase
