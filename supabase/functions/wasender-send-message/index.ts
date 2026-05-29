@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { resolveWasenderCredentials, WASENDER_BASE } from "../_shared/wasender-credentials.ts";
+import { resolveWasenderCredentials, WASENDER_BASE, formatWasenderJid } from "../_shared/wasender-credentials.ts";
 import { checkInstanceGuard } from "../_shared/instance-guard.ts";
 
 const corsHeaders = {
@@ -7,15 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-force-instance",
 };
-
-function formatPhone(phone: string): string {
-  // Mantém JIDs de grupo intactos
-  if (phone.includes("@") || phone.includes("-")) return phone;
-  let digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("120")) return digits;
-  if (digits.length >= 10 && digits.length <= 11) digits = "55" + digits;
-  return digits;
-}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
