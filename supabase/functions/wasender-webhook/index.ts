@@ -268,8 +268,114 @@ serve(async (req) => {
       return ok();
     }
 
+    // ── groups.update / groups.participants.update → sincroniza grupos conhecidos ──
+    if (event === "groups.update" || event === "groups.participants.update" || event.startsWith("groups")) {
+      try {
+        // O payload pode trazer um objeto ou uma lista de grupos
+        const rawGroups: any[] = Array.isArray((data as any)?.groups)
+          ? (data as any).groups
+          : Array.isArray(data)
+            ? (data as any)
+            : [data];
+
+        for (const g of rawGroups) {
+          if (!g || typeof g !== "object") continue;
+          const groupId = asString(g.id) || asString(g.jid) || asString(g.remoteJid) || asString(g.groupId);
+          if (!groupId) continue;
+
+          // Só atualiza grupos que já conhecemos (não cria novos via webhook)
+          const { data: known } = await supabase
+            .from("whatsapp_groups")
+            .select("id, participant_count")
+            .eq("group_id", groupId)
+            .maybeSingle();
+          if (!known) {
+            console.log("[wasender-webhook] grupo desconhecido, ignorando:", groupId);
+            continue;
+          }
+
+          const update: Record<string, unknown> = {
+            last_synced_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          const name = asString(g.subject) || asString(g.name);
+          if (name) update.name = name;
+          const desc = asString(g.desc) || asString(g.description);
+          if (desc) update.description = desc;
+
+          // participantes: lista completa ou ações add/remove
+          if (Array.isArray(g.participants)) {
+            update.previous_participant_count = (known as any).participant_count ?? null;
+            update.participant_count = g.participants.length;
+          } else if (event === "groups.participants.update" && Array.isArray((data as any)?.participants)) {
+            const action = String((data as any)?.action || "").toLowerCase();
+            const delta = (data as any).participants.length;
+            const prev = (known as any).participant_count ?? 0;
+            update.previous_participant_count = prev;
+            if (action === "add") update.participant_count = prev + delta;
+            else if (action === "remove") update.participant_count = Math.max(0, prev - delta);
+          }
+
+          await supabase.from("whatsapp_groups").update(update).eq("group_id", groupId);
+        }
+      } catch (e) {
+        console.error("[wasender-webhook] groups update falhou:", e);
+      }
+      return ok();
+    }
+
+    // ── contacts.update / contacts.upsert → atualiza nome de exibição ──
+    if (event === "contacts.update" || event === "contacts.upsert" || event.startsWith("contacts")) {
+      try {
+        const rawContacts: any[] = Array.isArray((data as any)?.contacts)
+          ? (data as any).contacts
+          : Array.isArray(data)
+            ? (data as any)
+            : [data];
+
+        for (const c of rawContacts) {
+          if (!c || typeof c !== "object") continue;
+          const jid = asString(c.id) || asString(c.jid) || asString(c.remoteJid);
+          if (!jid || jid.includes("@g.us")) continue; // ignora grupos
+          const rawPhone =
+            asString(c.cleanedPn) || asString(c.phone) || asString(jid.replace(/@.*$/, ""));
+          if (!rawPhone) continue;
+          const name = asString(c.name) || asString(c.notify) || asString(c.pushName) || asString(c.verifiedName);
+          if (!name) continue;
+
+          const digits = rawPhone.replace(/\D/g, "");
+          const suffix = digits.slice(-8); // match por sufixo de 8 dígitos (regra do projeto)
+          if (suffix.length < 8) continue;
+
+          // Atualiza display_name apenas onde ainda não há custom_name definido
+          const { data: existing } = await supabase
+            .from("chat_contacts")
+            .select("id, custom_name")
+            .like("phone", `%${suffix}`)
+            .limit(5);
+
+          if (existing && existing.length > 0) {
+            for (const row of existing) {
+              await supabase
+                .from("chat_contacts")
+                .update({ display_name: name, updated_at: new Date().toISOString() })
+                .eq("id", (row as any).id);
+            }
+          } else {
+            await supabase
+              .from("chat_contacts")
+              .insert({ phone: digits, display_name: name });
+          }
+        }
+      } catch (e) {
+        console.error("[wasender-webhook] contacts update falhou:", e);
+      }
+      return ok();
+    }
+
     // Eventos não tratados → 200
     return ok();
+
   } catch (e) {
     console.error("[wasender-webhook] error:", e);
     // Sempre 200 para a WaSender não reenviar em loop
