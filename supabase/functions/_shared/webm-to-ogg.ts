@@ -274,28 +274,51 @@ export function webmToOgg(webmBytes: Uint8Array): Uint8Array {
   new DataView(opusTags.buffer).setUint32(12 + vendor.length, 0, true); // 0 comments
   pages.push(writeOggPage(serialNo, pageSeqNo++, 0n, 0x00, [opusTags]));
 
-  // Audio data pages — group packets into pages of ~64KB max
-  let granulePos = 0n;
+  // Audio data pages.
+  // IMPORTANT: an OGG page can hold AT MOST 255 lacing segments (the segment
+  // count is a single byte). Each packet uses floor(len/255)+1 segments. If we
+  // exceed 255 segments the page header byte overflows and the whole bitstream
+  // becomes corrupt (CRC mismatch / "no OggS"), which makes WhatsApp unable to
+  // play the voice note. So we cap pages by BOTH segment count and body size.
+  let granulePos = 0n;       // running total of decoded samples
+  let pageGranule = 0n;      // granule at the end of the page being built
   const MAX_PAGE_BODY = 60000;
+  const MAX_PAGE_SEGMENTS = 255;
   let currentSegments: Uint8Array[] = [];
+  let currentSegCount = 0;
   let currentBodySize = 0;
 
-  for (const pkt of packets) {
-    granulePos += BigInt(pkt.samples);
+  const flushPage = (headerType: number) => {
+    pages.push(writeOggPage(serialNo, pageSeqNo++, pageGranule, headerType, currentSegments));
+    currentSegments = [];
+    currentSegCount = 0;
+    currentBodySize = 0;
+  };
 
-    if (currentBodySize + pkt.data.length > MAX_PAGE_BODY && currentSegments.length > 0) {
-      pages.push(writeOggPage(serialNo, pageSeqNo++, granulePos, 0x00, currentSegments));
-      currentSegments = [];
-      currentBodySize = 0;
+  for (const pkt of packets) {
+    const segs = Math.floor(pkt.data.length / 255) + 1;
+
+    // Flush the current page BEFORE adding this packet if it would overflow
+    // either the 255-segment limit or the target body size.
+    if (
+      currentSegments.length > 0 &&
+      (currentSegCount + segs > MAX_PAGE_SEGMENTS ||
+        currentBodySize + pkt.data.length > MAX_PAGE_BODY)
+    ) {
+      flushPage(0x00);
     }
 
+    granulePos += BigInt(pkt.samples);
+    pageGranule = granulePos; // granule = samples decoded by end of this page
+
     currentSegments.push(pkt.data);
+    currentSegCount += segs;
     currentBodySize += pkt.data.length;
   }
 
   // Last page (EOS)
   if (currentSegments.length > 0) {
-    pages.push(writeOggPage(serialNo, pageSeqNo++, granulePos, 0x04, currentSegments));
+    flushPage(0x04);
   }
 
   // Concatenate all pages

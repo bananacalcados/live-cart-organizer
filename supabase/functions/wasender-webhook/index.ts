@@ -112,21 +112,70 @@ serve(async (req) => {
       return ok();
     }
 
-    // ── messages.update → atualiza status (✓✓) ──
-    if (event === "messages.update" || event === "message.status" || event === "messages.status") {
-      const upd = (data as any)?.messages || (data as any)?.update || data;
-      const id = asString(upd?.key?.id) || asString(upd?.id) || asString((data as any)?.id);
-      const newStatus = String(upd?.status || (data as any)?.status || "").toLowerCase();
-      if (id && newStatus) {
-        const map: Record<string, string> = {
-          delivery_ack: "delivered",
-          delivered: "delivered",
-          read: "read",
-          played: "read",
-          server_ack: "sent",
-          sent: "sent",
-        };
-        const mapped = map[newStatus] || newStatus;
+    // ── messages.update / message-receipt.update → status dos tickets (✓ ✓✓ azul) ──
+    if (
+      event === "messages.update" ||
+      event === "message.status" ||
+      event === "messages.status" ||
+      event === "message-receipt.update" ||
+      event === "messages.receipt.update"
+    ) {
+      // O payload pode vir como objeto único ou lista (Baileys).
+      const entries: any[] = Array.isArray((data as any)?.messages)
+        ? (data as any).messages
+        : Array.isArray(data)
+          ? (data as any)
+          : [(data as any)?.messages || (data as any)?.update || data];
+
+      // Baileys: status numérico 1=pending 2=server_ack(sent) 3=delivery_ack(delivered) 4=read 5=played
+      const numMap: Record<string, string> = {
+        "2": "sent",
+        "3": "delivered",
+        "4": "read",
+        "5": "read",
+      };
+      const strMap: Record<string, string> = {
+        delivery_ack: "delivered",
+        delivered: "delivered",
+        read: "read",
+        played: "read",
+        server_ack: "sent",
+        sent: "sent",
+        pending: "sent",
+      };
+
+      for (const upd of entries) {
+        if (!upd) continue;
+        const id =
+          asString(upd?.key?.id) || asString(upd?.id) || asString((data as any)?.id);
+        if (!id) continue;
+
+        const rawStatus =
+          upd?.update?.status ?? upd?.status ?? (data as any)?.status;
+        // Receipts (message-receipt.update) muitas vezes só trazem readTimestamp.
+        const receipt = upd?.receipt || (data as any)?.receipt;
+        let mapped: string | null = null;
+
+        if (rawStatus != null && rawStatus !== "") {
+          const key = String(rawStatus).toLowerCase();
+          mapped = numMap[key] || strMap[key] || null;
+        }
+        if (!mapped && receipt) {
+          if (receipt.readTimestamp || receipt.playedTimestamp) mapped = "read";
+          else if (receipt.receiptTimestamp || receipt.deliveredTimestamp) mapped = "delivered";
+        }
+        if (!mapped) continue;
+
+        // Nunca rebaixar o status (read > delivered > sent).
+        const rank: Record<string, number> = { sent: 1, delivered: 2, read: 3 };
+        const { data: existing } = await supabase
+          .from("whatsapp_messages")
+          .select("status")
+          .eq("message_id", id)
+          .maybeSingle();
+        const currentRank = rank[String(existing?.status || "").toLowerCase()] || 0;
+        if ((rank[mapped] || 0) < currentRank) continue;
+
         await supabase
           .from("whatsapp_messages")
           .update({ status: mapped })
