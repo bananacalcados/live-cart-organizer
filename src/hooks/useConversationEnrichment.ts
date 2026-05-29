@@ -130,13 +130,22 @@ export function useConversationEnrichment() {
     extras?: { saleValue?: number; saleCurrency?: string; triggerId?: string | null; whatsappNumberId?: string | null }
   ) => {
     const phoneKey = normalizePhoneKey(phone);
+    const finishedAtIso = new Date().toISOString();
     if (phoneKey) {
       setFinishedPhones(prev => new Set([...prev, phoneKey]));
+      // Keep the timestamp map in sync too — enrichConversations reads this map
+      // (not the Set) to decide isFinished, so it MUST be updated optimistically
+      // or the conversation reverts on the next list refresh.
+      setFinishedAtByPhone(prev => {
+        const next = new Map(prev);
+        next.set(phoneKey, finishedAtIso);
+        return next;
+      });
     }
 
     const { error } = await supabase.from('chat_finished_conversations').upsert({
       phone,
-      finished_at: new Date().toISOString(),
+      finished_at: finishedAtIso,
       finish_reason: reason || null,
       seller_id: sellerId || null,
       sale_value: extras?.saleValue ?? null,
