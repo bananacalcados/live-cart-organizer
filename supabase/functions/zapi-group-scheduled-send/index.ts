@@ -15,14 +15,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ===== Defaults humanizados =====
-const INTER_BLOCK_DELAY_MIN_MS = 8_000;
-const INTER_BLOCK_DELAY_MAX_MS = 15_000;
-const INTER_GROUP_DELAY_MIN_MS = 45_000;
-const INTER_GROUP_DELAY_MAX_MS = 90_000;
-const LONG_PAUSE_EVERY_N_GROUPS = 3;
-const LONG_PAUSE_MIN_MS = 120_000;
-const LONG_PAUSE_MAX_MS = 180_000;
+// ===== Defaults humanizados (reduzidos: mais leves p/ o sistema, sem travar) =====
+const INTER_BLOCK_DELAY_MIN_MS = 4_000;
+const INTER_BLOCK_DELAY_MAX_MS = 8_000;
+const INTER_GROUP_DELAY_MIN_MS = 12_000;
+const INTER_GROUP_DELAY_MAX_MS = 25_000;
+const LONG_PAUSE_EVERY_N_GROUPS = 5;
+const LONG_PAUSE_MIN_MS = 40_000;
+const LONG_PAUSE_MAX_MS = 70_000;
 const RETRY_DELAY_MS = 10_000;
 
 // Tempo máximo de execução por invocação (cron volta a chamar depois)
