@@ -35,7 +35,7 @@ serve(async (req) => {
     }
 
     const { apiKey } = await resolveWasenderCredentials(whatsapp_number_id);
-    const to = formatPhone(phone);
+    const to = formatWasenderJid(phone);
 
     const payload: Record<string, unknown> = { to, text: message };
     if (quotedMessageId) payload.quotedMessageId = quotedMessageId;
