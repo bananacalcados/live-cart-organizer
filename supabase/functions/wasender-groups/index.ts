@@ -50,7 +50,7 @@ serve(async (req) => {
       return { ok: res.ok, status: res.status, data };
     };
 
-    const jid = body.groupJid as string | undefined;
+    const jid = body.groupJid ? formatWasenderJid(String(body.groupJid)) : undefined;
     let r: { ok: boolean; status: number; data: any };
 
     switch (action) {
