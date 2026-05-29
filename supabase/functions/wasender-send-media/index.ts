@@ -107,7 +107,7 @@ serve(async (req) => {
     }
 
     const { apiKey } = await resolveWasenderCredentials(whatsapp_number_id);
-    const to = formatPhone(phone);
+    const to = formatWasenderJid(phone);
 
     // Áudio: remux WebM→OGG/Opus para o WhatsApp reproduzir corretamente.
     let finalMediaUrl = mediaUrl;
