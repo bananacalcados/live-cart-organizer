@@ -12,15 +12,18 @@ const corsHeaders = {
 };
 
 // Eventos do webhook que a sessão WaSender deve assinar.
-// Inclui mensagens (received/upsert), status, QR, grupos e contatos.
+// IMPORTANTE: usar SOMENTE os nomes válidos da API WaSender, caso contrário
+// a criação/atualização da sessão falha com 422 "webhook_events.N is invalid".
+// `messages.upsert` cobre mensagens recebidas E enviadas (inclusive as enviadas
+// pelo celular físico no app do WhatsApp), permitindo puxá-las para o sistema.
 const WEBHOOK_EVENTS = [
-  "messages.received",
+  "message.sent",
   "messages.upsert",
   "messages.update",
   "session.status",
   "qrcode.updated",
   "groups.update",
-  "groups.participants.update",
+  "group-participants.update",
   "contacts.update",
   "contacts.upsert",
 ];

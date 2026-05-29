@@ -269,7 +269,7 @@ serve(async (req) => {
     }
 
     // ── groups.update / groups.participants.update → sincroniza grupos conhecidos ──
-    if (event === "groups.update" || event === "groups.participants.update" || event.startsWith("groups")) {
+    if (event === "groups.update" || event === "group-participants.update" || event === "groups.participants.update" || event.startsWith("group")) {
       try {
         // O payload pode trazer um objeto ou uma lista de grupos
         const rawGroups: any[] = Array.isArray((data as any)?.groups)
@@ -307,7 +307,7 @@ serve(async (req) => {
           if (Array.isArray(g.participants)) {
             update.previous_participant_count = (known as any).participant_count ?? null;
             update.participant_count = g.participants.length;
-          } else if (event === "groups.participants.update" && Array.isArray((data as any)?.participants)) {
+          } else if ((event === "group-participants.update" || event === "groups.participants.update") && Array.isArray((data as any)?.participants)) {
             const action = String((data as any)?.action || "").toLowerCase();
             const delta = (data as any).participants.length;
             const prev = (known as any).participant_count ?? 0;
