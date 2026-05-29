@@ -479,20 +479,17 @@ export default function Marketing() {
   };
 
   useEffect(() => {
-    fetchCustomers();
-    fetchCampaigns();
-    fetchLandingPages();
-    fetchLeads();
-    fetchLeadBackfillStatus({ silent: true })
-      .then((job) => {
-        if (job?.status === 'processing') {
-          startLeadBackfillPolling();
-        }
-      })
-      .catch(() => undefined);
+    loadedTabsRef.current.add(activeTab);
+    void loadTabData(activeTab);
 
     return () => stopLeadBackfillPolling();
-  }, [fetchCustomers, fetchCampaigns, fetchLandingPages, fetchLeads, fetchLeadBackfillStatus, startLeadBackfillPolling, stopLeadBackfillPolling]);
+  }, [activeTab, loadTabData, stopLeadBackfillPolling]);
+
+  useEffect(() => {
+    if (loadedTabsRef.current.has(activeTab)) return;
+    loadedTabsRef.current.add(activeTab);
+    void loadTabData(activeTab);
+  }, [activeTab, loadTabData]);
 
   // Fetch store/seller mapping for filters
   useEffect(() => {
