@@ -296,8 +296,8 @@ export function WaSenderInstanceManager() {
                           <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => checkStatus(inst)} title="Verificar status">
                             <RefreshCw className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => repairEvents(inst)} title="Reparar webhook (reativar recebimento)">
-                            <Webhook className="h-4 w-4" />
+                          <Button variant="outline" size="sm" className="h-8 gap-1" disabled={actingId === inst.id} onClick={() => repairEvents(inst)} title="Reativar recebimento de mensagens, tickets de leitura, grupos e contatos">
+                            <Webhook className="h-4 w-4" /> Atualizar eventos
                           </Button>
                           <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => disconnect(inst)} title="Desconectar">
                             <Power className="h-4 w-4" />
