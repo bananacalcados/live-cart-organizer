@@ -115,9 +115,15 @@ serve(async (req) => {
     const { apiKey } = await resolveWasenderCredentials(whatsapp_number_id);
     const to = formatPhone(phone);
 
+    // Áudio: remux WebM→OGG/Opus para o WhatsApp reproduzir corretamente.
+    let finalMediaUrl = mediaUrl;
+    if ((mediaType || "document") === "audio") {
+      finalMediaUrl = await ensureOggAudioUrl(mediaUrl);
+    }
+
     const payload: Record<string, unknown> = { to };
     if (caption) payload.text = caption;
-    payload[mediaField(mediaType || "document")] = mediaUrl;
+    payload[mediaField(mediaType || "document")] = finalMediaUrl;
 
     const res = await fetch(`${WASENDER_BASE}/send-message`, {
       method: "POST",
