@@ -367,8 +367,7 @@ serve(async (req) => {
         else {
           updated = true;
           console.log(`pos_sales ${ourOrderId} marked as paid via AppMax webhook`);
-          // Auto-create Tiny order
-          await autoCreateTinyOrder(supabase, ourOrderId, supabaseUrl, supabaseKey);
+          // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
         }
       } else if (isFailed && (record.status === "online_pending" || record.status === "paid" || record.status === "completed")) {
         const { error } = await supabase
