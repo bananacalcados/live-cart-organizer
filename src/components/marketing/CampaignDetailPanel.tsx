@@ -405,10 +405,12 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           offset++;
         }
       }
-      const { data: insertedRows, error } = await supabase
-        .from('group_campaign_scheduled_messages')
-        .insert(allInserts as any)
-        .select('id, block_order');
+      const { data: insertedRows, error } = await withNetworkRetry(() =>
+        supabase
+          .from('group_campaign_scheduled_messages')
+          .insert(allInserts as any)
+          .select('id, block_order'),
+      );
       if (error) throw error;
 
       const orderedInserted = (insertedRows || []).sort((a: any, b: any) => (a.block_order ?? 0) - (b.block_order ?? 0));
