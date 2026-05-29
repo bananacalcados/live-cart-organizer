@@ -70,15 +70,44 @@ serve(async (req) => {
     const event = String(payload?.event || "");
     const data = (payload?.data || {}) as Record<string, unknown>;
 
+    // ── qrcode.updated → salva QR para exibição em tempo real no Admin ──
+    if (event === "qrcode.updated" || event === "qr.updated" || event === "qrcode") {
+      const qr =
+        asString((data as any)?.qrCode) ||
+        asString((data as any)?.qr) ||
+        asString((data as any)?.code) ||
+        asString((payload as any)?.qrCode) ||
+        asString((payload as any)?.qr);
+      if (numberId && qr) {
+        await supabase
+          .from("whatsapp_numbers")
+          .update({
+            wasender_last_qr: qr,
+            wasender_qr_updated_at: new Date().toISOString(),
+            is_online: false,
+          })
+          .eq("id", numberId);
+      }
+      return ok();
+    }
+
     // ── session.status → atualiza is_online ──
     if (event === "session.status" || event.startsWith("session")) {
       const status = String((data as any)?.status || (payload as any)?.status || "").toLowerCase();
       const isOnline = status === "connected";
+      const needScan = status === "need_scan" || status === "disconnected" || status === "logged_out";
       if (numberId) {
-        await supabase
-          .from("whatsapp_numbers")
-          .update({ is_online: isOnline, last_health_check: new Date().toISOString() })
-          .eq("id", numberId);
+        const update: Record<string, unknown> = {
+          is_online: isOnline,
+          last_health_check: new Date().toISOString(),
+        };
+        // Ao conectar, o QR antigo não serve mais → limpa.
+        if (isOnline) {
+          update.wasender_last_qr = null;
+          update.wasender_qr_updated_at = null;
+        }
+        if (needScan) update.is_online = false;
+        await supabase.from("whatsapp_numbers").update(update).eq("id", numberId);
       }
       return ok();
     }
