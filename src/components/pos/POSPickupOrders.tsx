@@ -222,31 +222,8 @@ export function POSPickupOrders({ storeId }: Props) {
         paymentMethodName = pm?.name || "";
       }
 
-      // Create sale in Tiny ERP
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-create-sale`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-        body: JSON.stringify({
-          // CRITICAL: pass sale_id to UPDATE the existing live pos_sales row
-          // instead of creating a duplicate "physical" row sharing the same tiny_order_id.
-          sale_id: processingOrder.id,
-          store_id: storeId,
-          seller_id: selectedSeller || undefined,
-          tiny_seller_id: sellers.find(s => s.id === selectedSeller)?.tiny_seller_id || undefined,
-          customer: undefined,
-          items: processingOrder.items.map(item => ({
-            sku: item.sku,
-            name: item.product_name,
-            variant: item.variant_name,
-            price: item.unit_price,
-            quantity: item.quantity,
-          })),
-          payment_method_name: paymentMethodName,
-          discount: processingOrder.discount > 0 ? processingOrder.discount : undefined,
-        }),
-      });
-      const data = await resp.json();
-
+      // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
+      // We only register the payment locally here.
       // Update the pos_sales record
       await supabase
         .from("pos_sales")
@@ -257,8 +234,6 @@ export function POSPickupOrders({ storeId }: Props) {
           payment_details: useMultiPayment
             ? { multi: true, payments: multiPayments, source: processingOrder.payment_details?.source }
             : { source: processingOrder.payment_details?.source },
-          tiny_order_id: data.tiny_order_id ? String(data.tiny_order_id) : null,
-          tiny_order_number: data.tiny_order_number ? String(data.tiny_order_number) : null,
         })
         .eq("id", processingOrder.id);
 
@@ -278,15 +253,8 @@ export function POSPickupOrders({ storeId }: Props) {
         });
       }
 
-      if (data.success) {
-        if (data.tiny_failed) {
-          toast.warning("Pagamento registrado! Tiny indisponível — sincronize depois.");
-        } else {
-          toast.success(`Pagamento registrado! Pedido Tiny #${data.tiny_order_number || ""}`);
-        }
-      } else {
-        toast.warning("Pagamento registrado localmente. Erro Tiny: " + (data.error || ""));
-      }
+      const data = { success: true } as any;
+      toast.success("Pagamento registrado!");
 
       setSaleResult(data);
       setProcessStep("invoice");
