@@ -223,6 +223,7 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
             })),
             payment_method_name: "Venda Live - Retirada",
             seller_id: sellerId,
+            discount: discountAmount > 0 ? discountAmount : undefined,
             notes: `Venda da Live - Retirada ${storeName}${isSiteChannel ? " (Site)" : ""}`,
           },
         });
