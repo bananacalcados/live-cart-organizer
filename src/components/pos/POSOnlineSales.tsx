@@ -536,15 +536,8 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         setShowLinkDialog(true);
       }
 
-      // Create Tiny order for delivery, PayPal and PIX
-      if (gateway === "delivery" || gateway === "paypal" || gateway === "pix") {
-        const tinyResult = await createTinyOrder();
-        if (tinyResult?.success) {
-          console.log("Tiny order created:", tinyResult.tiny_order_id);
-        } else {
-          console.warn("Tiny order failed (sale saved locally):", tinyResult?.error);
-        }
-      }
+      // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
+      // The online sale is already saved locally above; no automatic Tiny push.
 
       // Transfer stock: source store -> Site
       for (const item of cart) {
