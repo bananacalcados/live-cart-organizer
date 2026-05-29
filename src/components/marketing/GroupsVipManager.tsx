@@ -112,14 +112,27 @@ export function GroupsVipManager() {
   const syncGroups = async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
-        method: 'POST',
-        headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ syncToDb: true, whatsapp_number_id: selectedNumberId }),
-      });
-      const data = await res.json();
-      if (data.success) { toast.success(`${data.total} grupos sincronizados!`); fetchGroups(); }
-      else toast.error(data.error || "Erro");
+      const { numbers, selectedNumberId: numId } = useWhatsAppNumberStore.getState();
+      const selected = numbers.find(n => n.id === numId);
+      const provider = selected?.provider || "zapi";
+
+      if (provider === "wasender") {
+        const { data, error } = await supabase.functions.invoke("wasender-groups", {
+          body: { action: "list", syncToDb: true, whatsapp_number_id: numId },
+        });
+        if (error) throw error;
+        if (data?.success) { toast.success(`${data.total ?? 0} grupos sincronizados!`); fetchGroups(); }
+        else toast.error(data?.error || "Erro");
+      } else {
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
+          method: 'POST',
+          headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ syncToDb: true, whatsapp_number_id: numId }),
+        });
+        const data = await res.json();
+        if (data.success) { toast.success(`${data.total} grupos sincronizados!`); fetchGroups(); }
+        else toast.error(data.error || "Erro");
+      }
     } catch { toast.error("Erro ao sincronizar"); }
     finally { setIsSyncing(false); }
   };
