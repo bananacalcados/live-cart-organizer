@@ -33,6 +33,35 @@ import { CampaignDashboard } from "./CampaignDashboard";
 import { VipStrategyPanel } from "./VipStrategyPanel";
 import { GroupDispatchErrorsPanel } from "./GroupDispatchErrorsPanel";
 
+/** Detecta falhas transitórias de rede ("Load failed"/"Failed to fetch"/timeout). */
+const isTransientNetworkError = (e: unknown): boolean => {
+  const msg = (e instanceof Error ? e.message : String(e || "")).toLowerCase();
+  return (
+    msg.includes("load failed") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("network") ||
+    msg.includes("timeout") ||
+    msg.includes("aborted")
+  );
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Reexecuta `fn` em falhas transitórias de rede (até `tries` tentativas). */
+async function withNetworkRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (!isTransientNetworkError(e) || i === tries - 1) throw e;
+      await sleep(800 * (i + 1));
+    }
+  }
+  throw lastErr;
+}
+
 interface CampaignDetailPanelProps {
   campaignId: string;
   onBack: () => void;
