@@ -172,6 +172,14 @@ serve(async (req) => {
         }
         if (!publicUrl) publicUrl = asString(mediaObj?.url);
 
+        const fileName = asString(mediaObj?.fileName);
+
+        // Re-hospeda a mídia (a URL da WaSender expira em ~1h) para que o chat
+        // mostre imagens/vídeos/áudios/documentos de forma permanente.
+        if (publicUrl) {
+          publicUrl = await rehostMedia(publicUrl, mediaType, fileName);
+        }
+
         const caption = asString(mediaObj?.caption) || messageBody || null;
         const mapKeyToField: Record<string, string> = {
           image: "image",
@@ -185,7 +193,7 @@ serve(async (req) => {
           url: publicUrl,
           [`${field}Url`]: publicUrl,
           caption,
-          fileName: asString(mediaObj?.fileName),
+          fileName,
         };
         if (caption) zPayload.text = caption;
       } else {
