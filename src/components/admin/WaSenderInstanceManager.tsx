@@ -12,7 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power } from "lucide-react";
+import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook } from "lucide-react";
 import QRCode from "react-qr-code";
 
 interface WaSenderInstance {
@@ -162,6 +162,23 @@ export function WaSenderInstanceManager() {
     setQrCode(null);
   };
 
+  const repairEvents = async (inst: WaSenderInstance) => {
+    setActingId(inst.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("wasender-session", {
+        body: { action: "update_events", whatsapp_number_id: inst.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "✅ Webhook atualizado", description: "Eventos de mensagens, grupos e contatos reativados." });
+    } catch (e) {
+      toast({ title: "Erro ao reparar webhook", description: (e as Error).message, variant: "destructive" });
+    }
+    setActingId(null);
+  };
+
+
+
   const checkStatus = async (inst: WaSenderInstance) => {
     setActingId(inst.id);
     try {
@@ -278,6 +295,9 @@ export function WaSenderInstanceManager() {
                           </Button>
                           <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => checkStatus(inst)} title="Verificar status">
                             <RefreshCw className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => repairEvents(inst)} title="Reparar webhook (reativar recebimento)">
+                            <Webhook className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => disconnect(inst)} title="Desconectar">
                             <Power className="h-4 w-4" />

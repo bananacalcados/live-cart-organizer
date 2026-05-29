@@ -11,6 +11,20 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
+// Eventos do webhook que a sessão WaSender deve assinar.
+// Inclui mensagens (received/upsert), status, QR, grupos e contatos.
+const WEBHOOK_EVENTS = [
+  "messages.received",
+  "messages.upsert",
+  "messages.update",
+  "session.status",
+  "qrcode.updated",
+  "groups.update",
+  "groups.participants.update",
+  "contacts.update",
+  "contacts.upsert",
+];
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -98,7 +112,7 @@ serve(async (req) => {
             read_incoming_messages: false,
             webhook_url: webhookUrl,
             webhook_enabled: true,
-            webhook_events: ["messages.received", "messages.update", "session.status"],
+            webhook_events: WEBHOOK_EVENTS,
           },
         });
 
@@ -183,6 +197,27 @@ serve(async (req) => {
           await supabase.from("whatsapp_numbers").delete().eq("id", numberId);
         }
         return json({ success: true });
+      }
+
+      case "update_events": {
+        // Re-aplica a lista completa de eventos do webhook numa sessão já existente.
+        const num = await loadNumber();
+        sessionId = num?.wasender_session_id ?? sessionId;
+        if (!sessionId) return json({ error: "Sessão WaSender não encontrada" }, 400);
+
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const webhookUrl = `${supabaseUrl}/functions/v1/wasender-webhook?number_id=${numberId}`;
+
+        const r = await wasenderPAT(`/whatsapp-sessions/${sessionId}`, {
+          method: "PUT",
+          body: {
+            webhook_url: webhookUrl,
+            webhook_enabled: true,
+            webhook_events: WEBHOOK_EVENTS,
+          },
+        });
+        if (!r.ok) return json({ error: "Falha ao atualizar eventos", details: r.data }, r.status);
+        return json({ success: true, events: WEBHOOK_EVENTS });
       }
 
       default:

@@ -40,7 +40,7 @@ interface LeadData {
 export function NewConversationDialog({ open, onOpenChange, onConversationCreated }: Props) {
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
-  const [sendVia, setSendVia] = useState<"zapi" | "meta">("zapi");
+  const [sendVia, setSendVia] = useState<"zapi" | "meta" | "wasender">("zapi");
   const [messageType, setMessageType] = useState<"normal" | "template">("normal");
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
@@ -227,6 +227,16 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
           phone: cleanPhone, message: messageText.trim(), direction: "outgoing", status: "sent",
           whatsapp_number_id: selectedNumberId,
         });
+      } else if (sendVia === "wasender") {
+        // WaSender
+        if (!messageText.trim()) { toast.error("Digite uma mensagem"); setSending(false); return; }
+        await supabase.functions.invoke("wasender-send-message", {
+          body: { phone: cleanPhone, message: messageText.trim(), whatsapp_number_id: selectedNumberId },
+        });
+        await supabase.from("whatsapp_messages").insert({
+          phone: cleanPhone, message: messageText.trim(), direction: "outgoing", status: "sent",
+          whatsapp_number_id: selectedNumberId || null,
+        });
       } else {
         // Z-API
         if (!messageText.trim()) { toast.error("Digite uma mensagem"); setSending(false); return; }
@@ -327,6 +337,14 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
                   Z-API
                 </button>
                 <button
+                  onClick={() => { setSendVia("wasender"); setMessageType("normal"); }}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
+                    sendVia === "wasender" ? "bg-[#00a884] text-white border-[#00a884]" : "bg-background border-border text-muted-foreground hover:border-[#00a884]/50"
+                  }`}
+                >
+                  WaSender
+                </button>
+                <button
                   onClick={() => setSendVia("meta")}
                   className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
                     sendVia === "meta" ? "bg-[#00a884] text-white border-[#00a884]" : "bg-background border-border text-muted-foreground hover:border-[#00a884]/50"
@@ -337,7 +355,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
               </div>
               {metaNumbers.length > 1 && (
                 <div className="mt-2">
-                  <WhatsAppNumberSelector className="h-8 text-xs" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />
+                  <WhatsAppNumberSelector className="h-8 text-xs" filterProvider={sendVia} />
                 </div>
               )}
             </div>
@@ -370,7 +388,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
             )}
 
             {/* Normal Message */}
-            {(sendVia === "zapi" || (sendVia === "meta" && messageType === "normal")) && (
+            {(sendVia === "zapi" || sendVia === "wasender" || (sendVia === "meta" && messageType === "normal")) && (
               <div>
                 <Label className="text-xs">Mensagem</Label>
                 <Textarea

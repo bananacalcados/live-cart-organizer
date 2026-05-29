@@ -787,7 +787,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           <span className="text-xs text-muted-foreground whitespace-nowrap">Instância WhatsApp:</span>
           <WhatsAppNumberSelector
             className="w-56"
-            filterProvider="zapi"
+            allowedProviders={["zapi", "wasender"]}
             value={(campaign as any)?.whatsapp_number_id ?? undefined}
             autoSelect={false}
             disabled={!campaign}
@@ -855,7 +855,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
               </div>
-              <WhatsAppNumberSelector filterProvider="zapi" className="w-[180px] h-9 text-xs" />
+              <WhatsAppNumberSelector allowedProviders={["zapi", "wasender"]} className="w-[180px] h-9 text-xs" />
               <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={async () => {
                 setIsSyncingFromZapi(true);
                 try {
