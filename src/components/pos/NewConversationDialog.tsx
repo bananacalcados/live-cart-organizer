@@ -337,6 +337,14 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
                   Z-API
                 </button>
                 <button
+                  onClick={() => { setSendVia("wasender"); setMessageType("normal"); }}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
+                    sendVia === "wasender" ? "bg-[#00a884] text-white border-[#00a884]" : "bg-background border-border text-muted-foreground hover:border-[#00a884]/50"
+                  }`}
+                >
+                  WaSender
+                </button>
+                <button
                   onClick={() => setSendVia("meta")}
                   className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
                     sendVia === "meta" ? "bg-[#00a884] text-white border-[#00a884]" : "bg-background border-border text-muted-foreground hover:border-[#00a884]/50"
@@ -347,7 +355,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
               </div>
               {metaNumbers.length > 1 && (
                 <div className="mt-2">
-                  <WhatsAppNumberSelector className="h-8 text-xs" filterProvider={sendVia === "zapi" ? "zapi" : "meta"} />
+                  <WhatsAppNumberSelector className="h-8 text-xs" filterProvider={sendVia} />
                 </div>
               )}
             </div>
