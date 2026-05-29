@@ -25,8 +25,20 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { username, message, eventId, fallbackCommentId, mediaType } = body;
+    const { username, message, eventId, fallbackCommentId, fallbackCommentIds, mediaType } = body;
     let { mediaUrl } = body;
+
+    // Lista de comment_ids candidatos para private_reply (mais recentes primeiro).
+    // Um comentário de Live só aceita UM private_reply e pode ficar inelegível;
+    // por isso tentamos vários em sequência até um funcionar.
+    const commentIdCandidates: string[] = Array.from(
+      new Set(
+        [
+          ...(Array.isArray(fallbackCommentIds) ? fallbackCommentIds : []),
+          fallbackCommentId,
+        ].filter((c): c is string => typeof c === "string" && c.trim().length > 0),
+      ),
+    );
     if (!username || (!message && !mediaUrl)) {
       return new Response(JSON.stringify({ error: "username and (message or mediaUrl) are required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
