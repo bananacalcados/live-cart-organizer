@@ -17,7 +17,7 @@ import { toast } from 'sonner';
  */
 
 export type SendChannel = 'whatsapp' | 'instagram' | 'messenger';
-export type SendProvider = 'zapi' | 'meta';
+export type SendProvider = 'zapi' | 'meta' | 'wasender';
 
 export interface SendRoute {
   channel: SendChannel;
