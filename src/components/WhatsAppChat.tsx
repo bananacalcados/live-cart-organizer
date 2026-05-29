@@ -196,12 +196,15 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   };
 
   // ── Detect provider for the instance bound to this conversation ──
-  const isZapiProvider = () => {
+  const getProvider = (): 'zapi' | 'meta' | 'wasender' => {
     const num = boundNumber
       ?? (effectiveNumberId ? numbers.find(n => n.id === effectiveNumberId) : null)
       ?? getSelectedNumber();
-    return num?.provider === 'zapi';
+    if (num?.provider === 'zapi') return 'zapi';
+    if (num?.provider === 'wasender') return 'wasender';
+    return 'meta';
   };
+  const isZapiProvider = () => getProvider() === 'zapi';
 
   // ── Send via Z-API ──
   const sendViaZapi = async (
@@ -214,6 +217,34 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       });
       if (error) return { success: false, error: error.message };
       if (data?.success) return { success: true, messageId: data?.data?.zapiMessageId };
+      return { success: false, error: data?.error || 'Erro ao enviar' };
+    } catch (err) {
+      return { success: false, error: 'Erro de conexão' };
+    }
+  };
+
+  // ── Send via WaSender ──
+  const sendViaWasender = async (
+    phoneNumber: string,
+    message: string,
+    type: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text',
+    mediaUrl?: string,
+    caption?: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+    try {
+      if (type !== 'text' && mediaUrl) {
+        const { data, error } = await supabase.functions.invoke('wasender-send-media', {
+          body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
+        });
+        if (error) return { success: false, error: error.message };
+        if (data?.success) return { success: true, messageId: data?.messageId };
+        return { success: false, error: data?.error || 'Erro ao enviar' };
+      }
+      const { data, error } = await supabase.functions.invoke('wasender-send-message', {
+        body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+      });
+      if (error) return { success: false, error: error.message };
+      if (data?.success) return { success: true, messageId: data?.messageId };
       return { success: false, error: data?.error || 'Erro ao enviar' };
     } catch (err) {
       return { success: false, error: 'Erro de conexão' };
@@ -263,7 +294,11 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     mediaUrl?: string,
     caption?: string,
   ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
-    if (isZapiProvider()) {
+    const provider = getProvider();
+    if (provider === 'wasender') {
+      return sendViaWasender(phoneNumber, message, type, mediaUrl, caption);
+    }
+    if (provider === 'zapi') {
       if (type !== 'text' && mediaUrl) {
         // Z-API media send
         try {

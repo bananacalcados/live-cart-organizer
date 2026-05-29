@@ -126,6 +126,25 @@ export function useChatSender() {
           });
           if (error) throw error;
           providerMessageId = data?.messageId || null;
+        } else if (route.provider === 'wasender') {
+          // WhatsApp via WaSender
+          const fnName = isMedia ? 'wasender-send-media' : 'wasender-send-message';
+          const body = isMedia
+            ? {
+                phone,
+                mediaUrl,
+                mediaType,
+                caption: (params as SendMediaParams).caption,
+                whatsapp_number_id: route.numberId,
+              }
+            : {
+                phone,
+                message: text,
+                whatsapp_number_id: route.numberId,
+              };
+          const { data, error } = await supabase.functions.invoke(fnName, { body });
+          if (error) throw error;
+          providerMessageId = data?.messageId || null;
         } else {
           // WhatsApp via Z-API
           const fnName = isMedia ? 'zapi-send-media' : 'zapi-send-message';

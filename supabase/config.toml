@@ -266,3 +266,15 @@ verify_jwt = false
 
 [functions.telegram-financial-process-attachment]
 verify_jwt = false
+
+[functions.wasender-webhook]
+verify_jwt = false
+
+[functions.wasender-session]
+verify_jwt = false
+
+[functions.wasender-send-message]
+verify_jwt = false
+
+[functions.wasender-send-media]
+verify_jwt = false
