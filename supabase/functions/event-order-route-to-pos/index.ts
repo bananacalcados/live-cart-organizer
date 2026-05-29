@@ -141,24 +141,9 @@ Deno.serve(async (req) => {
 
     await supabase.from("orders").update({ pos_sale_id: sale.id }).eq("id", order.id);
 
-    // Best-effort Tiny
-    try {
-      await supabase.functions.invoke("pos-tiny-create-sale", {
-        body: {
-          // CRITICAL: pass sale_id so pos-tiny-create-sale UPDATES the existing
-          // live sale instead of creating a duplicate "physical" pos_sales row.
-          sale_id: sale.id,
-          store_id: storeId,
-          customer: { name: customerName, whatsapp, cpf: reg?.cpf, email: reg?.email, address: shipping_address },
-          items: products.map((p: any) => ({ sku: p.sku || "", name: p.title, variant: p.variant, quantity: p.quantity, price: p.price })),
-          payment_method_name: "Venda Live - Retirada",
-          seller_id: sellerId,
-          notes: `Auto-routed Evento Físico`,
-        },
-      });
-    } catch (e) {
-      console.warn("Tiny create failed:", e);
-    }
+    // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button).
+    // The live order is routed to POS (pos_sales row created above) without any
+    // automatic Tiny push.
 
     return new Response(JSON.stringify({ success: true, sale_id: sale.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
