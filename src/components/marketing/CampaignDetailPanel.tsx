@@ -482,10 +482,17 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       });
       const result = await res.json();
       if (result.success) {
-        if (result.complete) {
-          toast.success(`Enviada! ${result.sentCount}/${result.total} grupos`);
+        const failed = Number(result.batchFailed ?? 0);
+        const sent = Number(result.batchSent ?? 0);
+        const total = Number(result.totalGroups ?? 0);
+        if (failed > 0) {
+          toast.error(
+            `Disparo com falhas: ${failed} grupo(s) não receberam. Veja "envios com erro" na campanha.`,
+          );
+        } else if (result.complete) {
+          toast.success(`Enviada! ${sent}/${total} grupos`);
         } else {
-          toast.success(`Iniciado! ${result.processed}/${result.total} grupos enviados, restante será processado automaticamente`);
+          toast.success(`Iniciado! ${result.processed ?? sent}/${total} grupos enviados, restante será processado automaticamente`);
         }
       } else if (res.status === 409 || result.status === 'sending') {
         toast.info('O disparo já foi iniciado e continuará automaticamente.');
@@ -494,6 +501,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       } else {
         toast.error(result.error || "Erro ao enviar");
       }
+      setDispatchRefreshKey((k) => k + 1);
       fetchMessages();
     } catch { toast.error("Erro ao enviar"); }
     finally {
