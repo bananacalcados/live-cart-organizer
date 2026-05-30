@@ -63,10 +63,38 @@ export function AiTransferBanner({ phone, onResolved }: AiTransferBannerProps) {
 
   const handleResolve = async () => {
     setResolving(true);
-    const { error } = await supabase
+    const suffix = (phone || "").replace(/\D/g, "").slice(-8);
+
+    // Resolve EVERY pending AI assignment that matches this contact — there are
+    // often several rows (and sometimes alternate phone formats missing the 9th
+    // digit), so resolving a single id makes the banner pop right back.
+    const { data: pending } = await supabase
       .from("chat_assignments")
-      .update({ status: "resolved", resolved_at: new Date().toISOString() } as never)
-      .eq("id", assignment.id);
+      .select("id, phone")
+      .eq("assigned_by", "ai")
+      .eq("status", "pending");
+
+    const idsToResolve = (pending as { id: string; phone: string }[] | null || [])
+      .filter(r => (r.phone || "").replace(/\D/g, "").slice(-8) === suffix)
+      .map(r => r.id);
+
+    let error: unknown = null;
+    if (idsToResolve.length > 0) {
+      const res = await supabase
+        .from("chat_assignments")
+        .update({ status: "resolved", resolved_at: new Date().toISOString() } as never)
+        .in("id", idsToResolve);
+      error = res.error;
+    }
+
+    // Mark this contact's incoming messages as read so it leaves "Não lidas".
+    await supabase
+      .from("whatsapp_messages")
+      .update({ status: "read" } as never)
+      .eq("phone", phone)
+      .eq("direction", "incoming")
+      .or("status.is.null,status.neq.read");
+
     setResolving(false);
     if (error) {
       toast.error("Não foi possível marcar como atendida");
