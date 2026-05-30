@@ -14,8 +14,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BATCH = 20;
-const CONCURRENCY = 20;
+const BATCH = 45;
+const CONCURRENCY = 45;
 const MAX_RUNTIME_MS = 50_000; // safely under 60s edge timeout
 const LEASE_SECONDS = 90;
 
