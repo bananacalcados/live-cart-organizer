@@ -1726,16 +1726,19 @@ export function MassTemplateDispatcher() {
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
+                ) : !audienceLoaded ? (
+                  <div className="flex flex-col items-center gap-2 text-center py-8 text-muted-foreground text-xs">
+                    <span>Audiência ainda não carregada.</span>
+                    <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={fetchAudience}>
+                      <RefreshCw className="h-3 w-3" />Carregar clientes
+                    </Button>
+                  </div>
                 ) : filteredRecipients.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground text-xs">
                     Nenhum destinatário encontrado com os filtros atuais
                   </div>
                 ) : (
-                  !audienceLoaded ? (
-                    <div className="text-center py-8 text-muted-foreground text-xs">
-                      Clique em atualizar para carregar a audiência desta campanha
-                    </div>
-                  ) : filteredRecipients.slice(0, 500).map(r => (
+                  filteredRecipients.slice(0, 500).map(r => (
                     <div
                       key={r.phone}
                       className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted/50 rounded text-xs"
