@@ -152,6 +152,9 @@ Deno.serve(async (req) => {
     };
 
     let order: NormOrder;
+    // Para pedidos Beta sem endereço/CPF, habilita fallback on-demand no Tiny ERP.
+    let betaTinyOrderId: string | null = null;
+    let betaOrderRowId: string | null = null;
 
     if (sale_id) {
       const { data: sale, error: sErr } = await supabase
