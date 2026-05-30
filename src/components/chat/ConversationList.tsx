@@ -273,7 +273,7 @@ export function ConversationList({
         <RailBtn icon={Bell} label="Follow Up" active={statusFilter === 'awaiting_customer'} count={followUpCount} onClick={() => pickRailStatus('awaiting_customer')} accent="bg-blue-500 text-white" />
         <RailBtn icon={Radio} label="Pedidos da Live" active={!!liveFilterActive} count={liveCount || 0} onClick={() => onLiveFilterToggle?.()} accent="bg-fuchsia-500 text-white" />
         <RailBtn icon={Bot} label="IA Transferiu" active={statusFilter === 'ai_transferred'} count={aiCount} onClick={() => pickRailStatus('ai_transferred')} accent="bg-orange-500 text-white" />
-        <RailBtn icon={CheckCircle2} label="Finalizadas" active={statusFilter === 'finished'} count={finishedCount} onClick={() => pickRailStatus('finished')} accent="bg-emerald-600 text-white" />
+        <RailBtn icon={CheckCircle2} label="Finalizadas" active={statusFilter === 'finished'} count={0} onClick={() => pickRailStatus('finished')} accent="bg-emerald-600 text-white" />
         <RailBtn icon={Archive} label="Arquivadas" active={statusFilter === 'archived'} count={archivedCount} onClick={() => pickRailStatus('archived')} accent="bg-zinc-500 text-white" />
         <RailBtn icon={Megaphone} label="Disparos" active={statusFilter === 'dispatch'} count={dispatchCount} onClick={() => pickRailStatus('dispatch')} accent="bg-violet-500 text-white" />
       </div>
