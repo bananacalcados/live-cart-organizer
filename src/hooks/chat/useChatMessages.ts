@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWaMessageBroadcast } from '@/hooks/useWaMessageBroadcast';
 import type { Message } from '@/components/chat/ChatTypes';
