@@ -165,7 +165,7 @@ serve(async (req) => {
           else posCount += chunk.length;
         }
       }
-      console.log(`POS sync: ${posCount} customers (merged by CPF: ${mergedByCpf}, by phone+name: ${mergedByPhone})`);
+      console.log(`POS sync: ${posCount} customers upserted (SET semantics)`);
     }
 
     // ── 2. Sync online sales from Tiny ERP (site) ──
