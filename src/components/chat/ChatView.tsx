@@ -162,8 +162,23 @@ export function ChatView({
     }
   }, []);
 
+  // Auto-scroll to the latest message. Quando troca de conversa rola instantâneo
+  // (para já abrir na mensagem mais recente), e em novas mensagens rola suave.
+  const conversationScrollKey = `${conversation?.phone ?? ''}|${conversation?.whatsapp_number_id ?? ''}`;
+  const prevScrollKeyRef = useRef(conversationScrollKey);
+
   useEffect(() => {
-  }, [messages]);
+    if (messages.length === 0) return;
+    const isNewConversation = prevScrollKeyRef.current !== conversationScrollKey;
+    prevScrollKeyRef.current = conversationScrollKey;
+    const behavior: ScrollBehavior = isNewConversation ? 'auto' : 'smooth';
+    // Dois rAF garantem que o layout/imagens já posicionaram antes de rolar.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' });
+      });
+    });
+  }, [messages, conversationScrollKey]);
 
   // Load tags from chat_contacts when conversation changes
   useEffect(() => {
