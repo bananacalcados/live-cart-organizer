@@ -118,6 +118,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // Live ghost rows: live orders that don't have an existing conversation yet
   const [liveGhostRows, setLiveGhostRows] = useState<Array<{ phone: string; name?: string; stageTitle: string; eventName?: string; orderId: string; eventId: string; updatedAt: string; whatsapp_number_id?: string | null }>>([]);
 
+  // Conversation enrichment (finished/archived/etc.) — declared early so the
+  // live ghost-row memo below can exclude finalized/archived phones.
+  const { enrichConversations, finishConversation, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
+
+
+
   // Load live customers (phones from db_orders of active events of this store) with their kanban stage
   useEffect(() => {
     let cancelled = false;
