@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useWaMessageBroadcast } from '@/hooks/useWaMessageBroadcast';
 import type { Message } from '@/components/chat/ChatTypes';
@@ -33,11 +33,17 @@ export function useChatMessages(
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Chave única da conversa atual. Muda quando o usuário troca de chat.
+  const conversationKey = `${phone ?? ''}|${numberId ?? ''}|${phoneVariations?.join(',') ?? ''}`;
+  // Guarda a chave da requisição mais recente para descartar respostas fora de ordem.
+  const latestKeyRef = useRef(conversationKey);
+
   const load = useCallback(async () => {
     if (!phone) {
       setMessages([]);
       return;
     }
+    const requestKey = conversationKey;
     setIsLoading(true);
     let query = supabase
       .from('whatsapp_messages')
@@ -57,9 +63,19 @@ export function useChatMessages(
     }
 
     const { data } = await query;
+    // Descarta respostas de uma conversa que já não está mais aberta (race condition).
+    if (latestKeyRef.current !== requestKey) return;
     setMessages((data as Message[]) || []);
     setIsLoading(false);
-  }, [phone, numberId, phoneVariations?.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phone, numberId, conversationKey, phoneVariations?.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ao trocar de conversa: limpa imediatamente o histórico antigo e marca a nova chave
+  // como a mais recente, evitando que mensagens do chat anterior fiquem visíveis.
+  useEffect(() => {
+    latestKeyRef.current = conversationKey;
+    setMessages([]);
+    if (phone) setIsLoading(true);
+  }, [conversationKey, phone]);
 
   // Initial + reactive load
   useEffect(() => {
