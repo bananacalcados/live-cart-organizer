@@ -78,6 +78,54 @@ async function lookupIbge(city: string, uf: string): Promise<string | null> {
   } catch { return null; }
 }
 
+// Fallback Tiny: pedidos Beta sincronizados (ou vindos do checkout-transparente) podem ter
+// shipping_address/CPF vazios. Busca os dados direto no Tiny ERP usando o tiny_order_id e
+// normaliza no mesmo formato do shipping_address da Expedição Beta.
+const TINY_V2_BASE = "https://api.tiny.com.br/api2";
+async function tinyGetOrderData(
+  tinyOrderId: string,
+): Promise<{ shipping_address: any | null; cpf: string | null } | null> {
+  const token = Deno.env.get("TINY_ERP_TOKEN");
+  if (!token || !tinyOrderId) return null;
+  try {
+    const reqBody = new URLSearchParams({ token, formato: "json", id: String(tinyOrderId) });
+    const resp = await fetch(`${TINY_V2_BASE}/pedido.obter.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: reqBody.toString(),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const pedido = json?.retorno?.pedido;
+    if (!pedido) return null;
+    const ent = pedido.endereco_entrega || {};
+    const cli = pedido.cliente || {};
+    const pick = (a: any, b: any) => (a && String(a).trim() ? a : (b ?? ""));
+    const cep = pick(ent.cep, cli.cep);
+    const endereco = pick(ent.endereco, cli.endereco);
+    const cpf = (cli.cpf_cnpj && String(cli.cpf_cnpj).trim()) ? cli.cpf_cnpj : null;
+    let shipping_address: any = null;
+    if (cep || endereco) {
+      shipping_address = {
+        address1: endereco || "",
+        address2: pick(ent.complemento, cli.complemento),
+        city: pick(ent.cidade, cli.cidade),
+        province: pick(ent.uf, cli.uf),
+        zip: cep || "",
+        country: "Brazil",
+        name: pick(cli.nome, cli.fantasia),
+        number: pick(ent.numero, cli.numero),
+        neighborhood: pick(ent.bairro, cli.bairro),
+        phone: pick(cli.fone, cli.celular),
+      };
+    }
+    return { shipping_address, cpf };
+  } catch (_e) {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -104,6 +152,9 @@ Deno.serve(async (req) => {
     };
 
     let order: NormOrder;
+    // Para pedidos Beta sem endereço/CPF, habilita fallback on-demand no Tiny ERP.
+    let betaTinyOrderId: string | null = null;
+    let betaOrderRowId: string | null = null;
 
     if (sale_id) {
       const { data: sale, error: sErr } = await supabase
@@ -161,6 +212,8 @@ Deno.serve(async (req) => {
         .select("*, expedition_beta_order_items(*)")
         .eq("id", beta_order_id).single();
       if (oErr || !o) throw new Error(`Pedido (Beta) não encontrado: ${oErr?.message}`);
+      betaOrderRowId = (o as any).id;
+      betaTinyOrderId = (o as any).tiny_order_id || null;
       order = {
         customer_cpf: (o as any).customer_cpf || null,
         customer_name: (o as any).customer_name || null,
@@ -202,18 +255,50 @@ Deno.serve(async (req) => {
     const items = order.items;
     if (!items.length) throw new Error("Pedido sem itens");
 
+    // Fallback Tiny: completa endereço/CPF ausentes em pedidos Beta (sync sem endereco_entrega
+    // ou pedidos do checkout-transparente). Busca on-demand no Tiny e persiste de volta para
+    // reaproveitar em reemissão e geração de etiqueta.
+    if (betaTinyOrderId) {
+      const sa0 = (order.shipping_address || {}) as any;
+      const needAddr = digits(sa0.zip ?? sa0.cep).length !== 8;
+      const needCpf = digits(order.customer_cpf).length !== 11;
+      if (needAddr || needCpf) {
+        const td = await tinyGetOrderData(betaTinyOrderId);
+        if (td) {
+          if (needCpf && td.cpf) order.customer_cpf = td.cpf;
+          if (needAddr && td.shipping_address) {
+            const merged: any = { ...td.shipping_address };
+            for (const k of Object.keys(sa0)) {
+              const v = sa0[k];
+              if (v !== null && v !== undefined && String(v).trim() !== "") merged[k] = v;
+            }
+            order.shipping_address = merged;
+          }
+          if (betaOrderRowId) {
+            await supabase.from("expedition_beta_orders").update({
+              shipping_address: order.shipping_address,
+              customer_cpf: order.customer_cpf,
+            }).eq("id", betaOrderRowId);
+          }
+        }
+      }
+    }
+
     const cpfDest = digits(order.customer_cpf);
     if (!cpfDest || cpfDest.length !== 11) throw new Error("Pedido sem CPF válido do destinatário");
 
     const ship = (order.shipping_address || {}) as any;
     const ufDestino = ufFromProvince(ship.province) || "MG";
-    const cepDest = digits(ship.zip);
+    const cepDest = digits(ship.zip ?? ship.cep);
     if (!cepDest || cepDest.length !== 8) throw new Error("Pedido sem CEP válido (shipping_address.zip/cep)");
     const cidadeDest = sanitize(ship.city || "").toUpperCase();
     if (!cidadeDest) throw new Error("Pedido sem cidade no endereço");
 
-    const { logradouro, numero } = splitStreetNumber(ship.address1);
-    const bairro = sanitize(ship.address2 || "Centro").slice(0, 60) || "Centro";
+    const split = splitStreetNumber(ship.address1);
+    const logradouro = split.logradouro;
+    // Prioriza o campo dedicado `number` (PDV/checkout/Tiny guardam separado do logradouro)
+    const numero = (ship.number && String(ship.number).trim()) ? String(ship.number).trim() : split.numero;
+    const bairro = sanitize(ship.address2 || ship.neighborhood || "Centro").slice(0, 60) || "Centro";
 
     // 2. Empresa (prioridade: forcedCompany > pos_stores.company_id > PILOT)
     const companyId = forcedCompany || order.store_company_id || PILOT_COMPANY_ID;
