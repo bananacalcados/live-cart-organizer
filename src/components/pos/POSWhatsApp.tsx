@@ -206,6 +206,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     const existingKeys = new Set(conversations.map(c => livePhoneKey(c.phone)));
     return liveGhostRows
       .filter(g => !existingKeys.has(livePhoneKey(g.phone)))
+      // A finalized/archived conversation must NEVER reappear as a live ghost row,
+      // even when its real conversation is filtered out of this store's list.
+      .filter(g => !finishedPhones.has(livePhoneKey(g.phone)))
+      .filter(g => !archivedPhones.has(g.phone))
       .map(g => ({
         phone: g.phone,
         lastMessage: `📦 ${g.stageTitle}${g.eventName ? ` · ${g.eventName}` : ''} — sem conversa ainda`,
