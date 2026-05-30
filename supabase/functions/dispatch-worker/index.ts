@@ -336,6 +336,10 @@ serve(async (req) => {
 
       totalSent += sentRows.length;
       totalFailed += failedRows.length;
+
+      // Push a monotonic count refresh after every batch so the UI advances
+      // smoothly during the run instead of only when the worker finishes.
+      await supabase.rpc('refresh_dispatch_counts', { p_dispatch_id: dispatchId });
     }
 
     // Refresh aggregate counts ATOMICALLY and MONOTONICALLY. Previously each worker
