@@ -78,6 +78,54 @@ async function lookupIbge(city: string, uf: string): Promise<string | null> {
   } catch { return null; }
 }
 
+// Fallback Tiny: pedidos Beta sincronizados (ou vindos do checkout-transparente) podem ter
+// shipping_address/CPF vazios. Busca os dados direto no Tiny ERP usando o tiny_order_id e
+// normaliza no mesmo formato do shipping_address da Expedição Beta.
+const TINY_V2_BASE = "https://api.tiny.com.br/api2";
+async function tinyGetOrderData(
+  tinyOrderId: string,
+): Promise<{ shipping_address: any | null; cpf: string | null } | null> {
+  const token = Deno.env.get("TINY_ERP_TOKEN");
+  if (!token || !tinyOrderId) return null;
+  try {
+    const reqBody = new URLSearchParams({ token, formato: "json", id: String(tinyOrderId) });
+    const resp = await fetch(`${TINY_V2_BASE}/pedido.obter.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: reqBody.toString(),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const pedido = json?.retorno?.pedido;
+    if (!pedido) return null;
+    const ent = pedido.endereco_entrega || {};
+    const cli = pedido.cliente || {};
+    const pick = (a: any, b: any) => (a && String(a).trim() ? a : (b ?? ""));
+    const cep = pick(ent.cep, cli.cep);
+    const endereco = pick(ent.endereco, cli.endereco);
+    const cpf = (cli.cpf_cnpj && String(cli.cpf_cnpj).trim()) ? cli.cpf_cnpj : null;
+    let shipping_address: any = null;
+    if (cep || endereco) {
+      shipping_address = {
+        address1: endereco || "",
+        address2: pick(ent.complemento, cli.complemento),
+        city: pick(ent.cidade, cli.cidade),
+        province: pick(ent.uf, cli.uf),
+        zip: cep || "",
+        country: "Brazil",
+        name: pick(cli.nome, cli.fantasia),
+        number: pick(ent.numero, cli.numero),
+        neighborhood: pick(ent.bairro, cli.bairro),
+        phone: pick(cli.fone, cli.celular),
+      };
+    }
+    return { shipping_address, cpf };
+  } catch (_e) {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
