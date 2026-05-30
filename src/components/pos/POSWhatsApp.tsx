@@ -877,10 +877,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     }
     setIsSending(true);
     try {
+      const sendRoute = await resolveBoundRoute(route);
       const result = await sender.sendAudio({
         phone: selectedPhone,
         mediaUrl: audioUrl,
-        route,
+        route: sendRoute,
         quotedMessageId: quotedMessage?.message_id || null,
         senderUserId: sellerLinkedUserId || currentUserId || null,
         senderName: selectedSellerName || null,
