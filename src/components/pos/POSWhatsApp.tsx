@@ -754,45 +754,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     };
   };
 
-  // The conversation is grouped by the LAST message's instance, which may be an
-  // outgoing one. The instance-guard, however, locks sends to the instance of the
-  // LAST INCOMING message. Align the route to that bound instance to avoid 409
-  // INSTANCE_MISMATCH (memory: WhatsApp Conversa = telefone+instância).
-  const resolveBoundRoute = async (route: SendRoute): Promise<SendRoute> => {
-    if (route.channel !== "whatsapp" || !selectedPhone) return route;
-    const digits = String(selectedPhone).replace(/\D/g, "");
-    if (!digits) return route;
-    const variants = new Set<string>([digits]);
-    if (digits.startsWith("55") && digits.length >= 12) variants.add(digits.slice(2));
-    else variants.add("55" + digits);
 
-    const { data } = await supabase
-      .from("whatsapp_messages")
-      .select("whatsapp_number_id")
-      .in("phone", [...variants])
-      .eq("direction", "incoming")
-      .not("whatsapp_number_id", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const boundId = (data as any)?.whatsapp_number_id as string | undefined;
-    if (!boundId || boundId === route.numberId) return route;
-
-    const boundNumber = metaNumbers.find((n) => n.id === boundId);
-    if (!boundNumber) return route;
-
-    return {
-      ...route,
-      numberId: boundId,
-      provider:
-        boundNumber.provider === "meta"
-          ? "meta"
-          : boundNumber.provider === "wasender"
-            ? "wasender"
-            : "zapi",
-    };
-  };
 
   const buildSendHooks = () => ({
     onBeforeSend: async (phone: string) => {
