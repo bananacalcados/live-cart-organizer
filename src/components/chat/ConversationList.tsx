@@ -134,7 +134,11 @@ export function ConversationList({
       return c.conversationStatus === statusFilter;
     })
     .filter(c => {
-      if (liveFilterActive && isLiveCustomer) return isLiveCustomer(c.phone);
+      if (liveFilterActive && isLiveCustomer) {
+        // Finalized/archived conversations must leave the live filter too.
+        if (c.isFinished || c.isArchived) return false;
+        return isLiveCustomer(c.phone);
+      }
       return true;
     })
     .filter(c => {
