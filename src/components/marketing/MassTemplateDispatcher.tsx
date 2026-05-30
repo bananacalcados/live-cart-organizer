@@ -467,6 +467,12 @@ export function MassTemplateDispatcher() {
     finally { setIsLoadingAudience(false); }
   };
 
+  // Auto-load audience on mount so the client lists appear without manual refresh
+  useEffect(() => {
+    fetchAudience();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Header media state
   const [headerMediaUrl, setHeaderMediaUrl] = useState("");
   const [uploadingHeaderFile, setUploadingHeaderFile] = useState(false);
