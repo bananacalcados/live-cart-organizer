@@ -79,10 +79,7 @@ serve(async (req) => {
     const mode = body.mode || 'all';
     const months = body.months || 24;
     let posCount = 0;
-    let mergedByCpf = 0;
-    let mergedByPhone = 0;
     let tinyOnlineCount = 0;
-    let existingRfm: any[] = [];
 
     // ── 1. Sync POS completed sales with CPF-first rematching ──
     if (mode === 'pos' || mode === 'all') {
