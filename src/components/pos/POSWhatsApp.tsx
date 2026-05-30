@@ -846,10 +846,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     setIsSending(true);
     setNewMessage("");
     try {
+      const sendRoute = await resolveBoundRoute(route);
       const result = await sender.sendText({
         phone: selectedPhone,
         message: messageText,
-        route,
+        route: sendRoute,
         quotedMessageId: quotedMessage?.message_id || null,
         senderUserId: sellerLinkedUserId || currentUserId || null,
         senderName: selectedSellerName || null,
