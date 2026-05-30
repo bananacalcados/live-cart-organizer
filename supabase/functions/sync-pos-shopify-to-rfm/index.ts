@@ -79,10 +79,7 @@ serve(async (req) => {
     const mode = body.mode || 'all';
     const months = body.months || 24;
     let posCount = 0;
-    let mergedByCpf = 0;
-    let mergedByPhone = 0;
     let tinyOnlineCount = 0;
-    let existingRfm: any[] = [];
 
     // ── 1. Sync POS completed sales with CPF-first rematching ──
     if (mode === 'pos' || mode === 'all') {
@@ -126,48 +123,18 @@ serve(async (req) => {
           }
         }
 
-        // 1d. Load existing RFM matrix indexes for CPF and phone matching
-        let rfmFrom = 0;
-        while (true) {
-          const { data: rfmChunk } = await supabase
-            .from('zoppy_customers')
-            .select('id, zoppy_id, cpf, phone, first_name, last_name, total_orders, total_spent, first_purchase_at, last_purchase_at')
-            .range(rfmFrom, rfmFrom + 999);
-          if (!rfmChunk || rfmChunk.length === 0) break;
-          existingRfm = existingRfm.concat(rfmChunk);
-          if (rfmChunk.length < 1000) break;
-          rfmFrom += 1000;
-        }
-
-        // Build lookup indexes
-        const cpfIndex = new Map<string, any>(); // normalized CPF -> rfm record
-        const phoneIndex = new Map<string, any[]>(); // DDD+suffix -> rfm records
-        for (const rfm of existingRfm) {
-          if (rfm.cpf) {
-            const normCpf = rfm.cpf.replace(/\D/g, '');
-            if (normCpf.length >= 11) cpfIndex.set(normCpf, rfm);
-          }
-          if (rfm.phone) {
-            const phoneKey = extractPhoneKey(rfm.phone);
-            if (phoneKey) {
-              const arr = phoneIndex.get(phoneKey) || [];
-              arr.push(rfm);
-              phoneIndex.set(phoneKey, arr);
-            }
-          }
-        }
-
-        console.log(`RFM index loaded: ${existingRfm.length} records, ${cpfIndex.size} with CPF, ${phoneIndex.size} unique phone keys`);
-
-        // 1e. Process each POS customer with CPF-first rematching
+        // 1d. Build dedicated pos- records with SET (REPLACE) semantics.
+        // IMPORTANT: We intentionally do NOT additively merge into existing zoppy
+        // records anymore. The previous additive merge re-added the full lifetime
+        // total on every cron run, compounding values into the millions. Each POS
+        // customer is now represented as a single `pos-<id>` row whose totals are
+        // recomputed (SET) from pos_sales every run — fully idempotent.
         const upsertBatch: any[] = [];
-        const updateBatch: { id: string; updates: Record<string, any> }[] = [];
 
         for (const [custId, stats] of customerSales) {
           const cust = customerMap.get(custId);
           if (!cust) continue;
           const phone = normalizeBRPhone(cust.whatsapp || '');
-          const phoneKey = phone ? extractPhoneKey(phone) : null;
           const cpf = (cust.cpf || '').replace(/\D/g, '') || null;
           const custName = (cust.name || '').trim();
           if (!phone && !cust.email && !cpf) continue;
@@ -175,107 +142,22 @@ serve(async (req) => {
           const nameParts = custName.split(' ');
           const ddd = phone.length >= 12 ? phone.slice(2, 4) : null;
 
-          // Strategy 1: Match by CPF
-          let matchedRfm: any = null;
-          let matchType = 'new';
-
-          if (cpf && cpf.length >= 11) {
-            matchedRfm = cpfIndex.get(cpf);
-            if (matchedRfm) matchType = 'cpf';
-          }
-
-          // Strategy 2: Match by DDD+suffix phone key + name similarity
-          if (!matchedRfm && phoneKey) {
-            const phoneMatches = phoneIndex.get(phoneKey);
-            if (phoneMatches && phoneMatches.length > 0) {
-              if (custName) {
-                // Find best name match
-                let bestMatch: any = null;
-                let bestScore = 0;
-                for (const pm of phoneMatches) {
-                  const rfmName = `${pm.first_name || ''} ${pm.last_name || ''}`.trim();
-                  const score = nameSimilarity(custName, rfmName);
-                  if (score > bestScore) { bestScore = score; bestMatch = pm; }
-                }
-                if (bestMatch && bestScore >= NAME_SIMILARITY_THRESHOLD) {
-                  matchedRfm = bestMatch;
-                  matchType = 'phone_name';
-                }
-              }
-              // If only 1 phone match and no name to compare, assume same
-              if (!matchedRfm && phoneMatches.length === 1 && !custName) {
-                matchedRfm = phoneMatches[0];
-                matchType = 'phone_only';
-              }
-            }
-          }
-
-          if (matchedRfm) {
-            // Merge: update existing RFM record with new sales data
-            const existingOrders = matchedRfm.total_orders || 0;
-            const existingSpent = matchedRfm.total_spent || 0;
-            const newTotal = existingOrders + stats.count;
-            const newSpent = existingSpent + stats.total;
-            const firstPurchase = matchedRfm.first_purchase_at && matchedRfm.first_purchase_at < stats.first
-              ? matchedRfm.first_purchase_at : stats.first;
-            const lastPurchase = matchedRfm.last_purchase_at && matchedRfm.last_purchase_at > stats.last
-              ? matchedRfm.last_purchase_at : stats.last;
-
-            const updates: Record<string, any> = {
-              total_orders: newTotal,
-              total_spent: newSpent,
-              avg_ticket: newTotal > 0 ? newSpent / newTotal : 0,
-              first_purchase_at: firstPurchase,
-              last_purchase_at: lastPurchase,
-            };
-
-            // Update phone if CPF matched but phone is different/newer
-            if (matchType === 'cpf' && phone && phone !== normalizeBRPhone(matchedRfm.phone || '')) {
-              updates.phone = phone;
-              updates.ddd = ddd;
-              console.log(`CPF match: updating phone for ${custName} (${matchedRfm.zoppy_id})`);
-            }
-
-            // Update CPF if phone matched but CPF was missing
-            if (matchType === 'phone_name' && cpf && !matchedRfm.cpf) {
-              updates.cpf = cpf;
-            }
-
-            // Update store, shoe_size etc if available
-            if (stats.storeId) updates.store_id = stats.storeId;
-            if (cust.shoe_size) updates.shoe_size = cust.shoe_size;
-            if (cust.preferred_style) updates.preferred_style = cust.preferred_style;
-            if (cust.age_range) updates.age_range = cust.age_range;
-
-            updateBatch.push({ id: matchedRfm.id, updates });
-
-            if (matchType === 'cpf') mergedByCpf++;
-            else mergedByPhone++;
-          } else {
-            // New customer - no match found
-            upsertBatch.push({
-              zoppy_id: `pos-${custId}`, external_id: custId,
-              first_name: nameParts[0] || '', last_name: nameParts.slice(1).join(' ') || '',
-              phone: phone || null, email: cust.email || null, cpf,
-              city: cust.city || null, state: cust.state || null, gender: cust.gender || null,
-              region_type: 'local', ddd, store_id: stats.storeId,
-              shoe_size: cust.shoe_size || null, preferred_style: cust.preferred_style || null, age_range: cust.age_range || null,
-              source: 'pos', lead_status: 'customer',
-              total_orders: stats.count, total_spent: stats.total,
-              avg_ticket: stats.count > 0 ? stats.total / stats.count : 0,
-              first_purchase_at: stats.first, last_purchase_at: stats.last,
-            });
-          }
+          upsertBatch.push({
+            zoppy_id: `pos-${custId}`, external_id: custId,
+            first_name: nameParts[0] || '', last_name: nameParts.slice(1).join(' ') || '',
+            phone: phone || null, email: cust.email || null, cpf,
+            city: cust.city || null, state: cust.state || null, gender: cust.gender || null,
+            region_type: 'local', ddd, store_id: stats.storeId,
+            shoe_size: cust.shoe_size || null, preferred_style: cust.preferred_style || null, age_range: cust.age_range || null,
+            source: 'pos', lead_status: 'customer',
+            total_orders: stats.count, total_spent: stats.total,
+            avg_ticket: stats.count > 0 ? stats.total / stats.count : 0,
+            first_purchase_at: stats.first, last_purchase_at: stats.last,
+          });
         }
 
-        // Execute updates for matched records
-        for (const { id, updates } of updateBatch) {
-          const { error } = await supabase.from('zoppy_customers').update(updates).eq('id', id);
-          if (error) console.error('RFM update error:', error);
-          else posCount++;
-        }
-
-        // Upsert new records
+        // Upsert with SET semantics: onConflict replaces the stored totals with the
+        // freshly recomputed values (never accumulates).
         for (let i = 0; i < upsertBatch.length; i += 100) {
           const chunk = upsertBatch.slice(i, i + 100);
           const { error } = await supabase.from('zoppy_customers').upsert(chunk, { onConflict: 'zoppy_id' });
@@ -340,107 +222,36 @@ serve(async (req) => {
 
         console.log(`Tiny scan done: ${totalOrders} orders, ${customerByName.size} unique customers`);
 
-        // Build a name index from existing RFM records to avoid duplicates
-        // existingRfm was loaded in the POS sync section above; reload if only tiny mode
-        let nameIndex: Map<string, any> | null = null;
-        if (existingRfm && existingRfm.length > 0) {
-          nameIndex = new Map();
-          for (const rfm of existingRfm) {
-            const rfmName = `${rfm.first_name || ''} ${rfm.last_name || ''}`.trim().toLowerCase();
-            if (rfmName) nameIndex.set(rfmName, rfm);
-          }
-        } else {
-          // Load existing records for name matching
-          let allRfm: any[] = [];
-          let rfmOff = 0;
-          while (true) {
-            const { data: chunk } = await supabase
-              .from('zoppy_customers')
-              .select('id, zoppy_id, first_name, last_name, total_orders, total_spent, first_purchase_at, last_purchase_at')
-              .range(rfmOff, rfmOff + 999);
-            if (!chunk || chunk.length === 0) break;
-            allRfm = allRfm.concat(chunk);
-            if (chunk.length < 1000) break;
-            rfmOff += 1000;
-          }
-          nameIndex = new Map();
-          for (const rfm of allRfm) {
-            const rfmName = `${rfm.first_name || ''} ${rfm.last_name || ''}`.trim().toLowerCase();
-            if (rfmName) nameIndex.set(rfmName, rfm);
-          }
-        }
-
+        // Build dedicated tiny-online- records with SET (REPLACE) semantics.
+        // IMPORTANT: We no longer additively merge Tiny totals into existing zoppy
+        // records. That additive merge re-added the full lifetime total on every run,
+        // compounding values. Each Tiny customer is one `tiny-online-<name>` row whose
+        // totals are recomputed (SET) from Tiny every run — fully idempotent.
         const newBatch: any[] = [];
-        const tinyUpdateBatch: { id: string; updates: Record<string, any> }[] = [];
-        let tinyMerged = 0;
 
         for (const [name, stats] of customerByName) {
           const nameParts = name.split(' ');
-          const nameKey = name.toLowerCase().trim();
-
-          // Check if customer already exists by exact name match
-          const existingByName = nameIndex?.get(nameKey);
-          // Also check with normalized accents
-          const nameKeyNorm = nameKey.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          const existingByNormName = !existingByName ? [...(nameIndex?.entries() || [])].find(([k]) =>
-            k.normalize('NFD').replace(/[\u0300-\u036f]/g, '') === nameKeyNorm
-          )?.[1] : null;
-
-          const matched = existingByName || existingByNormName;
-
-          if (matched && !matched.zoppy_id?.startsWith('tiny-online-')) {
-            // Merge into existing record
-            const existingOrders = matched.total_orders || 0;
-            const existingSpent = matched.total_spent || 0;
-            const newTotal = existingOrders + stats.count;
-            const newSpent = existingSpent + stats.total;
-            const firstPurchase = matched.first_purchase_at && matched.first_purchase_at < stats.first
-              ? matched.first_purchase_at : stats.first;
-            const lastPurchase = matched.last_purchase_at && matched.last_purchase_at > stats.last
-              ? matched.last_purchase_at : stats.last;
-
-            tinyUpdateBatch.push({
-              id: matched.id,
-              updates: {
-                total_orders: newTotal,
-                total_spent: newSpent,
-                avg_ticket: newTotal > 0 ? newSpent / newTotal : 0,
-                first_purchase_at: firstPurchase,
-                last_purchase_at: lastPurchase,
-              },
-            });
-            tinyMerged++;
-          } else {
-            // New customer or already a tiny-online record (upsert by zoppy_id)
-            newBatch.push({
-              zoppy_id: `tiny-online-${name.toLowerCase().replace(/\s+/g, '-')}`,
-              first_name: nameParts[0] || '', last_name: nameParts.slice(1).join(' ') || '',
-              phone: null, email: null, cpf: null,
-              city: null, state: null,
-              region_type: 'online', ddd: null,
-              source: 'tiny_online', lead_status: 'customer',
-              total_orders: stats.count, total_spent: stats.total,
-              avg_ticket: stats.count > 0 ? stats.total / stats.count : 0,
-              first_purchase_at: stats.first, last_purchase_at: stats.last,
-            });
-          }
+          newBatch.push({
+            zoppy_id: `tiny-online-${name.toLowerCase().replace(/\s+/g, '-')}`,
+            first_name: nameParts[0] || '', last_name: nameParts.slice(1).join(' ') || '',
+            phone: null, email: null, cpf: null,
+            city: null, state: null,
+            region_type: 'online', ddd: null,
+            source: 'tiny_online', lead_status: 'customer',
+            total_orders: stats.count, total_spent: stats.total,
+            avg_ticket: stats.count > 0 ? stats.total / stats.count : 0,
+            first_purchase_at: stats.first, last_purchase_at: stats.last,
+          });
         }
 
-        // Execute merges
-        for (const { id, updates } of tinyUpdateBatch) {
-          const { error } = await supabase.from('zoppy_customers').update(updates).eq('id', id);
-          if (error) console.error('Tiny merge error:', error);
-          else tinyOnlineCount++;
-        }
-
-        // Upsert truly new records
+        // Upsert with SET semantics (onConflict replaces totals, never accumulates).
         for (let i = 0; i < newBatch.length; i += 100) {
           const chunk = newBatch.slice(i, i + 100);
           const { error } = await supabase.from('zoppy_customers').upsert(chunk, { onConflict: 'zoppy_id' });
           if (error) console.error('Tiny upsert error:', error);
           else tinyOnlineCount += chunk.length;
         }
-        console.log(`Tiny online sync: ${tinyOnlineCount} customers (${tinyMerged} merged with existing)`);
+        console.log(`Tiny online sync: ${tinyOnlineCount} customers (SET mode)`);
       }
     }
 
@@ -459,10 +270,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       pos_customers_synced: posCount,
-      merged_by_cpf: mergedByCpf,
-      merged_by_phone_name: mergedByPhone,
       tiny_online_customers_synced: tinyOnlineCount,
-      message: `✅ POS: ${posCount} (CPF: ${mergedByCpf}, Tel+Nome: ${mergedByPhone} merges), Tiny: ${tinyOnlineCount}`,
+      message: `✅ SET mode (idempotente) — POS: ${posCount}, Tiny: ${tinyOnlineCount}`,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('Sync error:', error);
