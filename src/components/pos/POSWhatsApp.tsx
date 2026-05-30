@@ -907,12 +907,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     }
     setIsSending(true);
     try {
+      const sendRoute = await resolveBoundRoute(route);
       const result = await sender.sendMedia({
         phone: selectedPhone,
         mediaUrl,
         mediaType,
         caption,
-        route,
+        route: sendRoute,
         quotedMessageId: quotedMessage?.message_id || null,
         senderUserId: sellerLinkedUserId || currentUserId || null,
         senderName: selectedSellerName || null,
