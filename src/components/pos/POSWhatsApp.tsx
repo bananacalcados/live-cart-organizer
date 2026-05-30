@@ -118,6 +118,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // Live ghost rows: live orders that don't have an existing conversation yet
   const [liveGhostRows, setLiveGhostRows] = useState<Array<{ phone: string; name?: string; stageTitle: string; eventName?: string; orderId: string; eventId: string; updatedAt: string; whatsapp_number_id?: string | null }>>([]);
 
+  // Conversation enrichment (finished/archived/etc.) — declared early so the
+  // live ghost-row memo below can exclude finalized/archived phones.
+  const { enrichConversations, finishConversation, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
+
+
+
   // Load live customers (phones from db_orders of active events of this store) with their kanban stage
   useEffect(() => {
     let cancelled = false;
@@ -206,6 +212,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     const existingKeys = new Set(conversations.map(c => livePhoneKey(c.phone)));
     return liveGhostRows
       .filter(g => !existingKeys.has(livePhoneKey(g.phone)))
+      // A finalized/archived conversation must NEVER reappear as a live ghost row,
+      // even when its real conversation is filtered out of this store's list.
+      .filter(g => !finishedPhones.has(livePhoneKey(g.phone)))
+      .filter(g => !archivedPhones.has(g.phone))
       .map(g => ({
         phone: g.phone,
         lastMessage: `📦 ${g.stageTitle}${g.eventName ? ` · ${g.eventName}` : ''} — sem conversa ainda`,
@@ -218,7 +228,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         conversationStatus: 'not_started' as const,
         conversationKey: `ghost:${g.phone}`,
       }));
-  }, [liveFilterActive, liveGhostRows, conversations]);
+  }, [liveFilterActive, liveGhostRows, conversations, finishedPhones, archivedPhones]);
 
   const mergedConversations = useMemo<Conversation[]>(
     () => (ghostConversations.length ? [...ghostConversations, ...conversations] : conversations),
@@ -235,7 +245,6 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [selectedSendNumberId, setSelectedSendNumberId] = useState<string | null>(null);
 
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
-  const { enrichConversations, finishConversation, reopenConversation, archiveConversation, unarchiveConversation, finishedPhones, finishedAtByPhone, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
 

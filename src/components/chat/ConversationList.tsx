@@ -134,7 +134,11 @@ export function ConversationList({
       return c.conversationStatus === statusFilter;
     })
     .filter(c => {
-      if (liveFilterActive && isLiveCustomer) return isLiveCustomer(c.phone);
+      if (liveFilterActive && isLiveCustomer) {
+        // Finalized/archived conversations must leave the live filter too.
+        if (c.isFinished || c.isArchived) return false;
+        return isLiveCustomer(c.phone);
+      }
       return true;
     })
     .filter(c => {
@@ -155,7 +159,8 @@ export function ConversationList({
   // Rail counts
   const followUpCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_customer').length;
   const aiCount = conversations.filter(c => c.isAiTransferred && !c.isFinished && !c.isArchived).length;
-  const finishedCount = conversations.filter(c => c.isFinished && !c.isArchived).length;
+  // Finalizadas intentionally has no count badge — its purpose is to declutter
+  // the chat list, not to track how many are finished.
   const archivedCount = conversations.filter(c => c.isArchived).length;
   const dispatchCount = conversations.filter(c => c.isDispatchOnly && !c.isArchived).length;
 
@@ -269,7 +274,7 @@ export function ConversationList({
         <RailBtn icon={Bell} label="Follow Up" active={statusFilter === 'awaiting_customer'} count={followUpCount} onClick={() => pickRailStatus('awaiting_customer')} accent="bg-blue-500 text-white" />
         <RailBtn icon={Radio} label="Pedidos da Live" active={!!liveFilterActive} count={liveCount || 0} onClick={() => onLiveFilterToggle?.()} accent="bg-fuchsia-500 text-white" />
         <RailBtn icon={Bot} label="IA Transferiu" active={statusFilter === 'ai_transferred'} count={aiCount} onClick={() => pickRailStatus('ai_transferred')} accent="bg-orange-500 text-white" />
-        <RailBtn icon={CheckCircle2} label="Finalizadas" active={statusFilter === 'finished'} count={finishedCount} onClick={() => pickRailStatus('finished')} accent="bg-emerald-600 text-white" />
+        <RailBtn icon={CheckCircle2} label="Finalizadas" active={statusFilter === 'finished'} count={0} onClick={() => pickRailStatus('finished')} accent="bg-emerald-600 text-white" />
         <RailBtn icon={Archive} label="Arquivadas" active={statusFilter === 'archived'} count={archivedCount} onClick={() => pickRailStatus('archived')} accent="bg-zinc-500 text-white" />
         <RailBtn icon={Megaphone} label="Disparos" active={statusFilter === 'dispatch'} count={dispatchCount} onClick={() => pickRailStatus('dispatch')} accent="bg-violet-500 text-white" />
       </div>
