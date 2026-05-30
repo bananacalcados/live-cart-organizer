@@ -222,7 +222,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         conversationStatus: 'not_started' as const,
         conversationKey: `ghost:${g.phone}`,
       }));
-  }, [liveFilterActive, liveGhostRows, conversations]);
+  }, [liveFilterActive, liveGhostRows, conversations, finishedPhones, archivedPhones]);
 
   const mergedConversations = useMemo<Conversation[]>(
     () => (ghostConversations.length ? [...ghostConversations, ...conversations] : conversations),
