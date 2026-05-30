@@ -159,7 +159,8 @@ export function ConversationList({
   // Rail counts
   const followUpCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_customer').length;
   const aiCount = conversations.filter(c => c.isAiTransferred && !c.isFinished && !c.isArchived).length;
-  const finishedCount = conversations.filter(c => c.isFinished && !c.isArchived).length;
+  // Finalizadas intentionally has no count badge — its purpose is to declutter
+  // the chat list, not to track how many are finished.
   const archivedCount = conversations.filter(c => c.isArchived).length;
   const dispatchCount = conversations.filter(c => c.isDispatchOnly && !c.isArchived).length;
 
