@@ -184,6 +184,8 @@ export function MassTemplateDispatcher() {
 
   const startPolling = (dispatchId: string) => {
     if (pollingRef.current) clearInterval(pollingRef.current);
+    // Reset the guard for this dispatch so a new run starts clean.
+    progressGuardRef.current = { id: dispatchId, sent: 0, failed: 0 };
     pollingRef.current = setInterval(async () => {
       const { data: dispatch } = await supabase
         .from('dispatch_history')
@@ -193,8 +195,19 @@ export function MassTemplateDispatcher() {
 
       if (!dispatch) return;
 
-      const sent = dispatch.sent_count || 0;
-      const failed = dispatch.failed_count || 0;
+      const rawSent = dispatch.sent_count || 0;
+      const rawFailed = dispatch.failed_count || 0;
+
+      // Monotonic guard: never let the displayed counts go backwards for this dispatch.
+      const guard = progressGuardRef.current;
+      if (guard.id !== dispatchId) {
+        progressGuardRef.current = { id: dispatchId, sent: rawSent, failed: rawFailed };
+      } else {
+        guard.sent = Math.max(guard.sent, rawSent);
+        guard.failed = Math.max(guard.failed, rawFailed);
+      }
+      const sent = progressGuardRef.current.sent;
+      const failed = progressGuardRef.current.failed;
       const total = dispatch.total_recipients || sent + failed;
 
       setSendProgress({
@@ -213,7 +226,7 @@ export function MassTemplateDispatcher() {
         else if (dispatch.status === 'failed') toast.error("Disparo falhou");
         else toast.success("✅ Disparo concluído em background!");
       }
-    }, 5000);
+    }, 4000);
   };
 
   useEffect(() => {
