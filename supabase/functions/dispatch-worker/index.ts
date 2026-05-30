@@ -338,28 +338,17 @@ serve(async (req) => {
       totalFailed += failedRows.length;
     }
 
-    // Refresh aggregate counts (single query each). NOTE: the worker NEVER marks
-    // the dispatch 'completed' itself — finalization is owned solely by the cron
-    // RPC finalize_completed_dispatches(), which only closes a dispatch once ALL
-    // recipients have been inserted. This eliminates the premature-completion race
-    // that left thousands of recipients orphaned in 'pending'.
-    const [{ count: sCount }, { count: fCount }, { count: pCount }] = await Promise.all([
-      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId).in('status', ['sent', 'delivered', 'read']),
-      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId).eq('status', 'failed'),
-      supabase.from('dispatch_recipients').select('*', { count: 'exact', head: true })
-        .eq('dispatch_id', dispatchId).in('status', ['pending', 'leased']),
-    ]);
-
-    await supabase.from('dispatch_history').update({
-      sent_count: sCount || 0,
-      failed_count: fCount || 0,
-    }).eq('id', dispatchId);
+    // Refresh aggregate counts ATOMICALLY and MONOTONICALLY. Previously each worker
+    // ran its own COUNT then overwrote sent_count — a worker holding an older (lower)
+    // snapshot could land its UPDATE after a worker with a higher count, regressing the
+    // value. That race made the UI progress flap/reset (400 -> 0 -> 430 -> 0 -> 480).
+    // refresh_dispatch_counts() counts + updates in a single statement using GREATEST,
+    // so sent_count/failed_count can only ever go UP. Finalization stays owned by the
+    // cron RPC finalize_completed_dispatches().
+    await supabase.rpc('refresh_dispatch_counts', { p_dispatch_id: dispatchId });
 
     return new Response(JSON.stringify({
       workerId, loops, sent: totalSent, failed: totalFailed,
-      totalSent: sCount, totalFailed: fCount, totalPending: pCount,
       elapsedMs: Date.now() - startedAt,
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
