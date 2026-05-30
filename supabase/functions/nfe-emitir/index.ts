@@ -255,12 +255,41 @@ Deno.serve(async (req) => {
     const items = order.items;
     if (!items.length) throw new Error("Pedido sem itens");
 
+    // Fallback Tiny: completa endereço/CPF ausentes em pedidos Beta (sync sem endereco_entrega
+    // ou pedidos do checkout-transparente). Busca on-demand no Tiny e persiste de volta para
+    // reaproveitar em reemissão e geração de etiqueta.
+    if (betaTinyOrderId) {
+      const sa0 = (order.shipping_address || {}) as any;
+      const needAddr = digits(sa0.zip ?? sa0.cep).length !== 8;
+      const needCpf = digits(order.customer_cpf).length !== 11;
+      if (needAddr || needCpf) {
+        const td = await tinyGetOrderData(betaTinyOrderId);
+        if (td) {
+          if (needCpf && td.cpf) order.customer_cpf = td.cpf;
+          if (needAddr && td.shipping_address) {
+            const merged: any = { ...td.shipping_address };
+            for (const k of Object.keys(sa0)) {
+              const v = sa0[k];
+              if (v !== null && v !== undefined && String(v).trim() !== "") merged[k] = v;
+            }
+            order.shipping_address = merged;
+          }
+          if (betaOrderRowId) {
+            await supabase.from("expedition_beta_orders").update({
+              shipping_address: order.shipping_address,
+              customer_cpf: order.customer_cpf,
+            }).eq("id", betaOrderRowId);
+          }
+        }
+      }
+    }
+
     const cpfDest = digits(order.customer_cpf);
     if (!cpfDest || cpfDest.length !== 11) throw new Error("Pedido sem CPF válido do destinatário");
 
     const ship = (order.shipping_address || {}) as any;
     const ufDestino = ufFromProvince(ship.province) || "MG";
-    const cepDest = digits(ship.zip);
+    const cepDest = digits(ship.zip ?? ship.cep);
     if (!cepDest || cepDest.length !== 8) throw new Error("Pedido sem CEP válido (shipping_address.zip/cep)");
     const cidadeDest = sanitize(ship.city || "").toUpperCase();
     if (!cidadeDest) throw new Error("Pedido sem cidade no endereço");
