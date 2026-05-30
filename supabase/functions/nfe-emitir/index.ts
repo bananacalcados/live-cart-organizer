@@ -212,6 +212,8 @@ Deno.serve(async (req) => {
         .select("*, expedition_beta_order_items(*)")
         .eq("id", beta_order_id).single();
       if (oErr || !o) throw new Error(`Pedido (Beta) não encontrado: ${oErr?.message}`);
+      betaOrderRowId = (o as any).id;
+      betaTinyOrderId = (o as any).tiny_order_id || null;
       order = {
         customer_cpf: (o as any).customer_cpf || null,
         customer_name: (o as any).customer_name || null,
