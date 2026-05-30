@@ -30,6 +30,24 @@ export async function checkInstanceGuard(params: {
   if (phoneDigits.startsWith('55') && phoneDigits.length >= 12) variants.add(phoneDigits.slice(2));
   else variants.add('55' + phoneDigits);
 
+  // Conversations are independent per (phone + instance). If the REQUESTED
+  // instance already has incoming history with this phone, it's a legitimate
+  // dedicated chat — always allow. We must NOT compare against the globally
+  // latest incoming across instances, because the same phone can have separate
+  // conversations on different instances.
+  const { data: ownIncoming } = await supabase
+    .from('whatsapp_messages')
+    .select('id')
+    .in('phone', [...variants])
+    .eq('direction', 'incoming')
+    .eq('whatsapp_number_id', whatsappNumberId)
+    .limit(1)
+    .maybeSingle();
+
+  if (ownIncoming) return { ok: true };
+
+  // No incoming on the requested instance. Only block if another instance HAS
+  // received from this phone (operator is starting on the wrong instance).
   const { data } = await supabase
     .from('whatsapp_messages')
     .select('whatsapp_number_id')
