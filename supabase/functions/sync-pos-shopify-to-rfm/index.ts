@@ -270,10 +270,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       success: true,
       pos_customers_synced: posCount,
-      merged_by_cpf: mergedByCpf,
-      merged_by_phone_name: mergedByPhone,
       tiny_online_customers_synced: tinyOnlineCount,
-      message: `✅ POS: ${posCount} (CPF: ${mergedByCpf}, Tel+Nome: ${mergedByPhone} merges), Tiny: ${tinyOnlineCount}`,
+      message: `✅ SET mode (idempotente) — POS: ${posCount}, Tiny: ${tinyOnlineCount}`,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('Sync error:', error);
