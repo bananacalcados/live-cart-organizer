@@ -140,6 +140,9 @@ export function MassTemplateDispatcher() {
   const [sendProgress, setSendProgress] = useState({ sent: 0, total: 0, failed: 0 });
   const [activeDispatchId, setActiveDispatchId] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Tracks the highest sent/failed seen for the dispatch currently being polled so
+  // the displayed progress can never visually regress (defense against any backend race).
+  const progressGuardRef = useRef<{ id: string | null; sent: number; failed: number }>({ id: null, sent: 0, failed: 0 });
   const [testPhone, setTestPhone] = useState("");
   const [isTesting, setIsTesting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
