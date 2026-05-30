@@ -67,16 +67,21 @@ serve(async (req) => {
       processing_batch: false,
     }).eq('id', id).in('status', ['pending', 'sending']);
 
-    // Kick a worker immediately (fire and forget). Orchestrator scales out further.
-    fetch(`${supabaseUrl}/functions/v1/dispatch-worker`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceKey}`,
-        'apikey': serviceKey,
-      },
-      body: JSON.stringify({ dispatchId: id }),
-    }).catch(err => console.error(`kickstart worker failed for ${id}:`, err));
+    // Kick several workers immediately (fire and forget) so big audiences start
+    // draining within seconds instead of waiting for the 30s orchestrator cron.
+    // Workers self-coordinate via lease lock — extra workers just find nothing.
+    const INITIAL_WORKERS = 4;
+    for (let i = 0; i < INITIAL_WORKERS; i++) {
+      fetch(`${supabaseUrl}/functions/v1/dispatch-worker`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${serviceKey}`,
+          'apikey': serviceKey,
+        },
+        body: JSON.stringify({ dispatchId: id }),
+      }).catch(err => console.error(`kickstart worker failed for ${id}:`, err));
+    }
 
     return new Response(JSON.stringify({ success: true, dispatchId: id, via: 'native-queue' }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

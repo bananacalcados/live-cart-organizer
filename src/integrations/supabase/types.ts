@@ -15595,6 +15595,10 @@ export type Database = {
         Returns: undefined
       }
       recompute_needs_review: { Args: never; Returns: number }
+      refresh_dispatch_counts: {
+        Args: { p_dispatch_id: string }
+        Returns: undefined
+      }
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
