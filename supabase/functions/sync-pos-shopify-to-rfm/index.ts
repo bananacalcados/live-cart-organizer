@@ -126,48 +126,18 @@ serve(async (req) => {
           }
         }
 
-        // 1d. Load existing RFM matrix indexes for CPF and phone matching
-        let rfmFrom = 0;
-        while (true) {
-          const { data: rfmChunk } = await supabase
-            .from('zoppy_customers')
-            .select('id, zoppy_id, cpf, phone, first_name, last_name, total_orders, total_spent, first_purchase_at, last_purchase_at')
-            .range(rfmFrom, rfmFrom + 999);
-          if (!rfmChunk || rfmChunk.length === 0) break;
-          existingRfm = existingRfm.concat(rfmChunk);
-          if (rfmChunk.length < 1000) break;
-          rfmFrom += 1000;
-        }
-
-        // Build lookup indexes
-        const cpfIndex = new Map<string, any>(); // normalized CPF -> rfm record
-        const phoneIndex = new Map<string, any[]>(); // DDD+suffix -> rfm records
-        for (const rfm of existingRfm) {
-          if (rfm.cpf) {
-            const normCpf = rfm.cpf.replace(/\D/g, '');
-            if (normCpf.length >= 11) cpfIndex.set(normCpf, rfm);
-          }
-          if (rfm.phone) {
-            const phoneKey = extractPhoneKey(rfm.phone);
-            if (phoneKey) {
-              const arr = phoneIndex.get(phoneKey) || [];
-              arr.push(rfm);
-              phoneIndex.set(phoneKey, arr);
-            }
-          }
-        }
-
-        console.log(`RFM index loaded: ${existingRfm.length} records, ${cpfIndex.size} with CPF, ${phoneIndex.size} unique phone keys`);
-
-        // 1e. Process each POS customer with CPF-first rematching
+        // 1d. Build dedicated pos- records with SET (REPLACE) semantics.
+        // IMPORTANT: We intentionally do NOT additively merge into existing zoppy
+        // records anymore. The previous additive merge re-added the full lifetime
+        // total on every cron run, compounding values into the millions. Each POS
+        // customer is now represented as a single `pos-<id>` row whose totals are
+        // recomputed (SET) from pos_sales every run — fully idempotent.
         const upsertBatch: any[] = [];
-        const updateBatch: { id: string; updates: Record<string, any> }[] = [];
 
         for (const [custId, stats] of customerSales) {
           const cust = customerMap.get(custId);
           if (!cust) continue;
           const phone = normalizeBRPhone(cust.whatsapp || '');
-          const phoneKey = phone ? extractPhoneKey(phone) : null;
           const cpf = (cust.cpf || '').replace(/\D/g, '') || null;
           const custName = (cust.name || '').trim();
           if (!phone && !cust.email && !cpf) continue;
@@ -175,107 +145,22 @@ serve(async (req) => {
           const nameParts = custName.split(' ');
           const ddd = phone.length >= 12 ? phone.slice(2, 4) : null;
 
-          // Strategy 1: Match by CPF
-          let matchedRfm: any = null;
-          let matchType = 'new';
-
-          if (cpf && cpf.length >= 11) {
-            matchedRfm = cpfIndex.get(cpf);
-            if (matchedRfm) matchType = 'cpf';
-          }
-
-          // Strategy 2: Match by DDD+suffix phone key + name similarity
-          if (!matchedRfm && phoneKey) {
-            const phoneMatches = phoneIndex.get(phoneKey);
-            if (phoneMatches && phoneMatches.length > 0) {
-              if (custName) {
-                // Find best name match
-                let bestMatch: any = null;
-                let bestScore = 0;
-                for (const pm of phoneMatches) {
-                  const rfmName = `${pm.first_name || ''} ${pm.last_name || ''}`.trim();
-                  const score = nameSimilarity(custName, rfmName);
-                  if (score > bestScore) { bestScore = score; bestMatch = pm; }
-                }
-                if (bestMatch && bestScore >= NAME_SIMILARITY_THRESHOLD) {
-                  matchedRfm = bestMatch;
-                  matchType = 'phone_name';
-                }
-              }
-              // If only 1 phone match and no name to compare, assume same
-              if (!matchedRfm && phoneMatches.length === 1 && !custName) {
-                matchedRfm = phoneMatches[0];
-                matchType = 'phone_only';
-              }
-            }
-          }
-
-          if (matchedRfm) {
-            // Merge: update existing RFM record with new sales data
-            const existingOrders = matchedRfm.total_orders || 0;
-            const existingSpent = matchedRfm.total_spent || 0;
-            const newTotal = existingOrders + stats.count;
-            const newSpent = existingSpent + stats.total;
-            const firstPurchase = matchedRfm.first_purchase_at && matchedRfm.first_purchase_at < stats.first
-              ? matchedRfm.first_purchase_at : stats.first;
-            const lastPurchase = matchedRfm.last_purchase_at && matchedRfm.last_purchase_at > stats.last
-              ? matchedRfm.last_purchase_at : stats.last;
-
-            const updates: Record<string, any> = {
-              total_orders: newTotal,
-              total_spent: newSpent,
-              avg_ticket: newTotal > 0 ? newSpent / newTotal : 0,
-              first_purchase_at: firstPurchase,
-              last_purchase_at: lastPurchase,
-            };
-
-            // Update phone if CPF matched but phone is different/newer
-            if (matchType === 'cpf' && phone && phone !== normalizeBRPhone(matchedRfm.phone || '')) {
-              updates.phone = phone;
-              updates.ddd = ddd;
-              console.log(`CPF match: updating phone for ${custName} (${matchedRfm.zoppy_id})`);
-            }
-
-            // Update CPF if phone matched but CPF was missing
-            if (matchType === 'phone_name' && cpf && !matchedRfm.cpf) {
-              updates.cpf = cpf;
-            }
-
-            // Update store, shoe_size etc if available
-            if (stats.storeId) updates.store_id = stats.storeId;
-            if (cust.shoe_size) updates.shoe_size = cust.shoe_size;
-            if (cust.preferred_style) updates.preferred_style = cust.preferred_style;
-            if (cust.age_range) updates.age_range = cust.age_range;
-
-            updateBatch.push({ id: matchedRfm.id, updates });
-
-            if (matchType === 'cpf') mergedByCpf++;
-            else mergedByPhone++;
-          } else {
-            // New customer - no match found
-            upsertBatch.push({
-              zoppy_id: `pos-${custId}`, external_id: custId,
-              first_name: nameParts[0] || '', last_name: nameParts.slice(1).join(' ') || '',
-              phone: phone || null, email: cust.email || null, cpf,
-              city: cust.city || null, state: cust.state || null, gender: cust.gender || null,
-              region_type: 'local', ddd, store_id: stats.storeId,
-              shoe_size: cust.shoe_size || null, preferred_style: cust.preferred_style || null, age_range: cust.age_range || null,
-              source: 'pos', lead_status: 'customer',
-              total_orders: stats.count, total_spent: stats.total,
-              avg_ticket: stats.count > 0 ? stats.total / stats.count : 0,
-              first_purchase_at: stats.first, last_purchase_at: stats.last,
-            });
-          }
+          upsertBatch.push({
+            zoppy_id: `pos-${custId}`, external_id: custId,
+            first_name: nameParts[0] || '', last_name: nameParts.slice(1).join(' ') || '',
+            phone: phone || null, email: cust.email || null, cpf,
+            city: cust.city || null, state: cust.state || null, gender: cust.gender || null,
+            region_type: 'local', ddd, store_id: stats.storeId,
+            shoe_size: cust.shoe_size || null, preferred_style: cust.preferred_style || null, age_range: cust.age_range || null,
+            source: 'pos', lead_status: 'customer',
+            total_orders: stats.count, total_spent: stats.total,
+            avg_ticket: stats.count > 0 ? stats.total / stats.count : 0,
+            first_purchase_at: stats.first, last_purchase_at: stats.last,
+          });
         }
 
-        // Execute updates for matched records
-        for (const { id, updates } of updateBatch) {
-          const { error } = await supabase.from('zoppy_customers').update(updates).eq('id', id);
-          if (error) console.error('RFM update error:', error);
-          else posCount++;
-        }
-
-        // Upsert new records
+        // Upsert with SET semantics: onConflict replaces the stored totals with the
+        // freshly recomputed values (never accumulates).
         for (let i = 0; i < upsertBatch.length; i += 100) {
           const chunk = upsertBatch.slice(i, i + 100);
           const { error } = await supabase.from('zoppy_customers').upsert(chunk, { onConflict: 'zoppy_id' });
