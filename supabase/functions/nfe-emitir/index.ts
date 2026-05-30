@@ -294,8 +294,11 @@ Deno.serve(async (req) => {
     const cidadeDest = sanitize(ship.city || "").toUpperCase();
     if (!cidadeDest) throw new Error("Pedido sem cidade no endereço");
 
-    const { logradouro, numero } = splitStreetNumber(ship.address1);
-    const bairro = sanitize(ship.address2 || "Centro").slice(0, 60) || "Centro";
+    const split = splitStreetNumber(ship.address1);
+    const logradouro = split.logradouro;
+    // Prioriza o campo dedicado `number` (PDV/checkout/Tiny guardam separado do logradouro)
+    const numero = (ship.number && String(ship.number).trim()) ? String(ship.number).trim() : split.numero;
+    const bairro = sanitize(ship.address2 || ship.neighborhood || "Centro").slice(0, 60) || "Centro";
 
     // 2. Empresa (prioridade: forcedCompany > pos_stores.company_id > PILOT)
     const companyId = forcedCompany || order.store_company_id || PILOT_COMPANY_ID;
