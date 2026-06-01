@@ -844,7 +844,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           <span className="text-xs text-muted-foreground whitespace-nowrap">Instância WhatsApp:</span>
           <WhatsAppNumberSelector
             className="w-56"
-            allowedProviders={["zapi", "wasender"]}
+            allowedProviders={["zapi", "wasender", "uazapi"]}
             value={(campaign as any)?.whatsapp_number_id ?? undefined}
             autoSelect={false}
             disabled={!campaign}
