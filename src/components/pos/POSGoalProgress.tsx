@@ -217,8 +217,8 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
     fetchMonthRevenue();
   }, [storeId, hasMonthlyRevenueGoals, goals]);
 
-  // Filter goals matching the current dashboard period
-  const relevantGoals = goals.filter(g => mapPeriodToFilter(g, period));
+  // Filter goals matching the current dashboard period, then dedupe revenue goals
+  const relevantGoals = dedupeRevenueGoals(goals.filter(g => mapPeriodToFilter(g, period)));
 
   if (relevantGoals.length === 0) return null;
 
