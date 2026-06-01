@@ -1121,6 +1121,12 @@ function CardPaymentForm({
     onProcessingChange?.(isProcessing);
   }, [isProcessing, onProcessingChange]);
 
+  // Pré-carrega o SDK do Mercado Pago (gera device_id antecipadamente). Tolerante a falha.
+  useEffect(() => {
+    initMercadoPago().catch(() => {});
+  }, []);
+
+
   // Restore processing state from sessionStorage on mount
   useEffect(() => {
     const stored = sessionStorage.getItem(`checkout_payment_${orderId}`);
