@@ -1135,6 +1135,33 @@ export function ChatView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showBlockConfirm} onOpenChange={setShowBlockConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Bloquear contato no WhatsApp?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso aciona o bloqueio nativo do WhatsApp para{" "}
+              <strong>{conversation?.customerName || conversation?.phone}</strong>. Você não
+              conseguirá mais enviar nem receber mensagens dessa pessoa nesta instância até
+              desbloqueá-la.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={blockLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleToggleBlock();
+              }}
+              disabled={blockLoading}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {blockLoading ? "Bloqueando..." : "Bloquear"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
