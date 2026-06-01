@@ -177,6 +177,23 @@ serve(async (req) => {
               ? new Date(parseInt(msg.timestamp) * 1000).toISOString()
               : new Date().toISOString();
 
+            // Dedup: Meta frequently re-delivers the same webhook. The wamid is globally
+            // unique, so if we already stored this incoming message, skip it entirely
+            // (avoids duplicated chat rows AND double AI replies).
+            if (messageId) {
+              const { data: dupRow } = await supabase
+                .from('whatsapp_messages')
+                .select('id')
+                .eq('message_id', messageId)
+                .eq('direction', 'incoming')
+                .limit(1);
+              if (dupRow && dupRow.length > 0) {
+                console.log(`[meta-wa] Dedup: incoming message ${messageId} already exists, skipping`);
+                continue;
+              }
+            }
+
+
             let messageText = '';
             let mediaType = 'text';
             let mediaUrl: string | null = null;
