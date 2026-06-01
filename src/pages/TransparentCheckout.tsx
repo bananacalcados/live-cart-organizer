@@ -1645,13 +1645,15 @@ export default function TransparentCheckout() {
         ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
       };
 
-      const { data: reg, error } = await supabase
+      const { error } = await supabase
         .from("customer_registrations")
-        .upsert(payload, { onConflict: "order_id" })
-        .select("id, cep, address, address_number, neighborhood, city, state")
-        .single();
+        .upsert(payload, { onConflict: "order_id" });
 
       if (error) throw error;
+
+      const { data: regRaw } = await supabase
+        .rpc("get_checkout_registration", { p_order_id: payload.order_id });
+      const reg = regRaw as any;
       if (reg?.id) setRegistrationId(reg.id);
 
       // Também salva full_name na tabela orders para exibição no dashboard
