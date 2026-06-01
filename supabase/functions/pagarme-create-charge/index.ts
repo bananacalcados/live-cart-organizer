@@ -107,6 +107,100 @@ interface ChargeRequest {
   billingAddress: BillingAddress;
   totalAmountCents: number;
   shippingAmount?: number;
+  // ── Mercado Pago (tokenização no frontend via MercadoPago.JS V2) ──
+  // Quando o SDK do MP carrega no checkout, ele gera um token de cartão + device_id
+  // e os envia aqui. Se o SDK falhar, esses campos ficam vazios e o MP é pulado
+  // (degradação graciosa → cai direto no Pagar.me com o cartão cru).
+  mpCardToken?: string;
+  mpDeviceId?: string;
+  mpPaymentMethodId?: string;
+  mpIssuerId?: string;
+  paymentAttemptId?: string;
+}
+
+// ── Mercado Pago charge (gateway #1) ─────────────────────────────
+// Usa token gerado no frontend (MercadoPago.JS V2). binary_mode:true garante
+// status definitivo (approved/rejected) sem ficar "in_process" pendente.
+async function chargeMercadoPago(
+  params: ChargeRequest,
+  products: Array<{ title: string; price: number; quantity: number }>,
+  supabase: any
+): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string; pending?: boolean; mpAccountId?: string | null }> {
+  if (!params.mpCardToken || !params.mpPaymentMethodId) {
+    return { success: false, gateway: "mercadopago", error: "Token MP ausente (SDK não carregou) — pulando" };
+  }
+
+  const mpAccount = await getActiveMpAccount(supabase);
+  if (!mpAccount) {
+    return { success: false, gateway: "mercadopago", error: "Nenhuma conta Mercado Pago ativa" };
+  }
+
+  const cpf = params.customer.cpf.replace(/\D/g, "");
+  const email = params.customer.email || `${cpf}@cliente.bananacalcados.com.br`;
+  const amount = Math.round(params.totalAmountCents) / 100;
+  const nameParts = (params.customer.name || "Cliente").trim().split(/\s+/);
+  const firstName = nameParts[0] || "Cliente";
+  const lastName = nameParts.slice(1).join(" ") || ".";
+
+  const body: Record<string, unknown> = {
+    transaction_amount: Number(amount.toFixed(2)),
+    token: params.mpCardToken,
+    description: `Pedido #${String(params.orderId).substring(0, 8)}`,
+    installments: params.installments || 1,
+    payment_method_id: params.mpPaymentMethodId,
+    binary_mode: true,
+    external_reference: String(params.orderId),
+    notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=mercadopago`,
+    statement_descriptor: "BANANACALCADOS",
+    payer: {
+      email,
+      first_name: firstName,
+      last_name: lastName,
+      ...(cpf.length === 11 ? { identification: { type: "CPF", number: cpf } } : {}),
+    },
+    additional_info: {
+      items: products.map((p, i) => ({
+        id: `item_${i}`,
+        title: String(p.title || "Produto").substring(0, 256),
+        description: String(p.title || "Produto").substring(0, 256),
+        quantity: Number(p.quantity) || 1,
+        unit_price: Math.round(Number(p.price) * 100) / 100,
+      })),
+      payer: { first_name: firstName, last_name: lastName },
+    },
+  };
+  if (params.mpIssuerId) body.issuer_id = params.mpIssuerId;
+
+  try {
+    const idemKey = `card-${params.orderId}-${params.paymentAttemptId || crypto.randomUUID()}`;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${mpAccount.access_token}`,
+      "X-Idempotency-Key": idemKey,
+    };
+    // device_id (fingerprint do navegador) — pontua na qualidade e reduz fraude
+    if (params.mpDeviceId) headers["X-meli-session-id"] = params.mpDeviceId;
+
+    const res = await fetch("https://api.mercadopago.com/v1/payments", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    console.log(`[mercadopago] charge HTTP ${res.status} status=${data.status} detail=${data.status_detail} id=${data.id}`);
+
+    if (data.status === "approved") {
+      return { success: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id };
+    }
+    if (data.status === "in_process" || data.status === "pending") {
+      return { success: false, pending: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, error: "Pagamento em análise" };
+    }
+    const errMsg = data.status_detail || data.message || data.cause?.[0]?.description || "Cobrança recusada";
+    return { success: false, gateway: "mercadopago", error: errMsg };
+  } catch (e) {
+    console.error("[mercadopago] exception:", e);
+    return { success: false, gateway: "mercadopago", error: `MP exception: ${(e as Error).message}` };
+  }
 }
 
 // ── Pagar.me tokenize + charge ──────────────────────────────────
