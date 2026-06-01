@@ -442,7 +442,9 @@ export function ChatView({
     if (msg.direction === 'outgoing') {
       return (msg as any).sender_user_id !== (prevMsg as any).sender_user_id;
     }
-    return false;
+    // Incoming: in groups, different participants must be distinguished
+    return ((msg as any).sender_name || '') !== ((prevMsg as any).sender_name || '')
+      || ((msg as any).sender_phone || '') !== ((prevMsg as any).sender_phone || '');
   }, []);
 
   return (
