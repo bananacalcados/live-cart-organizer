@@ -138,7 +138,7 @@ async function chargeMercadoPago(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
   supabase: any
-): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string; pending?: boolean; mpAccountId?: string | null }> {
+): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string; pending?: boolean; mpAccountId?: string | null; isSandbox?: boolean }> {
   if (!params.mpCardToken || !params.mpPaymentMethodId) {
     return { success: false, gateway: "mercadopago", error: "Token MP ausente (SDK não carregou) — pulando" };
   }
@@ -202,25 +202,34 @@ async function chargeMercadoPago(
       body: JSON.stringify(body),
     });
     const rawText = await res.text();
+    const requestId = res.headers.get("x-request-id") || res.headers.get("X-Request-Id");
     let data: any = {};
     try {
       data = rawText ? JSON.parse(rawText) : {};
     } catch {
       data = { raw: rawText };
     }
-    console.log(`[mercadopago] charge HTTP ${res.status} status=${data.status} detail=${data.status_detail || data.error || data.message} id=${data.id}`);
+    console.log(`[mercadopago] charge HTTP ${res.status} status=${data.status} detail=${data.status_detail || data.error || data.message} id=${data.id} request_id=${requestId || "n/a"}`);
 
     if (data.status === "approved") {
-      return { success: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id };
+      return { success: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, isSandbox: mpAccount.is_sandbox };
     }
     if (data.status === "in_process" || data.status === "pending") {
-      return { success: false, pending: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, error: "Pagamento em análise" };
+      return { success: false, pending: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, error: "Pagamento em análise", isSandbox: mpAccount.is_sandbox };
     }
     const errMsg = data.status_detail || data.message || data.error || data.cause?.[0]?.description || data.raw || "Cobrança recusada";
-    return { success: false, gateway: "mercadopago", error: errMsg };
+    if (mpAccount.is_sandbox && errMsg === "internal_error") {
+      return {
+        success: false,
+        gateway: "mercadopago",
+        error: `Mercado Pago sandbox retornou erro interno no teste${requestId ? ` (request_id ${requestId})` : ""}. Nenhum gateway real foi tentado.`,
+        isSandbox: true,
+      };
+    }
+    return { success: false, gateway: "mercadopago", error: errMsg, isSandbox: mpAccount.is_sandbox };
   } catch (e) {
     console.error("[mercadopago] exception:", e);
-    return { success: false, gateway: "mercadopago", error: `MP exception: ${(e as Error).message}` };
+    return { success: false, gateway: "mercadopago", error: `MP exception: ${(e as Error).message}`, isSandbox: mpAccount.is_sandbox };
   }
 }
 
