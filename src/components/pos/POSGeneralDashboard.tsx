@@ -56,7 +56,10 @@ function bucketPayment(raw: string | null, _saleType?: string | null): string {
   if (s.includes("débito") || s.includes("debito") || s.includes("debit")) return "Débito";
   if (s.includes("crédito") || s.includes("credito") || s.includes("credit") || s.includes("cartão") || s.includes("cartao")) return "Crédito";
   if (s.includes("dinheiro") || s === "cash") return "Dinheiro";
-  if (s.includes("não informado") || s.includes("nao informado")) return "Não informado";
+  // Rótulos de CANAL/GATEWAY (não são forma de pagamento real) → auditoria.
+  if (s.includes("não informado") || s.includes("nao informado") ||
+      s.includes("shopify") || s.includes("checkout") || s.includes("online") ||
+      s.includes("mercado") || s.includes("paypal") || s.includes("yampi")) return "Não informado";
   return "Outros";
 }
 
