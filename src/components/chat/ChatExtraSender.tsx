@@ -125,7 +125,8 @@ export function ChatExtraSender({
   const send = async (kind: Exclude<ExtraKind, null>, body: Record<string, unknown>, summary: string) => {
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("wasender-send-extra", {
+      const fn = provider === "uazapi" ? "uazapi-send-extra" : "wasender-send-extra";
+      const { data, error } = await supabase.functions.invoke(fn, {
         body: { kind, phone, whatsapp_number_id: whatsappNumberId, ...body },
       });
       if (error) throw error;
