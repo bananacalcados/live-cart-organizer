@@ -36,6 +36,18 @@ import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
 import { AiTransferBanner } from "./AiTransferBanner";
 import { ChatExtraSender } from "./ChatExtraSender";
 
+/** Format a raw BR phone (digits only) for friendly display in group sender labels. */
+function formatPhoneDisplay(raw: string): string {
+  const d = (raw || '').replace(/\D/g, '');
+  if (!d) return raw;
+  // 55 + DDD(2) + number(8/9)
+  const local = d.startsWith('55') && d.length >= 12 ? d.slice(2) : d;
+  if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+  if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  return d;
+}
+
+
 interface ChatViewProps {
   messages: Message[];
   conversation: Conversation | null;
