@@ -498,8 +498,9 @@ async function chargePagarme(
 async function chargeVindi(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
-  tokenAccount: string
-): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  tokenAccount: string,
+  clientIp: string | null
+): Promise<ChargeResult> {
   const safeParams = { ...params, card: maskCard(params.card) };
   const cpf = params.customer.cpf.replace(/\D/g, "");
   const phone = params.customer.phone.replace(/\D/g, "");
@@ -533,7 +534,7 @@ async function chargeVindi(
     })),
     transaction: {
       available_payment_methods: "3,4,5,16,18,20,25",
-      customer_ip: "0.0.0.0",
+      customer_ip: clientIp || undefined,
       shipping_type: "Envio",
       shipping_price: params.shippingAmount?.toFixed(2) || "0",
       url_notification: `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=vindi`,
@@ -573,15 +574,16 @@ async function chargeVindi(
   }
 
   const errorMsg = data?.message_response?.message || data?.error_response?.general_errors?.[0]?.message || "Erro Yapay/VINDI";
-  return { success: false, gateway: "vindi", error: errorMsg };
+  return { success: false, gateway: "vindi", error: errorMsg, ...categorizeDecline(errorMsg) };
 }
 
 // ── APPMAX fallback (3-step API: customer → order → payment) ────
 async function chargeAppmax(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
-  accessToken: string
-): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  accessToken: string,
+  clientIp: string | null
+): Promise<ChargeResult> {
   const safeParams = { ...params, card: maskCard(params.card) };
   const base = "https://admin.appmax.com.br/api/v3";
   const headers = { "Content-Type": "application/json" };
@@ -608,7 +610,7 @@ async function chargeAppmax(
         address_city: params.billingAddress.city,
         address_state: params.billingAddress.state,
         address_street_complement: "",
-        ip: "0.0.0.0",
+        ip: clientIp || undefined,
       }),
     });
     const custData = await custRes.json();
@@ -694,11 +696,13 @@ async function chargeAppmax(
       return { success: true, gateway: "appmax", transactionId: appmaxTxId };
     }
 
-    return {
-      success: false,
-      gateway: "appmax",
-      error: payData.text || payData.message || payData.data?.message || "AppMax payment declined",
-    };
+      const errorMsg = payData.text || payData.message || payData.data?.message || "AppMax payment declined";
+      return {
+        success: false,
+        gateway: "appmax",
+        error: errorMsg,
+        ...categorizeDecline(errorMsg),
+      };
   } catch (e) {
     console.error("APPMAX exception:", e);
     return { success: false, gateway: "appmax", error: `AppMax exception: ${e.message}` };
