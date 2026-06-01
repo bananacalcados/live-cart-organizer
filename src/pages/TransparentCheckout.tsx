@@ -1372,7 +1372,7 @@ function CardPaymentForm({
             <div>
               <p className="text-sm font-medium text-destructive">Pagamento não aprovado</p>
               <p className="text-xs text-destructive/80 mt-1">{paymentError}</p>
-              <p className="text-xs text-muted-foreground mt-2">Revise os dados ou tente com outro cartão.</p>
+              <p className="text-xs text-muted-foreground mt-2">{paymentError?.includes("sandbox") ? "Teste do Mercado Pago falhou; confira os dados oficiais de teste." : "Revise os dados ou tente com outro cartão."}</p>
             </div>
           </div>
         </div>
