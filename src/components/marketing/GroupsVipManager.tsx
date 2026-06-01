@@ -116,8 +116,9 @@ export function GroupsVipManager() {
       const selected = numbers.find(n => n.id === numId);
       const provider = selected?.provider || "zapi";
 
-      if (provider === "wasender") {
-        const { data, error } = await supabase.functions.invoke("wasender-groups", {
+      if (provider === "wasender" || provider === "uazapi") {
+        const fn = provider === "uazapi" ? "uazapi-groups" : "wasender-groups";
+        const { data, error } = await supabase.functions.invoke(fn, {
           body: { action: "list", syncToDb: true, whatsapp_number_id: numId },
         });
         if (error) throw error;
