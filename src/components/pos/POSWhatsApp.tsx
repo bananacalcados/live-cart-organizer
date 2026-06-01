@@ -136,10 +136,27 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           .from("events")
           .select("id, name, is_active, default_store_id, channel, whatsapp_number_id")
           .eq("is_active", true);
-        const eventList = (events || []).filter((e: any) =>
-          e.default_store_id === storeId ||
-          (e.channel || "").startsWith("pos_")
+
+        // Restrict live orders to the WhatsApp instances this POS actually has access to,
+        // so the "Pedidos da Live" badge matches the conversations that are visible here.
+        const { data: storeNums } = await supabase
+          .from("pos_store_whatsapp_numbers")
+          .select("whatsapp_number_id")
+          .eq("store_id", storeId);
+        const accessibleNumberIds = new Set(
+          (storeNums || []).map((r: any) => r.whatsapp_number_id).filter(Boolean)
         );
+        const noInstanceRestriction = accessibleNumberIds.size === 0;
+
+        const eventList = (events || []).filter((e: any) => {
+          // Virtual/unscoped stores (no assigned instances) keep seeing everything.
+          if (noInstanceRestriction) return true;
+          // Events explicitly tied to this store stay visible.
+          if (e.default_store_id === storeId) return true;
+          // Otherwise only events whose instance is accessible to this POS.
+          if (e.whatsapp_number_id) return accessibleNumberIds.has(e.whatsapp_number_id);
+          return false;
+        });
         if (eventList.length === 0) { if (!cancelled) { setLiveStageMap({}); setLiveGhostRows([]); } return; }
         const eventIds = eventList.map((e: any) => e.id);
         const eventNameById = Object.fromEntries(eventList.map((e: any) => [e.id, e.name]));
