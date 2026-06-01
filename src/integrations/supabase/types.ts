@@ -14449,6 +14449,7 @@ export type Database = {
           quoted_message_id: string | null
           referral: Json | null
           sender_name: string | null
+          sender_phone: string | null
           sender_user_id: string | null
           source: string
           status: string | null
@@ -14471,6 +14472,7 @@ export type Database = {
           quoted_message_id?: string | null
           referral?: Json | null
           sender_name?: string | null
+          sender_phone?: string | null
           sender_user_id?: string | null
           source?: string
           status?: string | null
@@ -14493,6 +14495,7 @@ export type Database = {
           quoted_message_id?: string | null
           referral?: Json | null
           sender_name?: string | null
+          sender_phone?: string | null
           sender_user_id?: string | null
           source?: string
           status?: string | null
