@@ -42,6 +42,83 @@ function getCorsHeaders(req: Request) {
   };
 }
 
+type DeclineCategory = "risk" | "card_data" | "minimum_amount" | "issuer" | "unknown";
+
+interface ChargeResult {
+  success: boolean;
+  gateway: string;
+  transactionId?: string;
+  error?: string;
+  pending?: boolean;
+  mpAccountId?: string | null;
+  isSandbox?: boolean;
+  stopCascade?: boolean;
+  declineCategory?: DeclineCategory;
+}
+
+function normalizeFailureCode(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getClientIp(req: Request): string | null {
+  const forwarded = req.headers.get("forwarded") || "";
+  const forwardedFor = forwarded.match(/for="?([^;,"]+)"?/i)?.[1] || null;
+  const candidates = [
+    req.headers.get("cf-connecting-ip"),
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim(),
+    req.headers.get("x-real-ip"),
+    forwardedFor,
+  ];
+
+  for (const candidate of candidates) {
+    const ip = String(candidate || "").trim().replace(/^\[|\]$/g, "");
+    if (!ip || ip === "0.0.0.0" || ip === "::1" || ip === "127.0.0.1" || ip.toLowerCase() === "unknown") continue;
+    return ip;
+  }
+
+  return null;
+}
+
+function humanizeMpError(codeOrMessage: string) {
+  const code = normalizeFailureCode(codeOrMessage);
+  switch (code) {
+    case "cc_rejected_high_risk":
+      return "Transação recusada pela análise de risco do cartão no Mercado Pago.";
+    case "cc_rejected_bad_filled_security_code":
+      return "Código de segurança inválido.";
+    case "cc_rejected_bad_filled_date":
+      return "Data de validade inválida.";
+    case "cc_rejected_bad_filled_card_number":
+      return "Número do cartão inválido.";
+    case "cc_rejected_insufficient_amount":
+      return "Cartão sem limite disponível.";
+    default:
+      return codeOrMessage || "Cobrança recusada";
+  }
+}
+
+function categorizeDecline(codeOrMessage: string): { stopCascade: boolean; declineCategory: DeclineCategory } {
+  const normalized = normalizeFailureCode(codeOrMessage);
+
+  if (!normalized) {
+    return { stopCascade: false, declineCategory: "unknown" };
+  }
+
+  if (normalized.startsWith("cc_rejected_") || normalized.includes("análise de segurança") || normalized.includes("analise de seguranca") || normalized.includes("high_risk") || normalized.includes("antifraud") || normalized.includes("recusado_por_risco")) {
+    return { stopCascade: true, declineCategory: "risk" };
+  }
+
+  if (normalized.includes("código de segurança inválido") || normalized.includes("codigo de seguranca invalido") || normalized.includes("cartão inválido") || normalized.includes("cartao invalido") || normalized.includes("número do cartão") || normalized.includes("numero do cartao") || normalized.includes("data de validade") || normalized.includes("invalid_installments")) {
+    return { stopCascade: true, declineCategory: "card_data" };
+  }
+
+  if (normalized.includes("valor inferior a r$ 5,00") || normalized.includes("parcela 1 possui o valor inferior a r$ 5,00")) {
+    return { stopCascade: true, declineCategory: "minimum_amount" };
+  }
+
+  return { stopCascade: false, declineCategory: "unknown" };
+}
+
 async function notifyPaymentConfirmedLocal(orderId: string, gateway: string, transactionId: string) {
   try {
     const webhookUrl = Deno.env.get("AGENTE2_PAGAMENTO_CONFIRMADO") || "https://api.bananacalcados.com.br/webhook/pagamento-confirmado";
@@ -138,7 +215,7 @@ async function chargeMercadoPago(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
   supabase: any
-): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string; pending?: boolean; mpAccountId?: string | null; isSandbox?: boolean }> {
+): Promise<ChargeResult> {
   if (!params.mpCardToken || !params.mpPaymentMethodId) {
     return { success: false, gateway: "mercadopago", error: "Token MP ausente (SDK não carregou) — pulando" };
   }
@@ -233,16 +310,20 @@ async function chargeMercadoPago(
     if (data.status === "in_process" || data.status === "pending") {
       return { success: false, pending: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, error: "Pagamento em análise", isSandbox: mpAccount.is_sandbox };
     }
-    const errMsg = data.status_detail || data.message || data.error || data.cause?.[0]?.description || data.raw || "Cobrança recusada";
-    if (mpAccount.is_sandbox && errMsg === "internal_error") {
+    const rawErrMsg = data.status_detail || data.message || data.error || data.cause?.[0]?.description || data.raw || "Cobrança recusada";
+    const errMsg = humanizeMpError(rawErrMsg);
+    const failureMeta = categorizeDecline(rawErrMsg);
+    if (mpAccount.is_sandbox && rawErrMsg === "internal_error") {
       return {
         success: false,
         gateway: "mercadopago",
         error: `Mercado Pago sandbox retornou erro interno no teste${requestId ? ` (request_id ${requestId})` : ""}. Nenhum gateway real foi tentado.`,
         isSandbox: true,
+        stopCascade: true,
+        declineCategory: "risk",
       };
     }
-    return { success: false, gateway: "mercadopago", error: errMsg, isSandbox: mpAccount.is_sandbox };
+    return { success: false, gateway: "mercadopago", error: errMsg, isSandbox: mpAccount.is_sandbox, ...failureMeta };
   } catch (e) {
     console.error("[mercadopago] exception:", e);
     return { success: false, gateway: "mercadopago", error: `MP exception: ${(e as Error).message}`, isSandbox: mpAccount.is_sandbox };
@@ -253,8 +334,9 @@ async function chargeMercadoPago(
 async function chargePagarme(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
-  secretKey: string
-): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  secretKey: string,
+  clientIp: string | null
+): Promise<ChargeResult> {
   const safeParams = { ...params, card: maskCard(params.card) };
   const auth = btoa(`${secretKey}:`);
 
@@ -349,6 +431,7 @@ async function chargePagarme(
         credit_card: {
           installments: params.installments,
           card_token: cardToken,
+          operation_type: "auth_and_capture",
           card: {
             billing_address: {
               line_1: `${params.billingAddress.number}, ${params.billingAddress.street}, ${params.billingAddress.neighborhood}`,
@@ -359,6 +442,7 @@ async function chargePagarme(
             },
           },
         },
+        metadata: clientIp ? { customer_ip: clientIp } : undefined,
       },
     ],
   };
@@ -402,9 +486,11 @@ async function chargePagarme(
       || chargeData.message
       || "Cobrança recusada";
   }
-  
+  const rawErrorReason = antifraudStatus || gatewayErrors?.[0]?.message || acquirerMsg || chargeData.message || errorMsg;
+  const failureMeta = categorizeDecline(rawErrorReason);
+
   console.error("Pagar.me detailed error:", { errorMsg, antifraudStatus, gatewayErrors, acquirerMsg, status: chargeData.status });
-  return { success: false, gateway: "pagarme", error: errorMsg };
+  return { success: false, gateway: "pagarme", error: errorMsg, ...failureMeta };
 }
 
 
@@ -412,8 +498,9 @@ async function chargePagarme(
 async function chargeVindi(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
-  tokenAccount: string
-): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  tokenAccount: string,
+  clientIp: string | null
+): Promise<ChargeResult> {
   const safeParams = { ...params, card: maskCard(params.card) };
   const cpf = params.customer.cpf.replace(/\D/g, "");
   const phone = params.customer.phone.replace(/\D/g, "");
@@ -447,7 +534,7 @@ async function chargeVindi(
     })),
     transaction: {
       available_payment_methods: "3,4,5,16,18,20,25",
-      customer_ip: "0.0.0.0",
+      customer_ip: clientIp || undefined,
       shipping_type: "Envio",
       shipping_price: params.shippingAmount?.toFixed(2) || "0",
       url_notification: `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=vindi`,
@@ -487,15 +574,16 @@ async function chargeVindi(
   }
 
   const errorMsg = data?.message_response?.message || data?.error_response?.general_errors?.[0]?.message || "Erro Yapay/VINDI";
-  return { success: false, gateway: "vindi", error: errorMsg };
+  return { success: false, gateway: "vindi", error: errorMsg, ...categorizeDecline(errorMsg) };
 }
 
 // ── APPMAX fallback (3-step API: customer → order → payment) ────
 async function chargeAppmax(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
-  accessToken: string
-): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  accessToken: string,
+  clientIp: string | null
+): Promise<ChargeResult> {
   const safeParams = { ...params, card: maskCard(params.card) };
   const base = "https://admin.appmax.com.br/api/v3";
   const headers = { "Content-Type": "application/json" };
@@ -522,7 +610,7 @@ async function chargeAppmax(
         address_city: params.billingAddress.city,
         address_state: params.billingAddress.state,
         address_street_complement: "",
-        ip: "0.0.0.0",
+        ip: clientIp || undefined,
       }),
     });
     const custData = await custRes.json();
@@ -602,17 +690,26 @@ async function chargeAppmax(
       return { success: true, gateway: "appmax", transactionId: appmaxTxId };
     }
 
-    // Pre-authorization = payment accepted, waiting capture/antifraud
-    // We treat this as success so appmax_order_id gets saved and webhook can match later
+    // Pre-authorization = ainda não capturou. Aguarda webhook final da AppMax.
     if (payData.success && (appmaxStatus === "pre_authorized" || isPreAuth) && appmaxStatus !== "recusado_por_risco") {
-      return { success: true, gateway: "appmax", transactionId: appmaxTxId };
+      return {
+        success: false,
+        pending: true,
+        gateway: "appmax",
+        transactionId: appmaxTxId,
+        error: "Pagamento em análise pela operadora.",
+        stopCascade: true,
+        declineCategory: "risk",
+      };
     }
 
-    return {
-      success: false,
-      gateway: "appmax",
-      error: payData.text || payData.message || payData.data?.message || "AppMax payment declined",
-    };
+      const errorMsg = payData.text || payData.message || payData.data?.message || "AppMax payment declined";
+      return {
+        success: false,
+        gateway: "appmax",
+        error: errorMsg,
+        ...categorizeDecline(errorMsg),
+      };
   } catch (e) {
     console.error("APPMAX exception:", e);
     return { success: false, gateway: "appmax", error: `AppMax exception: ${e.message}` };
@@ -633,6 +730,8 @@ serve(async (req) => {
     }
 
     const paymentAttemptId = rawParams.paymentAttemptId || null;
+    const clientIp = getClientIp(req);
+    console.log(`[PAYMENT] client_ip=${clientIp || "unavailable"}`);
 
     // ── Idempotency: check if this attemptId is already processing ──
     if (paymentAttemptId) {
@@ -923,7 +1022,7 @@ serve(async (req) => {
     // ── Gateway #1: Mercado Pago (só quando o frontend enviou token via SDK) ──
     const fallbackErrors: string[] = [];
     let mpAccountIdForOrder: string | null = null;
-    let result: { success: boolean; gateway: string; transactionId?: string; error?: string; pending?: boolean; mpAccountId?: string | null };
+    let result: ChargeResult;
 
     if (chargeParams.mpCardToken) {
       console.log("[CASCATA] Token MP presente — tentando Mercado Pago como gateway #1...");
@@ -933,7 +1032,7 @@ serve(async (req) => {
         console.log(`[CASCATA] Mercado Pago APROVOU (tx: ${result.transactionId}).`);
       } else if (result.error) {
         fallbackErrors.push(`MercadoPago: ${result.error}`);
-        console.log(`[CASCATA] Mercado Pago NAO processou (${result.error}). Tentando Pagar.me...`);
+        console.log(`[CASCATA] Mercado Pago NAO processou (${result.error}). ${result.stopCascade ? "Bloqueando cascata." : "Tentando Pagar.me..."}`);
       }
     } else {
       console.log("[CASCATA] Sem token MP (SDK não carregou) — iniciando direto no Pagar.me.");
@@ -947,19 +1046,19 @@ serve(async (req) => {
 
     // Gateway #2: Pagar.me
     const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY") || "";
-    if (!result.success && !result.isSandbox) {
-      result = await chargePagarme(chargeParams, products, pagarmeKey);
+    if (!result.success && !result.isSandbox && !result.stopCascade) {
+      result = await chargePagarme(chargeParams, products, pagarmeKey, clientIp);
     }
 
     // Fallback chain: Pagar.me -> VINDI -> AppMax
-    if (!result.success && !result.isSandbox) {
+    if (!result.success && !result.isSandbox && !result.stopCascade) {
       if (result.error) fallbackErrors.push(`Pagar.me: ${result.error}`);
       console.log(`[FALLBACK] Pagar.me NAO processou (${result.error}). Tentando VINDI/Yapay...`);
 
 
       const vindiKey = Deno.env.get("VINDI_API_KEY") || "";
       if (vindiKey) {
-        const vindiResult = await chargeVindi(chargeParams, products, vindiKey);
+        const vindiResult = await chargeVindi(chargeParams, products, vindiKey, clientIp);
         if (vindiResult.success) {
           console.log(`[FALLBACK] VINDI/Yapay APROVOU (tx: ${vindiResult.transactionId}). Parando fallback.`);
           result = vindiResult;
@@ -973,11 +1072,11 @@ serve(async (req) => {
     }
 
     // PROTEÇÃO: só tenta AppMax se NENHUM gateway anterior capturou o pagamento
-    if (!result.success && !result.isSandbox) {
+    if (!result.success && !result.isSandbox && !result.stopCascade) {
       console.log(`[FALLBACK] Nenhum gateway anterior aprovou. Tentando APPMAX...`);
       const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
       if (appmaxToken) {
-        const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken);
+        const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken, clientIp);
         if (appmaxResult.success) {
           console.log(`[FALLBACK] APPMAX APROVOU (tx: ${appmaxResult.transactionId}). Parando fallback.`);
           result = appmaxResult;
@@ -991,9 +1090,14 @@ serve(async (req) => {
     }
 
     if (!result.success) {
+      if (result.error && !fallbackErrors.some((entry) => entry.includes(result.gateway))) {
+        fallbackErrors.push(`${result.gateway}: ${result.error}`);
+      }
       // Log detailed errors for debugging, but show generic message to customer
       console.log(`[ALL-GATEWAYS-FAILED] Errors: ${fallbackErrors.join(" | ")}`);
-      result.error = "Pagamento não aprovado. Verifique os dados do cartão ou tente outro cartão.";
+      if (!(result.stopCascade && result.error)) {
+        result.error = "Pagamento não aprovado. Verifique os dados do cartão ou tente outro cartão.";
+      }
     }
 
     // ── Update processing record with final status ──
