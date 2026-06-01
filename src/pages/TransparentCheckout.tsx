@@ -1536,11 +1536,9 @@ export default function TransparentCheckout() {
 
   const loadOrder = async () => {
     try {
-      const { data: order, error } = await supabase
-        .from("orders")
-        .select("*, customer:customers(*)")
-        .eq("id", orderId)
-        .maybeSingle();
+      const { data: orderRaw, error } = await supabase
+        .rpc("get_checkout_order", { p_order_id: orderId });
+      const order = orderRaw as any;
 
       if (error || !order) throw new Error("Pedido não encontrado");
 
