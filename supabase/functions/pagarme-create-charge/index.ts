@@ -215,7 +215,7 @@ async function chargeMercadoPago(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
   supabase: any
-): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string; pending?: boolean; mpAccountId?: string | null; isSandbox?: boolean }> {
+): Promise<ChargeResult> {
   if (!params.mpCardToken || !params.mpPaymentMethodId) {
     return { success: false, gateway: "mercadopago", error: "Token MP ausente (SDK não carregou) — pulando" };
   }
@@ -310,16 +310,20 @@ async function chargeMercadoPago(
     if (data.status === "in_process" || data.status === "pending") {
       return { success: false, pending: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, error: "Pagamento em análise", isSandbox: mpAccount.is_sandbox };
     }
-    const errMsg = data.status_detail || data.message || data.error || data.cause?.[0]?.description || data.raw || "Cobrança recusada";
-    if (mpAccount.is_sandbox && errMsg === "internal_error") {
+    const rawErrMsg = data.status_detail || data.message || data.error || data.cause?.[0]?.description || data.raw || "Cobrança recusada";
+    const errMsg = humanizeMpError(rawErrMsg);
+    const failureMeta = categorizeDecline(rawErrMsg);
+    if (mpAccount.is_sandbox && rawErrMsg === "internal_error") {
       return {
         success: false,
         gateway: "mercadopago",
         error: `Mercado Pago sandbox retornou erro interno no teste${requestId ? ` (request_id ${requestId})` : ""}. Nenhum gateway real foi tentado.`,
         isSandbox: true,
+        stopCascade: true,
+        declineCategory: "risk",
       };
     }
-    return { success: false, gateway: "mercadopago", error: errMsg, isSandbox: mpAccount.is_sandbox };
+    return { success: false, gateway: "mercadopago", error: errMsg, isSandbox: mpAccount.is_sandbox, ...failureMeta };
   } catch (e) {
     console.error("[mercadopago] exception:", e);
     return { success: false, gateway: "mercadopago", error: `MP exception: ${(e as Error).message}`, isSandbox: mpAccount.is_sandbox };
@@ -330,8 +334,9 @@ async function chargeMercadoPago(
 async function chargePagarme(
   params: ChargeRequest,
   products: Array<{ title: string; price: number; quantity: number }>,
-  secretKey: string
-): Promise<{ success: boolean; gateway: string; transactionId?: string; error?: string }> {
+  secretKey: string,
+  clientIp: string | null
+): Promise<ChargeResult> {
   const safeParams = { ...params, card: maskCard(params.card) };
   const auth = btoa(`${secretKey}:`);
 
@@ -474,14 +479,16 @@ async function chargePagarme(
       (chargeData.status === "failed" && acquirerMsg === "Transação aprovada com sucesso")) {
     errorMsg = "Transação recusada pela análise de segurança. Tente outro cartão.";
   } else {
-    errorMsg = gatewayErrors?.[0]?.message
-      || acquirerMsg
-      || chargeData.message
-      || "Cobrança recusada";
+      errorMsg = gatewayErrors?.[0]?.message
+        || acquirerMsg
+        || chargeData.message
+        || "Cobrança recusada";
   }
-  
+  const rawErrorReason = antifraudStatus || gatewayErrors?.[0]?.message || acquirerMsg || chargeData.message || errorMsg;
+  const failureMeta = categorizeDecline(rawErrorReason);
+
   console.error("Pagar.me detailed error:", { errorMsg, antifraudStatus, gatewayErrors, acquirerMsg, status: chargeData.status });
-  return { success: false, gateway: "pagarme", error: errorMsg };
+  return { success: false, gateway: "pagarme", error: errorMsg, ...failureMeta };
 }
 
 
