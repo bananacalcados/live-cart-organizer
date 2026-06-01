@@ -299,6 +299,11 @@ serve(async (req) => {
         });
 
         if (error) {
+          // 23505 = unique violation → concurrent retry already saved it; skip side-effects
+          if ((error as any).code === '23505') {
+            console.log(`[${channel}] Dedup (race): incoming ${incomingMid} already saved, skipping`);
+            continue;
+          }
           console.error('Error saving message:', error);
         } else {
           console.log(`Saved ${channel} DM from ${senderId} (${senderName || 'unknown'}): ${messageText.slice(0, 80)}`);
