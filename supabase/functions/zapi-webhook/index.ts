@@ -332,6 +332,9 @@ serve(async (req) => {
       } else {
         // Incoming message
         const senderName = asString(payload.senderName) || asString(payload.chatName) || asString(payload.pushName) || null;
+        // For group messages, capture the participant's real phone so we can identify who is talking
+        const rawParticipant = asString(payload.participantPhone) || asString(payload.participant) || asString(payload.senderPhone) || null;
+        const senderPhone = isGroup && rawParticipant ? rawParticipant.replace(/\D/g, '') || null : null;
 
         // Capture Click-to-WhatsApp ad referral (Z-API field: externalAdReply)
         const ext = payload.externalAdReply as Record<string, unknown> | undefined;
