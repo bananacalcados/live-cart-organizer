@@ -389,6 +389,15 @@ serve(async (req) => {
           insertError = error;
 
           if (error) {
+            // 23505 = unique violation → the same incoming message already exists
+            // (e.g. webhook retry or delivered to another instance). Treat as dedup.
+            if ((error as any).code === '23505') {
+              console.log(`[zapi] Dedup (unique): incoming ${messageId} already exists, skipping`);
+              return new Response(JSON.stringify({ success: true, dedup: true }), {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
             console.error('Error saving incoming message:', error);
           } else {
             // Detect referral signals (coupon code or pending friend phone) - fire & forget
