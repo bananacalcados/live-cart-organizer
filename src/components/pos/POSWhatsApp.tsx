@@ -711,7 +711,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           ? ("meta" as const)
           : number.provider === "wasender"
             ? ("wasender" as const)
-            : ("zapi" as const),
+            : number.provider === "uazapi"
+              ? ("uazapi" as const)
+              : ("zapi" as const),
       number,
       numberId: number.id,
     };
@@ -1433,7 +1435,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                       ? 'Meta API'
                       : selectedSendNumber?.provider === 'wasender'
                         ? 'WaSender'
-                        : 'Z-API'}
+                        : selectedSendNumber?.provider === 'uazapi'
+                          ? 'uazapi'
+                          : 'Z-API'}
               </span>
             </div>
 
