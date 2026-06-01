@@ -18,6 +18,7 @@ interface Goal {
   prize_label?: string | null;
   prize_value?: number | null;
   prize_type?: string | null;
+  created_at?: string | null;
 }
 
 interface GoalProgressRow {
