@@ -166,7 +166,6 @@ async function chargeMercadoPago(
     binary_mode: true,
     external_reference: String(params.orderId),
     notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=mercadopago`,
-    statement_descriptor: "BANANACALCADOS",
     payer: {
       email,
       first_name: firstName,
@@ -184,6 +183,7 @@ async function chargeMercadoPago(
       payer: { first_name: firstName, last_name: lastName },
     },
   };
+  if (!mpAccount.is_sandbox) body.statement_descriptor = "BANANACALCAD";
   if (params.mpIssuerId) body.issuer_id = params.mpIssuerId;
 
   try {
