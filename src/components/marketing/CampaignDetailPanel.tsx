@@ -844,7 +844,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           <span className="text-xs text-muted-foreground whitespace-nowrap">Instância WhatsApp:</span>
           <WhatsAppNumberSelector
             className="w-56"
-            allowedProviders={["zapi", "wasender"]}
+            allowedProviders={["zapi", "wasender", "uazapi"]}
             value={(campaign as any)?.whatsapp_number_id ?? undefined}
             autoSelect={false}
             disabled={!campaign}
@@ -912,18 +912,30 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Buscar grupos..." value={groupSearch} onChange={e => setGroupSearch(e.target.value)} className="pl-9" />
               </div>
-              <WhatsAppNumberSelector allowedProviders={["zapi", "wasender"]} className="w-[180px] h-9 text-xs" />
+              <WhatsAppNumberSelector allowedProviders={["zapi", "wasender", "uazapi"]} className="w-[180px] h-9 text-xs" />
               <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={async () => {
                 setIsSyncingFromZapi(true);
                 try {
-                  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
-                    method: 'POST',
-                    headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ syncToDb: true, whatsapp_number_id: selectedNumberId }),
-                  });
-                  const data = await res.json();
-                  if (data.success) { toast.success(`${data.total} grupos sincronizados do WhatsApp!`); fetchAllGroups(); }
-                  else toast.error(data.error || "Erro ao sincronizar");
+                  const { numbers, selectedNumberId: numId } = useWhatsAppNumberStore.getState();
+                  const provider = numbers.find(n => n.id === numId)?.provider || "zapi";
+                  if (provider === "wasender" || provider === "uazapi") {
+                    const fn = provider === "uazapi" ? "uazapi-groups" : "wasender-groups";
+                    const { data, error } = await supabase.functions.invoke(fn, {
+                      body: { action: "list", syncToDb: true, whatsapp_number_id: numId },
+                    });
+                    if (error) throw error;
+                    if (data?.success) { toast.success(`${data.total ?? 0} grupos sincronizados do WhatsApp!`); fetchAllGroups(); }
+                    else toast.error(data?.error || "Erro ao sincronizar");
+                  } else {
+                    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-list-groups`, {
+                      method: 'POST',
+                      headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ syncToDb: true, whatsapp_number_id: numId }),
+                    });
+                    const data = await res.json();
+                    if (data.success) { toast.success(`${data.total} grupos sincronizados do WhatsApp!`); fetchAllGroups(); }
+                    else toast.error(data.error || "Erro ao sincronizar");
+                  }
                 } catch { toast.error("Erro ao sincronizar"); }
                 finally { setIsSyncingFromZapi(false); }
               }} disabled={isSyncingFromZapi}>
