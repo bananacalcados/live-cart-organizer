@@ -104,16 +104,31 @@ function categorizeDecline(codeOrMessage: string): { stopCascade: boolean; decli
     return { stopCascade: false, declineCategory: "unknown" };
   }
 
-  if (normalized.startsWith("cc_rejected_") || normalized.includes("análise de segurança") || normalized.includes("analise de seguranca") || normalized.includes("high_risk") || normalized.includes("antifraud") || normalized.includes("recusado_por_risco")) {
-    return { stopCascade: true, declineCategory: "risk" };
-  }
-
-  if (normalized.includes("código de segurança inválido") || normalized.includes("codigo de seguranca invalido") || normalized.includes("cartão inválido") || normalized.includes("cartao invalido") || normalized.includes("número do cartão") || normalized.includes("numero do cartao") || normalized.includes("data de validade") || normalized.includes("invalid_installments")) {
+  // Dados do cartão genuinamente inválidos → não adianta tentar outro gateway (PARA)
+  if (
+    normalized.includes("bad_filled") ||
+    normalized.includes("código de segurança inválido") || normalized.includes("codigo de seguranca invalido") ||
+    normalized.includes("cartão inválido") || normalized.includes("cartao invalido") ||
+    normalized.includes("número do cartão") || normalized.includes("numero do cartao") ||
+    normalized.includes("data de validade") || normalized.includes("invalid_installments")
+  ) {
     return { stopCascade: true, declineCategory: "card_data" };
   }
 
+  // Valor mínimo — erro determinístico (PARA)
   if (normalized.includes("valor inferior a r$ 5,00") || normalized.includes("parcela 1 possui o valor inferior a r$ 5,00")) {
     return { stopCascade: true, declineCategory: "minimum_amount" };
+  }
+
+  // Recusa por RISCO/ANTIFRAUDE → a cascata DEVE CONTINUAR.
+  // O antifraude do AppMax é mais flexível; muitos cartões (ex.: virtuais legítimos)
+  // são barrados no MP/Pagar.me mas aprovados no próximo gateway.
+  if (
+    normalized.startsWith("cc_rejected_") ||
+    normalized.includes("análise de segurança") || normalized.includes("analise de seguranca") ||
+    normalized.includes("high_risk") || normalized.includes("antifraud") || normalized.includes("recusado_por_risco")
+  ) {
+    return { stopCascade: false, declineCategory: "risk" };
   }
 
   return { stopCascade: false, declineCategory: "unknown" };
