@@ -7,7 +7,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { startOfMonth, startOfDay, startOfWeek, endOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
+import { startOfMonth, endOfMonth, startOfDay, startOfWeek, endOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
+import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/businessDays";
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 
@@ -259,7 +260,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
       if (g.goal_type !== "revenue") continue;
       let kind: "custom" | "monthly" | null = null;
       if (g.period === "custom" && g.period_start && g.period_end) {
-        const ps = new Date(g.period_start); const pe = new Date(g.period_end);
+        const ps = parseLocalDate(g.period_start); const pe = parseLocalDate(g.period_end);
         if (!isBefore(now, ps) && !isAfter(now, pe)) kind = "custom";
       } else if (g.period === "monthly") {
         kind = "monthly";
@@ -273,10 +274,23 @@ export function POSGeneralDashboard({ onBack }: Props) {
       }
     }
     const total = Array.from(byStore.values()).reduce((a, b) => a + b, 0);
-    const dayOfPeriod = period === "month" ? now.getDate() : period === "week" ? differenceInDays(now, periodRange.start) + 1 : 1;
-    const expected = total > 0 ? (total / periodRange.days) * dayOfPeriod : 0;
-    return { byStore, total, expected };
+
+    // Ritmo por DIAS ÚTEIS (seg-sáb, excluindo domingos e feriados nacionais).
+    // Meta diária = meta total ÷ dias úteis do mês. Esperado = meta diária × dias úteis decorridos.
+    const monthStart = startOfMonth(now);
+    const monthEnd = endOfMonth(now);
+    const holidays = getBrazilianHolidays(now.getFullYear());
+    const totalBusinessDays = countBusinessDays(monthStart, monthEnd, holidays);
+    const dailyTarget = totalBusinessDays > 0 ? total / totalBusinessDays : 0;
+
+    // Dias úteis decorridos conforme o período selecionado
+    const elapsedStart = period === "month" ? monthStart : period === "week" ? periodRange.start : startOfDay(now);
+    const elapsedBusinessDays = countBusinessDays(elapsedStart, now, holidays);
+    const expected = dailyTarget * elapsedBusinessDays;
+
+    return { byStore, total, expected, dailyTarget, totalBusinessDays, elapsedBusinessDays };
   }, [goals, period, periodRange]);
+
 
   const handleSyncShopify = async () => {
     setSyncing(true);
@@ -390,10 +404,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
           {goalData.total > 0 && (
             <Panel title={`Meta consolidada — ${periodRange.label}`} icon={Target}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <GoalBox label="Meta total" value={BRL(goalData.total)} />
-                <GoalBox label="Esperado até hoje" value={BRL(goalData.expected)} sub={`${((goalData.expected / goalData.total) * 100).toFixed(0)}% da meta`} />
+                <GoalBox label="Meta total" value={BRL(goalData.total)} sub={`Meta/dia: ${BRL(goalData.dailyTarget)} · ${goalData.totalBusinessDays} dias úteis`} />
+                <GoalBox label="Esperado até hoje" value={BRL(goalData.expected)} sub={`${goalData.elapsedBusinessDays}/${goalData.totalBusinessDays} dias úteis decorridos`} />
                 <GoalBox label="Realizado" value={BRL(totals.revenue)}
-                  sub={`${((totals.revenue / goalData.total) * 100).toFixed(1)}% da meta`}
+                  sub={`${goalData.expected > 0 ? ((totals.revenue / goalData.expected) * 100).toFixed(0) : 0}% do esperado`}
                   highlight={totals.revenue >= goalData.expected ? "ahead" : "behind"} />
               </div>
               <div className="mt-3">
