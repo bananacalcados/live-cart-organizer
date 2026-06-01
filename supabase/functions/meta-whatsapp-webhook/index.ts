@@ -295,6 +295,11 @@ serve(async (req) => {
             });
 
             if (error) {
+              // 23505 = unique violation → concurrent retry inserted it first; safe to skip
+              if ((error as any).code === '23505') {
+                console.log(`[meta-wa] Dedup (race): incoming ${messageId} already saved, skipping side-effects`);
+                continue;
+              }
               console.error('Error saving incoming message:', error);
             } else {
               console.log(`Saved incoming message from ${phone} (${senderName || 'unknown'})`);
