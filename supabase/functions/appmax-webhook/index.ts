@@ -353,12 +353,20 @@ serve(async (req) => {
         });
       }
       if (isPaid && record.status !== "paid" && record.status !== "completed") {
+        // Detecta o método real de pagamento a partir do payload AppMax (PIX vs Cartão).
+        const payTypeRaw = (data.payment_type || data.payment?.type || data.type || "").toString().toLowerCase();
+        const appmaxPaymentMethod = payTypeRaw.includes("pix")
+          ? "PIX"
+          : (payTypeRaw.includes("credit") || payTypeRaw.includes("cart") || payTypeRaw.includes("cartao"))
+            ? "Cartão de Crédito"
+            : (record as any).payment_method || "Cartão de Crédito";
         const { error } = await supabase
           .from("pos_sales")
           .update({
             status: "paid",
             paid_at: new Date().toISOString(),
             payment_gateway: "appmax",
+            payment_method: appmaxPaymentMethod,
             notes: `🔔 Webhook AppMax: pago (${transactionId})`,
             appmax_order_id: String(appmaxOrderId),
           } as any)
