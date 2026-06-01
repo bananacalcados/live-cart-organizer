@@ -919,7 +919,7 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
       } as any).then(() => {});
       sessionStorage.removeItem(`checkout_payment_${saleId}`);
       const gw = data.gateway || "pagarme";
-      const gwLabel = gw === "pagarme" ? "Pagar.me" : gw === "vindi" ? "VINDI" : gw === "appmax" ? "APPMAX" : gw.toUpperCase();
+      const gwLabel = gw === "mercadopago" ? "Mercado Pago" : gw === "pagarme" ? "Pagar.me" : gw === "vindi" ? "VINDI" : gw === "appmax" ? "APPMAX" : gw.toUpperCase();
       toast.success(`Pagamento aprovado via ${gwLabel}!`);
       onPaid();
     } catch (e: any) {
