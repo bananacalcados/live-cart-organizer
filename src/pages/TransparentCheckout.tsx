@@ -1574,11 +1574,9 @@ export default function TransparentCheckout() {
       }
 
       // Pre-fill from existing registration for this order first
-      const { data: orderReg } = await supabase
-        .from("customer_registrations")
-        .select("id, full_name, email, cpf, whatsapp, cep, address, address_number, complement, neighborhood, city, state")
-        .eq("order_id", order.id)
-        .maybeSingle();
+      const { data: orderRegRaw } = await supabase
+        .rpc("get_checkout_registration", { p_order_id: order.id });
+      const orderReg = orderRegRaw as any;
 
       if (orderReg) {
         setRegistrationId(orderReg.id);
