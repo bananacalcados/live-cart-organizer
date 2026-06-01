@@ -200,7 +200,24 @@ serve(async (req) => {
         description: `Pedido #${orderId.substring(0, 8)}`,
         payment_method_id: "pix",
         payer: payerObj,
+        // ── Qualidade da integração MP ──
+        // external_reference: casa o payment_id do MP com nosso pedido interno (conciliação + antifraude)
+        external_reference: String(orderId),
         notification_url: `${supabaseUrl}/functions/v1/payment-webhook?gateway=mercadopago`,
+        statement_descriptor: "BANANACALCADOS",
+        additional_info: {
+          items: products.map((p, i) => ({
+            id: `item_${i}`,
+            title: String(p.title || "Produto").substring(0, 256),
+            description: String(p.title || "Produto").substring(0, 256),
+            quantity: Number(p.quantity) || 1,
+            unit_price: Math.round(Number(p.price) * 100) / 100,
+          })),
+          payer: {
+            first_name: payerFirstName,
+            last_name: payerLastName,
+          },
+        },
       }),
     });
 
