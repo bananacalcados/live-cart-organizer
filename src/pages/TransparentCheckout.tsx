@@ -1221,6 +1221,17 @@ function CardPaymentForm({
     trackPixelEvent("AddPaymentInfo", { content_category: "credit_card" });
     try {
       const totalCents = Math.round(totalWithInterest * 100);
+
+      // Tokeniza no navegador via MercadoPago.JS V2 (gateway #1). Se falhar, segue no Pagar.me.
+      const mpToken = await tokenizeCardMP({
+        number: cardNumber.replace(/\D/g, ""),
+        holderName: cardName.trim(),
+        expMonth: expiryParts[0].padStart(2, "0"),
+        expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
+        cvv: cvv.trim(),
+        cpf: form.cpf.replace(/\D/g, ""),
+      });
+
       const { data, error } = await supabase.functions.invoke("pagarme-create-charge", {
         body: {
           orderId,
@@ -1232,6 +1243,13 @@ function CardPaymentForm({
             expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
             cvv: cvv.trim(),
           },
+          // Campos Mercado Pago (presentes só quando o SDK tokenizou com sucesso)
+          ...(mpToken ? {
+            mpCardToken: mpToken.mpCardToken,
+            mpPaymentMethodId: mpToken.mpPaymentMethodId,
+            mpIssuerId: mpToken.mpIssuerId,
+            mpDeviceId: mpToken.mpDeviceId,
+          } : {}),
           installments: selectedInstallments,
           customer: {
             name: form.fullName,
@@ -1251,6 +1269,7 @@ function CardPaymentForm({
           totalAmountCents: totalCents,
         },
       });
+
 
       if (error) {
         // Tenta extrair mensagem detalhada (estoque insuficiente, etc.)
