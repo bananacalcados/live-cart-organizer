@@ -225,7 +225,7 @@ export function POSGoalsManagerDialog({ open, onClose, onSaved }: Props) {
                     <p className="font-semibold text-zinc-100 truncate">{sellerName(g.seller_id)} <span className="text-zinc-500 font-normal">· {storeName(g.store_id)}</span></p>
                     <p className="text-[11px] text-zinc-400">
                       {g.period}
-                      {g.period_start && ` · ${format(new Date(g.period_start), "dd/MM")}—${g.period_end ? format(new Date(g.period_end), "dd/MM") : "?"}`}
+                      {g.period_start && ` · ${format(parseLocalDate(g.period_start), "dd/MM")}—${g.period_end ? format(parseLocalDate(g.period_end), "dd/MM") : "?"}`}
                     </p>
                   </div>
                   <div className="text-right">
