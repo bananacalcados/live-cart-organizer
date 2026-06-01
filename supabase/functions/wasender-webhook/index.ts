@@ -268,6 +268,7 @@ serve(async (req) => {
         isGroup,
         messageId,
         senderName: pushName,
+        ...(isGroup && participantPhone ? { participantPhone } : {}),
       };
 
 
