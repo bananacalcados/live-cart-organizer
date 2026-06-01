@@ -150,11 +150,12 @@ export function ConversationList({
 
   const groupsCount = conversations.filter(c => c.isGroup && !c.isArchived && !c.isFinished).length;
   const newCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'not_started').length;
-  const unreadCount = conversations.reduce((sum, c) => {
-    if (c.isFinished || c.isArchived || c.isDispatchOnly) return sum;
-    if (c.conversationStatus !== 'awaiting_reply') return sum;
-    return sum + (c.unreadCount || 0);
-  }, 0);
+  // "Não lidas" = number of conversations awaiting our reply (chats, not messages).
+  // `conversations` is already scoped to the store's accessible instances, so this
+  // badge automatically reflects only the unread count for the current PDV.
+  const unreadCount = conversations.filter(c =>
+    !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_reply'
+  ).length;
 
   // Rail counts
   const followUpCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_customer').length;
