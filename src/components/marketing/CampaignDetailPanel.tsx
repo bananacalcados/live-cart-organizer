@@ -942,8 +942,6 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                 <RefreshCw className={`h-3.5 w-3.5 ${isSyncingFromZapi ? 'animate-spin' : ''}`} />
                 Sincronizar do WhatsApp
               </Button>
-                Sincronizar do WhatsApp
-              </Button>
               <Button variant="outline" size="sm" className="gap-1 shrink-0" onClick={() => setShowCreateGroup(true)}>
                 <Plus className="h-3.5 w-3.5" /> Criar Grupo
               </Button>
