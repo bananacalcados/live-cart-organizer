@@ -41,14 +41,13 @@ interface GoalRow {
 
 const BRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-// Normalize payment method strings into a canonical bucket
-function bucketPayment(raw: string | null, saleType?: string | null): string {
+// Normalize payment method strings into a canonical bucket.
+// IMPORTANTE: "Online" NÃO é forma de pagamento — é só o canal da venda.
+// Toda venda paga deve ter um método real (PIX/Crédito/Débito/Dinheiro/etc.).
+// Quando o método estiver vazio, cai em "Não informado" (auditoria), nunca em "Online".
+function bucketPayment(raw: string | null, _saleType?: string | null): string {
   const s = (raw || "").toLowerCase().trim();
-  if (!s) {
-    // sem método explícito → se for online (shopify/checkout), conta como Online; senão Outros
-    if (saleType === "online" || saleType === "live") return "Online";
-    return "Outros";
-  }
+  if (!s) return "Não informado";
   if (s.includes("pix")) return "PIX";
   if (s.includes("crediário") || s.includes("crediario")) return "Crediário";
   // VPS é forma de pagamento EXCLUSIVA (não confundir com Vale Presente)
@@ -57,7 +56,7 @@ function bucketPayment(raw: string | null, saleType?: string | null): string {
   if (s.includes("débito") || s.includes("debito") || s.includes("debit")) return "Débito";
   if (s.includes("crédito") || s.includes("credito") || s.includes("credit") || s.includes("cartão") || s.includes("cartao")) return "Crédito";
   if (s.includes("dinheiro") || s === "cash") return "Dinheiro";
-  if (s.includes("shopify") || s.includes("checkout") || s.includes("online") || s.includes("mercado") || s.includes("paypal")) return "Online";
+  if (s.includes("não informado") || s.includes("nao informado")) return "Não informado";
   return "Outros";
 }
 
@@ -69,7 +68,7 @@ const PAYMENT_STYLE: Record<string, { icon: any; gradient: string }> = {
   "Crediário":     { icon: Receipt,   gradient: "from-orange-500/20 to-orange-700/10" },
   "Vale Presente": { icon: Wallet,    gradient: "from-fuchsia-500/20 to-fuchsia-700/10" },
   "VPS":           { icon: Wallet,    gradient: "from-pink-500/20 to-pink-700/10" },
-  "Online":        { icon: CreditCard, gradient: "from-indigo-500/20 to-indigo-700/10" },
+  "Não informado": { icon: Receipt,   gradient: "from-red-500/20 to-red-700/10" },
   "Outros":        { icon: DollarSign, gradient: "from-zinc-500/20 to-zinc-700/10" },
 };
 
