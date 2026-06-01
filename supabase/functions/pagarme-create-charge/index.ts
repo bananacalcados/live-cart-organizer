@@ -874,15 +874,37 @@ serve(async (req) => {
       );
     }
 
-    // Try Pagar.me first
+    // ── Gateway #1: Mercado Pago (só quando o frontend enviou token via SDK) ──
     const fallbackErrors: string[] = [];
+    let mpAccountIdForOrder: string | null = null;
+    let result: { success: boolean; gateway: string; transactionId?: string; error?: string; pending?: boolean; mpAccountId?: string | null };
+
+    if (chargeParams.mpCardToken) {
+      console.log("[CASCATA] Token MP presente — tentando Mercado Pago como gateway #1...");
+      result = await chargeMercadoPago(chargeParams, products, supabase);
+      if (result.success) {
+        mpAccountIdForOrder = result.mpAccountId || null;
+        console.log(`[CASCATA] Mercado Pago APROVOU (tx: ${result.transactionId}).`);
+      } else if (result.error) {
+        fallbackErrors.push(`MercadoPago: ${result.error}`);
+        console.log(`[CASCATA] Mercado Pago NAO processou (${result.error}). Tentando Pagar.me...`);
+      }
+    } else {
+      console.log("[CASCATA] Sem token MP (SDK não carregou) — iniciando direto no Pagar.me.");
+      result = { success: false, gateway: "mercadopago" };
+    }
+
+    // Gateway #2: Pagar.me
     const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY") || "";
-    let result = await chargePagarme(chargeParams, products, pagarmeKey);
+    if (!result.success) {
+      result = await chargePagarme(chargeParams, products, pagarmeKey);
+    }
 
     // Fallback chain: Pagar.me -> VINDI -> AppMax
     if (!result.success) {
       if (result.error) fallbackErrors.push(`Pagar.me: ${result.error}`);
       console.log(`[FALLBACK] Pagar.me NAO processou (${result.error}). Tentando VINDI/Yapay...`);
+
 
       const vindiKey = Deno.env.get("VINDI_API_KEY") || "";
       if (vindiKey) {
