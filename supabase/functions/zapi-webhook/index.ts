@@ -380,6 +380,7 @@ serve(async (req) => {
             status,
             is_group: isGroup,
             sender_name: senderName,
+            sender_phone: senderPhone,
             whatsapp_number_id: whatsappNumberId,
             quoted_message_id: quotedMsgIdIn,
             referral: referralData,
