@@ -134,7 +134,7 @@ export default function LandingPage() {
       });
       await supabase.from('campaign_landing_pages').update({ submissions: (page as any).submissions + 1 } as any).eq('id', page.id);
       try {
-        await supabase.from('marketing_campaigns').update({ leads_captured: ((page as any).submissions || 0) + 1 } as any).eq('id', page.campaign_id);
+        await supabase.rpc('increment_campaign_leads_captured' as any, { p_campaign_id: page.campaign_id } as any);
       } catch {}
 
       setSubmitted(true);
