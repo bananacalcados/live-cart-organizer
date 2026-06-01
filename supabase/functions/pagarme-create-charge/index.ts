@@ -924,14 +924,19 @@ serve(async (req) => {
       result = { success: false, gateway: "mercadopago" };
     }
 
+    if (!result.success && result.isSandbox) {
+      console.log("[CASCATA] Conta Mercado Pago em sandbox — bloqueando fallback para gateways reais.");
+      result.error = result.error || "O teste no Mercado Pago sandbox falhou antes de chegar aos gateways reais.";
+    }
+
     // Gateway #2: Pagar.me
     const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY") || "";
-    if (!result.success) {
+    if (!result.success && !result.isSandbox) {
       result = await chargePagarme(chargeParams, products, pagarmeKey);
     }
 
     // Fallback chain: Pagar.me -> VINDI -> AppMax
-    if (!result.success) {
+    if (!result.success && !result.isSandbox) {
       if (result.error) fallbackErrors.push(`Pagar.me: ${result.error}`);
       console.log(`[FALLBACK] Pagar.me NAO processou (${result.error}). Tentando VINDI/Yapay...`);
 
@@ -952,7 +957,7 @@ serve(async (req) => {
     }
 
     // PROTEÇÃO: só tenta AppMax se NENHUM gateway anterior capturou o pagamento
-    if (!result.success) {
+    if (!result.success && !result.isSandbox) {
       console.log(`[FALLBACK] Nenhum gateway anterior aprovou. Tentando APPMAX...`);
       const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
       if (appmaxToken) {
