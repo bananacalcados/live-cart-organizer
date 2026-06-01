@@ -3,6 +3,7 @@ import { Target, TrendingUp, DollarSign, Package, Users, Trophy, Gift, Calendar 
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { getBrazilianHolidays, countBusinessDays, formatDateKey, parseLocalDate } from "@/lib/businessDays";
 
 interface Goal {
   id: string;
