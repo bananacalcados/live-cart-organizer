@@ -1144,7 +1144,8 @@ function CardPaymentForm({
       await new Promise(r => setTimeout(r, 3000));
       try {
         // Check if order is now paid
-        const { data: freshOrder } = await supabase.from("orders").select("is_paid").eq("id", orderId).maybeSingle();
+        const { data: statusRaw } = await supabase.rpc("get_order_status", { p_order_id: orderId });
+        const freshOrder = statusRaw as any;
         if (freshOrder?.is_paid) {
           sessionStorage.removeItem(`checkout_payment_${orderId}`);
           onPaymentConfirmed({ platform: "gateway", method: "credit_card", customerData: buildCustomerData() });
