@@ -196,15 +196,44 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   };
 
   // ── Detect provider for the instance bound to this conversation ──
-  const getProvider = (): 'zapi' | 'meta' | 'wasender' => {
+  const getProvider = (): 'zapi' | 'meta' | 'wasender' | 'uazapi' => {
     const num = boundNumber
       ?? (effectiveNumberId ? numbers.find(n => n.id === effectiveNumberId) : null)
       ?? getSelectedNumber();
     if (num?.provider === 'zapi') return 'zapi';
     if (num?.provider === 'wasender') return 'wasender';
+    if (num?.provider === 'uazapi') return 'uazapi';
     return 'meta';
   };
   const isZapiProvider = () => getProvider() === 'zapi';
+
+  // ── Send via uazapi ──
+  const sendViaUazapi = async (
+    phoneNumber: string,
+    message: string,
+    type: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text',
+    mediaUrl?: string,
+    caption?: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string }> => {
+    try {
+      if (type !== 'text' && mediaUrl) {
+        const { data, error } = await supabase.functions.invoke('uazapi-send-media', {
+          body: { phone: phoneNumber, mediaUrl, mediaType: type, caption: caption || message, whatsapp_number_id: effectiveNumberId },
+        });
+        if (error) return { success: false, error: error.message };
+        if (data?.success) return { success: true, messageId: data?.messageId };
+        return { success: false, error: data?.error || 'Erro ao enviar' };
+      }
+      const { data, error } = await supabase.functions.invoke('uazapi-send-message', {
+        body: { phone: phoneNumber, message, whatsapp_number_id: effectiveNumberId },
+      });
+      if (error) return { success: false, error: error.message };
+      if (data?.success) return { success: true, messageId: data?.messageId };
+      return { success: false, error: data?.error || 'Erro ao enviar' };
+    } catch (err) {
+      return { success: false, error: 'Erro de conexão' };
+    }
+  };
 
   // ── Send via Z-API ──
   const sendViaZapi = async (
@@ -297,6 +326,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     const provider = getProvider();
     if (provider === 'wasender') {
       return sendViaWasender(phoneNumber, message, type, mediaUrl, caption);
+    }
+    if (provider === 'uazapi') {
+      return sendViaUazapi(phoneNumber, message, type, mediaUrl, caption);
     }
     if (provider === 'zapi') {
       if (type !== 'text' && mediaUrl) {
