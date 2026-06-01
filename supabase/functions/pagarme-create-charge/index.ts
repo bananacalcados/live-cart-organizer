@@ -431,6 +431,7 @@ async function chargePagarme(
         credit_card: {
           installments: params.installments,
           card_token: cardToken,
+          operation_type: "auth_and_capture",
           card: {
             billing_address: {
               line_1: `${params.billingAddress.number}, ${params.billingAddress.street}, ${params.billingAddress.neighborhood}`,
@@ -441,6 +442,7 @@ async function chargePagarme(
             },
           },
         },
+        metadata: clientIp ? { customer_ip: clientIp } : undefined,
       },
     ],
   };
