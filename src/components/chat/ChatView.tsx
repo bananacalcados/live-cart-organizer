@@ -1,5 +1,15 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply, Play, Pause } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply, Play, Pause, Ban, ShieldCheck } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { QuotedMessagePreview, QuotedMessageData } from "./QuotedMessagePreview";
 import { QuotedMessageBubble } from "./QuotedMessageBubble";
 import { Button } from "@/components/ui/button";
@@ -121,6 +131,77 @@ export function ChatView({
   const [actionLoading, setActionLoading] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
+
+  // ---- Bloqueio nativo de contato (Z-API / WaSender / Meta) ----
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+
+  /** Instância vinculada à conversa: usa a da conversa ou a última mensagem trocada. */
+  const blockNumberId = useMemo(() => {
+    if (conversation?.whatsapp_number_id) return conversation.whatsapp_number_id;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]?.whatsapp_number_id) return messages[i].whatsapp_number_id as string;
+    }
+    return null;
+  }, [conversation?.whatsapp_number_id, messages]);
+
+  // Carrega o estado de bloqueio ao abrir a conversa
+  useEffect(() => {
+    let cancelled = false;
+    const phone = conversation?.phone;
+    if (!phone || conversation?.isGroup) {
+      setIsBlocked(false);
+      return;
+    }
+    (async () => {
+      let digits = phone.replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 11) digits = "55" + digits;
+      let query = supabase.from("blocked_contacts").select("id").eq("phone", digits);
+      if (blockNumberId) query = query.eq("whatsapp_number_id", blockNumberId);
+      const { data } = await query.limit(1);
+      if (!cancelled) setIsBlocked((data?.length ?? 0) > 0);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation?.phone, conversation?.isGroup, blockNumberId]);
+
+  const handleToggleBlock = useCallback(async () => {
+    const phone = conversation?.phone;
+    if (!phone) return;
+    if (!blockNumberId) {
+      toast.error("Não foi possível identificar a instância desta conversa para bloquear.");
+      return;
+    }
+    const action = isBlocked ? "unblock" : "block";
+    setBlockLoading(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data, error } = await supabase.functions.invoke("whatsapp-block-contact", {
+        body: {
+          phone,
+          whatsapp_number_id: blockNumberId,
+          action,
+          blocked_by: userData?.user?.id ?? null,
+        },
+      });
+      if (error) throw error;
+      if (data?.success === false || data?.error) throw new Error(data?.error || "Falha no bloqueio");
+      setIsBlocked(action === "block");
+      toast.success(action === "block" ? "Contato bloqueado no WhatsApp" : "Contato desbloqueado");
+    } catch (err) {
+      console.error("[ChatView] toggle block failed:", err);
+      toast.error(
+        `Não foi possível ${action === "block" ? "bloquear" : "desbloquear"} o contato. ${
+          err instanceof Error ? err.message : ""
+        }`,
+      );
+    } finally {
+      setBlockLoading(false);
+      setShowBlockConfirm(false);
+    }
+  }, [conversation?.phone, blockNumberId, isBlocked]);
 
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -491,6 +572,33 @@ export function ChatView({
             >
               <PhoneOff className="h-3.5 w-3.5" />
               Finalizar
+            </Button>
+          )}
+          {conversation && !conversation.isGroup && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={blockLoading}
+              onClick={() => (isBlocked ? handleToggleBlock() : setShowBlockConfirm(true))}
+              className={cn(
+                "h-7 px-2 text-xs gap-1",
+                isBlocked
+                  ? "text-emerald-600 hover:text-emerald-700"
+                  : "text-muted-foreground hover:text-destructive",
+              )}
+              title={isBlocked ? "Desbloquear contato no WhatsApp" : "Bloquear contato no WhatsApp"}
+            >
+              {isBlocked ? (
+                <>
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Desbloquear
+                </>
+              ) : (
+                <>
+                  <Ban className="h-3.5 w-3.5" />
+                  Bloquear
+                </>
+              )}
             </Button>
           )}
         </div>
@@ -1027,6 +1135,33 @@ export function ChatView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showBlockConfirm} onOpenChange={setShowBlockConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Bloquear contato no WhatsApp?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso aciona o bloqueio nativo do WhatsApp para{" "}
+              <strong>{conversation?.customerName || conversation?.phone}</strong>. Você não
+              conseguirá mais enviar nem receber mensagens dessa pessoa nesta instância até
+              desbloqueá-la.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={blockLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleToggleBlock();
+              }}
+              disabled={blockLoading}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {blockLoading ? "Bloqueando..." : "Bloquear"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
