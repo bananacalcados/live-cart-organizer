@@ -255,6 +255,7 @@ serve(async (req) => {
               paid_at: new Date().toISOString(),
               expedition_status: "pending",
               payment_gateway: "mercadopago",
+              payment_method: "PIX",
               customer_id: customerId,
               notes: `💳 Pago via PIX Mercado Pago (${paymentId})`,
             })
