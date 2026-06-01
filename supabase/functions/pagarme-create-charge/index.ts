@@ -963,7 +963,11 @@ serve(async (req) => {
         gatewayIdField.vindi_transaction_id = String(result.transactionId);
       } else if (result.gateway === "appmax") {
         gatewayIdField.appmax_order_id = String(result.transactionId);
+      } else if (result.gateway === "mercadopago") {
+        gatewayIdField.mercadopago_payment_id = String(result.transactionId);
+        if (mpAccountIdForOrder) gatewayIdField.mp_account_id = mpAccountIdForOrder;
       }
+
 
       if (orderSource === "orders") {
         const { error: updErr } = await supabase
