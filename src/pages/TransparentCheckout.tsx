@@ -1323,11 +1323,9 @@ function CardPaymentForm({
       for (let attempt = 0; attempt < 3; attempt++) {
         await new Promise(r => setTimeout(r, 3000));
         try {
-          const { data: freshOrder } = await supabase
-            .from("orders")
-            .select("is_paid, stage")
-            .eq("id", orderId)
-            .maybeSingle();
+          const { data: statusRaw } = await supabase
+            .rpc("get_order_status", { p_order_id: orderId });
+          const freshOrder = statusRaw as any;
           if (freshOrder?.is_paid) {
             sessionStorage.removeItem(`checkout_payment_${orderId}`);
             toast.success("Pagamento aprovado!");
