@@ -36,6 +36,18 @@ import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
 import { AiTransferBanner } from "./AiTransferBanner";
 import { ChatExtraSender } from "./ChatExtraSender";
 
+/** Format a raw BR phone (digits only) for friendly display in group sender labels. */
+function formatPhoneDisplay(raw: string): string {
+  const d = (raw || '').replace(/\D/g, '');
+  if (!d) return raw;
+  // 55 + DDD(2) + number(8/9)
+  const local = d.startsWith('55') && d.length >= 12 ? d.slice(2) : d;
+  if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+  if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  return d;
+}
+
+
 interface ChatViewProps {
   messages: Message[];
   conversation: Conversation | null;
@@ -442,7 +454,9 @@ export function ChatView({
     if (msg.direction === 'outgoing') {
       return (msg as any).sender_user_id !== (prevMsg as any).sender_user_id;
     }
-    return false;
+    // Incoming: in groups, different participants must be distinguished
+    return ((msg as any).sender_name || '') !== ((prevMsg as any).sender_name || '')
+      || ((msg as any).sender_phone || '') !== ((prevMsg as any).sender_phone || '');
   }, []);
 
   return (
@@ -593,6 +607,12 @@ export function ChatView({
                 const suid = (msg as any).sender_user_id;
                 // Prioritize sender_name (set by POS with seller name) over profilesMap lookup
                 senderLabel = msgSenderName || (suid ? (profilesMap[suid] || 'Atendente') : (isAuto ? 'Auto' : 'Sistema'));
+              } else if (conversation?.isGroup) {
+                // In groups, always show who is talking: name + phone when available
+                const gName = (msg as any).sender_name || null;
+                const gPhone = (msg as any).sender_phone || null;
+                if (gName && gPhone) senderLabel = `${gName} • ${formatPhoneDisplay(gPhone)}`;
+                else senderLabel = gName || (gPhone ? formatPhoneDisplay(gPhone) : 'Participante');
               } else {
                 senderLabel = (msg as any).sender_name || conversation?.customerName || msg.phone || null;
               }

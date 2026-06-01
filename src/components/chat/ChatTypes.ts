@@ -21,6 +21,7 @@ export interface Message {
   is_group?: boolean;
   whatsapp_number_id?: string;
   sender_name?: string;
+  sender_phone?: string | null;
   message_id?: string;
   sender_user_id?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

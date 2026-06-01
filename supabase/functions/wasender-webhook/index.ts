@@ -207,11 +207,18 @@ serve(async (req) => {
       const remoteJid = asString(key?.remoteJid) || "";
       const isGroup = remoteJid.includes("@g.us") || Boolean((msg as any)?.isGroup);
 
-      // Telefone limpo (recomendado pela doc): cleanedSenderPn / cleanedParticipantPn
-      const cleanedPhone =
+      // Participante (quem realmente enviou dentro do grupo)
+      const participantPhone =
         asString(key?.cleanedParticipantPn) ||
-        asString(key?.cleanedSenderPn) ||
-        asString(remoteJid.replace(/@.*$/, ""));
+        asString(key?.participant?.replace?.(/@.*$/, "")) ||
+        null;
+
+      // Telefone do chat: em grupos é o ID do grupo (remoteJid); em conversas 1:1 é o remetente
+      const cleanedPhone = isGroup
+        ? asString(remoteJid.replace(/@.*$/, ""))
+        : (asString(key?.cleanedSenderPn) ||
+           asString(key?.cleanedParticipantPn) ||
+           asString(remoteJid.replace(/@.*$/, "")));
 
       if (!cleanedPhone) {
         console.warn("[wasender-webhook] sem telefone resolvível, ignorando");
@@ -261,6 +268,7 @@ serve(async (req) => {
         isGroup,
         messageId,
         senderName: pushName,
+        ...(isGroup && participantPhone ? { participantPhone } : {}),
       };
 
 
