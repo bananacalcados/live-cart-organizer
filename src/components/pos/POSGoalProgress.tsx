@@ -115,9 +115,9 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
     load();
   }, [storeId]);
 
-  // Check if there are monthly revenue/seller_revenue goals
+  // Metas de faturamento (loja ou vendedor) com ritmo por dias úteis — mensais OU custom
   const hasMonthlyRevenueGoals = useMemo(() => {
-    return goals.some(g => g.period === "monthly" && (g.goal_type === "revenue" || g.goal_type === "seller_revenue"));
+    return goals.some(g => (g.goal_type === "revenue" || g.goal_type === "seller_revenue") && (g.period === "monthly" || g.period === "custom"));
   }, [goals]);
 
   // Fetch monthly accumulated revenue when needed
