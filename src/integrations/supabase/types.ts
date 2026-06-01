@@ -1309,6 +1309,47 @@ export type Database = {
           },
         ]
       }
+      blocked_contacts: {
+        Row: {
+          blocked_by: string | null
+          blocked_by_name: string | null
+          created_at: string
+          id: string
+          phone: string
+          provider: string | null
+          reason: string | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          blocked_by?: string | null
+          blocked_by_name?: string | null
+          created_at?: string
+          id?: string
+          phone: string
+          provider?: string | null
+          reason?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          blocked_by?: string | null
+          blocked_by_name?: string | null
+          created_at?: string
+          id?: string
+          phone?: string
+          provider?: string | null
+          reason?: string | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocked_contacts_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_channels: {
         Row: {
           campaign_id: string
