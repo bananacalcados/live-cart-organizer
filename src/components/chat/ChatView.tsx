@@ -574,6 +574,33 @@ export function ChatView({
               Finalizar
             </Button>
           )}
+          {conversation && !conversation.isGroup && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={blockLoading}
+              onClick={() => (isBlocked ? handleToggleBlock() : setShowBlockConfirm(true))}
+              className={cn(
+                "h-7 px-2 text-xs gap-1",
+                isBlocked
+                  ? "text-emerald-600 hover:text-emerald-700"
+                  : "text-muted-foreground hover:text-destructive",
+              )}
+              title={isBlocked ? "Desbloquear contato no WhatsApp" : "Bloquear contato no WhatsApp"}
+            >
+              {isBlocked ? (
+                <>
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Desbloquear
+                </>
+              ) : (
+                <>
+                  <Ban className="h-3.5 w-3.5" />
+                  Bloquear
+                </>
+              )}
+            </Button>
+          )}
         </div>
       )}
 
