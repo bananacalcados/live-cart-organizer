@@ -14640,6 +14640,11 @@ export type Database = {
           phone_display: string
           phone_number_id: string | null
           provider: string
+          uazapi_instance_name: string | null
+          uazapi_last_qr: string | null
+          uazapi_owner: string | null
+          uazapi_qr_updated_at: string | null
+          uazapi_token: string | null
           updated_at: string
           wasender_api_key: string | null
           wasender_last_qr: string | null
@@ -14666,6 +14671,11 @@ export type Database = {
           phone_display: string
           phone_number_id?: string | null
           provider?: string
+          uazapi_instance_name?: string | null
+          uazapi_last_qr?: string | null
+          uazapi_owner?: string | null
+          uazapi_qr_updated_at?: string | null
+          uazapi_token?: string | null
           updated_at?: string
           wasender_api_key?: string | null
           wasender_last_qr?: string | null
@@ -14692,6 +14702,11 @@ export type Database = {
           phone_display?: string
           phone_number_id?: string | null
           provider?: string
+          uazapi_instance_name?: string | null
+          uazapi_last_qr?: string | null
+          uazapi_owner?: string | null
+          uazapi_qr_updated_at?: string | null
+          uazapi_token?: string | null
           updated_at?: string
           wasender_api_key?: string | null
           wasender_last_qr?: string | null
