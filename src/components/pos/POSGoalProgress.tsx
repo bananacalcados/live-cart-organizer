@@ -185,7 +185,7 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
   if (relevantGoals.length === 0) return null;
 
   const isMonthlyRevenueGoal = (goal: Goal) =>
-    goal.period === "monthly" && (goal.goal_type === "revenue" || goal.goal_type === "seller_revenue");
+    (goal.goal_type === "revenue" || goal.goal_type === "seller_revenue") && (goal.period === "monthly" || goal.period === "custom");
 
   const getCurrentValue = (goal: Goal): number => {
     // For monthly revenue goals, always use month-accumulated data
