@@ -17,7 +17,7 @@ import { toast } from 'sonner';
  */
 
 export type SendChannel = 'whatsapp' | 'instagram' | 'messenger';
-export type SendProvider = 'zapi' | 'meta' | 'wasender';
+export type SendProvider = 'zapi' | 'meta' | 'wasender' | 'uazapi';
 
 export interface SendRoute {
   channel: SendChannel;
@@ -136,6 +136,27 @@ export function useChatSender() {
                 mediaType,
                 caption: (params as SendMediaParams).caption,
                 whatsapp_number_id: route.numberId,
+              }
+            : {
+                phone,
+                message: text,
+                whatsapp_number_id: route.numberId,
+                quotedMessageId: quotedMessageId || undefined,
+              };
+          const { data, error } = await supabase.functions.invoke(fnName, { body });
+          if (error) throw error;
+          providerMessageId = data?.messageId || null;
+        } else if (route.provider === 'uazapi') {
+          // WhatsApp via uazapi
+          const fnName = isMedia ? 'uazapi-send-media' : 'uazapi-send-message';
+          const body = isMedia
+            ? {
+                phone,
+                mediaUrl,
+                mediaType,
+                caption: (params as SendMediaParams).caption,
+                whatsapp_number_id: route.numberId,
+                quotedMessageId: quotedMessageId || undefined,
               }
             : {
                 phone,
