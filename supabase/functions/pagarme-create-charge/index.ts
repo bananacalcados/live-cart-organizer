@@ -723,6 +723,8 @@ serve(async (req) => {
     }
 
     const paymentAttemptId = rawParams.paymentAttemptId || null;
+    const clientIp = getClientIp(req);
+    console.log(`[PAYMENT] client_ip=${clientIp || "unavailable"}`);
 
     // ── Idempotency: check if this attemptId is already processing ──
     if (paymentAttemptId) {
@@ -1013,7 +1015,7 @@ serve(async (req) => {
     // ── Gateway #1: Mercado Pago (só quando o frontend enviou token via SDK) ──
     const fallbackErrors: string[] = [];
     let mpAccountIdForOrder: string | null = null;
-    let result: { success: boolean; gateway: string; transactionId?: string; error?: string; pending?: boolean; mpAccountId?: string | null };
+    let result: ChargeResult;
 
     if (chargeParams.mpCardToken) {
       console.log("[CASCATA] Token MP presente — tentando Mercado Pago como gateway #1...");
@@ -1023,7 +1025,7 @@ serve(async (req) => {
         console.log(`[CASCATA] Mercado Pago APROVOU (tx: ${result.transactionId}).`);
       } else if (result.error) {
         fallbackErrors.push(`MercadoPago: ${result.error}`);
-        console.log(`[CASCATA] Mercado Pago NAO processou (${result.error}). Tentando Pagar.me...`);
+        console.log(`[CASCATA] Mercado Pago NAO processou (${result.error}). ${result.stopCascade ? "Bloqueando cascata." : "Tentando Pagar.me..."}`);
       }
     } else {
       console.log("[CASCATA] Sem token MP (SDK não carregou) — iniciando direto no Pagar.me.");
@@ -1037,19 +1039,19 @@ serve(async (req) => {
 
     // Gateway #2: Pagar.me
     const pagarmeKey = Deno.env.get("PAGARME_SECRET_KEY") || "";
-    if (!result.success && !result.isSandbox) {
-      result = await chargePagarme(chargeParams, products, pagarmeKey);
+    if (!result.success && !result.isSandbox && !result.stopCascade) {
+      result = await chargePagarme(chargeParams, products, pagarmeKey, clientIp);
     }
 
     // Fallback chain: Pagar.me -> VINDI -> AppMax
-    if (!result.success && !result.isSandbox) {
+    if (!result.success && !result.isSandbox && !result.stopCascade) {
       if (result.error) fallbackErrors.push(`Pagar.me: ${result.error}`);
       console.log(`[FALLBACK] Pagar.me NAO processou (${result.error}). Tentando VINDI/Yapay...`);
 
 
       const vindiKey = Deno.env.get("VINDI_API_KEY") || "";
       if (vindiKey) {
-        const vindiResult = await chargeVindi(chargeParams, products, vindiKey);
+        const vindiResult = await chargeVindi(chargeParams, products, vindiKey, clientIp);
         if (vindiResult.success) {
           console.log(`[FALLBACK] VINDI/Yapay APROVOU (tx: ${vindiResult.transactionId}). Parando fallback.`);
           result = vindiResult;
@@ -1063,11 +1065,11 @@ serve(async (req) => {
     }
 
     // PROTEÇÃO: só tenta AppMax se NENHUM gateway anterior capturou o pagamento
-    if (!result.success && !result.isSandbox) {
+    if (!result.success && !result.isSandbox && !result.stopCascade) {
       console.log(`[FALLBACK] Nenhum gateway anterior aprovou. Tentando APPMAX...`);
       const appmaxToken = Deno.env.get("APPMAX_ACCESS_TOKEN") || "";
       if (appmaxToken) {
-        const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken);
+        const appmaxResult = await chargeAppmax(chargeParams, products, appmaxToken, clientIp);
         if (appmaxResult.success) {
           console.log(`[FALLBACK] APPMAX APROVOU (tx: ${appmaxResult.transactionId}). Parando fallback.`);
           result = appmaxResult;
@@ -1081,9 +1083,16 @@ serve(async (req) => {
     }
 
     if (!result.success) {
+      if (result.error && !fallbackErrors.some((entry) => entry.includes(result.gateway))) {
+        fallbackErrors.push(`${result.gateway}: ${result.error}`);
+      }
       // Log detailed errors for debugging, but show generic message to customer
       console.log(`[ALL-GATEWAYS-FAILED] Errors: ${fallbackErrors.join(" | ")}`);
-      result.error = "Pagamento não aprovado. Verifique os dados do cartão ou tente outro cartão.";
+      if (result.stopCascade && result.error) {
+        result.error = result.error;
+      } else {
+        result.error = "Pagamento não aprovado. Verifique os dados do cartão ou tente outro cartão.";
+      }
     }
 
     // ── Update processing record with final status ──
