@@ -404,10 +404,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
           {goalData.total > 0 && (
             <Panel title={`Meta consolidada — ${periodRange.label}`} icon={Target}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <GoalBox label="Meta total" value={BRL(goalData.total)} />
-                <GoalBox label="Esperado até hoje" value={BRL(goalData.expected)} sub={`${((goalData.expected / goalData.total) * 100).toFixed(0)}% da meta`} />
+                <GoalBox label="Meta total" value={BRL(goalData.total)} sub={`Meta/dia: ${BRL(goalData.dailyTarget)} · ${goalData.totalBusinessDays} dias úteis`} />
+                <GoalBox label="Esperado até hoje" value={BRL(goalData.expected)} sub={`${goalData.elapsedBusinessDays}/${goalData.totalBusinessDays} dias úteis decorridos`} />
                 <GoalBox label="Realizado" value={BRL(totals.revenue)}
-                  sub={`${((totals.revenue / goalData.total) * 100).toFixed(1)}% da meta`}
+                  sub={`${goalData.expected > 0 ? ((totals.revenue / goalData.expected) * 100).toFixed(0) : 0}% do esperado`}
                   highlight={totals.revenue >= goalData.expected ? "ahead" : "behind"} />
               </div>
               <div className="mt-3">
