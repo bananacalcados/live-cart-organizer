@@ -149,7 +149,9 @@ async function chargeMercadoPago(
   }
 
   const cpf = params.customer.cpf.replace(/\D/g, "");
-  const email = params.customer.email || `${cpf}@cliente.bananacalcados.com.br`;
+  const email = mpAccount.is_sandbox
+    ? "test@testuser.com"
+    : (params.customer.email || `${cpf}@cliente.bananacalcados.com.br`);
   const amount = Math.round(params.totalAmountCents) / 100;
   const nameParts = (params.customer.name || "Cliente").trim().split(/\s+/);
   const firstName = nameParts[0] || "Cliente";
@@ -199,8 +201,14 @@ async function chargeMercadoPago(
       headers,
       body: JSON.stringify(body),
     });
-    const data = await res.json();
-    console.log(`[mercadopago] charge HTTP ${res.status} status=${data.status} detail=${data.status_detail} id=${data.id}`);
+    const rawText = await res.text();
+    let data: any = {};
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      data = { raw: rawText };
+    }
+    console.log(`[mercadopago] charge HTTP ${res.status} status=${data.status} detail=${data.status_detail || data.error || data.message} id=${data.id}`);
 
     if (data.status === "approved") {
       return { success: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id };
@@ -208,7 +216,7 @@ async function chargeMercadoPago(
     if (data.status === "in_process" || data.status === "pending") {
       return { success: false, pending: true, gateway: "mercadopago", transactionId: String(data.id), mpAccountId: mpAccount.account_id, error: "Pagamento em análise" };
     }
-    const errMsg = data.status_detail || data.message || data.cause?.[0]?.description || "Cobrança recusada";
+    const errMsg = data.status_detail || data.message || data.error || data.cause?.[0]?.description || data.raw || "Cobrança recusada";
     return { success: false, gateway: "mercadopago", error: errMsg };
   } catch (e) {
     console.error("[mercadopago] exception:", e);
