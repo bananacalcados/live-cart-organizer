@@ -11,10 +11,23 @@ const ALLOWED_ORIGINS = [
   "https://tqxhcyuxgqbzqwoidpie.supabase.co",
 ];
 
+function isAllowedOrigin(origin: string) {
+  if (!origin) return false;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+
+  try {
+    const { hostname, protocol } = new URL(origin);
+    if (protocol !== "https:") return false;
+    return hostname.endsWith(".lovable.app") || hostname.endsWith(".lovableproject.com");
+  } catch {
+    return false;
+  }
+}
+
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("origin") || "";
   return {
-    "Access-Control-Allow-Origin": ALLOWED_ORIGINS.includes(origin) ? origin : "null",
+    "Access-Control-Allow-Origin": isAllowedOrigin(origin) ? origin : "null",
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
     "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
   };
