@@ -260,7 +260,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
       if (g.goal_type !== "revenue") continue;
       let kind: "custom" | "monthly" | null = null;
       if (g.period === "custom" && g.period_start && g.period_end) {
-        const ps = new Date(g.period_start); const pe = new Date(g.period_end);
+        const ps = parseLocalDate(g.period_start); const pe = parseLocalDate(g.period_end);
         if (!isBefore(now, ps) && !isAfter(now, pe)) kind = "custom";
       } else if (g.period === "monthly") {
         kind = "monthly";
@@ -274,10 +274,23 @@ export function POSGeneralDashboard({ onBack }: Props) {
       }
     }
     const total = Array.from(byStore.values()).reduce((a, b) => a + b, 0);
-    const dayOfPeriod = period === "month" ? now.getDate() : period === "week" ? differenceInDays(now, periodRange.start) + 1 : 1;
-    const expected = total > 0 ? (total / periodRange.days) * dayOfPeriod : 0;
-    return { byStore, total, expected };
+
+    // Ritmo por DIAS ÚTEIS (seg-sáb, excluindo domingos e feriados nacionais).
+    // Meta diária = meta total ÷ dias úteis do mês. Esperado = meta diária × dias úteis decorridos.
+    const monthStart = startOfMonth(now);
+    const monthEnd = endOfMonth(now);
+    const holidays = getBrazilianHolidays(now.getFullYear());
+    const totalBusinessDays = countBusinessDays(monthStart, monthEnd, holidays);
+    const dailyTarget = totalBusinessDays > 0 ? total / totalBusinessDays : 0;
+
+    // Dias úteis decorridos conforme o período selecionado
+    const elapsedStart = period === "month" ? monthStart : period === "week" ? periodRange.start : startOfDay(now);
+    const elapsedBusinessDays = countBusinessDays(elapsedStart, now, holidays);
+    const expected = dailyTarget * elapsedBusinessDays;
+
+    return { byStore, total, expected, dailyTarget, totalBusinessDays, elapsedBusinessDays };
   }, [goals, period, periodRange]);
+
 
   const handleSyncShopify = async () => {
     setSyncing(true);
