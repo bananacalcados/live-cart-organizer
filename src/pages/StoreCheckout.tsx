@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, User, MapPin, Wallet, ChevronRight, Store } from "lucide-react";
 import { toast } from "sonner";
@@ -600,6 +601,11 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pixConfirmedRef = useRef(false);
 
+  // Pré-carrega o SDK do Mercado Pago (gera device_id antecipadamente). Tolerante a falha.
+  useEffect(() => {
+    initMercadoPago().catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!pixPaymentId || paid) return;
     pixConfirmedRef.current = false;
@@ -838,6 +844,17 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
       };
       const totalCents = Math.round(totalWithInterest * 100);
       const expiryParts = expiry.split("/");
+
+      // Tokeniza no navegador via MercadoPago.JS V2 (gateway #1). Se falhar, segue no Pagar.me.
+      const mpToken = await tokenizeCardMP({
+        number: cardNumber.replace(/\D/g, ""),
+        holderName: cardName,
+        expMonth: (expiryParts[0] || "").padStart(2, "0"),
+        expYear: expiryParts[1]?.length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
+        cvv,
+        cpf: form.cpf.replace(/\D/g, ""),
+      });
+
       const { data, error } = await supabase.functions.invoke("pagarme-create-charge", {
         body: {
           orderId: saleId,
@@ -851,7 +868,14 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
             expYear: expiryParts[1]?.length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
             cvv,
           },
+          ...(mpToken ? {
+            mpCardToken: mpToken.mpCardToken,
+            mpPaymentMethodId: mpToken.mpPaymentMethodId,
+            mpIssuerId: mpToken.mpIssuerId,
+            mpDeviceId: mpToken.mpDeviceId,
+          } : {}),
           installments: selectedInstallments,
+
           billingAddress: {
             street: form.address,
             number: form.addressNumber || "S/N",
@@ -895,7 +919,7 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
       } as any).then(() => {});
       sessionStorage.removeItem(`checkout_payment_${saleId}`);
       const gw = data.gateway || "pagarme";
-      const gwLabel = gw === "pagarme" ? "Pagar.me" : gw === "vindi" ? "VINDI" : gw === "appmax" ? "APPMAX" : gw.toUpperCase();
+      const gwLabel = gw === "mercadopago" ? "Mercado Pago" : gw === "pagarme" ? "Pagar.me" : gw === "vindi" ? "VINDI" : gw === "appmax" ? "APPMAX" : gw.toUpperCase();
       toast.success(`Pagamento aprovado via ${gwLabel}!`);
       onPaid();
     } catch (e: any) {

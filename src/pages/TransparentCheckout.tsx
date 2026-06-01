@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
+import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
 import {
   fireInitiateCheckout,
   fireAddPaymentInfo,
@@ -1120,6 +1121,12 @@ function CardPaymentForm({
     onProcessingChange?.(isProcessing);
   }, [isProcessing, onProcessingChange]);
 
+  // Pré-carrega o SDK do Mercado Pago (gera device_id antecipadamente). Tolerante a falha.
+  useEffect(() => {
+    initMercadoPago().catch(() => {});
+  }, []);
+
+
   // Restore processing state from sessionStorage on mount
   useEffect(() => {
     const stored = sessionStorage.getItem(`checkout_payment_${orderId}`);
@@ -1214,6 +1221,17 @@ function CardPaymentForm({
     trackPixelEvent("AddPaymentInfo", { content_category: "credit_card" });
     try {
       const totalCents = Math.round(totalWithInterest * 100);
+
+      // Tokeniza no navegador via MercadoPago.JS V2 (gateway #1). Se falhar, segue no Pagar.me.
+      const mpToken = await tokenizeCardMP({
+        number: cardNumber.replace(/\D/g, ""),
+        holderName: cardName.trim(),
+        expMonth: expiryParts[0].padStart(2, "0"),
+        expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
+        cvv: cvv.trim(),
+        cpf: form.cpf.replace(/\D/g, ""),
+      });
+
       const { data, error } = await supabase.functions.invoke("pagarme-create-charge", {
         body: {
           orderId,
@@ -1225,6 +1243,13 @@ function CardPaymentForm({
             expYear: expiryParts[1].length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
             cvv: cvv.trim(),
           },
+          // Campos Mercado Pago (presentes só quando o SDK tokenizou com sucesso)
+          ...(mpToken ? {
+            mpCardToken: mpToken.mpCardToken,
+            mpPaymentMethodId: mpToken.mpPaymentMethodId,
+            mpIssuerId: mpToken.mpIssuerId,
+            mpDeviceId: mpToken.mpDeviceId,
+          } : {}),
           installments: selectedInstallments,
           customer: {
             name: form.fullName,
@@ -1244,6 +1269,7 @@ function CardPaymentForm({
           totalAmountCents: totalCents,
         },
       });
+
 
       if (error) {
         // Tenta extrair mensagem detalhada (estoque insuficiente, etc.)
@@ -1286,7 +1312,7 @@ function CardPaymentForm({
 
       if (data?.success) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
-        toast.success(`Pagamento aprovado via ${data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
+        toast.success(`Pagamento aprovado via ${data.gateway === 'mercadopago' ? 'Mercado Pago' : data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
         onPaymentConfirmed({ platform: data.gateway || "pagarme", method: "credit_card", customerData: buildCustomerData() });
       } else {
         throw new Error(data?.error || "Pagamento recusado.");
