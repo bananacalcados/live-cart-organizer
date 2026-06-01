@@ -81,7 +81,7 @@ export function ChatExtraSender({
     };
   }, [whatsappNumberId]);
 
-  if (provider !== "wasender") return null;
+  if (provider !== "wasender" && provider !== "uazapi") return null;
 
   const resetAll = () => {
     setContactName("");
