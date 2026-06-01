@@ -58,7 +58,7 @@ serve(async (req) => {
     const { data: num, error: numErr } = await supabase
       .from("whatsapp_numbers")
       .select(
-        "id, provider, phone_number_id, access_token, zapi_instance_id, zapi_token, zapi_client_token, wasender_api_key",
+        "id, provider, phone_number_id, access_token, zapi_instance_id, zapi_token, zapi_client_token, wasender_api_key, uazapi_token",
       )
       .eq("id", whatsapp_number_id)
       .single();
