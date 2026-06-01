@@ -481,10 +481,10 @@ async function chargePagarme(
       (chargeData.status === "failed" && acquirerMsg === "Transação aprovada com sucesso")) {
     errorMsg = "Transação recusada pela análise de segurança. Tente outro cartão.";
   } else {
-      errorMsg = gatewayErrors?.[0]?.message
-        || acquirerMsg
-        || chargeData.message
-        || "Cobrança recusada";
+    errorMsg = gatewayErrors?.[0]?.message
+      || acquirerMsg
+      || chargeData.message
+      || "Cobrança recusada";
   }
   const rawErrorReason = antifraudStatus || gatewayErrors?.[0]?.message || acquirerMsg || chargeData.message || errorMsg;
   const failureMeta = categorizeDecline(rawErrorReason);
@@ -1088,9 +1088,7 @@ serve(async (req) => {
       }
       // Log detailed errors for debugging, but show generic message to customer
       console.log(`[ALL-GATEWAYS-FAILED] Errors: ${fallbackErrors.join(" | ")}`);
-      if (result.stopCascade && result.error) {
-        result.error = result.error;
-      } else {
+      if (!(result.stopCascade && result.error)) {
         result.error = "Pagamento não aprovado. Verifique os dados do cartão ou tente outro cartão.";
       }
     }
