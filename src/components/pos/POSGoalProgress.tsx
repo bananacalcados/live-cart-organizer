@@ -18,6 +18,7 @@ interface Goal {
   prize_label?: string | null;
   prize_value?: number | null;
   prize_type?: string | null;
+  created_at?: string | null;
 }
 
 interface GoalProgressRow {
@@ -70,12 +71,49 @@ const periodLabels: Record<string, string> = {
 };
 
 function mapPeriodToFilter(goal: Goal, dashPeriod: string): boolean {
-  if (goal.period === "custom") return true;
+  // Metas custom só são relevantes quando a data de hoje está dentro da janela.
+  // Isso evita que metas antigas (ex.: maio) apareçam no mês seguinte.
+  if (goal.period === "custom") {
+    if (!goal.period_start || !goal.period_end) return true;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = parseLocalDate(goal.period_start);
+    const end = parseLocalDate(goal.period_end);
+    end.setHours(23, 59, 59, 999);
+    return today >= start && today <= end;
+  }
   if (goal.goal_type === "category_units" || goal.goal_type === "brand_units" || goal.goal_type === "points") return true;
   if (goal.period === "daily" && dashPeriod === "day") return true;
   if (goal.period === "weekly" && dashPeriod === "week") return true;
   if (goal.period === "monthly") return true;
   return false;
+}
+
+// Remove metas de faturamento duplicadas para o mesmo escopo (loja ou vendedor):
+// quando existe uma meta custom vigente, ela tem prioridade sobre a meta monthly
+// antiga. Entre metas equivalentes, mantém a criada mais recentemente.
+function dedupeRevenueGoals(list: Goal[]): Goal[] {
+  const revenueTypes = new Set(["revenue", "seller_revenue"]);
+  const groups = new Map<string, Goal[]>();
+  const others: Goal[] = [];
+  for (const g of list) {
+    if (revenueTypes.has(g.goal_type)) {
+      const key = `${g.goal_type}:${g.seller_id ?? "store"}`;
+      const arr = groups.get(key) || [];
+      arr.push(g);
+      groups.set(key, arr);
+    } else {
+      others.push(g);
+    }
+  }
+  const picked: Goal[] = [];
+  for (const arr of groups.values()) {
+    const customs = arr.filter(g => g.period === "custom");
+    const pool = customs.length > 0 ? customs : arr;
+    pool.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+    picked.push(pool[0]);
+  }
+  return [...picked, ...others];
 }
 
 // Business-day helpers (feriados, contagem) vêm de @/lib/businessDays.
@@ -179,8 +217,8 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
     fetchMonthRevenue();
   }, [storeId, hasMonthlyRevenueGoals, goals]);
 
-  // Filter goals matching the current dashboard period
-  const relevantGoals = goals.filter(g => mapPeriodToFilter(g, period));
+  // Filter goals matching the current dashboard period, then dedupe revenue goals
+  const relevantGoals = dedupeRevenueGoals(goals.filter(g => mapPeriodToFilter(g, period)));
 
   if (relevantGoals.length === 0) return null;
 
