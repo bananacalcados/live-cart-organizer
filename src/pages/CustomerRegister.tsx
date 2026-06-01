@@ -301,7 +301,7 @@ export default function CustomerRegister() {
       const cleanWhatsapp = whatsapp.replace(/\D/g, "");
       const cleanCep = cep.replace(/\D/g, "");
       
-      const { data: reg, error: regError } = await supabase
+      const { error: regError } = await supabase
         .from("customer_registrations")
         .insert({
           order_id: orderId!,
@@ -317,11 +317,13 @@ export default function CustomerRegister() {
           city: city || null,
           state: state || null,
           ...(customerIdToLink ? { customer_id: customerIdToLink } : {}),
-        })
-        .select()
-        .single();
+        });
 
       if (regError) throw regError;
+
+      const { data: regRaw } = await supabase
+        .rpc("get_checkout_registration", { p_order_id: orderId! });
+      const reg = regRaw as any;
 
       // Save/update pos_customers for global CPF lookup
       const { data: existingCustomer } = await supabase
