@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getUazapiBase } from "../_shared/uazapi-credentials.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,7 +59,7 @@ serve(async (req) => {
     const { data: num, error: numErr } = await supabase
       .from("whatsapp_numbers")
       .select(
-        "id, provider, phone_number_id, access_token, zapi_instance_id, zapi_token, zapi_client_token, wasender_api_key",
+        "id, provider, phone_number_id, access_token, zapi_instance_id, zapi_token, zapi_client_token, wasender_api_key, uazapi_token",
       )
       .eq("id", whatsapp_number_id)
       .single();
@@ -97,6 +98,17 @@ serve(async (req) => {
           Authorization: `Bearer ${num.wasender_api_key}`,
           "Content-Type": "application/json",
         },
+      });
+      providerDetail = await res.json().catch(() => null);
+      providerOk = res.ok;
+    } else if (provider === "uazapi") {
+      if (!num.uazapi_token) {
+        return json({ error: "Credenciais uazapi ausentes nesta instância" }, 400);
+      }
+      const res = await fetch(`${getUazapiBase()}/chat/block`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: num.uazapi_token },
+        body: JSON.stringify({ number: normalized, action }),
       });
       providerDetail = await res.json().catch(() => null);
       providerOk = res.ok;

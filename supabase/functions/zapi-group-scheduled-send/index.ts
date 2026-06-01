@@ -287,12 +287,61 @@ serve(async (req) => {
       });
     }
 
+    // Envia um único bloco a um grupo via uazapi (texto/mídia/enquete)
+    async function sendBlockUazapi(block: any, group: { id: string; group_id: string; name: string }) {
+      const content = replaceVars(block.message_content || "", group.name);
+
+      // Enquete
+      if (block.message_type === "poll" && Array.isArray(block.poll_options) && block.poll_options.length >= 2) {
+        return callFn("uazapi-send-extra", {
+          kind: "poll",
+          phone: group.group_id,
+          whatsapp_number_id: resolvedNumberId,
+          poll: {
+            question: content || "Enquete",
+            options: block.poll_options,
+            selectableCount: block.poll_max_options && block.poll_max_options > 0 ? block.poll_max_options : 1,
+          },
+        });
+      }
+
+      // Mídia (image | video | audio | document | sticker)
+      if (block.message_type !== "text" && block.media_url) {
+        return callFn("uazapi-send-media", {
+          phone: group.group_id,
+          mediaUrl: block.media_url,
+          mediaType: block.message_type,
+          caption: content,
+          whatsapp_number_id: resolvedNumberId,
+        });
+      }
+
+      // Texto (com menções "todos" via uazapi-groups quando aplicável)
+      if (block.mention_all) {
+        return callFn("uazapi-groups", {
+          action: "sendMessage",
+          groupJid: group.group_id,
+          message: content,
+          whatsapp_number_id: resolvedNumberId,
+        });
+      }
+      return callFn("uazapi-send-message", {
+        phone: group.group_id,
+        message: content,
+        whatsapp_number_id: resolvedNumberId,
+      });
+    }
+
     // Helper: send a single block, with 1 retry on failure
     async function sendBlockOnce(block: any, group: { id: string; group_id: string; name: string }) {
       // Roteamento por provider da instância
       if (instanceProvider === "wasender") {
         return sendBlockWasender(block, group);
       }
+      if (instanceProvider === "uazapi") {
+        return sendBlockUazapi(block, group);
+      }
+
 
       // ===== Z-API (comportamento original) =====
       const body: Record<string, unknown> = {
