@@ -1312,7 +1312,7 @@ function CardPaymentForm({
 
       if (data?.success) {
         sessionStorage.removeItem(`checkout_payment_${orderId}`);
-        toast.success(`Pagamento aprovado via ${data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
+        toast.success(`Pagamento aprovado via ${data.gateway === 'mercadopago' ? 'Mercado Pago' : data.gateway === 'pagarme' ? 'Pagar.me' : data.gateway === 'vindi' ? 'VINDI' : 'APPMAX'}!`);
         onPaymentConfirmed({ platform: data.gateway || "pagarme", method: "credit_card", customerData: buildCustomerData() });
       } else {
         throw new Error(data?.error || "Pagamento recusado.");
