@@ -232,8 +232,21 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
   const getMonthlyPaceForGoal = (goal: Goal) => {
     if (!isMonthlyRevenueGoal(goal) || !monthlyPace) return null;
 
-    const { totalBusinessDays, elapsedBusinessDays } = monthlyPace;
+    const now = new Date();
+    const holidays = getBrazilianHolidays(now.getFullYear());
+    // Janela: usa as datas do próprio goal quando custom, senão o mês corrente
+    let winStart: Date, winEnd: Date;
+    if (goal.period === "custom" && goal.period_start && goal.period_end) {
+      winStart = parseLocalDate(goal.period_start);
+      winEnd = parseLocalDate(goal.period_end);
+    } else {
+      winStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      winEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    }
+    const totalBusinessDays = countBusinessDays(winStart, winEnd, holidays);
     if (totalBusinessDays === 0) return null;
+    const elapsedEnd = now < winEnd ? now : winEnd;
+    const elapsedBusinessDays = countBusinessDays(winStart, elapsedEnd, holidays);
 
     const dailyTarget = goal.goal_value / totalBusinessDays;
     const expectedSoFar = dailyTarget * elapsedBusinessDays;
