@@ -15291,6 +15291,8 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_checkout_order: { Args: { p_order_id: string }; Returns: Json }
+      get_checkout_registration: { Args: { p_order_id: string }; Returns: Json }
       get_conversation_counts: {
         Args: never
         Returns: {
@@ -15499,6 +15501,7 @@ export type Database = {
           out_serie: number
         }[]
       }
+      get_order_status: { Args: { p_order_id: string }; Returns: Json }
       get_orders_by_customer: {
         Args: { p_customer_id: string }
         Returns: {
@@ -15537,6 +15540,7 @@ export type Database = {
         }[]
       }
       get_reactivation_candidates: { Args: { p_limit?: number }; Returns: Json }
+      get_registration_by_cpf: { Args: { p_cpf: string }; Returns: Json }
       get_user_allowed_modules: {
         Args: { p_user_id: string }
         Returns: string[]
