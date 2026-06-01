@@ -601,6 +601,11 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pixConfirmedRef = useRef(false);
 
+  // Pré-carrega o SDK do Mercado Pago (gera device_id antecipadamente). Tolerante a falha.
+  useEffect(() => {
+    initMercadoPago().catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!pixPaymentId || paid) return;
     pixConfirmedRef.current = false;
