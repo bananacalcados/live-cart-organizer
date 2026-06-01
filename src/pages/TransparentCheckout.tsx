@@ -1704,11 +1704,9 @@ export default function TransparentCheckout() {
     // Verify the registration was actually saved with address data
     if (orderData && !orderData.id.startsWith("live-")) {
       try {
-        const { data: reg } = await supabase
-          .from("customer_registrations")
-          .select("cep, address, address_number, neighborhood, city, state")
-          .eq("order_id", orderData.id)
-          .maybeSingle();
+        const { data: regRaw } = await supabase
+          .rpc("get_checkout_registration", { p_order_id: orderData.id });
+        const reg = regRaw as any;
 
         const persistedForm = mapRegistrationToCustomerForm(reg);
         if (!reg || !hasCompleteAddress(persistedForm)) {
