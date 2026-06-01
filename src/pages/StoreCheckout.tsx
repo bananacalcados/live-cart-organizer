@@ -838,6 +838,17 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
       };
       const totalCents = Math.round(totalWithInterest * 100);
       const expiryParts = expiry.split("/");
+
+      // Tokeniza no navegador via MercadoPago.JS V2 (gateway #1). Se falhar, segue no Pagar.me.
+      const mpToken = await tokenizeCardMP({
+        number: cardNumber.replace(/\D/g, ""),
+        holderName: cardName,
+        expMonth: (expiryParts[0] || "").padStart(2, "0"),
+        expYear: expiryParts[1]?.length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
+        cvv,
+        cpf: form.cpf.replace(/\D/g, ""),
+      });
+
       const { data, error } = await supabase.functions.invoke("pagarme-create-charge", {
         body: {
           orderId: saleId,
@@ -851,7 +862,14 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
             expYear: expiryParts[1]?.length === 2 ? `20${expiryParts[1]}` : expiryParts[1],
             cvv,
           },
+          ...(mpToken ? {
+            mpCardToken: mpToken.mpCardToken,
+            mpPaymentMethodId: mpToken.mpPaymentMethodId,
+            mpIssuerId: mpToken.mpIssuerId,
+            mpDeviceId: mpToken.mpDeviceId,
+          } : {}),
           installments: selectedInstallments,
+
           billingAddress: {
             street: form.address,
             number: form.addressNumber || "S/N",
