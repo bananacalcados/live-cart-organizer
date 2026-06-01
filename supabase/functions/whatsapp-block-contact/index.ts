@@ -101,6 +101,17 @@ serve(async (req) => {
       });
       providerDetail = await res.json().catch(() => null);
       providerOk = res.ok;
+    } else if (provider === "uazapi") {
+      if (!num.uazapi_token) {
+        return json({ error: "Credenciais uazapi ausentes nesta instância" }, 400);
+      }
+      const res = await fetch(`${getUazapiBase()}/chat/block`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", token: num.uazapi_token },
+        body: JSON.stringify({ number: normalized, action }),
+      });
+      providerDetail = await res.json().catch(() => null);
+      providerOk = res.ok;
     } else if (provider === "meta") {
       if (!num.phone_number_id || !num.access_token) {
         return json({ error: "Credenciais Meta ausentes nesta instância" }, 400);
