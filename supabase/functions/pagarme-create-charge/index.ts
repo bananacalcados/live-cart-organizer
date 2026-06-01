@@ -157,23 +157,27 @@ async function chargeMercadoPago(
   const firstName = nameParts[0] || "Cliente";
   const lastName = nameParts.slice(1).join(" ") || ".";
 
+  const payer = {
+    email,
+    first_name: firstName,
+    last_name: lastName,
+    ...(cpf.length === 11 ? { identification: { type: "CPF", number: cpf } } : {}),
+  };
+
   const body: Record<string, unknown> = {
     transaction_amount: Number(amount.toFixed(2)),
     token: params.mpCardToken,
     description: `Pedido #${String(params.orderId).substring(0, 8)}`,
     installments: params.installments || 1,
     payment_method_id: params.mpPaymentMethodId,
-    binary_mode: true,
-    external_reference: String(params.orderId),
-    notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=mercadopago`,
-    statement_descriptor: "BANANACALCADOS",
-    payer: {
-      email,
-      first_name: firstName,
-      last_name: lastName,
-      ...(cpf.length === 11 ? { identification: { type: "CPF", number: cpf } } : {}),
-    },
-    additional_info: {
+    payer,
+  };
+  if (!mpAccount.is_sandbox) {
+    body.binary_mode = true;
+    body.external_reference = String(params.orderId);
+    body.notification_url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/payment-webhook?gateway=mercadopago`;
+    body.statement_descriptor = "BANANACALCAD";
+    body.additional_info = {
       items: products.map((p, i) => ({
         id: `item_${i}`,
         title: String(p.title || "Produto").substring(0, 256),
@@ -182,9 +186,9 @@ async function chargeMercadoPago(
         unit_price: Math.round(Number(p.price) * 100) / 100,
       })),
       payer: { first_name: firstName, last_name: lastName },
-    },
-  };
-  if (params.mpIssuerId) body.issuer_id = params.mpIssuerId;
+    };
+    if (params.mpIssuerId) body.issuer_id = params.mpIssuerId;
+  }
 
   try {
     const idemKey = `card-${params.orderId}-${params.paymentAttemptId || crypto.randomUUID()}`;
@@ -194,7 +198,19 @@ async function chargeMercadoPago(
       "X-Idempotency-Key": idemKey,
     };
     // device_id (fingerprint do navegador) — pontua na qualidade e reduz fraude
-    if (params.mpDeviceId) headers["X-meli-session-id"] = params.mpDeviceId;
+    if (!mpAccount.is_sandbox && params.mpDeviceId) headers["X-meli-session-id"] = params.mpDeviceId;
+
+    console.log("[mercadopago] payload", JSON.stringify({
+      isSandbox: mpAccount.is_sandbox,
+      payment_method_id: body.payment_method_id,
+      installments: body.installments,
+      transaction_amount: body.transaction_amount,
+      hasIssuer: Boolean((body as any).issuer_id),
+      hasAdditionalInfo: Boolean((body as any).additional_info),
+      hasNotificationUrl: Boolean((body as any).notification_url),
+      hasDeviceHeader: Boolean(headers["X-meli-session-id"]),
+      payer,
+    }));
 
     const res = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
