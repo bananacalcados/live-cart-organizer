@@ -42,6 +42,83 @@ function getCorsHeaders(req: Request) {
   };
 }
 
+type DeclineCategory = "risk" | "card_data" | "minimum_amount" | "issuer" | "unknown";
+
+interface ChargeResult {
+  success: boolean;
+  gateway: string;
+  transactionId?: string;
+  error?: string;
+  pending?: boolean;
+  mpAccountId?: string | null;
+  isSandbox?: boolean;
+  stopCascade?: boolean;
+  declineCategory?: DeclineCategory;
+}
+
+function normalizeFailureCode(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getClientIp(req: Request): string | null {
+  const forwarded = req.headers.get("forwarded") || "";
+  const forwardedFor = forwarded.match(/for="?([^;,"]+)"?/i)?.[1] || null;
+  const candidates = [
+    req.headers.get("cf-connecting-ip"),
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim(),
+    req.headers.get("x-real-ip"),
+    forwardedFor,
+  ];
+
+  for (const candidate of candidates) {
+    const ip = String(candidate || "").trim().replace(/^\[|\]$/g, "");
+    if (!ip || ip === "0.0.0.0" || ip === "::1" || ip === "127.0.0.1" || ip.toLowerCase() === "unknown") continue;
+    return ip;
+  }
+
+  return null;
+}
+
+function humanizeMpError(codeOrMessage: string) {
+  const code = normalizeFailureCode(codeOrMessage);
+  switch (code) {
+    case "cc_rejected_high_risk":
+      return "Transação recusada pela análise de risco do cartão no Mercado Pago.";
+    case "cc_rejected_bad_filled_security_code":
+      return "Código de segurança inválido.";
+    case "cc_rejected_bad_filled_date":
+      return "Data de validade inválida.";
+    case "cc_rejected_bad_filled_card_number":
+      return "Número do cartão inválido.";
+    case "cc_rejected_insufficient_amount":
+      return "Cartão sem limite disponível.";
+    default:
+      return codeOrMessage || "Cobrança recusada";
+  }
+}
+
+function categorizeDecline(codeOrMessage: string): { stopCascade: boolean; declineCategory: DeclineCategory } {
+  const normalized = normalizeFailureCode(codeOrMessage);
+
+  if (!normalized) {
+    return { stopCascade: false, declineCategory: "unknown" };
+  }
+
+  if (normalized.startsWith("cc_rejected_") || normalized.includes("análise de segurança") || normalized.includes("analise de seguranca") || normalized.includes("high_risk") || normalized.includes("antifraud") || normalized.includes("recusado_por_risco")) {
+    return { stopCascade: true, declineCategory: "risk" };
+  }
+
+  if (normalized.includes("código de segurança inválido") || normalized.includes("codigo de seguranca invalido") || normalized.includes("cartão inválido") || normalized.includes("cartao invalido") || normalized.includes("número do cartão") || normalized.includes("numero do cartao") || normalized.includes("data de validade") || normalized.includes("invalid_installments")) {
+    return { stopCascade: true, declineCategory: "card_data" };
+  }
+
+  if (normalized.includes("valor inferior a r$ 5,00") || normalized.includes("parcela 1 possui o valor inferior a r$ 5,00")) {
+    return { stopCascade: true, declineCategory: "minimum_amount" };
+  }
+
+  return { stopCascade: false, declineCategory: "unknown" };
+}
+
 async function notifyPaymentConfirmedLocal(orderId: string, gateway: string, transactionId: string) {
   try {
     const webhookUrl = Deno.env.get("AGENTE2_PAGAMENTO_CONFIRMADO") || "https://api.bananacalcados.com.br/webhook/pagamento-confirmado";
