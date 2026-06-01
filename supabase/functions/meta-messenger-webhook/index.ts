@@ -131,10 +131,27 @@ serve(async (req) => {
           continue;
         }
 
+        // Dedup: Meta re-delivers webhooks. The message mid is unique, so skip if
+        // this incoming DM was already stored (avoids duplicates + double AI replies).
+        const incomingMid = event.message?.mid || null;
+        if (incomingMid) {
+          const { data: dupDm } = await supabase
+            .from('whatsapp_messages')
+            .select('id')
+            .eq('message_id', incomingMid)
+            .eq('direction', 'incoming')
+            .limit(1);
+          if (dupDm && dupDm.length > 0) {
+            console.log(`[${channel}] Dedup: incoming ${incomingMid} already exists, skipping`);
+            continue;
+          }
+        }
+
         let messageText = '';
         let mediaType = 'text';
         let mediaUrl: string | null = null;
         let referralData: Record<string, unknown> | null = null;
+
 
         if (event.message) {
           messageText = event.message.text || '';
@@ -282,6 +299,11 @@ serve(async (req) => {
         });
 
         if (error) {
+          // 23505 = unique violation → concurrent retry already saved it; skip side-effects
+          if ((error as any).code === '23505') {
+            console.log(`[${channel}] Dedup (race): incoming ${incomingMid} already saved, skipping`);
+            continue;
+          }
           console.error('Error saving message:', error);
         } else {
           console.log(`Saved ${channel} DM from ${senderId} (${senderName || 'unknown'}): ${messageText.slice(0, 80)}`);
