@@ -1144,7 +1144,8 @@ function CardPaymentForm({
       await new Promise(r => setTimeout(r, 3000));
       try {
         // Check if order is now paid
-        const { data: freshOrder } = await supabase.from("orders").select("is_paid").eq("id", orderId).maybeSingle();
+        const { data: statusRaw } = await supabase.rpc("get_order_status", { p_order_id: orderId });
+        const freshOrder = statusRaw as any;
         if (freshOrder?.is_paid) {
           sessionStorage.removeItem(`checkout_payment_${orderId}`);
           onPaymentConfirmed({ platform: "gateway", method: "credit_card", customerData: buildCustomerData() });
@@ -1322,11 +1323,9 @@ function CardPaymentForm({
       for (let attempt = 0; attempt < 3; attempt++) {
         await new Promise(r => setTimeout(r, 3000));
         try {
-          const { data: freshOrder } = await supabase
-            .from("orders")
-            .select("is_paid, stage")
-            .eq("id", orderId)
-            .maybeSingle();
+          const { data: statusRaw } = await supabase
+            .rpc("get_order_status", { p_order_id: orderId });
+          const freshOrder = statusRaw as any;
           if (freshOrder?.is_paid) {
             sessionStorage.removeItem(`checkout_payment_${orderId}`);
             toast.success("Pagamento aprovado!");
@@ -1536,11 +1535,9 @@ export default function TransparentCheckout() {
 
   const loadOrder = async () => {
     try {
-      const { data: order, error } = await supabase
-        .from("orders")
-        .select("*, customer:customers(*)")
-        .eq("id", orderId)
-        .maybeSingle();
+      const { data: orderRaw, error } = await supabase
+        .rpc("get_checkout_order", { p_order_id: orderId });
+      const order = orderRaw as any;
 
       if (error || !order) throw new Error("Pedido não encontrado");
 
@@ -1574,11 +1571,9 @@ export default function TransparentCheckout() {
       }
 
       // Pre-fill from existing registration for this order first
-      const { data: orderReg } = await supabase
-        .from("customer_registrations")
-        .select("id, full_name, email, cpf, whatsapp, cep, address, address_number, complement, neighborhood, city, state")
-        .eq("order_id", order.id)
-        .maybeSingle();
+      const { data: orderRegRaw } = await supabase
+        .rpc("get_checkout_registration", { p_order_id: order.id });
+      const orderReg = orderRegRaw as any;
 
       if (orderReg) {
         setRegistrationId(orderReg.id);
@@ -1645,13 +1640,15 @@ export default function TransparentCheckout() {
         ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
       };
 
-      const { data: reg, error } = await supabase
+      const { error } = await supabase
         .from("customer_registrations")
-        .upsert(payload, { onConflict: "order_id" })
-        .select("id, cep, address, address_number, neighborhood, city, state")
-        .single();
+        .upsert(payload, { onConflict: "order_id" });
 
       if (error) throw error;
+
+      const { data: regRaw } = await supabase
+        .rpc("get_checkout_registration", { p_order_id: payload.order_id });
+      const reg = regRaw as any;
       if (reg?.id) setRegistrationId(reg.id);
 
       // Também salva full_name na tabela orders para exibição no dashboard
@@ -1702,11 +1699,9 @@ export default function TransparentCheckout() {
     // Verify the registration was actually saved with address data
     if (orderData && !orderData.id.startsWith("live-")) {
       try {
-        const { data: reg } = await supabase
-          .from("customer_registrations")
-          .select("cep, address, address_number, neighborhood, city, state")
-          .eq("order_id", orderData.id)
-          .maybeSingle();
+        const { data: regRaw } = await supabase
+          .rpc("get_checkout_registration", { p_order_id: orderData.id });
+        const reg = regRaw as any;
 
         const persistedForm = mapRegistrationToCustomerForm(reg);
         if (!reg || !hasCompleteAddress(persistedForm)) {

@@ -534,11 +534,9 @@ export default function Checkout() {
   const markCheckoutStarted = async (orderId: string) => {
     try {
       // Check if already started
-      const { data: orderRow } = await supabase
-        .from('orders')
-        .select('checkout_started_at')
-        .eq('id', orderId)
-        .single();
+      const { data: statusRaw } = await supabase
+        .rpc('get_order_status', { p_order_id: orderId });
+      const orderRow = statusRaw as any;
       
       if (orderRow?.checkout_started_at) {
         setCheckoutStartedAt(orderRow.checkout_started_at);
