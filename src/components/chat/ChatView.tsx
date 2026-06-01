@@ -595,6 +595,12 @@ export function ChatView({
                 const suid = (msg as any).sender_user_id;
                 // Prioritize sender_name (set by POS with seller name) over profilesMap lookup
                 senderLabel = msgSenderName || (suid ? (profilesMap[suid] || 'Atendente') : (isAuto ? 'Auto' : 'Sistema'));
+              } else if (conversation?.isGroup) {
+                // In groups, always show who is talking: name + phone when available
+                const gName = (msg as any).sender_name || null;
+                const gPhone = (msg as any).sender_phone || null;
+                if (gName && gPhone) senderLabel = `${gName} • ${formatPhoneDisplay(gPhone)}`;
+                else senderLabel = gName || (gPhone ? formatPhoneDisplay(gPhone) : 'Participante');
               } else {
                 senderLabel = (msg as any).sender_name || conversation?.customerName || msg.phone || null;
               }
