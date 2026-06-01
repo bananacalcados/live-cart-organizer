@@ -223,7 +223,7 @@ export function GroupsVipManager() {
                 <SelectItem value="available">🟢 Disponíveis</SelectItem>
               </SelectContent>
             </Select>
-            <WhatsAppNumberSelector allowedProviders={["zapi", "wasender"]} className="w-[180px] h-9 text-xs" />
+            <WhatsAppNumberSelector allowedProviders={["zapi", "wasender", "uazapi"]} className="w-[180px] h-9 text-xs" />
             <Button variant="outline" size="sm" onClick={syncGroups} disabled={isSyncing} className="gap-1">
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sincronizar
             </Button>
