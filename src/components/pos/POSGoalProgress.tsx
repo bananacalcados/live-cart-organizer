@@ -180,14 +180,16 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
       const startStr = formatDateKey(monthStart);
       const endStr = `${formatDateKey(today)}T23:59:59`;
 
-      // Fetch completed sales for the entire month so far
+      // Faturamento do mês — DEVE bater com o KPI de cima (loja física + online + live).
+      // Mesmas regras do dashboard: status pago (completed/pending_sync/paid),
+      // exclui retiradas só-site, e considera paid_at quando existir senão created_at.
       const { data: salesData } = await supabase
         .from("pos_sales")
         .select("total, seller_id")
         .eq("store_id", storeId)
-        .eq("status", "completed")
-        .gte("created_at", startStr)
-        .lte("created_at", endStr);
+        .in("status", ["completed", "pending_sync", "paid"])
+        .neq("revenue_attribution", "site_pickup_only")
+        .or(`and(paid_at.gte.${startStr},paid_at.lte.${endStr}),and(paid_at.is.null,created_at.gte.${startStr},created_at.lte.${endStr})`);
 
       const monthRev = (salesData || []).reduce((s, r) => s + (r.total || 0), 0);
 
