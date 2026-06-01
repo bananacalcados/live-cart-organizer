@@ -54,11 +54,9 @@ export default function CustomerRegister() {
   }, [orderId]);
 
   const loadOrder = async () => {
-    const { data, error } = await supabase
-      .from("orders")
-      .select("id, products, customer_id, is_pickup, is_delivery, pickup_store_id, discount_type, discount_value, free_shipping, custom_shipping_cost, shipping_cost, customer:customers(id, instagram_handle)")
-      .eq("id", orderId)
-      .single();
+    const { data: dataRaw, error } = await supabase
+      .rpc("get_checkout_order", { p_order_id: orderId });
+    const data = dataRaw as any;
 
     if (error || !data) {
       setLoading(false);
@@ -66,11 +64,9 @@ export default function CustomerRegister() {
     }
 
     // Check if already registered for THIS order
-    const { data: existing } = await supabase
-      .from("customer_registrations")
-      .select("id, status, shopify_draft_order_name")
-      .eq("order_id", orderId)
-      .maybeSingle();
+    const { data: existingRaw } = await supabase
+      .rpc("get_checkout_registration", { p_order_id: orderId });
+    const existing = existingRaw as any;
 
     if (existing?.status === "completed") {
       setDraftOrderName(existing.shopify_draft_order_name || "");
@@ -192,15 +188,11 @@ export default function CustomerRegister() {
         toast.success("Cliente encontrado! Dados preenchidos automaticamente.");
       } else {
         // Also try customer_registrations by CPF
-        const { data: regs } = await supabase
-          .from("customer_registrations")
-          .select("full_name, email, whatsapp, cep, address, address_number, complement, neighborhood, city, state")
-          .eq("cpf", digits)
-          .order("created_at", { ascending: false })
-          .limit(1);
+        const { data: regRaw } = await supabase
+          .rpc("get_registration_by_cpf", { p_cpf: digits });
+        const r = regRaw as any;
 
-        if (regs && regs.length > 0) {
-          const r = regs[0];
+        if (r) {
           setCpfFound(true);
           if (r.full_name) setFullName(r.full_name);
           if (r.email) setEmail(r.email);
@@ -282,11 +274,9 @@ export default function CustomerRegister() {
     setSubmitting(true);
     try {
       // Check if already registered (prevent duplicate submissions)
-      const { data: existingReg } = await supabase
-        .from("customer_registrations")
-        .select("id, status, shopify_draft_order_name")
-        .eq("order_id", orderId!)
-        .maybeSingle();
+      const { data: existingRegRaw } = await supabase
+        .rpc("get_checkout_registration", { p_order_id: orderId! });
+      const existingReg = existingRegRaw as any;
 
       if (existingReg) {
         setDraftOrderName(existingReg.shopify_draft_order_name || "");
