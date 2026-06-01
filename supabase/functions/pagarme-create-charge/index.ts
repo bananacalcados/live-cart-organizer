@@ -690,10 +690,17 @@ async function chargeAppmax(
       return { success: true, gateway: "appmax", transactionId: appmaxTxId };
     }
 
-    // Pre-authorization = payment accepted, waiting capture/antifraud
-    // We treat this as success so appmax_order_id gets saved and webhook can match later
+    // Pre-authorization = ainda não capturou. Aguarda webhook final da AppMax.
     if (payData.success && (appmaxStatus === "pre_authorized" || isPreAuth) && appmaxStatus !== "recusado_por_risco") {
-      return { success: true, gateway: "appmax", transactionId: appmaxTxId };
+      return {
+        success: false,
+        pending: true,
+        gateway: "appmax",
+        transactionId: appmaxTxId,
+        error: "Pagamento em análise pela operadora.",
+        stopCascade: true,
+        declineCategory: "risk",
+      };
     }
 
       const errorMsg = payData.text || payData.message || payData.data?.message || "AppMax payment declined";
