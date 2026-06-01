@@ -287,8 +287,8 @@ export function POSGoalProgress({ storeId, totalRevenue, avgTicket, avgItemsPerS
 
   const getPeriodLabel = (goal: Goal): string => {
     if (goal.period === "custom" && goal.period_start && goal.period_end) {
-      const start = new Date(goal.period_start).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-      const end = new Date(goal.period_end).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+      const start = parseLocalDate(goal.period_start).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+      const end = parseLocalDate(goal.period_end).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
       return `${start} - ${end}`;
     }
     return periodLabels[goal.period] || goal.period;
