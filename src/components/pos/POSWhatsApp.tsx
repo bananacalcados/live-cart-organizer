@@ -264,7 +264,27 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     [ghostConversations, conversations]
   );
 
-  const liveCount = Object.keys(liveStageByPhone).length + ghostConversations.length;
+  // Badge count must match what the "Pedidos da Live" filter actually shows:
+  // exclude finalized/archived conversations so finishing chats lowers the number.
+  const liveCount = useMemo(() => {
+    const counted = new Set<string>();
+    for (const c of conversations) {
+      const k = livePhoneKey(c.phone);
+      if (!liveStageMap[k]) continue;
+      if (finishedPhones.has(k)) continue;
+      if (archivedPhones.has(c.phone)) continue;
+      counted.add(k);
+    }
+    for (const g of liveGhostRows) {
+      const k = livePhoneKey(g.phone);
+      if (!liveStageMap[k]) continue;
+      if (counted.has(k)) continue;
+      if (finishedPhones.has(k)) continue;
+      if (archivedPhones.has(g.phone)) continue;
+      counted.add(k);
+    }
+    return counted.size;
+  }, [conversations, liveStageMap, liveGhostRows, finishedPhones, archivedPhones]);
 
   // Quote/reply
   const [quotedMessage, setQuotedMessage] = useState<QuotedMessageData | null>(null);
