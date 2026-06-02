@@ -305,7 +305,14 @@ export function ConversationList({
           <Pill label="Novas" active={newActive} count={newCount} onClick={() => pickNativePill('not_started', 'all')} />
           <Pill label="Não lidas" active={unreadActive} count={unreadCount} badge={unreadCount > 0 && !unreadActive} onClick={() => pickNativePill('awaiting_reply', 'all')} />
           <Pill label="Grupos" active={groupsActive} count={groupsCount} onClick={() => pickNativePill('all', 'groups')} />
+          <Pill label="Follow Up" active={statusFilter === 'awaiting_customer' && !liveFilterActive} count={followUpCount} onClick={() => pickRailStatus('awaiting_customer')} />
+          <Pill label="Pedidos da Live" active={!!liveFilterActive} count={liveCount || 0} onClick={() => onLiveFilterToggle?.()} />
+          <Pill label="IA Transferiu" active={statusFilter === 'ai_transferred' && !liveFilterActive} count={aiCount} badge={aiCount > 0 && statusFilter !== 'ai_transferred'} onClick={() => pickRailStatus('ai_transferred')} />
+          <Pill label="Finalizadas" active={statusFilter === 'finished' && !liveFilterActive} onClick={() => pickRailStatus('finished')} />
+          <Pill label="Arquivadas" active={statusFilter === 'archived' && !liveFilterActive} count={archivedCount} onClick={() => pickRailStatus('archived')} />
+          <Pill label="Disparos" active={statusFilter === 'dispatch' && !liveFilterActive} count={dispatchCount} onClick={() => pickRailStatus('dispatch')} />
         </div>
+
 
         {/* Instance tabs (only when multiple) */}
         {instanceTabs.length > 2 && (
