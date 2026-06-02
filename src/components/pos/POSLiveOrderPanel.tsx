@@ -138,9 +138,18 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
           <span className="ml-auto text-[11px] font-bold text-fuchsia-700 dark:text-fuchsia-200">
             R$ {total.toFixed(2)}
           </span>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-5 w-5 text-fuchsia-600 dark:text-fuchsia-300 hover:bg-fuchsia-500/20"
+            onClick={toggleCollapsed}
+            title={collapsed ? "Expandir pedido" : "Minimizar pedido"}
+          >
+            {collapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+          </Button>
         </div>
 
-        {products.length > 0 && (
+        {!collapsed && products.length > 0 && (
           <div className="text-[10px] text-muted-foreground space-y-0.5 max-h-20 overflow-y-auto">
             {products.slice(0, 4).map((p, i) => (
               <div key={i} className="flex items-center gap-1 truncate">
@@ -155,6 +164,7 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
           </div>
         )}
 
+        {!collapsed && (
         <div className="flex flex-wrap items-center gap-1">
           <Select value={order.stage as string} onValueChange={(v) => doMove(v as OrderStage)} disabled={busy === "move"}>
             <SelectTrigger className="h-6 text-[10px] w-auto min-w-[140px] bg-white dark:bg-[#202c33]">
@@ -187,7 +197,9 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
             <X className="h-3 w-3" /> Cancelar
           </Button>
         </div>
+        )}
       </div>
+
 
       {showEdit && (
         <OrderDialogDb
