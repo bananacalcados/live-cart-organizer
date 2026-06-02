@@ -12,7 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook } from "lucide-react";
+import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook, Bot, BotOff } from "lucide-react";
 import QRCode from "react-qr-code";
 
 interface UazapiInstance {
@@ -23,6 +23,7 @@ interface UazapiInstance {
   is_active: boolean;
   is_default: boolean;
   is_online: boolean | null;
+  ai_paused: boolean | null;
   last_health_check: string | null;
   uazapi_owner: string | null;
   uazapi_instance_name: string | null;
