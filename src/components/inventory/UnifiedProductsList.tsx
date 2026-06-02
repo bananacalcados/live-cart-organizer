@@ -105,7 +105,8 @@ export function UnifiedProductsList() {
       return all;
     }
     const [{ data: m }, pp, { data: st }] = await Promise.all([
-      supabase.from("product_master_data").select("*").eq("is_active", true).order("name").limit(5000),
+      // Inclui também masters inativos para não esconder o produto-pai.
+      supabase.from("product_master_data").select("*").order("name").limit(8000),
       fetchAllPos(),
       supabase.from("pos_stores").select("id, name").order("name"),
     ]);
