@@ -329,6 +329,16 @@ export function UazapiInstanceManager() {
                           <Button variant="outline" size="sm" className="h-8 gap-1" disabled={actingId === inst.id} onClick={() => repairEvents(inst)} title="Reativar recebimento de mensagens e status">
                             <Webhook className="h-4 w-4" /> Atualizar eventos
                           </Button>
+                          <Button
+                            variant={inst.ai_paused ? "outline" : "ghost"}
+                            size="sm"
+                            className={`h-8 gap-1 ${inst.ai_paused ? "border-amber-500/50 text-amber-500 hover:bg-amber-500/10" : ""}`}
+                            disabled={actingId === inst.id}
+                            onClick={() => toggleAi(inst)}
+                            title={inst.ai_paused ? "Ativar IA/automações" : "Pausar IA/automações"}
+                          >
+                            {inst.ai_paused ? <><Bot className="h-4 w-4" /> Ativar IA</> : <><BotOff className="h-4 w-4" /> Pausar IA</>}
+                          </Button>
                           <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => disconnect(inst)} title="Desconectar">
                             <Power className="h-4 w-4" />
                           </Button>
