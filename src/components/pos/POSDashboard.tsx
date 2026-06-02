@@ -159,8 +159,20 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
       if (completedSales.length > 0) {
         const saleIds = completedSales.map((s) => s.id);
-        const { data: items } = await supabase.from("pos_sale_items").select("sale_id, quantity").in("sale_id", saleIds);
-        const totalItems = (items || []).reduce((s, i) => s + (i.quantity || 0), 0);
+        // Fetch items in chunks — a single .in() with hundreds of IDs blows the URL
+        // length / row limit and silently returns nothing (itens/venda = 0).
+        const items: { sale_id: string; quantity: number }[] = [];
+        const chunkSize = 300;
+        for (let i = 0; i < saleIds.length; i += chunkSize) {
+          const slice = saleIds.slice(i, i + chunkSize);
+          const { data: chunkItems } = await supabase
+            .from("pos_sale_items")
+            .select("sale_id, quantity")
+            .in("sale_id", slice)
+            .limit(20000);
+          if (chunkItems) items.push(...(chunkItems as any));
+        }
+        const totalItems = items.reduce((s, i) => s + (i.quantity || 0), 0);
         setAvgItemsPerSale(count > 0 ? totalItems / count : 0);
 
         const { data: sellersData } = await supabase.from("pos_sellers").select("id, name").eq("store_id", storeId);
