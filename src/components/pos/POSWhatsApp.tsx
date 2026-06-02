@@ -255,7 +255,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   }, [liveFilterActive, liveGhostRows, conversations, finishedPhones, archivedPhones]);
 
   const mergedConversations = useMemo<Conversation[]>(
-    () => (ghostConversations.length ? [...ghostConversations, ...conversations] : conversations),
+    () => {
+      const merged = ghostConversations.length ? [...ghostConversations, ...conversations] : conversations;
+      // Always keep the list strictly chronological (most recent first), even when
+      // live ghost rows are injected on top of real conversations.
+      return [...merged].sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
+    },
     [ghostConversations, conversations]
   );
 
