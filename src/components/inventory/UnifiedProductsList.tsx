@@ -78,6 +78,7 @@ export function UnifiedProductsList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "review" | "ok">("all");
+  const [storeFilter, setStoreFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<MasterData | null>(null);
   const [editingSku, setEditingSku] = useState<PosSku | null>(null);
