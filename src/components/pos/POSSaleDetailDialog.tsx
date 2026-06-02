@@ -153,9 +153,20 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
 
     setSendingTracking(true);
     try {
-      const link = `https://www.melhorrastreio.com.br/rastreio/${encodeURIComponent(code)}`;
-      const greeting = currentCustomer?.name ? `Oi, ${String(currentCustomer.name).split(' ')[0]}!` : 'Oi!';
-      const message = `${greeting} 📦\nSeu pedido foi postado.\n\n*Código de rastreio:* ${code}\n*Acompanhe aqui:* ${link}`;
+      // Detecta a transportadora pelo formato do código para montar o link no padrão Frenet
+      // (rota pública: https://rastreio.frenet.com.br/{TRANSPORTADORA}/{codigo})
+      const detectFrenetCarrier = (c: string): string => {
+        const v = c.trim().toUpperCase();
+        if (/^[A-Z]{2}\d{9}[A-Z]{2}$/.test(v)) return 'COR'; // Correios
+        if (/^[A-Z]{2}\d{6,}$/.test(v)) return 'JAD';        // Jadlog (prefixo + números)
+        if (/^\d{11,}$/.test(v)) return 'JAD';               // Jadlog (numérico longo)
+        return 'COR'; // fallback: Correios (mais comum)
+      };
+      const carrier = detectFrenetCarrier(code);
+      const link = `https://rastreio.frenet.com.br/${carrier}/${encodeURIComponent(code)}`;
+      const firstName = currentCustomer?.name ? String(currentCustomer.name).split(' ')[0] : '';
+      const greeting = firstName ? `Olá ${firstName}` : 'Olá';
+      const message = `${greeting}, seu pedido já foi enviado 😃\n\nO Código de Rastreio é: ${code}\n\nE o link pra rastrear é o: ${link}`;
 
       // descobrir provider para escolher a função
       const { data: num } = await supabase
