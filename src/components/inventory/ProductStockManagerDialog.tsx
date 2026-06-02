@@ -146,8 +146,8 @@ export function ProductStockManagerDialog({ masterId, open, onOpenChange }: Prop
       toast.error("Quantidade inválida");
       return;
     }
-    if (!row.tinyId) {
-      toast.error("Variação sem tiny_id — não dá pra ajustar no Tiny");
+    if (!row.posProductId) {
+      toast.error("Variação sem cadastro no estoque desta loja — não dá pra ajustar");
       return;
     }
 
@@ -242,9 +242,6 @@ export function ProductStockManagerDialog({ masterId, open, onOpenChange }: Prop
                     <Badge variant="secondary">{v.size || "—"}</Badge>
                     {v.color && <Badge variant="outline">{v.color}</Badge>}
                     <span className="text-xs font-mono text-muted-foreground">SKU: {v.sku}</span>
-                    {!v.tiny_variant_id && (
-                      <Badge variant="destructive" className="text-[10px]">sem tiny_id</Badge>
-                    )}
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
@@ -318,7 +315,7 @@ export function ProductStockManagerDialog({ masterId, open, onOpenChange }: Prop
                           <Button
                             size="sm"
                             className="w-full h-7 text-xs"
-                            disabled={savingKey === k || !row.tinyId}
+                            disabled={savingKey === k || !row.posProductId}
                             onClick={() => handleApply(v, row)}
                           >
                             {savingKey === k ? (

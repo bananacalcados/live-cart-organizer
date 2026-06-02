@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+/**
+ * Balanço de estoque 100% LOCAL.
+ * Fonte da verdade: tabela pos_products. NÃO lê nem grava no Tiny.
+ * Calcula o novo saldo a partir do estoque local, atualiza pos_products e
+ * registra o histórico em pos_stock_adjustments.
+ */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -14,8 +20,11 @@ serve(async (req) => {
   try {
     const { store_id, tiny_id, quantity, direction, reason, product_name, sku, barcode, product_id, seller_id, seller_name } = await req.json();
 
-    if (!store_id || !tiny_id || !quantity || !direction) {
-      throw new Error('store_id, tiny_id, quantity, direction are required');
+    if (!quantity || !direction) {
+      throw new Error('quantity e direction são obrigatórios');
+    }
+    if (!product_id && !(store_id && (tiny_id || sku || barcode))) {
+      throw new Error('Informe product_id, ou store_id + (tiny_id/sku/barcode)');
     }
 
     const supabase = createClient(
@@ -23,122 +32,57 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Get store config
-    const { data: store, error: storeError } = await supabase
-      .from('pos_stores')
-      .select('tiny_token, tiny_deposit_name')
-      .eq('id', store_id)
-      .single();
+    // 1. Localiza a linha do produto no estoque LOCAL (pos_products)
+    let row: any = null;
 
-    if (storeError || !store?.tiny_token) throw new Error('Store not found or token not configured');
-
-    const token = store.tiny_token;
-    const depositName = store.tiny_deposit_name || '';
-
-    // 1. Get current stock from Tiny for the specific deposit
-    const stockResp = await fetch('https://api.tiny.com.br/api2/produto.obter.estoque.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `token=${token}&formato=json&id=${tiny_id}`,
-    });
-    const stockText = await stockResp.text();
-    console.log(`Stock response for ${product_name} (${tiny_id}):`, stockText.substring(0, 500));
-
-    let stockData: any;
-    try { stockData = JSON.parse(stockText); } catch {
-      throw new Error('Failed to parse stock response from Tiny');
+    if (product_id) {
+      const { data } = await supabase
+        .from('pos_products')
+        .select('id, stock, store_id, tiny_id, sku, barcode')
+        .eq('id', product_id)
+        .maybeSingle();
+      row = data;
     }
 
-    // Parse stock for specific deposit
-    let currentStock = 0;
-    if (depositName) {
-      const depositos = stockData.retorno?.produto?.depositos || [];
-      for (const dep of depositos) {
-        const d = dep.deposito || dep;
-        if (d.nome === depositName) {
-          currentStock = parseFloat(d.saldo || '0');
-          break;
-        }
-      }
-      console.log(`Deposit "${depositName}" current stock: ${currentStock}`);
-    } else {
-      currentStock = parseFloat(stockData.retorno?.produto?.saldo || '0');
-      console.log(`Global current stock: ${currentStock}`);
+    if (!row && store_id) {
+      let q = supabase
+        .from('pos_products')
+        .select('id, stock, store_id, tiny_id, sku, barcode')
+        .eq('store_id', store_id);
+      if (tiny_id) q = q.eq('tiny_id', tiny_id);
+      else if (sku) q = q.eq('sku', sku);
+      else if (barcode) q = q.eq('barcode', barcode);
+      const { data } = await q.limit(1).maybeSingle();
+      row = data;
     }
 
-    // 2. Calculate new absolute stock
+    if (!row) {
+      throw new Error('Produto não encontrado no estoque local (pos_products)');
+    }
+
+    // 2. Calcula novo saldo absoluto a partir do estoque local
+    const currentStock = Number(row.stock || 0);
     const qty = parseFloat(quantity);
     const newStock = direction === 'in'
       ? currentStock + qty
       : Math.max(0, currentStock - qty);
 
-    console.log(`Calculating: ${currentStock} ${direction === 'in' ? '+' : '-'} ${qty} = ${newStock}`);
+    console.log(`[pos-stock-balance][LOCAL] ${product_name || row.sku} (loja ${row.store_id}): ${currentStock} ${direction === 'in' ? '+' : '-'} ${qty} = ${newStock}`);
 
-    // 3. Send balance update (tipo B) to Tiny
-    const obsText = direction === 'in'
-      ? `Balanco POS: entrada +${qty}${reason ? '. ' + reason : ''}`
-      : `Balanco POS: saida -${qty}${reason ? '. ' + reason : ''}`;
+    // 3. Atualiza o estoque local
+    const { error: updErr } = await supabase
+      .from('pos_products')
+      .update({ stock: newStock, synced_at: new Date().toISOString() })
+      .eq('id', row.id);
+    if (updErr) throw new Error('Falha ao atualizar pos_products: ' + updErr.message);
 
-    const estoquePayload: any = {
-      idProduto: Number(tiny_id),
-      tipo: 'B',
-      quantidade: String(newStock),
-      observacoes: obsText,
-    };
-    if (depositName) {
-      estoquePayload.nome_deposito = depositName;
-    }
-    const estoqueJson = JSON.stringify({ estoque: estoquePayload });
-    console.log(`Sending stock update JSON:`, estoqueJson);
-
-    const formBody = new URLSearchParams();
-    formBody.set('token', token);
-    formBody.set('formato', 'json');
-    formBody.set('estoque', estoqueJson);
-
-    const updateResp = await fetch('https://api.tiny.com.br/api2/produto.atualizar.estoque.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: formBody.toString(),
-    });
-    const updateText = await updateResp.text();
-    console.log(`Update response:`, updateText.substring(0, 500));
-
-    let updateData: any;
-    try { updateData = JSON.parse(updateText); } catch {
-      throw new Error('Failed to parse update response: ' + updateText.substring(0, 100));
-    }
-
-    if (updateData.retorno?.status === 'Erro') {
-      const nestedError = updateData.retorno?.registros?.registro?.erros?.[0]?.erro;
-      const topError = updateData.retorno?.erros?.[0]?.erro;
-      const errorMsg = nestedError || topError || JSON.stringify(updateData.retorno) || 'Unknown error';
-      throw new Error(errorMsg);
-    }
-
-    console.log(`Stock adjusted [${depositName || 'global'}]: ${product_name} (${tiny_id}) ${currentStock} -> ${newStock} (${direction})`);
-
-    // 4. Update local cache (pos_products)
-    if (product_id) {
-      await supabase
-        .from('pos_products')
-        .update({ stock: newStock })
-        .eq('id', product_id);
-    } else {
-      await supabase
-        .from('pos_products')
-        .update({ stock: newStock })
-        .eq('tiny_id', tiny_id)
-        .eq('store_id', store_id);
-    }
-
-    // 5. Save adjustment record
+    // 4. Registra o histórico do ajuste
     await supabase.from('pos_stock_adjustments').insert({
-      store_id,
-      product_id: product_id || null,
-      tiny_id,
-      sku: sku || null,
-      barcode: barcode || null,
+      store_id: row.store_id,
+      product_id: row.id,
+      tiny_id: row.tiny_id ?? tiny_id ?? null,
+      sku: sku || row.sku || null,
+      barcode: barcode || row.barcode || null,
       product_name: product_name || 'Unknown',
       direction,
       quantity: qty,

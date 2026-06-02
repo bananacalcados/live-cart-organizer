@@ -6,9 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const VERIFY_DELAY_MS = 1500;
-const DEFAULT_BATCH_SIZE = 8;
-const MAX_SAFE_BATCH_SIZE = 8;
+const DEFAULT_BATCH_SIZE = 100;
+const MAX_SAFE_BATCH_SIZE = 200;
 
 function queueNextBatch(
   supabaseUrl: string,
@@ -37,7 +36,8 @@ function queueNextBatch(
 }
 
 /**
- * Server-side batch verification of Tiny stock.
+ * Verificação em lote do estoque 100% LOCAL.
+ * Fonte da verdade: pos_products. NÃO lê o Tiny.
  * Self-invokes until all items are verified — no browser needed.
  * A watchdog cron re-triggers if stalled for >3 min.
  */
@@ -62,22 +62,10 @@ serve(async (req) => {
       last_batch_at: new Date().toISOString(),
     }).eq('id', count_id);
 
-    // Get store config
-    const { data: store } = await supabase
-      .from('pos_stores')
-      .select('tiny_token, tiny_deposit_name')
-      .eq('id', store_id)
-      .single();
-
-    if (!store?.tiny_token) throw new Error('Store token not found');
-
-    const token = store.tiny_token;
-    const depositName = store.tiny_deposit_name || null;
-
     // Get items that still need stock verification (current_stock IS NULL)
     const { data: items, error: fetchErr } = await supabase
       .from('inventory_count_items')
-      .select('id, product_id, counted_quantity')
+      .select('id, product_id, sku, barcode, counted_quantity')
       .eq('count_id', count_id)
       .is('current_stock', null)
       .order('created_at', { ascending: true })
@@ -153,56 +141,49 @@ serve(async (req) => {
       });
     }
 
-    // Process batch — verify each item's stock in Tiny
+    // Process batch — verify each item's stock from LOCAL pos_products
     let verified = 0;
     let errors = 0;
 
     for (const item of items) {
       try {
-        const resp = await fetch('https://api.tiny.com.br/api2/produto.obter.estoque.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${token}&formato=json&id=${item.product_id}`,
-        });
+        let stock: number | null = null;
 
-        const data = await resp.json();
-
-        if (data.retorno?.status === 'Erro') {
-          const errMsg = data.retorno?.erros?.[0]?.erro || 'Unknown';
-          console.warn(`[verify] product ${item.product_id}: Tiny error: ${errMsg}, setting stock=0`);
-          const divergence = item.counted_quantity - 0;
-          await supabase.from('inventory_count_items').update({
-            current_stock: 0,
-            divergence,
-          }).eq('id', item.id);
-          verified++;
-        } else {
-          const produto = data.retorno?.produto;
-          const depositos = produto?.depositos || [];
-          let stock = parseFloat(produto?.saldo || '0');
-
-          if (depositName && depositos.length > 0) {
-            const matched = depositos.find((d: any) => {
-              const dep = d?.deposito || d;
-              const name = dep?.nome || dep?.descricao || '';
-              return name.toLowerCase() === depositName.toLowerCase();
-            });
-            if (matched) {
-              const dep = matched?.deposito || matched;
-              stock = parseFloat(dep?.saldo || '0');
-            }
-          } else if (depositos.length === 1) {
-            const dep = depositos[0]?.deposito || depositos[0];
-            stock = parseFloat(dep?.saldo || produto?.saldo || '0');
-          }
-
-          const divergence = item.counted_quantity - stock;
-          await supabase.from('inventory_count_items').update({
-            current_stock: stock,
-            divergence,
-          }).eq('id', item.id);
-          verified++;
+        // 1) Casa pelo tiny_id (product_id do item é o id do Tiny) + loja
+        const tinyIdNum = Number(item.product_id);
+        if (!Number.isNaN(tinyIdNum)) {
+          const { data: pp } = await supabase
+            .from('pos_products')
+            .select('stock')
+            .eq('tiny_id', tinyIdNum)
+            .eq('store_id', store_id)
+            .maybeSingle();
+          if (pp) stock = Number(pp.stock || 0);
         }
+
+        // 2) Fallback: casa por sku/barcode + loja
+        if (stock === null) {
+          const ident = item.sku || item.barcode;
+          if (ident) {
+            const { data: pp2 } = await supabase
+              .from('pos_products')
+              .select('stock')
+              .eq('store_id', store_id)
+              .or(`sku.eq.${ident},barcode.eq.${ident}`)
+              .limit(1)
+              .maybeSingle();
+            if (pp2) stock = Number(pp2.stock || 0);
+          }
+        }
+
+        // Produto sem cadastro local nessa loja → considera 0
+        const resolvedStock = stock === null ? 0 : stock;
+        const divergence = item.counted_quantity - resolvedStock;
+        await supabase.from('inventory_count_items').update({
+          current_stock: resolvedStock,
+          divergence,
+        }).eq('id', item.id);
+        verified++;
       } catch (e) {
         console.error(`[verify] Error for product ${item.product_id}:`, e);
         await supabase.from('inventory_count_items').update({
@@ -211,10 +192,8 @@ serve(async (req) => {
         }).eq('id', item.id);
         errors++;
       }
-
-      // Throttle: ~1.5s between calls
-      await new Promise(r => setTimeout(r, VERIFY_DELAY_MS));
     }
+
 
     const newRemaining = totalRemaining - items.length;
     console.log(`[inventory-verify-and-correct] Verified ${verified}, errors ${errors}, remaining ~${newRemaining}`);
