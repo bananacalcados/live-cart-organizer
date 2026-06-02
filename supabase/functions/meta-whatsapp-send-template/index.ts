@@ -395,13 +395,32 @@ serve(async (req) => {
         whatsappNumberDbId = defaultNum?.id || null;
       }
 
+      // Render the full message (text + variables + media) when the caller
+      // didn't pass a renderedMessage, so the chat shows the real content.
+      let finalText = renderedMessage || '';
+      let finalMediaUrl: string | null = null;
+      let finalMediaType = 'text';
+      if (!finalText) {
+        try {
+          const def = await fetchTemplateDef(accessToken, businessAccountId, templateName, language);
+          if (def) {
+            const r = renderTemplateMessage(def, components);
+            if (r.text) finalText = r.text;
+            finalMediaUrl = r.mediaUrl;
+            finalMediaType = r.mediaType;
+          }
+        } catch (_e) { /* keep fallback */ }
+      }
+      if (!finalText) finalText = `[Template: ${templateName}]`;
+
       await supabase.from('whatsapp_messages').insert({
         phone: formattedPhone,
-        message: renderedMessage || `[Template: ${templateName}]`,
+        message: finalText,
         direction: 'outgoing',
         message_id: messageId,
         status: 'sent',
-        media_type: 'text',
+        media_type: finalMediaType,
+        media_url: finalMediaUrl,
         whatsapp_number_id: whatsappNumberDbId,
       });
 
