@@ -328,7 +328,7 @@ serve(async (req) => {
       );
     }
 
-    const { phoneNumberId, accessToken } = await getCredentials(supabase, whatsappNumberId);
+    const { phoneNumberId, accessToken, businessAccountId } = await getCredentials(supabase, whatsappNumberId);
 
     if (!accessToken || !phoneNumberId) {
       return new Response(
