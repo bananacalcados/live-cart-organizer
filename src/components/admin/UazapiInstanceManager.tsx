@@ -16,7 +16,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook, Bot, BotOff, Globe } from "lucide-react";
+import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook, Bot, BotOff, Globe, ShieldCheck } from "lucide-react";
 import QRCode from "react-qr-code";
 
 interface UazapiInstance {
@@ -79,6 +79,18 @@ export function UazapiInstanceManager() {
   const [proxyStatus, setProxyStatus] = useState<string>("");
   const [proxySaving, setProxySaving] = useState(false);
 
+  // Estado runtime REAL do proxy por instância (lido via GET /instance/proxy).
+  // ok=true só quando effective_mode bate com a intenção e não está em fallback.
+  interface ProxyRuntime {
+    effective: string;
+    intended: string;
+    fallback: boolean;
+    error: string | null;
+    ok: boolean;
+  }
+  const [proxyRuntime, setProxyRuntime] = useState<Record<string, ProxyRuntime>>({});
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+
   const fetchInstances = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -98,6 +110,14 @@ export function UazapiInstanceManager() {
   useEffect(() => {
     fetchInstances();
   }, [fetchInstances]);
+
+  // Verifica silenciosamente o proxy real das instâncias online com proxy configurado.
+  useEffect(() => {
+    instances
+      .filter((i) => i.is_online && i.uazapi_proxy_mode && i.uazapi_proxy_mode !== "none")
+      .forEach((i) => { if (!proxyRuntime[i.id]) verifyProxy(i, true); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instances]);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -172,6 +192,10 @@ export function UazapiInstanceManager() {
         toast({ title: "✅ Conectado!", description: `${inst.label} está online.` });
         setQrOpen(false);
         fetchInstances();
+        // Logo após conectar, lê o proxy REAL para confirmar que pegou (não confia no "salvo").
+        if (inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none") {
+          verifyProxy(inst);
+        }
       } else {
         const { data: qr } = await supabase.functions.invoke("uazapi-session", {
           body: { action: "qrcode", whatsapp_number_id: inst.id },
@@ -288,6 +312,49 @@ export function UazapiInstanceManager() {
     }
     setProxyCitiesLoading(false);
   }, []);
+
+  // Lê o estado RUNTIME real do proxy e compara com a intenção persistida.
+  const parseProxyRuntime = (proxy: any, intendedMode: string): ProxyRuntime => {
+    const p = proxy?.proxy ?? proxy ?? {};
+    const effective = String(p.effective_mode || p.mode || "none").toLowerCase();
+    const fallback = Boolean(p.fallback?.active);
+    const error = p.validation_error || p.last_test_error || null;
+    // "ok" = o transporte efetivo bate com a intenção e não caiu em fallback nem deu erro.
+    const intended = (intendedMode || "none").toLowerCase();
+    const ok = effective === intended && !fallback && !error;
+    return { effective, intended, fallback, error: error ? String(error) : null, ok };
+  };
+
+  const verifyProxy = useCallback(async (inst: UazapiInstance, silent = false) => {
+    const intended = inst.uazapi_proxy_mode || "none";
+    if (!silent) setVerifyingId(inst.id);
+    try {
+      const { data } = await supabase.functions.invoke("uazapi-session", {
+        body: { action: "get_proxy", whatsapp_number_id: inst.id },
+      });
+      const rt = parseProxyRuntime(data?.proxy, intended);
+      setProxyRuntime((prev) => ({ ...prev, [inst.id]: rt }));
+      if (!silent) {
+        if (rt.ok) {
+          toast({ title: "✅ Proxy ativo", description: `Em uso: ${rt.effective}${rt.intended !== "none" ? ` (configurado: ${rt.intended})` : ""}.` });
+        } else if (rt.fallback) {
+          toast({ title: "⚠️ Proxy em fallback", description: `O proxy escolhido falhou. Transporte atual: ${rt.effective}.`, variant: "destructive" });
+        } else if (rt.error) {
+          toast({ title: "⚠️ Erro de validação do proxy", description: rt.error, variant: "destructive" });
+        } else if (rt.effective !== rt.intended) {
+          toast({ title: "⚠️ Proxy não aplicado", description: `Configurado "${rt.intended}", mas em uso "${rt.effective}". Reconecte (QR).`, variant: "destructive" });
+        } else {
+          toast({ title: "Proxy verificado", description: `Em uso: ${rt.effective}.` });
+        }
+      }
+      return rt;
+    } catch (e) {
+      if (!silent) toast({ title: "Erro ao verificar proxy", description: (e as Error).message, variant: "destructive" });
+      return null;
+    } finally {
+      if (!silent) setVerifyingId(null);
+    }
+  }, [toast]);
 
   const openProxy = async (inst: UazapiInstance) => {
     setProxyInstance(inst);
@@ -421,14 +488,37 @@ export function UazapiInstanceManager() {
                               <Bot className="h-3 w-3" /> IA ativa
                             </Badge>
                           )}
-                          {inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none" && (
-                            <Badge variant="outline" className="gap-1 border-sky-500/40 text-sky-500">
-                              <Globe className="h-3 w-3" />
-                              {inst.uazapi_proxy_mode === "internal"
-                                ? `Proxy${inst.uazapi_proxy_managed_city ? ` ${inst.uazapi_proxy_managed_city}` : inst.uazapi_proxy_managed_state ? ` ${inst.uazapi_proxy_managed_state.toUpperCase()}` : " interno"}`
-                                : "Proxy próprio"}
-                            </Badge>
-                          )}
+                          {inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none" && (() => {
+                            const rt = proxyRuntime[inst.id];
+                            const label = inst.uazapi_proxy_mode === "internal"
+                              ? `Proxy${inst.uazapi_proxy_managed_city ? ` ${inst.uazapi_proxy_managed_city}` : inst.uazapi_proxy_managed_state ? ` ${inst.uazapi_proxy_managed_state.toUpperCase()}` : " interno"}`
+                              : "Proxy próprio";
+                            // Sem leitura runtime ainda → mostra a intenção (cinza/azul).
+                            if (!rt) {
+                              return (
+                                <Badge variant="outline" className="gap-1 border-sky-500/40 text-sky-500">
+                                  <Globe className="h-3 w-3" /> {label}
+                                </Badge>
+                              );
+                            }
+                            if (rt.ok) {
+                              return (
+                                <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500" title={`Em uso: ${rt.effective}`}>
+                                  <Globe className="h-3 w-3" /> {label} ✓
+                                </Badge>
+                              );
+                            }
+                            const reason = rt.fallback
+                              ? `em fallback → ${rt.effective}`
+                              : rt.error
+                                ? rt.error
+                                : `em uso: ${rt.effective}`;
+                            return (
+                              <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-500" title={reason}>
+                                <Globe className="h-3 w-3" /> {label} ⚠️
+                              </Badge>
+                            );
+                          })()}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -436,6 +526,11 @@ export function UazapiInstanceManager() {
                           <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => openQr(inst)} title="Conectar / QR Code">
                             <QrCode className="h-4 w-4" /> Conectar
                           </Button>
+                          {inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none" && (
+                            <Button variant="ghost" size="icon" disabled={verifyingId === inst.id} onClick={() => verifyProxy(inst)} title="Verificar proxy real (effective_mode)">
+                              <ShieldCheck className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => checkStatus(inst)} title="Verificar status">
                             <RefreshCw className="h-4 w-4" />
                           </Button>
