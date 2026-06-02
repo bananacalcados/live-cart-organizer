@@ -204,7 +204,7 @@ export function ShopifyLinkManager() {
   );
 }
 
-function StatCard({ label, value, sub, icon }: { label: string; value: number; sub?: string; icon?: React.ReactNode }) {
+function StatCard({ label, value, sub, icon }: { label: string; value: number; sub?: string; icon?: ReactNode }) {
   return (
     <div className="rounded-lg border p-3">
       <div className="flex items-center gap-1 text-xs text-muted-foreground">{icon}{label}</div>
