@@ -12,7 +12,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook } from "lucide-react";
+import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook, Bot, BotOff } from "lucide-react";
 import QRCode from "react-qr-code";
 
 interface UazapiInstance {
@@ -23,6 +23,7 @@ interface UazapiInstance {
   is_active: boolean;
   is_default: boolean;
   is_online: boolean | null;
+  ai_paused: boolean | null;
   last_health_check: string | null;
   uazapi_owner: string | null;
   uazapi_instance_name: string | null;
@@ -54,7 +55,7 @@ export function UazapiInstanceManager() {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers")
-      .select("id, label, phone_display, provider, is_active, is_default, is_online, last_health_check, uazapi_owner, uazapi_instance_name, created_at")
+      .select("id, label, phone_display, provider, is_active, is_default, is_online, ai_paused, last_health_check, uazapi_owner, uazapi_instance_name, created_at")
       .eq("provider", "uazapi")
       .order("created_at", { ascending: true });
 
@@ -207,6 +208,29 @@ export function UazapiInstanceManager() {
     setActingId(null);
   };
 
+  const toggleAi = async (inst: UazapiInstance) => {
+    const next = !inst.ai_paused;
+    if (next && !confirm(`Pausar TODAS as IAs/automações da instância "${inst.label}"? Nenhuma resposta automática será enviada por esse número até você reativar.`)) return;
+    setActingId(inst.id);
+    try {
+      const { error } = await supabase
+        .from("whatsapp_numbers")
+        .update({ ai_paused: next })
+        .eq("id", inst.id);
+      if (error) throw error;
+      toast({
+        title: next ? "🤖 IA pausada" : "✅ IA ativada",
+        description: next
+          ? `Nenhuma automação responde por "${inst.label}" até reativar.`
+          : `Automações liberadas para "${inst.label}".`,
+      });
+      await fetchInstances();
+    } catch (e) {
+      toast({ title: "Erro ao alterar IA", description: (e as Error).message, variant: "destructive" });
+    }
+    setActingId(null);
+  };
+
   const handleDelete = async (inst: UazapiInstance) => {
     if (!confirm(`Excluir a instância "${inst.label}"? Isso remove a sessão na uazapi. O histórico de conversas é preservado.`)) return;
     setActingId(inst.id);
@@ -273,15 +297,26 @@ export function UazapiInstanceManager() {
                         </code>
                       </TableCell>
                       <TableCell>
-                        {online === true ? (
-                          <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 gap-1">
-                            <Wifi className="h-3 w-3" /> Online
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="gap-1">
-                            <WifiOff className="h-3 w-3" /> Offline
-                          </Badge>
-                        )}
+                        <div className="flex flex-col items-start gap-1">
+                          {online === true ? (
+                            <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 gap-1">
+                              <Wifi className="h-3 w-3" /> Online
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive" className="gap-1">
+                              <WifiOff className="h-3 w-3" /> Offline
+                            </Badge>
+                          )}
+                          {inst.ai_paused ? (
+                            <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-500">
+                              <BotOff className="h-3 w-3" /> IA pausada
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500">
+                              <Bot className="h-3 w-3" /> IA ativa
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
@@ -293,6 +328,16 @@ export function UazapiInstanceManager() {
                           </Button>
                           <Button variant="outline" size="sm" className="h-8 gap-1" disabled={actingId === inst.id} onClick={() => repairEvents(inst)} title="Reativar recebimento de mensagens e status">
                             <Webhook className="h-4 w-4" /> Atualizar eventos
+                          </Button>
+                          <Button
+                            variant={inst.ai_paused ? "outline" : "ghost"}
+                            size="sm"
+                            className={`h-8 gap-1 ${inst.ai_paused ? "border-amber-500/50 text-amber-500 hover:bg-amber-500/10" : ""}`}
+                            disabled={actingId === inst.id}
+                            onClick={() => toggleAi(inst)}
+                            title={inst.ai_paused ? "Ativar IA/automações" : "Pausar IA/automações"}
+                          >
+                            {inst.ai_paused ? <><Bot className="h-4 w-4" /> Ativar IA</> : <><BotOff className="h-4 w-4" /> Pausar IA</>}
                           </Button>
                           <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => disconnect(inst)} title="Desconectar">
                             <Power className="h-4 w-4" />

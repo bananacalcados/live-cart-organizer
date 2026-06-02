@@ -87,6 +87,9 @@ serve(async (req) => {
         if (!label) return json({ error: "label é obrigatório" }, 400);
 
         // 1) cria a linha local primeiro (precisamos do id para o webhook_url)
+        //    ai_paused: true → instância NOVA nasce em "modo aquecimento":
+        //    nenhuma IA/automação responde até o operador liberar manualmente.
+        //    Isso reduz o risco de banimento nos primeiros minutos de uma sessão nova.
         const { data: row, error: insErr } = await supabase
           .from("whatsapp_numbers")
           .insert({
@@ -95,6 +98,7 @@ serve(async (req) => {
             provider: "uazapi",
             is_active: true,
             is_default: false,
+            ai_paused: true,
           })
           .select("id")
           .single();
