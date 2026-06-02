@@ -1204,6 +1204,8 @@ export default function Inventory() {
           <InventoryAIAnalysis />
         ) : inventoryMode === "bulk" ? (
           <InventoryBulkActions />
+        ) : inventoryMode === "shopify" ? (
+          <ShopifyLinkManager />
         ) : !selectedStoreId ? (
           <div className="text-center py-20">
             <Store className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
