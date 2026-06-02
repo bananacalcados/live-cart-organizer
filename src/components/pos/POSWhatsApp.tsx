@@ -308,9 +308,22 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     return metaNumbers.filter(n => storeNumberIds.includes(n.id));
   }, [metaNumbers, storeNumberIds]);
 
+  // Resolve the instance this conversation already belongs to. Prefer the id set
+  // on selection, but fall back to the instance stamped on the loaded messages so
+  // a conversation with history NEVER shows the "choose instance" selector — it's
+  // locked to whichever instance first/last talked to this contact.
+  const messageBoundNumberId = useMemo<string | null>(() => {
+    if (selectedConvNumberId) return selectedConvNumberId;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const id = (messages[i] as any)?.whatsapp_number_id;
+      if (id) return id;
+    }
+    return null;
+  }, [selectedConvNumberId, messages]);
+
   const conversationBoundNumber = useMemo(
-    () => selectedConvNumberId ? metaNumbers.find((number) => number.id === selectedConvNumberId) ?? null : null,
-    [metaNumbers, selectedConvNumberId]
+    () => messageBoundNumberId ? metaNumbers.find((number) => number.id === messageBoundNumberId) ?? null : null,
+    [metaNumbers, messageBoundNumberId]
   );
 
   const selectedSendNumber = useMemo(
