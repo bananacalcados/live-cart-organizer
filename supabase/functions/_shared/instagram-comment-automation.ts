@@ -8,6 +8,43 @@ interface CommentData {
   mediaType: string; // post, REELS, etc
 }
 
+interface PostThumb {
+  media_url: string | null;
+  permalink: string | null;
+  media_type: string | null;
+}
+
+/**
+ * Fetch the thumbnail of the post/reel/ad the comment belongs to, so it can be
+ * shown next to the lead's first message in the chat (the "ad thumbnail").
+ */
+async function fetchCommentMediaThumb(
+  commentId: string,
+  token: string,
+): Promise<PostThumb | null> {
+  try {
+    const res = await fetch(
+      `https://graph.instagram.com/v25.0/${commentId}?fields=media{id,media_type,media_url,thumbnail_url,permalink}&access_token=${token}`,
+    );
+    if (!res.ok) {
+      console.warn(`[comment-thumb] fetch failed ${res.status} for ${commentId}`);
+      return null;
+    }
+    const data = await res.json();
+    const media = data?.media;
+    if (!media) return null;
+    return {
+      // VIDEO/REELS expose a thumbnail_url; IMAGE/CAROUSEL expose media_url
+      media_url: media.thumbnail_url || media.media_url || null,
+      permalink: media.permalink || null,
+      media_type: media.media_type || null,
+    };
+  } catch (e) {
+    console.warn(`[comment-thumb] error for ${commentId}:`, e);
+    return null;
+  }
+}
+
 interface Rule {
   id: string;
   name: string;
