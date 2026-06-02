@@ -91,6 +91,11 @@ export async function processCommentAutomation(
 
   const commentTextLower = comment.text.toLowerCase().trim();
 
+  // Lazily fetched once and reused across rules (undefined = not yet fetched).
+  let postThumb: PostThumb | null | undefined = undefined;
+
+
+
   for (const rule of rules as Rule[]) {
     // Check media type match
     if (!rule.media_types.some(mt => mt.toLowerCase() === comment.mediaType.toLowerCase())) {
