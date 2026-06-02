@@ -208,8 +208,29 @@ export function UnifiedProductsList() {
               </Button>
             ))}
           </div>
+          <Select value={storeFilter} onValueChange={setStoreFilter}>
+            <SelectTrigger className="w-full md:w-[200px]">
+              <div className="flex items-center gap-2 min-w-0">
+                <StoreIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <SelectValue placeholder="Loja" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as lojas</SelectItem>
+              {stores.map((st) => (
+                <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
+
+      {storeFilter !== "all" && (
+        <div className="flex items-center gap-2 text-xs px-1 text-muted-foreground">
+          <Filter className="h-3 w-3" />
+          Mostrando apenas o estoque da loja <strong className="text-foreground">{storeName(storeFilter)}</strong>. Produtos sem estoque cadastrado nessa loja ficam ocultos.
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20">
