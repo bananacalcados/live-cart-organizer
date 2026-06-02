@@ -208,6 +208,29 @@ export function UazapiInstanceManager() {
     setActingId(null);
   };
 
+  const toggleAi = async (inst: UazapiInstance) => {
+    const next = !inst.ai_paused;
+    if (next && !confirm(`Pausar TODAS as IAs/automações da instância "${inst.label}"? Nenhuma resposta automática será enviada por esse número até você reativar.`)) return;
+    setActingId(inst.id);
+    try {
+      const { error } = await supabase
+        .from("whatsapp_numbers")
+        .update({ ai_paused: next })
+        .eq("id", inst.id);
+      if (error) throw error;
+      toast({
+        title: next ? "🤖 IA pausada" : "✅ IA ativada",
+        description: next
+          ? `Nenhuma automação responde por "${inst.label}" até reativar.`
+          : `Automações liberadas para "${inst.label}".`,
+      });
+      await fetchInstances();
+    } catch (e) {
+      toast({ title: "Erro ao alterar IA", description: (e as Error).message, variant: "destructive" });
+    }
+    setActingId(null);
+  };
+
   const handleDelete = async (inst: UazapiInstance) => {
     if (!confirm(`Excluir a instância "${inst.label}"? Isso remove a sessão na uazapi. O histórico de conversas é preservado.`)) return;
     setActingId(inst.id);
