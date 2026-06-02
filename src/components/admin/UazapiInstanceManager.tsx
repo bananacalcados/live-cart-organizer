@@ -549,6 +549,118 @@ export function UazapiInstanceManager() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Proxy Dialog */}
+      <Dialog open={proxyOpen} onOpenChange={setProxyOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Proxy — {proxyInstance?.label}</DialogTitle>
+            <DialogDescription>
+              Roteia a conexão por um IP diferente do datacenter. Use proxy interno do Brasil para reduzir risco de banimento.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {proxyStatus && (
+              <Badge variant="secondary" className="text-xs">{proxyStatus}</Badge>
+            )}
+
+            <RadioGroup value={proxyMode} onValueChange={(v) => setProxyMode(v as "internal" | "custom" | "none")} className="space-y-2">
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="internal" id="proxy-internal" className="mt-1" />
+                <Label htmlFor="proxy-internal" className="font-normal cursor-pointer">
+                  <span className="font-medium">Interno gerenciado (recomendado)</span>
+                  <span className="block text-xs text-muted-foreground">Pool de proxies da uazapi. Pode fixar uma cidade/UF do Brasil.</span>
+                </Label>
+              </div>
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="custom" id="proxy-custom" className="mt-1" />
+                <Label htmlFor="proxy-custom" className="font-normal cursor-pointer">
+                  <span className="font-medium">Próprio</span>
+                  <span className="block text-xs text-muted-foreground">Seu proxy (http/https/socks5).</span>
+                </Label>
+              </div>
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="none" id="proxy-none" className="mt-1" />
+                <Label htmlFor="proxy-none" className="font-normal cursor-pointer">
+                  <span className="font-medium">Direto (sem proxy)</span>
+                  <span className="block text-xs text-muted-foreground">Conexão direta — maior risco.</span>
+                </Label>
+              </div>
+            </RadioGroup>
+
+            {proxyMode === "internal" && (
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <div className="space-y-1.5">
+                  <Label>Estado (UF) — opcional</Label>
+                  <Select
+                    value={proxyState || "any"}
+                    onValueChange={(v) => {
+                      const uf = v === "any" ? "" : v;
+                      setProxyState(uf);
+                      setProxyCity("");
+                      if (proxyInstance) loadProxyCities(proxyInstance.id, uf);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Qualquer estado" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Qualquer estado</SelectItem>
+                      {BR_STATES.map((uf) => (
+                        <SelectItem key={uf} value={uf}>{uf.toUpperCase()}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Cidade — opcional</Label>
+                  <Select value={proxyCity || "any"} onValueChange={(v) => setProxyCity(v === "any" ? "" : v)} disabled={proxyCitiesLoading}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={proxyCitiesLoading ? "Carregando..." : "Qualquer cidade"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Qualquer cidade</SelectItem>
+                      {proxyCities.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.name || c.label || c.value}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Deixe em branco para a uazapi escolher automaticamente no pool BR.</p>
+                </div>
+              </div>
+            )}
+
+            {proxyMode === "custom" && (
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <div className="space-y-1.5">
+                  <Label>URL do proxy *</Label>
+                  <Input value={proxyUrl} onChange={(e) => setProxyUrl(e.target.value)} placeholder="socks5://usuario:senha@host:porta" />
+                  <p className="text-xs text-muted-foreground">Protocolos: http://, https://, socks5:// ou socks5h://</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Contingência</Label>
+                  <Select value={proxyFallback} onValueChange={setProxyFallback}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="internal_proxy">Proxy interno (se o seu falhar)</SelectItem>
+                      <SelectItem value="never">Nunca (sem contingência)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            <Button
+              onClick={saveProxy}
+              className="w-full"
+              disabled={proxySaving || (proxyMode === "custom" && !proxyUrl.trim())}
+            >
+              {proxySaving ? "Salvando..." : "Salvar proxy"}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Após salvar, reconecte a instância (QR) para o proxy entrar em uso.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
