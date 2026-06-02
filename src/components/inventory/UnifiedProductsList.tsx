@@ -93,7 +93,8 @@ export function UnifiedProductsList() {
         const { data, error } = await supabase
           .from("pos_products")
           .select("id, parent_sku, store_id, sku, barcode, name, variant, size, color, image_url, cost_price, price, stock, is_active")
-          .eq("is_active", true)
+          // NÃO filtrar por is_active: produtos inativos e suas grades de tamanho
+          // devem continuar aparecendo no controle de estoque.
           .order("id")
           .range(from, from + CHUNK - 1);
         if (error) { toast.error("pos_products: " + error.message); break; }
