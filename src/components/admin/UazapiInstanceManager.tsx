@@ -301,6 +301,49 @@ export function UazapiInstanceManager() {
     setProxyCitiesLoading(false);
   }, []);
 
+  // Lê o estado RUNTIME real do proxy e compara com a intenção persistida.
+  const parseProxyRuntime = (proxy: any, intendedMode: string): ProxyRuntime => {
+    const p = proxy?.proxy ?? proxy ?? {};
+    const effective = String(p.effective_mode || p.mode || "none").toLowerCase();
+    const fallback = Boolean(p.fallback?.active);
+    const error = p.validation_error || p.last_test_error || null;
+    // "ok" = o transporte efetivo bate com a intenção e não caiu em fallback nem deu erro.
+    const intended = (intendedMode || "none").toLowerCase();
+    const ok = effective === intended && !fallback && !error;
+    return { effective, intended, fallback, error: error ? String(error) : null, ok };
+  };
+
+  const verifyProxy = useCallback(async (inst: UazapiInstance, silent = false) => {
+    const intended = inst.uazapi_proxy_mode || "none";
+    if (!silent) setVerifyingId(inst.id);
+    try {
+      const { data } = await supabase.functions.invoke("uazapi-session", {
+        body: { action: "get_proxy", whatsapp_number_id: inst.id },
+      });
+      const rt = parseProxyRuntime(data?.proxy, intended);
+      setProxyRuntime((prev) => ({ ...prev, [inst.id]: rt }));
+      if (!silent) {
+        if (rt.ok) {
+          toast({ title: "✅ Proxy ativo", description: `Em uso: ${rt.effective}${rt.intended !== "none" ? ` (configurado: ${rt.intended})` : ""}.` });
+        } else if (rt.fallback) {
+          toast({ title: "⚠️ Proxy em fallback", description: `O proxy escolhido falhou. Transporte atual: ${rt.effective}.`, variant: "destructive" });
+        } else if (rt.error) {
+          toast({ title: "⚠️ Erro de validação do proxy", description: rt.error, variant: "destructive" });
+        } else if (rt.effective !== rt.intended) {
+          toast({ title: "⚠️ Proxy não aplicado", description: `Configurado "${rt.intended}", mas em uso "${rt.effective}". Reconecte (QR).`, variant: "destructive" });
+        } else {
+          toast({ title: "Proxy verificado", description: `Em uso: ${rt.effective}.` });
+        }
+      }
+      return rt;
+    } catch (e) {
+      if (!silent) toast({ title: "Erro ao verificar proxy", description: (e as Error).message, variant: "destructive" });
+      return null;
+    } finally {
+      if (!silent) setVerifyingId(null);
+    }
+  }, [toast]);
+
   const openProxy = async (inst: UazapiInstance) => {
     setProxyInstance(inst);
     setProxyMode((inst.uazapi_proxy_mode as "internal" | "custom" | "none") || "internal");
