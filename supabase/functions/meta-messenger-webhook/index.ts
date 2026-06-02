@@ -113,8 +113,27 @@ serve(async (req) => {
             }
           }
 
+          // Dedup against automation-inserted outgoing records (e.g. comment
+          // auto-reply DMs). Those are stored with a different message_id than the
+          // echo mid, so match on phone + identical text within the last 5 minutes.
+          const echoRecipient = event.recipient?.id || '';
+          if (echoRecipient && echoMessage) {
+            const { data: dupOut } = await supabase
+              .from('whatsapp_messages')
+              .select('id')
+              .eq('phone', echoRecipient)
+              .eq('direction', 'outgoing')
+              .eq('message', echoMessage)
+              .gte('created_at', new Date(Date.now() - 5 * 60 * 1000).toISOString())
+              .limit(1);
+            if (dupOut && dupOut.length > 0) {
+              console.log(`[${channel}] Dedup: echo matches recent automation outgoing, skipping`);
+              continue;
+            }
+          }
+
           const { error: insertEchoError } = await supabase.from('whatsapp_messages').insert({
-            phone: event.recipient?.id || '',
+            phone: echoRecipient,
             message: echoMessage,
             direction: 'outgoing',
             message_id: mid || null,
