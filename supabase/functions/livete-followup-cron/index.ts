@@ -135,9 +135,11 @@ serve(async (req) => {
 
       const { data: unpaidOrders } = await supabase
         .from('orders')
-        .select('id, event_id, customer_id, stage_atendimento, ai_paused, created_at, customers!inner(whatsapp)')
+        .select('id, event_id, customer_id, stage, stage_atendimento, ai_paused, created_at, customers!inner(whatsapp)')
         .in('event_id', eventIds)
         .eq('is_paid', false)
+        // Never pursue cancelled/completed orders (no reason to follow up on them).
+        .not('stage', 'in', '("cancelled","completed")')
         .not('stage_atendimento', 'is', null)
         .gte('created_at', orderCutoff);
 
