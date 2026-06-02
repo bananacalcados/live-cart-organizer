@@ -274,6 +274,83 @@ export function UazapiInstanceManager() {
     setActingId(null);
   };
 
+  const loadProxyCities = useCallback(async (instId: string, state: string) => {
+    setProxyCitiesLoading(true);
+    try {
+      const { data } = await supabase.functions.invoke("uazapi-session", {
+        body: { action: "proxy_cities", whatsapp_number_id: instId, country: "br", state: state || undefined },
+      });
+      const raw = data?.cities;
+      const list: ProxyCity[] = Array.isArray(raw) ? raw : (raw?.cities ?? []);
+      setProxyCities(list);
+    } catch {
+      setProxyCities([]);
+    }
+    setProxyCitiesLoading(false);
+  }, []);
+
+  const openProxy = async (inst: UazapiInstance) => {
+    setProxyInstance(inst);
+    setProxyMode((inst.uazapi_proxy_mode as "internal" | "custom" | "none") || "internal");
+    setProxyState(inst.uazapi_proxy_managed_state || "");
+    setProxyCity(inst.uazapi_proxy_managed_city || "");
+    setProxyUrl("");
+    setProxyFallback("internal_proxy");
+    setProxyStatus("");
+    setProxyCities([]);
+    setProxyOpen(true);
+    // Lê o estado runtime real do proxy
+    try {
+      const { data } = await supabase.functions.invoke("uazapi-session", {
+        body: { action: "get_proxy", whatsapp_number_id: inst.id },
+      });
+      const p = data?.proxy;
+      if (p) {
+        const eff = p.effective_mode || p.mode || "—";
+        const detail = p.effective_detail ? ` (${p.effective_detail})` : "";
+        const fb = p.fallback?.active ? " ⚠️ em fallback" : "";
+        setProxyStatus(`Em uso: ${eff}${detail}${fb}`);
+      }
+    } catch { /* noop */ }
+    loadProxyCities(inst.id, inst.uazapi_proxy_managed_state || "");
+  };
+
+  const saveProxy = async () => {
+    if (!proxyInstance) return;
+    setProxySaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        action: "set_proxy",
+        whatsapp_number_id: proxyInstance.id,
+        mode: proxyMode,
+      };
+      if (proxyMode === "internal") {
+        payload.proxy_managed_country = "br";
+        if (proxyState) payload.proxy_managed_state = proxyState;
+        if (proxyCity) payload.proxy_managed_city = proxyCity;
+      } else if (proxyMode === "custom") {
+        payload.proxy_url = proxyUrl.trim();
+        payload.proxy_fallback = proxyFallback;
+      }
+      const { data, error } = await supabase.functions.invoke("uazapi-session", { body: payload });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({
+        title: "✅ Proxy configurado",
+        description: "Reconecte a instância (QR) para o proxy entrar em uso.",
+      });
+      setProxyOpen(false);
+      await fetchInstances();
+    } catch (e) {
+      toast({ title: "Erro ao configurar proxy", description: (e as Error).message, variant: "destructive" });
+    }
+    setProxySaving(false);
+  };
+
+  const BR_STATES = ["ac","al","ap","am","ba","ce","df","es","go","ma","mt","ms","mg","pa","pb","pr","pe","pi","rj","rn","rs","ro","rr","sc","sp","se","to"];
+
+
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
