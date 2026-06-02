@@ -37,7 +37,8 @@ function queueNextBatch(
 }
 
 /**
- * Server-side batch verification of Tiny stock.
+ * Verificação em lote do estoque 100% LOCAL.
+ * Fonte da verdade: pos_products. NÃO lê o Tiny.
  * Self-invokes until all items are verified — no browser needed.
  * A watchdog cron re-triggers if stalled for >3 min.
  */
@@ -62,22 +63,10 @@ serve(async (req) => {
       last_batch_at: new Date().toISOString(),
     }).eq('id', count_id);
 
-    // Get store config
-    const { data: store } = await supabase
-      .from('pos_stores')
-      .select('tiny_token, tiny_deposit_name')
-      .eq('id', store_id)
-      .single();
-
-    if (!store?.tiny_token) throw new Error('Store token not found');
-
-    const token = store.tiny_token;
-    const depositName = store.tiny_deposit_name || null;
-
     // Get items that still need stock verification (current_stock IS NULL)
     const { data: items, error: fetchErr } = await supabase
       .from('inventory_count_items')
-      .select('id, product_id, counted_quantity')
+      .select('id, product_id, sku, barcode, counted_quantity')
       .eq('count_id', count_id)
       .is('current_stock', null)
       .order('created_at', { ascending: true })
