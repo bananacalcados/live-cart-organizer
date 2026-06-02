@@ -61,7 +61,7 @@ serve(async (req) => {
   }
 
   try {
-    const { recipient_cep, store, total_value, weight_kg, items_count, order_id, event_id, store_id } = await req.json();
+    const { recipient_cep, store, total_value, weight_kg, items_count, order_id, event_id, store_id, free_shipping, fixed_shipping } = await req.json();
     if (!recipient_cep) throw new Error('recipient_cep is required');
 
     const cepDigits = recipient_cep.replace(/\D/g, '');
@@ -109,6 +109,34 @@ serve(async (req) => {
       }
     }
 
+    // Caller-provided overrides:
+    //  - free_shipping: order/sale was marked as free in the card (handled by the callers,
+    //    here we only use it to SKIP the fixed-price override).
+    //  - fixed_shipping: per-sale shipping value typed by the seller (POS online link).
+    const forceFreeShipping = free_shipping === true;
+    const explicitFixedShipping: number | null =
+      (typeof fixed_shipping === 'number' && fixed_shipping > 0) ? fixed_shipping : null;
+
+    // Event-level default shipping value (set when creating the Live event).
+    let eventDefaultShipping: number | null = null;
+    if (event_id) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const sb = createClient(supabaseUrl, supabaseKey);
+        const { data: ev } = await sb
+          .from('events')
+          .select('default_shipping_cost')
+          .eq('id', event_id)
+          .maybeSingle();
+        if (ev?.default_shipping_cost != null && Number(ev.default_shipping_cost) > 0) {
+          eventDefaultShipping = Number(ev.default_shipping_cost);
+        }
+      } catch (e) {
+        console.warn('Error fetching event default shipping:', e.message);
+      }
+    }
+
     const quotes: Array<{
       id: string;
       carrier: string;
@@ -117,6 +145,7 @@ serve(async (req) => {
       delivery_days: number | null;
       type: string;
     }> = [];
+
 
     // 0. If repeat customer, add free shipping option first
     if (repeatCustomerFreeShipping) {
@@ -130,18 +159,16 @@ serve(async (req) => {
       });
     }
 
-    // 1. Always add "Retirada na loja"
-    quotes.push({
-      id: 'pickup',
-      carrier: 'Retirada na Loja',
-      service: 'Grátis',
-      price: 0,
-      delivery_days: 0,
-      type: 'pickup',
-    });
-
-    // 2. If CEP is in GV, add Mototaxista
+    // 1. Retirada na loja + Mototaxista — APENAS para Governador Valadares.
     if (isGVCep(cepDigits)) {
+      quotes.push({
+        id: 'pickup',
+        carrier: 'Retirada na Loja',
+        service: 'Grátis',
+        price: 0,
+        delivery_days: 0,
+        type: 'pickup',
+      });
       quotes.push({
         id: 'mototaxi',
         carrier: 'Mototaxista 🏍️',
@@ -236,100 +263,73 @@ serve(async (req) => {
       console.warn('Error fetching shipping rules:', e.message);
     }
 
-    // Apply rules to carrier quotes AND generate standalone event_fixed quotes
-    if (shippingRules.length > 0) {
-      // Sort rules: event-specific first, then by priority
-      const sortedRules = [...shippingRules].sort((a: any, b: any) => {
-        if (a.event_id && !b.event_id) return -1;
-        if (!a.event_id && b.event_id) return 1;
-        return (b.priority || 0) - (a.priority || 0);
-      });
+    // === Apply shipping rules & fixed-price override ===
+    const destState = cepToState(cepDigits);
 
-      // 1. Create standalone fixed-price quotes for event or store rules
-      const contextId = event_id || store_id;
-      const contextType = event_id ? 'event' : 'store';
-      if (contextId) {
-        const fixedRules = sortedRules.filter((rule: any) =>
-          (rule.event_id === contextId || rule.store_id === contextId) &&
-          rule.rule_type === 'fixed_price' &&
-          rule.fixed_price != null
-        );
+    // Sort rules: event-specific first, then by priority.
+    const sortedRules = [...shippingRules].sort((a: any, b: any) => {
+      if (a.event_id && !b.event_id) return -1;
+      if (!a.event_id && b.event_id) return 1;
+      return (b.priority || 0) - (a.priority || 0);
+    });
 
-        for (const rule of fixedRules) {
-          // Check region match
-          if (rule.region_states && rule.region_states.length > 0) {
-            const destState = cepToState(cepDigits);
-            if (!destState || !rule.region_states.includes(destState)) continue;
-          }
-
-          const regionLabel = rule.region_states?.length > 0
-            ? ` (${rule.region_states.join(', ')})`
-            : '';
-
-          const label = contextType === 'event' 
-            ? `Frete Especial Live${regionLabel}`
-            : `${rule.name}${regionLabel}`;
-
-          quotes.push({
-            id: `${contextType}-fixed-${rule.id}`,
-            carrier: label,
-            service: rule.name || 'Padrão',
-            price: rule.fixed_price,
-            delivery_days: null,
-            type: 'event_fixed',
-          });
+    // 1. Targeted carrier_match rules (per-carrier fixed price / discounts) keep working.
+    for (const q of quotes) {
+      if (q.type !== 'carrier') continue;
+      const rule = sortedRules.find((r: any) => {
+        if (!r.carrier_match) return false;
+        if (r.region_states && r.region_states.length > 0) {
+          if (!destState || !r.region_states.includes(destState)) return false;
         }
+        const carrierLower = (q.carrier + ' ' + q.service).toLowerCase();
+        return carrierLower.includes(r.carrier_match.toLowerCase());
+      });
+      if (!rule) continue;
+      if (rule.rule_type === 'fixed_price' && rule.fixed_price != null) {
+        q.price = rule.fixed_price;
+      } else if (rule.rule_type === 'discount_percentage' && rule.discount_percentage != null) {
+        q.price = Math.max(0, q.price * (1 - rule.discount_percentage / 100));
+      } else if (rule.rule_type === 'discount_fixed' && rule.discount_fixed != null) {
+        q.price = Math.max(0, q.price - rule.discount_fixed);
       }
+      q.price = Math.round(q.price * 100) / 100;
+    }
 
-      // 2. Apply modifier rules to Frenet carrier quotes
-      // IMPORTANT:
-      //  - Rules WITH carrier_match: applied to every matching carrier (existing behavior).
-      //  - Rules WITHOUT carrier_match (global fixed_price): applied ONLY to the cheapest
-      //    carrier quote, so SEDEX/expressos não viram R$19,99 indevidamente.
-      const destState = cepToState(cepDigits);
+    // 2. Resolve the SINGLE fixed shipping value that REPLACES the cheapest carrier quote.
+    //    Priority: region-specific rule > explicit per-sale value > event default > global rule.
+    const regionRule = sortedRules.find((r: any) =>
+      r.rule_type === 'fixed_price' && r.fixed_price != null && !r.carrier_match &&
+      r.region_states && r.region_states.length > 0 && destState && r.region_states.includes(destState)
+    );
+    const globalRule = sortedRules.find((r: any) =>
+      r.rule_type === 'fixed_price' && r.fixed_price != null && !r.carrier_match &&
+      (!r.region_states || r.region_states.length === 0)
+    );
 
-      // Identify the cheapest Frenet carrier quote (used for global rules)
+    let fixedShippingValue: number | null = null;
+    if (regionRule) fixedShippingValue = Number(regionRule.fixed_price);
+    else if (explicitFixedShipping != null) fixedShippingValue = explicitFixedShipping;
+    else if (eventDefaultShipping != null) fixedShippingValue = eventDefaultShipping;
+    else if (globalRule) fixedShippingValue = Number(globalRule.fixed_price);
+
+    // 3. Apply the override to the CHEAPEST carrier quote (raise OR lower its price).
+    //    Skipped entirely when the order/sale was marked as free shipping (handled by callers).
+    if (!forceFreeShipping && fixedShippingValue != null) {
       const carrierQuotes = quotes.filter(q => q.type === 'carrier');
-      let cheapestCarrierId: string | null = null;
       if (carrierQuotes.length > 0) {
         const cheapest = carrierQuotes.reduce((acc, cur) => (cur.price < acc.price ? cur : acc));
-        cheapestCarrierId = cheapest.id;
-      }
-
-      for (let i = 0; i < quotes.length; i++) {
-        const q = quotes[i];
-        if (q.type !== 'carrier') continue;
-
-        const matchingRule = sortedRules.find((rule: any) => {
-          // Region filter (applies to all rules)
-          if (rule.region_states && rule.region_states.length > 0) {
-            if (!destState || !rule.region_states.includes(destState)) return false;
-          }
-
-          if (rule.carrier_match) {
-            // Targeted rule: match by carrier name/service
-            const carrierLower = (q.carrier + ' ' + q.service).toLowerCase();
-            if (!carrierLower.includes(rule.carrier_match.toLowerCase())) return false;
-            return true;
-          }
-
-          // Global rule (no carrier_match): only apply to the cheapest carrier
-          // and only for fixed_price rules (avoids global discounts hitting SEDEX).
-          if (rule.rule_type !== 'fixed_price') return false;
-          return q.id === cheapestCarrierId;
+        cheapest.price = Math.round(fixedShippingValue * 100) / 100;
+        cheapest.type = 'event_fixed';
+      } else {
+        // Frenet returned nothing — still offer the fixed value so the customer can pay.
+        quotes.push({
+          id: 'fixed-shipping',
+          carrier: 'Frete',
+          service: 'Padrão',
+          price: Math.round(fixedShippingValue * 100) / 100,
+          delivery_days: null,
+          type: 'event_fixed',
         });
-
-        if (matchingRule) {
-          if (matchingRule.rule_type === 'fixed_price' && matchingRule.fixed_price != null) {
-            // Never make shipping more expensive than the real Frenet price.
-            q.price = Math.min(q.price, matchingRule.fixed_price);
-          } else if (matchingRule.rule_type === 'discount_percentage' && matchingRule.discount_percentage != null) {
-            q.price = Math.max(0, q.price * (1 - matchingRule.discount_percentage / 100));
-          } else if (matchingRule.rule_type === 'discount_fixed' && matchingRule.discount_fixed != null) {
-            q.price = Math.max(0, q.price - matchingRule.discount_fixed);
-          }
-          q.price = Math.round(q.price * 100) / 100;
-        }
       }
     }
 
