@@ -11,6 +11,7 @@ import { InventoryVerification } from "@/components/inventory/InventoryVerificat
 import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
+import { ShopifyLinkManager } from "@/components/inventory/ShopifyLinkManager";
 import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
 import { InventoryHealthDashboard } from "@/components/inventory/InventoryHealthDashboard";
 import { InventoryAnalytics } from "@/components/inventory/InventoryAnalytics";
@@ -174,7 +175,7 @@ export default function Inventory() {
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe">("dashboard");
+  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "shopify">("dashboard");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
@@ -1121,6 +1122,14 @@ export default function Inventory() {
               >
                 <Sparkles className="h-3 w-3" /> Ações em Massa
               </Button>
+              <Button
+                variant={inventoryMode === "shopify" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("shopify")}
+                className="text-xs h-7 gap-1"
+              >
+                <ShoppingBag className="h-3 w-3" /> Vincular Shopify
+              </Button>
               {selectedStoreId && (
                 <>
                   <Button
@@ -1195,6 +1204,8 @@ export default function Inventory() {
           <InventoryAIAnalysis />
         ) : inventoryMode === "bulk" ? (
           <InventoryBulkActions />
+        ) : inventoryMode === "shopify" ? (
+          <ShopifyLinkManager />
         ) : !selectedStoreId ? (
           <div className="text-center py-20">
             <Store className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
