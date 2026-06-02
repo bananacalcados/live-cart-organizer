@@ -421,6 +421,14 @@ export function UazapiInstanceManager() {
                               <Bot className="h-3 w-3" /> IA ativa
                             </Badge>
                           )}
+                          {inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none" && (
+                            <Badge variant="outline" className="gap-1 border-sky-500/40 text-sky-500">
+                              <Globe className="h-3 w-3" />
+                              {inst.uazapi_proxy_mode === "internal"
+                                ? `Proxy${inst.uazapi_proxy_managed_city ? ` ${inst.uazapi_proxy_managed_city}` : inst.uazapi_proxy_managed_state ? ` ${inst.uazapi_proxy_managed_state.toUpperCase()}` : " interno"}`
+                                : "Proxy próprio"}
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
