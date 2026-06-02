@@ -55,7 +55,7 @@ export function UazapiInstanceManager() {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers")
-      .select("id, label, phone_display, provider, is_active, is_default, is_online, last_health_check, uazapi_owner, uazapi_instance_name, created_at")
+      .select("id, label, phone_display, provider, is_active, is_default, is_online, ai_paused, last_health_check, uazapi_owner, uazapi_instance_name, created_at")
       .eq("provider", "uazapi")
       .order("created_at", { ascending: true });
 
