@@ -1122,6 +1122,14 @@ export default function Inventory() {
               >
                 <Sparkles className="h-3 w-3" /> Ações em Massa
               </Button>
+              <Button
+                variant={inventoryMode === "shopify" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("shopify")}
+                className="text-xs h-7 gap-1"
+              >
+                <ShoppingBag className="h-3 w-3" /> Vincular Shopify
+              </Button>
               {selectedStoreId && (
                 <>
                   <Button
