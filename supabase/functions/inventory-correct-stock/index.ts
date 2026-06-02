@@ -32,9 +32,10 @@ function queueNextBatch(
 }
 
 /**
- * Processes pending items from inventory_correction_queue one by one with throttling.
- * Self-invokes to continue processing until all items are done — no browser needed.
- * A watchdog cron re-triggers if stalled for >3 min.
+ * Aplica a correção do balanço de estoque 100% LOCAL.
+ * Fonte da verdade: pos_products. NÃO grava no Tiny.
+ * Processa a fila inventory_correction_queue gravando o saldo contado direto
+ * no pos_products. Auto-reinvoca até concluir.
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -42,7 +43,7 @@ serve(async (req) => {
   }
 
   try {
-    const { count_id, batch_size = 10 } = await req.json();
+    const { count_id, batch_size = 100 } = await req.json();
     if (!count_id) throw new Error('count_id is required');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -59,7 +60,7 @@ serve(async (req) => {
     // Get pending items
     const { data: items, error: fetchError } = await supabase
       .from('inventory_correction_queue')
-      .select('*, pos_stores:store_id(tiny_token)')
+      .select('*')
       .eq('count_id', count_id)
       .in('status', ['pending', 'error'])
       .lt('attempts', 5)
@@ -84,41 +85,49 @@ serve(async (req) => {
     let errors = 0;
 
     for (const item of items) {
-      const token = (item as any).pos_stores?.tiny_token;
-      if (!token) {
-        await supabase.from('inventory_correction_queue').update({
-          status: 'error', error_message: 'Store token not found', attempts: item.attempts + 1
-        }).eq('id', item.id);
-        errors++;
-        continue;
-      }
-
       // Mark as processing
       await supabase.from('inventory_correction_queue').update({
         status: 'processing', attempts: item.attempts + 1
       }).eq('id', item.id);
 
       try {
-        const estoqueJson = JSON.stringify({
-          estoque: {
-            idProduto: Number(item.product_id),
-            tipo: 'B',
-            quantidade: item.new_quantity,
-            observacoes: 'Balanco de estoque - correcao automatica',
+        const nowIso = new Date().toISOString();
+        const newQty = item.new_quantity;
+        let updatedId: string | null = null;
+
+        // 1) Tenta casar pelo tiny_id (product_id da fila é o id do Tiny) + loja
+        const tinyIdNum = Number(item.product_id);
+        if (!Number.isNaN(tinyIdNum)) {
+          const { data: updRows } = await supabase
+            .from('pos_products')
+            .update({ stock: newQty, synced_at: nowIso })
+            .eq('tiny_id', tinyIdNum)
+            .eq('store_id', item.store_id)
+            .select('id');
+          if (updRows && updRows.length > 0) updatedId = updRows[0].id;
+        }
+
+        // 2) Fallback: casa por sku/barcode do item de contagem + loja
+        if (!updatedId) {
+          const { data: ci } = await supabase
+            .from('inventory_count_items')
+            .select('sku, barcode')
+            .eq('id', item.count_item_id)
+            .maybeSingle();
+          const ident = ci?.sku || ci?.barcode;
+          if (ident) {
+            const { data: updRows2 } = await supabase
+              .from('pos_products')
+              .update({ stock: newQty, synced_at: nowIso })
+              .eq('store_id', item.store_id)
+              .or(`sku.eq.${ident},barcode.eq.${ident}`)
+              .select('id');
+            if (updRows2 && updRows2.length > 0) updatedId = updRows2[0].id;
           }
-        });
+        }
 
-        const resp = await fetch('https://api.tiny.com.br/api2/produto.atualizar.estoque.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `token=${token}&formato=json&estoque=${encodeURIComponent(estoqueJson)}`,
-        });
-
-        const data = await resp.json();
-        console.log(`Stock update for product ${item.product_id}:`, data.retorno?.status);
-
-        if (data.retorno?.status === 'Erro') {
-          const errMsg = data.retorno?.erros?.[0]?.erro || 'Unknown Tiny error';
+        if (!updatedId) {
+          const errMsg = 'Produto não encontrado no estoque local (pos_products)';
           await supabase.from('inventory_correction_queue').update({
             status: 'error', error_message: errMsg
           }).eq('id', item.id);
@@ -126,15 +135,30 @@ serve(async (req) => {
             correction_status: 'error', correction_error: errMsg
           }).eq('id', item.count_item_id);
           errors++;
-        } else {
-          await supabase.from('inventory_correction_queue').update({
-            status: 'completed', processed_at: new Date().toISOString()
-          }).eq('id', item.id);
-          await supabase.from('inventory_count_items').update({
-            correction_status: 'corrected', corrected_at: new Date().toISOString()
-          }).eq('id', item.count_item_id);
-          processed++;
+          continue;
         }
+
+        // Registra histórico do ajuste (balanço absoluto)
+        await supabase.from('pos_stock_adjustments').insert({
+          store_id: item.store_id,
+          product_id: updatedId,
+          tiny_id: Number.isNaN(tinyIdNum) ? null : tinyIdNum,
+          product_name: item.product_name || 'Unknown',
+          direction: 'balance',
+          quantity: newQty,
+          previous_stock: item.old_quantity ?? null,
+          new_stock: newQty,
+          reason: 'Balanço de estoque - correção automática (local)',
+        });
+
+        await supabase.from('inventory_correction_queue').update({
+          status: 'completed', processed_at: nowIso
+        }).eq('id', item.id);
+        await supabase.from('inventory_count_items').update({
+          correction_status: 'corrected', corrected_at: nowIso
+        }).eq('id', item.count_item_id);
+        console.log(`[inventory-correct-stock][LOCAL] product ${item.product_id} @ store ${item.store_id} -> stock=${newQty}`);
+        processed++;
       } catch (e) {
         console.error(`Error correcting product ${item.product_id}:`, e);
         await supabase.from('inventory_correction_queue').update({
@@ -145,9 +169,6 @@ serve(async (req) => {
         }).eq('id', item.count_item_id);
         errors++;
       }
-
-      // Throttle: 2s between API calls
-      await new Promise(r => setTimeout(r, 2000));
     }
 
     // Update count stats using aggregate queries to avoid 1000-row limit
