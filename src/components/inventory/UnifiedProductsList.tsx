@@ -232,6 +232,9 @@ export function UnifiedProductsList() {
                       <Badge variant="secondary" className="text-[10px]">
                         {g.skus.length} SKUs · {g.totalStock} un · {g.storesPresent} loja(s)
                       </Badge>
+                      {g.skus.length > 0 && g.skus.every((s) => !s.is_active) && (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">Inativo</Badge>
+                      )}
                       {g.master?.needs_review && (
                         <Badge variant="destructive" className="text-[10px] gap-1">
                           <AlertCircle className="h-2.5 w-2.5" />
