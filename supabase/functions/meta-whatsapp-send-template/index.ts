@@ -249,12 +249,29 @@ serve(async (req) => {
               })
               .eq('id', item.id);
 
+            // Render the full message (text + variables + media) for the chat.
+            let bulkText = `[Template: ${item.template_name}]`;
+            let bulkMediaUrl: string | null = null;
+            let bulkMediaType = 'text';
+            try {
+              const def = await fetchTemplateDef(accessToken, businessAccountId, item.template_name, item.template_language || 'pt_BR');
+              if (def) {
+                const r = renderTemplateMessage(def, item.template_params as any[]);
+                if (r.text) bulkText = r.text;
+                bulkMediaUrl = r.mediaUrl;
+                bulkMediaType = r.mediaType;
+              }
+            } catch (_e) { /* keep fallback */ }
+
             await supabase.from('whatsapp_messages').insert({
               phone: formattedPhone,
-              message: `[Template: ${item.template_name}]`,
+              message: bulkText,
               direction: 'outgoing',
               message_id: messageId,
               status: 'sent',
+              media_type: bulkMediaType,
+              media_url: bulkMediaUrl,
+              whatsapp_number_id: whatsappNumberId || null,
             });
 
             // Auto-close conversation from dispatch
