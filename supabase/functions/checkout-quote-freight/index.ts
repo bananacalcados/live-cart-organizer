@@ -109,6 +109,34 @@ serve(async (req) => {
       }
     }
 
+    // Caller-provided overrides:
+    //  - free_shipping: order/sale was marked as free in the card (handled by the callers,
+    //    here we only use it to SKIP the fixed-price override).
+    //  - fixed_shipping: per-sale shipping value typed by the seller (POS online link).
+    const forceFreeShipping = free_shipping === true;
+    const explicitFixedShipping: number | null =
+      (typeof fixed_shipping === 'number' && fixed_shipping > 0) ? fixed_shipping : null;
+
+    // Event-level default shipping value (set when creating the Live event).
+    let eventDefaultShipping: number | null = null;
+    if (event_id) {
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const sb = createClient(supabaseUrl, supabaseKey);
+        const { data: ev } = await sb
+          .from('events')
+          .select('default_shipping_cost')
+          .eq('id', event_id)
+          .maybeSingle();
+        if (ev?.default_shipping_cost != null && Number(ev.default_shipping_cost) > 0) {
+          eventDefaultShipping = Number(ev.default_shipping_cost);
+        }
+      } catch (e) {
+        console.warn('Error fetching event default shipping:', e.message);
+      }
+    }
+
     const quotes: Array<{
       id: string;
       carrier: string;
@@ -117,6 +145,7 @@ serve(async (req) => {
       delivery_days: number | null;
       type: string;
     }> = [];
+
 
     // 0. If repeat customer, add free shipping option first
     if (repeatCustomerFreeShipping) {
