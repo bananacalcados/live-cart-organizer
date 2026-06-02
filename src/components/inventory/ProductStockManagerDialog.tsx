@@ -242,9 +242,6 @@ export function ProductStockManagerDialog({ masterId, open, onOpenChange }: Prop
                     <Badge variant="secondary">{v.size || "—"}</Badge>
                     {v.color && <Badge variant="outline">{v.color}</Badge>}
                     <span className="text-xs font-mono text-muted-foreground">SKU: {v.sku}</span>
-                    {!v.tiny_variant_id && (
-                      <Badge variant="destructive" className="text-[10px]">sem tiny_id</Badge>
-                    )}
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
