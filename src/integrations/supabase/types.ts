@@ -5745,14 +5745,18 @@ export type Database = {
           block_type: string | null
           campaign_id: string | null
           created_at: string
+          delay_after_ms: number
           error_message: string | null
           group_db_id: string
           group_name: string | null
           group_zapi_id: string
           id: string
+          locked_until: string | null
           message_group_id: string | null
           scheduled_message_id: string
+          send_after: string | null
           sent_at: string | null
+          seq: number | null
           status: string
           updated_at: string
           whatsapp_number_id: string | null
@@ -5763,14 +5767,18 @@ export type Database = {
           block_type?: string | null
           campaign_id?: string | null
           created_at?: string
+          delay_after_ms?: number
           error_message?: string | null
           group_db_id: string
           group_name?: string | null
           group_zapi_id: string
           id?: string
+          locked_until?: string | null
           message_group_id?: string | null
           scheduled_message_id: string
+          send_after?: string | null
           sent_at?: string | null
+          seq?: number | null
           status?: string
           updated_at?: string
           whatsapp_number_id?: string | null
@@ -5781,14 +5789,18 @@ export type Database = {
           block_type?: string | null
           campaign_id?: string | null
           created_at?: string
+          delay_after_ms?: number
           error_message?: string | null
           group_db_id?: string
           group_name?: string | null
           group_zapi_id?: string
           id?: string
+          locked_until?: string | null
           message_group_id?: string | null
           scheduled_message_id?: string
+          send_after?: string | null
           sent_at?: string | null
+          seq?: number | null
           status?: string
           updated_at?: string
           whatsapp_number_id?: string | null
@@ -15234,6 +15246,37 @@ export type Database = {
           recipient_name: string
         }[]
       }
+      claim_group_dispatch_job: {
+        Args: { p_number_id: string }
+        Returns: {
+          attempts: number
+          block_order: number
+          block_type: string | null
+          campaign_id: string | null
+          created_at: string
+          delay_after_ms: number
+          error_message: string | null
+          group_db_id: string
+          group_name: string | null
+          group_zapi_id: string
+          id: string
+          locked_until: string | null
+          message_group_id: string | null
+          scheduled_message_id: string
+          send_after: string | null
+          sent_at: string | null
+          seq: number | null
+          status: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "group_campaign_block_dispatches"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       clear_event_live_active: {
         Args: { p_event_id: string }
         Returns: undefined
@@ -15405,6 +15448,12 @@ export type Database = {
         Returns: {
           dispatch_id: string
           pending_count: number
+        }[]
+      }
+      get_group_dispatch_ready_instances: {
+        Args: never
+        Returns: {
+          whatsapp_number_id: string
         }[]
       }
       get_inventory_summary: {
