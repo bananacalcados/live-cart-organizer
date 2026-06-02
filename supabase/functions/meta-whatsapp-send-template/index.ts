@@ -179,7 +179,7 @@ serve(async (req) => {
     // === Bulk send from queue ===
     if (body.queueIds) {
       const { queueIds, whatsappNumberId } = body as BulkSendRequest;
-      const { phoneNumberId, accessToken } = await getCredentials(supabase, whatsappNumberId);
+      const { phoneNumberId, accessToken, businessAccountId } = await getCredentials(supabase, whatsappNumberId);
 
       if (!accessToken || !phoneNumberId) {
         return new Response(
