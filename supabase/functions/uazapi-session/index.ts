@@ -145,9 +145,27 @@ serve(async (req) => {
         const token = await loadToken();
         if (!token) return json({ error: "Instância uazapi não encontrada" }, 400);
 
+        // Reaplica a região do proxy interno gerenciado (persistida na linha local),
+        // para que toda reconexão saia da mesma cidade/UF brasileira escolhida.
+        const connectBody: Record<string, unknown> = body.phone
+          ? { phone: String(body.phone).replace(/\D/g, "") }
+          : {};
+        if (numberId) {
+          const { data: cfg } = await supabase
+            .from("whatsapp_numbers")
+            .select("uazapi_proxy_mode, uazapi_proxy_managed_country, uazapi_proxy_managed_state, uazapi_proxy_managed_city")
+            .eq("id", numberId)
+            .maybeSingle();
+          if (cfg?.uazapi_proxy_mode === "internal") {
+            if (cfg.uazapi_proxy_managed_country) connectBody.proxy_managed_country = cfg.uazapi_proxy_managed_country;
+            if (cfg.uazapi_proxy_managed_state) connectBody.proxy_managed_state = cfg.uazapi_proxy_managed_state;
+            if (cfg.uazapi_proxy_managed_city) connectBody.proxy_managed_city = cfg.uazapi_proxy_managed_city;
+          }
+        }
+
         const r = await uazapiInstance("/instance/connect", token, {
           method: "POST",
-          body: body.phone ? { phone: String(body.phone).replace(/\D/g, "") } : {},
+          body: connectBody,
         });
         if (!r.ok) return json({ error: "Falha ao conectar", details: r.data }, r.status);
         const inst = r.data?.instance || r.data;
