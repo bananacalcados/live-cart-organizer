@@ -261,13 +261,24 @@ serve(async (req) => {
         }
       }
 
-      // Check if AI is paused
+      // Check if order was cancelled/completed or AI is paused
       if (fu.order_id) {
         const { data: order } = await supabase
           .from('orders')
-          .select('ai_paused')
+          .select('ai_paused, stage')
           .eq('id', fu.order_id)
           .maybeSingle();
+
+        // Cancelled/completed orders must never be chased — deactivate immediately.
+        if (order?.stage === 'cancelled' || order?.stage === 'completed') {
+          await supabase.from('livete_followups').update({
+            is_active: false, completed_at: now.toISOString(), updated_at: now.toISOString(),
+          }).eq('id', fu.id);
+          deactivated++;
+          console.log(`[livete-followup] ${fu.phone} order ${order.stage}, deactivated`);
+          continue;
+        }
+
         if (order?.ai_paused) {
           console.log(`[livete-followup] ${fu.phone} AI paused, skipping`);
           continue;
