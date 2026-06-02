@@ -159,18 +159,16 @@ serve(async (req) => {
       });
     }
 
-    // 1. Always add "Retirada na loja"
-    quotes.push({
-      id: 'pickup',
-      carrier: 'Retirada na Loja',
-      service: 'Grátis',
-      price: 0,
-      delivery_days: 0,
-      type: 'pickup',
-    });
-
-    // 2. If CEP is in GV, add Mototaxista
+    // 1. Retirada na loja + Mototaxista — APENAS para Governador Valadares.
     if (isGVCep(cepDigits)) {
+      quotes.push({
+        id: 'pickup',
+        carrier: 'Retirada na Loja',
+        service: 'Grátis',
+        price: 0,
+        delivery_days: 0,
+        type: 'pickup',
+      });
       quotes.push({
         id: 'mototaxi',
         carrier: 'Mototaxista 🏍️',
