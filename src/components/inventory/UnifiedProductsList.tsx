@@ -11,6 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Search, Package, Loader2, Pencil, AlertCircle, Boxes, Save, Filter, ChevronDown, ChevronRight, Store as StoreIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -78,6 +81,7 @@ export function UnifiedProductsList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "review" | "ok">("all");
+  const [storeFilter, setStoreFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<MasterData | null>(null);
   const [editingSku, setEditingSku] = useState<PosSku | null>(null);
@@ -124,8 +128,12 @@ export function UnifiedProductsList() {
     for (const m of masters) {
       byParent.set(m.parent_sku, { parent_sku: m.parent_sku, master: m, skus: [], totalStock: 0, storesPresent: 0 });
     }
+    // when a specific store is selected, only consider its SKUs
+    const sourceProducts = storeFilter === "all"
+      ? posProducts
+      : posProducts.filter((p) => p.store_id === storeFilter);
     // attach skus
-    for (const p of posProducts) {
+    for (const p of sourceProducts) {
       const key = p.parent_sku || p.sku || p.barcode || p.id;
       let g = byParent.get(key);
       if (!g) {
@@ -140,6 +148,10 @@ export function UnifiedProductsList() {
       g.storesPresent = new Set(g.skus.map((s) => s.store_id)).size;
     }
     let arr = Array.from(byParent.values());
+    // when filtering by store, hide products that don't exist in that store
+    if (storeFilter !== "all") {
+      arr = arr.filter((g) => g.skus.length > 0);
+    }
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       arr = arr.filter((g) =>
@@ -152,10 +164,10 @@ export function UnifiedProductsList() {
     if (filter === "review") arr = arr.filter((g) => g.master?.needs_review);
     if (filter === "ok") arr = arr.filter((g) => g.master && !g.master.needs_review);
     return arr.sort((a, b) => (a.master?.name || a.parent_sku).localeCompare(b.master?.name || b.parent_sku));
-  }, [masters, posProducts, search, filter]);
+  }, [masters, posProducts, search, filter, storeFilter]);
 
   // Reset to first page when filter/search changes
-  useEffect(() => { setPage(0); }, [search, filter]);
+  useEffect(() => { setPage(0); }, [search, filter, storeFilter]);
 
   const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
   const pageItems = grouped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -199,8 +211,29 @@ export function UnifiedProductsList() {
               </Button>
             ))}
           </div>
+          <Select value={storeFilter} onValueChange={setStoreFilter}>
+            <SelectTrigger className="w-full md:w-[200px]">
+              <div className="flex items-center gap-2 min-w-0">
+                <StoreIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <SelectValue placeholder="Loja" />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as lojas</SelectItem>
+              {stores.map((st) => (
+                <SelectItem key={st.id} value={st.id}>{st.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
+
+      {storeFilter !== "all" && (
+        <div className="flex items-center gap-2 text-xs px-1 text-muted-foreground">
+          <Filter className="h-3 w-3" />
+          Mostrando apenas o estoque da loja <strong className="text-foreground">{storeName(storeFilter)}</strong>. Produtos sem estoque cadastrado nessa loja ficam ocultos.
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-20">
