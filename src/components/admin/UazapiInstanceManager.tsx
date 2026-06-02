@@ -444,6 +444,16 @@ export function UazapiInstanceManager() {
                           >
                             {inst.ai_paused ? <><Bot className="h-4 w-4" /> Ativar IA</> : <><BotOff className="h-4 w-4" /> Pausar IA</>}
                           </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={`h-8 gap-1 ${inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none" ? "border-sky-500/50 text-sky-500 hover:bg-sky-500/10" : ""}`}
+                            disabled={actingId === inst.id}
+                            onClick={() => openProxy(inst)}
+                            title="Configurar proxy"
+                          >
+                            <Globe className="h-4 w-4" /> Proxy
+                          </Button>
                           <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => disconnect(inst)} title="Desconectar">
                             <Power className="h-4 w-4" />
                           </Button>
