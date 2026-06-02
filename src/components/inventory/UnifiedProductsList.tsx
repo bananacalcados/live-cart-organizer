@@ -93,7 +93,8 @@ export function UnifiedProductsList() {
         const { data, error } = await supabase
           .from("pos_products")
           .select("id, parent_sku, store_id, sku, barcode, name, variant, size, color, image_url, cost_price, price, stock, is_active")
-          .eq("is_active", true)
+          // NÃO filtrar por is_active: produtos inativos e suas grades de tamanho
+          // devem continuar aparecendo no controle de estoque.
           .order("id")
           .range(from, from + CHUNK - 1);
         if (error) { toast.error("pos_products: " + error.message); break; }
@@ -104,7 +105,8 @@ export function UnifiedProductsList() {
       return all;
     }
     const [{ data: m }, pp, { data: st }] = await Promise.all([
-      supabase.from("product_master_data").select("*").eq("is_active", true).order("name").limit(5000),
+      // Inclui também masters inativos para não esconder o produto-pai.
+      supabase.from("product_master_data").select("*").order("name").limit(8000),
       fetchAllPos(),
       supabase.from("pos_stores").select("id, name").order("name"),
     ]);
@@ -230,6 +232,9 @@ export function UnifiedProductsList() {
                       <Badge variant="secondary" className="text-[10px]">
                         {g.skus.length} SKUs · {g.totalStock} un · {g.storesPresent} loja(s)
                       </Badge>
+                      {g.skus.length > 0 && g.skus.every((s) => !s.is_active) && (
+                        <Badge variant="outline" className="text-[10px] text-muted-foreground">Inativo</Badge>
+                      )}
                       {g.master?.needs_review && (
                         <Badge variant="destructive" className="text-[10px] gap-1">
                           <AlertCircle className="h-2.5 w-2.5" />
