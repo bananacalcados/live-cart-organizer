@@ -7,7 +7,7 @@ import { STAGES, OrderStage } from "@/types/order";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder, DbOrderProduct } from "@/types/database";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
-import { Radio, RefreshCw, Check, X, Pencil, Loader2, ExternalLink } from "lucide-react";
+import { Radio, RefreshCw, Check, X, Pencil, Loader2, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
@@ -16,12 +16,26 @@ interface Props {
   eventName?: string;
 }
 
+const COLLAPSE_KEY = "pos_live_order_panel_collapsed";
+
 export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
   const [order, setOrder] = useState<DbOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [showEdit, setShowEdit] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem(COLLAPSE_KEY) === "1"; } catch { return false; }
+  });
   const { updateOrder, moveOrder, deleteOrder, regenerateCartLink } = useDbOrderStore();
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
 
   const load = async () => {
     setLoading(true);
