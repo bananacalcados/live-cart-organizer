@@ -115,7 +115,12 @@ serve(async (req) => {
       });
     }
 
-    // ── STEP 1: Auto-create followups for active orders without one ──
+    // ── STEP 1: Auto-create followups for RECENT active orders without one ──
+    // Anti-ban rules:
+    //  • Only pursue orders created in the last 48h (never chase month-old orders).
+    //  • Never re-pursue an order that already had ANY followup (kills the daily loop).
+    //  • Never create a 2nd active followup for a phone that already has one.
+    const orderCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
     const { data: activeEvents } = await supabase
       .from('events')
       .select('id')
@@ -126,10 +131,11 @@ serve(async (req) => {
 
       const { data: unpaidOrders } = await supabase
         .from('orders')
-        .select('id, event_id, customer_id, stage_atendimento, ai_paused, customers!inner(whatsapp)')
+        .select('id, event_id, customer_id, stage_atendimento, ai_paused, created_at, customers!inner(whatsapp)')
         .in('event_id', eventIds)
         .eq('is_paid', false)
-        .not('stage_atendimento', 'is', null);
+        .not('stage_atendimento', 'is', null)
+        .gte('created_at', orderCutoff);
 
       for (const order of (unpaidOrders || [])) {
         const phone = (order as any).customers?.whatsapp;
@@ -138,14 +144,22 @@ serve(async (req) => {
 
         const normalizedPhone = phone.replace(/\D/g, '');
 
-        const { data: existingRows } = await supabase
+        // (a) Never re-pursue an order that already had a followup (active or completed).
+        const { data: orderHadFollowup } = await supabase
           .from('livete_followups')
           .select('id')
           .eq('order_id', order.id)
+          .limit(1);
+        if (orderHadFollowup && orderHadFollowup.length > 0) continue;
+
+        // (b) One active followup per phone, max — even across multiple orders.
+        const { data: phoneActive } = await supabase
+          .from('livete_followups')
+          .select('id')
+          .eq('phone', normalizedPhone)
           .eq('is_active', true)
           .limit(1);
-
-        if (existingRows && existingRows.length > 0) continue;
+        if (phoneActive && phoneActive.length > 0) continue;
 
         const { data: lastMsg } = await supabase
           .from('whatsapp_messages')
@@ -161,6 +175,20 @@ serve(async (req) => {
         const minutesSince = (now.getTime() - lastMsgTime.getTime()) / 60000;
         if (minutesSince < LEVEL_INTERVALS[0]) continue;
 
+        // Resolve the instance the client actually talked on (last inbound), so the
+        // followup goes out on the SAME number and the UI can show it (issue #2).
+        let resolvedNumberId: string | null = null;
+        const { data: lastIn } = await supabase
+          .from('whatsapp_messages')
+          .select('whatsapp_number_id')
+          .eq('phone', normalizedPhone)
+          .eq('direction', 'incoming')
+          .not('whatsapp_number_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (lastIn?.whatsapp_number_id) resolvedNumberId = lastIn.whatsapp_number_id;
+
         await supabase.from('livete_followups').insert({
           phone: normalizedPhone,
           order_id: order.id,
@@ -169,7 +197,7 @@ serve(async (req) => {
           reminder_level: 0,
           next_reminder_at: now.toISOString(),
           last_client_message_at: null,
-          whatsapp_number_id: null,
+          whatsapp_number_id: resolvedNumberId,
         });
 
         created++;
