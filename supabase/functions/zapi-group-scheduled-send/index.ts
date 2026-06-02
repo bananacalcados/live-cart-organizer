@@ -1,11 +1,17 @@
-// Envia campanhas para Grupos VIPs em modo "humano real":
-// - Sequencial puro (1 mensagem por vez para a Meta/Z-API)
-// - Para cada grupo: envia bloco 1, delay, bloco 2, delay... até terminar todos os blocos
-// - Em seguida vai pro próximo grupo (delay maior entre grupos)
-// - Pausa longa a cada 3 grupos completos
-// - Se um bloco falha: 1 retry após 10s. Se falhar de novo, marca como failed e segue
-// - Persiste cada (grupo,bloco) em group_campaign_block_dispatches para reenvio seletivo
-// - Aborta se instância Z-API estiver offline (is_online=false)
+// PLANNER de campanhas para Grupos VIPs (Fila Durável com Delay Agendado)
+// ------------------------------------------------------------------------
+// Este endpoint NÃO envia mensagens diretamente. Ele apenas:
+//  1) Faz o "claim" atômico da mensagem agendada (evita disparo duplicado)
+//  2) Valida pausa global, instância online e grupos
+//  3) PLANEJA todos os jobs (grupo × bloco) na tabela
+//     group_campaign_block_dispatches com:
+//       - seq            → ordem absoluta do disparo
+//       - delay_after_ms → atraso VARIÁVEL/humanizado a aplicar APÓS o job
+//       - send_after     → quando o job fica liberado (1º = agora, demais = null)
+//  4) Dispara o worker uma vez (start imediato)
+//
+// O envio real + o ritmo (delays) é feito pelo `group-dispatch-worker`, que é
+// reentrante e imune ao timeout de Edge Functions: o estado vive no banco.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getPausedGroupSendUntil } from "../_shared/group-send-guard.ts";
@@ -15,7 +21,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ===== Defaults humanizados (reduzidos: mais leves p/ o sistema, sem travar) =====
+// ===== Defaults humanizados (delays VARIÁVEIS sorteados por job) =====
 const INTER_BLOCK_DELAY_MIN_MS = 4_000;
 const INTER_BLOCK_DELAY_MAX_MS = 8_000;
 const INTER_GROUP_DELAY_MIN_MS = 12_000;
@@ -23,14 +29,8 @@ const INTER_GROUP_DELAY_MAX_MS = 25_000;
 const LONG_PAUSE_EVERY_N_GROUPS = 5;
 const LONG_PAUSE_MIN_MS = 40_000;
 const LONG_PAUSE_MAX_MS = 70_000;
-const RETRY_DELAY_MS = 10_000;
-
-// Tempo máximo de execução por invocação (cron volta a chamar depois)
-const MAX_FUNCTION_TIME_MS = 50_000;
-const TIME_GUARD_MS = 10_000;
 
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -61,26 +61,22 @@ serve(async (req) => {
       });
     }
 
+    // ===== Pausa global =====
     const pausedBeforeStart = await getPausedGroupSendUntil(supabase);
     if (pausedBeforeStart) {
-      if (existingMsg.message_group_id) {
-        await supabase.from("group_campaign_scheduled_messages")
-          .update({ status: "cancelled" })
-          .eq("message_group_id", existingMsg.message_group_id)
-          .in("status", ["pending", "sending"]);
-      } else {
-        await supabase.from("group_campaign_scheduled_messages")
-          .update({ status: "cancelled" })
-          .eq("id", scheduledMessageId)
-          .in("status", ["pending", "sending"]);
-      }
+      const col = existingMsg.message_group_id ? "message_group_id" : "id";
+      const val = existingMsg.message_group_id || scheduledMessageId;
+      await supabase.from("group_campaign_scheduled_messages")
+        .update({ status: "cancelled" })
+        .eq(col, val)
+        .in("status", ["pending", "sending"]);
       return new Response(
         JSON.stringify({ error: "Group sends temporarily paused", pausedUntil: pausedBeforeStart }),
         { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    // Atomic claim
+    // ===== Claim atômico (impede planejamento duplicado) =====
     const { data: claimResult, error: claimErr } = await supabase.rpc("try_claim_scheduled_message", {
       p_message_id: scheduledMessageId,
       p_lock_duration_seconds: 120,
@@ -99,10 +95,9 @@ serve(async (req) => {
       );
     }
 
-    const functionStartTime = Date.now();
     const lockUntil = new Date(Date.now() + 120_000).toISOString();
 
-    // Mark sibling blocks (same message_group_id) as sending
+    // Marca irmãos (mesmo message_group_id) como sending
     if (claimedMsg.message_group_id) {
       await supabase.from("group_campaign_scheduled_messages")
         .update({ status: "sending", locked_until: lockUntil })
@@ -110,7 +105,7 @@ serve(async (req) => {
         .in("status", ["pending", "grouped"]);
     }
 
-    // Fetch the message + campaign
+    // Carrega mensagem + campanha
     const { data: msg } = await supabase
       .from("group_campaign_scheduled_messages")
       .select("*, group_campaigns!inner(id, target_groups, whatsapp_number_id)")
@@ -130,10 +125,7 @@ serve(async (req) => {
     const resolvedNumberId = msg.whatsapp_number_id || campaign.whatsapp_number_id || null;
     const messageGroupId = msg.message_group_id;
 
-    // Provider da instância (zapi | wasender). Default zapi para compatibilidade.
-    let instanceProvider = "zapi";
-
-    // ===== Validate instance is online =====
+    // ===== Valida instância online (apenas zapi tem flag confiável) =====
     if (resolvedNumberId) {
       const { data: inst } = await supabase
         .from("whatsapp_numbers")
@@ -141,10 +133,7 @@ serve(async (req) => {
         .eq("id", resolvedNumberId)
         .maybeSingle();
 
-      if (inst?.provider) instanceProvider = inst.provider;
-
       if (inst && inst.provider === "zapi" && inst.is_online === false) {
-        // Trigger immediate re-check to avoid stale data
         try {
           await fetch(`${supabaseUrl}/functions/v1/zapi-instance-health-check`, {
             method: "POST",
@@ -170,17 +159,7 @@ serve(async (req) => {
       }
     }
 
-    // Campaign vars
-    const { data: varsData } = await supabase
-      .from("campaign_variables")
-      .select("variable_name, variable_value")
-      .eq("campaign_id", campaignId);
-    const campaignVars: Record<string, string> = {};
-    if (varsData) for (const v of varsData) campaignVars[v.variable_name] = v.variable_value;
-    const now = new Date();
-    campaignVars["data_hoje"] = now.toLocaleDateString("pt-BR");
-    campaignVars["horario"] = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-
+    // ===== Grupos =====
     const { data: allGroups } = await supabase
       .from("whatsapp_groups")
       .select("id, group_id, name")
@@ -200,18 +179,14 @@ serve(async (req) => {
     const pendingGroups = allGroups.filter((g) => !alreadySentGroupIds.includes(g.id));
     if (pendingGroups.length === 0) {
       await supabase.from("group_campaign_scheduled_messages")
-        .update({
-          status: "sent",
-          sent_at: new Date().toISOString(),
-          locked_until: null,
-        })
+        .update({ status: "sent", sent_at: new Date().toISOString(), locked_until: null })
         .eq("id", scheduledMessageId);
-      return new Response(JSON.stringify({ success: true, complete: true }), {
+      return new Response(JSON.stringify({ success: true, complete: true, totalGroups: allGroups.length }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Load all blocks (ordered) for this message-group
+    // ===== Blocos (ordenados) deste message-group =====
     let allBlocks: any[] = [msg];
     if (messageGroupId) {
       const { data: grouped } = await supabase
@@ -222,323 +197,101 @@ serve(async (req) => {
       if (grouped && grouped.length > 0) allBlocks = grouped;
     }
 
-    const replaceVars = (text: string, groupName: string): string => {
-      let result = text || "";
-      for (const [k, v] of Object.entries(campaignVars)) {
-        result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v);
-      }
-      return result.replace(/\{\{nome_grupo\}\}/g, groupName);
-    };
+    // ===== Idempotência: já existe fila para este disparo? =====
+    const dispatchCol = messageGroupId ? "message_group_id" : "scheduled_message_id";
+    const dispatchVal = messageGroupId || scheduledMessageId;
+    const { count: existingJobs } = await supabase
+      .from("group_campaign_block_dispatches")
+      .select("id", { count: "exact", head: true })
+      .eq(dispatchCol, dispatchVal)
+      .not("seq", "is", null);
 
-    // Helper genérico de invocação de função → normaliza para { ok, error }
-    async function callFn(fnName: string, body: Record<string, unknown>) {
-      const r = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await r.json().catch(() => ({}));
-      const ok = r.ok && data?.success !== false && !data?.error;
-      return { ok, error: ok ? null : (data?.error || data?.data?.error || `http_${r.status}`) };
-    }
-
-    // Envia um único bloco a um grupo via WaSender (texto/mídia/enquete)
-    async function sendBlockWasender(block: any, group: { id: string; group_id: string; name: string }) {
-      const content = replaceVars(block.message_content || "", group.name);
-
-      // Enquete
-      if (block.message_type === "poll" && Array.isArray(block.poll_options) && block.poll_options.length >= 2) {
-        return callFn("wasender-send-extra", {
-          kind: "poll",
-          phone: group.group_id,
-          whatsapp_number_id: resolvedNumberId,
-          poll: {
-            name: content || "Enquete",
-            options: block.poll_options,
-            selectableCount: block.poll_max_options && block.poll_max_options > 0 ? block.poll_max_options : 1,
-          },
-        });
-      }
-
-      // Mídia (image | video | audio | document | sticker)
-      if (block.message_type !== "text" && block.media_url) {
-        return callFn("wasender-send-media", {
-          phone: group.group_id,
-          mediaUrl: block.media_url,
-          mediaType: block.message_type,
-          caption: content,
-          whatsapp_number_id: resolvedNumberId,
-        });
-      }
-
-      // Texto (com menções "todos" via wasender-groups quando aplicável)
-      if (block.mention_all) {
-        return callFn("wasender-groups", {
-          action: "sendMessage",
-          groupJid: group.group_id,
-          message: content,
-          whatsapp_number_id: resolvedNumberId,
-        });
-      }
-      return callFn("wasender-send-message", {
-        phone: group.group_id,
-        message: content,
-        whatsapp_number_id: resolvedNumberId,
-      });
-    }
-
-    // Envia um único bloco a um grupo via uazapi (texto/mídia/enquete)
-    async function sendBlockUazapi(block: any, group: { id: string; group_id: string; name: string }) {
-      const content = replaceVars(block.message_content || "", group.name);
-
-      // Enquete
-      if (block.message_type === "poll" && Array.isArray(block.poll_options) && block.poll_options.length >= 2) {
-        return callFn("uazapi-send-extra", {
-          kind: "poll",
-          phone: group.group_id,
-          whatsapp_number_id: resolvedNumberId,
-          poll: {
-            question: content || "Enquete",
-            options: block.poll_options,
-            selectableCount: block.poll_max_options && block.poll_max_options > 0 ? block.poll_max_options : 1,
-          },
-        });
-      }
-
-      // Mídia (image | video | audio | document | sticker)
-      if (block.message_type !== "text" && block.media_url) {
-        return callFn("uazapi-send-media", {
-          phone: group.group_id,
-          mediaUrl: block.media_url,
-          mediaType: block.message_type,
-          caption: content,
-          whatsapp_number_id: resolvedNumberId,
-        });
-      }
-
-      // Texto (com menções "todos" via uazapi-groups quando aplicável)
-      if (block.mention_all) {
-        return callFn("uazapi-groups", {
-          action: "sendMessage",
-          groupJid: group.group_id,
-          message: content,
-          whatsapp_number_id: resolvedNumberId,
-        });
-      }
-      return callFn("uazapi-send-message", {
-        phone: group.group_id,
-        message: content,
-        whatsapp_number_id: resolvedNumberId,
-      });
-    }
-
-    // Helper: send a single block, with 1 retry on failure
-    async function sendBlockOnce(block: any, group: { id: string; group_id: string; name: string }) {
-      // Roteamento por provider da instância
-      if (instanceProvider === "wasender") {
-        return sendBlockWasender(block, group);
-      }
-      if (instanceProvider === "uazapi") {
-        return sendBlockUazapi(block, group);
-      }
-
-
-      // ===== Z-API (comportamento original) =====
-      const body: Record<string, unknown> = {
-        groupId: group.group_id,
-        mentionAll: block.mention_all || false,
-        whatsapp_number_id: resolvedNumberId,
-      };
-      const content = replaceVars(block.message_content || "", group.name);
-      if (block.message_type === "poll" && block.poll_options) {
-        body.type = "poll";
-        body.pollOptions = block.poll_options;
-        body.message = content;
-        body.pollMaxOptions = block.poll_max_options ?? 1;
-      } else if (block.message_type !== "text" && block.media_url) {
-        body.type = block.message_type;
-        body.mediaUrl = block.media_url;
-        body.caption = content;
-        body.message = content;
-      } else {
-        body.type = "text";
-        body.message = content;
-      }
-      return callFn("zapi-send-group-message", body);
-    }
-
-    async function sendBlockWithRetry(block: any, group: { id: string; group_id: string; name: string }) {
-      // Record/upsert tracking row
-      const trackingRow = {
-        scheduled_message_id: scheduledMessageId,
-        message_group_id: messageGroupId || null,
-        campaign_id: campaignId,
-        group_db_id: group.id,
-        group_zapi_id: group.group_id,
-        group_name: group.name,
-        block_order: block.block_order ?? 0,
-        block_type: block.message_type || "text",
-        whatsapp_number_id: resolvedNumberId,
-      };
-
-      // attempt 1
-      const a1 = await sendBlockOnce(block, group);
-      if (a1.ok) {
-        await supabase.from("group_campaign_block_dispatches").insert({
-          ...trackingRow, status: "sent", attempts: 1, sent_at: new Date().toISOString(),
-        });
-        return { ok: true };
-      }
-      // retry
-      await sleep(RETRY_DELAY_MS);
-      const a2 = await sendBlockOnce(block, group);
-      if (a2.ok) {
-        await supabase.from("group_campaign_block_dispatches").insert({
-          ...trackingRow, status: "sent", attempts: 2, sent_at: new Date().toISOString(),
-        });
-        return { ok: true };
-      }
-      await supabase.from("group_campaign_block_dispatches").insert({
-        ...trackingRow,
-        status: "failed",
-        attempts: 2,
-        error_message: String(a2.error || a1.error || "send_failed").slice(0, 500),
-      });
-      return { ok: false, error: a2.error || a1.error };
-    }
-
-    // ===== Main sequential loop =====
-    let batchSentCount = 0;
-    let batchFailedCount = 0;
-    const newlySentIds: string[] = [];
-    let pausedDuringRun: string | null = null;
-    // groups completed so far across the WHOLE message-group (for long-pause cadence)
-    let totalGroupsDoneSoFar = alreadySentGroupIds.length;
-    // Se precisarmos esperar (pausa longa) além do orçamento desta invocação,
-    // marcamos o lock no futuro e DEIXAMOS o cron retomar — sem dormir segurando recursos.
-    let deferUntilMs: number | null = null;
-
-    try {
+    if (!existingJobs || existingJobs === 0) {
+      // ===== PLANEJAMENTO: monta todos os jobs com delays VARIÁVEIS =====
+      const nowIso = new Date().toISOString();
+      const jobs: any[] = [];
+      let seq = 0;
       for (let gi = 0; gi < pendingGroups.length; gi++) {
         const group = pendingGroups[gi];
+        const isLastGroup = gi === pendingGroups.length - 1;
+        const groupNum = gi + 1; // cadência de pausa longa
 
-        // Time guard — para e deixa o cron retomar imediatamente (lock curto no finally)
-        const remaining = MAX_FUNCTION_TIME_MS - (Date.now() - functionStartTime);
-        if (remaining < TIME_GUARD_MS) {
-          console.warn(`Time guard: ${remaining}ms left — stopping batch (cron retoma)`);
-          break;
-        }
-
-        pausedDuringRun = await getPausedGroupSendUntil(supabase);
-        if (pausedDuringRun) break;
-
-        // Idempotency: re-check sent_group_ids
-        const { data: freshMsg } = await supabase
-          .from("group_campaign_scheduled_messages")
-          .select("sent_group_ids")
-          .eq("id", scheduledMessageId)
-          .single();
-        const currentSentIds: string[] = freshMsg?.sent_group_ids || [];
-        if (currentSentIds.includes(group.id)) continue;
-
-        // Send all blocks to this group, sequentially
-        let groupHadAnyFail = false;
         for (let bi = 0; bi < allBlocks.length; bi++) {
           const block = allBlocks[bi];
-          const res = await sendBlockWithRetry(block, group);
-          if (!res.ok) groupHadAnyFail = true;
+          const isLastBlock = bi === allBlocks.length - 1;
+          seq++;
 
-          // Delay BETWEEN BLOCKS (not after last)
-          if (bi < allBlocks.length - 1) {
-            await sleep(rand(INTER_BLOCK_DELAY_MIN_MS, INTER_BLOCK_DELAY_MAX_MS));
-          }
-        }
-
-        if (groupHadAnyFail) batchFailedCount++; else batchSentCount++;
-        newlySentIds.push(group.id);
-        totalGroupsDoneSoFar++;
-
-        // ===== Persistência INCREMENTAL + renovação da trava =====
-        // Grava sent_group_ids assim que o grupo é concluído (não só no finally).
-        // Isso garante que, se a trava expirar e o cron re-assumir o disparo,
-        // este grupo NÃO será reenviado (evita duplicação nos grupos VIP).
-        try {
-          const persistSentIds = [...alreadySentGroupIds, ...newlySentIds];
-          await supabase
-            .from("group_campaign_scheduled_messages")
-            .update({
-              sent_group_ids: persistSentIds,
-              locked_until: new Date(Date.now() + 120_000).toISOString(),
-            })
-            .eq(messageGroupId ? "message_group_id" : "id", messageGroupId || scheduledMessageId);
-        } catch (persistErr) {
-          console.error("Falha ao persistir progresso incremental:", persistErr);
-        }
-
-        // ===== Ritmo APÓS um envio real (evita o stall de pausa-no-início) =====
-        const isLast = gi === pendingGroups.length - 1;
-        if (!isLast) {
-          const isLongPause = totalGroupsDoneSoFar % LONG_PAUSE_EVERY_N_GROUPS === 0;
-          const delayMs = isLongPause
-            ? rand(LONG_PAUSE_MIN_MS, LONG_PAUSE_MAX_MS)
-            : rand(INTER_GROUP_DELAY_MIN_MS, INTER_GROUP_DELAY_MAX_MS);
-
-          const budgetLeft = MAX_FUNCTION_TIME_MS - (Date.now() - functionStartTime);
-          // Se o atraso cabe no orçamento desta invocação, dorme em processo.
-          // Senão, ADIA: grava o lock no futuro e encerra; o cron retoma após expirar.
-          if (delayMs + TIME_GUARD_MS < budgetLeft) {
-            await sleep(delayMs);
+          let delayAfter: number;
+          if (!isLastBlock) {
+            // entre blocos do mesmo grupo
+            delayAfter = Math.round(rand(INTER_BLOCK_DELAY_MIN_MS, INTER_BLOCK_DELAY_MAX_MS));
+          } else if (!isLastGroup) {
+            // transição de grupo (pausa longa periódica)
+            const isLongPause = groupNum % LONG_PAUSE_EVERY_N_GROUPS === 0;
+            delayAfter = Math.round(
+              isLongPause
+                ? rand(LONG_PAUSE_MIN_MS, LONG_PAUSE_MAX_MS)
+                : rand(INTER_GROUP_DELAY_MIN_MS, INTER_GROUP_DELAY_MAX_MS),
+            );
           } else {
-            deferUntilMs = Date.now() + delayMs;
-            console.log(`Adiando ${Math.round(delayMs / 1000)}s (cron retoma) após ${totalGroupsDoneSoFar} grupos`);
-            break;
+            // último job do disparo
+            delayAfter = 0;
           }
+
+          jobs.push({
+            scheduled_message_id: scheduledMessageId,
+            message_group_id: messageGroupId || null,
+            campaign_id: campaignId,
+            group_db_id: group.id,
+            group_zapi_id: group.group_id,
+            group_name: group.name,
+            block_order: block.block_order ?? bi,
+            block_type: block.message_type || "text",
+            whatsapp_number_id: resolvedNumberId,
+            seq,
+            delay_after_ms: delayAfter,
+            send_after: seq === 1 ? nowIso : null, // só o 1º já está liberado
+            status: "pending",
+            attempts: 0,
+          });
         }
       }
-    } catch (e) {
-      console.error("Loop error:", e);
-    } finally {
-      const updatedSentIds = [...alreadySentGroupIds, ...newlySentIds];
-      const totalSent = (msg.sent_count || 0) + batchSentCount;
-      const totalFailed = (msg.failed_count || 0) + batchFailedCount;
-      const isComplete = updatedSentIds.length >= allGroups.length;
 
-      const updatePayload: Record<string, unknown> = {
-        sent_group_ids: updatedSentIds,
-        sent_count: totalSent,
-        failed_count: totalFailed,
-      };
-      if (pausedDuringRun) {
-        updatePayload.status = "cancelled";
-        updatePayload.locked_until = null;
-      } else if (isComplete) {
-        updatePayload.status = totalFailed === allGroups.length ? "failed" : "sent";
-        updatePayload.sent_at = new Date().toISOString();
-        updatePayload.locked_until = null;
-      } else {
-        updatePayload.status = "sending";
-        // Se houve adiamento (pausa longa), respeita o atraso via lock no futuro.
-        // Caso contrário (time guard), retoma rápido para o cron continuar.
-        updatePayload.locked_until = new Date(deferUntilMs ?? (Date.now() + 5_000)).toISOString();
-      }
+      const { error: insertErr } = await supabase
+        .from("group_campaign_block_dispatches")
+        .insert(jobs);
 
-      if (messageGroupId) {
+      if (insertErr) {
         await supabase.from("group_campaign_scheduled_messages")
-          .update(updatePayload)
-          .eq("message_group_id", messageGroupId);
-      } else {
-        await supabase.from("group_campaign_scheduled_messages")
-          .update(updatePayload)
-          .eq("id", scheduledMessageId);
+          .update({ status: "failed", failed_reason: `plan_failed: ${insertErr.message}`.slice(0, 500), locked_until: null })
+          .eq(messageGroupId ? "message_group_id" : "id", messageGroupId || scheduledMessageId);
+        return new Response(JSON.stringify({ error: "plan_failed", details: insertErr.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
+
+    // Mantém a(s) mensagem(ns) como "sending" (o worker conclui para "sent")
+    await supabase.from("group_campaign_scheduled_messages")
+      .update({ status: "sending", locked_until: lockUntil })
+      .eq(messageGroupId ? "message_group_id" : "id", messageGroupId || scheduledMessageId);
+
+    // ===== Start imediato: dispara o worker (fire-and-forget) =====
+    try {
+      fetch(`${supabaseUrl}/functions/v1/group-dispatch-worker`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger: "planner", numberId: resolvedNumberId }),
+      }).catch(() => {});
+    } catch { /* ignore */ }
 
     return new Response(
       JSON.stringify({
         success: true,
-        batchSent: batchSentCount,
-        batchFailed: batchFailedCount,
-        processed: newlySentIds.length,
+        planned: true,
+        processed: 0,
+        complete: false,
         totalGroups: allGroups.length,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
