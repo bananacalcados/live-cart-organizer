@@ -114,9 +114,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   // Live filter (pedidos da Live / eventos)
   const [liveFilterActive, setLiveFilterActive] = useState(false);
-  const [liveStageMap, setLiveStageMap] = useState<Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string }>>({});
+  const [liveStageMap, setLiveStageMap] = useState<Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string; createdAt?: string; isPaid?: boolean }>>({});
   // Live ghost rows: live orders that don't have an existing conversation yet
-  const [liveGhostRows, setLiveGhostRows] = useState<Array<{ phone: string; name?: string; stageTitle: string; eventName?: string; orderId: string; eventId: string; updatedAt: string; whatsapp_number_id?: string | null }>>([]);
+  const [liveGhostRows, setLiveGhostRows] = useState<Array<{ phone: string; name?: string; stageTitle: string; eventName?: string; orderId: string; eventId: string; createdAt?: string; isPaid?: boolean; updatedAt: string; whatsapp_number_id?: string | null }>>([]);
 
   // Conversation enrichment (finished/archived/etc.) — declared early so the
   // live ghost-row memo below can exclude finalized/archived phones.
