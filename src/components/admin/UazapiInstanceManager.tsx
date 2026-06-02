@@ -184,6 +184,10 @@ export function UazapiInstanceManager() {
         toast({ title: "✅ Conectado!", description: `${inst.label} está online.` });
         setQrOpen(false);
         fetchInstances();
+        // Logo após conectar, lê o proxy REAL para confirmar que pegou (não confia no "salvo").
+        if (inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none") {
+          verifyProxy(inst);
+        }
       } else {
         const { data: qr } = await supabase.functions.invoke("uazapi-session", {
           body: { action: "qrcode", whatsapp_number_id: inst.id },
