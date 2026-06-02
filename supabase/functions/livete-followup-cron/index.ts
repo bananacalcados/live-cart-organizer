@@ -422,14 +422,24 @@ serve(async (req) => {
         }
       }
 
-      // ── LOCK: Move next_reminder_at far ahead BEFORE sending to prevent duplicates ──
+      // ── ATOMIC CLAIM: only ONE concurrent invocation may win this row. ──
+      // The conditional UPDATE (still active + still due) acts as a row lock, so
+      // overlapping cron runs can never send the same followup twice in a row.
       const level = fu.reminder_level;
       const nextLevel = level + 1;
       const lockTime = new Date(now.getTime() + 30 * 60000).toISOString(); // 30 min lock
-      await supabase.from('livete_followups').update({
-        next_reminder_at: lockTime,
-        updated_at: now.toISOString(),
-      }).eq('id', fu.id);
+      const { data: claimed } = await supabase
+        .from('livete_followups')
+        .update({ next_reminder_at: lockTime, updated_at: now.toISOString() })
+        .eq('id', fu.id)
+        .eq('is_active', true)
+        .lte('next_reminder_at', now.toISOString())
+        .select('id');
+      if (!claimed || claimed.length === 0) {
+        // Lost the race to a concurrent run — skip to avoid a duplicate send.
+        console.log(`[livete-followup] ${fu.phone} claim lost (concurrent run), skipping`);
+        continue;
+      }
 
       // Send message
       try {
