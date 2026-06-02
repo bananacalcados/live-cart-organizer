@@ -222,9 +222,59 @@ export async function processCommentAutomation(
           actions.push(`dm:${rule.name}`);
           console.log(`✅ DM sent for comment ${comment.commentId} via rule "${rule.name}"`);
 
-          // Also save the DM as a whatsapp_messages record for chat visibility
+          // The Private Reply API delivers to the user's messaging-scoped id,
+          // which is what later inbound/echo events use. Persist everything under
+          // that id so the comment automation lands in the SAME chat thread as
+          // the lead's future replies (instead of an outgoing-only "Disparos" thread).
+          const threadId: string = data.recipient_id || comment.fromId;
+
+          // Fetch the post/ad thumbnail once (reused across rules).
+          if (postThumb === undefined) {
+            postThumb = await fetchCommentMediaThumb(comment.commentId, pageAccessToken);
+          }
+
+          const referral = {
+            source_type: comment.mediaType?.toUpperCase() === "REELS" ? "reel" : "comment",
+            media_url: postThumb?.media_url || null,
+            source_url: postThumb?.permalink || null,
+            headline: comment.mediaType?.toUpperCase() === "REELS"
+              ? "Comentário no Reel"
+              : "Comentário no anúncio/post",
+            body: comment.text,
+          };
+
+          // Mirror the lead's first message (the comment) as INCOMING in the
+          // canonical thread, with the ad/post thumbnail — but only once.
+          const { data: existingIncoming } = await supabase
+            .from("whatsapp_messages")
+            .select("id")
+            .eq("phone", threadId)
+            .eq("channel", "instagram")
+            .eq("direction", "incoming")
+            .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+            .limit(1);
+
+          if (!existingIncoming || existingIncoming.length === 0) {
+            const { error: incErr } = await supabase.from("whatsapp_messages").insert({
+              phone: threadId,
+              message: comment.text,
+              direction: "incoming",
+              message_id: comment.commentId,
+              status: "received",
+              media_type: "text",
+              is_group: false,
+              channel: "instagram",
+              sender_name: comment.username,
+              referral,
+            });
+            if (incErr && (incErr as any).code !== "23505") {
+              console.warn("[comment-dm] mirror incoming error:", incErr);
+            }
+          }
+
+          // Save the DM as a whatsapp_messages record for chat visibility.
           await supabase.from("whatsapp_messages").insert({
-            phone: comment.fromId,
+            phone: threadId,
             message: dmText,
             direction: "outgoing",
             message_id: data.message_id || null,
