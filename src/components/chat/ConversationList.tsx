@@ -300,7 +300,7 @@ export function ConversationList({
         </div>
 
         {/* Native filter pills */}
-        <div className="px-3 py-2.5 bg-[#d6dde2] dark:bg-[#1a2329] flex gap-2 overflow-x-auto flex-shrink-0">
+        <div className="px-3 py-2.5 bg-[#d6dde2] dark:bg-[#1a2329] flex flex-wrap gap-2 flex-shrink-0">
           <Pill label="Todas" active={allActive} onClick={() => pickNativePill('all', 'all')} />
           <Pill label="Novas" active={newActive} count={newCount} onClick={() => pickNativePill('not_started', 'all')} />
           <Pill label="Não lidas" active={unreadActive} count={unreadCount} badge={unreadCount > 0 && !unreadActive} onClick={() => pickNativePill('awaiting_reply', 'all')} />
