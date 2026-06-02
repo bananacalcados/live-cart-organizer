@@ -217,7 +217,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const livePhoneKey = (p: string) => String(p || "").replace(/\D/g, "").slice(-8);
   const isLiveCustomer = (phone: string) => !!liveStageMap[livePhoneKey(phone)];
   const liveStageByPhone = useMemo(() => {
-    const out: Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string }> = {};
+    const out: Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string; createdAt?: string; isPaid?: boolean }> = {};
     for (const c of conversations) {
       const k = livePhoneKey(c.phone);
       if (liveStageMap[k]) out[c.phone] = liveStageMap[k];
