@@ -529,6 +529,7 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
           items_count: totalQty,
           order_id: orderId,
           event_id: orderData?.eventId || null,
+          free_shipping: orderData?.freeShipping || false,
         },
       });
       if (error) throw error;
