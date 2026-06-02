@@ -106,13 +106,20 @@ export function POSLiveOrderPanel({ orderId, eventId, eventName }: Props) {
               {eventName}
             </Badge>
           )}
+          {order.created_at && (
+            <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+              {new Date(order.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+            </span>
+          )}
           {stageMeta && (
             <Badge className="text-[9px] bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-200 border-0">
               {stageMeta.title}
             </Badge>
           )}
-          {order.is_paid && (
+          {order.is_paid ? (
             <Badge className="text-[9px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-0">PAGO</Badge>
+          ) : (
+            <Badge className="text-[9px] bg-amber-500/20 text-amber-700 dark:text-amber-300 border-0">A PAGAR</Badge>
           )}
           <span className="ml-auto text-[11px] font-bold text-fuchsia-700 dark:text-fuchsia-200">
             R$ {total.toFixed(2)}
