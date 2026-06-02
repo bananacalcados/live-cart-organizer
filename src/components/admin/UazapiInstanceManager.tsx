@@ -111,6 +111,14 @@ export function UazapiInstanceManager() {
     fetchInstances();
   }, [fetchInstances]);
 
+  // Verifica silenciosamente o proxy real das instâncias online com proxy configurado.
+  useEffect(() => {
+    instances
+      .filter((i) => i.is_online && i.uazapi_proxy_mode && i.uazapi_proxy_mode !== "none")
+      .forEach((i) => { if (!proxyRuntime[i.id]) verifyProxy(i, true); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instances]);
+
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
