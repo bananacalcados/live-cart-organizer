@@ -187,11 +187,16 @@ serve(async (req) => {
     const orderAgeHours = (Date.now() - new Date(order.created_at).getTime()) / (1000 * 60 * 60);
     const isOldOrder = orderAgeHours > 48;
 
-    // Load event date for more context
+    // Load event date for more context + the instance bound to this event.
+    // RULE: Livete must ONLY act on the instance that sent the event's first
+    // message (event.whatsapp_number_id). It must NEVER reply on a different
+    // instance just because the customer happened to write to another number.
     let eventDate: string | null = null;
+    let eventNumberId: string | null = null;
     if (order.event_id) {
-      const { data: evt } = await supabase.from('events').select('date').eq('id', order.event_id).single();
+      const { data: evt } = await supabase.from('events').select('date, whatsapp_number_id').eq('id', order.event_id).single();
       if (evt?.date) eventDate = evt.date;
+      if ((evt as any)?.whatsapp_number_id) eventNumberId = (evt as any).whatsapp_number_id;
     }
     const eventAgeHours = eventDate ? (Date.now() - new Date(eventDate).getTime()) / (1000 * 60 * 60) : orderAgeHours;
 
@@ -556,8 +561,12 @@ ${stageSpecificRules}
     console.log(`[livete-respond] Typing delay: ${delay}ms, tools: [${toolsExecuted.join(', ')}]`);
     await sleep(delay);
 
-    // 8. Send reply via WhatsApp
-    const sendNumberId = whatsappNumberId || session.whatsapp_number_id;
+    // 8. Send reply via WhatsApp.
+    // Bind to the event's instance first (the one that sent the first message),
+    // then the session's instance. Only fall back to the incoming instance when
+    // neither is known. This prevents Livete from leaking replies to a different
+    // instance than the one the live conversation started on.
+    const sendNumberId = eventNumberId || session.whatsapp_number_id || whatsappNumberId;
 
     async function sendWhatsApp(message: string) {
       if (!sendNumberId) return;
