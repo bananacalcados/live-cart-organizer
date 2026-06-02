@@ -179,19 +179,23 @@ serve(async (req) => {
         const minutesSince = (now.getTime() - lastMsgTime.getTime()) / 60000;
         if (minutesSince < LEVEL_INTERVALS[0]) continue;
 
-        // Resolve the instance the client actually talked on (last inbound), so the
-        // followup goes out on the SAME number and the UI can show it (issue #2).
-        let resolvedNumberId: string | null = null;
-        const { data: lastIn } = await supabase
-          .from('whatsapp_messages')
-          .select('whatsapp_number_id')
-          .eq('phone', normalizedPhone)
-          .eq('direction', 'incoming')
-          .not('whatsapp_number_id', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (lastIn?.whatsapp_number_id) resolvedNumberId = lastIn.whatsapp_number_id;
+        // Bind the followup to the event's instance (the one that sent the
+        // first live message). Only fall back to the last inbound instance when
+        // the event has no instance configured. This guarantees followups never
+        // leak to a different instance than the live started on.
+        let resolvedNumberId: string | null = eventNumberById[(order as any).event_id] || null;
+        if (!resolvedNumberId) {
+          const { data: lastIn } = await supabase
+            .from('whatsapp_messages')
+            .select('whatsapp_number_id')
+            .eq('phone', normalizedPhone)
+            .eq('direction', 'incoming')
+            .not('whatsapp_number_id', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (lastIn?.whatsapp_number_id) resolvedNumberId = lastIn.whatsapp_number_id;
+        }
 
         await supabase.from('livete_followups').insert({
           phone: normalizedPhone,
