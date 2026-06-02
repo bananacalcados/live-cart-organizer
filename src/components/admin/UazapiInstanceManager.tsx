@@ -66,11 +66,24 @@ export function UazapiInstanceManager() {
 
   const [actingId, setActingId] = useState<string | null>(null);
 
+  // Proxy dialog
+  const [proxyOpen, setProxyOpen] = useState(false);
+  const [proxyInstance, setProxyInstance] = useState<UazapiInstance | null>(null);
+  const [proxyMode, setProxyMode] = useState<"internal" | "custom" | "none">("internal");
+  const [proxyState, setProxyState] = useState<string>("");
+  const [proxyCity, setProxyCity] = useState<string>("");
+  const [proxyUrl, setProxyUrl] = useState<string>("");
+  const [proxyFallback, setProxyFallback] = useState<string>("internal_proxy");
+  const [proxyCities, setProxyCities] = useState<ProxyCity[]>([]);
+  const [proxyCitiesLoading, setProxyCitiesLoading] = useState(false);
+  const [proxyStatus, setProxyStatus] = useState<string>("");
+  const [proxySaving, setProxySaving] = useState(false);
+
   const fetchInstances = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers")
-      .select("id, label, phone_display, provider, is_active, is_default, is_online, ai_paused, last_health_check, uazapi_owner, uazapi_instance_name, created_at")
+      .select("id, label, phone_display, provider, is_active, is_default, is_online, ai_paused, uazapi_proxy_mode, uazapi_proxy_managed_country, uazapi_proxy_managed_state, uazapi_proxy_managed_city, last_health_check, uazapi_owner, uazapi_instance_name, created_at")
       .eq("provider", "uazapi")
       .order("created_at", { ascending: true });
 
