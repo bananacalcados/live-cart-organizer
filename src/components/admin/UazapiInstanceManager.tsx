@@ -488,14 +488,37 @@ export function UazapiInstanceManager() {
                               <Bot className="h-3 w-3" /> IA ativa
                             </Badge>
                           )}
-                          {inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none" && (
-                            <Badge variant="outline" className="gap-1 border-sky-500/40 text-sky-500">
-                              <Globe className="h-3 w-3" />
-                              {inst.uazapi_proxy_mode === "internal"
-                                ? `Proxy${inst.uazapi_proxy_managed_city ? ` ${inst.uazapi_proxy_managed_city}` : inst.uazapi_proxy_managed_state ? ` ${inst.uazapi_proxy_managed_state.toUpperCase()}` : " interno"}`
-                                : "Proxy próprio"}
-                            </Badge>
-                          )}
+                          {inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none" && (() => {
+                            const rt = proxyRuntime[inst.id];
+                            const label = inst.uazapi_proxy_mode === "internal"
+                              ? `Proxy${inst.uazapi_proxy_managed_city ? ` ${inst.uazapi_proxy_managed_city}` : inst.uazapi_proxy_managed_state ? ` ${inst.uazapi_proxy_managed_state.toUpperCase()}` : " interno"}`
+                              : "Proxy próprio";
+                            // Sem leitura runtime ainda → mostra a intenção (cinza/azul).
+                            if (!rt) {
+                              return (
+                                <Badge variant="outline" className="gap-1 border-sky-500/40 text-sky-500">
+                                  <Globe className="h-3 w-3" /> {label}
+                                </Badge>
+                              );
+                            }
+                            if (rt.ok) {
+                              return (
+                                <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500" title={`Em uso: ${rt.effective}`}>
+                                  <Globe className="h-3 w-3" /> {label} ✓
+                                </Badge>
+                              );
+                            }
+                            const reason = rt.fallback
+                              ? `em fallback → ${rt.effective}`
+                              : rt.error
+                                ? rt.error
+                                : `em uso: ${rt.effective}`;
+                            return (
+                              <Badge variant="outline" className="gap-1 border-amber-500/50 text-amber-500" title={reason}>
+                                <Globe className="h-3 w-3" /> {label} ⚠️
+                              </Badge>
+                            );
+                          })()}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -503,6 +526,11 @@ export function UazapiInstanceManager() {
                           <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => openQr(inst)} title="Conectar / QR Code">
                             <QrCode className="h-4 w-4" /> Conectar
                           </Button>
+                          {inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none" && (
+                            <Button variant="ghost" size="icon" disabled={verifyingId === inst.id} onClick={() => verifyProxy(inst)} title="Verificar proxy real (effective_mode)">
+                              <ShieldCheck className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => checkStatus(inst)} title="Verificar status">
                             <RefreshCw className="h-4 w-4" />
                           </Button>
