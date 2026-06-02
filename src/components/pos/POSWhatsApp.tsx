@@ -114,9 +114,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   // Live filter (pedidos da Live / eventos)
   const [liveFilterActive, setLiveFilterActive] = useState(false);
-  const [liveStageMap, setLiveStageMap] = useState<Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string }>>({});
+  const [liveStageMap, setLiveStageMap] = useState<Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string; createdAt?: string; isPaid?: boolean }>>({});
   // Live ghost rows: live orders that don't have an existing conversation yet
-  const [liveGhostRows, setLiveGhostRows] = useState<Array<{ phone: string; name?: string; stageTitle: string; eventName?: string; orderId: string; eventId: string; updatedAt: string; whatsapp_number_id?: string | null }>>([]);
+  const [liveGhostRows, setLiveGhostRows] = useState<Array<{ phone: string; name?: string; stageTitle: string; eventName?: string; orderId: string; eventId: string; createdAt?: string; isPaid?: boolean; updatedAt: string; whatsapp_number_id?: string | null }>>([]);
 
   // Conversation enrichment (finished/archived/etc.) — declared early so the
   // live ghost-row memo below can exclude finalized/archived phones.
@@ -164,30 +164,37 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
         const { data: orders } = await supabase
           .from("orders")
-          .select("id, event_id, stage, updated_at, customer:customers(instagram_handle, whatsapp)")
+          .select("id, event_id, stage, is_paid, created_at, updated_at, customer:customers(instagram_handle, whatsapp)")
           .in("event_id", eventIds)
-          .order("updated_at", { ascending: false })
+          .order("created_at", { ascending: false })
           .limit(1000);
 
-        const map: Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string }> = {};
-        const ghosts: Array<{ phone: string; name?: string; stageTitle: string; eventName?: string; orderId: string; eventId: string; updatedAt: string; whatsapp_number_id?: string | null }> = [];
-        const seenKeys = new Set<string>();
+        const map: Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string; createdAt?: string; isPaid?: boolean }> = {};
+        const ghosts: Array<{ phone: string; name?: string; stageTitle: string; eventName?: string; orderId: string; eventId: string; createdAt?: string; isPaid?: boolean; updatedAt: string; whatsapp_number_id?: string | null }> = [];
+
+        // Group all orders per phone (last-8 key). orders are newest-first by created_at.
+        const byKey: Record<string, any[]> = {};
         for (const o of (orders || []) as any[]) {
           const ph = o.customer?.whatsapp;
           if (!ph) continue;
           const digits = String(ph).replace(/\D/g, "");
           if (digits.length < 8) continue;
-          const key = digits.slice(-8);
-          if (seenKeys.has(key)) continue;
-          seenKeys.add(key);
+          (byKey[digits.slice(-8)] ||= []).push({ ...o, _digits: digits });
+        }
+        for (const list of Object.values(byKey)) {
+          // Show the order the conversation is actually about: the NEWEST UNPAID order
+          // (what Livete is chasing) wins; otherwise fall back to the newest order.
+          const o = list.find((x) => !x.is_paid) || list[0];
           const entry = {
             stageTitle: stageMap[o.stage] || o.stage || "Live",
             eventName: eventNameById[o.event_id],
             orderId: o.id,
             eventId: o.event_id,
+            createdAt: o.created_at,
+            isPaid: !!o.is_paid,
           };
-          map[key] = entry;
-          const normalized = digits.startsWith("55") ? digits : `55${digits}`;
+          map[o._digits.slice(-8)] = entry;
+          const normalized = o._digits.startsWith("55") ? o._digits : `55${o._digits}`;
           ghosts.push({
             phone: normalized,
             name: o.customer?.instagram_handle,
@@ -210,7 +217,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const livePhoneKey = (p: string) => String(p || "").replace(/\D/g, "").slice(-8);
   const isLiveCustomer = (phone: string) => !!liveStageMap[livePhoneKey(phone)];
   const liveStageByPhone = useMemo(() => {
-    const out: Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string }> = {};
+    const out: Record<string, { stageTitle: string; eventName?: string; orderId: string; eventId: string; createdAt?: string; isPaid?: boolean }> = {};
     for (const c of conversations) {
       const k = livePhoneKey(c.phone);
       if (liveStageMap[k]) out[c.phone] = liveStageMap[k];
