@@ -6,13 +6,17 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook, Bot, BotOff } from "lucide-react";
+import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook, Bot, BotOff, Globe } from "lucide-react";
 import QRCode from "react-qr-code";
 
 interface UazapiInstance {
@@ -24,10 +28,21 @@ interface UazapiInstance {
   is_default: boolean;
   is_online: boolean | null;
   ai_paused: boolean | null;
+  uazapi_proxy_mode: string | null;
+  uazapi_proxy_managed_country: string | null;
+  uazapi_proxy_managed_state: string | null;
+  uazapi_proxy_managed_city: string | null;
   last_health_check: string | null;
   uazapi_owner: string | null;
   uazapi_instance_name: string | null;
   created_at: string;
+}
+
+interface ProxyCity {
+  value: string;
+  label?: string;
+  name?: string;
+  state?: string;
 }
 
 export function UazapiInstanceManager() {
