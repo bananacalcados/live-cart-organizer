@@ -315,7 +315,7 @@ export function ProductStockManagerDialog({ masterId, open, onOpenChange }: Prop
                           <Button
                             size="sm"
                             className="w-full h-7 text-xs"
-                            disabled={savingKey === k || !row.tinyId}
+                            disabled={savingKey === k || !row.posProductId}
                             onClick={() => handleApply(v, row)}
                           >
                             {savingKey === k ? (
