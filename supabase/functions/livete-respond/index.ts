@@ -561,8 +561,12 @@ ${stageSpecificRules}
     console.log(`[livete-respond] Typing delay: ${delay}ms, tools: [${toolsExecuted.join(', ')}]`);
     await sleep(delay);
 
-    // 8. Send reply via WhatsApp
-    const sendNumberId = whatsappNumberId || session.whatsapp_number_id;
+    // 8. Send reply via WhatsApp.
+    // Bind to the event's instance first (the one that sent the first message),
+    // then the session's instance. Only fall back to the incoming instance when
+    // neither is known. This prevents Livete from leaking replies to a different
+    // instance than the one the live conversation started on.
+    const sendNumberId = eventNumberId || session.whatsapp_number_id || whatsappNumberId;
 
     async function sendWhatsApp(message: string) {
       if (!sendNumberId) return;
