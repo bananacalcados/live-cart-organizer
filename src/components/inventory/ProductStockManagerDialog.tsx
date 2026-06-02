@@ -146,8 +146,8 @@ export function ProductStockManagerDialog({ masterId, open, onOpenChange }: Prop
       toast.error("Quantidade inválida");
       return;
     }
-    if (!row.tinyId) {
-      toast.error("Variação sem tiny_id — não dá pra ajustar no Tiny");
+    if (!row.posProductId) {
+      toast.error("Variação sem cadastro no estoque desta loja — não dá pra ajustar");
       return;
     }
 
