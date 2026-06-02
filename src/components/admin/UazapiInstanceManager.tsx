@@ -79,6 +79,18 @@ export function UazapiInstanceManager() {
   const [proxyStatus, setProxyStatus] = useState<string>("");
   const [proxySaving, setProxySaving] = useState(false);
 
+  // Estado runtime REAL do proxy por instância (lido via GET /instance/proxy).
+  // ok=true só quando effective_mode bate com a intenção e não está em fallback.
+  interface ProxyRuntime {
+    effective: string;
+    intended: string;
+    fallback: boolean;
+    error: string | null;
+    ok: boolean;
+  }
+  const [proxyRuntime, setProxyRuntime] = useState<Record<string, ProxyRuntime>>({});
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+
   const fetchInstances = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
