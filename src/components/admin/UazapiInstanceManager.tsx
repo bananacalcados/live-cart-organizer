@@ -6,13 +6,17 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook, Bot, BotOff } from "lucide-react";
+import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook, Bot, BotOff, Globe } from "lucide-react";
 import QRCode from "react-qr-code";
 
 interface UazapiInstance {
@@ -24,10 +28,21 @@ interface UazapiInstance {
   is_default: boolean;
   is_online: boolean | null;
   ai_paused: boolean | null;
+  uazapi_proxy_mode: string | null;
+  uazapi_proxy_managed_country: string | null;
+  uazapi_proxy_managed_state: string | null;
+  uazapi_proxy_managed_city: string | null;
   last_health_check: string | null;
   uazapi_owner: string | null;
   uazapi_instance_name: string | null;
   created_at: string;
+}
+
+interface ProxyCity {
+  value: string;
+  label?: string;
+  name?: string;
+  state?: string;
 }
 
 export function UazapiInstanceManager() {
@@ -51,11 +66,24 @@ export function UazapiInstanceManager() {
 
   const [actingId, setActingId] = useState<string | null>(null);
 
+  // Proxy dialog
+  const [proxyOpen, setProxyOpen] = useState(false);
+  const [proxyInstance, setProxyInstance] = useState<UazapiInstance | null>(null);
+  const [proxyMode, setProxyMode] = useState<"internal" | "custom" | "none">("internal");
+  const [proxyState, setProxyState] = useState<string>("");
+  const [proxyCity, setProxyCity] = useState<string>("");
+  const [proxyUrl, setProxyUrl] = useState<string>("");
+  const [proxyFallback, setProxyFallback] = useState<string>("internal_proxy");
+  const [proxyCities, setProxyCities] = useState<ProxyCity[]>([]);
+  const [proxyCitiesLoading, setProxyCitiesLoading] = useState(false);
+  const [proxyStatus, setProxyStatus] = useState<string>("");
+  const [proxySaving, setProxySaving] = useState(false);
+
   const fetchInstances = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers")
-      .select("id, label, phone_display, provider, is_active, is_default, is_online, ai_paused, last_health_check, uazapi_owner, uazapi_instance_name, created_at")
+      .select("id, label, phone_display, provider, is_active, is_default, is_online, ai_paused, uazapi_proxy_mode, uazapi_proxy_managed_country, uazapi_proxy_managed_state, uazapi_proxy_managed_city, last_health_check, uazapi_owner, uazapi_instance_name, created_at")
       .eq("provider", "uazapi")
       .order("created_at", { ascending: true });
 
@@ -246,6 +274,83 @@ export function UazapiInstanceManager() {
     setActingId(null);
   };
 
+  const loadProxyCities = useCallback(async (instId: string, state: string) => {
+    setProxyCitiesLoading(true);
+    try {
+      const { data } = await supabase.functions.invoke("uazapi-session", {
+        body: { action: "proxy_cities", whatsapp_number_id: instId, country: "br", state: state || undefined },
+      });
+      const raw = data?.cities;
+      const list: ProxyCity[] = Array.isArray(raw) ? raw : (raw?.cities ?? []);
+      setProxyCities(list);
+    } catch {
+      setProxyCities([]);
+    }
+    setProxyCitiesLoading(false);
+  }, []);
+
+  const openProxy = async (inst: UazapiInstance) => {
+    setProxyInstance(inst);
+    setProxyMode((inst.uazapi_proxy_mode as "internal" | "custom" | "none") || "internal");
+    setProxyState(inst.uazapi_proxy_managed_state || "");
+    setProxyCity(inst.uazapi_proxy_managed_city || "");
+    setProxyUrl("");
+    setProxyFallback("internal_proxy");
+    setProxyStatus("");
+    setProxyCities([]);
+    setProxyOpen(true);
+    // Lê o estado runtime real do proxy
+    try {
+      const { data } = await supabase.functions.invoke("uazapi-session", {
+        body: { action: "get_proxy", whatsapp_number_id: inst.id },
+      });
+      const p = data?.proxy;
+      if (p) {
+        const eff = p.effective_mode || p.mode || "—";
+        const detail = p.effective_detail ? ` (${p.effective_detail})` : "";
+        const fb = p.fallback?.active ? " ⚠️ em fallback" : "";
+        setProxyStatus(`Em uso: ${eff}${detail}${fb}`);
+      }
+    } catch { /* noop */ }
+    loadProxyCities(inst.id, inst.uazapi_proxy_managed_state || "");
+  };
+
+  const saveProxy = async () => {
+    if (!proxyInstance) return;
+    setProxySaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        action: "set_proxy",
+        whatsapp_number_id: proxyInstance.id,
+        mode: proxyMode,
+      };
+      if (proxyMode === "internal") {
+        payload.proxy_managed_country = "br";
+        if (proxyState) payload.proxy_managed_state = proxyState;
+        if (proxyCity) payload.proxy_managed_city = proxyCity;
+      } else if (proxyMode === "custom") {
+        payload.proxy_url = proxyUrl.trim();
+        payload.proxy_fallback = proxyFallback;
+      }
+      const { data, error } = await supabase.functions.invoke("uazapi-session", { body: payload });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({
+        title: "✅ Proxy configurado",
+        description: "Reconecte a instância (QR) para o proxy entrar em uso.",
+      });
+      setProxyOpen(false);
+      await fetchInstances();
+    } catch (e) {
+      toast({ title: "Erro ao configurar proxy", description: (e as Error).message, variant: "destructive" });
+    }
+    setProxySaving(false);
+  };
+
+  const BR_STATES = ["ac","al","ap","am","ba","ce","df","es","go","ma","mt","ms","mg","pa","pb","pr","pe","pi","rj","rn","rs","ro","rr","sc","sp","se","to"];
+
+
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -316,6 +421,14 @@ export function UazapiInstanceManager() {
                               <Bot className="h-3 w-3" /> IA ativa
                             </Badge>
                           )}
+                          {inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none" && (
+                            <Badge variant="outline" className="gap-1 border-sky-500/40 text-sky-500">
+                              <Globe className="h-3 w-3" />
+                              {inst.uazapi_proxy_mode === "internal"
+                                ? `Proxy${inst.uazapi_proxy_managed_city ? ` ${inst.uazapi_proxy_managed_city}` : inst.uazapi_proxy_managed_state ? ` ${inst.uazapi_proxy_managed_state.toUpperCase()}` : " interno"}`
+                                : "Proxy próprio"}
+                            </Badge>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -338,6 +451,16 @@ export function UazapiInstanceManager() {
                             title={inst.ai_paused ? "Ativar IA/automações" : "Pausar IA/automações"}
                           >
                             {inst.ai_paused ? <><Bot className="h-4 w-4" /> Ativar IA</> : <><BotOff className="h-4 w-4" /> Pausar IA</>}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={`h-8 gap-1 ${inst.uazapi_proxy_mode && inst.uazapi_proxy_mode !== "none" ? "border-sky-500/50 text-sky-500 hover:bg-sky-500/10" : ""}`}
+                            disabled={actingId === inst.id}
+                            onClick={() => openProxy(inst)}
+                            title="Configurar proxy"
+                          >
+                            <Globe className="h-4 w-4" /> Proxy
                           </Button>
                           <Button variant="ghost" size="icon" disabled={actingId === inst.id} onClick={() => disconnect(inst)} title="Desconectar">
                             <Power className="h-4 w-4" />
@@ -423,6 +546,118 @@ export function UazapiInstanceManager() {
             <Button variant="outline" className="w-full gap-2" disabled={qrLoading} onClick={() => qrInstance && refreshQr(qrInstance)}>
               <RefreshCw className="h-4 w-4" /> Atualizar QR Code
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Proxy Dialog */}
+      <Dialog open={proxyOpen} onOpenChange={setProxyOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Proxy — {proxyInstance?.label}</DialogTitle>
+            <DialogDescription>
+              Roteia a conexão por um IP diferente do datacenter. Use proxy interno do Brasil para reduzir risco de banimento.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {proxyStatus && (
+              <Badge variant="secondary" className="text-xs">{proxyStatus}</Badge>
+            )}
+
+            <RadioGroup value={proxyMode} onValueChange={(v) => setProxyMode(v as "internal" | "custom" | "none")} className="space-y-2">
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="internal" id="proxy-internal" className="mt-1" />
+                <Label htmlFor="proxy-internal" className="font-normal cursor-pointer">
+                  <span className="font-medium">Interno gerenciado (recomendado)</span>
+                  <span className="block text-xs text-muted-foreground">Pool de proxies da uazapi. Pode fixar uma cidade/UF do Brasil.</span>
+                </Label>
+              </div>
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="custom" id="proxy-custom" className="mt-1" />
+                <Label htmlFor="proxy-custom" className="font-normal cursor-pointer">
+                  <span className="font-medium">Próprio</span>
+                  <span className="block text-xs text-muted-foreground">Seu proxy (http/https/socks5).</span>
+                </Label>
+              </div>
+              <div className="flex items-start gap-2">
+                <RadioGroupItem value="none" id="proxy-none" className="mt-1" />
+                <Label htmlFor="proxy-none" className="font-normal cursor-pointer">
+                  <span className="font-medium">Direto (sem proxy)</span>
+                  <span className="block text-xs text-muted-foreground">Conexão direta — maior risco.</span>
+                </Label>
+              </div>
+            </RadioGroup>
+
+            {proxyMode === "internal" && (
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <div className="space-y-1.5">
+                  <Label>Estado (UF) — opcional</Label>
+                  <Select
+                    value={proxyState || "any"}
+                    onValueChange={(v) => {
+                      const uf = v === "any" ? "" : v;
+                      setProxyState(uf);
+                      setProxyCity("");
+                      if (proxyInstance) loadProxyCities(proxyInstance.id, uf);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Qualquer estado" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Qualquer estado</SelectItem>
+                      {BR_STATES.map((uf) => (
+                        <SelectItem key={uf} value={uf}>{uf.toUpperCase()}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Cidade — opcional</Label>
+                  <Select value={proxyCity || "any"} onValueChange={(v) => setProxyCity(v === "any" ? "" : v)} disabled={proxyCitiesLoading}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={proxyCitiesLoading ? "Carregando..." : "Qualquer cidade"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Qualquer cidade</SelectItem>
+                      {proxyCities.map((c) => (
+                        <SelectItem key={c.value} value={c.value}>{c.name || c.label || c.value}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Deixe em branco para a uazapi escolher automaticamente no pool BR.</p>
+                </div>
+              </div>
+            )}
+
+            {proxyMode === "custom" && (
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <div className="space-y-1.5">
+                  <Label>URL do proxy *</Label>
+                  <Input value={proxyUrl} onChange={(e) => setProxyUrl(e.target.value)} placeholder="socks5://usuario:senha@host:porta" />
+                  <p className="text-xs text-muted-foreground">Protocolos: http://, https://, socks5:// ou socks5h://</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Contingência</Label>
+                  <Select value={proxyFallback} onValueChange={setProxyFallback}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="internal_proxy">Proxy interno (se o seu falhar)</SelectItem>
+                      <SelectItem value="never">Nunca (sem contingência)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            <Button
+              onClick={saveProxy}
+              className="w-full"
+              disabled={proxySaving || (proxyMode === "custom" && !proxyUrl.trim())}
+            >
+              {proxySaving ? "Salvando..." : "Salvar proxy"}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Após salvar, reconecte a instância (QR) para o proxy entrar em uso.
+            </p>
           </div>
         </DialogContent>
       </Dialog>

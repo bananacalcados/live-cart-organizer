@@ -14655,6 +14655,10 @@ export type Database = {
           uazapi_instance_name: string | null
           uazapi_last_qr: string | null
           uazapi_owner: string | null
+          uazapi_proxy_managed_city: string | null
+          uazapi_proxy_managed_country: string | null
+          uazapi_proxy_managed_state: string | null
+          uazapi_proxy_mode: string | null
           uazapi_qr_updated_at: string | null
           uazapi_token: string | null
           updated_at: string
@@ -14686,6 +14690,10 @@ export type Database = {
           uazapi_instance_name?: string | null
           uazapi_last_qr?: string | null
           uazapi_owner?: string | null
+          uazapi_proxy_managed_city?: string | null
+          uazapi_proxy_managed_country?: string | null
+          uazapi_proxy_managed_state?: string | null
+          uazapi_proxy_mode?: string | null
           uazapi_qr_updated_at?: string | null
           uazapi_token?: string | null
           updated_at?: string
@@ -14717,6 +14725,10 @@ export type Database = {
           uazapi_instance_name?: string | null
           uazapi_last_qr?: string | null
           uazapi_owner?: string | null
+          uazapi_proxy_managed_city?: string | null
+          uazapi_proxy_managed_country?: string | null
+          uazapi_proxy_managed_state?: string | null
+          uazapi_proxy_mode?: string | null
           uazapi_qr_updated_at?: string | null
           uazapi_token?: string | null
           updated_at?: string

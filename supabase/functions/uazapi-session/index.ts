@@ -145,9 +145,27 @@ serve(async (req) => {
         const token = await loadToken();
         if (!token) return json({ error: "Instância uazapi não encontrada" }, 400);
 
+        // Reaplica a região do proxy interno gerenciado (persistida na linha local),
+        // para que toda reconexão saia da mesma cidade/UF brasileira escolhida.
+        const connectBody: Record<string, unknown> = body.phone
+          ? { phone: String(body.phone).replace(/\D/g, "") }
+          : {};
+        if (numberId) {
+          const { data: cfg } = await supabase
+            .from("whatsapp_numbers")
+            .select("uazapi_proxy_mode, uazapi_proxy_managed_country, uazapi_proxy_managed_state, uazapi_proxy_managed_city")
+            .eq("id", numberId)
+            .maybeSingle();
+          if (cfg?.uazapi_proxy_mode === "internal") {
+            if (cfg.uazapi_proxy_managed_country) connectBody.proxy_managed_country = cfg.uazapi_proxy_managed_country;
+            if (cfg.uazapi_proxy_managed_state) connectBody.proxy_managed_state = cfg.uazapi_proxy_managed_state;
+            if (cfg.uazapi_proxy_managed_city) connectBody.proxy_managed_city = cfg.uazapi_proxy_managed_city;
+          }
+        }
+
         const r = await uazapiInstance("/instance/connect", token, {
           method: "POST",
-          body: body.phone ? { phone: String(body.phone).replace(/\D/g, "") } : {},
+          body: connectBody,
         });
         if (!r.ok) return json({ error: "Falha ao conectar", details: r.data }, r.status);
         const inst = r.data?.instance || r.data;
@@ -223,6 +241,62 @@ serve(async (req) => {
         const r = await configureWebhook(token, numberId);
         if (!r.ok) return json({ error: "Falha ao atualizar webhook", details: r.data }, r.status);
         return json({ success: true, events: WEBHOOK_EVENTS });
+      }
+
+      // ───────────────────────── proxy ─────────────────────────
+      case "get_proxy": {
+        const token = await loadToken();
+        if (!token) return json({ error: "Instância uazapi não encontrada" }, 400);
+        const r = await uazapiInstance("/instance/proxy", token, { method: "GET" });
+        return json({ success: r.ok, proxy: r.data }, r.ok ? 200 : r.status);
+      }
+
+      case "proxy_cities": {
+        const token = await loadToken();
+        if (!token) return json({ error: "Instância uazapi não encontrada" }, 400);
+        const country = String(body.country || "br");
+        const params = new URLSearchParams({ country });
+        if (body.state) params.set("state", String(body.state));
+        if (body.search) params.set("search", String(body.search));
+        const r = await uazapiInstance(`/proxy-managed/cities?${params.toString()}`, token, { method: "GET" });
+        return json({ success: r.ok, cities: r.data }, r.ok ? 200 : r.status);
+      }
+
+      case "set_proxy": {
+        const token = await loadToken();
+        if (!token || !numberId) return json({ error: "Instância uazapi não encontrada" }, 400);
+        const mode = String(body.mode || "");
+        if (!["custom", "internal", "none"].includes(mode)) {
+          return json({ error: "mode inválido (custom|internal|none)" }, 400);
+        }
+
+        const proxyPayload: Record<string, unknown> = { mode };
+        if (mode === "custom") {
+          const proxyUrl = String(body.proxy_url || "").trim();
+          if (!/^(https?|socks5h?):\/\//i.test(proxyUrl)) {
+            return json({ error: "proxy_url inválida. Use http://, https://, socks5:// ou socks5h://" }, 400);
+          }
+          proxyPayload.proxy_url = proxyUrl;
+          if (body.proxy_fallback) proxyPayload.proxy_fallback = String(body.proxy_fallback).trim();
+        } else if (mode === "none") {
+          proxyPayload.confirm_no_proxy = true;
+        }
+
+        const r = await uazapiInstance("/instance/proxy", token, { method: "POST", body: proxyPayload });
+        if (!r.ok) return json({ error: "Falha ao configurar proxy", details: r.data }, r.status);
+
+        // Persiste a intenção localmente (a cidade gerenciada é reaplicada no connect).
+        await supabase
+          .from("whatsapp_numbers")
+          .update({
+            uazapi_proxy_mode: mode,
+            uazapi_proxy_managed_country: mode === "internal" ? (body.proxy_managed_country ? String(body.proxy_managed_country) : "br") : null,
+            uazapi_proxy_managed_state: mode === "internal" && body.proxy_managed_state ? String(body.proxy_managed_state) : null,
+            uazapi_proxy_managed_city: mode === "internal" && body.proxy_managed_city ? String(body.proxy_managed_city) : null,
+          })
+          .eq("id", numberId);
+
+        return json({ success: true, result: r.data });
       }
 
       default:
