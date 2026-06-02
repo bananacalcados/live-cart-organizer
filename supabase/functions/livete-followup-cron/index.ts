@@ -123,11 +123,15 @@ serve(async (req) => {
     const orderCutoff = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
     const { data: activeEvents } = await supabase
       .from('events')
-      .select('id')
+      .select('id, whatsapp_number_id')
       .eq('is_active', true);
 
     if (activeEvents && activeEvents.length > 0) {
       const eventIds = activeEvents.map((e: any) => e.id);
+      // Canonical instance per event = the one that sent the first live message.
+      const eventNumberById: Record<string, string | null> = Object.fromEntries(
+        activeEvents.map((e: any) => [e.id, e.whatsapp_number_id ?? null]),
+      );
 
       const { data: unpaidOrders } = await supabase
         .from('orders')
