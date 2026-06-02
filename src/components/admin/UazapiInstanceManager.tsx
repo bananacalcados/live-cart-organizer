@@ -297,15 +297,26 @@ export function UazapiInstanceManager() {
                         </code>
                       </TableCell>
                       <TableCell>
-                        {online === true ? (
-                          <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 gap-1">
-                            <Wifi className="h-3 w-3" /> Online
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="gap-1">
-                            <WifiOff className="h-3 w-3" /> Offline
-                          </Badge>
-                        )}
+                        <div className="flex flex-col items-start gap-1">
+                          {online === true ? (
+                            <Badge className="bg-emerald-500/20 text-emerald-500 border-emerald-500/30 gap-1">
+                              <Wifi className="h-3 w-3" /> Online
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive" className="gap-1">
+                              <WifiOff className="h-3 w-3" /> Offline
+                            </Badge>
+                          )}
+                          {inst.ai_paused ? (
+                            <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-500">
+                              <BotOff className="h-3 w-3" /> IA pausada
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="gap-1 border-emerald-500/40 text-emerald-500">
+                              <Bot className="h-3 w-3" /> IA ativa
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
