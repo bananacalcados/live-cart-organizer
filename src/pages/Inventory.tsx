@@ -2190,6 +2190,63 @@ export default function Inventory() {
         </DialogContent>
       </Dialog>
 
+      {/* Clone product from another store dialog */}
+      <Dialog open={showCloneDialog} onOpenChange={(open) => {
+        setShowCloneDialog(open);
+        if (!open) { setCloneInfo(null); setCloneScanCode(""); barcodeInputRef.current?.focus(); }
+      }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Produto encontrado em outra loja</DialogTitle>
+            <DialogDescription>
+              O código <span className="font-mono font-semibold">{cloneScanCode}</span> não existe em{' '}
+              <strong>{selectedStore?.name}</strong>, mas existe em{' '}
+              <strong>{cloneInfo?.source_store_name || 'outra loja'}</strong>.
+              Clone o produto pai e todas as variações para esta loja (estoque zerado) para poder bipá-lo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-sm font-semibold">{cloneInfo?.parent_name}</p>
+              <p className="text-xs text-muted-foreground">
+                {cloneInfo?.parent_sku && `SKU pai: ${cloneInfo.parent_sku} • `}
+                {cloneInfo?.variant_count} variação(ões)
+              </p>
+            </div>
+            <ScrollArea className="h-[220px] border rounded-lg">
+              <div className="divide-y">
+                {(cloneInfo?.variants || []).map((v, idx) => (
+                  <div key={idx} className={cn(
+                    "flex items-center gap-2 p-2",
+                    v.barcode === cloneScanCode && "bg-primary/5"
+                  )}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">
+                        {[v.color, v.size].filter(Boolean).join(' / ') || v.variant || v.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {v.sku}{v.barcode ? ` • ${v.barcode}` : ''}
+                      </p>
+                    </div>
+                    {v.barcode === cloneScanCode && (
+                      <Badge variant="secondary" className="text-[10px]">bipado</Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCloneDialog(false)} disabled={isCloning}>Cancelar</Button>
+            <Button onClick={handleCloneProduct} disabled={isCloning} className="gap-2">
+              {isCloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Store className="h-4 w-4" />}
+              Clonar para {selectedStore?.name}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       {/* Unknown Barcode Dialog */}
       <Dialog open={showUnknownBarcodeDialog} onOpenChange={(open) => {
         setShowUnknownBarcodeDialog(open);
