@@ -51,6 +51,7 @@ interface CountItem {
   counted_quantity: number;
   current_stock: number | null;
   divergence: number | null;
+  last_corrected_quantity: number | null;
   correction_status: string;
   correction_error: string | null;
 }
