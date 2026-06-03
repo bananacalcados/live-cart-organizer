@@ -211,6 +211,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
           description,
           brand,
           category,
+          category_id: categoryId || null,
           ncm,
           cest,
           cost_price: parseFloat(costPrice) || 0,
