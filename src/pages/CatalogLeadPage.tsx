@@ -174,11 +174,8 @@ export default function CatalogLeadPage() {
       
       for (const reg of regs) {
         if (!reg.checkout_sale_id) continue;
-        const { data: sale } = await supabase
-          .from("pos_sales")
-          .select("*")
-          .eq("id", reg.checkout_sale_id)
-          .maybeSingle();
+        const saleRes = await cpGetSale(reg.checkout_sale_id);
+        const sale = saleRes?.sale;
         if (sale && Number((sale as any).shipping_cost) > 0 && sale.status === "completed") {
           setShippingAlreadyPaid(true);
           const key = `catalog_lead_${slug}`;
