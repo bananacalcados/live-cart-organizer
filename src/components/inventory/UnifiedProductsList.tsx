@@ -456,6 +456,14 @@ export function UnifiedProductsList() {
         onSaved={() => { setEditingSku(null); load(); }}
         storeName={editingSku ? storeName(editingSku.store_id) : ""}
       />
+
+      {/* Print labels dialog */}
+      <ProductLabelPrintDialog
+        open={!!labelGroup}
+        onOpenChange={(v) => !v && setLabelGroup(null)}
+        productName={labelGroup?.name}
+        items={labelGroup?.items || []}
+      />
     </div>
   );
 }
