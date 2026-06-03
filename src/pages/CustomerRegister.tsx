@@ -363,42 +363,26 @@ export default function CustomerRegister() {
       }
       const total = Math.max(0, subtotal - discount);
 
-      // Create pos_sale with status pending_pickup
-      const { data: sale, error: saleError } = await supabase
-        .from("pos_sales")
-        .insert({
-          store_id: storeId,
-          subtotal,
-          discount,
-          total,
-          status: "pending_pickup",
-          sale_type: "pickup",
-          source_order_id: orderData.id,
-          customer_name: customerName,
-          customer_phone: customerPhone,
-          notes: `Retirada na loja - Pedido Live #${orderData.id.slice(0, 8)}`,
-        })
-        .select("id")
-        .single();
+      // Create pickup sale + items (server-side, service_role)
+      const res = await cpCreatePickupSale({
+        storeId,
+        sourceOrderId: orderData.id,
+        customerName,
+        customerPhone,
+        subtotal,
+        discount,
+        total,
+        notes: `Retirada na loja - Pedido Live #${orderData.id.slice(0, 8)}`,
+        items: products.map(p => ({
+          product_name: p.title,
+          variant_name: p.variant || null,
+          sku: p.sku || null,
+          unit_price: p.price,
+          quantity: p.quantity,
+        })),
+      });
 
-      if (saleError) throw saleError;
-
-      // Create pos_sale_items
-      const items = products.map(p => ({
-        sale_id: sale.id,
-        product_name: p.title,
-        variant_name: p.variant || null,
-        sku: p.sku || null,
-        unit_price: p.price,
-        quantity: p.quantity,
-        total_price: p.price * p.quantity,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from("pos_sale_items")
-        .insert(items);
-
-      if (itemsError) throw itemsError;
+      if (!res?.ok) throw new Error("Falha ao criar pedido de retirada");
 
       // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button in the POS).
       // The pickup sale is saved locally above; no automatic Tiny push happens here.
