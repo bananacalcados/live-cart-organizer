@@ -1154,7 +1154,7 @@ function CardPaymentForm({
           return;
         }
         // Check if attempt finished (failed)
-        const { data: attempt } = await supabase.from("pos_checkout_attempts").select("status, error_message").eq("transaction_id", attemptId).maybeSingle();
+        const attempt = await cpGetAttemptStatus(attemptId);
         if (attempt && attempt.status === "failed") {
           sessionStorage.removeItem(`checkout_payment_${orderId}`);
           setPaymentError((attempt as any).error_message || "A operadora do seu cartão não aprovou a compra. Revise os dados ou tente com outro cartão.");
