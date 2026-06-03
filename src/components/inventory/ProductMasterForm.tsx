@@ -75,6 +75,21 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
       .select("id, name")
       .order("name")
       .then(({ data }) => setStores((data || []) as any));
+    supabase
+      .from("product_categories")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => {
+        const cats = (data || []) as { id: string; name: string }[];
+        setCategories(cats);
+        // Se a categoria inicial bater com uma existente, vincula o id
+        if (initial?.category) {
+          const match = cats.find((c) => c.name.toLowerCase() === initial.category!.toLowerCase());
+          if (match) { setCategoryId(match.id); setCategory(match.name); }
+          else setNewCategoryMode(true);
+        }
+      });
   }, [open]);
 
   // Filhos
