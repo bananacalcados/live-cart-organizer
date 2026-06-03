@@ -656,8 +656,8 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
       // Persist customer data to pos_sales BEFORE generating PIX
       // This ensures data is available even if the customer closes the page after paying
       // Fetch existing payment_details to preserve shipping_amount
-      const { data: existingSale } = await supabase.from("pos_sales").select("payment_details").eq("id", saleId).maybeSingle();
-      const existingPd = (existingSale?.payment_details as Record<string, unknown>) || {};
+      const existingRes = await cpGetSale(saleId!);
+      const existingPd = ((existingRes?.sale?.payment_details) as Record<string, unknown>) || {};
       
       const customerPayload = {
         customer_name: form.fullName,
