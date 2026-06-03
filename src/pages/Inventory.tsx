@@ -1695,6 +1695,23 @@ export default function Inventory() {
                   </Card>
                 )}
 
+                {activeCount.status === 'smart_correcting' && (
+                  <Card className="border-primary/40 bg-primary/5">
+                    <CardContent className="p-4 space-y-2">
+                      <p className="text-sm font-medium flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        Corrigindo bipados (balanço)... pode continuar contando em instantes.
+                      </p>
+                      <Progress value={smartProgress.total > 0 ? (smartProgress.processed / smartProgress.total) * 100 : 0} />
+                      <p className="text-xs text-muted-foreground">
+                        {smartProgress.processed}/{smartProgress.total} corrigidos
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+
+
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
