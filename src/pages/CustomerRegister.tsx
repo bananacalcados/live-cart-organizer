@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { cpLookupCustomerCpf, cpUpsertCustomer, cpCreatePickupSale } from "@/lib/checkoutPublic";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -165,15 +166,11 @@ export default function CustomerRegister() {
     setLookingUpCpf(true);
     setCpfFound(false);
     try {
-      // Search in pos_customers by CPF
-      const { data: customers } = await supabase
-        .from("pos_customers")
-        .select("name, email, whatsapp, cep, address, address_number, complement, neighborhood, city, state")
-        .eq("cpf", digits)
-        .limit(1);
+      // Search in pos_customers by CPF (server-side, service_role)
+      const lookupRes = await cpLookupCustomerCpf(digits);
+      const c = lookupRes?.customer;
 
-      if (customers && customers.length > 0) {
-        const c = customers[0];
+      if (c) {
         setCpfFound(true);
         if (c.name) setFullName(c.name);
         if (c.email) setEmail(c.email);
@@ -315,46 +312,20 @@ export default function CustomerRegister() {
         .rpc("get_checkout_registration", { p_order_id: orderId! });
       const reg = regRaw as any;
 
-      // Save/update pos_customers for global CPF lookup
-      const { data: existingCustomer } = await supabase
-        .from("pos_customers")
-        .select("id")
-        .eq("cpf", cleanCpf)
-        .maybeSingle();
-
-      if (existingCustomer) {
-        await supabase
-          .from("pos_customers")
-          .update({
-            name: fullName,
-            email,
-            whatsapp: cleanWhatsapp,
-            cep: cleanCep,
-            address: address || null,
-            address_number: addressNumber || null,
-            complement: complement || null,
-            neighborhood: neighborhood || null,
-            city: city || null,
-            state: state || null,
-          })
-          .eq("id", existingCustomer.id);
-      } else {
-        await supabase
-          .from("pos_customers")
-          .insert({
-            cpf: cleanCpf,
-            name: fullName,
-            email,
-            whatsapp: cleanWhatsapp,
-            cep: cleanCep,
-            address: address || null,
-            address_number: addressNumber || null,
-            complement: complement || null,
-            neighborhood: neighborhood || null,
-            city: city || null,
-            state: state || null,
-          });
-      }
+      // Save/update pos_customers for global CPF lookup (server-side, service_role)
+      await cpUpsertCustomer({
+        cpf: cleanCpf,
+        name: fullName,
+        email,
+        whatsapp: cleanWhatsapp,
+        cep: cleanCep,
+        address: address || null,
+        address_number: addressNumber || null,
+        complement: complement || null,
+        neighborhood: neighborhood || null,
+        city: city || null,
+        state: state || null,
+      });
 
       if (isPickupOrder && order?.pickup_store_id) {
         // Create pos_sales entry for pickup
@@ -392,42 +363,26 @@ export default function CustomerRegister() {
       }
       const total = Math.max(0, subtotal - discount);
 
-      // Create pos_sale with status pending_pickup
-      const { data: sale, error: saleError } = await supabase
-        .from("pos_sales")
-        .insert({
-          store_id: storeId,
-          subtotal,
-          discount,
-          total,
-          status: "pending_pickup",
-          sale_type: "pickup",
-          source_order_id: orderData.id,
-          customer_name: customerName,
-          customer_phone: customerPhone,
-          notes: `Retirada na loja - Pedido Live #${orderData.id.slice(0, 8)}`,
-        })
-        .select("id")
-        .single();
+      // Create pickup sale + items (server-side, service_role)
+      const res = await cpCreatePickupSale({
+        storeId,
+        sourceOrderId: orderData.id,
+        customerName,
+        customerPhone,
+        subtotal,
+        discount,
+        total,
+        notes: `Retirada na loja - Pedido Live #${orderData.id.slice(0, 8)}`,
+        items: products.map(p => ({
+          product_name: p.title,
+          variant_name: p.variant || null,
+          sku: p.sku || null,
+          unit_price: p.price,
+          quantity: p.quantity,
+        })),
+      });
 
-      if (saleError) throw saleError;
-
-      // Create pos_sale_items
-      const items = products.map(p => ({
-        sale_id: sale.id,
-        product_name: p.title,
-        variant_name: p.variant || null,
-        sku: p.sku || null,
-        unit_price: p.price,
-        quantity: p.quantity,
-        total_price: p.price * p.quantity,
-      }));
-
-      const { error: itemsError } = await supabase
-        .from("pos_sale_items")
-        .insert(items);
-
-      if (itemsError) throw itemsError;
+      if (!res?.ok) throw new Error("Falha ao criar pedido de retirada");
 
       // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button in the POS).
       // The pickup sale is saved locally above; no automatic Tiny push happens here.

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
+import { cpGetSale, cpGetSaleStatus, cpUpdateSale, cpLogAttempt, cpGetAttemptStatus, cpCompleteSale } from "@/lib/checkoutPublic";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, User, MapPin, Wallet, ChevronRight, Store } from "lucide-react";
 import { toast } from "sonner";
@@ -627,7 +628,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
           setPaid(true);
           if (pollingRef.current) clearInterval(pollingRef.current);
           // Log PIX success
-          await supabase.from("pos_checkout_attempts").insert({
+          await cpLogAttempt({
             sale_id: saleId,
             store_id: storeId,
             payment_method: "pix",
@@ -639,7 +640,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
             gateway: "mercadopago",
             transaction_id: pixPaymentId,
             metadata: { cpf: form.cpf, cep: form.cep, address: form.address, address_number: form.addressNumber, complement: form.complement, neighborhood: form.neighborhood, city: form.city, state: form.state },
-          } as any).then(() => {});
+          });
           onPaid();
         }
       } catch {}
@@ -655,8 +656,8 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
       // Persist customer data to pos_sales BEFORE generating PIX
       // This ensures data is available even if the customer closes the page after paying
       // Fetch existing payment_details to preserve shipping_amount
-      const { data: existingSale } = await supabase.from("pos_sales").select("payment_details").eq("id", saleId).maybeSingle();
-      const existingPd = (existingSale?.payment_details as Record<string, unknown>) || {};
+      const existingRes = await cpGetSale(saleId!);
+      const existingPd = ((existingRes?.sale?.payment_details) as Record<string, unknown>) || {};
       
       const customerPayload = {
         customer_name: form.fullName,
@@ -677,7 +678,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
           description: "PIX Checkout Loja",
         },
       };
-      await supabase.from("pos_sales").update(customerPayload as any).eq("id", saleId);
+      await cpUpdateSale(saleId!, customerPayload);
 
       const nameParts = form.fullName.split(" ");
       const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
@@ -697,7 +698,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
       if (data.paymentId) setPixPaymentId(String(data.paymentId));
     } catch (e: any) {
       // Log PIX generation error
-      await supabase.from("pos_checkout_attempts").insert({
+      await cpLogAttempt({
         sale_id: saleId,
         store_id: storeId,
         payment_method: "pix",
@@ -708,7 +709,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
         customer_phone: form.whatsapp,
         customer_email: form.email,
         gateway: "mercadopago",
-      } as any).then(() => {});
+      });
       toast.error(e.message || "Erro ao gerar PIX");
     } finally {
       setGenerating(false);
@@ -783,14 +784,14 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
     for (let i = 0; i < 10; i++) {
       await new Promise(r => setTimeout(r, 3000));
       try {
-        const { data: freshSale } = await supabase.from("pos_sales").select("status, payment_gateway").eq("id", saleId).maybeSingle();
+        const freshSale = await cpGetSaleStatus(saleId!);
         if (freshSale?.status === "paid" || freshSale?.status === "completed") {
           sessionStorage.removeItem(`checkout_payment_${saleId}`);
           toast.success("Pagamento aprovado!");
           onPaid();
           return;
         }
-        const { data: attempt } = await supabase.from("pos_checkout_attempts").select("status, error_message").eq("transaction_id", attemptId).maybeSingle();
+        const attempt = await cpGetAttemptStatus(attemptId);
         if (attempt && attempt.status === "failed") {
           sessionStorage.removeItem(`checkout_payment_${saleId}`);
           setPaymentError((attempt as any).error_message || "A operadora do seu cartão não aprovou a compra. Revise os dados ou tente com outro cartão.");
@@ -912,20 +913,20 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
 
       if (error || !data?.success || !data?.transactionId) {
         const errMsg = data?.error || (error && typeof error === "object" && "message" in error ? String((error as any).message) : null) || "Erro no pagamento";
-        await supabase.from("pos_checkout_attempts").insert({
+        await cpLogAttempt({
           sale_id: saleId, store_id: storeId, payment_method: "card", status: "failed", error_message: errMsg,
           amount: totalWithInterest, customer_name: form.fullName, customer_phone: form.whatsapp,
           customer_email: form.email, gateway: data?.gateway || "pagarme",
-        } as any).then(() => {});
+        });
         throw new Error(errMsg);
       }
       // Log success
-      await supabase.from("pos_checkout_attempts").insert({
+      await cpLogAttempt({
         sale_id: saleId, store_id: storeId, payment_method: "card", status: "success", amount: totalWithInterest,
         customer_name: form.fullName, customer_phone: form.whatsapp, customer_email: form.email,
         gateway: data.gateway || "pagarme", transaction_id: data.transactionId || null,
         metadata: { cpf: form.cpf, cep: form.cep, address: form.address, address_number: form.addressNumber, complement: form.complement, neighborhood: form.neighborhood, city: form.city, state: form.state },
-      } as any).then(() => {});
+      });
       sessionStorage.removeItem(`checkout_payment_${saleId}`);
       const gw = data.gateway || "pagarme";
       const gwLabel = gw === "mercadopago" ? "Mercado Pago" : gw === "pagarme" ? "Pagar.me" : gw === "vindi" ? "VINDI" : gw === "appmax" ? "APPMAX" : gw.toUpperCase();
@@ -936,7 +937,7 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
       for (let attempt = 0; attempt < 3; attempt++) {
         await new Promise(r => setTimeout(r, 3000));
         try {
-          const { data: freshSale } = await supabase.from("pos_sales").select("status, payment_gateway").eq("id", saleId).maybeSingle();
+          const freshSale = await cpGetSaleStatus(saleId!);
           if (freshSale?.status === "paid" || freshSale?.status === "completed") {
             sessionStorage.removeItem(`checkout_payment_${saleId}`);
             toast.success("Pagamento aprovado!");
@@ -1030,32 +1031,27 @@ export default function StoreCheckout() {
     loadSale();
     loadInstallmentConfig();
     // Mark checkout_step = 0 when the checkout page loads
-    supabase.from("pos_sales").update({ checkout_step: 0 } as any).eq("id", saleId).then(() => {});
+    cpUpdateSale(saleId, { checkout_step: 0 });
   }, [storeId, saleId]);
 
   // Update checkout_step when currentStep changes to 3
   useEffect(() => {
     if (currentStep === 3 && saleId) {
-      supabase.from("pos_sales").update({ checkout_step: 3 } as any).eq("id", saleId).then(() => {});
+      cpUpdateSale(saleId, { checkout_step: 3 });
     }
   }, [currentStep, saleId]);
 
   const loadSale = async () => {
     try {
-      const { data: sale, error } = await supabase
-        .from("pos_sales")
-        .select("*")
-        .eq("id", saleId!)
-        .eq("store_id", storeId!)
-        .maybeSingle();
+      const saleRes = await cpGetSale(saleId!, storeId!);
+      const sale = saleRes?.sale;
+      if (!sale) throw new Error("Venda não encontrada");
 
-      if (error || !sale) throw new Error("Venda não encontrada");
+      // Store name (resolved server-side)
+      const store = { name: saleRes?.store_name };
 
-      // Load store name
-      const { data: store } = await supabase.from("pos_stores").select("name").eq("id", storeId!).maybeSingle();
-
-      // Load sale items
-      const { data: items } = await supabase.from("pos_sale_items").select("*").eq("sale_id", saleId!);
+      // Sale items (resolved server-side)
+      const items = saleRes?.items || [];
 
       const paymentDetails = ((sale as any).payment_details || {}) as Record<string, any>;
 
@@ -1130,64 +1126,20 @@ export default function StoreCheckout() {
 
     if (!saleData) return;
 
-    // Upsert customer in pos_customers and link to sale
-    let customerId: string | null = null;
-    const cpfDigits = customerForm.cpf.replace(/\D/g, "");
-    const phoneDigits = customerForm.whatsapp.replace(/\D/g, "");
-
-    // Try to find existing customer by CPF
-    if (cpfDigits) {
-      const { data: existing } = await supabase
-        .from("pos_customers")
-        .select("id")
-        .eq("cpf", cpfDigits)
-        .maybeSingle();
-      if (existing) customerId = existing.id;
-    }
-    // Fallback: find by phone
-    if (!customerId && phoneDigits) {
-      const { data: existing } = await supabase
-        .from("pos_customers")
-        .select("id")
-        .eq("whatsapp", phoneDigits)
-        .maybeSingle();
-      if (existing) customerId = existing.id;
-    }
-
-    const customerPayload = {
+    // Upsert customer + mark sale completed (server-side via service_role)
+    await cpCompleteSale(saleData.id, {
       name: customerForm.fullName,
-      cpf: cpfDigits,
+      cpf: customerForm.cpf,
       email: customerForm.email,
-      whatsapp: phoneDigits,
+      whatsapp: customerForm.whatsapp,
       address: customerForm.address,
       address_number: customerForm.addressNumber,
       complement: customerForm.complement || null,
       neighborhood: customerForm.neighborhood,
       city: customerForm.city,
       state: customerForm.state,
-      cep: customerForm.cep.replace(/\D/g, ""),
-    };
-
-    try {
-      if (customerId) {
-        await supabase.from("pos_customers").update(customerPayload as any).eq("id", customerId);
-      } else {
-        const { data: newCust } = await supabase
-          .from("pos_customers")
-          .insert(customerPayload as any)
-          .select("id")
-          .single();
-        customerId = newCust?.id || null;
-      }
-    } catch (e) {
-      console.error("Error upserting customer:", e);
-    }
-
-    // Update sale status with customer_id
-    await supabase.from("pos_sales").update({
-      status: "completed",
-      customer_id: customerId,
-    } as any).eq("id", saleData.id);
+      cep: customerForm.cep,
+    });
 
     // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button in the POS).
     // The sale is saved locally above; no automatic Tiny push happens here.
@@ -1451,7 +1403,7 @@ export default function StoreCheckout() {
                   <StepIdentification form={customerForm} setForm={setCustomerForm} onNext={() => {
                     // Save customer data progressively to pos_sales when advancing to Step 2
                     if (saleData) {
-                      supabase.from("pos_sales").update({
+                      cpUpdateSale(saleData.id, {
                         customer_name: customerForm.fullName,
                         customer_phone: customerForm.whatsapp.replace(/\D/g, ""),
                         checkout_step: 1,
@@ -1461,7 +1413,7 @@ export default function StoreCheckout() {
                           customer_email: customerForm.email,
                           customer_cpf: customerForm.cpf.replace(/\D/g, ""),
                         },
-                      } as any).eq("id", saleData.id).then(() => {});
+                      });
                     }
                     setCurrentStep(2);
                   }} prefilled={!!saleData.customer_name} />
@@ -1470,7 +1422,7 @@ export default function StoreCheckout() {
                   <StepDelivery form={customerForm} setForm={setCustomerForm} onNext={() => {
                     // Save address data to pos_sales when advancing to Step 3
                     if (saleData) {
-                      supabase.from("pos_sales").update({
+                      cpUpdateSale(saleData.id, {
                         checkout_step: 2,
                         payment_details: {
                           customer_name: customerForm.fullName,
@@ -1495,7 +1447,7 @@ export default function StoreCheckout() {
                           city: customerForm.city,
                           state: customerForm.state,
                         },
-                      } as any).eq("id", saleData.id).then(() => {});
+                      });
                     }
                     setCurrentStep(3);
                   }} onBack={() => setCurrentStep(1)}
@@ -1506,19 +1458,19 @@ export default function StoreCheckout() {
                       // Update local state
                       setSaleData(prev => prev ? { ...prev, shipping_amount: newShipping } : prev);
                       // Update in DB
-                      supabase.from("pos_sales").update({
+                      cpUpdateSale(saleData.id, {
                         payment_details: {
                           ...((saleData as any).payment_details || {}),
                           shipping_amount: newShipping,
                           shipping_carrier: option.carrier,
                           shipping_service: option.service,
                         },
-                      } as any).eq("id", saleData.id).then(() => {});
+                      });
                       // Also update total
                       const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
                       const netProduct = subtotal - saleData.discount_amount;
                       const newTotal = netProduct + newShipping;
-                      supabase.from("pos_sales").update({ total: newTotal } as any).eq("id", saleData.id).then(() => {});
+                      cpUpdateSale(saleData.id, { total: newTotal });
                     }
                   }}
                   />
