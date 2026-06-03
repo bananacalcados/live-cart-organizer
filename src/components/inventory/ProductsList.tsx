@@ -318,6 +318,16 @@ export function ProductsList() {
                       <Boxes className="h-3 w-3 mr-1" />
                       Estoque
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs h-8"
+                      onClick={() => setLabelPrintId(p.id)}
+                      title="Imprimir etiquetas com código de barras (8×5cm em folha A4)"
+                    >
+                      <Tag className="h-3 w-3 mr-1" />
+                      Etiqueta
+                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
