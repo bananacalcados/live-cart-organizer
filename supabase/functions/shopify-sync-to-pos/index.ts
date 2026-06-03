@@ -10,6 +10,29 @@ const corsHeaders = {
 
 const TINY_SHOPIFY_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 
+function digits(v: string | null | undefined): string {
+  return (v || "").replace(/\D/g, "");
+}
+
+function splitStreetNumber(address1: string | null | undefined): { street: string | null; number: string | null } {
+  if (!address1) return { street: null, number: null };
+  const raw = address1.trim();
+  const m = raw.match(/^(.*?)[,\s]+(\d+[A-Za-z]?)\s*$/);
+  if (m) return { street: m[1].replace(/[,\s]+$/, "").trim() || raw, number: m[2] };
+  return { street: raw, number: null };
+}
+
+function findNoteAttr(notes: any[], ...patterns: RegExp[]): string | null {
+  for (const a of notes || []) {
+    const name = a?.name || "";
+    if (patterns.some((p) => p.test(name))) {
+      const val = (a?.value ?? "").toString().trim();
+      if (val) return val;
+    }
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
