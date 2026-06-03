@@ -186,6 +186,35 @@ serve(async (req) => {
         return json({ customer: data && data.length > 0 ? data[0] : null });
       }
 
+      // ── Upsert customer by CPF/phone (CustomerRegister) ──
+      case "upsert_customer": {
+        const customer = pick(body?.customer || {}, CUSTOMER_KEYS);
+        customer.cpf = digits(customer.cpf) || null;
+        customer.whatsapp = digits(customer.whatsapp) || null;
+        customer.cep = digits(customer.cep) || null;
+
+        let customerId: string | null = null;
+        if (customer.cpf) {
+          const { data } = await supabase
+            .from("pos_customers").select("id").eq("cpf", customer.cpf).maybeSingle();
+          if (data) customerId = data.id;
+        }
+        if (!customerId && customer.whatsapp) {
+          const { data } = await supabase
+            .from("pos_customers").select("id").eq("whatsapp", customer.whatsapp).maybeSingle();
+          if (data) customerId = data.id;
+        }
+        if (customerId) {
+          await supabase.from("pos_customers").update(customer).eq("id", customerId);
+        } else {
+          const { data } = await supabase
+            .from("pos_customers").insert(customer).select("id").single();
+          customerId = data?.id || null;
+        }
+        return json({ ok: true, customerId });
+      }
+
+
       // ── Finalize a sale: upsert customer + mark sale completed ──
       case "complete_sale": {
         const { saleId } = body;
