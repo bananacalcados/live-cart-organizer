@@ -558,6 +558,52 @@ export default function Inventory() {
     barcodeInputRef.current?.focus();
   };
 
+  // Clone parent + all variations from another store into the current store (stock 0),
+  // then register the scanned item.
+  const handleCloneProduct = async () => {
+    if (!activeCount || !cloneScanCode) return;
+    setIsCloning(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('pos-clone-product-to-store', {
+        body: { barcode: cloneScanCode, target_store_id: selectedStoreId, preview: false },
+      });
+      if (error || !result?.success || !result?.found) {
+        toast.error('Não foi possível clonar o produto.');
+        setIsCloning(false);
+        return;
+      }
+
+      const sv = result.scanned_variant;
+      if (sv) {
+        const productName = sv.name + (sv.variant ? ` - ${sv.variant}` : '');
+        await supabase.from('inventory_count_items').insert({
+          count_id: activeCount.id,
+          product_id: sv.tiny_id ? String(sv.tiny_id) : (sv.id as string),
+          product_name: productName,
+          sku: sv.sku,
+          barcode: sv.barcode,
+          counted_quantity: cloneScanQty,
+        });
+        setLastBipedProduct(`${productName} (clonado) → ${cloneScanQty} un`);
+      }
+
+      toast.success(`Produto clonado para esta loja (${result.cloned} variações) e bipado!`);
+      setShowCloneDialog(false);
+      setCloneInfo(null);
+      setCloneScanCode("");
+      setCloneScanQty(1);
+      if (activeCount) loadCountItems(activeCount.id);
+    } catch (e: any) {
+      console.error('handleCloneProduct error:', e);
+      toast.error('Erro ao clonar produto: ' + (e.message || 'desconhecido'));
+    } finally {
+      setIsCloning(false);
+      barcodeInputRef.current?.focus();
+    }
+  };
+
+
+
   // Product search for unknown barcode dialog
   const handleProductSearch = async (query: string) => {
     setProductSearchQuery(query);
