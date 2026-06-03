@@ -123,12 +123,8 @@ export default function ReviewReferralPage() {
     if ((data as any)?.doubled) {
       toast.success("🎉 Cashback DOBRADO! Você indicou 3 amigos.", { duration: 6000 });
       // refresh token
-      const { data: nt } = await supabase
-        .from("review_tokens")
-        .select("id, customer_phone, customer_name, store_phone, cashback_value, cashback_doubled, review_submitted_at")
-        .eq("token", token)
-        .maybeSingle();
-      if (nt) setTok(nt as ReviewToken);
+      const { data: nt } = await supabase.functions.invoke("review-load", { body: { token } });
+      if ((nt as any)?.token) setTok((nt as any).token as ReviewToken);
     }
   }
 
