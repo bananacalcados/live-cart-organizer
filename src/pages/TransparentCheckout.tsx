@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { cpGetAttemptStatus } from "@/lib/checkoutPublic";
 import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
 import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
 import {
