@@ -64,21 +64,22 @@ serve(async (req) => {
         actions.push(`count=${count.id} STALLED verify — re-triggered (${Math.round(elapsed / 1000)}s)`);
       }
 
-      if (count.status === 'correcting') {
-        console.log(`[watchdog] Re-triggering correction for count ${count.id} (stalled ${Math.round(elapsed / 1000)}s)`);
+      if (count.status === 'correcting' || count.status === 'smart_correcting') {
+        const isFinal = count.status === 'correcting';
+        console.log(`[watchdog] Re-triggering correction for count ${count.id} (status=${count.status}, stalled ${Math.round(elapsed / 1000)}s)`);
         const invokePromise = fetch(`${supabaseUrl}/functions/v1/inventory-correct-stock`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${anonKey}`,
           },
-          body: JSON.stringify({ count_id: count.id, batch_size: 10 }),
+          body: JSON.stringify({ count_id: count.id, batch_size: 10, final: isFinal }),
         }).then(async (r) => {
           const body = await r.text();
           console.log(`[watchdog] Re-triggered correction response: ${r.status} ${body.substring(0, 200)}`);
         }).catch(e => console.error('[watchdog] Re-trigger correction failed:', e));
         if (edgeRuntime?.waitUntil) edgeRuntime.waitUntil(invokePromise);
-        actions.push(`count=${count.id} STALLED correction — re-triggered (${Math.round(elapsed / 1000)}s)`);
+        actions.push(`count=${count.id} STALLED ${count.status} — re-triggered (${Math.round(elapsed / 1000)}s)`);
       }
     }
 
