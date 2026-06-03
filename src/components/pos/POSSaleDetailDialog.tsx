@@ -91,6 +91,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [currentCustomer, setCurrentCustomer] = useState<CustomerInfo | null>(customer);
   const [recovering, setRecovering] = useState(false);
+  const [pullingShopify, setPullingShopify] = useState(false);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [editItemSku, setEditItemSku] = useState("");
   const [savingItem, setSavingItem] = useState(false);
