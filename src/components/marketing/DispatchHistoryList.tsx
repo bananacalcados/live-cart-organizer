@@ -187,7 +187,7 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
 
       if (numberIds.length > 0) {
         const { data: numbers } = await supabase
-          .from('whatsapp_numbers')
+          .from('whatsapp_numbers_safe')
           .select('id, label, phone_display')
           .in('id', numberIds);
 

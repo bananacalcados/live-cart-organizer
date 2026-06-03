@@ -541,7 +541,7 @@ function StepEditorDialog({
   const loadWhatsappNumbers = async () => {
     setLoadingNumbers(true);
     const { data } = await supabase
-      .from('whatsapp_numbers')
+      .from('whatsapp_numbers_safe')
       .select('id, label, phone_display, provider, is_default')
       .eq('is_active', true)
       .eq('provider', 'meta');
