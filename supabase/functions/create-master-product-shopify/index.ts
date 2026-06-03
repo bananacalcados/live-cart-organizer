@@ -59,18 +59,39 @@ Deno.serve(async (req) => {
     if (hasColor) options.push({ name: "Cor" });
     if (hasSize) options.push({ name: "Tamanho" });
 
+    // === ESTOQUE COMPARTILHADO ===
+    // A Shopify recebe a SOMA do estoque de TODAS as lojas do PDV (por GTIN/barcode),
+    // não o estoque inicial da NF-e nem o de uma loja específica.
+    // Ex.: Tiny Shopify 1 + Centro 2 + Perola 3 = 6 pares na Shopify.
+    const gtins = variants.map((v: any) => v.gtin).filter(Boolean);
+    const sharedStockByGtin: Record<string, number> = {};
+    if (gtins.length) {
+      const { data: posRows } = await supabase
+        .from("pos_products")
+        .select("barcode, stock")
+        .in("barcode", gtins);
+      for (const row of posRows || []) {
+        const code = String(row.barcode);
+        sharedStockByGtin[code] = (sharedStockByGtin[code] || 0) + (Number(row.stock) || 0);
+      }
+    }
+
     const shopifyVariants = variants.map((v: any) => {
       const opts: any = {};
       let i = 1;
       if (hasColor) { opts[`option${i}`] = v.color || "Único"; i++; }
       if (hasSize) { opts[`option${i}`] = v.size || "Único"; i++; }
+      // Estoque compartilhado entre todas as lojas (fallback: estoque inicial da variação)
+      const sharedStock = v.gtin && sharedStockByGtin[String(v.gtin)] !== undefined
+        ? sharedStockByGtin[String(v.gtin)]
+        : (Number(v.initial_stock) || 0);
       return {
         ...opts,
         sku: v.sku,
         barcode: v.gtin,
         price: (v.sale_price_override ?? master.sale_price ?? 0).toString(),
         inventory_management: "shopify",
-        inventory_quantity: v.initial_stock || 0,
+        inventory_quantity: sharedStock,
         weight: (v.weight_kg_override ?? master.weight_kg ?? 0),
         weight_unit: "kg",
         requires_shipping: true,
