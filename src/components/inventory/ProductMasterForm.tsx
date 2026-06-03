@@ -51,6 +51,9 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
   const [description, setDescription] = useState(initial?.description || "");
   const [brand, setBrand] = useState(initial?.brand || "");
   const [category, setCategory] = useState(initial?.category || "");
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [newCategoryMode, setNewCategoryMode] = useState(false);
   const [ncm, setNcm] = useState(initial?.ncm || "64039900");
   const [cest, setCest] = useState("");
   const [costPrice, setCostPrice] = useState<string>(initial?.cost_price?.toString() || "");
