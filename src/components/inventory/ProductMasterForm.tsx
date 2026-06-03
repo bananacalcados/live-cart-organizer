@@ -280,6 +280,8 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
                 </p>
               </div>
 
+              <div>
+                <Label>NCM</Label>
                 <Input value={ncm} onChange={(e) => setNcm(e.target.value)} />
               </div>
               <div>
