@@ -11,7 +11,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { master_id, store_id, all_stores } = await req.json();
+    const { master_id, store_id, all_stores, stock_from_variants } = await req.json();
     if (!master_id) {
       return new Response(JSON.stringify({ error: "master_id required" }), {
         status: 400,
@@ -112,26 +112,33 @@ Deno.serve(async (req) => {
         const cost = v.cost_price_override ?? master.cost_price;
         const sale = v.sale_price_override ?? master.sale_price;
         const skuName = `${master.name} - ${v.color || ''} ${v.size || ''}`.trim().replace(/\s+/g, ' ');
+        // Estoque de entrada (vindo da NF-e): só entra na loja escolhida.
+        const entryStock = stock_from_variants ? (Number(v.initial_stock) || 0) : 0;
 
         // Lookup existing by barcode in this store
         const { data: existing } = await supabase
           .from("pos_products")
-          .select("id")
+          .select("id, stock")
           .eq("store_id", targetStoreId)
           .eq("barcode", v.gtin)
           .maybeSingle();
 
         if (existing) {
+          const updatePayload: Record<string, any> = {
+            name: skuName,
+            sku: v.sku,
+            parent_sku: parentSku,
+            cost_price: cost,
+            price: sale,
+            is_active: true,
+          };
+          // NF-e adiciona ao estoque existente da loja
+          if (stock_from_variants) {
+            updatePayload.stock = (Number(existing.stock) || 0) + entryStock;
+          }
           const { error: upErr } = await supabase
             .from("pos_products")
-            .update({
-              name: skuName,
-              sku: v.sku,
-              parent_sku: parentSku,
-              cost_price: cost,
-              price: sale,
-              is_active: true,
-            })
+            .update(updatePayload)
             .eq("id", existing.id);
           if (upErr) {
             console.error(`[${store?.name}] update error:`, upErr);
@@ -150,7 +157,7 @@ Deno.serve(async (req) => {
               barcode: v.gtin,
               cost_price: cost,
               price: sale,
-              stock: 0, // estoque real virá do Tiny / balanço
+              stock: entryStock, // NF-e: estoque inicial; demais fluxos: 0
               is_active: true,
             });
           if (insErr) {

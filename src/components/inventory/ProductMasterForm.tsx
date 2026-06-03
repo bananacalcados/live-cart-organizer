@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,9 +6,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Loader2, Package, Sparkles, Upload, X } from "lucide-react";
+import { Plus, Trash2, Loader2, Package, Sparkles, Upload, X, Store as StoreIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { generateEan13, normalizeColorForSku } from "@/lib/ean13";
@@ -57,6 +60,19 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
   const [width, setWidth] = useState<string>("32");
   const [length, setLength] = useState<string>("22");
   const [images, setImages] = useState<string[]>([]);
+
+  // Loja que recebe o estoque inicial / envio ao PDV
+  const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
+  const [stockStoreId, setStockStoreId] = useState<string>("");
+
+  useEffect(() => {
+    if (!open) return;
+    supabase
+      .from("pos_stores")
+      .select("id, name")
+      .order("name")
+      .then(({ data }) => setStores((data || []) as any));
+  }, [open]);
 
   // Filhos
   const initialVariants: VariantRow[] = (initial?.items || []).map((it) => ({
@@ -185,8 +201,24 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
         })) as any,
       });
       if (error) throw error;
-      toast.success("Produto criado com sucesso!");
-      onCreated?.(data as string);
+      const masterId = data as string;
+
+      // Empurra ao PDV / catálogo unificado já com o estoque inicial na loja escolhida.
+      if (stockStoreId) {
+        const { error: posErr } = await supabase.functions.invoke("create-master-product-pos", {
+          body: { master_id: masterId, store_id: stockStoreId, stock_from_variants: true },
+        });
+        if (posErr) {
+          toast.warning("Produto criado, mas falhou ao enviar ao PDV: " + posErr.message);
+        } else {
+          const storeName = stores.find((s) => s.id === stockStoreId)?.name || "loja";
+          toast.success(`Produto criado e estoque lançado em ${storeName}!`);
+        }
+      } else {
+        toast.success("Produto criado com sucesso!");
+      }
+
+      onCreated?.(masterId);
       onOpenChange(false);
     } catch (err: any) {
       toast.error("Erro ao criar produto: " + err.message);
@@ -228,6 +260,26 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
                 <Label>Categoria</Label>
                 <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Tênis casual" />
               </div>
+              <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+                <Label className="flex items-center gap-1.5">
+                  <StoreIcon className="h-4 w-4 text-primary" />
+                  Lançar estoque na loja (PDV) *
+                </Label>
+                <Select value={stockStoreId} onValueChange={setStockStoreId}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Escolha a loja que recebe o estoque" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stores.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  O produto vai para o PDV e Catálogo Unificado, com o estoque das variações entrando nesta loja. Sem loja selecionada, o produto fica só no cadastro (não aparece no PDV).
+                </p>
+              </div>
+
               <div>
                 <Label>NCM</Label>
                 <Input value={ncm} onChange={(e) => setNcm(e.target.value)} />
