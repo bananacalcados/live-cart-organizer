@@ -155,7 +155,10 @@ Deno.serve(async (req) => {
               },
             ).catch(() => {});
 
-            // Define o estoque
+            // Define o estoque (compartilhado entre todas as lojas)
+            const sharedStock = v.gtin && sharedStockByGtin[String(v.gtin)] !== undefined
+              ? sharedStockByGtin[String(v.gtin)]
+              : Number(v.initial_stock || 0);
             const setRes = await fetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels/set.json`,
               {
@@ -164,7 +167,7 @@ Deno.serve(async (req) => {
                 body: JSON.stringify({
                   location_id: locationId,
                   inventory_item_id: inventoryItemId,
-                  available: Number(v.initial_stock || 0),
+                  available: sharedStock,
                 }),
               },
             );
