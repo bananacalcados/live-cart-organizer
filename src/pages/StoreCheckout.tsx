@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
+import { cpGetSale, cpGetSaleStatus, cpUpdateSale, cpLogAttempt, cpGetAttemptStatus, cpCompleteSale } from "@/lib/checkoutPublic";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, User, MapPin, Wallet, ChevronRight, Store } from "lucide-react";
 import { toast } from "sonner";
