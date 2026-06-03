@@ -555,8 +555,16 @@ Deno.serve(async (req) => {
             .from("fiscal-documents")
             .upload(path, fileBytes, { contentType: ctype, upsert: true });
           if (!upErr) {
-            const { data: pub } = supabase.storage.from("fiscal-documents").getPublicUrl(path);
-            danfeUrl = buildRenderableDanfeUrl(pub?.publicUrl || danfeUrl);
+            if (isPdf) {
+              // Private bucket: customer-shareable long-lived signed URL (10 years)
+              const { data: signed } = await supabase.storage
+                .from("fiscal-documents").createSignedUrl(path, 315360000);
+              danfeUrl = signed?.signedUrl || danfeUrl;
+            } else {
+              // HTML DANFE renders via fiscal-render-document (service-role download)
+              const { data: pub } = supabase.storage.from("fiscal-documents").getPublicUrl(path);
+              danfeUrl = buildRenderableDanfeUrl(pub?.publicUrl || danfeUrl);
+            }
           }
         }
       } catch (e) {
