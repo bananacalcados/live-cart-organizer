@@ -1422,7 +1422,7 @@ export default function StoreCheckout() {
                   <StepDelivery form={customerForm} setForm={setCustomerForm} onNext={() => {
                     // Save address data to pos_sales when advancing to Step 3
                     if (saleData) {
-                      supabase.from("pos_sales").update({
+                      cpUpdateSale(saleData.id, {
                         checkout_step: 2,
                         payment_details: {
                           customer_name: customerForm.fullName,
@@ -1447,7 +1447,7 @@ export default function StoreCheckout() {
                           city: customerForm.city,
                           state: customerForm.state,
                         },
-                      } as any).eq("id", saleData.id).then(() => {});
+                      });
                     }
                     setCurrentStep(3);
                   }} onBack={() => setCurrentStep(1)}
