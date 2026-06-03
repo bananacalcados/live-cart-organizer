@@ -257,11 +257,9 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       // 2. Move to "Novo Pedido"
       await storeMove(order.id, 'new');
 
-      // 3. Fetch event's whatsapp_number_id to resolve Z-API instance
+      // 3. Fetch event's whatsapp_number_id to resolve the store (loja)
       let loja = 'centro';
-      let zapiInstanceId = '';
-      let zapiToken = '';
-      let zapiClientToken = '';
+      let whatsappNumberId = '';
       
       let automationEnabled = false;
       if (order.event_id) {
@@ -274,9 +272,10 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         automationEnabled = eventData?.automation_enabled === true;
         
         if (eventData?.whatsapp_number_id) {
+          whatsappNumberId = eventData.whatsapp_number_id;
           const { data: whatsappData } = await supabase
-            .from('whatsapp_numbers')
-            .select('id, label, phone_display, zapi_instance_id, zapi_token, zapi_client_token')
+            .from('whatsapp_numbers_safe')
+            .select('id, label, phone_display')
             .eq('id', eventData.whatsapp_number_id)
             .single();
           
@@ -288,9 +287,6 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             } else {
               loja = 'centro';
             }
-            zapiInstanceId = (whatsappData as any).zapi_instance_id || '';
-            zapiToken = (whatsappData as any).zapi_token || '';
-            zapiClientToken = (whatsappData as any).zapi_client_token || '';
           }
         }
       }
