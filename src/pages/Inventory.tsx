@@ -168,11 +168,27 @@ export default function Inventory() {
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [correctionProgress, setCorrectionProgress] = useState({ processed: 0, total: 0, errors: 0 });
   const [showNewCountDialog, setShowNewCountDialog] = useState(false);
-  const [newCountScope, setNewCountScope] = useState<'total' | 'partial'>('total');
+  const [newCountScope, setNewCountScope] = useState<'total' | 'partial' | 'total_smart'>('total');
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyProgress, setVerifyProgress] = useState({ current: 0, total: 0 });
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
+  // Smart (Total Inteligente) incremental correction
+  const [isSmartCorrecting, setIsSmartCorrecting] = useState(false);
+  const [smartProgress, setSmartProgress] = useState({ processed: 0, total: 0 });
+  // Clone-from-another-store flow
+  const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [isCloneChecking, setIsCloneChecking] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
+  const [cloneInfo, setCloneInfo] = useState<{
+    source_store_name: string | null;
+    parent_sku: string | null;
+    parent_name: string | null;
+    variant_count: number;
+    variants: Array<{ sku: string | null; barcode: string | null; color: string | null; size: string | null; variant: string | null; name: string | null }>;
+  } | null>(null);
+  const [cloneScanCode, setCloneScanCode] = useState("");
+  const [cloneScanQty, setCloneScanQty] = useState(1);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
   const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "shopify">("dashboard");
