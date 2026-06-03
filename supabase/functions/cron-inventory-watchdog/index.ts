@@ -28,11 +28,11 @@ serve(async (req) => {
     const now = Date.now();
     const actions: string[] = [];
 
-    // Find counts that are stuck in 'verifying' or 'correcting'
+    // Find counts that are stuck in 'verifying', 'correcting' or 'smart_correcting'
     const { data: stalledCounts } = await supabase
       .from('inventory_counts')
       .select('id, status, store_id, last_batch_at')
-      .in('status', ['verifying', 'correcting']);
+      .in('status', ['verifying', 'correcting', 'smart_correcting']);
 
     const edgeRuntime = (globalThis as typeof globalThis & {
       EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
