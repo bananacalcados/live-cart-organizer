@@ -312,46 +312,20 @@ export default function CustomerRegister() {
         .rpc("get_checkout_registration", { p_order_id: orderId! });
       const reg = regRaw as any;
 
-      // Save/update pos_customers for global CPF lookup
-      const { data: existingCustomer } = await supabase
-        .from("pos_customers")
-        .select("id")
-        .eq("cpf", cleanCpf)
-        .maybeSingle();
-
-      if (existingCustomer) {
-        await supabase
-          .from("pos_customers")
-          .update({
-            name: fullName,
-            email,
-            whatsapp: cleanWhatsapp,
-            cep: cleanCep,
-            address: address || null,
-            address_number: addressNumber || null,
-            complement: complement || null,
-            neighborhood: neighborhood || null,
-            city: city || null,
-            state: state || null,
-          })
-          .eq("id", existingCustomer.id);
-      } else {
-        await supabase
-          .from("pos_customers")
-          .insert({
-            cpf: cleanCpf,
-            name: fullName,
-            email,
-            whatsapp: cleanWhatsapp,
-            cep: cleanCep,
-            address: address || null,
-            address_number: addressNumber || null,
-            complement: complement || null,
-            neighborhood: neighborhood || null,
-            city: city || null,
-            state: state || null,
-          });
-      }
+      // Save/update pos_customers for global CPF lookup (server-side, service_role)
+      await cpUpsertCustomer({
+        cpf: cleanCpf,
+        name: fullName,
+        email,
+        whatsapp: cleanWhatsapp,
+        cep: cleanCep,
+        address: address || null,
+        address_number: addressNumber || null,
+        complement: complement || null,
+        neighborhood: neighborhood || null,
+        city: city || null,
+        state: state || null,
+      });
 
       if (isPickupOrder && order?.pickup_store_id) {
         // Create pos_sales entry for pickup
