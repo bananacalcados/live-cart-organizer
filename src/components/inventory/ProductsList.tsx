@@ -48,6 +48,7 @@ export function ProductsList() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [stockManagerId, setStockManagerId] = useState<string | null>(null);
+  const [labelPrintId, setLabelPrintId] = useState<string | null>(null);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [backfilling, setBackfilling] = useState(false);
 
