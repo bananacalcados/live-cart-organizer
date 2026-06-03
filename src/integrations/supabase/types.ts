@@ -15335,6 +15335,8 @@ export type Database = {
         Returns: string
       }
       format_customer_code: { Args: { seq_val: number }; Returns: string }
+      gen_unique_ean13: { Args: never; Returns: string }
+      gen_unique_variant_sku: { Args: { p_base: string }; Returns: string }
       generate_ean13_barcode: { Args: never; Returns: string }
       generate_ean13_internal: { Args: never; Returns: string }
       get_active_mp_account: {
