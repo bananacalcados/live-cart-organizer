@@ -111,8 +111,10 @@ Deno.serve(async (req) => {
         const cost = v.cost_price_override ?? master.cost_price;
         const sale = v.sale_price_override ?? master.sale_price;
         const skuName = `${master.name} - ${v.color || ''} ${v.size || ''}`.trim().replace(/\s+/g, ' ');
-        // Estoque de entrada (vindo da NF-e): só entra na loja escolhida.
-        const entryStock = stock_from_variants ? (Number(v.initial_stock) || 0) : 0;
+        // Estoque de entrada (NF-e): SÓ entra na loja escolhida (stockStoreId).
+        // Nas demais lojas o produto é criado com estoque ZERADO (apenas bipável + estoque compartilhado p/ Shopify).
+        const isStockStore = stock_from_variants && (!stockStoreId || targetStoreId === stockStoreId);
+        const entryStock = isStockStore ? (Number(v.initial_stock) || 0) : 0;
 
         // Lookup existing by barcode in this store
         const { data: existing } = await supabase
