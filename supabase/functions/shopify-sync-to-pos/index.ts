@@ -10,6 +10,29 @@ const corsHeaders = {
 
 const TINY_SHOPIFY_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 
+function digits(v: string | null | undefined): string {
+  return (v || "").replace(/\D/g, "");
+}
+
+function splitStreetNumber(address1: string | null | undefined): { street: string | null; number: string | null } {
+  if (!address1) return { street: null, number: null };
+  const raw = address1.trim();
+  const m = raw.match(/^(.*?)[,\s]+(\d+[A-Za-z]?)\s*$/);
+  if (m) return { street: m[1].replace(/[,\s]+$/, "").trim() || raw, number: m[2] };
+  return { street: raw, number: null };
+}
+
+function findNoteAttr(notes: any[], ...patterns: RegExp[]): string | null {
+  for (const a of notes || []) {
+    const name = a?.name || "";
+    if (patterns.some((p) => p.test(name))) {
+      const val = (a?.value ?? "").toString().trim();
+      if (val) return val;
+    }
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -73,11 +96,53 @@ Deno.serve(async (req) => {
           const addr = o.shipping_address || o.billing_address || {};
           const customerCity = addr.city || null;
           const customerState = addr.province_code || addr.province || null;
-          const customerCep = addr.zip || null;
+          const customerCep = digits(addr.zip) || null;
           // CPF can be in note_attributes (commonly "cpf" or "CPF")
           const cpfAttr = (o.note_attributes || []).find((a: any) => /cpf/i.test(a?.name || ""));
-          const customerCpf = cpfAttr?.value || null;
+          const customerCpf = digits(cpfAttr?.value) || null;
           const gateway = (o.payment_gateway_names || [])[0] || o.gateway || "shopify";
+
+          // Full address breakdown (street/number/complement/neighborhood)
+          const notesAttrs = o.note_attributes || [];
+          const { street, number } = splitStreetNumber(addr.address1);
+          const custAddress = street;
+          const custNumber = number || findNoteAttr(notesAttrs, /n[uú]mero/i, /^num/i);
+          const custComplement = (addr.address2 || "").trim() || findNoteAttr(notesAttrs, /complement/i);
+          const custNeighborhood = findNoteAttr(notesAttrs, /bairro/i, /neighborhood/i) || (addr.company || "").trim() || null;
+          const phoneClean = digits(customerPhone);
+
+          // Find or create a linked pos_customers record
+          let customerId: string | null = null;
+          if (customerCpf) {
+            const { data: ex } = await supabase.from("pos_customers").select("id").eq("cpf", customerCpf).maybeSingle();
+            if (ex) customerId = ex.id;
+          }
+          if (!customerId && phoneClean) {
+            const { data: ex } = await supabase.from("pos_customers").select("id").eq("whatsapp", phoneClean).maybeSingle();
+            if (ex) customerId = ex.id;
+          }
+          if (customerName || phoneClean || customerCpf) {
+            const custPayload: Record<string, any> = {
+              name: customerName,
+              whatsapp: phoneClean || null,
+              email: customerEmail,
+              address: custAddress || null,
+              address_number: custNumber || null,
+              complement: custComplement || null,
+              neighborhood: custNeighborhood || null,
+              city: customerCity,
+              state: customerState,
+              cep: customerCep,
+            };
+            if (customerCpf) custPayload.cpf = customerCpf;
+            const cleanCust = Object.fromEntries(Object.entries(custPayload).filter(([, v]) => v !== null && v !== undefined && v !== ""));
+            if (customerId) {
+              await supabase.from("pos_customers").update(cleanCust).eq("id", customerId);
+            } else {
+              const { data: nc } = await supabase.from("pos_customers").insert(cleanCust).select("id").single();
+              customerId = nc?.id || null;
+            }
+          }
 
           const { data: sale, error: saleErr } = await supabase
             .from("pos_sales")
@@ -93,6 +158,7 @@ Deno.serve(async (req) => {
               discount,
               total,
               shipping_cost: shippingCost,
+              customer_id: customerId,
               customer_name: customerName,
               customer_phone: customerPhone,
               customer_email: customerEmail,
@@ -100,6 +166,11 @@ Deno.serve(async (req) => {
               customer_city: customerCity,
               customer_state: customerState,
               customer_cep: customerCep,
+              shipping_address: {
+                address: custAddress, address_number: custNumber, complement: custComplement,
+                neighborhood: custNeighborhood, city: customerCity, state: customerState,
+                cep: customerCep, name: customerName, phone: phoneClean || null,
+              },
               paid_at: o.created_at,
               created_at: o.created_at,
               notes: `Shopify ${o.name || ""}`.trim(),

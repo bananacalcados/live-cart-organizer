@@ -91,6 +91,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [showCustomerForm, setShowCustomerForm] = useState(false);
   const [currentCustomer, setCurrentCustomer] = useState<CustomerInfo | null>(customer);
   const [recovering, setRecovering] = useState(false);
+  const [pullingShopify, setPullingShopify] = useState(false);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [editItemSku, setEditItemSku] = useState("");
   const [savingItem, setSavingItem] = useState(false);
@@ -761,6 +762,35 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     }
   };
 
+  const handlePullFromShopify = async () => {
+    if (!sale) return;
+    setPullingShopify(true);
+    try {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/shopify-pull-order-customer`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({ sale_id: sale.id }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        toast.error(data.error || "Erro ao puxar dados da Shopify");
+        return;
+      }
+      if (data.customer) setCurrentCustomer(data.customer as CustomerInfo);
+      toast.success("Dados do cliente puxados do site (Shopify)!");
+      onDeleted?.();
+    } catch (e) {
+      console.error(e);
+      toast.error("Erro ao puxar dados da Shopify");
+    } finally {
+      setPullingShopify(false);
+    }
+  };
+
   if (!sale) return null;
 
   const date = new Date(sale.created_at);
@@ -908,6 +938,18 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     >
                       {recovering ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
                       Puxar Dados
+                    </Button>
+                  )}
+                  {sale.sale_type === 'online' && storeId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 border-emerald-300 text-emerald-600 hover:bg-emerald-50"
+                      onClick={handlePullFromShopify}
+                      disabled={pullingShopify}
+                    >
+                      {pullingShopify ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
+                      Puxar do Site
                     </Button>
                   )}
                   {!isTinyOnly && storeId && (
