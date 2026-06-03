@@ -1706,10 +1706,22 @@ export default function Inventory() {
                     />
                   </div>
                   {activeCount.status === 'counting' && (
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setShowFinishDialog(true)}>
-                        Finalizar Contagem
-                      </Button>
+                    <div className="flex gap-2 flex-wrap">
+                      {activeCount.scope === 'total_smart' ? (
+                        <>
+                          <Button variant="secondary" size="sm" className="gap-1" onClick={handleSmartCorrectScanned} disabled={isSmartCorrecting}>
+                            {isSmartCorrecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                            Salvar e corrigir bipados
+                          </Button>
+                          <Button size="sm" className="gap-1" onClick={() => setShowFinishDialog(true)} disabled={isSmartCorrecting}>
+                            <Sparkles className="h-4 w-4" /> Finalizar Balanço Inteligente
+                          </Button>
+                        </>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => setShowFinishDialog(true)}>
+                          Finalizar Contagem
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeleteCount(activeCount.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
