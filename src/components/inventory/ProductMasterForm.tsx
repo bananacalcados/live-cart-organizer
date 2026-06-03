@@ -409,26 +409,47 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
                 <Sparkles className="h-4 w-4" /> Gerador de Matriz Cor × Tamanho
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
-              <div>
-                <Label className="text-xs">Cores (separadas por vírgula)</Label>
-                <Input
-                  value={matrixColors}
-                  onChange={(e) => setMatrixColors(e.target.value)}
-                  placeholder="Preto, Branco, Vermelho"
-                />
+            <CardContent className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                <div>
+                  <Label className="text-xs">Cores (separadas por vírgula)</Label>
+                  <Input
+                    value={matrixColors}
+                    onChange={(e) => setMatrixColors(e.target.value)}
+                    placeholder="Preto, Branco, Vermelho"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Tamanhos (separados por vírgula)</Label>
+                  <Input
+                    value={matrixSizes}
+                    onChange={(e) => setMatrixSizes(e.target.value)}
+                    placeholder="35, 36, 37, 38, 39, 40"
+                  />
+                </div>
+                <Button onClick={generateMatrix} variant="secondary" size="sm">
+                  <Sparkles className="h-4 w-4 mr-1" /> Gerar Variações
+                </Button>
               </div>
-              <div>
-                <Label className="text-xs">Tamanhos (separados por vírgula)</Label>
-                <Input
-                  value={matrixSizes}
-                  onChange={(e) => setMatrixSizes(e.target.value)}
-                  placeholder="35, 36, 37, 38, 39, 40"
-                />
+              <div className="flex flex-wrap gap-1.5">
+                <span className="text-[11px] text-muted-foreground self-center">Grades rápidas:</span>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => setMatrixSizes("33/34, 35/36, 37/38, 39/40")}>
+                  Chinelo (33/34…)
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => setMatrixSizes("25/26, 27/28, 29/30, 31/32, 33/34")}>
+                  Chinelo Infantil
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => setMatrixSizes("34, 35, 36, 37, 38, 39, 40")}>
+                  Numérica 34–40
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => setMatrixSizes("37, 38, 39, 40, 41, 42, 43, 44")}>
+                  Numérica 37–44
+                </Button>
               </div>
-              <Button onClick={generateMatrix} variant="secondary" size="sm">
-                <Sparkles className="h-4 w-4 mr-1" /> Gerar Variações
-              </Button>
             </CardContent>
           </Card>
 
