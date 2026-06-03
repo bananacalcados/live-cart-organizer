@@ -260,8 +260,26 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
                 <Label>Categoria</Label>
                 <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Tênis casual" />
               </div>
-              <div>
-                <Label>NCM</Label>
+              <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 p-3">
+                <Label className="flex items-center gap-1.5">
+                  <StoreIcon className="h-4 w-4 text-primary" />
+                  Lançar estoque na loja (PDV) *
+                </Label>
+                <Select value={stockStoreId} onValueChange={setStockStoreId}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="Escolha a loja que recebe o estoque" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stores.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  O produto vai para o PDV e Catálogo Unificado, com o estoque das variações entrando nesta loja. Sem loja selecionada, o produto fica só no cadastro (não aparece no PDV).
+                </p>
+              </div>
+
                 <Input value={ncm} onChange={(e) => setNcm(e.target.value)} />
               </div>
               <div>
