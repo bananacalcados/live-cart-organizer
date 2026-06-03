@@ -678,7 +678,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
           description: "PIX Checkout Loja",
         },
       };
-      await supabase.from("pos_sales").update(customerPayload as any).eq("id", saleId);
+      await cpUpdateSale(saleId!, customerPayload);
 
       const nameParts = form.fullName.split(" ");
       const { data, error } = await supabase.functions.invoke("mercadopago-create-pix", {
