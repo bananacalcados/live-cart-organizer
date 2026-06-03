@@ -227,6 +227,15 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
         .eq("id", masterId);
       if (e1) throw e1;
 
+      // 1b. Propaga categoria ao PDV (pos_products) pelas SKUs das variações
+      const variantSkus = variants.map((v) => v.sku).filter(Boolean) as string[];
+      if (variantSkus.length > 0) {
+        await supabase
+          .from("pos_products")
+          .update({ category: category || null, category_id: categoryId || null })
+          .in("sku", variantSkus);
+      }
+
       // 2. Remove variações marcadas
       if (removedVariantIds.length > 0) {
         const { error: eDel } = await supabase
