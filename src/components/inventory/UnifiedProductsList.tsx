@@ -102,6 +102,7 @@ function buildLabelGroup(g: GroupRow): { name: string; items: LabelItem[] } {
   return { name: g.master?.name || g.parent_sku, items };
 }
 
+export function UnifiedProductsList() {
   const [masters, setMasters] = useState<MasterData[]>([]);
   const [posProducts, setPosProducts] = useState<PosSku[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
