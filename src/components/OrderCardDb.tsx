@@ -311,11 +311,6 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         valor_total: finalValue,
         link_pagamento: paymentLink,
         loja,
-        whatsapp: {
-          zapi_instance_id: zapiInstanceId,
-          zapi_token: zapiToken,
-          zapi_client_token: zapiClientToken,
-        },
         automation_enabled: automationEnabled,
         customer_id: order.customer_id || '',
         instagram_handle: order.customer?.instagram_handle || '',
@@ -327,20 +322,15 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         // O início da Livete já é disparado pelo move para "new".
         console.log('🤖 [LIVETE] Start handled by moveOrder for', order.id);
       } else {
-        // Fallback: send to VPS webhook (legacy)
+        // Fallback: send to VPS webhook (legacy) via secure edge function
+        // so Z-API credentials are never read in the browser.
         try {
           const webhookUrl = import.meta.env.VITE_AGENTE2_NOVO_PEDIDO || 'https://api.bananacalcados.com.br/webhook/novo-pedido';
-          console.log('🚀 [WEBHOOK] URL:', webhookUrl);
-          const webhookResp = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+          await supabase.functions.invoke('legacy-order-webhook', {
+            body: { payload, whatsapp_number_id: whatsappNumberId, webhook_url: webhookUrl },
           });
-          console.log('🚀 [WEBHOOK] Response status:', webhookResp.status);
-          const webhookBody = await webhookResp.text();
-          console.log('🚀 [WEBHOOK] Response body:', webhookBody);
         } catch (webhookErr) {
-          console.error('🚀 [WEBHOOK] Fetch falhou (CORS/rede):', webhookErr);
+          console.error('🚀 [WEBHOOK] Falha ao despachar webhook legado:', webhookErr);
         }
       }
 
