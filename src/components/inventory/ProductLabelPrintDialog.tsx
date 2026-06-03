@@ -11,19 +11,25 @@ import { Loader2, Printer, Tag, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import JsBarcode from "jsbarcode";
 
-interface Props {
-  masterId: string | null;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}
-
-interface Variant {
+export interface LabelItem {
   id: string;
   sku: string;
   gtin: string | null;
   size: string | null;
   color: string | null;
 }
+
+interface Props {
+  /** Modo catálogo legacy: carrega variações por master. */
+  masterId?: string | null;
+  /** Modo direto (catálogo unificado): passa itens e nome já prontos. */
+  productName?: string;
+  items?: LabelItem[];
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}
+
+type Variant = LabelItem;
 
 /** Gera o código de barras como dataURL (PNG) usando JsBarcode. */
 function makeBarcodeDataUrl(code: string): string {
@@ -51,13 +57,22 @@ function escapeHtml(s: string): string {
   );
 }
 
-export function ProductLabelPrintDialog({ masterId, open, onOpenChange }: Props) {
+export function ProductLabelPrintDialog({ masterId, productName, items, open, onOpenChange }: Props) {
   const [loading, setLoading] = useState(false);
   const [master, setMaster] = useState<{ name: string; sku_root: string } | null>(null);
   const [variants, setVariants] = useState<Variant[]>([]);
   const [qty, setQty] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
+    // Modo direto: usa os itens fornecidos.
+    if (items && items.length >= 0 && !masterId) {
+      setMaster({ name: productName || "", sku_root: "" });
+      setVariants(items);
+      const initQty: Record<string, number> = {};
+      items.forEach((v) => (initQty[v.id] = 1));
+      setQty(initQty);
+      return;
+    }
     if (!masterId) return;
     setLoading(true);
     try {
@@ -84,11 +99,12 @@ export function ProductLabelPrintDialog({ masterId, open, onOpenChange }: Props)
     } finally {
       setLoading(false);
     }
-  }, [masterId]);
+  }, [masterId, items, productName]);
 
   useEffect(() => {
-    if (open && masterId) load();
-  }, [open, masterId, load]);
+    if (open) load();
+  }, [open, load]);
+
 
   const setQ = (id: string, val: number) =>
     setQty((p) => ({ ...p, [id]: Math.max(0, val) }));
