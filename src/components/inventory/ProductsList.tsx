@@ -424,6 +424,12 @@ export function ProductsList() {
         open={!!stockManagerId}
         onOpenChange={(v) => !v && setStockManagerId(null)}
       />
+
+      <ProductLabelPrintDialog
+        masterId={labelPrintId}
+        open={!!labelPrintId}
+        onOpenChange={(v) => !v && setLabelPrintId(null)}
+      />
     </div>
       )}
     </div>
