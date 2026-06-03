@@ -289,6 +289,13 @@ export function UnifiedProductsList() {
                       R$ {(g.master?.cost_price || 0).toFixed(2)} / R$ {(g.master?.sale_price || 0).toFixed(2)}
                     </div>
                   </div>
+                  <Button
+                    size="icon" variant="ghost" className="h-7 w-7"
+                    title="Imprimir etiquetas com código de barras (8×5cm, folha A4)"
+                    onClick={() => setLabelGroup(buildLabelGroup(g))}
+                  >
+                    <Tag className="h-3.5 w-3.5" />
+                  </Button>
                   {g.master && (
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(g.master!)}>
                       <Pencil className="h-3.5 w-3.5" />
