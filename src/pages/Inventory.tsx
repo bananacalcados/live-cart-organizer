@@ -366,6 +366,45 @@ export default function Inventory() {
     return () => clearInterval(interval);
   }, [activeCount?.id, activeCount?.status]);
 
+  // Poll incremental (Total Inteligente) correction progress
+  useEffect(() => {
+    if (!activeCount || activeCount.status !== 'smart_correcting') return;
+    setIsSmartCorrecting(true);
+
+    const pollSmart = async () => {
+      const { count: totalCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id);
+      const { count: doneCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id)
+        .in('status', ['completed', 'error']);
+
+      setSmartProgress({ processed: doneCount || 0, total: totalCount || 0 });
+
+      // When the edge function drains the queue it sets status back to 'counting'.
+      const { data: refreshed } = await supabase
+        .from('inventory_counts')
+        .select('*')
+        .eq('id', activeCount.id)
+        .single();
+      if (refreshed && refreshed.status !== 'smart_correcting') {
+        setIsSmartCorrecting(false);
+        setActiveCount(refreshed as unknown as InventoryCount);
+        loadCountItems(activeCount.id);
+        toast.success('Bipados corrigidos! Pode continuar a contagem.');
+      }
+    };
+
+    pollSmart();
+    const interval = setInterval(pollSmart, 4000);
+    return () => clearInterval(interval);
+  }, [activeCount?.id, activeCount?.status]);
+
+
+
   const loadCountItems = async (countId: string) => {
     // Load all items in batches to bypass the 1000-row default limit
     let allData: CountItem[] = [];
