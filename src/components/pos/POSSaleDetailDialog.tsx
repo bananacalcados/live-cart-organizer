@@ -940,6 +940,18 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                       Puxar Dados
                     </Button>
                   )}
+                  {sale.sale_type === 'online' && storeId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs gap-1 border-emerald-300 text-emerald-600 hover:bg-emerald-50"
+                      onClick={handlePullFromShopify}
+                      disabled={pullingShopify}
+                    >
+                      {pullingShopify ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
+                      Puxar do Site
+                    </Button>
+                  )}
                   {!isTinyOnly && storeId && (
                     <Button
                       variant="outline"
