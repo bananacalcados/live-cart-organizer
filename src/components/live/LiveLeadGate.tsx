@@ -86,42 +86,17 @@ export function LiveLeadGate({ onSubmit, sessionTitle }: LiveLeadGateProps) {
   const verifyCode = async (codeStr: string) => {
     setVerifying(true);
     try {
-      const { data, error } = await supabase
-        .from("live_phone_verifications")
-        .select("id, code, expires_at")
-        .eq("phone", fullPhone)
-        .eq("verified", false)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { data, error } = await supabase.functions.invoke("live-verify-code", {
+        body: { phone: fullPhone, code: codeStr },
+      });
 
-      if (error || !data) {
-        toast.error("Código não encontrado. Solicite um novo.");
-        setCode(["", "", "", ""]);
-        setVerifying(false);
-        return;
-      }
-
-      if (new Date(data.expires_at) < new Date()) {
-        toast.error("Código expirado. Solicite um novo.");
-        setCode(["", "", "", ""]);
-        setVerifying(false);
-        return;
-      }
-
-      if (data.code !== codeStr) {
-        toast.error("Código incorreto. Tente novamente.");
+      if (error || !data?.success) {
+        toast.error(data?.error || "Erro ao verificar código");
         setCode(["", "", "", ""]);
         inputRefs.current[0]?.focus();
         setVerifying(false);
         return;
       }
-
-      // Mark as verified
-      await supabase
-        .from("live_phone_verifications")
-        .update({ verified: true })
-        .eq("id", data.id);
 
       toast.success("WhatsApp verificado! ✅");
       onSubmit(name.trim(), fullPhone);
