@@ -913,20 +913,20 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
 
       if (error || !data?.success || !data?.transactionId) {
         const errMsg = data?.error || (error && typeof error === "object" && "message" in error ? String((error as any).message) : null) || "Erro no pagamento";
-        await supabase.from("pos_checkout_attempts").insert({
+        await cpLogAttempt({
           sale_id: saleId, store_id: storeId, payment_method: "card", status: "failed", error_message: errMsg,
           amount: totalWithInterest, customer_name: form.fullName, customer_phone: form.whatsapp,
           customer_email: form.email, gateway: data?.gateway || "pagarme",
-        } as any).then(() => {});
+        });
         throw new Error(errMsg);
       }
       // Log success
-      await supabase.from("pos_checkout_attempts").insert({
+      await cpLogAttempt({
         sale_id: saleId, store_id: storeId, payment_method: "card", status: "success", amount: totalWithInterest,
         customer_name: form.fullName, customer_phone: form.whatsapp, customer_email: form.email,
         gateway: data.gateway || "pagarme", transaction_id: data.transactionId || null,
         metadata: { cpf: form.cpf, cep: form.cep, address: form.address, address_number: form.addressNumber, complement: form.complement, neighborhood: form.neighborhood, city: form.city, state: form.state },
-      } as any).then(() => {});
+      });
       sessionStorage.removeItem(`checkout_payment_${saleId}`);
       const gw = data.gateway || "pagarme";
       const gwLabel = gw === "mercadopago" ? "Mercado Pago" : gw === "pagarme" ? "Pagar.me" : gw === "vindi" ? "VINDI" : gw === "appmax" ? "APPMAX" : gw.toUpperCase();
