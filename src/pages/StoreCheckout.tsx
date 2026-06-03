@@ -628,7 +628,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
           setPaid(true);
           if (pollingRef.current) clearInterval(pollingRef.current);
           // Log PIX success
-          await supabase.from("pos_checkout_attempts").insert({
+          await cpLogAttempt({
             sale_id: saleId,
             store_id: storeId,
             payment_method: "pix",
@@ -640,7 +640,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
             gateway: "mercadopago",
             transaction_id: pixPaymentId,
             metadata: { cpf: form.cpf, cep: form.cep, address: form.address, address_number: form.addressNumber, complement: form.complement, neighborhood: form.neighborhood, city: form.city, state: form.state },
-          } as any).then(() => {});
+          });
           onPaid();
         }
       } catch {}
