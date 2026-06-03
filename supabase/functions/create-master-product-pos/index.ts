@@ -75,17 +75,16 @@ Deno.serve(async (req) => {
       review_reason: reasons.length > 0 ? reasons.join("; ") : null,
     }, { onConflict: "parent_sku" });
 
-    // Resolve target stores: default = ALL active stores (PDV needs product everywhere)
-    let targetStoreIds: string[] = [];
-    if (store_id) {
-      targetStoreIds = [store_id];
-    } else {
-      const { data: stores } = await supabase
-        .from("pos_stores")
-        .select("id")
-        .order("name");
-      targetStoreIds = (stores || []).map((s: any) => s.id);
-    }
+    // SEMPRE replica em TODAS as lojas ativas (PDV precisa do produto bipável em todas
+    // e a Shopify usa estoque compartilhado entre lojas). O estoque de entrada (NF-e)
+    // entra APENAS na loja escolhida (store_id); as demais ficam com estoque ZERADO.
+    const { data: stores } = await supabase
+      .from("pos_stores")
+      .select("id")
+      .eq("is_active", true)
+      .order("name");
+    const targetStoreIds: string[] = (stores || []).map((s: any) => s.id);
+    const stockStoreId: string | null = store_id || null;
 
     if (targetStoreIds.length === 0) {
       return new Response(JSON.stringify({ error: "Nenhuma loja PDV cadastrada" }), {
@@ -112,8 +111,10 @@ Deno.serve(async (req) => {
         const cost = v.cost_price_override ?? master.cost_price;
         const sale = v.sale_price_override ?? master.sale_price;
         const skuName = `${master.name} - ${v.color || ''} ${v.size || ''}`.trim().replace(/\s+/g, ' ');
-        // Estoque de entrada (vindo da NF-e): só entra na loja escolhida.
-        const entryStock = stock_from_variants ? (Number(v.initial_stock) || 0) : 0;
+        // Estoque de entrada (NF-e): SÓ entra na loja escolhida (stockStoreId).
+        // Nas demais lojas o produto é criado com estoque ZERADO (apenas bipável + estoque compartilhado p/ Shopify).
+        const isStockStore = stock_from_variants && (!stockStoreId || targetStoreId === stockStoreId);
+        const entryStock = isStockStore ? (Number(v.initial_stock) || 0) : 0;
 
         // Lookup existing by barcode in this store
         const { data: existing } = await supabase
@@ -132,8 +133,8 @@ Deno.serve(async (req) => {
             price: sale,
             is_active: true,
           };
-          // NF-e adiciona ao estoque existente da loja
-          if (stock_from_variants) {
+          // NF-e adiciona ao estoque existente APENAS na loja escolhida.
+          if (isStockStore) {
             updatePayload.stock = (Number(existing.stock) || 0) + entryStock;
           }
           const { error: upErr } = await supabase
