@@ -10,6 +10,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
@@ -50,6 +53,9 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
   const [description, setDescription] = useState("");
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("");
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [newCategoryMode, setNewCategoryMode] = useState(false);
   const [ncm, setNcm] = useState("");
   const [cest, setCest] = useState("");
   const [costPrice, setCostPrice] = useState("");
@@ -70,6 +76,16 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     loadData();
   }, [open, masterId]);
 
+  useEffect(() => {
+    if (!open) return;
+    supabase
+      .from("product_categories")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setCategories((data || []) as any));
+  }, [open]);
+
   async function loadData() {
     if (!masterId) return;
     setLoading(true);
@@ -85,6 +101,15 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       setDescription(master.description || "");
       setBrand(master.brand || "");
       setCategory(master.category || "");
+      {
+        const catName = (master.category || "").toString();
+        const match = categories.find((c) => c.name.toLowerCase() === catName.toLowerCase())
+          || (master.category_id ? categories.find((c) => c.id === master.category_id) : undefined);
+        if (master.category_id) setCategoryId(master.category_id);
+        else if (match) setCategoryId(match.id);
+        else setCategoryId("");
+        setNewCategoryMode(!!catName && !match && !master.category_id);
+      }
       setNcm(master.ncm || "");
       setCest(master.cest || "");
       setCostPrice(master.cost_price?.toString() || "");
@@ -186,6 +211,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
           description,
           brand,
           category,
+          category_id: categoryId || null,
           ncm,
           cest,
           cost_price: parseFloat(costPrice) || 0,
@@ -200,6 +226,15 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
         } as any)
         .eq("id", masterId);
       if (e1) throw e1;
+
+      // 1b. Propaga categoria ao PDV (pos_products) pelas SKUs das variações
+      const variantSkus = variants.map((v) => v.sku).filter(Boolean) as string[];
+      if (variantSkus.length > 0) {
+        await supabase
+          .from("pos_products")
+          .update({ category: category || null, category_id: categoryId || null })
+          .in("sku", variantSkus);
+      }
 
       // 2. Remove variações marcadas
       if (removedVariantIds.length > 0) {
@@ -230,6 +265,22 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
             .eq("id", v.id);
           if (eUp) throw eUp;
 
+          // Propaga nome corrigido + variação ao PDV (pos_products) pela SKU
+          if (v.sku) {
+            const variantLabel = `${v.color || ""} ${v.size || ""}`.trim().replace(/\s+/g, " ");
+            const posName = `${name} - ${variantLabel}`.trim().replace(/\s+/g, " ");
+            await supabase
+              .from("pos_products")
+              .update({
+                name: posName,
+                color: v.color || null,
+                size: v.size || null,
+                variant: variantLabel,
+                last_sync_source: "pos",
+              })
+              .eq("sku", v.sku);
+          }
+
           if (stockDelta !== 0) {
             await supabase.from("product_stock_movements").insert({
               variant_id: v.id,
@@ -240,10 +291,15 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
             } as any);
           }
         } else {
-          // nova: insert
+          // nova: insert — gera SKU e GTIN ÚNICOS via banco (sem colisão)
           if (!v.color || !v.size) continue;
-          const newGtin = generateEan13();
-          const newSku = `${skuRoot}-${(v.color || "X").substring(0, 3).toUpperCase()}-${v.size}`;
+          const colorSlug = (v.color || "X").normalize("NFD").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 10) || "UN";
+          const sizeSlug = (v.size || "U").replace(/[^A-Za-z0-9]/g, "") || "U";
+          const baseSku = `${skuRoot}-${colorSlug}-${sizeSlug}`;
+          const { data: skuData } = await supabase.rpc("gen_unique_variant_sku", { p_base: baseSku });
+          const { data: gtinData } = await supabase.rpc("gen_unique_ean13");
+          const newSku = (skuData as string) || baseSku;
+          const newGtin = (gtinData as string) || generateEan13();
           const { data: ins, error: eIns } = await supabase
             .from("product_variants")
             .insert({
@@ -342,7 +398,46 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                 </div>
                 <div>
                   <Label>Categoria</Label>
-                  <Input value={category} onChange={(e) => setCategory(e.target.value)} />
+                  {newCategoryMode ? (
+                    <div className="flex gap-1">
+                      <Input
+                        value={category}
+                        onChange={(e) => { setCategory(e.target.value); setCategoryId(""); }}
+                        placeholder="Nova categoria"
+                        autoFocus
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setNewCategoryMode(false); setCategory(""); setCategoryId(""); }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={categoryId || (category ? "__custom__" : "")}
+                      onValueChange={(v) => {
+                        if (v === "__new__") { setNewCategoryMode(true); setCategory(""); setCategoryId(""); return; }
+                        const cat = categories.find((c) => c.id === v);
+                        if (cat) { setCategoryId(cat.id); setCategory(cat.name); }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {category && !categories.some((c) => c.name.toLowerCase() === category.toLowerCase()) && (
+                          <SelectItem value="__custom__">{category} (atual)</SelectItem>
+                        )}
+                        {categories.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                        <SelectItem value="__new__" className="text-primary font-medium">+ Criar nova categoria</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div>
                   <Label>NCM</Label>

@@ -51,6 +51,9 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
   const [description, setDescription] = useState(initial?.description || "");
   const [brand, setBrand] = useState(initial?.brand || "");
   const [category, setCategory] = useState(initial?.category || "");
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [newCategoryMode, setNewCategoryMode] = useState(false);
   const [ncm, setNcm] = useState(initial?.ncm || "64039900");
   const [cest, setCest] = useState("");
   const [costPrice, setCostPrice] = useState<string>(initial?.cost_price?.toString() || "");
@@ -72,6 +75,21 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
       .select("id, name")
       .order("name")
       .then(({ data }) => setStores((data || []) as any));
+    supabase
+      .from("product_categories")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => {
+        const cats = (data || []) as { id: string; name: string }[];
+        setCategories(cats);
+        // Se a categoria inicial bater com uma existente, vincula o id
+        if (initial?.category) {
+          const match = cats.find((c) => c.name.toLowerCase() === initial.category!.toLowerCase());
+          if (match) { setCategoryId(match.id); setCategory(match.name); }
+          else setNewCategoryMode(true);
+        }
+      });
   }, [open]);
 
   // Filhos
@@ -179,6 +197,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
           description,
           brand,
           category,
+          category_id: categoryId || "",
           ncm,
           cest,
           cost_price: parseFloat(costPrice) || 0,
@@ -258,7 +277,43 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
               </div>
               <div>
                 <Label>Categoria</Label>
-                <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Tênis casual" />
+                {newCategoryMode ? (
+                  <div className="flex gap-1">
+                    <Input
+                      value={category}
+                      onChange={(e) => { setCategory(e.target.value); setCategoryId(""); }}
+                      placeholder="Nova categoria"
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setNewCategoryMode(false); setCategory(""); setCategoryId(""); }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    value={categoryId || (category ? "__custom__" : "")}
+                    onValueChange={(v) => {
+                      if (v === "__new__") { setNewCategoryMode(true); setCategory(""); setCategoryId(""); return; }
+                      const cat = categories.find((c) => c.id === v);
+                      if (cat) { setCategoryId(cat.id); setCategory(cat.name); }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__new__" className="text-primary font-medium">+ Criar nova categoria</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 p-3">
                 <Label className="flex items-center gap-1.5">
@@ -354,26 +409,47 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
                 <Sparkles className="h-4 w-4" /> Gerador de Matriz Cor × Tamanho
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
-              <div>
-                <Label className="text-xs">Cores (separadas por vírgula)</Label>
-                <Input
-                  value={matrixColors}
-                  onChange={(e) => setMatrixColors(e.target.value)}
-                  placeholder="Preto, Branco, Vermelho"
-                />
+            <CardContent className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                <div>
+                  <Label className="text-xs">Cores (separadas por vírgula)</Label>
+                  <Input
+                    value={matrixColors}
+                    onChange={(e) => setMatrixColors(e.target.value)}
+                    placeholder="Preto, Branco, Vermelho"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Tamanhos (separados por vírgula)</Label>
+                  <Input
+                    value={matrixSizes}
+                    onChange={(e) => setMatrixSizes(e.target.value)}
+                    placeholder="35, 36, 37, 38, 39, 40"
+                  />
+                </div>
+                <Button onClick={generateMatrix} variant="secondary" size="sm">
+                  <Sparkles className="h-4 w-4 mr-1" /> Gerar Variações
+                </Button>
               </div>
-              <div>
-                <Label className="text-xs">Tamanhos (separados por vírgula)</Label>
-                <Input
-                  value={matrixSizes}
-                  onChange={(e) => setMatrixSizes(e.target.value)}
-                  placeholder="35, 36, 37, 38, 39, 40"
-                />
+              <div className="flex flex-wrap gap-1.5">
+                <span className="text-[11px] text-muted-foreground self-center">Grades rápidas:</span>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => setMatrixSizes("33/34, 35/36, 37/38, 39/40")}>
+                  Chinelo (33/34…)
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => setMatrixSizes("25/26, 27/28, 29/30, 31/32, 33/34")}>
+                  Chinelo Infantil
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => setMatrixSizes("34, 35, 36, 37, 38, 39, 40")}>
+                  Numérica 34–40
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                  onClick={() => setMatrixSizes("37, 38, 39, 40, 41, 42, 43, 44")}>
+                  Numérica 37–44
+                </Button>
               </div>
-              <Button onClick={generateMatrix} variant="secondary" size="sm">
-                <Sparkles className="h-4 w-4 mr-1" /> Gerar Variações
-              </Button>
             </CardContent>
           </Card>
 
