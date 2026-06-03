@@ -277,7 +277,43 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
               </div>
               <div>
                 <Label>Categoria</Label>
-                <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Tênis casual" />
+                {newCategoryMode ? (
+                  <div className="flex gap-1">
+                    <Input
+                      value={category}
+                      onChange={(e) => { setCategory(e.target.value); setCategoryId(""); }}
+                      placeholder="Nova categoria"
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setNewCategoryMode(false); setCategory(""); setCategoryId(""); }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    value={categoryId || (category ? "__custom__" : "")}
+                    onValueChange={(v) => {
+                      if (v === "__new__") { setNewCategoryMode(true); setCategory(""); setCategoryId(""); return; }
+                      const cat = categories.find((c) => c.id === v);
+                      if (cat) { setCategoryId(cat.id); setCategory(cat.name); }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__new__" className="text-primary font-medium">+ Criar nova categoria</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 p-3">
                 <Label className="flex items-center gap-1.5">
