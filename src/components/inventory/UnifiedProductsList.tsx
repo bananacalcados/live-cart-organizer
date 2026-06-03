@@ -14,9 +14,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Search, Package, Loader2, Pencil, AlertCircle, Boxes, Save, Filter, ChevronDown, ChevronRight, Store as StoreIcon,
+  Search, Package, Loader2, Pencil, AlertCircle, Boxes, Save, Filter, ChevronDown, ChevronRight, Store as StoreIcon, Tag,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
 
 interface MasterData {
   parent_sku: string;
@@ -74,6 +75,33 @@ const CFOP_OPTIONS = [
   { value: "6404", label: "6404 — ST interestadual" },
 ];
 
+/** Monta itens de etiqueta (uma por variação cor+tamanho) a partir de um grupo. */
+function buildLabelGroup(g: GroupRow): { name: string; items: LabelItem[] } {
+  const seen = new Map<string, LabelItem>();
+  for (const s of g.skus) {
+    const color = s.color || s.variant || "";
+    const size = s.size || "";
+    const code = (s.barcode && s.barcode.trim()) || s.sku || "";
+    const key = `${color}||${size}`;
+    if (!seen.has(key)) {
+      seen.set(key, {
+        id: key,
+        sku: s.sku || "",
+        gtin: s.barcode || null,
+        size: size || null,
+        color: color || null,
+      });
+    } else if (code && !seen.get(key)!.gtin && !seen.get(key)!.sku) {
+      seen.set(key, { ...seen.get(key)!, sku: s.sku || "", gtin: s.barcode || null });
+    }
+  }
+  const items = Array.from(seen.values()).sort((a, b) =>
+    (a.color || "").localeCompare(b.color || "") ||
+    (a.size || "").localeCompare(b.size || "", undefined, { numeric: true })
+  );
+  return { name: g.master?.name || g.parent_sku, items };
+}
+
 export function UnifiedProductsList() {
   const [masters, setMasters] = useState<MasterData[]>([]);
   const [posProducts, setPosProducts] = useState<PosSku[]>([]);
@@ -85,6 +113,7 @@ export function UnifiedProductsList() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<MasterData | null>(null);
   const [editingSku, setEditingSku] = useState<PosSku | null>(null);
+  const [labelGroup, setLabelGroup] = useState<{ name: string; items: LabelItem[] } | null>(null);
   const [page, setPage] = useState(0);
 
   async function load() {
@@ -287,6 +316,13 @@ export function UnifiedProductsList() {
                       R$ {(g.master?.cost_price || 0).toFixed(2)} / R$ {(g.master?.sale_price || 0).toFixed(2)}
                     </div>
                   </div>
+                  <Button
+                    size="icon" variant="ghost" className="h-7 w-7"
+                    title="Imprimir etiquetas com código de barras (8×5cm, folha A4)"
+                    onClick={() => setLabelGroup(buildLabelGroup(g))}
+                  >
+                    <Tag className="h-3.5 w-3.5" />
+                  </Button>
                   {g.master && (
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(g.master!)}>
                       <Pencil className="h-3.5 w-3.5" />
@@ -419,6 +455,14 @@ export function UnifiedProductsList() {
         onClose={() => setEditingSku(null)}
         onSaved={() => { setEditingSku(null); load(); }}
         storeName={editingSku ? storeName(editingSku.store_id) : ""}
+      />
+
+      {/* Print labels dialog */}
+      <ProductLabelPrintDialog
+        open={!!labelGroup}
+        onOpenChange={(v) => !v && setLabelGroup(null)}
+        productName={labelGroup?.name}
+        items={labelGroup?.items || []}
       />
     </div>
   );

@@ -8,10 +8,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes, Sparkles } from "lucide-react";
+import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes, Sparkles, Tag } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
 import { ProductStockManagerDialog } from "./ProductStockManagerDialog";
+import { ProductLabelPrintDialog } from "./ProductLabelPrintDialog";
 import { UnifiedProductsList } from "./UnifiedProductsList";
 import { toast } from "sonner";
 
@@ -47,6 +48,7 @@ export function ProductsList() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [stockManagerId, setStockManagerId] = useState<string | null>(null);
+  const [labelPrintId, setLabelPrintId] = useState<string | null>(null);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [backfilling, setBackfilling] = useState(false);
 
@@ -316,6 +318,16 @@ export function ProductsList() {
                       <Boxes className="h-3 w-3 mr-1" />
                       Estoque
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs h-8"
+                      onClick={() => setLabelPrintId(p.id)}
+                      title="Imprimir etiquetas com código de barras (8×5cm em folha A4)"
+                    >
+                      <Tag className="h-3 w-3 mr-1" />
+                      Etiqueta
+                    </Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -411,6 +423,12 @@ export function ProductsList() {
         masterId={stockManagerId}
         open={!!stockManagerId}
         onOpenChange={(v) => !v && setStockManagerId(null)}
+      />
+
+      <ProductLabelPrintDialog
+        masterId={labelPrintId}
+        open={!!labelPrintId}
+        onOpenChange={(v) => !v && setLabelPrintId(null)}
       />
     </div>
       )}
