@@ -53,6 +53,9 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
   const [description, setDescription] = useState("");
   const [brand, setBrand] = useState("");
   const [category, setCategory] = useState("");
+  const [categoryId, setCategoryId] = useState<string>("");
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [newCategoryMode, setNewCategoryMode] = useState(false);
   const [ncm, setNcm] = useState("");
   const [cest, setCest] = useState("");
   const [costPrice, setCostPrice] = useState("");
