@@ -2088,21 +2088,35 @@ export default function Inventory() {
           <div className="space-y-4">
             <div>
               <p className="text-sm font-medium mb-2">Escopo do balanço:</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <Card
-                  className={cn("cursor-pointer p-4 transition-all", newCountScope === 'total' && "border-primary ring-2 ring-primary/20")}
-                  onClick={() => setNewCountScope('total')}
+                  className={cn("cursor-pointer p-4 transition-all border-primary/60", newCountScope === 'total_smart' && "border-primary ring-2 ring-primary/20")}
+                  onClick={() => setNewCountScope('total_smart')}
                 >
-                  <p className="font-semibold text-sm">Total</p>
-                  <p className="text-xs text-muted-foreground mt-1">Todos os produtos. O que não for bipado terá estoque zerado.</p>
+                  <p className="font-semibold text-sm flex items-center gap-1">
+                    <Sparkles className="h-4 w-4 text-primary" /> Total Inteligente <Badge variant="secondary" className="text-[10px]">recomendado</Badge>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Conte aos poucos: salve e corrija os bipados durante o processo para conferir.
+                    Ao final, o que não foi bipado tem o estoque zerado. Ideal para muitos SKUs.
+                  </p>
                 </Card>
-                <Card
-                  className={cn("cursor-pointer p-4 transition-all", newCountScope === 'partial' && "border-primary ring-2 ring-primary/20")}
-                  onClick={() => setNewCountScope('partial')}
-                >
-                  <p className="font-semibold text-sm">Parcial</p>
-                  <p className="text-xs text-muted-foreground mt-1">Apenas os produtos bipados serão conferidos.</p>
-                </Card>
+                <div className="grid grid-cols-2 gap-3">
+                  <Card
+                    className={cn("cursor-pointer p-4 transition-all", newCountScope === 'total' && "border-primary ring-2 ring-primary/20")}
+                    onClick={() => setNewCountScope('total')}
+                  >
+                    <p className="font-semibold text-sm">Total</p>
+                    <p className="text-xs text-muted-foreground mt-1">Todos os produtos. O que não for bipado terá estoque zerado.</p>
+                  </Card>
+                  <Card
+                    className={cn("cursor-pointer p-4 transition-all", newCountScope === 'partial' && "border-primary ring-2 ring-primary/20")}
+                    onClick={() => setNewCountScope('partial')}
+                  >
+                    <p className="font-semibold text-sm">Parcial</p>
+                    <p className="text-xs text-muted-foreground mt-1">Apenas os produtos bipados serão conferidos.</p>
+                  </Card>
+                </div>
               </div>
             </div>
           </div>
