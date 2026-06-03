@@ -110,7 +110,10 @@ Deno.serve(async (req) => {
       for (const v of variants) {
         const cost = v.cost_price_override ?? master.cost_price;
         const sale = v.sale_price_override ?? master.sale_price;
-        const skuName = `${master.name} - ${v.color || ''} ${v.size || ''}`.trim().replace(/\s+/g, ' ');
+        const vColor = (v.color || "").toString().trim();
+        const vSize = (v.size || "").toString().trim();
+        const vVariant = `${vColor} ${vSize}`.trim().replace(/\s+/g, " ");
+        const skuName = `${master.name} - ${vColor} ${vSize}`.trim().replace(/\s+/g, ' ');
         // Estoque de entrada (NF-e): SÓ entra na loja escolhida (stockStoreId).
         // Nas demais lojas o produto é criado com estoque ZERADO (apenas bipável + estoque compartilhado p/ Shopify).
         const isStockStore = stock_from_variants && (!stockStoreId || targetStoreId === stockStoreId);
@@ -129,6 +132,9 @@ Deno.serve(async (req) => {
             name: skuName,
             sku: v.sku,
             parent_sku: parentSku,
+            color: vColor || null,
+            size: vSize || null,
+            variant: vVariant,
             cost_price: cost,
             price: sale,
             is_active: true,
