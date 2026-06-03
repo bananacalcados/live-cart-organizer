@@ -1403,7 +1403,7 @@ export default function StoreCheckout() {
                   <StepIdentification form={customerForm} setForm={setCustomerForm} onNext={() => {
                     // Save customer data progressively to pos_sales when advancing to Step 2
                     if (saleData) {
-                      supabase.from("pos_sales").update({
+                      cpUpdateSale(saleData.id, {
                         customer_name: customerForm.fullName,
                         customer_phone: customerForm.whatsapp.replace(/\D/g, ""),
                         checkout_step: 1,
@@ -1413,7 +1413,7 @@ export default function StoreCheckout() {
                           customer_email: customerForm.email,
                           customer_cpf: customerForm.cpf.replace(/\D/g, ""),
                         },
-                      } as any).eq("id", saleData.id).then(() => {});
+                      });
                     }
                     setCurrentStep(2);
                   }} prefilled={!!saleData.customer_name} />
