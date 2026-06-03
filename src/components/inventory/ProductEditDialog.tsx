@@ -377,7 +377,46 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                 </div>
                 <div>
                   <Label>Categoria</Label>
-                  <Input value={category} onChange={(e) => setCategory(e.target.value)} />
+                  {newCategoryMode ? (
+                    <div className="flex gap-1">
+                      <Input
+                        value={category}
+                        onChange={(e) => { setCategory(e.target.value); setCategoryId(""); }}
+                        placeholder="Nova categoria"
+                        autoFocus
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setNewCategoryMode(false); setCategory(""); setCategoryId(""); }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={categoryId || (category ? "__custom__" : "")}
+                      onValueChange={(v) => {
+                        if (v === "__new__") { setNewCategoryMode(true); setCategory(""); setCategoryId(""); return; }
+                        const cat = categories.find((c) => c.id === v);
+                        if (cat) { setCategoryId(cat.id); setCategory(cat.name); }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {category && !categories.some((c) => c.name.toLowerCase() === category.toLowerCase()) && (
+                          <SelectItem value="__custom__">{category} (atual)</SelectItem>
+                        )}
+                        {categories.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                        <SelectItem value="__new__" className="text-primary font-medium">+ Criar nova categoria</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div>
                   <Label>NCM</Label>
