@@ -1348,6 +1348,13 @@ export type Database = {
             referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "blocked_contacts_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       campaign_channels: {
@@ -4206,6 +4213,13 @@ export type Database = {
             referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "events_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       exchange_requests: {
@@ -5943,6 +5957,13 @@ export type Database = {
             referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "group_campaign_scheduled_messages_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       group_campaigns: {
@@ -6060,6 +6081,13 @@ export type Database = {
             columns: ["whatsapp_number_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_campaigns_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -6983,6 +7011,13 @@ export type Database = {
             referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "live_campaign_dispatches_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       live_campaign_messages: {
@@ -7904,6 +7939,13 @@ export type Database = {
             columns: ["whatsapp_number_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_campaigns_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -11273,6 +11315,13 @@ export type Database = {
             referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pos_store_whatsapp_numbers_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pos_stores: {
@@ -12734,6 +12783,13 @@ export type Database = {
             columns: ["whatsapp_number_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_messages_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -14355,6 +14411,13 @@ export type Database = {
             referencedRelation: "whatsapp_numbers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "whatsapp_auto_replies_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       whatsapp_auto_reply_log: {
@@ -14385,6 +14448,13 @@ export type Database = {
             columns: ["whatsapp_number_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_auto_reply_log_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -14563,6 +14633,13 @@ export type Database = {
             columns: ["whatsapp_number_id"]
             isOneToOne: false
             referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_messages_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -15142,6 +15219,81 @@ export type Database = {
           sender_user_id: string | null
           status: string | null
           whatsapp_number_id: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_numbers_safe: {
+        Row: {
+          ai_paused: boolean | null
+          business_account_id: string | null
+          created_at: string | null
+          id: string | null
+          is_active: boolean | null
+          is_default: boolean | null
+          is_online: boolean | null
+          label: string | null
+          last_health_check: string | null
+          phone_display: string | null
+          phone_number_id: string | null
+          provider: string | null
+          uazapi_instance_name: string | null
+          uazapi_owner: string | null
+          uazapi_proxy_managed_city: string | null
+          uazapi_proxy_managed_country: string | null
+          uazapi_proxy_managed_state: string | null
+          uazapi_proxy_mode: string | null
+          updated_at: string | null
+          wasender_phone_number: string | null
+          wasender_session_id: number | null
+          zapi_instance_id: string | null
+        }
+        Insert: {
+          ai_paused?: boolean | null
+          business_account_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          is_default?: boolean | null
+          is_online?: boolean | null
+          label?: string | null
+          last_health_check?: string | null
+          phone_display?: string | null
+          phone_number_id?: string | null
+          provider?: string | null
+          uazapi_instance_name?: string | null
+          uazapi_owner?: string | null
+          uazapi_proxy_managed_city?: string | null
+          uazapi_proxy_managed_country?: string | null
+          uazapi_proxy_managed_state?: string | null
+          uazapi_proxy_mode?: string | null
+          updated_at?: string | null
+          wasender_phone_number?: string | null
+          wasender_session_id?: number | null
+          zapi_instance_id?: string | null
+        }
+        Update: {
+          ai_paused?: boolean | null
+          business_account_id?: string | null
+          created_at?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          is_default?: boolean | null
+          is_online?: boolean | null
+          label?: string | null
+          last_health_check?: string | null
+          phone_display?: string | null
+          phone_number_id?: string | null
+          provider?: string | null
+          uazapi_instance_name?: string | null
+          uazapi_owner?: string | null
+          uazapi_proxy_managed_city?: string | null
+          uazapi_proxy_managed_country?: string | null
+          uazapi_proxy_managed_state?: string | null
+          uazapi_proxy_mode?: string | null
+          updated_at?: string | null
+          wasender_phone_number?: string | null
+          wasender_session_id?: number | null
+          zapi_instance_id?: string | null
         }
         Relationships: []
       }
