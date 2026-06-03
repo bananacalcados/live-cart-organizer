@@ -51,6 +51,7 @@ interface CountItem {
   counted_quantity: number;
   current_stock: number | null;
   divergence: number | null;
+  last_corrected_quantity: number | null;
   correction_status: string;
   correction_error: string | null;
 }
@@ -168,11 +169,27 @@ export default function Inventory() {
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [correctionProgress, setCorrectionProgress] = useState({ processed: 0, total: 0, errors: 0 });
   const [showNewCountDialog, setShowNewCountDialog] = useState(false);
-  const [newCountScope, setNewCountScope] = useState<'total' | 'partial'>('total');
+  const [newCountScope, setNewCountScope] = useState<'total' | 'partial' | 'total_smart'>('total');
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyProgress, setVerifyProgress] = useState({ current: 0, total: 0 });
   const [lastBipedProduct, setLastBipedProduct] = useState<string | null>(null);
+  // Smart (Total Inteligente) incremental correction
+  const [isSmartCorrecting, setIsSmartCorrecting] = useState(false);
+  const [smartProgress, setSmartProgress] = useState({ processed: 0, total: 0 });
+  // Clone-from-another-store flow
+  const [showCloneDialog, setShowCloneDialog] = useState(false);
+  const [isCloneChecking, setIsCloneChecking] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
+  const [cloneInfo, setCloneInfo] = useState<{
+    source_store_name: string | null;
+    parent_sku: string | null;
+    parent_name: string | null;
+    variant_count: number;
+    variants: Array<{ sku: string | null; barcode: string | null; color: string | null; size: string | null; variant: string | null; name: string | null }>;
+  } | null>(null);
+  const [cloneScanCode, setCloneScanCode] = useState("");
+  const [cloneScanQty, setCloneScanQty] = useState(1);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
   const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "shopify">("dashboard");
@@ -227,7 +244,7 @@ export default function Inventory() {
         .from('inventory_counts')
         .select('*')
         .eq('store_id', selectedStoreId)
-        .in('status', ['counting', 'reviewing', 'correcting', 'verifying'])
+        .in('status', ['counting', 'reviewing', 'correcting', 'verifying', 'smart_correcting'])
         .order('created_at', { ascending: false })
         .limit(1);
       if (data && data.length > 0) {
@@ -348,6 +365,45 @@ export default function Inventory() {
     const interval = setInterval(pollVerify, 5000);
     return () => clearInterval(interval);
   }, [activeCount?.id, activeCount?.status]);
+
+  // Poll incremental (Total Inteligente) correction progress
+  useEffect(() => {
+    if (!activeCount || activeCount.status !== 'smart_correcting') return;
+    setIsSmartCorrecting(true);
+
+    const pollSmart = async () => {
+      const { count: totalCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id);
+      const { count: doneCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('count_id', activeCount.id)
+        .in('status', ['completed', 'error']);
+
+      setSmartProgress({ processed: doneCount || 0, total: totalCount || 0 });
+
+      // When the edge function drains the queue it sets status back to 'counting'.
+      const { data: refreshed } = await supabase
+        .from('inventory_counts')
+        .select('*')
+        .eq('id', activeCount.id)
+        .single();
+      if (refreshed && refreshed.status !== 'smart_correcting') {
+        setIsSmartCorrecting(false);
+        setActiveCount(refreshed as unknown as InventoryCount);
+        loadCountItems(activeCount.id);
+        toast.success('Bipados corrigidos! Pode continuar a contagem.');
+      }
+    };
+
+    pollSmart();
+    const interval = setInterval(pollSmart, 4000);
+    return () => clearInterval(interval);
+  }, [activeCount?.id, activeCount?.status]);
+
+
 
   const loadCountItems = async (countId: string) => {
     // Load all items in batches to bypass the 1000-row default limit
@@ -484,7 +540,31 @@ export default function Inventory() {
       .limit(1);
 
     if (!products || products.length === 0) {
-      // NOT FOUND — show dialog
+      // NOT FOUND in current store — check if it exists in ANOTHER store (clone flow)
+      setIsCloneChecking(true);
+      try {
+        const { data: clone } = await supabase.functions.invoke('pos-clone-product-to-store', {
+          body: { barcode, target_store_id: selectedStoreId, preview: true },
+        });
+        if (clone?.found) {
+          setCloneInfo({
+            source_store_name: clone.source_store_name,
+            parent_sku: clone.parent_sku,
+            parent_name: clone.parent_name,
+            variant_count: clone.variant_count,
+            variants: clone.variants || [],
+          });
+          setCloneScanCode(barcode);
+          setCloneScanQty(qty);
+          setShowCloneDialog(true);
+          setIsCloneChecking(false);
+          return;
+        }
+      } catch (e) {
+        console.error('Clone preview error:', e);
+      }
+      setIsCloneChecking(false);
+      // NOT FOUND anywhere — show "produto não localizado" dialog
       setUnknownBarcode(barcode);
       setUnknownQty(qty);
       setProductSearchQuery("");
@@ -517,6 +597,52 @@ export default function Inventory() {
     }
     barcodeInputRef.current?.focus();
   };
+
+  // Clone parent + all variations from another store into the current store (stock 0),
+  // then register the scanned item.
+  const handleCloneProduct = async () => {
+    if (!activeCount || !cloneScanCode) return;
+    setIsCloning(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke('pos-clone-product-to-store', {
+        body: { barcode: cloneScanCode, target_store_id: selectedStoreId, preview: false },
+      });
+      if (error || !result?.success || !result?.found) {
+        toast.error('Não foi possível clonar o produto.');
+        setIsCloning(false);
+        return;
+      }
+
+      const sv = result.scanned_variant;
+      if (sv) {
+        const productName = sv.name + (sv.variant ? ` - ${sv.variant}` : '');
+        await supabase.from('inventory_count_items').insert({
+          count_id: activeCount.id,
+          product_id: sv.tiny_id ? String(sv.tiny_id) : (sv.id as string),
+          product_name: productName,
+          sku: sv.sku,
+          barcode: sv.barcode,
+          counted_quantity: cloneScanQty,
+        });
+        setLastBipedProduct(`${productName} (clonado) → ${cloneScanQty} un`);
+      }
+
+      toast.success(`Produto clonado para esta loja (${result.cloned} variações) e bipado!`);
+      setShowCloneDialog(false);
+      setCloneInfo(null);
+      setCloneScanCode("");
+      setCloneScanQty(1);
+      if (activeCount) loadCountItems(activeCount.id);
+    } catch (e: any) {
+      console.error('handleCloneProduct error:', e);
+      toast.error('Erro ao clonar produto: ' + (e.message || 'desconhecido'));
+    } finally {
+      setIsCloning(false);
+      barcodeInputRef.current?.focus();
+    }
+  };
+
+
 
   // Product search for unknown barcode dialog
   const handleProductSearch = async (query: string) => {
@@ -869,7 +995,7 @@ export default function Inventory() {
     setIsVerifying(true);
 
     // Step 1: If total scope, insert uncounted products with qty=0
-    if (activeCount.scope === 'total') {
+    if (activeCount.scope === 'total' || activeCount.scope === 'total_smart') {
       toast.info('Buscando todos os produtos da loja...');
       let allProducts: any[] = [];
       let prodFrom = 0;
@@ -933,6 +1059,60 @@ export default function Inventory() {
     supabase.functions.invoke('inventory-verify-and-correct', {
       body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
     }).catch(e => console.error('Initial verify invoke error:', e));
+  };
+
+  // Total Inteligente: apply BALANCE correction to ALREADY-scanned items only,
+  // without zeroing anything, and return to counting so the operator keeps going.
+  const handleSmartCorrectScanned = async () => {
+    if (!activeCount) return;
+
+    // Only scanned items whose counted quantity changed since last correction.
+    const toCorrect = countItems.filter(i =>
+      i.counted_quantity > 0 &&
+      (i.last_corrected_quantity === null || i.last_corrected_quantity === undefined || i.last_corrected_quantity !== i.counted_quantity)
+    );
+
+    if (toCorrect.length === 0) {
+      toast.info('Nenhum item novo para corrigir desde a última correção.');
+      return;
+    }
+
+    toast.loading('Salvando e corrigindo bipados...', { id: 'smart-correct' });
+    try {
+      // Clean any leftover queue then enqueue the scanned items (absolute balance).
+      await supabase.from('inventory_correction_queue').delete().eq('count_id', activeCount.id);
+
+      const rows = toCorrect.map(item => ({
+        count_id: activeCount.id,
+        count_item_id: item.id,
+        store_id: selectedStoreId,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        new_quantity: item.counted_quantity,
+        old_quantity: item.current_stock,
+      }));
+
+      const CHUNK = 200;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error } = await supabase.from('inventory_correction_queue').insert(rows.slice(i, i + CHUNK));
+        if (error) throw error;
+      }
+
+      await supabase.from('inventory_counts').update({ status: 'smart_correcting' }).eq('id', activeCount.id);
+      setActiveCount({ ...activeCount, status: 'smart_correcting' } as unknown as InventoryCount);
+      setIsSmartCorrecting(true);
+      setSmartProgress({ processed: 0, total: toCorrect.length });
+
+      // Fire-and-forget incremental correction (final:false → returns to 'counting').
+      supabase.functions.invoke('inventory-correct-stock', {
+        body: { count_id: activeCount.id, batch_size: 10, final: false }
+      }).catch(e => console.error('Smart correct invoke error:', e));
+
+      toast.success(`Corrigindo ${toCorrect.length} bipados (balanço). Você pode continuar bipando.`, { id: 'smart-correct' });
+    } catch (err: any) {
+      console.error('handleSmartCorrectScanned error:', err);
+      toast.error('Erro ao corrigir bipados: ' + (err.message || 'desconhecido'), { id: 'smart-correct' });
+    }
   };
 
   const handleStartCorrection = async () => {
@@ -1382,7 +1562,7 @@ export default function Inventory() {
             {/* Active count header with delete button */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Badge variant="outline">{activeCount.scope === 'total' ? 'Balanço Total' : 'Balanço Parcial'}</Badge>
+                <Badge variant="outline">{activeCount.scope === 'total_smart' ? 'Balanço Total Inteligente' : activeCount.scope === 'total' ? 'Balanço Total' : 'Balanço Parcial'}</Badge>
                 <span className="text-xs text-muted-foreground">
                   Iniciado em {new Date(activeCount.started_at).toLocaleDateString('pt-BR')}
                 </span>
@@ -1490,8 +1670,8 @@ export default function Inventory() {
                           onChange={(e) => setQuantityInput(e.target.value)}
                           className="w-20 h-12 text-center text-lg"
                         />
-                        <Button onClick={() => handleBarcodeScan()} className="h-12 px-4">
-                          <ScanBarcode className="h-5 w-5" />
+                        <Button onClick={() => handleBarcodeScan()} className="h-12 px-4" disabled={isCloneChecking}>
+                          {isCloneChecking ? <Loader2 className="h-5 w-5 animate-spin" /> : <ScanBarcode className="h-5 w-5" />}
                         </Button>
                         <Button
                           variant="outline"
@@ -1515,6 +1695,23 @@ export default function Inventory() {
                   </Card>
                 )}
 
+                {activeCount.status === 'smart_correcting' && (
+                  <Card className="border-primary/40 bg-primary/5">
+                    <CardContent className="p-4 space-y-2">
+                      <p className="text-sm font-medium flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        Corrigindo bipados (balanço)... pode continuar contando em instantes.
+                      </p>
+                      <Progress value={smartProgress.total > 0 ? (smartProgress.processed / smartProgress.total) * 100 : 0} />
+                      <p className="text-xs text-muted-foreground">
+                        {smartProgress.processed}/{smartProgress.total} corrigidos
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+
+
+
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1526,10 +1723,22 @@ export default function Inventory() {
                     />
                   </div>
                   {activeCount.status === 'counting' && (
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setShowFinishDialog(true)}>
-                        Finalizar Contagem
-                      </Button>
+                    <div className="flex gap-2 flex-wrap">
+                      {activeCount.scope === 'total_smart' ? (
+                        <>
+                          <Button variant="secondary" size="sm" className="gap-1" onClick={handleSmartCorrectScanned} disabled={isSmartCorrecting}>
+                            {isSmartCorrecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                            Salvar e corrigir bipados
+                          </Button>
+                          <Button size="sm" className="gap-1" onClick={() => setShowFinishDialog(true)} disabled={isSmartCorrecting}>
+                            <Sparkles className="h-4 w-4" /> Finalizar Balanço Inteligente
+                          </Button>
+                        </>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => setShowFinishDialog(true)}>
+                          Finalizar Contagem
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeleteCount(activeCount.id)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -1908,21 +2117,35 @@ export default function Inventory() {
           <div className="space-y-4">
             <div>
               <p className="text-sm font-medium mb-2">Escopo do balanço:</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <Card
-                  className={cn("cursor-pointer p-4 transition-all", newCountScope === 'total' && "border-primary ring-2 ring-primary/20")}
-                  onClick={() => setNewCountScope('total')}
+                  className={cn("cursor-pointer p-4 transition-all border-primary/60", newCountScope === 'total_smart' && "border-primary ring-2 ring-primary/20")}
+                  onClick={() => setNewCountScope('total_smart')}
                 >
-                  <p className="font-semibold text-sm">Total</p>
-                  <p className="text-xs text-muted-foreground mt-1">Todos os produtos. O que não for bipado terá estoque zerado.</p>
+                  <p className="font-semibold text-sm flex items-center gap-1">
+                    <Sparkles className="h-4 w-4 text-primary" /> Total Inteligente <Badge variant="secondary" className="text-[10px]">recomendado</Badge>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Conte aos poucos: salve e corrija os bipados durante o processo para conferir.
+                    Ao final, o que não foi bipado tem o estoque zerado. Ideal para muitos SKUs.
+                  </p>
                 </Card>
-                <Card
-                  className={cn("cursor-pointer p-4 transition-all", newCountScope === 'partial' && "border-primary ring-2 ring-primary/20")}
-                  onClick={() => setNewCountScope('partial')}
-                >
-                  <p className="font-semibold text-sm">Parcial</p>
-                  <p className="text-xs text-muted-foreground mt-1">Apenas os produtos bipados serão conferidos.</p>
-                </Card>
+                <div className="grid grid-cols-2 gap-3">
+                  <Card
+                    className={cn("cursor-pointer p-4 transition-all", newCountScope === 'total' && "border-primary ring-2 ring-primary/20")}
+                    onClick={() => setNewCountScope('total')}
+                  >
+                    <p className="font-semibold text-sm">Total</p>
+                    <p className="text-xs text-muted-foreground mt-1">Todos os produtos. O que não for bipado terá estoque zerado.</p>
+                  </Card>
+                  <Card
+                    className={cn("cursor-pointer p-4 transition-all", newCountScope === 'partial' && "border-primary ring-2 ring-primary/20")}
+                    onClick={() => setNewCountScope('partial')}
+                  >
+                    <p className="font-semibold text-sm">Parcial</p>
+                    <p className="text-xs text-muted-foreground mt-1">Apenas os produtos bipados serão conferidos.</p>
+                  </Card>
+                </div>
               </div>
             </div>
           </div>
@@ -1937,9 +2160,9 @@ export default function Inventory() {
       <Dialog open={showFinishDialog} onOpenChange={setShowFinishDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Finalizar Contagem?</DialogTitle>
+            <DialogTitle>{activeCount?.scope === 'total_smart' ? 'Finalizar Balanço Inteligente?' : 'Finalizar Contagem?'}</DialogTitle>
             <DialogDescription>
-              {activeCount?.scope === 'total'
+              {activeCount?.scope === 'total' || activeCount?.scope === 'total_smart'
                 ? `Balanço TOTAL: ${countItems.length} produtos bipados. Todos os outros terão estoque ZERADO.`
                 : `Balanço PARCIAL: ${countItems.length} produtos bipados serão conferidos.`
               }
@@ -1956,7 +2179,7 @@ export default function Inventory() {
             </div>
           )}
           <p className="text-sm text-muted-foreground">
-            O sistema consultará o saldo atual de cada produto no Tiny para calcular divergências.
+            O sistema comparará a quantidade bipada com o estoque atual e aplicará a correção por BALANÇO (substitui o saldo).
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowFinishDialog(false)}>Voltar</Button>
@@ -1966,6 +2189,63 @@ export default function Inventory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Clone product from another store dialog */}
+      <Dialog open={showCloneDialog} onOpenChange={(open) => {
+        setShowCloneDialog(open);
+        if (!open) { setCloneInfo(null); setCloneScanCode(""); barcodeInputRef.current?.focus(); }
+      }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Produto encontrado em outra loja</DialogTitle>
+            <DialogDescription>
+              O código <span className="font-mono font-semibold">{cloneScanCode}</span> não existe em{' '}
+              <strong>{selectedStore?.name}</strong>, mas existe em{' '}
+              <strong>{cloneInfo?.source_store_name || 'outra loja'}</strong>.
+              Clone o produto pai e todas as variações para esta loja (estoque zerado) para poder bipá-lo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border p-3">
+              <p className="text-sm font-semibold">{cloneInfo?.parent_name}</p>
+              <p className="text-xs text-muted-foreground">
+                {cloneInfo?.parent_sku && `SKU pai: ${cloneInfo.parent_sku} • `}
+                {cloneInfo?.variant_count} variação(ões)
+              </p>
+            </div>
+            <ScrollArea className="h-[220px] border rounded-lg">
+              <div className="divide-y">
+                {(cloneInfo?.variants || []).map((v, idx) => (
+                  <div key={idx} className={cn(
+                    "flex items-center gap-2 p-2",
+                    v.barcode === cloneScanCode && "bg-primary/5"
+                  )}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm truncate">
+                        {[v.color, v.size].filter(Boolean).join(' / ') || v.variant || v.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {v.sku}{v.barcode ? ` • ${v.barcode}` : ''}
+                      </p>
+                    </div>
+                    {v.barcode === cloneScanCode && (
+                      <Badge variant="secondary" className="text-[10px]">bipado</Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCloneDialog(false)} disabled={isCloning}>Cancelar</Button>
+            <Button onClick={handleCloneProduct} disabled={isCloning} className="gap-2">
+              {isCloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Store className="h-4 w-4" />}
+              Clonar para {selectedStore?.name}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Unknown Barcode Dialog */}
       <Dialog open={showUnknownBarcodeDialog} onOpenChange={(open) => {

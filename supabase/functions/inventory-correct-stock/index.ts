@@ -9,7 +9,7 @@ const corsHeaders = {
 function queueNextBatch(
   supabaseUrl: string,
   authKey: string,
-  payload: { count_id: string; batch_size: number },
+  payload: { count_id: string; batch_size: number; final: boolean },
 ) {
   const nextRun = fetch(`${supabaseUrl}/functions/v1/inventory-correct-stock`, {
     method: 'POST',
@@ -43,7 +43,7 @@ serve(async (req) => {
   }
 
   try {
-    const { count_id, batch_size = 100 } = await req.json();
+    const { count_id, batch_size = 100, final = true } = await req.json();
     if (!count_id) throw new Error('count_id is required');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -69,12 +69,14 @@ serve(async (req) => {
 
     if (fetchError) throw fetchError;
     if (!items || items.length === 0) {
-      // All done — update count status to completed
-      await supabase.from('inventory_counts').update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        last_batch_at: new Date().toISOString(),
-      }).eq('id', count_id);
+      // All done. In FINAL mode the balance is closed (status=completed).
+      // In incremental (smart) mode we return to 'counting' so the operator
+      // keeps scanning/conferring the rest of the store.
+      await supabase.from('inventory_counts').update(
+        final
+          ? { status: 'completed', completed_at: new Date().toISOString(), last_batch_at: new Date().toISOString() }
+          : { status: 'counting', last_batch_at: new Date().toISOString() },
+      ).eq('id', count_id);
 
       return new Response(JSON.stringify({ success: true, processed: 0, remaining: 0, done: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -155,7 +157,7 @@ serve(async (req) => {
           status: 'completed', processed_at: nowIso
         }).eq('id', item.id);
         await supabase.from('inventory_count_items').update({
-          correction_status: 'corrected', corrected_at: nowIso
+          correction_status: 'corrected', corrected_at: nowIso, last_corrected_quantity: newQty
         }).eq('id', item.count_item_id);
         console.log(`[inventory-correct-stock][LOCAL] product ${item.product_id} @ store ${item.store_id} -> stock=${newQty}`);
         processed++;
@@ -205,11 +207,19 @@ serve(async (req) => {
     // Self-invoke if there are more items to process (with waitUntil!)
     if (!isDone) {
       try {
-        queueNextBatch(supabaseUrl, anonKey, { count_id, batch_size });
-        console.log(`Self-invoked for count_id=${count_id}, remaining ~${remaining - processed}`);
+        queueNextBatch(supabaseUrl, anonKey, { count_id, batch_size, final });
+        console.log(`Self-invoked for count_id=${count_id}, remaining ~${remaining - processed}, final=${final}`);
       } catch (e) {
         console.error('Self-invoke error:', e);
       }
+    } else {
+      // Last batch just finished the queue. Apply final status transition here too
+      // (the empty-queue branch above only triggers on a fresh invoke with 0 items).
+      await supabase.from('inventory_counts').update(
+        final
+          ? { status: 'completed', completed_at: new Date().toISOString(), last_batch_at: new Date().toISOString() }
+          : { status: 'counting', last_batch_at: new Date().toISOString() },
+      ).eq('id', count_id);
     }
 
     return new Response(JSON.stringify({

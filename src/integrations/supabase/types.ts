@@ -6508,6 +6508,7 @@ export type Database = {
           current_stock: number | null
           divergence: number | null
           id: string
+          last_corrected_quantity: number | null
           product_id: string
           product_name: string
           sku: string | null
@@ -6524,6 +6525,7 @@ export type Database = {
           current_stock?: number | null
           divergence?: number | null
           id?: string
+          last_corrected_quantity?: number | null
           product_id: string
           product_name: string
           sku?: string | null
@@ -6540,6 +6542,7 @@ export type Database = {
           current_stock?: number | null
           divergence?: number | null
           id?: string
+          last_corrected_quantity?: number | null
           product_id?: string
           product_name?: string
           sku?: string | null
