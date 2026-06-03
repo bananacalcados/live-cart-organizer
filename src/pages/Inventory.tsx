@@ -955,7 +955,7 @@ export default function Inventory() {
     setIsVerifying(true);
 
     // Step 1: If total scope, insert uncounted products with qty=0
-    if (activeCount.scope === 'total') {
+    if (activeCount.scope === 'total' || activeCount.scope === 'total_smart') {
       toast.info('Buscando todos os produtos da loja...');
       let allProducts: any[] = [];
       let prodFrom = 0;
