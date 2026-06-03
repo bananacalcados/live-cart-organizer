@@ -162,6 +162,9 @@ Deno.serve(async (req) => {
               sku: v.sku,
               parent_sku: parentSku,
               barcode: v.gtin,
+              color: vColor || null,
+              size: vSize || null,
+              variant: vVariant,
               cost_price: cost,
               price: sale,
               stock: entryStock, // NF-e: estoque inicial; demais fluxos: 0
