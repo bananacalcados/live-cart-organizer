@@ -784,14 +784,14 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
     for (let i = 0; i < 10; i++) {
       await new Promise(r => setTimeout(r, 3000));
       try {
-        const { data: freshSale } = await supabase.from("pos_sales").select("status, payment_gateway").eq("id", saleId).maybeSingle();
+        const freshSale = await cpGetSaleStatus(saleId!);
         if (freshSale?.status === "paid" || freshSale?.status === "completed") {
           sessionStorage.removeItem(`checkout_payment_${saleId}`);
           toast.success("Pagamento aprovado!");
           onPaid();
           return;
         }
-        const { data: attempt } = await supabase.from("pos_checkout_attempts").select("status, error_message").eq("transaction_id", attemptId).maybeSingle();
+        const attempt = await cpGetAttemptStatus(attemptId);
         if (attempt && attempt.status === "failed") {
           sessionStorage.removeItem(`checkout_payment_${saleId}`);
           setPaymentError((attempt as any).error_message || "A operadora do seu cartão não aprovou a compra. Revise os dados ou tente com outro cartão.");
