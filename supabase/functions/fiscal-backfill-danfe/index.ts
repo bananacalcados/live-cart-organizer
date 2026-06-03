@@ -60,8 +60,14 @@ Deno.serve(async (req) => {
           .from("fiscal-documents")
           .upload(path, fileBytes, { contentType: ctype, upsert: true });
         if (!upErr) {
-          const { data: pub } = supabase.storage.from("fiscal-documents").getPublicUrl(path);
-          updates.danfe_url = buildRenderableDanfeUrl(pub?.publicUrl || null);
+          if (isPdf) {
+            const { data: signed } = await supabase.storage
+              .from("fiscal-documents").createSignedUrl(path, 315360000);
+            updates.danfe_url = signed?.signedUrl || null;
+          } else {
+            const { data: pub } = supabase.storage.from("fiscal-documents").getPublicUrl(path);
+            updates.danfe_url = buildRenderableDanfeUrl(pub?.publicUrl || null);
+          }
         } else {
           console.error("upload", upErr);
         }
