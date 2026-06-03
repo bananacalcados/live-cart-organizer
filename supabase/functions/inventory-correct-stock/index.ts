@@ -157,7 +157,7 @@ serve(async (req) => {
           status: 'completed', processed_at: nowIso
         }).eq('id', item.id);
         await supabase.from('inventory_count_items').update({
-          correction_status: 'corrected', corrected_at: nowIso
+          correction_status: 'corrected', corrected_at: nowIso, last_corrected_quantity: newQty
         }).eq('id', item.count_item_id);
         console.log(`[inventory-correct-stock][LOCAL] product ${item.product_id} @ store ${item.store_id} -> stock=${newQty}`);
         processed++;
