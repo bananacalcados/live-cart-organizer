@@ -133,8 +133,8 @@ Deno.serve(async (req) => {
             price: sale,
             is_active: true,
           };
-          // NF-e adiciona ao estoque existente da loja
-          if (stock_from_variants) {
+          // NF-e adiciona ao estoque existente APENAS na loja escolhida.
+          if (isStockStore) {
             updatePayload.stock = (Number(existing.stock) || 0) + entryStock;
           }
           const { error: upErr } = await supabase
