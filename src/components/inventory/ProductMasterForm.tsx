@@ -201,8 +201,24 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
         })) as any,
       });
       if (error) throw error;
-      toast.success("Produto criado com sucesso!");
-      onCreated?.(data as string);
+      const masterId = data as string;
+
+      // Empurra ao PDV / catálogo unificado já com o estoque inicial na loja escolhida.
+      if (stockStoreId) {
+        const { error: posErr } = await supabase.functions.invoke("create-master-product-pos", {
+          body: { master_id: masterId, store_id: stockStoreId, stock_from_variants: true },
+        });
+        if (posErr) {
+          toast.warning("Produto criado, mas falhou ao enviar ao PDV: " + posErr.message);
+        } else {
+          const storeName = stores.find((s) => s.id === stockStoreId)?.name || "loja";
+          toast.success(`Produto criado e estoque lançado em ${storeName}!`);
+        }
+      } else {
+        toast.success("Produto criado com sucesso!");
+      }
+
+      onCreated?.(masterId);
       onOpenChange(false);
     } catch (err: any) {
       toast.error("Erro ao criar produto: " + err.message);
