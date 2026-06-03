@@ -937,7 +937,7 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
       for (let attempt = 0; attempt < 3; attempt++) {
         await new Promise(r => setTimeout(r, 3000));
         try {
-          const { data: freshSale } = await supabase.from("pos_sales").select("status, payment_gateway").eq("id", saleId).maybeSingle();
+          const freshSale = await cpGetSaleStatus(saleId!);
           if (freshSale?.status === "paid" || freshSale?.status === "completed") {
             sessionStorage.removeItem(`checkout_payment_${saleId}`);
             toast.success("Pagamento aprovado!");
