@@ -1,86 +1,81 @@
-# Plano: Vincular produtos da Shopify ao nosso sistema (substituindo o Tiny)
+# Plano: Clonagem ao bipar + Balanço Total Inteligente
 
-## 1. Vai funcionar? Sim — e nossos dados estão prontos
+## Parte 1 — Bipar produto que não existe na loja atual
 
-Conferi o nosso catálogo agora. A base está limpa, que é exatamente o que precisamos pra "bater perfeitamente":
+Hoje, ao bipar um código que não existe na loja, abre só o diálogo "código desconhecido". Vamos tornar isso inteligente e baseado em loja (sem Tiny ID).
 
-- **5.593 variações** no total
-- **Todas (5.593) têm SKU** preenchido
-- **5.024 têm GTIN** (código de barras) — as outras 569 só têm SKU
-- **0 GTINs duplicados** e **0 SKUs duplicados** → cada código aponta pra um único produto, sem ambiguidade do nosso lado
+### Comportamento novo
+Ao bipar um código não encontrado em `pos_products` da loja atual:
 
-Ou seja: do nosso lado, o casamento é seguro. O risco mora no lado da Shopify (códigos faltando ou diferentes lá), e é por isso que o plano tem uma etapa de **conferência antes de gravar qualquer coisa**.
+1. **Buscar em TODAS as outras lojas** (por `barcode` ou `sku`).
+2. **Não existe em nenhuma loja** → Modal "Produto não localizado" avisando que o código bipado não foi encontrado (mantém as opções atuais: vincular manualmente a um produto / salvar como pendente).
+3. **Existe em outra loja** → Modal "Clonar produto para esta loja", mostrando:
+   - O **produto pai** (agrupado por `parent_sku`) e **todas as variações** de cor e tamanho existentes na loja de origem.
+   - Botão **"Clonar para [loja atual]"** que copia o pai e todos os filhos para a loja atual com **estoque zerado**, mantendo o **mesmo SKU/GTIN** (essencial para o estoque compartilhado por GTIN).
+   - Após clonar, registra automaticamente a bipagem do item escaneado.
 
-## 2. Como o casamento vai funcionar (GTIN + SKU, em 2 passadas)
+### Como funciona tecnicamente
+- Nova edge function `pos-clone-product-to-store`:
+  - Recebe `barcode`/`sku` + `target_store_id`.
+  - Localiza o grupo `parent_sku` em qualquer loja que tenha o produto.
+  - Insere no `target_store_id` apenas as variações que ainda não existem, com `stock = 0`, copiando `name`, `variant`, `color`, `size`, `sku`, `barcode`, `category`, `category_id`, `parent_sku`, `price`, `cost_price`.
+  - Retorna a variação correspondente ao código bipado.
+- `handleBarcodeScan` em `Inventory.tsx` ganha o passo de busca cross-store e abre o modal certo.
+- Reforço: a criação automática em todas as lojas (já existente em `create-master-product-pos`) continua sendo a primeira linha de defesa; o modal de clonagem é a rede de segurança para casos legados.
 
-Para cada variação que existe na Shopify, tentamos casar nesta ordem:
+> Observação: a verificação já foi feita — atualmente **nenhum produto real está faltando** em alguma das 3 lojas, então o modal será raro, usado só para correções pontuais.
 
+## Parte 2 — Nova modalidade "Balanço Total Inteligente"
+
+Objetivo: contar 6 mil SKUs aos poucos, **corrigindo e conferindo parcialmente** durante o processo, e só no fim zerar o que não foi bipado — sem perder dados e sem quebrar nos limites de 50s dos crons.
+
+### Fluxo do usuário
+1. Ao criar balanço, surge um 3º card: **"Total Inteligente"** (além de Total e Parcial).
+2. Durante a bipagem aparecem dois botões novos:
+   - **"Salvar e corrigir bipados"** → aplica a correção (BALANÇO absoluto) **somente nos produtos já bipados**, sem zerar nada, e **volta para a bipagem** para continuar contando/conferindo.
+   - **"Finalizar Balanço Inteligente"** → entende que tudo já foi bipado: insere os não bipados com quantidade 0, compara com o estoque e **zera os que não foram bipados**.
+3. Pode-se rodar "Salvar e corrigir bipados" quantas vezes quiser ao longo da contagem.
+
+### Garantias importantes
+- **Sempre BALANÇO absoluto**: se a contagem é 3 e o estoque está -3, o sistema grava 3 (substitui), nunca lança entrada/saída. (Já é o comportamento atual.)
+- **Idempotente**: re-corrigir um item já corrigido é seguro, pois o saldo é absoluto. Se o usuário bipar mais unidades depois, a próxima correção grava o novo total.
+- **Persistência total**: tudo fica salvo em `inventory_count_items` e `inventory_correction_queue`, então a conferência dos não bipados é feita no banco, não na memória.
+- **Resistente aos 50s de cron**: reutiliza o motor já existente de auto-reinvocação (`waitUntil`), heartbeat (`last_batch_at`) e o `cron-inventory-watchdog` que re-dispara processos travados.
+
+### Mudanças técnicas
+
+**Banco (migration):**
+- `inventory_count_items`: nova coluna `last_corrected_quantity int` (controla o que já foi corrigido, evita reprocessar itens inalterados nas correções incrementais).
+- `scope` aceita o valor `total_smart` (campo texto, sem alteração de enum).
+
+**Edge function `inventory-correct-stock`:**
+- Novo parâmetro `final` (padrão `true`).
+- Ao esvaziar a fila: se `final = true`, mantém o comportamento atual (`status = completed`); se `final = false`, volta `status = counting` (modo inteligente continua a bipagem).
+- Ao corrigir cada item, grava `last_corrected_quantity = new_quantity`.
+
+**Novo status `smart_correcting`:**
+- Usado durante a correção incremental para o watchdog saber re-disparar com `final:false`.
+- `cron-inventory-watchdog` passa a tratar `smart_correcting` re-disparando `inventory-correct-stock` com `final:false`.
+
+**Frontend `Inventory.tsx`:**
+- 3º card de escopo no diálogo de novo balanço.
+- `handleSmartCorrectScanned`: enfileira correção (BALANÇO) apenas dos itens bipados cujo `counted_quantity` mudou desde a última correção, marca `status = smart_correcting`, invoca `inventory-correct-stock` com `final:false`.
+- `handleFinalizeSmart`: reusa a lógica do Total (inserir não bipados com qty 0 → verificar → corrigir/zerar), levando a `verifying → reviewing/correcting → completed`.
+- Polling/realtime ajustados para o status `smart_correcting` (volta para `counting` ao terminar).
+
+### Diagrama de estados (Total Inteligente)
+
+```text
+counting ──"Salvar e corrigir bipados"──▶ smart_correcting ──(fila vazia)──▶ counting
+   │
+   └──"Finalizar Balanço Inteligente"──▶ verifying ──▶ reviewing ──▶ correcting ──▶ completed
+                                          (insere não bipados=0, zera os não bipados)
 ```
-1ª passada → comparar BARCODE da Shopify  ==  GTIN nosso   (mais confiável)
-2ª passada → se não achou, comparar SKU da Shopify == SKU nosso
-```
 
-Cada variação da Shopify cai em uma de 3 listas:
-
-```
- VERDE   = casou (por GTIN ou por SKU)  → pronto pra vincular
- AMARELO = casou por SKU mas o GTIN diverge, OU casou 2 vezes → revisar manual
- VERMELHO= não casou com nada           → não existe no nosso catálogo
-```
-
-**Nada é gravado na 1ª rodada.** Você recebe um relatório (quantos verdes, amarelos, vermelhos + a lista) e só depois autoriza a gravação dos verdes. Isso é o que garante o "bater perfeitamente": você vê antes.
-
-## 3. O que acontece com o vínculo no Tiny (parte mais importante)
-
-Aqui preciso ser 100% honesto pra não te criar uma expectativa errada:
-
-**Vincular aqui NÃO desliga o Tiny sozinho.** Quem empurra estoque pra Shopify hoje é o próprio Tiny, e essa sincronização roda dentro do painel do Tiny, no horário dele. Eu não tenho como desligar isso pelo nosso sistema.
-
-O que o nosso vinculador faz: grava nos nossos registros o `shopify_product_id` e o `shopify_variant_id` de cada produto. Isso permite que a **nossa** função de sincronização passe a escrever o estoque na Shopify. Mas:
-
-```
-Se o Tiny continuar ligado:
-   Nós escrevemos estoque  →  depois o Tiny escreve por cima  →  Tiny vence
-   (os dois brigam, e o último a sincronizar ganha)
-```
-
-Por isso, pra nossa vinculação "valer de verdade", são **2 passos que dependem de você no Tiny**:
-
-1. **No painel do Tiny:** desativar/desconectar a integração Tiny ↔ Shopify (a sincronização de estoque desses produtos). É manual, do seu lado.
-2. **Depois disso:** a nossa sincronização vira a única fonte que escreve na Shopify → estoque da Banana passa a mandar.
-
-**Detalhe técnico extra:** na Shopify, cada variante tem um campo de "quem gerencia o estoque" (`inventory_management`). Quando o Tiny criou os produtos, ele pode ter se marcado como gestor. Nossa função de sincronização usa o endpoint de `inventory_levels` da Shopify, que funciona independente disso — então conseguimos escrever. Mas enquanto o Tiny estiver ativo, ele reescreve. A ordem correta é sempre: **vincular → desligar Tiny → sincronizar pela Banana.**
-
-## 4. Ordem de execução recomendada
-
-```
-Fase 0  Backup mental: nada é destrutivo. Só GRAVAMOS shopify_id nos nossos
-        registros. Não apagamos nada na Shopify nem no Tiny.
-
-Fase 1  Vinculador em modo CONFERÊNCIA (dry-run)
-        → lê todos os produtos da Shopify, casa por GTIN e depois SKU
-        → devolve relatório verde/amarelo/vermelho, sem gravar
-
-Fase 2  Você revisa o relatório (principalmente amarelos e vermelhos)
-
-Fase 3  Vinculador em modo GRAVAÇÃO
-        → grava shopify_product_id / shopify_variant_id só nos VERDES
-
-Fase 4  VOCÊ desliga a sincronização Tiny → Shopify no painel do Tiny
-
-Fase 5  Sincronização de estoque Banana → Shopify (função que já existe)
-        → a partir daqui a Banana é a fonte da verdade
-```
-
-## 5. O que eu construo (parte técnica)
-
-- **Nova função `shopify-link-products`** com 2 modos: `dry_run` (relatório) e `commit` (grava). Faz paginação de todos os produtos da Shopify (via Admin API, paginação por cursor), monta o índice GTIN→variação e SKU→variação a partir do nosso `product_variants`, e classifica verde/amarelo/vermelho.
-- **Tela de revisão** (no módulo de Estoque): botão "Vincular Shopify", roda o dry-run, mostra os contadores e a lista, e um botão "Confirmar vínculos" que chama o modo commit.
-- **Reaproveitamento**: a sincronização de estoque (`sync-master-product-stock`) já existe e já escreve na Shopify por variante — não precisa refazer, só usar depois do vínculo.
-- **Relatório de divergências**: exporto a lista de amarelos/vermelhos pra você tratar (cadastrar no nosso sistema ou corrigir código).
-
-## Resumo da resposta direta às suas perguntas
-
-- **"Vai funcionar mesmo?"** Sim. Nosso lado está sem duplicidade e 100% com SKU. O casamento por GTIN+SKU é seguro, e a etapa de conferência garante que você valida antes de gravar.
-- **"Validar por GTIN e SKU?"** Sim — GTIN primeiro (mais confiável), SKU como segundo critério. É exatamente o que você pediu.
-- **"O que acontece com o Tiny?"** O vínculo aqui não mexe no Tiny. Pra nossa vinculação valer, você precisa desligar a sincronização Tiny→Shopify no painel do Tiny. Senão os dois brigam e o Tiny sobrescreve.
+## Resumo das alterações
+- Edge function nova: `pos-clone-product-to-store`.
+- Edge function editada: `inventory-correct-stock` (parâmetro `final`, `last_corrected_quantity`).
+- Edge function editada: `cron-inventory-watchdog` (status `smart_correcting`).
+- Migration: coluna `last_corrected_quantity` + suporte ao escopo `total_smart`/status `smart_correcting`.
+- `src/pages/Inventory.tsx`: busca cross-store na bipagem, modais (não localizado / clonar), 3º escopo, botões e handlers do balanço inteligente.
+- Modal de clonagem (componente novo dentro de inventory).
