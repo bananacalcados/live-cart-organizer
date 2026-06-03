@@ -1126,64 +1126,20 @@ export default function StoreCheckout() {
 
     if (!saleData) return;
 
-    // Upsert customer in pos_customers and link to sale
-    let customerId: string | null = null;
-    const cpfDigits = customerForm.cpf.replace(/\D/g, "");
-    const phoneDigits = customerForm.whatsapp.replace(/\D/g, "");
-
-    // Try to find existing customer by CPF
-    if (cpfDigits) {
-      const { data: existing } = await supabase
-        .from("pos_customers")
-        .select("id")
-        .eq("cpf", cpfDigits)
-        .maybeSingle();
-      if (existing) customerId = existing.id;
-    }
-    // Fallback: find by phone
-    if (!customerId && phoneDigits) {
-      const { data: existing } = await supabase
-        .from("pos_customers")
-        .select("id")
-        .eq("whatsapp", phoneDigits)
-        .maybeSingle();
-      if (existing) customerId = existing.id;
-    }
-
-    const customerPayload = {
+    // Upsert customer + mark sale completed (server-side via service_role)
+    await cpCompleteSale(saleData.id, {
       name: customerForm.fullName,
-      cpf: cpfDigits,
+      cpf: customerForm.cpf,
       email: customerForm.email,
-      whatsapp: phoneDigits,
+      whatsapp: customerForm.whatsapp,
       address: customerForm.address,
       address_number: customerForm.addressNumber,
       complement: customerForm.complement || null,
       neighborhood: customerForm.neighborhood,
       city: customerForm.city,
       state: customerForm.state,
-      cep: customerForm.cep.replace(/\D/g, ""),
-    };
-
-    try {
-      if (customerId) {
-        await supabase.from("pos_customers").update(customerPayload as any).eq("id", customerId);
-      } else {
-        const { data: newCust } = await supabase
-          .from("pos_customers")
-          .insert(customerPayload as any)
-          .select("id")
-          .single();
-        customerId = newCust?.id || null;
-      }
-    } catch (e) {
-      console.error("Error upserting customer:", e);
-    }
-
-    // Update sale status with customer_id
-    await supabase.from("pos_sales").update({
-      status: "completed",
-      customer_id: customerId,
-    } as any).eq("id", saleData.id);
+      cep: customerForm.cep,
+    });
 
     // Tiny order creation is now MANUAL ONLY (via the "Enviar/Reenviar ao Tiny" button in the POS).
     // The sale is saved locally above; no automatic Tiny push happens here.
