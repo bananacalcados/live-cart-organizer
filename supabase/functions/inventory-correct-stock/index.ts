@@ -69,12 +69,14 @@ serve(async (req) => {
 
     if (fetchError) throw fetchError;
     if (!items || items.length === 0) {
-      // All done — update count status to completed
-      await supabase.from('inventory_counts').update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-        last_batch_at: new Date().toISOString(),
-      }).eq('id', count_id);
+      // All done. In FINAL mode the balance is closed (status=completed).
+      // In incremental (smart) mode we return to 'counting' so the operator
+      // keeps scanning/conferring the rest of the store.
+      await supabase.from('inventory_counts').update(
+        final
+          ? { status: 'completed', completed_at: new Date().toISOString(), last_batch_at: new Date().toISOString() }
+          : { status: 'counting', last_batch_at: new Date().toISOString() },
+      ).eq('id', count_id);
 
       return new Response(JSON.stringify({ success: true, processed: 0, remaining: 0, done: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
