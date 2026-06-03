@@ -698,7 +698,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
       if (data.paymentId) setPixPaymentId(String(data.paymentId));
     } catch (e: any) {
       // Log PIX generation error
-      await supabase.from("pos_checkout_attempts").insert({
+      await cpLogAttempt({
         sale_id: saleId,
         store_id: storeId,
         payment_method: "pix",
@@ -709,7 +709,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
         customer_phone: form.whatsapp,
         customer_email: form.email,
         gateway: "mercadopago",
-      } as any).then(() => {});
+      });
       toast.error(e.message || "Erro ao gerar PIX");
     } finally {
       setGenerating(false);
