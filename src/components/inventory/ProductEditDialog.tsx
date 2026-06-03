@@ -76,6 +76,16 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     loadData();
   }, [open, masterId]);
 
+  useEffect(() => {
+    if (!open) return;
+    supabase
+      .from("product_categories")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setCategories((data || []) as any));
+  }, [open]);
+
   async function loadData() {
     if (!masterId) return;
     setLoading(true);
