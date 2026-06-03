@@ -1458,19 +1458,19 @@ export default function StoreCheckout() {
                       // Update local state
                       setSaleData(prev => prev ? { ...prev, shipping_amount: newShipping } : prev);
                       // Update in DB
-                      supabase.from("pos_sales").update({
+                      cpUpdateSale(saleData.id, {
                         payment_details: {
                           ...((saleData as any).payment_details || {}),
                           shipping_amount: newShipping,
                           shipping_carrier: option.carrier,
                           shipping_service: option.service,
                         },
-                      } as any).eq("id", saleData.id).then(() => {});
+                      });
                       // Also update total
                       const subtotal = saleData.items.reduce((s, i) => s + i.price * i.quantity, 0);
                       const netProduct = subtotal - saleData.discount_amount;
                       const newTotal = netProduct + newShipping;
-                      supabase.from("pos_sales").update({ total: newTotal } as any).eq("id", saleData.id).then(() => {});
+                      cpUpdateSale(saleData.id, { total: newTotal });
                     }
                   }}
                   />
