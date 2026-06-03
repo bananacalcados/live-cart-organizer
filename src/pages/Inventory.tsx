@@ -1562,7 +1562,7 @@ export default function Inventory() {
             {/* Active count header with delete button */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Badge variant="outline">{activeCount.scope === 'total' ? 'Balanço Total' : 'Balanço Parcial'}</Badge>
+                <Badge variant="outline">{activeCount.scope === 'total_smart' ? 'Balanço Total Inteligente' : activeCount.scope === 'total' ? 'Balanço Total' : 'Balanço Parcial'}</Badge>
                 <span className="text-xs text-muted-foreground">
                   Iniciado em {new Date(activeCount.started_at).toLocaleDateString('pt-BR')}
                 </span>
