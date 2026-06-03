@@ -500,7 +500,31 @@ export default function Inventory() {
       .limit(1);
 
     if (!products || products.length === 0) {
-      // NOT FOUND — show dialog
+      // NOT FOUND in current store — check if it exists in ANOTHER store (clone flow)
+      setIsCloneChecking(true);
+      try {
+        const { data: clone } = await supabase.functions.invoke('pos-clone-product-to-store', {
+          body: { barcode, target_store_id: selectedStoreId, preview: true },
+        });
+        if (clone?.found) {
+          setCloneInfo({
+            source_store_name: clone.source_store_name,
+            parent_sku: clone.parent_sku,
+            parent_name: clone.parent_name,
+            variant_count: clone.variant_count,
+            variants: clone.variants || [],
+          });
+          setCloneScanCode(barcode);
+          setCloneScanQty(qty);
+          setShowCloneDialog(true);
+          setIsCloneChecking(false);
+          return;
+        }
+      } catch (e) {
+        console.error('Clone preview error:', e);
+      }
+      setIsCloneChecking(false);
+      // NOT FOUND anywhere — show "produto não localizado" dialog
       setUnknownBarcode(barcode);
       setUnknownQty(qty);
       setProductSearchQuery("");
