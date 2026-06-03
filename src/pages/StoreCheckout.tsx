@@ -1031,7 +1031,7 @@ export default function StoreCheckout() {
     loadSale();
     loadInstallmentConfig();
     // Mark checkout_step = 0 when the checkout page loads
-    supabase.from("pos_sales").update({ checkout_step: 0 } as any).eq("id", saleId).then(() => {});
+    cpUpdateSale(saleId, { checkout_step: 0 });
   }, [storeId, saleId]);
 
   // Update checkout_step when currentStep changes to 3
