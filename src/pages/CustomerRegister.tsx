@@ -165,15 +165,11 @@ export default function CustomerRegister() {
     setLookingUpCpf(true);
     setCpfFound(false);
     try {
-      // Search in pos_customers by CPF
-      const { data: customers } = await supabase
-        .from("pos_customers")
-        .select("name, email, whatsapp, cep, address, address_number, complement, neighborhood, city, state")
-        .eq("cpf", digits)
-        .limit(1);
+      // Search in pos_customers by CPF (server-side, service_role)
+      const lookupRes = await cpLookupCustomerCpf(digits);
+      const c = lookupRes?.customer;
 
-      if (customers && customers.length > 0) {
-        const c = customers[0];
+      if (c) {
         setCpfFound(true);
         if (c.name) setFullName(c.name);
         if (c.email) setEmail(c.email);
