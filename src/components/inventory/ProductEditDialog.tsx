@@ -265,6 +265,22 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
             .eq("id", v.id);
           if (eUp) throw eUp;
 
+          // Propaga nome corrigido + variação ao PDV (pos_products) pela SKU
+          if (v.sku) {
+            const variantLabel = `${v.color || ""} ${v.size || ""}`.trim().replace(/\s+/g, " ");
+            const posName = `${name} - ${variantLabel}`.trim().replace(/\s+/g, " ");
+            await supabase
+              .from("pos_products")
+              .update({
+                name: posName,
+                color: v.color || null,
+                size: v.size || null,
+                variant: variantLabel,
+                last_sync_source: "pos",
+              })
+              .eq("sku", v.sku);
+          }
+
           if (stockDelta !== 0) {
             await supabase.from("product_stock_movements").insert({
               variant_id: v.id,
