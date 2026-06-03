@@ -197,6 +197,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
           description,
           brand,
           category,
+          category_id: categoryId || "",
           ncm,
           cest,
           cost_price: parseFloat(costPrice) || 0,
