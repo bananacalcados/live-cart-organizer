@@ -207,11 +207,19 @@ serve(async (req) => {
     // Self-invoke if there are more items to process (with waitUntil!)
     if (!isDone) {
       try {
-        queueNextBatch(supabaseUrl, anonKey, { count_id, batch_size });
-        console.log(`Self-invoked for count_id=${count_id}, remaining ~${remaining - processed}`);
+        queueNextBatch(supabaseUrl, anonKey, { count_id, batch_size, final });
+        console.log(`Self-invoked for count_id=${count_id}, remaining ~${remaining - processed}, final=${final}`);
       } catch (e) {
         console.error('Self-invoke error:', e);
       }
+    } else {
+      // Last batch just finished the queue. Apply final status transition here too
+      // (the empty-queue branch above only triggers on a fresh invoke with 0 items).
+      await supabase.from('inventory_counts').update(
+        final
+          ? { status: 'completed', completed_at: new Date().toISOString(), last_batch_at: new Date().toISOString() }
+          : { status: 'counting', last_batch_at: new Date().toISOString() },
+      ).eq('id', count_id);
     }
 
     return new Response(JSON.stringify({
