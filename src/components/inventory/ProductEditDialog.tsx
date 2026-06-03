@@ -101,6 +101,15 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       setDescription(master.description || "");
       setBrand(master.brand || "");
       setCategory(master.category || "");
+      {
+        const catName = (master.category || "").toString();
+        const match = categories.find((c) => c.name.toLowerCase() === catName.toLowerCase())
+          || (master.category_id ? categories.find((c) => c.id === master.category_id) : undefined);
+        if (master.category_id) setCategoryId(master.category_id);
+        else if (match) setCategoryId(match.id);
+        else setCategoryId("");
+        setNewCategoryMode(!!catName && !match && !master.category_id);
+      }
       setNcm(master.ncm || "");
       setCest(master.cest || "");
       setCostPrice(master.cost_price?.toString() || "");
