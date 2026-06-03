@@ -47,6 +47,10 @@ export async function cpCompleteSale(saleId: string, customer: Record<string, un
   return call<{ ok: boolean; customerId: string | null }>("complete_sale", { saleId, customer });
 }
 
+export async function cpUpsertCustomer(customer: Record<string, unknown>) {
+  return call<{ ok: boolean; customerId: string | null }>("upsert_customer", { customer });
+}
+
 export async function cpCreatePickupSale(payload: Record<string, unknown>) {
   return call<{ ok: boolean; saleId: string }>("create_pickup_sale", payload);
 }
