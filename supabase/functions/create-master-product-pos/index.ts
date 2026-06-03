@@ -75,17 +75,16 @@ Deno.serve(async (req) => {
       review_reason: reasons.length > 0 ? reasons.join("; ") : null,
     }, { onConflict: "parent_sku" });
 
-    // Resolve target stores: default = ALL active stores (PDV needs product everywhere)
-    let targetStoreIds: string[] = [];
-    if (store_id) {
-      targetStoreIds = [store_id];
-    } else {
-      const { data: stores } = await supabase
-        .from("pos_stores")
-        .select("id")
-        .order("name");
-      targetStoreIds = (stores || []).map((s: any) => s.id);
-    }
+    // SEMPRE replica em TODAS as lojas ativas (PDV precisa do produto bipável em todas
+    // e a Shopify usa estoque compartilhado entre lojas). O estoque de entrada (NF-e)
+    // entra APENAS na loja escolhida (store_id); as demais ficam com estoque ZERADO.
+    const { data: stores } = await supabase
+      .from("pos_stores")
+      .select("id")
+      .eq("is_active", true)
+      .order("name");
+    const targetStoreIds: string[] = (stores || []).map((s: any) => s.id);
+    const stockStoreId: string | null = store_id || null;
 
     if (targetStoreIds.length === 0) {
       return new Response(JSON.stringify({ error: "Nenhuma loja PDV cadastrada" }), {
