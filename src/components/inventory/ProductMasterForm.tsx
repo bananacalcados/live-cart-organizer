@@ -61,6 +61,19 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
   const [length, setLength] = useState<string>("22");
   const [images, setImages] = useState<string[]>([]);
 
+  // Loja que recebe o estoque inicial / envio ao PDV
+  const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
+  const [stockStoreId, setStockStoreId] = useState<string>("");
+
+  useEffect(() => {
+    if (!open) return;
+    supabase
+      .from("pos_stores")
+      .select("id, name")
+      .order("name")
+      .then(({ data }) => setStores((data || []) as any));
+  }, [open]);
+
   // Filhos
   const initialVariants: VariantRow[] = (initial?.items || []).map((it) => ({
     color: it.color || "",
