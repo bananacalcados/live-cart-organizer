@@ -14,9 +14,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Search, Package, Loader2, Pencil, AlertCircle, Boxes, Save, Filter, ChevronDown, ChevronRight, Store as StoreIcon,
+  Search, Package, Loader2, Pencil, AlertCircle, Boxes, Save, Filter, ChevronDown, ChevronRight, Store as StoreIcon, Tag,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
 
 interface MasterData {
   parent_sku: string;
