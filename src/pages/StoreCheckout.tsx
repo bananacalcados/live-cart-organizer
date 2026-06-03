@@ -1043,20 +1043,15 @@ export default function StoreCheckout() {
 
   const loadSale = async () => {
     try {
-      const { data: sale, error } = await supabase
-        .from("pos_sales")
-        .select("*")
-        .eq("id", saleId!)
-        .eq("store_id", storeId!)
-        .maybeSingle();
+      const saleRes = await cpGetSale(saleId!, storeId!);
+      const sale = saleRes?.sale;
+      if (!sale) throw new Error("Venda não encontrada");
 
-      if (error || !sale) throw new Error("Venda não encontrada");
+      // Store name (resolved server-side)
+      const store = { name: saleRes?.store_name };
 
-      // Load store name
-      const { data: store } = await supabase.from("pos_stores").select("name").eq("id", storeId!).maybeSingle();
-
-      // Load sale items
-      const { data: items } = await supabase.from("pos_sale_items").select("*").eq("sale_id", saleId!);
+      // Sale items (resolved server-side)
+      const items = saleRes?.items || [];
 
       const paymentDetails = ((sale as any).payment_details || {}) as Record<string, any>;
 
