@@ -227,7 +227,7 @@ export default function Inventory() {
         .from('inventory_counts')
         .select('*')
         .eq('store_id', selectedStoreId)
-        .in('status', ['counting', 'reviewing', 'correcting', 'verifying'])
+        .in('status', ['counting', 'reviewing', 'correcting', 'verifying', 'smart_correcting'])
         .order('created_at', { ascending: false })
         .limit(1);
       if (data && data.length > 0) {
