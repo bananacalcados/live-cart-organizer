@@ -1037,7 +1037,7 @@ export default function StoreCheckout() {
   // Update checkout_step when currentStep changes to 3
   useEffect(() => {
     if (currentStep === 3 && saleId) {
-      supabase.from("pos_sales").update({ checkout_step: 3 } as any).eq("id", saleId).then(() => {});
+      cpUpdateSale(saleId, { checkout_step: 3 });
     }
   }, [currentStep, saleId]);
 
