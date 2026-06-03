@@ -1021,7 +1021,61 @@ export default function Inventory() {
     }).catch(e => console.error('Initial verify invoke error:', e));
   };
 
-  const handleStartCorrection = async () => {
+  // Total Inteligente: apply BALANCE correction to ALREADY-scanned items only,
+  // without zeroing anything, and return to counting so the operator keeps going.
+  const handleSmartCorrectScanned = async () => {
+    if (!activeCount) return;
+
+    // Only scanned items whose counted quantity changed since last correction.
+    const toCorrect = countItems.filter(i =>
+      i.counted_quantity > 0 &&
+      (i.last_corrected_quantity === null || i.last_corrected_quantity === undefined || i.last_corrected_quantity !== i.counted_quantity)
+    );
+
+    if (toCorrect.length === 0) {
+      toast.info('Nenhum item novo para corrigir desde a última correção.');
+      return;
+    }
+
+    toast.loading('Salvando e corrigindo bipados...', { id: 'smart-correct' });
+    try {
+      // Clean any leftover queue then enqueue the scanned items (absolute balance).
+      await supabase.from('inventory_correction_queue').delete().eq('count_id', activeCount.id);
+
+      const rows = toCorrect.map(item => ({
+        count_id: activeCount.id,
+        count_item_id: item.id,
+        store_id: selectedStoreId,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        new_quantity: item.counted_quantity,
+        old_quantity: item.current_stock,
+      }));
+
+      const CHUNK = 200;
+      for (let i = 0; i < rows.length; i += CHUNK) {
+        const { error } = await supabase.from('inventory_correction_queue').insert(rows.slice(i, i + CHUNK));
+        if (error) throw error;
+      }
+
+      await supabase.from('inventory_counts').update({ status: 'smart_correcting' }).eq('id', activeCount.id);
+      setActiveCount({ ...activeCount, status: 'smart_correcting' } as unknown as InventoryCount);
+      setIsSmartCorrecting(true);
+      setSmartProgress({ processed: 0, total: toCorrect.length });
+
+      // Fire-and-forget incremental correction (final:false → returns to 'counting').
+      supabase.functions.invoke('inventory-correct-stock', {
+        body: { count_id: activeCount.id, batch_size: 10, final: false }
+      }).catch(e => console.error('Smart correct invoke error:', e));
+
+      toast.success(`Corrigindo ${toCorrect.length} bipados (balanço). Você pode continuar bipando.`, { id: 'smart-correct' });
+    } catch (err: any) {
+      console.error('handleSmartCorrectScanned error:', err);
+      toast.error('Erro ao corrigir bipados: ' + (err.message || 'desconhecido'), { id: 'smart-correct' });
+    }
+  };
+
+
     if (!activeCount) return;
 
     const allDivergent = countItems.filter(i =>
