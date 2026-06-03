@@ -86,6 +86,7 @@ export function UnifiedProductsList() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<MasterData | null>(null);
   const [editingSku, setEditingSku] = useState<PosSku | null>(null);
+  const [labelGroup, setLabelGroup] = useState<{ name: string; items: LabelItem[] } | null>(null);
   const [page, setPage] = useState(0);
 
   async function load() {
