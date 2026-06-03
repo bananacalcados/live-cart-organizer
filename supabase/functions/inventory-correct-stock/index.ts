@@ -9,7 +9,7 @@ const corsHeaders = {
 function queueNextBatch(
   supabaseUrl: string,
   authKey: string,
-  payload: { count_id: string; batch_size: number },
+  payload: { count_id: string; batch_size: number; final: boolean },
 ) {
   const nextRun = fetch(`${supabaseUrl}/functions/v1/inventory-correct-stock`, {
     method: 'POST',
