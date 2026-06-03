@@ -306,7 +306,7 @@ export function POSShipments({ storeId }: Props) {
       const link = `https://www.melhorrastreio.com.br/rastreio/${encodeURIComponent(code)}`;
       const greeting = order.customer_name ? `Oi, ${String(order.customer_name).split(' ')[0]}!` : 'Oi!';
       const message = `${greeting} 📦\nSeu pedido foi postado.\n\n*Código de rastreio:* ${code}\n*Acompanhe:* ${link}`;
-      const { data: num } = await supabase.from('whatsapp_numbers').select('provider').eq('id', trackingNumberId).maybeSingle();
+      const { data: num } = await supabase.from('whatsapp_numbers_safe').select('provider').eq('id', trackingNumberId).maybeSingle();
       const fn = (num as any)?.provider === 'meta' ? 'meta-whatsapp-send' : 'zapi-send-message';
       const { error } = await supabase.functions.invoke(fn, { body: { phone, message, whatsapp_number_id: trackingNumberId } });
       if (error) throw error;

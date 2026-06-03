@@ -82,7 +82,7 @@ export function SecretaryChat() {
 
   const loadWhatsappNumbers = async () => {
     const { data } = await supabase
-      .from("whatsapp_numbers")
+      .from("whatsapp_numbers_safe")
       .select("id, label, phone_number")
       .eq("is_active", true);
     if (data) setWhatsappNumbers(data);

@@ -69,7 +69,7 @@ export function ChatExtraSender({
       return;
     }
     supabase
-      .from("whatsapp_numbers")
+      .from("whatsapp_numbers_safe")
       .select("provider")
       .eq("id", whatsappNumberId)
       .maybeSingle()
