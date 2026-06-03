@@ -2160,9 +2160,9 @@ export default function Inventory() {
       <Dialog open={showFinishDialog} onOpenChange={setShowFinishDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Finalizar Contagem?</DialogTitle>
+            <DialogTitle>{activeCount?.scope === 'total_smart' ? 'Finalizar Balanço Inteligente?' : 'Finalizar Contagem?'}</DialogTitle>
             <DialogDescription>
-              {activeCount?.scope === 'total'
+              {activeCount?.scope === 'total' || activeCount?.scope === 'total_smart'
                 ? `Balanço TOTAL: ${countItems.length} produtos bipados. Todos os outros terão estoque ZERADO.`
                 : `Balanço PARCIAL: ${countItems.length} produtos bipados serão conferidos.`
               }
@@ -2179,7 +2179,7 @@ export default function Inventory() {
             </div>
           )}
           <p className="text-sm text-muted-foreground">
-            O sistema consultará o saldo atual de cada produto no Tiny para calcular divergências.
+            O sistema comparará a quantidade bipada com o estoque atual e aplicará a correção por BALANÇO (substitui o saldo).
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowFinishDialog(false)}>Voltar</Button>
