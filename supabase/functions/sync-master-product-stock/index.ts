@@ -116,6 +116,20 @@ Deno.serve(async (req) => {
           let shopUpdated = 0;
           let shopErrors = 0;
 
+          // ESTOQUE COMPARTILHADO: soma do estoque de TODAS as lojas do PDV por GTIN
+          const gtins = variants.map((v: any) => v.gtin).filter(Boolean);
+          const sharedStockByGtin: Record<string, number> = {};
+          if (gtins.length) {
+            const { data: posRows } = await supabase
+              .from("pos_products")
+              .select("barcode, stock")
+              .in("barcode", gtins);
+            for (const row of posRows || []) {
+              const code = String(row.barcode);
+              sharedStockByGtin[code] = (sharedStockByGtin[code] || 0) + (Number(row.stock) || 0);
+            }
+          }
+
           for (const v of variants) {
             if (!v.shopify_variant_id) continue;
 
@@ -141,7 +155,10 @@ Deno.serve(async (req) => {
               },
             ).catch(() => {});
 
-            // Define o estoque
+            // Define o estoque (compartilhado entre todas as lojas)
+            const sharedStock = v.gtin && sharedStockByGtin[String(v.gtin)] !== undefined
+              ? sharedStockByGtin[String(v.gtin)]
+              : Number(v.initial_stock || 0);
             const setRes = await fetch(
               `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels/set.json`,
               {
@@ -150,7 +167,7 @@ Deno.serve(async (req) => {
                 body: JSON.stringify({
                   location_id: locationId,
                   inventory_item_id: inventoryItemId,
-                  available: Number(v.initial_stock || 0),
+                  available: sharedStock,
                 }),
               },
             );
