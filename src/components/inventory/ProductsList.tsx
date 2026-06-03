@@ -8,10 +8,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes, Sparkles } from "lucide-react";
+import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes, Sparkles, Tag } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
 import { ProductStockManagerDialog } from "./ProductStockManagerDialog";
+import { ProductLabelPrintDialog } from "./ProductLabelPrintDialog";
 import { UnifiedProductsList } from "./UnifiedProductsList";
 import { toast } from "sonner";
 
