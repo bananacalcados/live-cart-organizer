@@ -43,7 +43,7 @@ serve(async (req) => {
   }
 
   try {
-    const { count_id, batch_size = 100 } = await req.json();
+    const { count_id, batch_size = 100, final = true } = await req.json();
     if (!count_id) throw new Error('count_id is required');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
