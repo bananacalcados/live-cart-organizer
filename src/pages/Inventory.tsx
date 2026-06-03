@@ -1670,8 +1670,8 @@ export default function Inventory() {
                           onChange={(e) => setQuantityInput(e.target.value)}
                           className="w-20 h-12 text-center text-lg"
                         />
-                        <Button onClick={() => handleBarcodeScan()} className="h-12 px-4">
-                          <ScanBarcode className="h-5 w-5" />
+                        <Button onClick={() => handleBarcodeScan()} className="h-12 px-4" disabled={isCloneChecking}>
+                          {isCloneChecking ? <Loader2 className="h-5 w-5 animate-spin" /> : <ScanBarcode className="h-5 w-5" />}
                         </Button>
                         <Button
                           variant="outline"
