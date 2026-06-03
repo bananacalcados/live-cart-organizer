@@ -50,22 +50,14 @@ export default function ReviewReferralPage() {
   useEffect(() => {
     if (!token) return;
     (async () => {
-      const { data: t } = await supabase
-        .from("review_tokens")
-        .select("id, customer_phone, customer_name, store_phone, cashback_value, cashback_doubled, review_submitted_at")
-        .eq("token", token)
-        .maybeSingle();
+      const { data } = await supabase.functions.invoke("review-load", { body: { token } });
+      const t = (data as any)?.token as ReviewToken | null;
       if (!t) {
         setLoading(false);
         return;
       }
-      setTok(t as ReviewToken);
-      const { data: refs } = await supabase
-        .from("referrals")
-        .select("id, friend_name, friend_phone, coupon_code, coupon_value, message_sent_at")
-        .eq("review_token_id", t.id)
-        .order("created_at");
-      setReferrals((refs as Referral[]) || []);
+      setTok(t);
+      setReferrals(((data as any)?.referrals as Referral[]) || []);
       if (t.review_submitted_at) setStep("referral");
       setLoading(false);
     })();
