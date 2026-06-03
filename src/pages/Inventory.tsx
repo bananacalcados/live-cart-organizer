@@ -1075,7 +1075,7 @@ export default function Inventory() {
     }
   };
 
-
+  const handleStartCorrection = async () => {
     if (!activeCount) return;
 
     const allDivergent = countItems.filter(i =>
