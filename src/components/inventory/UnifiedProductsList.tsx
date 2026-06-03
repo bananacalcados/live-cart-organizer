@@ -75,7 +75,33 @@ const CFOP_OPTIONS = [
   { value: "6404", label: "6404 — ST interestadual" },
 ];
 
-export function UnifiedProductsList() {
+/** Monta itens de etiqueta (uma por variação cor+tamanho) a partir de um grupo. */
+function buildLabelGroup(g: GroupRow): { name: string; items: LabelItem[] } {
+  const seen = new Map<string, LabelItem>();
+  for (const s of g.skus) {
+    const color = s.color || s.variant || "";
+    const size = s.size || "";
+    const code = (s.barcode && s.barcode.trim()) || s.sku || "";
+    const key = `${color}||${size}`;
+    if (!seen.has(key)) {
+      seen.set(key, {
+        id: key,
+        sku: s.sku || "",
+        gtin: s.barcode || null,
+        size: size || null,
+        color: color || null,
+      });
+    } else if (code && !seen.get(key)!.gtin && !seen.get(key)!.sku) {
+      seen.set(key, { ...seen.get(key)!, sku: s.sku || "", gtin: s.barcode || null });
+    }
+  }
+  const items = Array.from(seen.values()).sort((a, b) =>
+    (a.color || "").localeCompare(b.color || "") ||
+    (a.size || "").localeCompare(b.size || "", undefined, { numeric: true })
+  );
+  return { name: g.master?.name || g.parent_sku, items };
+}
+
   const [masters, setMasters] = useState<MasterData[]>([]);
   const [posProducts, setPosProducts] = useState<PosSku[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
