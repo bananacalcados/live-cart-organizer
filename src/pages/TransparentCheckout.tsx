@@ -1642,11 +1642,9 @@ export default function TransparentCheckout() {
         ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
       };
 
-      const { error } = await supabase
-        .from("customer_registrations")
-        .upsert(payload, { onConflict: "order_id" });
+      const regRes = await cpUpsertRegistration(payload);
 
-      if (error) throw error;
+      if (!regRes?.ok) throw new Error("registration upsert failed");
 
       const { data: regRaw } = await supabase
         .rpc("get_checkout_registration", { p_order_id: payload.order_id });
