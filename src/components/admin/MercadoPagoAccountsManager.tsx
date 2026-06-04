@@ -16,7 +16,7 @@ interface MpAccount {
   name: string;
   cnpj: string | null;
   description: string | null;
-  access_token: string;
+  has_access_token?: boolean;
   public_key: string | null;
   is_sandbox: boolean;
   is_active: boolean;
