@@ -76,6 +76,43 @@ const CUSTOMER_KEYS = new Set([
   "cep",
 ]);
 
+// Whitelisted fields the public checkout may write to the legacy `orders` table
+const ORDER_PATCH_KEYS = new Set([
+  "checkout_started_at",
+  "eligible_for_prize",
+  "notes",
+  "shipping_cost",
+  "free_shipping",
+  "cart_link",
+]);
+
+const ORDER_CREATE_KEYS = new Set([
+  "customer_id",
+  "products",
+  "stage",
+  "free_shipping",
+  "shipping_cost",
+  "checkout_started_at",
+  "notes",
+]);
+
+// Whitelisted fields for customer_registrations (checkout PII)
+const REGISTRATION_KEYS = new Set([
+  "order_id",
+  "customer_id",
+  "full_name",
+  "cpf",
+  "email",
+  "whatsapp",
+  "cep",
+  "address",
+  "address_number",
+  "complement",
+  "neighborhood",
+  "city",
+  "state",
+]);
+
 function pick(obj: Record<string, unknown>, allowed: Set<string>) {
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(obj || {})) {
