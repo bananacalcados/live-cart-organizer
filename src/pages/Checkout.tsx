@@ -570,10 +570,7 @@ export default function Checkout() {
           const elapsed = (now - startTime) / 1000;
           if (elapsed <= 600) { // 10 minutes
             setIsEligibleForPrize(true);
-            await supabase
-              .from('orders')
-              .update({ eligible_for_prize: true })
-              .eq('id', orderData.orderId);
+            await cpUpdateOrder(orderData.orderId, { eligible_for_prize: true });
           }
         }
       } else {
