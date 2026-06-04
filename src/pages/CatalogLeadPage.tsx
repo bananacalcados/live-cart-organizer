@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { cpGetSale } from "@/lib/checkoutPublic";
+import { cpGetSale, cpCreateOrder, cpUpdateOrder } from "@/lib/checkoutPublic";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { toast } from "sonner";
 import { ShoppingBag, X, ChevronLeft, Instagram, Phone, Loader2, Check, Trash2, Plus, Minus, Sparkles } from "lucide-react";
@@ -433,23 +433,20 @@ export default function CatalogLeadPage() {
         };
       });
 
-      const { data: order, error: orderError } = await supabase
-        .from("orders")
-        .insert({
-          customer_id: customerId,
-          products: orderProducts as any,
-          stage: "incomplete_order",
-          free_shipping: shippingAlreadyPaid,
-          shipping_cost: shippingCost,
-          checkout_started_at: new Date().toISOString(),
-          notes: `Catálogo Lead: ${slug}`,
-        } as any)
-        .select("id")
-        .single();
-      if (orderError) throw orderError;
+      const orderRes = await cpCreateOrder({
+        customer_id: customerId,
+        products: orderProducts as any,
+        stage: "incomplete_order",
+        free_shipping: shippingAlreadyPaid,
+        shipping_cost: shippingCost,
+        checkout_started_at: new Date().toISOString(),
+        notes: `Catálogo Lead: ${slug}`,
+      });
+      if (!orderRes?.orderId) throw new Error("Erro ao criar pedido");
+      const order = { id: orderRes.orderId };
 
       const cartLink = `${CHECKOUT_BASE_URL}/checkout/order/${order.id}`;
-      await supabase.from("orders").update({ cart_link: cartLink } as any).eq("id", order.id);
+      await cpUpdateOrder(order.id, { cart_link: cartLink });
 
       if (registrationId) {
         await supabase.from("catalog_lead_registrations").update({

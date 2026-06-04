@@ -76,6 +76,43 @@ const CUSTOMER_KEYS = new Set([
   "cep",
 ]);
 
+// Whitelisted fields the public checkout may write to the legacy `orders` table
+const ORDER_PATCH_KEYS = new Set([
+  "checkout_started_at",
+  "eligible_for_prize",
+  "notes",
+  "shipping_cost",
+  "free_shipping",
+  "cart_link",
+]);
+
+const ORDER_CREATE_KEYS = new Set([
+  "customer_id",
+  "products",
+  "stage",
+  "free_shipping",
+  "shipping_cost",
+  "checkout_started_at",
+  "notes",
+]);
+
+// Whitelisted fields for customer_registrations (checkout PII)
+const REGISTRATION_KEYS = new Set([
+  "order_id",
+  "customer_id",
+  "full_name",
+  "cpf",
+  "email",
+  "whatsapp",
+  "cep",
+  "address",
+  "address_number",
+  "complement",
+  "neighborhood",
+  "city",
+  "state",
+]);
+
 function pick(obj: Record<string, unknown>, allowed: Set<string>) {
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(obj || {})) {
@@ -287,6 +324,60 @@ serve(async (req) => {
         if (itemsError) return json({ error: itemsError.message }, 500);
 
         return json({ ok: true, saleId: sale.id });
+      }
+
+      // ── Store name lookup (CustomerRegister pickup store) ──
+      case "get_store_name": {
+        const { storeId } = body;
+        if (!isUuid(storeId)) return json({ name: null });
+        const { data } = await supabase
+          .from("pos_stores").select("name").eq("id", storeId).maybeSingle();
+        return json({ name: data?.name ?? null });
+      }
+
+      // ── Create a legacy order (CatalogLeadPage) ──
+      case "order_create": {
+        const clean = pick(body?.order || {}, ORDER_CREATE_KEYS);
+        if (clean.customer_id !== undefined && clean.customer_id !== null && !isUuid(clean.customer_id)) {
+          delete clean.customer_id;
+        }
+        const { data, error } = await supabase
+          .from("orders").insert(clean).select("id").single();
+        if (error) return json({ error: error.message }, 500);
+        return json({ ok: true, orderId: data?.id ?? null });
+      }
+
+      // ── Update whitelisted checkout fields on an UNPAID order ──
+      case "order_update": {
+        const { orderId, patch } = body;
+        if (!isUuid(orderId)) return json({ error: "invalid orderId" }, 400);
+        const clean = pick(patch || {}, ORDER_PATCH_KEYS);
+        if (Object.keys(clean).length === 0) return json({ error: "empty patch" }, 400);
+        const { error } = await supabase
+          .from("orders")
+          .update(clean)
+          .eq("id", orderId)
+          .eq("is_paid", false);
+        if (error) return json({ error: error.message }, 500);
+        return json({ ok: true });
+      }
+
+      // ── Upsert checkout PII into customer_registrations for an UNPAID order ──
+      case "registration_upsert": {
+        const reg = pick(body?.registration || {}, REGISTRATION_KEYS);
+        if (!isUuid(reg.order_id)) return json({ error: "invalid order_id" }, 400);
+        if (reg.customer_id !== undefined && reg.customer_id !== null && !isUuid(reg.customer_id)) {
+          delete reg.customer_id;
+        }
+        // Only allow writes tied to a real, unpaid order
+        const { data: ord } = await supabase
+          .from("orders").select("id, is_paid").eq("id", reg.order_id).maybeSingle();
+        if (!ord || ord.is_paid) return json({ error: "order not eligible" }, 400);
+        const { error } = await supabase
+          .from("customer_registrations")
+          .upsert(reg, { onConflict: "order_id" });
+        if (error) return json({ error: error.message }, 500);
+        return json({ ok: true });
       }
 
       default:

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { cpLookupCustomerCpf, cpUpsertCustomer, cpCreatePickupSale } from "@/lib/checkoutPublic";
+import { cpLookupCustomerCpf, cpUpsertCustomer, cpCreatePickupSale, cpGetStoreName, cpUpsertRegistration } from "@/lib/checkoutPublic";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -76,12 +76,8 @@ export default function CustomerRegister() {
 
     // Load pickup store name if applicable
     if ((data as any).pickup_store_id) {
-      const { data: storeData } = await supabase
-        .from("pos_stores")
-        .select("name")
-        .eq("id", (data as any).pickup_store_id)
-        .single();
-      if (storeData) setPickupStoreName(storeData.name);
+      const storeRes = await cpGetStoreName((data as any).pickup_store_id);
+      if (storeRes?.name) setPickupStoreName(storeRes.name);
     }
 
     // Pre-fill from previous registration if customer has one
@@ -288,25 +284,23 @@ export default function CustomerRegister() {
       const cleanWhatsapp = whatsapp.replace(/\D/g, "");
       const cleanCep = cep.replace(/\D/g, "");
       
-      const { error: regError } = await supabase
-        .from("customer_registrations")
-        .insert({
-          order_id: orderId!,
-          full_name: fullName,
-          cpf: cleanCpf,
-          email,
-          whatsapp: cleanWhatsapp,
-          cep: cleanCep,
-          address: address || null,
-          address_number: addressNumber || null,
-          complement: complement || null,
-          neighborhood: neighborhood || null,
-          city: city || null,
-          state: state || null,
-          ...(customerIdToLink ? { customer_id: customerIdToLink } : {}),
-        });
+      const regRes = await cpUpsertRegistration({
+        order_id: orderId!,
+        full_name: fullName,
+        cpf: cleanCpf,
+        email,
+        whatsapp: cleanWhatsapp,
+        cep: cleanCep,
+        address: address || null,
+        address_number: addressNumber || null,
+        complement: complement || null,
+        neighborhood: neighborhood || null,
+        city: city || null,
+        state: state || null,
+        ...(customerIdToLink ? { customer_id: customerIdToLink } : {}),
+      });
 
-      if (regError) throw regError;
+      if (!regRes?.ok) throw new Error("Erro ao salvar cadastro");
 
       const { data: regRaw } = await supabase
         .rpc("get_checkout_registration", { p_order_id: orderId! });

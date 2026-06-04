@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { cpUpdateOrder } from "@/lib/checkoutPublic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, CheckCircle2, XCircle, ShoppingBag, Lock, CreditCard, QrCode, Copy, Check, Clock, Trophy } from "lucide-react";
 import { toast } from "sonner";
@@ -542,10 +543,7 @@ export default function Checkout() {
         setCheckoutStartedAt(orderRow.checkout_started_at);
       } else {
         const now = new Date().toISOString();
-        await supabase
-          .from('orders')
-          .update({ checkout_started_at: now })
-          .eq('id', orderId);
+        await cpUpdateOrder(orderId, { checkout_started_at: now });
         setCheckoutStartedAt(now);
       }
     } catch (error) {
@@ -572,10 +570,7 @@ export default function Checkout() {
           const elapsed = (now - startTime) / 1000;
           if (elapsed <= 600) { // 10 minutes
             setIsEligibleForPrize(true);
-            await supabase
-              .from('orders')
-              .update({ eligible_for_prize: true })
-              .eq('id', orderData.orderId);
+            await cpUpdateOrder(orderData.orderId, { eligible_for_prize: true });
           }
         }
       } else {
@@ -829,7 +824,7 @@ export default function Checkout() {
                   const elapsed = (Date.now() - startTime) / 1000;
                   if (elapsed <= 600) {
                     setIsEligibleForPrize(true);
-                    supabase.from('orders').update({ eligible_for_prize: true }).eq('id', orderData.orderId);
+                    cpUpdateOrder(orderData.orderId, { eligible_for_prize: true });
                   }
                 }
               }} />

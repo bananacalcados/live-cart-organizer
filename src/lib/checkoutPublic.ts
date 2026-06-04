@@ -54,3 +54,22 @@ export async function cpUpsertCustomer(customer: Record<string, unknown>) {
 export async function cpCreatePickupSale(payload: Record<string, unknown>) {
   return call<{ ok: boolean; saleId: string }>("create_pickup_sale", payload);
 }
+
+// ── Legacy `orders` / `customer_registrations` / store-name proxies ──
+// These replace direct anon access to those tables, now locked down server-side.
+export async function cpGetStoreName(storeId: string) {
+  return call<{ name: string | null }>("get_store_name", { storeId });
+}
+
+export async function cpCreateOrder(order: Record<string, unknown>) {
+  return call<{ ok: boolean; orderId: string | null }>("order_create", { order });
+}
+
+export async function cpUpdateOrder(orderId: string, patch: Record<string, unknown>) {
+  return call<{ ok: boolean }>("order_update", { orderId, patch });
+}
+
+export async function cpUpsertRegistration(registration: Record<string, unknown>) {
+  return call<{ ok: boolean }>("registration_upsert", { registration });
+}
+

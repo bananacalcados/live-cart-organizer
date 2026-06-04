@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { cpGetAttemptStatus } from "@/lib/checkoutPublic";
+import { cpGetAttemptStatus, cpUpdateOrder, cpUpsertRegistration } from "@/lib/checkoutPublic";
 import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
 import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
 import {
@@ -982,7 +982,7 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
     // Save customer registration early
     if (orderId && !orderId.startsWith("live-")) {
       try {
-        await supabase.from("customer_registrations").upsert({
+        await cpUpsertRegistration({
           order_id: orderId,
           full_name: form.fullName,
           email: form.email,
@@ -995,7 +995,7 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
           neighborhood: form.neighborhood,
           city: form.city,
           state: form.state,
-        }, { onConflict: "order_id" });
+        });
       } catch {}
     }
 
@@ -1568,7 +1568,7 @@ export default function TransparentCheckout() {
         setPaymentStatus("success");
       } else if (!order.checkout_started_at) {
         const now = new Date().toISOString();
-        await supabase.from("orders").update({ checkout_started_at: now }).eq("id", order.id);
+        await cpUpdateOrder(order.id, { checkout_started_at: now });
         setOrderData((prev) => prev ? { ...prev, checkoutStartedAt: now } : prev);
       }
 
@@ -1642,11 +1642,9 @@ export default function TransparentCheckout() {
         ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
       };
 
-      const { error } = await supabase
-        .from("customer_registrations")
-        .upsert(payload, { onConflict: "order_id" });
+      const regRes = await cpUpsertRegistration(payload);
 
-      if (error) throw error;
+      if (!regRes?.ok) throw new Error("registration upsert failed");
 
       const { data: regRaw } = await supabase
         .rpc("get_checkout_registration", { p_order_id: payload.order_id });
@@ -1655,7 +1653,7 @@ export default function TransparentCheckout() {
 
       // Também salva full_name na tabela orders para exibição no dashboard
       if (payload.full_name && orderData?.id && !orderData.id.startsWith("live-")) {
-        await supabase.from("orders").update({ notes: `Cliente: ${payload.full_name}` } as any).eq("id", orderData.id);
+        await cpUpdateOrder(orderData.id, { notes: `Cliente: ${payload.full_name}` });
       }
 
       return true;
@@ -1760,7 +1758,7 @@ export default function TransparentCheckout() {
         const elapsed = (Date.now() - new Date(orderData.checkoutStartedAt).getTime()) / 1000;
         if (elapsed <= 600) {
           setIsEligibleForPrize(true);
-          if (orderId) supabase.from("orders").update({ eligible_for_prize: true }).eq("id", orderId);
+          if (orderId) cpUpdateOrder(orderId, { eligible_for_prize: true });
         }
       }
 
@@ -1822,7 +1820,7 @@ export default function TransparentCheckout() {
 
       if (orderId && !liveCartRaw && cd) {
         try {
-          await supabase.from("customer_registrations").upsert({
+          await cpUpsertRegistration({
             order_id: orderId,
             full_name: cd.name || "Cliente",
             email: cd.email || "",
@@ -1836,7 +1834,7 @@ export default function TransparentCheckout() {
             city: cd.address?.city || "",
             state: cd.address?.state || "",
             ...(orderData?.customerId ? { customer_id: orderData.customerId } : {}),
-          }, { onConflict: 'order_id' });
+          });
         } catch (err) {
           console.error("Error saving customer registration:", err);
         }
@@ -1977,10 +1975,10 @@ export default function TransparentCheckout() {
                         const newShippingCost = option.price;
                         const isPickup = option.type === 'pickup';
                         if (orderId && !orderData.id.startsWith("live-")) {
-                          await supabase.from("orders").update({
+                          await cpUpdateOrder(orderId, {
                             shipping_cost: newShippingCost,
                             free_shipping: isPickup,
-                          }).eq("id", orderId);
+                          });
                         }
                         // Recalculate total
                         setOrderData(prev => {
