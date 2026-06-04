@@ -113,6 +113,19 @@ const REGISTRATION_KEYS = new Set([
   "state",
 ]);
 
+const LIVE_VIEWER_KEYS = new Set([
+  "name",
+  "is_online",
+  "last_seen_at",
+  "cart_items",
+  "cart_value",
+  "checkout_completed",
+  "checkout_completed_at",
+  "payment_platform",
+  "payment_method",
+  "messages_count",
+]);
+
 function pick(obj: Record<string, unknown>, allowed: Set<string>) {
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(obj || {})) {
@@ -376,6 +389,93 @@ serve(async (req) => {
         const { error } = await supabase
           .from("customer_registrations")
           .upsert(reg, { onConflict: "order_id" });
+        if (error) return json({ error: error.message }, 500);
+        return json({ ok: true });
+      }
+
+      // ── Public live-commerce helpers (sanitized, no direct anon table access) ──
+      case "live_get_state": {
+        const { sessionId } = body;
+        if (!isUuid(sessionId)) return json({ viewerCount: 0, messages: [] });
+
+        const [{ count }, { data: messages, error: messageError }] = await Promise.all([
+          supabase
+            .from("live_viewers")
+            .select("id", { count: "exact", head: true })
+            .eq("session_id", sessionId)
+            .eq("is_online", true),
+          supabase
+            .from("live_chat_messages")
+            .select("id, viewer_name, message, message_type, created_at")
+            .eq("session_id", sessionId)
+            .neq("message_type", "private")
+            .order("created_at", { ascending: true })
+            .limit(100),
+        ]);
+
+        if (messageError) return json({ error: messageError.message }, 500);
+        return json({ viewerCount: count ?? 0, messages: messages || [] });
+      }
+
+      case "live_upsert_viewer": {
+        const { sessionId, viewer } = body;
+        if (!isUuid(sessionId)) return json({ error: "invalid sessionId" }, 400);
+        const name = typeof viewer?.name === "string" ? viewer.name.trim().slice(0, 120) : "";
+        const phone = digits(viewer?.phone);
+        if (!name || phone.length < 12) return json({ error: "invalid viewer" }, 400);
+
+        const payload = {
+          session_id: sessionId,
+          name,
+          phone,
+          is_online: true,
+          last_seen_at: new Date().toISOString(),
+        };
+
+        const { error } = await supabase
+          .from("live_viewers")
+          .upsert(payload, { onConflict: "session_id,phone" });
+        if (error) return json({ error: error.message }, 500);
+        return json({ ok: true });
+      }
+
+      case "live_update_viewer": {
+        const { sessionId, phone, patch } = body;
+        if (!isUuid(sessionId)) return json({ error: "invalid sessionId" }, 400);
+        const normalizedPhone = digits(phone);
+        if (normalizedPhone.length < 12) return json({ error: "invalid phone" }, 400);
+
+        const clean = pick(patch || {}, LIVE_VIEWER_KEYS);
+        if (typeof clean.name === "string") clean.name = clean.name.trim().slice(0, 120);
+        if (Object.keys(clean).length === 0) return json({ error: "empty patch" }, 400);
+
+        const { error } = await supabase
+          .from("live_viewers")
+          .update(clean)
+          .eq("session_id", sessionId)
+          .eq("phone", normalizedPhone);
+        if (error) return json({ error: error.message }, 500);
+        return json({ ok: true });
+      }
+
+      case "live_send_message": {
+        const { sessionId, viewerName, viewerPhone, message, messageType } = body;
+        if (!isUuid(sessionId)) return json({ error: "invalid sessionId" }, 400);
+        const normalizedPhone = digits(viewerPhone);
+        const normalizedName = typeof viewerName === "string" ? viewerName.trim().slice(0, 120) : "";
+        const text = typeof message === "string" ? message.trim().slice(0, 500) : "";
+        const type = messageType === "system" ? "system" : "text";
+        if (!normalizedName || !text || normalizedPhone.length < 12) {
+          return json({ error: "invalid message payload" }, 400);
+        }
+
+        const { error } = await supabase.from("live_chat_messages").insert({
+          session_id: sessionId,
+          viewer_name: normalizedName,
+          viewer_phone: normalizedPhone,
+          message: text,
+          message_type: type,
+        });
         if (error) return json({ error: error.message }, 500);
         return json({ ok: true });
       }
