@@ -1,0 +1,13 @@
+ALTER FUNCTION public._set_updated_at() SET search_path = public;
+ALTER FUNCTION public.cleanup_livete_locks() SET search_path = public;
+ALTER FUNCTION public.get_conversations(p_number_id uuid, p_dispatch_only boolean) SET search_path = public;
+ALTER FUNCTION public.lookup_crm_by_phones(p_phones text[]) SET search_path = public;
+ALTER FUNCTION public.norm_cpf(raw text) SET search_path = public;
+ALTER FUNCTION public.norm_email(raw text) SET search_path = public;
+ALTER FUNCTION public.norm_instagram(raw text) SET search_path = public;
+ALTER FUNCTION public.norm_phone_br(raw text) SET search_path = public;
+ALTER FUNCTION public.phone_ddd(e164 text) SET search_path = public;
+ALTER FUNCTION public.phone_suffix8(e164 text) SET search_path = public;
+ALTER FUNCTION public.reactivate_pos_product_on_stock() SET search_path = public;
+ALTER FUNCTION public.sync_lead_pix_data(p_whatsapp text, p_chosen_payment_method text, p_pix_code text, p_pix_expires_at timestamp with time zone) SET search_path = public;
+ALTER FUNCTION public.update_lead_recovery(p_lead_id text, p_source_table text, p_disparo integer, p_session_id text) SET search_path = public;
