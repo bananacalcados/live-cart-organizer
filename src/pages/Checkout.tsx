@@ -824,7 +824,7 @@ export default function Checkout() {
                   const elapsed = (Date.now() - startTime) / 1000;
                   if (elapsed <= 600) {
                     setIsEligibleForPrize(true);
-                    supabase.from('orders').update({ eligible_for_prize: true }).eq('id', orderData.orderId);
+                    cpUpdateOrder(orderData.orderId, { eligible_for_prize: true });
                   }
                 }
               }} />
