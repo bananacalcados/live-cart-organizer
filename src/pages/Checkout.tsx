@@ -543,10 +543,7 @@ export default function Checkout() {
         setCheckoutStartedAt(orderRow.checkout_started_at);
       } else {
         const now = new Date().toISOString();
-        await supabase
-          .from('orders')
-          .update({ checkout_started_at: now })
-          .eq('id', orderId);
+        await cpUpdateOrder(orderId, { checkout_started_at: now });
         setCheckoutStartedAt(now);
       }
     } catch (error) {
