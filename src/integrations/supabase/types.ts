@@ -8180,6 +8180,7 @@ export type Database = {
           cnpj: string | null
           created_at: string
           description: string | null
+          has_access_token: boolean | null
           id: string
           is_active: boolean
           is_sandbox: boolean
@@ -8196,6 +8197,7 @@ export type Database = {
           cnpj?: string | null
           created_at?: string
           description?: string | null
+          has_access_token?: boolean | null
           id?: string
           is_active?: boolean
           is_sandbox?: boolean
@@ -8212,6 +8214,7 @@ export type Database = {
           cnpj?: string | null
           created_at?: string
           description?: string | null
+          has_access_token?: boolean | null
           id?: string
           is_active?: boolean
           is_sandbox?: boolean
