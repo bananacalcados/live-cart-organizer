@@ -104,7 +104,9 @@ export default function Companies() {
   const load = async () => {
     setLoading(true);
     const [c, s] = await Promise.all([
-      (supabase as any).from("companies").select("*").order("legal_name"),
+      (supabase as any).from("companies").select(
+        "id, legal_name, trade_name, cnpj, ie, ie_isento, im, regime_tributario, crt, cnae_principal, address_cep, address_street, address_number, address_complement, address_neighborhood, address_city, address_city_ibge, address_state, address_country, email, phone, ambiente_nfe, brasilnfe_token, certificate_uploaded_at, certificate_expires_at, is_active, is_pilot, notes, created_at, updated_at, certificate_path, certificate_valid_until, certificate_filename"
+      ).order("legal_name"),
       supabase.from("pos_stores").select("id,name,company_id").order("name"),
     ]);
     if (c.error) toast({ title: "Erro ao carregar empresas", description: c.error.message, variant: "destructive" });
