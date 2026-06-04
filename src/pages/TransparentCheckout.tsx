@@ -1760,7 +1760,7 @@ export default function TransparentCheckout() {
         const elapsed = (Date.now() - new Date(orderData.checkoutStartedAt).getTime()) / 1000;
         if (elapsed <= 600) {
           setIsEligibleForPrize(true);
-          if (orderId) supabase.from("orders").update({ eligible_for_prize: true }).eq("id", orderId);
+          if (orderId) cpUpdateOrder(orderId, { eligible_for_prize: true });
         }
       }
 
