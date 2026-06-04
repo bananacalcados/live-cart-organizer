@@ -235,7 +235,13 @@ export function MercadoPagoAccountsManager() {
                     )}
                   </TableCell>
                   <TableCell className="text-sm">{acc.cnpj || "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{maskToken(acc.access_token)}</TableCell>
+                  <TableCell className="text-xs">
+                    {acc.has_access_token ? (
+                      <Badge variant="outline" className="text-green-600 border-green-600">Configurado</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">—</Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {acc.is_sandbox ? (
                       <Badge variant="outline" className="text-yellow-600 border-yellow-600">Sandbox</Badge>
