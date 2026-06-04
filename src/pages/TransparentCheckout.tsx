@@ -1568,7 +1568,7 @@ export default function TransparentCheckout() {
         setPaymentStatus("success");
       } else if (!order.checkout_started_at) {
         const now = new Date().toISOString();
-        await supabase.from("orders").update({ checkout_started_at: now }).eq("id", order.id);
+        await cpUpdateOrder(order.id, { checkout_started_at: now });
         setOrderData((prev) => prev ? { ...prev, checkoutStartedAt: now } : prev);
       }
 
