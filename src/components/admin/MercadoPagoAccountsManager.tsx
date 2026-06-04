@@ -155,8 +155,6 @@ export function MercadoPagoAccountsManager() {
     }
   };
 
-  const maskToken = (t: string) => (t.length > 14 ? `${t.slice(0, 8)}…${t.slice(-4)}` : "•••");
-
   const projectId = (import.meta as any).env?.VITE_SUPABASE_PROJECT_ID || "tqxhcyuxgqbzqwoidpie";
   const webhookUrl = `https://${projectId}.supabase.co/functions/v1/payment-webhook`;
 
