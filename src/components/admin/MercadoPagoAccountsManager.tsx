@@ -46,7 +46,7 @@ export function MercadoPagoAccountsManager() {
     setLoading(true);
     const { data, error } = await (supabase as any)
       .from("mercadopago_accounts")
-      .select("*")
+      .select("id, name, cnpj, description, public_key, has_access_token, is_sandbox, is_active, created_at, updated_at")
       .order("created_at", { ascending: true });
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
