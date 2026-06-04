@@ -253,14 +253,8 @@ const LiveCommerce = () => {
     setShowGate(false);
 
     if (session?.id) {
-      await supabase.from("live_viewers").upsert(
-        { session_id: session.id, name: viewerData.name, phone, is_online: true, last_seen_at: new Date().toISOString() },
-        { onConflict: "session_id,phone" }
-      );
-      await supabase.from("live_chat_messages").insert({
-        session_id: session.id, viewer_name: `@${username}`, viewer_phone: phone,
-        message: `${viewerData.name} entrou na live! 🎉`, message_type: "system",
-      });
+      await lpUpsertViewer(session.id, { name: viewerData.name, phone });
+      await lpSendMessage(session.id, `@${username}`, phone, `${viewerData.name} entrou na live! 🎉`, "system");
     }
     // Pixel: Lead event
     trackPixelEvent("Lead", { content_name: "live_gate", content_category: gatePurpose });
@@ -322,7 +316,7 @@ const LiveCommerce = () => {
         const variantTitle = variant.title === "Default Title" ? "" : variant.title;
         const currentCart = [...cart, { variantId: variant.id, productTitle, variantTitle, price: variant.price, quantity: 1, image }];
         const cartItems = currentCart.map(i => ({ handle: i.variantId, variantId: i.variantId, productTitle: i.productTitle, variantTitle: i.variantTitle || "", price: i.price, quantity: i.quantity, image: i.image }));
-        await supabase.from("live_viewers").update({ cart_items: cartItems as any }).eq("session_id", session.id).eq("phone", viewer.phone);
+        await lpUpdateViewer(session.id, viewer.phone, { cart_items: cartItems as any });
       }, 100);
     }
   }, [cart, viewer, session?.id]);
@@ -349,11 +343,11 @@ const LiveCommerce = () => {
       // Save cart to DB for admin visibility / cart recovery (NOT checkout_completed yet - that happens after payment)
       if (viewer && session?.id) {
         const cartValue = cart.reduce((s, i) => s + i.price * i.quantity, 0);
-        await supabase.from("live_viewers").update({
+        await lpUpdateViewer(session.id, viewer.phone, {
           cart_items: cart as any,
           cart_value: cartValue,
           last_seen_at: new Date().toISOString(),
-        }).eq("session_id", session.id).eq("phone", viewer.phone);
+        });
       }
 
       // Fetch freight config from the active session for checkout
@@ -396,13 +390,7 @@ const LiveCommerce = () => {
     setSendingChat(true);
     const text = chatInput.trim();
     setChatInput("");
-    await supabase.from("live_chat_messages").insert({
-      session_id: session.id,
-      viewer_name: `@${viewer.username}`,
-      viewer_phone: viewer.phone,
-      message: text,
-      message_type: "text",
-    });
+    await lpSendMessage(session.id, `@${viewer.username}`, viewer.phone, text, "text");
     setSendingChat(false);
   };
 
