@@ -982,7 +982,7 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
     // Save customer registration early
     if (orderId && !orderId.startsWith("live-")) {
       try {
-        await supabase.from("customer_registrations").upsert({
+        await cpUpsertRegistration({
           order_id: orderId,
           full_name: form.fullName,
           email: form.email,
@@ -995,7 +995,7 @@ function PixPaymentForm({ orderId, amount, pixDiscountPercent = 0, form, onPayme
           neighborhood: form.neighborhood,
           city: form.city,
           state: form.state,
-        }, { onConflict: "order_id" });
+        });
       } catch {}
     }
 
