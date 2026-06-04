@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { cpGetAttemptStatus, cpUpdateOrder, cpUpsertRegistration } from "@/lib/checkoutPublic";
+import { lpUpdateViewer } from "@/lib/livePublic";
 import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
 import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
 import {
@@ -1763,12 +1764,12 @@ export default function TransparentCheckout() {
       }
 
       if (livePayload?.customer?.phone && livePayload.sessionId) {
-        await supabase.from("live_viewers").update({
+        await lpUpdateViewer(livePayload.sessionId, livePayload.customer.phone, {
           checkout_completed: true,
           checkout_completed_at: new Date().toISOString(),
           payment_platform: paymentInfo?.platform || null,
           payment_method: paymentInfo?.method || null,
-        }).eq("session_id", livePayload.sessionId).eq("phone", livePayload.customer.phone);
+        });
       }
 
       if (liveCartRaw && liveCartRaw.items.length > 0) {
