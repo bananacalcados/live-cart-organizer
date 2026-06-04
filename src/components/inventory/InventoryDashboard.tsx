@@ -51,7 +51,7 @@ export function InventoryDashboard() {
     const { data: stores } = await supabase
       .from("pos_stores")
       .select("id, name")
-      .not("tiny_token", "is", null)
+      .eq("has_tiny_token", true)
       .eq("is_active", true)
       .eq("is_simulation", false);
 
