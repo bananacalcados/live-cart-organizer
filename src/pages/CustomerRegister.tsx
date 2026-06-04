@@ -284,25 +284,23 @@ export default function CustomerRegister() {
       const cleanWhatsapp = whatsapp.replace(/\D/g, "");
       const cleanCep = cep.replace(/\D/g, "");
       
-      const { error: regError } = await supabase
-        .from("customer_registrations")
-        .insert({
-          order_id: orderId!,
-          full_name: fullName,
-          cpf: cleanCpf,
-          email,
-          whatsapp: cleanWhatsapp,
-          cep: cleanCep,
-          address: address || null,
-          address_number: addressNumber || null,
-          complement: complement || null,
-          neighborhood: neighborhood || null,
-          city: city || null,
-          state: state || null,
-          ...(customerIdToLink ? { customer_id: customerIdToLink } : {}),
-        });
+      const regRes = await cpUpsertRegistration({
+        order_id: orderId!,
+        full_name: fullName,
+        cpf: cleanCpf,
+        email,
+        whatsapp: cleanWhatsapp,
+        cep: cleanCep,
+        address: address || null,
+        address_number: addressNumber || null,
+        complement: complement || null,
+        neighborhood: neighborhood || null,
+        city: city || null,
+        state: state || null,
+        ...(customerIdToLink ? { customer_id: customerIdToLink } : {}),
+      });
 
-      if (regError) throw regError;
+      if (!regRes?.ok) throw new Error("Erro ao salvar cadastro");
 
       const { data: regRaw } = await supabase
         .rpc("get_checkout_registration", { p_order_id: orderId! });
