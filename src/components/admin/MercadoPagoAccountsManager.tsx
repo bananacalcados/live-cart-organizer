@@ -16,7 +16,7 @@ interface MpAccount {
   name: string;
   cnpj: string | null;
   description: string | null;
-  access_token: string;
+  has_access_token?: boolean;
   public_key: string | null;
   is_sandbox: boolean;
   is_active: boolean;
@@ -46,7 +46,7 @@ export function MercadoPagoAccountsManager() {
     setLoading(true);
     const { data, error } = await (supabase as any)
       .from("mercadopago_accounts")
-      .select("*")
+      .select("id, name, cnpj, description, public_key, has_access_token, is_sandbox, is_active, created_at, updated_at")
       .order("created_at", { ascending: true });
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -72,7 +72,7 @@ export function MercadoPagoAccountsManager() {
       name: acc.name,
       cnpj: acc.cnpj || "",
       description: acc.description || "",
-      access_token: acc.access_token,
+      access_token: "",
       public_key: acc.public_key || "",
       is_sandbox: acc.is_sandbox,
     });
@@ -80,23 +80,29 @@ export function MercadoPagoAccountsManager() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.access_token.trim()) {
-      toast({ title: "Campos obrigatórios", description: "Nome e Access Token são obrigatórios", variant: "destructive" });
+    if (!form.name.trim() || (!editing && !form.access_token.trim())) {
+      toast({
+        title: "Campos obrigatórios",
+        description: editing ? "Nome é obrigatório" : "Nome e Access Token são obrigatórios",
+        variant: "destructive",
+      });
       return;
     }
     setSaving(true);
     try {
       if (editing) {
+        const payload: any = {
+          name: form.name.trim(),
+          cnpj: form.cnpj.trim() || null,
+          description: form.description.trim() || null,
+          public_key: form.public_key.trim() || null,
+          is_sandbox: form.is_sandbox,
+        };
+        // Só substitui o token se um novo valor for informado (em branco = mantém o atual)
+        if (form.access_token.trim()) payload.access_token = form.access_token.trim();
         const { error } = await (supabase as any)
           .from("mercadopago_accounts")
-          .update({
-            name: form.name.trim(),
-            cnpj: form.cnpj.trim() || null,
-            description: form.description.trim() || null,
-            access_token: form.access_token.trim(),
-            public_key: form.public_key.trim() || null,
-            is_sandbox: form.is_sandbox,
-          })
+          .update(payload)
           .eq("id", editing.id);
         if (error) throw error;
         toast({ title: "Conta atualizada" });
@@ -148,8 +154,6 @@ export function MercadoPagoAccountsManager() {
       fetchAccounts();
     }
   };
-
-  const maskToken = (t: string) => (t.length > 14 ? `${t.slice(0, 8)}…${t.slice(-4)}` : "•••");
 
   const projectId = (import.meta as any).env?.VITE_SUPABASE_PROJECT_ID || "tqxhcyuxgqbzqwoidpie";
   const webhookUrl = `https://${projectId}.supabase.co/functions/v1/payment-webhook`;
@@ -231,7 +235,13 @@ export function MercadoPagoAccountsManager() {
                     )}
                   </TableCell>
                   <TableCell className="text-sm">{acc.cnpj || "—"}</TableCell>
-                  <TableCell className="font-mono text-xs">{maskToken(acc.access_token)}</TableCell>
+                  <TableCell className="text-xs">
+                    {acc.has_access_token ? (
+                      <Badge variant="outline" className="text-green-600 border-green-600">Configurado</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">—</Badge>
+                    )}
+                  </TableCell>
                   <TableCell>
                     {acc.is_sandbox ? (
                       <Badge variant="outline" className="text-yellow-600 border-yellow-600">Sandbox</Badge>
@@ -293,13 +303,18 @@ export function MercadoPagoAccountsManager() {
                 <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Notas internas" />
               </div>
               <div>
-                <Label>Access Token * (Mercado Pago)</Label>
+                <Label>Access Token {editing ? "(Mercado Pago)" : "* (Mercado Pago)"}</Label>
                 <Input
                   value={form.access_token}
                   onChange={(e) => setForm({ ...form, access_token: e.target.value })}
-                  placeholder="APP_USR-xxxxxxxxxxxx"
+                  placeholder={editing ? "Deixe em branco para manter o token atual" : "APP_USR-xxxxxxxxxxxx"}
                   className="font-mono text-xs"
                 />
+                {editing && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Por segurança o token não é exibido. Preencha apenas se quiser substituí-lo.
+                  </p>
+                )}
               </div>
               <div>
                 <Label>Public Key</Label>
