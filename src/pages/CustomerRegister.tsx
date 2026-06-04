@@ -76,12 +76,8 @@ export default function CustomerRegister() {
 
     // Load pickup store name if applicable
     if ((data as any).pickup_store_id) {
-      const { data: storeData } = await supabase
-        .from("pos_stores")
-        .select("name")
-        .eq("id", (data as any).pickup_store_id)
-        .single();
-      if (storeData) setPickupStoreName(storeData.name);
+      const storeRes = await cpGetStoreName((data as any).pickup_store_id);
+      if (storeRes?.name) setPickupStoreName(storeRes.name);
     }
 
     // Pre-fill from previous registration if customer has one
