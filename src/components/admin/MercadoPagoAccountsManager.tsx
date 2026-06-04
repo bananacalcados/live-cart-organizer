@@ -72,7 +72,7 @@ export function MercadoPagoAccountsManager() {
       name: acc.name,
       cnpj: acc.cnpj || "",
       description: acc.description || "",
-      access_token: acc.access_token,
+      access_token: "",
       public_key: acc.public_key || "",
       is_sandbox: acc.is_sandbox,
     });
@@ -80,23 +80,29 @@ export function MercadoPagoAccountsManager() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.access_token.trim()) {
-      toast({ title: "Campos obrigatórios", description: "Nome e Access Token são obrigatórios", variant: "destructive" });
+    if (!form.name.trim() || (!editing && !form.access_token.trim())) {
+      toast({
+        title: "Campos obrigatórios",
+        description: editing ? "Nome é obrigatório" : "Nome e Access Token são obrigatórios",
+        variant: "destructive",
+      });
       return;
     }
     setSaving(true);
     try {
       if (editing) {
+        const payload: any = {
+          name: form.name.trim(),
+          cnpj: form.cnpj.trim() || null,
+          description: form.description.trim() || null,
+          public_key: form.public_key.trim() || null,
+          is_sandbox: form.is_sandbox,
+        };
+        // Só substitui o token se um novo valor for informado (em branco = mantém o atual)
+        if (form.access_token.trim()) payload.access_token = form.access_token.trim();
         const { error } = await (supabase as any)
           .from("mercadopago_accounts")
-          .update({
-            name: form.name.trim(),
-            cnpj: form.cnpj.trim() || null,
-            description: form.description.trim() || null,
-            access_token: form.access_token.trim(),
-            public_key: form.public_key.trim() || null,
-            is_sandbox: form.is_sandbox,
-          })
+          .update(payload)
           .eq("id", editing.id);
         if (error) throw error;
         toast({ title: "Conta atualizada" });
