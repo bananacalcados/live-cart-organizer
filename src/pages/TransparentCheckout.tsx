@@ -1822,7 +1822,7 @@ export default function TransparentCheckout() {
 
       if (orderId && !liveCartRaw && cd) {
         try {
-          await supabase.from("customer_registrations").upsert({
+          await cpUpsertRegistration({
             order_id: orderId,
             full_name: cd.name || "Cliente",
             email: cd.email || "",
@@ -1836,7 +1836,7 @@ export default function TransparentCheckout() {
             city: cd.address?.city || "",
             state: cd.address?.state || "",
             ...(orderData?.customerId ? { customer_id: orderData.customerId } : {}),
-          }, { onConflict: 'order_id' });
+          });
         } catch (err) {
           console.error("Error saving customer registration:", err);
         }
