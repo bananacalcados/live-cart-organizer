@@ -75,7 +75,7 @@ interface StoreRow {
   name: string;
   revenue_target?: number;
   is_simulation?: boolean;
-  tiny_token?: string | null;
+  has_tiny_token?: boolean;
 }
 
 interface InventorySummaryRow {
@@ -766,7 +766,7 @@ export default function Management() {
     const [tinyData, posData, storesRes, invRes, apRes, stockRes] = await Promise.all([
       fetchAllTinyOrders(startDate, endDate, APPROVED_STATUSES),
       fetchPosSales(startISO, endISO),
-      supabase.from("pos_stores").select("id, name, revenue_target, is_simulation, tiny_token").eq("is_active", true),
+      supabase.from("pos_stores").select("id, name, revenue_target, is_simulation, has_tiny_token").eq("is_active", true),
       supabase.rpc("get_inventory_summary"),
       supabase.from("tiny_accounts_payable").select("*").order("data_vencimento", { ascending: true }),
       supabase.from("pos_products").select("name, variant, sku, stock, price, cost_price, store_id").eq("is_active", true).gt("stock", 0),
@@ -808,7 +808,7 @@ export default function Management() {
 
       const storesToSync = body.store_id
         ? [body.store_id]
-        : stores.filter(s => Boolean(s.tiny_token)).map(s => s.id);
+        : stores.filter(s => Boolean(s.has_tiny_token)).map(s => s.id);
 
       for (const sid of storesToSync) {
         let currentBody = { ...body, store_id: sid };
@@ -895,7 +895,7 @@ export default function Management() {
     }, 1500);
 
     try {
-      const storesToSync = stores.filter(s => Boolean(s.tiny_token)).map(s => s.id);
+      const storesToSync = stores.filter(s => Boolean(s.has_tiny_token)).map(s => s.id);
       for (const sid of storesToSync) {
         let currentBody: any = { stock_only: true, store_id: sid };
         let attempts = 0;
