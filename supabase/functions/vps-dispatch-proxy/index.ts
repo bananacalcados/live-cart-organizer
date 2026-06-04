@@ -15,10 +15,24 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+function isInternalRequest(req: Request, serviceKey: string) {
+  const authHeader = req.headers.get('Authorization') || '';
+  const apiKey = req.headers.get('apikey') || '';
+  return authHeader === `Bearer ${serviceKey}` || apiKey === serviceKey;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    if (!isInternalRequest(req, serviceKey)) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await req.json().catch(() => ({}));
     const { dispatch_id, dispatchId, action } = body;
     const id = dispatch_id || dispatchId;
@@ -28,8 +42,6 @@ serve(async (req) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
     // Legacy "status" action — emulate by aggregating recipients
