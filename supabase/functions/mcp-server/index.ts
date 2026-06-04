@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { McpServer, StreamableHttpTransport } from "mcp-lite";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const AGENT_KEY = Deno.env.get("MCP_AGENT_KEY") || "";
+const AGENT_KEY = (Deno.env.get("MCP_AGENT_KEY") || "").trim();
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -704,8 +704,15 @@ app.use("/*", async (c, next) => {
   }
 
   // Check agent key
-  const agentKey = c.req.header("x-agent-key");
-  if (agentKey !== AGENT_KEY) {
+  if (AGENT_KEY.length < 20) {
+    return new Response(JSON.stringify({ error: "Function misconfigured. MCP key missing." }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const agentKey = (c.req.header("x-agent-key") || "").trim();
+  if (!agentKey || agentKey !== AGENT_KEY) {
     return new Response(JSON.stringify({ error: "Unauthorized. Set header x-agent-key." }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
