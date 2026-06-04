@@ -15,10 +15,53 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+function isInternalRequest(req: Request, serviceKey: string) {
+  const authHeader = req.headers.get('Authorization') || '';
+  const apiKey = req.headers.get('apikey') || '';
+  return authHeader === `Bearer ${serviceKey}` || apiKey === serviceKey;
+}
+
+async function requireStaffOrInternal(req: Request, serviceKey: string) {
+  if (isInternalRequest(req, serviceKey)) return { ok: true as const };
+
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return { ok: false as const, status: 401, error: 'Unauthorized' };
+
+  const anonClient = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!,
+    { global: { headers: { Authorization: authHeader } } }
+  );
+  const token = authHeader.replace('Bearer ', '');
+  const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
+  const userId = claimsData?.claims?.sub;
+  if (claimsError || !userId) return { ok: false as const, status: 401, error: 'Unauthorized' };
+
+  const serviceClient = createClient(Deno.env.get('SUPABASE_URL')!, serviceKey);
+  const roleChecks = await Promise.all([
+    serviceClient.rpc('has_role', { _user_id: userId, _role: 'admin' }),
+    serviceClient.rpc('has_role', { _user_id: userId, _role: 'manager' }),
+    serviceClient.rpc('has_module_access', { _user_id: userId, _module: 'marketing' }),
+  ]);
+  const allowed = roleChecks.some((result) => result.data === true);
+  if (!allowed) return { ok: false as const, status: 403, error: 'Forbidden' };
+
+  return { ok: true as const };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const auth = await requireStaffOrInternal(req, serviceKey);
+    if (!auth.ok) {
+      return new Response(JSON.stringify({ error: auth.error }), {
+        status: auth.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const body = await req.json().catch(() => ({}));
     const { dispatch_id, dispatchId, action } = body;
     const id = dispatch_id || dispatchId;
@@ -28,8 +71,6 @@ serve(async (req) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
     // Legacy "status" action — emulate by aggregating recipients
