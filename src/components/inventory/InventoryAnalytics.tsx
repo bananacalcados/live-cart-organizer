@@ -179,7 +179,7 @@ export function InventoryAnalytics() {
       .select("id, name")
       .eq("is_active", true)
       .eq("is_simulation", false)
-      .not("tiny_token", "is", null);
+      .eq("has_tiny_token", true);
     setStores(storeRows || []);
 
     // Conta total
