@@ -30,7 +30,15 @@ async function requireStaffUser(req: Request) {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
   const { data: isAdmin, error: roleError } = await serviceClient.rpc('has_role', { _user_id: userId, _role: 'admin' });
-  if (roleError || !isAdmin) return { ok: false as const, status: 403, error: 'Forbidden' };
+  const { data: isManager } = await serviceClient.rpc('has_role', { _user_id: userId, _role: 'manager' });
+  const moduleChecks = await Promise.all([
+    serviceClient.rpc('has_module_access', { _user_id: userId, _module: 'events' }),
+    serviceClient.rpc('has_module_access', { _user_id: userId, _module: 'pos' }),
+  ]);
+  const hasAllowedModule = moduleChecks.some((result) => result.data === true);
+  if (roleError || (!isAdmin && !isManager && !hasAllowedModule)) {
+    return { ok: false as const, status: 403, error: 'Forbidden' };
+  }
 
   return { ok: true as const, serviceClient };
 }
@@ -55,7 +63,16 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const url = new URL(webhook_url || 'https://api.bananacalcados.com.br/webhook/novo-pedido');
+    let url: URL;
+    try {
+      url = new URL(webhook_url || 'https://api.bananacalcados.com.br/webhook/novo-pedido');
+    } catch {
+      return new Response(JSON.stringify({ error: 'invalid webhook_url' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (url.protocol !== 'https:' || !ALLOWED_WEBHOOK_HOSTS.has(url.hostname)) {
       return new Response(JSON.stringify({ error: 'webhook_url not allowed' }), {
         status: 400,
