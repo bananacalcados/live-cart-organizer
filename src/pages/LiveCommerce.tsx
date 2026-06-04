@@ -4,6 +4,7 @@ import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
 import { Button } from "@/components/ui/button";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 import { supabase } from "@/integrations/supabase/client";
+import { lpGetState, lpSendMessage, lpUpdateViewer, lpUpsertViewer } from "@/lib/livePublic";
 import { toast } from "sonner";
 
 interface CartItem {
@@ -154,19 +155,15 @@ const LiveCommerce = () => {
           const allProds = await fetchProducts(250);
           setProducts(allProds.filter(p => spotlightHandles.includes(p.node.handle)));
         }
-        const { count } = await supabase
-          .from("live_viewers").select("*", { count: "exact", head: true })
-          .eq("session_id", s.id).eq("is_online", true);
-        setViewerCount(count || 0);
+        const liveState = await lpGetState(s.id);
+        setViewerCount(liveState?.viewerCount || 0);
+        setChatMessages(liveState?.messages || []);
 
         const stored = localStorage.getItem(STORAGE_KEY);
         if (stored) {
           try {
             const v = JSON.parse(stored);
-            await supabase.from("live_viewers").upsert(
-              { session_id: s.id, name: v.name, phone: v.phone, is_online: true, last_seen_at: new Date().toISOString() },
-              { onConflict: "session_id,phone" }
-            );
+            await lpUpsertViewer(s.id, { name: v.name, phone: v.phone });
           } catch {}
         }
       }
@@ -183,10 +180,7 @@ const LiveCommerce = () => {
     let v: { name: string; phone: string };
     try { v = JSON.parse(stored); } catch { return; }
     const interval = setInterval(async () => {
-      await supabase.from("live_viewers").upsert(
-        { session_id: session.id, name: v.name, phone: v.phone, is_online: true, last_seen_at: new Date().toISOString() },
-        { onConflict: "session_id,phone" }
-      );
+      await lpUpsertViewer(session.id, { name: v.name, phone: v.phone });
     }, 30_000);
     return () => clearInterval(interval);
   }, [session?.id]);
@@ -212,40 +206,18 @@ const LiveCommerce = () => {
     return () => { supabase.removeChannel(channel); };
   }, [session?.id]);
 
-  // Realtime: viewer count
+  // Polling: public viewer count + sanitized chat state
   useEffect(() => {
     if (!session?.id) return;
-    const channel = supabase
-      .channel(`live-viewers-${session.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "live_viewers", filter: `session_id=eq.${session.id}` }, async () => {
-        const { count } = await supabase
-          .from("live_viewers").select("*", { count: "exact", head: true })
-          .eq("session_id", session.id).eq("is_online", true);
-        setViewerCount(count || 0);
-      }).subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [session?.id]);
-
-  // Realtime: chat messages
-  useEffect(() => {
-    if (!session?.id) return;
-    const loadMsgs = async () => {
-      const { data } = await supabase
-        .from("live_chat_messages").select("id, viewer_name, message, message_type, created_at")
-        .eq("session_id", session.id).order("created_at", { ascending: true }).limit(100);
-      if (data) setChatMessages(data);
+    const loadState = async () => {
+      const liveState = await lpGetState(session.id);
+      if (!liveState) return;
+      setViewerCount(liveState.viewerCount || 0);
+      setChatMessages(liveState.messages || []);
     };
-    loadMsgs();
-    const channel = supabase
-      .channel(`live-chat-${session.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "live_chat_messages", filter: `session_id=eq.${session.id}` }, (payload) => {
-        if (payload.eventType === "INSERT") {
-          setChatMessages(prev => [...prev.slice(-99), payload.new]);
-        } else if (payload.eventType === "DELETE") {
-          setChatMessages(prev => prev.filter((m: any) => m.id !== payload.old.id));
-        }
-      }).subscribe();
-    return () => { supabase.removeChannel(channel); };
+    void loadState();
+    const interval = setInterval(loadState, 5000);
+    return () => clearInterval(interval);
   }, [session?.id]);
 
   // Auto-scroll chat
@@ -281,14 +253,8 @@ const LiveCommerce = () => {
     setShowGate(false);
 
     if (session?.id) {
-      await supabase.from("live_viewers").upsert(
-        { session_id: session.id, name: viewerData.name, phone, is_online: true, last_seen_at: new Date().toISOString() },
-        { onConflict: "session_id,phone" }
-      );
-      await supabase.from("live_chat_messages").insert({
-        session_id: session.id, viewer_name: `@${username}`, viewer_phone: phone,
-        message: `${viewerData.name} entrou na live! 🎉`, message_type: "system",
-      });
+      await lpUpsertViewer(session.id, { name: viewerData.name, phone });
+      await lpSendMessage(session.id, `@${username}`, phone, `${viewerData.name} entrou na live! 🎉`, "system");
     }
     // Pixel: Lead event
     trackPixelEvent("Lead", { content_name: "live_gate", content_category: gatePurpose });
@@ -350,7 +316,7 @@ const LiveCommerce = () => {
         const variantTitle = variant.title === "Default Title" ? "" : variant.title;
         const currentCart = [...cart, { variantId: variant.id, productTitle, variantTitle, price: variant.price, quantity: 1, image }];
         const cartItems = currentCart.map(i => ({ handle: i.variantId, variantId: i.variantId, productTitle: i.productTitle, variantTitle: i.variantTitle || "", price: i.price, quantity: i.quantity, image: i.image }));
-        await supabase.from("live_viewers").update({ cart_items: cartItems as any }).eq("session_id", session.id).eq("phone", viewer.phone);
+        await lpUpdateViewer(session.id, viewer.phone, { cart_items: cartItems as any });
       }, 100);
     }
   }, [cart, viewer, session?.id]);
@@ -377,11 +343,11 @@ const LiveCommerce = () => {
       // Save cart to DB for admin visibility / cart recovery (NOT checkout_completed yet - that happens after payment)
       if (viewer && session?.id) {
         const cartValue = cart.reduce((s, i) => s + i.price * i.quantity, 0);
-        await supabase.from("live_viewers").update({
+        await lpUpdateViewer(session.id, viewer.phone, {
           cart_items: cart as any,
           cart_value: cartValue,
           last_seen_at: new Date().toISOString(),
-        }).eq("session_id", session.id).eq("phone", viewer.phone);
+        });
       }
 
       // Fetch freight config from the active session for checkout
@@ -424,13 +390,7 @@ const LiveCommerce = () => {
     setSendingChat(true);
     const text = chatInput.trim();
     setChatInput("");
-    await supabase.from("live_chat_messages").insert({
-      session_id: session.id,
-      viewer_name: `@${viewer.username}`,
-      viewer_phone: viewer.phone,
-      message: text,
-      message_type: "text",
-    });
+    await lpSendMessage(session.id, `@${viewer.username}`, viewer.phone, text, "text");
     setSendingChat(false);
   };
 

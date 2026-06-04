@@ -198,11 +198,10 @@ export function POSShipments({ storeId }: Props) {
 
   useEffect(() => {
     fetchOrders();
-    const channel = supabase
-      .channel(`pos-shipments-${storeId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'pos_sales', filter: `store_id=eq.${storeId}` }, () => fetchOrders())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 5000);
+    return () => clearInterval(interval);
   }, [storeId]);
 
   const filteredOrders = orders.filter(o => {

@@ -414,19 +414,10 @@ export function LiveSessionManager() {
   // Realtime subscriptions for admin
   useEffect(() => {
     if (!adminSessionId) return;
-    const ch1 = supabase.channel(`admin-chat-${adminSessionId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "live_chat_messages", filter: `session_id=eq.${adminSessionId}` }, (p) => {
-        if (p.eventType === "INSERT") {
-          setChatMessages(prev => [...prev.slice(-499), p.new as ChatMsg]);
-        } else if (p.eventType === "DELETE") {
-          setChatMessages(prev => prev.filter(m => m.id !== (p.old as any).id));
-        }
-      }).subscribe();
-    const ch2 = supabase.channel(`admin-viewers-${adminSessionId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "live_viewers", filter: `session_id=eq.${adminSessionId}` }, () => {
-        loadAdminData(adminSessionId);
-      }).subscribe();
-    return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2); };
+    const interval = setInterval(() => {
+      loadAdminData(adminSessionId);
+    }, 5000);
+    return () => clearInterval(interval);
   }, [adminSessionId]);
 
   // Auto-scroll admin chat

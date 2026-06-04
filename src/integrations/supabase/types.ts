@@ -11330,6 +11330,7 @@ export type Database = {
           company_id: string | null
           created_at: string
           disable_tiny_orders: boolean
+          has_tiny_token: boolean | null
           id: string
           is_active: boolean
           is_simulation: boolean
@@ -11344,6 +11345,7 @@ export type Database = {
           company_id?: string | null
           created_at?: string
           disable_tiny_orders?: boolean
+          has_tiny_token?: boolean | null
           id?: string
           is_active?: boolean
           is_simulation?: boolean
@@ -11358,6 +11360,7 @@ export type Database = {
           company_id?: string | null
           created_at?: string
           disable_tiny_orders?: boolean
+          has_tiny_token?: boolean | null
           id?: string
           is_active?: boolean
           is_simulation?: boolean

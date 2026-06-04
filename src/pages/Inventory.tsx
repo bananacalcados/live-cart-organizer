@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 interface PosStore {
   id: string;
   name: string;
-  tiny_token: string | null;
+  has_tiny_token: boolean;
 }
 
 interface CountItem {
@@ -229,7 +229,7 @@ export default function Inventory() {
   // Load stores
   useEffect(() => {
     const loadStores = async () => {
-      const { data } = await supabase.from('pos_stores').select('id, name, tiny_token').eq('is_active', true).eq('is_simulation', false);
+      const { data } = await supabase.from('pos_stores').select('id, name, has_tiny_token').eq('is_active', true).eq('is_simulation', false);
       if (data) setStores(data);
       setIsLoadingStores(false);
     };
