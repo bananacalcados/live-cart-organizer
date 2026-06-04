@@ -1977,10 +1977,10 @@ export default function TransparentCheckout() {
                         const newShippingCost = option.price;
                         const isPickup = option.type === 'pickup';
                         if (orderId && !orderData.id.startsWith("live-")) {
-                          await supabase.from("orders").update({
+                          await cpUpdateOrder(orderId, {
                             shipping_cost: newShippingCost,
                             free_shipping: isPickup,
-                          }).eq("id", orderId);
+                          });
                         }
                         // Recalculate total
                         setOrderData(prev => {
