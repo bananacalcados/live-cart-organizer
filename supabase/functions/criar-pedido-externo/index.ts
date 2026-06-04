@@ -18,7 +18,7 @@ function getCorsHeaders(req: Request) {
   };
 }
 
-const AGENT_KEY = Deno.env.get("MCP_AGENT_KEY") || "";
+const AGENT_KEY = (Deno.env.get("MCP_AGENT_KEY") || "").trim();
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -26,9 +26,16 @@ serve(async (req) => {
   }
 
   try {
+    if (AGENT_KEY.length < 20) {
+      return new Response(JSON.stringify({ error: "Function misconfigured" }), {
+        status: 503,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
     // Auth check
-    const agentKey = req.headers.get("x-agent-key");
-    if (agentKey !== AGENT_KEY) {
+    const agentKey = (req.headers.get("x-agent-key") || "").trim();
+    if (!agentKey || agentKey !== AGENT_KEY) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
