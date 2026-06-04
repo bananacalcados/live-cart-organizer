@@ -303,13 +303,18 @@ export function MercadoPagoAccountsManager() {
                 <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Notas internas" />
               </div>
               <div>
-                <Label>Access Token * (Mercado Pago)</Label>
+                <Label>Access Token {editing ? "(Mercado Pago)" : "* (Mercado Pago)"}</Label>
                 <Input
                   value={form.access_token}
                   onChange={(e) => setForm({ ...form, access_token: e.target.value })}
-                  placeholder="APP_USR-xxxxxxxxxxxx"
+                  placeholder={editing ? "Deixe em branco para manter o token atual" : "APP_USR-xxxxxxxxxxxx"}
                   className="font-mono text-xs"
                 />
+                {editing && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Por segurança o token não é exibido. Preencha apenas se quiser substituí-lo.
+                  </p>
+                )}
               </div>
               <div>
                 <Label>Public Key</Label>
