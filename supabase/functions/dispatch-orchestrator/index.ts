@@ -13,6 +13,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function isInternalRequest(req: Request, serviceKey: string) {
+  const authHeader = req.headers.get('Authorization') || '';
+  const apiKey = req.headers.get('apikey') || '';
+  return authHeader === `Bearer ${serviceKey}` || apiKey === serviceKey;
+}
+
 const MAX_WORKERS_PER_DISPATCH = 8; // raised: each worker is HTTP-bound, DB ops are bulk
 const JOBS_PER_WORKER = 600; // 1 worker now covers ~600 pending jobs in 50s (BATCH=45)
 
@@ -22,6 +28,12 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    if (!isInternalRequest(req, serviceKey)) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabase = createClient(supabaseUrl, serviceKey);
 
     // 1. Promote any scheduled dispatches that became due
