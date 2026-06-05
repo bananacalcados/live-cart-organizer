@@ -333,7 +333,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     }
     setEmittingNfce(true);
     try {
-      const isNfe = modelo ? modelo === 'nfe' : sale.sale_type === 'online';
+      const isNfe = modelo ? modelo === 'nfe' : isRemoteSale;
       const fnName = isNfe ? 'nfe-emitir' : 'nfce-emitir';
       const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id } });
       if (error) {
@@ -357,15 +357,14 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!confirm('Re-emitir esta nota em PRODUÇÃO (com valor fiscal real)? A nota anterior em homologação será mantida no histórico.')) return;
     setReemittingProd(true);
     try {
-      const isOnline = sale.sale_type === 'online';
-      const fnName = isOnline ? 'nfe-emitir' : 'nfce-emitir';
+      const fnName = isRemoteSale ? 'nfe-emitir' : 'nfce-emitir';
       const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id, ambiente: 'producao' } });
       if (error) {
         const msg = await (await import('@/lib/edgeFunctionError')).extractEdgeError(error, 'Erro ao re-emitir nota fiscal');
         toast.error(msg, { duration: 12000 });
         return;
       }
-      if (data?.ok) toast.success(`${isOnline ? 'NF-e' : 'NFC-e'} autorizada em PRODUÇÃO!`);
+      if (data?.ok) toast.success(`${isRemoteSale ? 'NF-e' : 'NFC-e'} autorizada em PRODUÇÃO!`);
       else if (data?.contingencia) toast.info('SEFAZ indisponível — em contingência.');
       else toast.error(data?.error || data?.rejection_message || 'Erro ao re-emitir nota fiscal', { duration: 12000 });
     } catch (e: any) {
@@ -413,9 +412,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!fiscalDoc.danfe_url) { toast.error('DANFE indisponível'); return; }
     setSendingNfeWa(true);
     try {
-      const isOnline = sale.sale_type === 'online';
       const greeting = currentCustomer?.name ? `Oi, ${String(currentCustomer.name).split(' ')[0]}!` : 'Oi!';
-      const message = `${greeting} 🧾\nSegue a ${isOnline ? 'NF-e' : 'NFC-e'} do seu pedido.\n\n*DANFE:* ${fiscalDoc.danfe_url}${fiscalDoc.chave_acesso ? `\n*Chave:* ${fiscalDoc.chave_acesso}` : ''}`;
+      const message = `${greeting} 🧾\nSegue a ${isRemoteSale ? 'NF-e' : 'NFC-e'} do seu pedido.\n\n*DANFE:* ${fiscalDoc.danfe_url}${fiscalDoc.chave_acesso ? `\n*Chave:* ${fiscalDoc.chave_acesso}` : ''}`;
       const { data: num } = await supabase
         .from('whatsapp_numbers_safe')
         .select('provider')
