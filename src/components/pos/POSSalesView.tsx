@@ -629,6 +629,23 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           }));
         results = mapped;
       }
+
+      // Complemento: base unificada (customers_unified) — garante achar QUALQUER
+      // cliente independente da loja/origem. Mescla sem duplicar por CPF/telefone.
+      const unified = await searchUnifiedCustomers(term, 25);
+      if (unified.length > 0) {
+        const keyOf = (r: any) =>
+          (r.cpf || '').replace(/\D/g, '') ||
+          (r.whatsapp || '').replace(/\D/g, '').slice(-8) ||
+          r.id;
+        const seenKeys = new Set(results.map(keyOf));
+        for (const u of unified) {
+          const k = keyOf(u);
+          if (seenKeys.has(k)) continue;
+          seenKeys.add(k);
+          results.push({ ...u });
+        }
+      }
       setCustomerResults(results);
 
       // Also search zoppy_customers (RFM) by phone, cpf, name or email
