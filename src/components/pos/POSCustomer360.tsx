@@ -37,6 +37,7 @@ interface CustomerRow {
   city: string | null;
   state: string | null;
   previous_whatsapp_numbers?: string[] | null;
+  _fromUnified?: boolean;
 }
 
 interface CashbackRow {
