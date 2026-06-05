@@ -157,6 +157,35 @@ export function UazapiInstanceManager() {
     setCreating(false);
   };
 
+  const openRename = (inst: UazapiInstance) => {
+    setRenameInstance(inst);
+    setRenameValue(inst.label || "");
+    setRenameOpen(true);
+  };
+
+  const handleRename = async () => {
+    if (!renameInstance) return;
+    const name = renameValue.trim();
+    if (!name) {
+      toast({ title: "Digite um nome", variant: "destructive" });
+      return;
+    }
+    setRenaming(true);
+    const { error } = await supabase
+      .from("whatsapp_numbers")
+      .update({ label: name })
+      .eq("id", renameInstance.id);
+    setRenaming(false);
+    if (error) {
+      toast({ title: "Erro ao renomear", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Instância renomeada!", description: `Agora se chama "${name}".` });
+    setRenameOpen(false);
+    setRenameInstance(null);
+    await fetchInstances();
+  };
+
   const refreshQr = useCallback(async (inst: UazapiInstance) => {
     setQrLoading(true);
     try {
