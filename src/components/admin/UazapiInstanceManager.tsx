@@ -56,6 +56,12 @@ export function UazapiInstanceManager() {
   const [formPhone, setFormPhone] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // Rename dialog
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameInstance, setRenameInstance] = useState<UazapiInstance | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
+
   // QR dialog
   const [qrOpen, setQrOpen] = useState(false);
   const [qrInstance, setQrInstance] = useState<UazapiInstance | null>(null);
