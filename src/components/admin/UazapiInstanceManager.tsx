@@ -612,6 +612,31 @@ export function UazapiInstanceManager() {
         </CardContent>
       </Card>
 
+      {/* Rename Dialog */}
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Renomear instância</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Nome de exibição</Label>
+              <Input
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                placeholder="Ex: Centro, Loja 2..."
+                onKeyDown={e => { if (e.key === "Enter") handleRename(); }}
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">Aparecerá nos chats e seletores do WhatsApp</p>
+            </div>
+            <Button onClick={handleRename} className="w-full" disabled={renaming}>
+              {renaming ? "Salvando..." : "Salvar nome"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Create Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-md">
