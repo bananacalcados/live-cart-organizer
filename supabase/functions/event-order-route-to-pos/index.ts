@@ -116,13 +116,17 @@ Deno.serve(async (req) => {
         source_order_id: order.id,
         event_id: order.event_id,
         revenue_attribution: "store",
+        payment_method: (order as any).payment_method_label || null,
         notes: `Auto-routed (Evento Físico - ${event.channel}). Pedido CRM: ${order.id.slice(0, 8)}`,
         payment_details: {
           source: "live_event_auto_route",
           event_channel: event.channel,
           customer_instagram: customer?.instagram_handle,
           customer_whatsapp: whatsapp,
+          payment_method: (order as any).payment_method_label || null,
+          installments: (order as any).installments || null,
         },
+
       })
       .select("id")
       .single();
