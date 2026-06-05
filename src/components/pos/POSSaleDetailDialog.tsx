@@ -1139,10 +1139,23 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                           )}
                         </div>
                       </div>
-                      <div className="text-right ml-3 shrink-0">
-                        <p className="text-xs text-gray-500">{item.quantity}x R$ {item.unit_price.toFixed(2)}</p>
-                        <p className="text-sm font-bold text-orange-600">R$ {(item.quantity * item.unit_price).toFixed(2)}</p>
+                      <div className="flex items-center gap-2 ml-3 shrink-0">
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">{item.quantity}x R$ {item.unit_price.toFixed(2)}</p>
+                          <p className="text-sm font-bold text-orange-600">R$ {(item.quantity * item.unit_price).toFixed(2)}</p>
+                        </div>
+                        {!isTinyOnly && storeId && (
+                          <button
+                            onClick={() => handleRemoveItem(i)}
+                            disabled={removingItemIndex === i}
+                            title="Remover produto"
+                            className="text-red-400 hover:text-red-600 disabled:opacity-50 p-1 rounded hover:bg-red-50 transition-colors"
+                          >
+                            {removingItemIndex === i ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </button>
+                        )}
                       </div>
+
                     </div>
                     {editingItemIndex === i && (
                       <div className="flex gap-2 items-center mt-2 pt-2 border-t border-gray-200">
