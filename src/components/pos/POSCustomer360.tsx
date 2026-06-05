@@ -137,17 +137,44 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
         queryBuilder = queryBuilder.or(`name.ilike.%${q}%,email.ilike.%${q}%`);
       }
 
-      const { data, error } = await queryBuilder;
+      // Busca em paralelo: pos_customers (transacional) + customers_unified (base completa)
+      const [{ data: posData, error }, unifiedData] = await Promise.all([
+        queryBuilder,
+        searchUnifiedCustomers(q, 25),
+      ]);
       if (error) throw error;
-      setResults((data as CustomerRow[]) || []);
-      if (!data || data.length === 0) toast.info("Nenhum cliente encontrado");
-      else if (data.length === 1) handleSelect(data[0] as CustomerRow);
+
+      const merged: CustomerRow[] = [...((posData as CustomerRow[]) || [])];
+      const seen = new Set(
+        merged.map(c => (c.cpf?.replace(/\D/g, "") || c.whatsapp?.replace(/\D/g, "").slice(-8) || c.id)),
+      );
+      for (const u of unifiedData) {
+        const key = u.cpf?.replace(/\D/g, "") || u.whatsapp?.replace(/\D/g, "").slice(-8) || u.id;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push({
+          id: u.id,
+          name: u.name,
+          whatsapp: u.whatsapp,
+          cpf: u.cpf,
+          email: u.email,
+          city: u.city,
+          state: u.state,
+          previous_whatsapp_numbers: null,
+          _fromUnified: true,
+        } as CustomerRow);
+      }
+
+      setResults(merged);
+      if (merged.length === 0) toast.info("Nenhum cliente encontrado");
+      else if (merged.length === 1) handleSelect(merged[0]);
     } catch (e: any) {
       toast.error("Erro ao buscar: " + e.message);
     } finally {
       setSearching(false);
     }
   };
+
 
   const handleSelect = async (c: CustomerRow) => {
     setSelected(c);
