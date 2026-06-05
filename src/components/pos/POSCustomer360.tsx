@@ -10,6 +10,7 @@ import { Search, User, Phone, FileText, Copy, Gift, ShoppingBag, Loader2, Calend
 import { LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import { buildPhoneVariations, normalizeBRPhone } from "@/lib/phoneUtils";
+import { searchUnifiedCustomers, findPosCustomer } from "@/lib/posCustomerResolve";
 
 interface Props {
   storeId: string;
