@@ -1216,24 +1216,30 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                 <CreditCard className="h-3.5 w-3.5 text-emerald-500" /> Pagamento
               </h4>
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2">
-                {(sale.payment_method || sale.payment_details?.payment_method) && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600">Forma</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-gray-900">
-                        {sale.payment_method || (sale.payment_details?.payment_method === "credit_card" ? "Cartão de Crédito" : sale.payment_details?.payment_method === "pix" ? "PIX" : sale.payment_details?.payment_method)}
-                        {sale.payment_details?.installments && sale.payment_details.installments > 1 && !sale.payment_method?.includes('x') && (
-                          <span className="text-gray-500 ml-1">({sale.payment_details.installments}x)</span>
+                {(() => {
+                  const hasMethod = !!(sale.payment_method || sale.payment_details?.payment_method);
+                  return (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Forma</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={hasMethod ? "font-semibold text-gray-900" : "font-semibold text-amber-600"}>
+                          {hasMethod
+                            ? (sale.payment_method || (sale.payment_details?.payment_method === "credit_card" ? "Cartão de Crédito" : sale.payment_details?.payment_method === "pix" ? "PIX" : sale.payment_details?.payment_method))
+                            : "Não informado"}
+                          {hasMethod && sale.payment_details?.installments && sale.payment_details.installments > 1 && !sale.payment_method?.includes('x') && (
+                            <span className="text-gray-500 ml-1">({sale.payment_details.installments}x)</span>
+                          )}
+                        </span>
+                        {!isTinyOnly && storeId && (
+                          <button onClick={() => setEditingPayment(!editingPayment)} className="text-blue-500 hover:text-blue-700">
+                            <Pencil className="h-3 w-3" />
+                          </button>
                         )}
-                      </span>
-                      {!isTinyOnly && storeId && (
-                        <button onClick={() => setEditingPayment(!editingPayment)} className="text-blue-500 hover:text-blue-700">
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
+
                 {editingPayment && (
                   <div className="flex gap-2 items-center">
                     <Select value={selectedPaymentId} onValueChange={setSelectedPaymentId}>
