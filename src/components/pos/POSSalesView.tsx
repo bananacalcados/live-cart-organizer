@@ -1767,13 +1767,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <div className="space-y-2">
                   <p className="text-xs text-pos-orange font-medium">Clientes cadastrados:</p>
                   {customerResults.map(c => (
-                    <div key={c.id} className="cursor-pointer rounded-lg border border-pos-orange/20 bg-pos-white/5 p-3 hover:border-pos-orange transition-all" onClick={() => { setSelectedCustomer(c); lookupCashback(c); }}>
+                    <div key={c.id} className="cursor-pointer rounded-lg border border-pos-orange/20 bg-pos-white/5 p-3 hover:border-pos-orange transition-all" onClick={() => selectCustomerResult(c)}>
                       <p className="font-medium text-pos-white">{c.name || 'Sem nome'}</p>
                       <div className="flex gap-3 text-xs text-pos-white/50 mt-1">
                         {c.cpf && <span>CPF: {c.cpf}</span>}
                         {c.whatsapp && <span>WhatsApp: {c.whatsapp}</span>}
                         {c.email && <span>{c.email}</span>}
                       </div>
+                      {c._fromRegistration && <span className="text-[10px] text-pos-orange/70">cadastro do checkout</span>}
                     </div>
                   ))}
                 </div>
