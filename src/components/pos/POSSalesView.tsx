@@ -30,6 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
+import { searchUnifiedCustomers, materializePosCustomer } from "@/lib/posCustomerResolve";
 
 interface CartItem {
   id: string;
