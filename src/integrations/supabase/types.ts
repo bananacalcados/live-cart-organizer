@@ -8844,6 +8844,7 @@ export type Database = {
           has_gift: boolean | null
           has_unread_messages: boolean
           id: string
+          installments: number | null
           is_delivery: boolean | null
           is_paid: boolean
           is_pickup: boolean | null
@@ -8857,6 +8858,7 @@ export type Database = {
           pagarme_order_id: string | null
           paid_at: string | null
           paid_externally: boolean | null
+          payment_method_label: string | null
           pickup_store_id: string | null
           pos_sale_id: string | null
           products: Json
@@ -8889,6 +8891,7 @@ export type Database = {
           has_gift?: boolean | null
           has_unread_messages?: boolean
           id?: string
+          installments?: number | null
           is_delivery?: boolean | null
           is_paid?: boolean
           is_pickup?: boolean | null
@@ -8902,6 +8905,7 @@ export type Database = {
           pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
+          payment_method_label?: string | null
           pickup_store_id?: string | null
           pos_sale_id?: string | null
           products?: Json
@@ -8934,6 +8938,7 @@ export type Database = {
           has_gift?: boolean | null
           has_unread_messages?: boolean
           id?: string
+          installments?: number | null
           is_delivery?: boolean | null
           is_paid?: boolean
           is_pickup?: boolean | null
@@ -8947,6 +8952,7 @@ export type Database = {
           pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
+          payment_method_label?: string | null
           pickup_store_id?: string | null
           pos_sale_id?: string | null
           products?: Json

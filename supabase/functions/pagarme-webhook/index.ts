@@ -221,6 +221,21 @@ serve(async (req) => {
         });
       }
       if (isPaid && !order.is_paid) {
+        // Captura forma de pagamento + parcelas a partir da cobrança Pagar.me
+        const chargeMethod = String(chargeObj?.payment_method || "");
+        const lastTx = chargeObj?.last_transaction || {};
+        const inst = Number(lastTx.installments || chargeObj?.installments || 1);
+        const payLabel =
+          chargeMethod === "pix"
+            ? "PIX"
+            : chargeMethod === "credit_card"
+              ? (inst > 1 ? `Cartão de Crédito ${inst}x` : "Cartão de Crédito")
+              : chargeMethod === "debit_card"
+                ? "Cartão de Débito"
+                : chargeMethod === "boleto"
+                  ? "Boleto"
+                  : (chargeMethod ? chargeMethod.toUpperCase() : null);
+
         const { error } = await supabase
           .from("orders")
           .update({
@@ -228,9 +243,11 @@ serve(async (req) => {
             paid_at: new Date().toISOString(),
             stage: "paid",
             pagarme_order_id: String(ourOrderId),
+            ...(payLabel ? { payment_method_label: payLabel, installments: inst } : {}),
             notes: `${order.notes || ""}\n🔔 Webhook Pagar.me: pago (${transactionId})`.trim(),
           })
           .eq("id", order.id);
+
         if (error) console.error("Error updating orders:", error);
         else {
           updated = true;

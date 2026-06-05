@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
 
     const { data: order } = await supabase
       .from("orders")
-      .select("id, event_id, customer_id, products, discount_type, discount_value, pos_sale_id, stage, is_paid")
+      .select("id, event_id, customer_id, products, discount_type, discount_value, pos_sale_id, stage, is_paid, payment_method_label, installments")
       .eq("id", order_id)
       .maybeSingle();
 
@@ -116,13 +116,17 @@ Deno.serve(async (req) => {
         source_order_id: order.id,
         event_id: order.event_id,
         revenue_attribution: "store",
+        payment_method: (order as any).payment_method_label || null,
         notes: `Auto-routed (Evento Físico - ${event.channel}). Pedido CRM: ${order.id.slice(0, 8)}`,
         payment_details: {
           source: "live_event_auto_route",
           event_channel: event.channel,
           customer_instagram: customer?.instagram_handle,
           customer_whatsapp: whatsapp,
+          payment_method: (order as any).payment_method_label || null,
+          installments: (order as any).installments || null,
         },
+
       })
       .select("id")
       .single();

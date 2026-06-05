@@ -93,6 +93,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [recovering, setRecovering] = useState(false);
   const [pullingShopify, setPullingShopify] = useState(false);
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [removingItemIndex, setRemovingItemIndex] = useState<number | null>(null);
   const [editItemSku, setEditItemSku] = useState("");
   const [savingItem, setSavingItem] = useState(false);
   const [editingSeller, setEditingSeller] = useState(false);
@@ -617,6 +618,54 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     }
   };
 
+  const handleRemoveItem = async (index: number) => {
+    if (!sale) return;
+    const item = currentItems[index];
+    if (!item) return;
+    if (currentItems.length <= 1) {
+      toast.error("O pedido precisa ter ao menos 1 produto. Para zerar, use Excluir Venda.");
+      return;
+    }
+    if (!confirm(`Remover "${item.product_name}" do pedido?`)) return;
+    setRemovingItemIndex(index);
+    try {
+      // Localiza a linha exata (evita apagar duplicatas) e deleta por id.
+      let q = supabase
+        .from('pos_sale_items')
+        .select('id')
+        .eq('sale_id', sale.id)
+        .eq('product_name', item.product_name)
+        .eq('unit_price', item.unit_price)
+        .eq('quantity', item.quantity);
+      if (item.sku) q = q.eq('sku', item.sku);
+      const { data: rows } = await q.limit(1);
+      const rowId = (rows as any[])?.[0]?.id;
+      if (rowId) {
+        const { error } = await supabase.from('pos_sale_items').delete().eq('id', rowId);
+        if (error) throw error;
+      } else {
+        throw new Error("Item não encontrado");
+      }
+
+      // Recalcula totais a partir dos itens restantes (preserva o desconto da venda).
+      const remaining = currentItems.filter((_, i) => i !== index);
+      const newSubtotal = remaining.reduce((s, it) => s + it.unit_price * it.quantity, 0);
+      const newTotal = Math.max(0, newSubtotal - (sale.discount || 0));
+      await supabase.from('pos_sales').update({
+        subtotal: newSubtotal,
+        total: newTotal,
+      } as any).eq('id', sale.id);
+
+      setCurrentItems(remaining);
+      toast.success("Produto removido do pedido.");
+      onDeleted?.(); // refresh parent
+    } catch (e: any) {
+      toast.error("Erro ao remover produto: " + (e?.message || ""));
+    } finally {
+      setRemovingItemIndex(null);
+    }
+  };
+
   const handleRecoverCustomer = async () => {
     if (!sale) return;
     setRecovering(true);
@@ -1090,10 +1139,23 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                           )}
                         </div>
                       </div>
-                      <div className="text-right ml-3 shrink-0">
-                        <p className="text-xs text-gray-500">{item.quantity}x R$ {item.unit_price.toFixed(2)}</p>
-                        <p className="text-sm font-bold text-orange-600">R$ {(item.quantity * item.unit_price).toFixed(2)}</p>
+                      <div className="flex items-center gap-2 ml-3 shrink-0">
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">{item.quantity}x R$ {item.unit_price.toFixed(2)}</p>
+                          <p className="text-sm font-bold text-orange-600">R$ {(item.quantity * item.unit_price).toFixed(2)}</p>
+                        </div>
+                        {!isTinyOnly && storeId && (
+                          <button
+                            onClick={() => handleRemoveItem(i)}
+                            disabled={removingItemIndex === i}
+                            title="Remover produto"
+                            className="text-red-400 hover:text-red-600 disabled:opacity-50 p-1 rounded hover:bg-red-50 transition-colors"
+                          >
+                            {removingItemIndex === i ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </button>
+                        )}
                       </div>
+
                     </div>
                     {editingItemIndex === i && (
                       <div className="flex gap-2 items-center mt-2 pt-2 border-t border-gray-200">
@@ -1154,24 +1216,30 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                 <CreditCard className="h-3.5 w-3.5 text-emerald-500" /> Pagamento
               </h4>
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2">
-                {(sale.payment_method || sale.payment_details?.payment_method) && (
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600">Forma</span>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-semibold text-gray-900">
-                        {sale.payment_method || (sale.payment_details?.payment_method === "credit_card" ? "Cartão de Crédito" : sale.payment_details?.payment_method === "pix" ? "PIX" : sale.payment_details?.payment_method)}
-                        {sale.payment_details?.installments && sale.payment_details.installments > 1 && !sale.payment_method?.includes('x') && (
-                          <span className="text-gray-500 ml-1">({sale.payment_details.installments}x)</span>
+                {(() => {
+                  const hasMethod = !!(sale.payment_method || sale.payment_details?.payment_method);
+                  return (
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-600">Forma</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={hasMethod ? "font-semibold text-gray-900" : "font-semibold text-amber-600"}>
+                          {hasMethod
+                            ? (sale.payment_method || (sale.payment_details?.payment_method === "credit_card" ? "Cartão de Crédito" : sale.payment_details?.payment_method === "pix" ? "PIX" : sale.payment_details?.payment_method))
+                            : "Não informado"}
+                          {hasMethod && sale.payment_details?.installments && sale.payment_details.installments > 1 && !sale.payment_method?.includes('x') && (
+                            <span className="text-gray-500 ml-1">({sale.payment_details.installments}x)</span>
+                          )}
+                        </span>
+                        {!isTinyOnly && storeId && (
+                          <button onClick={() => setEditingPayment(!editingPayment)} className="text-blue-500 hover:text-blue-700">
+                            <Pencil className="h-3 w-3" />
+                          </button>
                         )}
-                      </span>
-                      {!isTinyOnly && storeId && (
-                        <button onClick={() => setEditingPayment(!editingPayment)} className="text-blue-500 hover:text-blue-700">
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
+
                 {editingPayment && (
                   <div className="flex gap-2 items-center">
                     <Select value={selectedPaymentId} onValueChange={setSelectedPaymentId}>

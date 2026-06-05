@@ -324,47 +324,60 @@ Deno.serve(async (req) => {
     const somaBruta = items.reduce((acc, it) => acc + Number(it.unit_price) * Number(it.quantity), 0);
     const ratioDesc = descontoVenda > 0 && somaBruta > 0 ? descontoVenda / somaBruta : 0;
 
-    const missingFiscal: string[] = [];
+    
     for (const [idx, it] of items.entries()) {
       let prodFiscal: any = null;
       const lookupKey = it.sku || it.barcode;
 
-      // 1ª prioridade: product_master_data (cadastro central por parent_sku)
+      // Reúne TODAS as chaves possíveis do item (SKU/barcode do pedido + GTIN/SKU
+      // do cadastro PDV), porque o item da Live pode trazer o SKU interno do Tiny
+      // (ex: 15407071) enquanto o cadastro fiscal está ligado pelo GTIN (7890...).
+      const candidateKeys = new Set<string>();
+      if (it.sku) candidateKeys.add(String(it.sku));
+      if (it.barcode) candidateKeys.add(String(it.barcode));
+      let posParentSku: string | null = null;
+
       if (lookupKey) {
-        const { data: pos } = await supabase
+        const { data: posRows } = await supabase
           .from("pos_products")
-          .select("parent_sku")
+          .select("parent_sku, sku, barcode")
           .or(`sku.eq.${lookupKey},barcode.eq.${lookupKey}`)
-          .not("parent_sku", "is", null)
-          .limit(1)
-          .maybeSingle();
-        const parentSku = (pos as any)?.parent_sku;
-        if (parentSku) {
-          const { data: master } = await supabase
-            .from("product_master_data")
-            .select("ncm, origem, cest, unidade, needs_review")
-            .eq("parent_sku", parentSku)
-            .maybeSingle();
-          if (master && !(master as any).needs_review) prodFiscal = master;
+          .limit(10);
+        for (const pr of ((posRows as any[]) || [])) {
+          if (pr.parent_sku && !posParentSku) posParentSku = pr.parent_sku;
+          if (pr.sku) candidateKeys.add(String(pr.sku));
+          if (pr.barcode) candidateKeys.add(String(pr.barcode));
         }
       }
 
-      // 2ª prioridade (legado): product_variants -> products_master
-      if (!prodFiscal && lookupKey) {
-        const { data: variant } = await supabase
-          .from("product_variants")
-          .select("master_id, products_master:master_id(ncm, origem, cest, unidade)")
-          .or(`sku.eq.${lookupKey},gtin.eq.${lookupKey}`)
+      // 1ª prioridade: product_master_data (cadastro central por parent_sku)
+      if (posParentSku) {
+        const { data: master } = await supabase
+          .from("product_master_data")
+          .select("ncm, origem, cest, unidade, needs_review")
+          .eq("parent_sku", posParentSku)
           .maybeSingle();
-        prodFiscal = (variant as any)?.products_master || null;
+        if (master && !(master as any).needs_review && (master as any).ncm) prodFiscal = master;
+      }
+
+      // 2ª prioridade (legado): product_variants -> products_master, testando todas as chaves
+      if (!prodFiscal) {
+        for (const k of candidateKeys) {
+          const { data: variant } = await supabase
+            .from("product_variants")
+            .select("master_id, products_master:master_id(ncm, origem, cest, unidade)")
+            .or(`sku.eq.${k},gtin.eq.${k}`)
+            .maybeSingle();
+          const pf = (variant as any)?.products_master;
+          if (pf?.ncm) { prodFiscal = pf; break; }
+        }
       }
 
       const ncmRaw: string | null = prodFiscal?.ncm || null;
-      const ncm = ncmRaw ? ncmRaw.replace(/\D/g, "") : "";
-      if (!ncm || ncm.length !== 8) {
-        missingFiscal.push(`${it.product_name || lookupKey || `item ${idx + 1}`} (SKU ${lookupKey || "?"})`);
-        continue;
-      }
+      const ncmDigits = ncmRaw ? ncmRaw.replace(/\D/g, "") : "";
+      // Fallback calçados de couro (64039990) — não trava a emissão quando o produto
+      // não tem cadastro fiscal vinculável (mesma regra de segurança da NFC-e).
+      const ncm = (ncmDigits.length === 8 ? ncmDigits : "") || "64039990";
 
       const { data: rule, error: rErr } = await supabase.rpc("resolve_fiscal_rule", {
         p_ncm: ncm, p_uf_origem: ufOrigem, p_uf_destino: ufDestino, p_tipo_operacao: "venda",
@@ -420,30 +433,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Bloqueia emissão se algum item está sem cadastro fiscal completo (NCM)
-    if (missingFiscal.length > 0) {
-      // Marca os parent_skus envolvidos como needs_review
-      try {
-        const skuKeys = items.map((it: any) => it.sku || it.barcode).filter(Boolean);
-        if (skuKeys.length) {
-          const { data: posRows } = await supabase
-            .from("pos_products")
-            .select("parent_sku")
-            .in("sku", skuKeys);
-          const parents = Array.from(new Set((posRows || []).map((r: any) => r.parent_sku).filter(Boolean)));
-          if (parents.length) {
-            await supabase
-              .from("product_master_data")
-              .update({ needs_review: true, review_reason: "NCM ausente — bloqueado em emissão NF-e" })
-              .in("parent_sku", parents);
-          }
-        }
-      } catch (_) {}
-      throw new Error(
-        `Emissão bloqueada: ${missingFiscal.length} item(ns) sem NCM cadastrado. ` +
-        `Cadastre o NCM em "Produtos / Revisão" antes de emitir. Itens: ${missingFiscal.slice(0, 5).join("; ")}${missingFiscal.length > 5 ? "..." : ""}`
-      );
-    }
+    // (NCM agora tem fallback 64039990 por item — não há mais bloqueio por NCM ausente.)
+
 
     // 5. Frete (a ser somado ao total da nota como vFrete; opcional)
     const vFrete = round2(Number(order.total_shipping || 0));
