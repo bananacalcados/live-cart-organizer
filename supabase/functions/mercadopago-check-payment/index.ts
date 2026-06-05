@@ -163,14 +163,30 @@ serve(async (req) => {
         .single();
 
       if (existingOrder && !existingOrder.is_paid) {
+        // Captura forma de pagamento + parcelas direto do Mercado Pago
+        const mpTypeId = String(mpPayment.payment_type_id || "");
+        const mpMethodId = String(mpPayment.payment_method_id || "");
+        const inst = Number(mpPayment.installments || 1);
+        const payLabel =
+          mpMethodId === "pix" || mpTypeId === "account_money" || mpTypeId === "bank_transfer"
+            ? "PIX"
+            : mpTypeId === "credit_card"
+              ? (inst > 1 ? `Cartão de Crédito ${inst}x` : "Cartão de Crédito")
+              : mpTypeId === "debit_card"
+                ? "Cartão de Débito"
+                : (mpMethodId ? mpMethodId.toUpperCase() : "PIX");
+
         await supabase
           .from("orders")
           .update({
             is_paid: true,
             paid_at: new Date().toISOString(),
             stage: "paid",
+            payment_method_label: payLabel,
+            installments: inst,
           })
           .eq("id", orderId);
+
 
         console.log("Order marked as paid:", orderId);
 
