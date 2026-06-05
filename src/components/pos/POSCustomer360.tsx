@@ -10,6 +10,7 @@ import { Search, User, Phone, FileText, Copy, Gift, ShoppingBag, Loader2, Calend
 import { LineChart, Line, XAxis, YAxis, Tooltip as RTooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import { buildPhoneVariations, normalizeBRPhone } from "@/lib/phoneUtils";
+import { searchUnifiedCustomers, findPosCustomer } from "@/lib/posCustomerResolve";
 
 interface Props {
   storeId: string;
@@ -36,6 +37,7 @@ interface CustomerRow {
   city: string | null;
   state: string | null;
   previous_whatsapp_numbers?: string[] | null;
+  _fromUnified?: boolean;
 }
 
 interface CashbackRow {
@@ -137,17 +139,44 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
         queryBuilder = queryBuilder.or(`name.ilike.%${q}%,email.ilike.%${q}%`);
       }
 
-      const { data, error } = await queryBuilder;
+      // Busca em paralelo: pos_customers (transacional) + customers_unified (base completa)
+      const [{ data: posData, error }, unifiedData] = await Promise.all([
+        queryBuilder,
+        searchUnifiedCustomers(q, 25),
+      ]);
       if (error) throw error;
-      setResults((data as CustomerRow[]) || []);
-      if (!data || data.length === 0) toast.info("Nenhum cliente encontrado");
-      else if (data.length === 1) handleSelect(data[0] as CustomerRow);
+
+      const merged: CustomerRow[] = [...((posData as CustomerRow[]) || [])];
+      const seen = new Set(
+        merged.map(c => (c.cpf?.replace(/\D/g, "") || c.whatsapp?.replace(/\D/g, "").slice(-8) || c.id)),
+      );
+      for (const u of unifiedData) {
+        const key = u.cpf?.replace(/\D/g, "") || u.whatsapp?.replace(/\D/g, "").slice(-8) || u.id;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        merged.push({
+          id: u.id,
+          name: u.name,
+          whatsapp: u.whatsapp,
+          cpf: u.cpf,
+          email: u.email,
+          city: u.city,
+          state: u.state,
+          previous_whatsapp_numbers: null,
+          _fromUnified: true,
+        } as CustomerRow);
+      }
+
+      setResults(merged);
+      if (merged.length === 0) toast.info("Nenhum cliente encontrado");
+      else if (merged.length === 1) handleSelect(merged[0]);
     } catch (e: any) {
       toast.error("Erro ao buscar: " + e.message);
     } finally {
       setSearching(false);
     }
   };
+
 
   const handleSelect = async (c: CustomerRow) => {
     setSelected(c);
@@ -159,6 +188,14 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
     setAiInsights(null);
     setLegacyAggregate(null);
     try {
+      // Quando o cliente vem da base unificada, resolve o id real em pos_customers
+      // (se houver) para puxar as vendas presenciais.
+      let posCustomerId: string | null = c._fromUnified ? null : c.id;
+      if (c._fromUnified) {
+        const posMatch = await findPosCustomer({ cpf: c.cpf, whatsapp: c.whatsapp });
+        if (posMatch) posCustomerId = posMatch.id;
+      }
+
       const phoneVariations = c.whatsapp ? buildPhoneVariations(c.whatsapp) : [];
       const last8 = c.whatsapp ? c.whatsapp.replace(/\D/g, "").slice(-8) : null;
 
@@ -170,12 +207,14 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
             .order("expires_at", { ascending: true })
         : Promise.resolve({ data: [], error: null } as any);
 
-      const salesPromise = supabase
-        .from("pos_sales")
-        .select("id, created_at, total, discount, status, payment_method, store_id, seller_id, invoice_number, crediario_status, crediario_due_date, crediario_paid_at, crediario_paid_amount, pos_sale_items(product_name, size, quantity, unit_price)")
-        .eq("customer_id", c.id)
-        .order("created_at", { ascending: false })
-        .limit(50);
+      const salesPromise = posCustomerId
+        ? supabase
+            .from("pos_sales")
+            .select("id, created_at, total, discount, status, payment_method, store_id, seller_id, invoice_number, crediario_status, crediario_due_date, crediario_paid_at, crediario_paid_amount, pos_sale_items(product_name, size, quantity, unit_price)")
+            .eq("customer_id", posCustomerId)
+            .order("created_at", { ascending: false })
+            .limit(50)
+        : Promise.resolve({ data: [], error: null } as any);
 
       // Legacy purchases from CRM (zoppy_sales) matched by last 8 phone digits
       const zoppySalesPromise = last8

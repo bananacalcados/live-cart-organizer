@@ -30,6 +30,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
+import { searchUnifiedCustomers, materializePosCustomer } from "@/lib/posCustomerResolve";
 
 interface CartItem {
   id: string;
@@ -539,58 +540,39 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
-  // Select a customer result. If it came from customer_registrations (checkout),
-  // materialize it into pos_customers first so it gets a real id usable in the sale.
+  // Select a customer result. If it came from customer_registrations (checkout)
+  // or from the unified base, materialize it into pos_customers first so it gets
+  // a real id usable in the sale (dedup por CPF/telefone, sem duplicar).
   const selectCustomerResult = async (c: any) => {
-    if (!c?._fromRegistration) {
+    if (!c?._fromRegistration && !c?._fromUnified) {
       setSelectedCustomer(c);
       lookupCashback(c);
       return;
     }
     try {
-      const cpfDigits = (c.cpf || '').replace(/\D/g, '');
-      let existing: any = null;
-      if (cpfDigits.length === 11) {
-        const { data } = await supabase
-          .from('pos_customers')
-          .select('*')
-          .eq('cpf', cpfDigits)
-          .maybeSingle();
-        existing = data;
-      }
-      if (existing) {
-        setSelectedCustomer(existing);
-        lookupCashback(existing);
-        setCustomerResults([]);
-        return;
-      }
-      const { data: inserted, error } = await supabase
-        .from('pos_customers')
-        .insert({
-          name: c.name || 'Cliente',
-          cpf: cpfDigits || null,
-          email: c.email || null,
-          whatsapp: c.whatsapp || null,
-          cep: c.cep || null,
-          address: c.address || null,
-          address_number: c.address_number || null,
-          complement: c.complement || null,
-          neighborhood: c.neighborhood || null,
-          city: c.city || null,
-          state: c.state || null,
-        } as any)
-        .select()
-        .single();
-      if (error) throw error;
-      toast.success('Cliente do checkout importado para o PDV!');
-      setSelectedCustomer(inserted);
-      lookupCashback(inserted);
+      const materialized = await materializePosCustomer({
+        name: c.name,
+        cpf: c.cpf,
+        email: c.email,
+        whatsapp: c.whatsapp,
+        cep: c.cep,
+        address: c.address,
+        address_number: c.address_number,
+        complement: c.complement,
+        neighborhood: c.neighborhood,
+        city: c.city,
+        state: c.state,
+      });
+      if (!materialized) throw new Error('Falha ao materializar cliente');
+      setSelectedCustomer(materialized);
+      lookupCashback(materialized);
       setCustomerResults([]);
     } catch (e) {
       console.error('selectCustomerResult error:', e);
-      toast.error('Erro ao importar cliente do cadastro');
+      toast.error('Erro ao importar cliente');
     }
   };
+
 
   const searchCustomerByTerm = async () => {
     if (!customerSearch.trim()) return;
@@ -646,6 +628,23 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             state: r.state,
           }));
         results = mapped;
+      }
+
+      // Complemento: base unificada (customers_unified) — garante achar QUALQUER
+      // cliente independente da loja/origem. Mescla sem duplicar por CPF/telefone.
+      const unified = await searchUnifiedCustomers(term, 25);
+      if (unified.length > 0) {
+        const keyOf = (r: any) =>
+          (r.cpf || '').replace(/\D/g, '') ||
+          (r.whatsapp || '').replace(/\D/g, '').slice(-8) ||
+          r.id;
+        const seenKeys = new Set(results.map(keyOf));
+        for (const u of unified) {
+          const k = keyOf(u);
+          if (seenKeys.has(k)) continue;
+          seenKeys.add(k);
+          results.push({ ...u });
+        }
       }
       setCustomerResults(results);
 

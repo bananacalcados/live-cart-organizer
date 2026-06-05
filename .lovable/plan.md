@@ -1,81 +1,55 @@
-# Plano: Clonagem ao bipar + Balanço Total Inteligente
+# Plano completo — PDV, Clientes Unificados e Expedição Beta
 
-## Parte 1 — Bipar produto que não existe na loja atual
+Antes de tudo, o diagnóstico-chave: **já existe a tabela unificada de clientes** que você deseja — ela se chama `customers_unified` (87.784 clientes) e já junta automaticamente clientes do Marketing (zoppy/Clientes 360), do PDV (`pos_customers`), do checkout (`customer_registrations`) e de campanhas. O cliente Matthews (CPF 150.231.397-94, registro "Rafael Silva de Jesus") **já está nela**. O problema é que o PDV (aba Cliente 360 e aba Clientes) busca **apenas** em `pos_customers`, que é menor.
 
-Hoje, ao bipar um código que não existe na loja, abre só o diálogo "código desconhecido". Vamos tornar isso inteligente e baseado em loja (sem Tiny ID).
+Recomendação técnica: manter `customers_unified` como a **fonte de leitura/busca** de TODOS os módulos (ela já agrega tudo), e usar `pos_customers` como tabela **transacional** (onde existe a chave estrangeira das vendas, trocas, condicionais). Quando um cliente é selecionado para uma venda/ação, ele é "materializado" em `pos_customers`. Assim você nunca quebra as vendas existentes e ainda enxerga 100% dos clientes.
 
-### Comportamento novo
-Ao bipar um código não encontrado em `pos_products` da loja atual:
+Vou dividir em **6 etapas independentes**, cada uma testável isoladamente.
 
-1. **Buscar em TODAS as outras lojas** (por `barcode` ou `sku`).
-2. **Não existe em nenhuma loja** → Modal "Produto não localizado" avisando que o código bipado não foi encontrado (mantém as opções atuais: vincular manualmente a um produto / salvar como pendente).
-3. **Existe em outra loja** → Modal "Clonar produto para esta loja", mostrando:
-   - O **produto pai** (agrupado por `parent_sku`) e **todas as variações** de cor e tamanho existentes na loja de origem.
-   - Botão **"Clonar para [loja atual]"** que copia o pai e todos os filhos para a loja atual com **estoque zerado**, mantendo o **mesmo SKU/GTIN** (essencial para o estoque compartilhado por GTIN).
-   - Após clonar, registra automaticamente a bipagem do item escaneado.
+---
 
-### Como funciona tecnicamente
-- Nova edge function `pos-clone-product-to-store`:
-  - Recebe `barcode`/`sku` + `target_store_id`.
-  - Localiza o grupo `parent_sku` em qualquer loja que tenha o produto.
-  - Insere no `target_store_id` apenas as variações que ainda não existem, com `stock = 0`, copiando `name`, `variant`, `color`, `size`, `sku`, `barcode`, `category`, `category_id`, `parent_sku`, `price`, `cost_price`.
-  - Retorna a variação correspondente ao código bipado.
-- `handleBarcodeScan` em `Inventory.tsx` ganha o passo de busca cross-store e abre o modal certo.
-- Reforço: a criação automática em todas as lojas (já existente em `create-master-product-pos`) continua sendo a primeira linha de defesa; o modal de clonagem é a rede de segurança para casos legados.
+## Etapa 1 — Corrigir forma de pagamento "VPS" (rápida, sem risco)
+A lista de formas de pagamento do PDV vem da tabela `pos_payment_methods` (espelho do Tiny). "VPS" não existe lá, por isso não aparece.
+- Adicionar "VPS" como método ativo em `pos_payment_methods` para as lojas.
+- O resto do sistema (dashboard, modal de vendas) já reconhece "VPS" — só falta cadastrar.
 
-> Observação: a verificação já foi feita — atualmente **nenhum produto real está faltando** em alguma das 3 lojas, então o modal será raro, usado só para correções pontuais.
+## Etapa 2 — Busca de clientes unificada no PDV (Cliente 360 + materialização)
+Trocar a fonte de busca de `pos_customers` para `customers_unified` no `POSCustomer360` e na função de busca de vendas (`POSSalesView`).
+- Busca por CPF, telefone (sufixo 8 dígitos), nome ou email passa a achar **todos** os clientes, independente de loja ou origem de cadastro (resolve o caso do Matthews).
+- Ao selecionar um cliente que ainda não existe em `pos_customers`, materializar automaticamente (criar o registro com CPF/whatsapp/endereço) para a venda/NF-e funcionar — lógica de dedup por CPF normalizado.
 
-## Parte 2 — Nova modalidade "Balanço Total Inteligente"
+## Etapa 3 — Aba "Clientes" do PDV: paginada + filtros + WhatsApp
+Reformular a aba Clientes para listar clientes recentes (lendo de `customers_unified`), com:
+- **Paginação** (ex.: 30 por página) para não pesar.
+- **Filtros**: loja, vendedor, ticket médio (faixas), data de última compra.
+- **Busca** por CPF/telefone/nome/email achando todos os clientes.
+- **Botão "Enviar WhatsApp"** no cliente, reaproveitando o seletor de instância ONLINE já criado (NewConversationDialog), enviando pela instância escolhida (provedor derivado automaticamente).
 
-Objetivo: contar 6 mil SKUs aos poucos, **corrigindo e conferindo parcialmente** durante o processo, e só no fim zerar o que não foi bipado — sem perder dados e sem quebrar nos limites de 50s dos crons.
+## Etapa 4 — Sincronizar checkout/links de pagamento → `pos_customers`
+Garantir que clientes do checkout/link de pagamento entrem em `pos_customers`:
+- Criar trigger que espelha `customer_registrations` → `pos_customers` (dedup por CPF; atualiza endereço/whatsapp se já existir).
+- No fluxo de pagamento por link, ao confirmar pagamento, casar pelo CPF um cliente já existente e vincular a venda a ele (sem criar duplicado).
+- Backfill único dos registros de checkout existentes que ainda não têm correspondente no PDV.
 
-### Fluxo do usuário
-1. Ao criar balanço, surge um 3º card: **"Total Inteligente"** (além de Total e Parcial).
-2. Durante a bipagem aparecem dois botões novos:
-   - **"Salvar e corrigir bipados"** → aplica a correção (BALANÇO absoluto) **somente nos produtos já bipados**, sem zerar nada, e **volta para a bipagem** para continuar contando/conferindo.
-   - **"Finalizar Balanço Inteligente"** → entende que tudo já foi bipado: insere os não bipados com quantidade 0, compara com o estoque e **zera os que não foram bipados**.
-3. Pode-se rodar "Salvar e corrigir bipados" quantas vezes quiser ao longo da contagem.
+## Etapa 5 — Aba "Envios" na Expedição Beta (antes de Suporte)
+Nova aba **Envios** posicionada antes de **Suporte**, com a lista de todos os envios já realizados (status despachado/entregue), mostrando nome, endereço, código de rastreio, método de envio e data.
+- **Paginação** server-side (ex.: 25 por página) para carregamento leve.
+- **Filtros**: dia, semana, mês e período personalizado.
+- Leitura de `expedition_beta_orders` (já tem `tracking_code`, `shipping_address`, `customer_name`).
 
-### Garantias importantes
-- **Sempre BALANÇO absoluto**: se a contagem é 3 e o estoque está -3, o sistema grava 3 (substitui), nunca lança entrada/saída. (Já é o comportamento atual.)
-- **Idempotente**: re-corrigir um item já corrigido é seguro, pois o saldo é absoluto. Se o usuário bipar mais unidades depois, a próxima correção grava o novo total.
-- **Persistência total**: tudo fica salvo em `inventory_count_items` e `inventory_correction_queue`, então a conferência dos não bipados é feita no banco, não na memória.
-- **Resistente aos 50s de cron**: reutiliza o motor já existente de auto-reinvocação (`waitUntil`), heartbeat (`last_batch_at`) e o `cron-inventory-watchdog` que re-dispara processos travados.
+## Etapa 6 — Migrar fonte da Expedição Beta: Tiny → Shopify
+Hoje `expedition-beta-initial-sync` puxa do Tiny (`api.tiny.com.br`). Migrar para puxar pedidos direto da **Shopify** (API de Orders), mantendo o mesmo formato de `expedition_beta_orders` para não quebrar as telas.
+- Reescrever a sincronização para ler pedidos pagos/abertos da Shopify (status financeiro e de fulfillment), mapeando para `expedition_status`.
+- Trazer rastreio da Shopify quando disponível (fulfillment tracking).
+- Por ser a etapa de maior risco, fica por último e será testada isoladamente antes de desligar o caminho do Tiny.
 
-### Mudanças técnicas
+---
 
-**Banco (migration):**
-- `inventory_count_items`: nova coluna `last_corrected_quantity int` (controla o que já foi corrigido, evita reprocessar itens inalterados nas correções incrementais).
-- `scope` aceita o valor `total_smart` (campo texto, sem alteração de enum).
+## Observações importantes
+- **`pos_customers` definitiva**: para os módulos PDV/Eventos/Expedição/Marketing, a busca passa a enxergar tudo via `customers_unified`, e `pos_customers` recebe os clientes materializados — efetivamente vira a base operacional única, sem quebrar as FKs de vendas existentes.
+- **Clientes Shopify**: já vão para `pos_customers` via `shopify-sync-to-pos` (dedup por CPF/whatsapp). Vou confirmar/garantir isso na Etapa 4.
+- **Clientes 360 do Marketing**: continua usando a mesma base unificada — fica consistente com o PDV.
+- Nada nesta sequência altera/exclui dados existentes de forma destrutiva; são adições e troca de fonte de leitura.
 
-**Edge function `inventory-correct-stock`:**
-- Novo parâmetro `final` (padrão `true`).
-- Ao esvaziar a fila: se `final = true`, mantém o comportamento atual (`status = completed`); se `final = false`, volta `status = counting` (modo inteligente continua a bipagem).
-- Ao corrigir cada item, grava `last_corrected_quantity = new_quantity`.
-
-**Novo status `smart_correcting`:**
-- Usado durante a correção incremental para o watchdog saber re-disparar com `final:false`.
-- `cron-inventory-watchdog` passa a tratar `smart_correcting` re-disparando `inventory-correct-stock` com `final:false`.
-
-**Frontend `Inventory.tsx`:**
-- 3º card de escopo no diálogo de novo balanço.
-- `handleSmartCorrectScanned`: enfileira correção (BALANÇO) apenas dos itens bipados cujo `counted_quantity` mudou desde a última correção, marca `status = smart_correcting`, invoca `inventory-correct-stock` com `final:false`.
-- `handleFinalizeSmart`: reusa a lógica do Total (inserir não bipados com qty 0 → verificar → corrigir/zerar), levando a `verifying → reviewing/correcting → completed`.
-- Polling/realtime ajustados para o status `smart_correcting` (volta para `counting` ao terminar).
-
-### Diagrama de estados (Total Inteligente)
-
-```text
-counting ──"Salvar e corrigir bipados"──▶ smart_correcting ──(fila vazia)──▶ counting
-   │
-   └──"Finalizar Balanço Inteligente"──▶ verifying ──▶ reviewing ──▶ correcting ──▶ completed
-                                          (insere não bipados=0, zera os não bipados)
-```
-
-## Resumo das alterações
-- Edge function nova: `pos-clone-product-to-store`.
-- Edge function editada: `inventory-correct-stock` (parâmetro `final`, `last_corrected_quantity`).
-- Edge function editada: `cron-inventory-watchdog` (status `smart_correcting`).
-- Migration: coluna `last_corrected_quantity` + suporte ao escopo `total_smart`/status `smart_correcting`.
-- `src/pages/Inventory.tsx`: busca cross-store na bipagem, modais (não localizado / clonar), 3º escopo, botões e handlers do balanço inteligente.
-- Modal de clonagem (componente novo dentro de inventory).
+## Pergunta antes de começar
+Sobre o **VPS**: ele deve aparecer nas **duas lojas** (Centro e a outra) e como forma à vista (sem parcelas), igual Dinheiro/Pix? Confirmando isso, começo pela Etapa 1 imediatamente.

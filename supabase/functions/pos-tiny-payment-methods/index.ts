@@ -159,6 +159,27 @@ serve(async (req) => {
       }
     }
 
+    // Merge LOCAL-only active methods (e.g. VPS) that don't exist in Tiny,
+    // so custom payment forms cadastrados no banco sempre aparecem no PDV.
+    try {
+      const { data: localMethods } = await supabase
+        .from('pos_payment_methods')
+        .select('id, name')
+        .eq('store_id', store_id)
+        .eq('is_active', true)
+        .order('sort_order');
+      const norm = (s: string) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+      const existing = new Set(methods.map((m) => norm(m.name)));
+      for (const lm of (localMethods || [])) {
+        if (!existing.has(norm(lm.name))) {
+          methods.push({ id: lm.id, name: lm.name });
+          existing.add(norm(lm.name));
+        }
+      }
+    } catch (e) {
+      console.warn('Merge local methods failed:', (e as Error).message);
+    }
+
     return new Response(JSON.stringify({ success: true, methods }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
