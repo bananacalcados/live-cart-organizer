@@ -552,7 +552,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         .select('*')
         .or(`cpf.ilike.%${term}%,name.ilike.%${term}%,whatsapp.ilike.%${term}%`)
         .limit(10);
-      let results = posData || [];
+      let results: any[] = posData || [];
 
       // Fallback: customers who registered via checkout live only in customer_registrations.
       // Search there (by CPF/name/whatsapp) and surface them so PDV can find them by CPF.
