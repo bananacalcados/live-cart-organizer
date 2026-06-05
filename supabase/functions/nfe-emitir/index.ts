@@ -433,30 +433,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Bloqueia emissão se algum item está sem cadastro fiscal completo (NCM)
-    if (missingFiscal.length > 0) {
-      // Marca os parent_skus envolvidos como needs_review
-      try {
-        const skuKeys = items.map((it: any) => it.sku || it.barcode).filter(Boolean);
-        if (skuKeys.length) {
-          const { data: posRows } = await supabase
-            .from("pos_products")
-            .select("parent_sku")
-            .in("sku", skuKeys);
-          const parents = Array.from(new Set((posRows || []).map((r: any) => r.parent_sku).filter(Boolean)));
-          if (parents.length) {
-            await supabase
-              .from("product_master_data")
-              .update({ needs_review: true, review_reason: "NCM ausente — bloqueado em emissão NF-e" })
-              .in("parent_sku", parents);
-          }
-        }
-      } catch (_) {}
-      throw new Error(
-        `Emissão bloqueada: ${missingFiscal.length} item(ns) sem NCM cadastrado. ` +
-        `Cadastre o NCM em "Produtos / Revisão" antes de emitir. Itens: ${missingFiscal.slice(0, 5).join("; ")}${missingFiscal.length > 5 ? "..." : ""}`
-      );
-    }
+    // (NCM agora tem fallback 64039990 por item — não há mais bloqueio por NCM ausente.)
+
 
     // 5. Frete (a ser somado ao total da nota como vFrete; opcional)
     const vFrete = round2(Number(order.total_shipping || 0));
