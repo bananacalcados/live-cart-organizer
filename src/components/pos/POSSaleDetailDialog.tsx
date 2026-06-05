@@ -617,6 +617,54 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     }
   };
 
+  const handleRemoveItem = async (index: number) => {
+    if (!sale) return;
+    const item = currentItems[index];
+    if (!item) return;
+    if (currentItems.length <= 1) {
+      toast.error("O pedido precisa ter ao menos 1 produto. Para zerar, use Excluir Venda.");
+      return;
+    }
+    if (!confirm(`Remover "${item.product_name}" do pedido?`)) return;
+    setRemovingItemIndex(index);
+    try {
+      // Localiza a linha exata (evita apagar duplicatas) e deleta por id.
+      let q = supabase
+        .from('pos_sale_items')
+        .select('id')
+        .eq('sale_id', sale.id)
+        .eq('product_name', item.product_name)
+        .eq('unit_price', item.unit_price)
+        .eq('quantity', item.quantity);
+      if (item.sku) q = q.eq('sku', item.sku);
+      const { data: rows } = await q.limit(1);
+      const rowId = (rows as any[])?.[0]?.id;
+      if (rowId) {
+        const { error } = await supabase.from('pos_sale_items').delete().eq('id', rowId);
+        if (error) throw error;
+      } else {
+        throw new Error("Item não encontrado");
+      }
+
+      // Recalcula totais a partir dos itens restantes (preserva o desconto da venda).
+      const remaining = currentItems.filter((_, i) => i !== index);
+      const newSubtotal = remaining.reduce((s, it) => s + it.unit_price * it.quantity, 0);
+      const newTotal = Math.max(0, newSubtotal - (sale.discount || 0));
+      await supabase.from('pos_sales').update({
+        subtotal: newSubtotal,
+        total: newTotal,
+      } as any).eq('id', sale.id);
+
+      setCurrentItems(remaining);
+      toast.success("Produto removido do pedido.");
+      onDeleted?.(); // refresh parent
+    } catch (e: any) {
+      toast.error("Erro ao remover produto: " + (e?.message || ""));
+    } finally {
+      setRemovingItemIndex(null);
+    }
+  };
+
   const handleRecoverCustomer = async () => {
     if (!sale) return;
     setRecovering(true);
