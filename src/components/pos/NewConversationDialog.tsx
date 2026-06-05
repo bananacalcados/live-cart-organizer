@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { UserPlus, Send, Loader2, Search, FileText, MessageCircle } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { UserPlus, Send, Loader2, Search, FileText, MessageCircle, Wifi, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,16 +7,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
+import { useWhatsAppNumberStore, WhatsAppNumber } from "@/stores/whatsappNumberStore";
 import { toast } from "sonner";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConversationCreated: (phone: string, whatsappNumberId?: string | null) => void;
+  /** Instances available to this POS/store. If omitted, falls back to all numbers from the store. */
+  instances?: WhatsAppNumber[];
 }
 
 interface MetaTemplate {
@@ -37,10 +37,19 @@ interface LeadData {
   cpf?: string;
 }
 
-export function NewConversationDialog({ open, onOpenChange, onConversationCreated }: Props) {
+type Provider = "zapi" | "meta" | "wasender" | "uazapi";
+
+const PROVIDER_LABEL: Record<string, string> = {
+  meta: "Meta API",
+  zapi: "Z-API",
+  wasender: "WaSender",
+  uazapi: "UAZAPI",
+};
+
+export function NewConversationDialog({ open, onOpenChange, onConversationCreated, instances }: Props) {
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
-  const [sendVia, setSendVia] = useState<"zapi" | "meta" | "wasender">("zapi");
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<"normal" | "template">("normal");
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
@@ -56,14 +65,43 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
   const [leadData, setLeadData] = useState<LeadData | null>(null);
   const [lookingUpLead, setLookingUpLead] = useState(false);
 
-  const { numbers: metaNumbers, selectedNumberId } = useWhatsAppNumberStore();
+  const { numbers: storeNumbers } = useWhatsAppNumberStore();
+
+  // Only ONLINE instances are selectable. Meta numbers don't expose a realtime
+  // connection flag (always reachable via API), so they're always considered online.
+  const onlineInstances = useMemo(() => {
+    const pool = (instances && instances.length > 0) ? instances : storeNumbers;
+    return pool.filter(n => n.provider === "meta" || n.is_online === true);
+  }, [instances, storeNumbers]);
+
+  const selectedInstance = useMemo(
+    () => onlineInstances.find(n => n.id === selectedInstanceId) || null,
+    [onlineInstances, selectedInstanceId]
+  );
+  const provider: Provider = (selectedInstance?.provider as Provider) || "zapi";
+
+  // Auto-select the first online instance when the dialog opens / list changes.
+  useEffect(() => {
+    if (!open) return;
+    if (selectedInstanceId && onlineInstances.some(n => n.id === selectedInstanceId)) return;
+    setSelectedInstanceId(onlineInstances[0]?.id || null);
+  }, [open, onlineInstances, selectedInstanceId]);
+
+  // Reset template flow if we leave a meta instance.
+  useEffect(() => {
+    if (provider !== "meta" && messageType === "template") {
+      setMessageType("normal");
+      setSelectedTemplate(null);
+    }
+  }, [provider, messageType]);
 
   // Load templates when Meta is selected and template mode
   useEffect(() => {
-    if (sendVia === "meta" && messageType === "template" && templates.length === 0) {
-      loadTemplates();
+    if (provider === "meta" && messageType === "template" && selectedInstanceId) {
+      loadTemplates(selectedInstanceId);
     }
-  }, [sendVia, messageType]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, messageType, selectedInstanceId]);
 
   // Lookup lead data when phone changes
   useEffect(() => {
@@ -72,13 +110,15 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
     } else {
       setLeadData(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactPhone]);
 
-  const loadTemplates = async () => {
+  const loadTemplates = async (numberId: string) => {
     setLoadingTemplates(true);
+    setTemplates([]);
     try {
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
-        body: { whatsappNumberId: selectedNumberId, status: "APPROVED" },
+      const { data } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
+        body: { whatsappNumberId: numberId, status: "APPROVED" },
       });
       if (data?.templates) {
         setTemplates(data.templates.filter((t: MetaTemplate) => t.status === "APPROVED"));
@@ -95,8 +135,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
     if (clean.length < 8) return;
     setLookingUpLead(true);
     try {
-      // Search in pos_customers and customers
-      const [posRes, custRes] = await Promise.all([
+      const [posRes] = await Promise.all([
         supabase.from("pos_customers" as any).select("name, email, whatsapp, cpf, city, state, address").ilike("whatsapp", `%${clean.slice(-8)}%`).limit(1).maybeSingle(),
         supabase.from("customers").select("instagram_handle, whatsapp").ilike("whatsapp", `%${clean.slice(-8)}%`).limit(1).maybeSingle(),
       ]);
@@ -143,7 +182,6 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
         break;
       }
     }
-    // Replace variables with filled values
     Object.entries(templateVars).forEach(([key, value]) => {
       if (value) preview = preview.replace(key, value);
     });
@@ -153,7 +191,6 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
   const autoFillVariable = (varKey: string): string => {
     if (!leadData) return "";
     const index = parseInt(varKey.replace(/[{}]/g, ""));
-    // Common mapping: {{1}} = name, {{2}} = email, {{3}} = city, etc.
     switch (index) {
       case 1: return leadData.name || "";
       case 2: return leadData.email || leadData.phone || "";
@@ -189,11 +226,15 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
       toast.error("Telefone inválido");
       return;
     }
+    if (!selectedInstance) {
+      toast.error("Selecione uma instância online");
+      return;
+    }
 
+    const numberId = selectedInstance.id;
     setSending(true);
     try {
-      if (sendVia === "meta" && messageType === "template" && selectedTemplate) {
-        // Send template
+      if (provider === "meta" && messageType === "template" && selectedTemplate) {
         const parameters = extractTemplateVariables(selectedTemplate).map(v => ({
           type: "text",
           text: templateVars[v] || "",
@@ -205,7 +246,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
             templateName: selectedTemplate.name,
             language: selectedTemplate.language,
             components: parameters.length > 0 ? [{ type: "body", parameters }] : [],
-            whatsappNumberId: selectedNumberId,
+            whatsappNumberId: numberId,
           },
         });
 
@@ -215,37 +256,33 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
           message: previewText,
           direction: "outgoing",
           status: "sent",
-          whatsapp_number_id: selectedNumberId,
-        });
-      } else if (sendVia === "meta") {
-        // Normal Meta message
-        if (!messageText.trim()) { toast.error("Digite uma mensagem"); setSending(false); return; }
-        await supabase.functions.invoke("meta-whatsapp-send", {
-          body: { phone: cleanPhone, message: messageText.trim(), whatsapp_number_id: selectedNumberId },
-        });
-        await supabase.from("whatsapp_messages").insert({
-          phone: cleanPhone, message: messageText.trim(), direction: "outgoing", status: "sent",
-          whatsapp_number_id: selectedNumberId,
-        });
-      } else if (sendVia === "wasender") {
-        // WaSender
-        if (!messageText.trim()) { toast.error("Digite uma mensagem"); setSending(false); return; }
-        await supabase.functions.invoke("wasender-send-message", {
-          body: { phone: cleanPhone, message: messageText.trim(), whatsapp_number_id: selectedNumberId },
-        });
-        await supabase.from("whatsapp_messages").insert({
-          phone: cleanPhone, message: messageText.trim(), direction: "outgoing", status: "sent",
-          whatsapp_number_id: selectedNumberId || null,
+          whatsapp_number_id: numberId,
         });
       } else {
-        // Z-API
         if (!messageText.trim()) { toast.error("Digite uma mensagem"); setSending(false); return; }
-        await supabase.functions.invoke("zapi-send-message", {
-          body: { phone: cleanPhone, message: messageText.trim(), whatsapp_number_id: selectedNumberId },
-        });
+        const text = messageText.trim();
+
+        if (provider === "meta") {
+          await supabase.functions.invoke("meta-whatsapp-send", {
+            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+          });
+        } else if (provider === "wasender") {
+          await supabase.functions.invoke("wasender-send-message", {
+            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+          });
+        } else if (provider === "uazapi") {
+          await supabase.functions.invoke("uazapi-send-message", {
+            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+          });
+        } else {
+          await supabase.functions.invoke("zapi-send-message", {
+            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+          });
+        }
+
         await supabase.from("whatsapp_messages").insert({
-          phone: cleanPhone, message: messageText.trim(), direction: "outgoing", status: "sent",
-          whatsapp_number_id: selectedNumberId || null,
+          phone: cleanPhone, message: text, direction: "outgoing", status: "sent",
+          whatsapp_number_id: numberId,
         });
       }
 
@@ -256,7 +293,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
       );
 
       toast.success("Mensagem enviada!");
-      onConversationCreated(cleanPhone, selectedNumberId || null);
+      onConversationCreated(cleanPhone, numberId);
       onOpenChange(false);
       resetForm();
     } catch (error) {
@@ -324,44 +361,44 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
               </div>
             </div>
 
-            {/* Send Via */}
+            {/* Instance selection (online only) */}
             <div>
-              <Label className="text-xs">Enviar via</Label>
-              <div className="flex gap-2 mt-1">
-                <button
-                  onClick={() => { setSendVia("zapi"); setMessageType("normal"); }}
-                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
-                    sendVia === "zapi" ? "bg-[#00a884] text-white border-[#00a884]" : "bg-background border-border text-muted-foreground hover:border-[#00a884]/50"
-                  }`}
-                >
-                  Z-API
-                </button>
-                <button
-                  onClick={() => { setSendVia("wasender"); setMessageType("normal"); }}
-                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
-                    sendVia === "wasender" ? "bg-[#00a884] text-white border-[#00a884]" : "bg-background border-border text-muted-foreground hover:border-[#00a884]/50"
-                  }`}
-                >
-                  WaSender
-                </button>
-                <button
-                  onClick={() => setSendVia("meta")}
-                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${
-                    sendVia === "meta" ? "bg-[#00a884] text-white border-[#00a884]" : "bg-background border-border text-muted-foreground hover:border-[#00a884]/50"
-                  }`}
-                >
-                  Meta API
-                </button>
-              </div>
-              {metaNumbers.length > 1 && (
-                <div className="mt-2">
-                  <WhatsAppNumberSelector className="h-8 text-xs" filterProvider={sendVia} />
+              <Label className="text-xs">Instância (somente online)</Label>
+              {onlineInstances.length === 0 ? (
+                <p className="mt-1 text-xs text-muted-foreground p-3 rounded-lg border border-dashed text-center">
+                  Nenhuma instância online disponível para esta loja.
+                </p>
+              ) : (
+                <div className="mt-1 space-y-1.5">
+                  {onlineInstances.map(inst => {
+                    const active = inst.id === selectedInstanceId;
+                    return (
+                      <button
+                        key={inst.id}
+                        onClick={() => setSelectedInstanceId(inst.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
+                          active
+                            ? "bg-[#00a884]/10 border-[#00a884]"
+                            : "bg-background border-border hover:border-[#00a884]/50"
+                        }`}
+                      >
+                        <Wifi className={`h-3.5 w-3.5 shrink-0 ${active ? "text-[#00a884]" : "text-emerald-500"}`} />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{inst.label}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {inst.phone_display} · {PROVIDER_LABEL[inst.provider || "zapi"] || inst.provider}
+                          </p>
+                        </div>
+                        {active && <Check className="h-4 w-4 text-[#00a884] shrink-0" />}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
             {/* Message Type (Meta only) */}
-            {sendVia === "meta" && (
+            {provider === "meta" && (
               <div>
                 <Label className="text-xs">Tipo de mensagem</Label>
                 <div className="flex gap-2 mt-1">
@@ -388,7 +425,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
             )}
 
             {/* Normal Message */}
-            {(sendVia === "zapi" || sendVia === "wasender" || (sendVia === "meta" && messageType === "normal")) && (
+            {!(provider === "meta" && messageType === "template") && (
               <div>
                 <Label className="text-xs">Mensagem</Label>
                 <Textarea
@@ -401,7 +438,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
             )}
 
             {/* Template Selection */}
-            {sendVia === "meta" && messageType === "template" && (
+            {provider === "meta" && messageType === "template" && (
               <div className="space-y-3">
                 {!selectedTemplate ? (
                   <>
@@ -500,7 +537,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
           <Button
             size="sm"
             className="bg-[#00a884] hover:bg-[#00a884]/90 text-white gap-1"
-            disabled={sending || !contactPhone.replace(/\D/g, "")}
+            disabled={sending || !contactPhone.replace(/\D/g, "") || !selectedInstance}
             onClick={handleSend}
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

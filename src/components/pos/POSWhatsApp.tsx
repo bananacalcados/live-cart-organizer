@@ -1570,6 +1570,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       <NewConversationDialog
         open={showNewConversation}
         onOpenChange={setShowNewConversation}
+        instances={storeNumbers}
         onConversationCreated={(phone, whatsappNumberId) => {
           handleSelectConversation(phone, whatsappNumberId);
         }}

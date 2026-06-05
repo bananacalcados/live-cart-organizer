@@ -16,7 +16,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook, Bot, BotOff, Globe, ShieldCheck } from "lucide-react";
+import { Plus, Trash2, Wifi, WifiOff, QrCode, MessageCircle, RefreshCw, Power, Webhook, Bot, BotOff, Globe, ShieldCheck, Pencil } from "lucide-react";
 import QRCode from "react-qr-code";
 
 interface UazapiInstance {
@@ -55,6 +55,12 @@ export function UazapiInstanceManager() {
   const [formLabel, setFormLabel] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // Rename dialog
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameInstance, setRenameInstance] = useState<UazapiInstance | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   // QR dialog
   const [qrOpen, setQrOpen] = useState(false);
@@ -149,6 +155,35 @@ export function UazapiInstanceManager() {
       toast({ title: "Erro ao criar instância", description: (e as Error).message, variant: "destructive" });
     }
     setCreating(false);
+  };
+
+  const openRename = (inst: UazapiInstance) => {
+    setRenameInstance(inst);
+    setRenameValue(inst.label || "");
+    setRenameOpen(true);
+  };
+
+  const handleRename = async () => {
+    if (!renameInstance) return;
+    const name = renameValue.trim();
+    if (!name) {
+      toast({ title: "Digite um nome", variant: "destructive" });
+      return;
+    }
+    setRenaming(true);
+    const { error } = await supabase
+      .from("whatsapp_numbers")
+      .update({ label: name })
+      .eq("id", renameInstance.id);
+    setRenaming(false);
+    if (error) {
+      toast({ title: "Erro ao renomear", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Instância renomeada!", description: `Agora se chama "${name}".` });
+    setRenameOpen(false);
+    setRenameInstance(null);
+    await fetchInstances();
   };
 
   const refreshQr = useCallback(async (inst: UazapiInstance) => {
@@ -523,6 +558,9 @@ export function UazapiInstanceManager() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openRename(inst)} title="Renomear instância">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                           <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => openQr(inst)} title="Conectar / QR Code">
                             <QrCode className="h-4 w-4" /> Conectar
                           </Button>
@@ -573,6 +611,31 @@ export function UazapiInstanceManager() {
           )}
         </CardContent>
       </Card>
+
+      {/* Rename Dialog */}
+      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Renomear instância</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Nome de exibição</Label>
+              <Input
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                placeholder="Ex: Centro, Loja 2..."
+                onKeyDown={e => { if (e.key === "Enter") handleRename(); }}
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">Aparecerá nos chats e seletores do WhatsApp</p>
+            </div>
+            <Button onClick={handleRename} className="w-full" disabled={renaming}>
+              {renaming ? "Salvando..." : "Salvar nome"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

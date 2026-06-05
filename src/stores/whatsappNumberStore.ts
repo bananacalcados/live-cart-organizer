@@ -10,6 +10,7 @@ export interface WhatsAppNumber {
   is_default: boolean;
   is_active: boolean;
   provider?: string;
+  is_online?: boolean | null;
 }
 
 interface WhatsAppNumberStore {
@@ -33,7 +34,7 @@ export const useWhatsAppNumberStore = create<WhatsAppNumberStore>((set, get) => 
     set({ isLoading: true });
     const { data, error } = await supabase
       .from('whatsapp_numbers_safe')
-      .select('id, label, phone_display, phone_number_id, business_account_id, is_default, is_active, provider')
+      .select('id, label, phone_display, phone_number_id, business_account_id, is_default, is_active, provider, is_online')
       .eq('is_active', true)
       .order('is_default', { ascending: false });
 
