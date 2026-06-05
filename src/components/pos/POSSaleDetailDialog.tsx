@@ -117,6 +117,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [savingTracking, setSavingTracking] = useState(false);
   const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
   const [sendingTracking, setSendingTracking] = useState(false);
+  const isRemoteSale = sale?.sale_type === 'online' || sale?.sale_type === 'live';
 
   useEffect(() => {
     setCurrentItems(items);
@@ -195,10 +196,12 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!sale?.id) { setFiscalDoc(null); return; }
     let cancelled = false;
     const loadDoc = async () => {
+      const expectedModel = isRemoteSale ? 55 : 65;
       const { data: authd } = await supabase
         .from('fiscal_documents')
         .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
         .eq('pos_sale_id', sale.id)
+        .eq('modelo', expectedModel)
         .in('status', ['authorized', 'autorizada', 'autorizado'])
         .order('created_at', { ascending: false })
         .limit(1)
@@ -220,6 +223,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         .from('fiscal_documents')
         .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
         .eq('pos_sale_id', sale.id)
+        .eq('modelo', expectedModel)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -232,7 +236,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         () => loadDoc())
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
-  }, [sale?.id]);
+  }, [sale?.id, isRemoteSale]);
 
   const exchangePolicyHtml = `
     <div class="policy">
