@@ -96,40 +96,50 @@ serve(async (req) => {
         const nowIso = new Date().toISOString();
         const newQty = item.new_quantity;
         let updatedId: string | null = null;
+        let lastUpdErr: string | null = null;
 
-        // 1) Tenta casar pelo tiny_id (product_id da fila é o id do Tiny) + loja
-        const tinyIdNum = Number(item.product_id);
-        if (!Number.isNaN(tinyIdNum)) {
-          const { data: updRows } = await supabase
+        // Identificadores do item de contagem (sku/barcode são a chave principal,
+        // pois product_id pode ser nulo em contagens por bipagem de código de barras).
+        const { data: ci } = await supabase
+          .from('inventory_count_items')
+          .select('sku, barcode')
+          .eq('id', item.count_item_id)
+          .maybeSingle();
+        const ciSku = ci?.sku ? String(ci.sku).trim() : null;
+        const ciBarcode = ci?.barcode ? String(ci.barcode).trim() : null;
+
+        // tiny_id só é válido quando product_id é um número inteiro real
+        // (Number(null) === 0, por isso checamos o formato antes).
+        const tinyIdNum = item.product_id != null && /^\d+$/.test(String(item.product_id))
+          ? Number(item.product_id)
+          : null;
+
+        // Atualiza pos_products por uma coluna específica + loja, capturando erros.
+        const tryUpdate = async (column: string, value: string | number | null) => {
+          if (value === null || value === undefined || value === '') return;
+          const { data, error } = await supabase
             .from('pos_products')
             .update({ stock: newQty, synced_at: nowIso })
-            .eq('tiny_id', tinyIdNum)
             .eq('store_id', item.store_id)
+            .eq(column, value)
             .select('id');
-          if (updRows && updRows.length > 0) updatedId = updRows[0].id;
-        }
-
-        // 2) Fallback: casa por sku/barcode do item de contagem + loja
-        if (!updatedId) {
-          const { data: ci } = await supabase
-            .from('inventory_count_items')
-            .select('sku, barcode')
-            .eq('id', item.count_item_id)
-            .maybeSingle();
-          const ident = ci?.sku || ci?.barcode;
-          if (ident) {
-            const { data: updRows2 } = await supabase
-              .from('pos_products')
-              .update({ stock: newQty, synced_at: nowIso })
-              .eq('store_id', item.store_id)
-              .or(`sku.eq.${ident},barcode.eq.${ident}`)
-              .select('id');
-            if (updRows2 && updRows2.length > 0) updatedId = updRows2[0].id;
+          if (error) {
+            lastUpdErr = error.message;
+            console.error(`[correct] update by ${column}=${value} store=${item.store_id} error: ${error.message}`);
+            return;
           }
-        }
+          if (data && data.length > 0) updatedId = data[0].id;
+        };
+
+        // 1) tiny_id (quando existir)  2) sku  3) barcode
+        if (tinyIdNum !== null) await tryUpdate('tiny_id', tinyIdNum);
+        if (!updatedId) await tryUpdate('sku', ciSku);
+        if (!updatedId) await tryUpdate('barcode', ciBarcode);
 
         if (!updatedId) {
-          const errMsg = 'Produto não encontrado no estoque local (pos_products)';
+          const errMsg = lastUpdErr
+            ? `Falha ao atualizar pos_products: ${lastUpdErr}`
+            : 'Produto não encontrado no estoque local (pos_products)';
           await supabase.from('inventory_correction_queue').update({
             status: 'error', error_message: errMsg
           }).eq('id', item.id);
@@ -144,7 +154,7 @@ serve(async (req) => {
         await supabase.from('pos_stock_adjustments').insert({
           store_id: item.store_id,
           product_id: updatedId,
-          tiny_id: Number.isNaN(tinyIdNum) ? null : tinyIdNum,
+          tiny_id: tinyIdNum,
           product_name: item.product_name || 'Unknown',
           direction: 'balance',
           quantity: newQty,
