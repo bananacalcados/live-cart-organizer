@@ -324,7 +324,7 @@ Deno.serve(async (req) => {
     const somaBruta = items.reduce((acc, it) => acc + Number(it.unit_price) * Number(it.quantity), 0);
     const ratioDesc = descontoVenda > 0 && somaBruta > 0 ? descontoVenda / somaBruta : 0;
 
-    const missingFiscal: string[] = [];
+    
     for (const [idx, it] of items.entries()) {
       let prodFiscal: any = null;
       const lookupKey = it.sku || it.barcode;
