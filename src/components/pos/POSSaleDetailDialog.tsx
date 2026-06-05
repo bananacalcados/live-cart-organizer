@@ -117,6 +117,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [savingTracking, setSavingTracking] = useState(false);
   const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
   const [sendingTracking, setSendingTracking] = useState(false);
+  const isRemoteSale = sale?.sale_type === 'online' || sale?.sale_type === 'live';
 
   useEffect(() => {
     setCurrentItems(items);
@@ -195,10 +196,12 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!sale?.id) { setFiscalDoc(null); return; }
     let cancelled = false;
     const loadDoc = async () => {
+      const expectedModel = isRemoteSale ? 55 : 65;
       const { data: authd } = await supabase
         .from('fiscal_documents')
         .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
         .eq('pos_sale_id', sale.id)
+        .eq('modelo', expectedModel)
         .in('status', ['authorized', 'autorizada', 'autorizado'])
         .order('created_at', { ascending: false })
         .limit(1)
@@ -220,6 +223,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         .from('fiscal_documents')
         .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
         .eq('pos_sale_id', sale.id)
+        .eq('modelo', expectedModel)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -232,7 +236,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         () => loadDoc())
       .subscribe();
     return () => { cancelled = true; supabase.removeChannel(ch); };
-  }, [sale?.id]);
+  }, [sale?.id, isRemoteSale]);
 
   const exchangePolicyHtml = `
     <div class="policy">
@@ -329,7 +333,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     }
     setEmittingNfce(true);
     try {
-      const isNfe = modelo ? modelo === 'nfe' : sale.sale_type === 'online';
+      const isNfe = modelo ? modelo === 'nfe' : isRemoteSale;
       const fnName = isNfe ? 'nfe-emitir' : 'nfce-emitir';
       const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id } });
       if (error) {
@@ -353,15 +357,14 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!confirm('Re-emitir esta nota em PRODUÇÃO (com valor fiscal real)? A nota anterior em homologação será mantida no histórico.')) return;
     setReemittingProd(true);
     try {
-      const isOnline = sale.sale_type === 'online';
-      const fnName = isOnline ? 'nfe-emitir' : 'nfce-emitir';
+      const fnName = isRemoteSale ? 'nfe-emitir' : 'nfce-emitir';
       const { data, error } = await supabase.functions.invoke(fnName, { body: { sale_id: sale.id, ambiente: 'producao' } });
       if (error) {
         const msg = await (await import('@/lib/edgeFunctionError')).extractEdgeError(error, 'Erro ao re-emitir nota fiscal');
         toast.error(msg, { duration: 12000 });
         return;
       }
-      if (data?.ok) toast.success(`${isOnline ? 'NF-e' : 'NFC-e'} autorizada em PRODUÇÃO!`);
+      if (data?.ok) toast.success(`${isRemoteSale ? 'NF-e' : 'NFC-e'} autorizada em PRODUÇÃO!`);
       else if (data?.contingencia) toast.info('SEFAZ indisponível — em contingência.');
       else toast.error(data?.error || data?.rejection_message || 'Erro ao re-emitir nota fiscal', { duration: 12000 });
     } catch (e: any) {
@@ -409,9 +412,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!fiscalDoc.danfe_url) { toast.error('DANFE indisponível'); return; }
     setSendingNfeWa(true);
     try {
-      const isOnline = sale.sale_type === 'online';
       const greeting = currentCustomer?.name ? `Oi, ${String(currentCustomer.name).split(' ')[0]}!` : 'Oi!';
-      const message = `${greeting} 🧾\nSegue a ${isOnline ? 'NF-e' : 'NFC-e'} do seu pedido.\n\n*DANFE:* ${fiscalDoc.danfe_url}${fiscalDoc.chave_acesso ? `\n*Chave:* ${fiscalDoc.chave_acesso}` : ''}`;
+      const message = `${greeting} 🧾\nSegue a ${isRemoteSale ? 'NF-e' : 'NFC-e'} do seu pedido.\n\n*DANFE:* ${fiscalDoc.danfe_url}${fiscalDoc.chave_acesso ? `\n*Chave:* ${fiscalDoc.chave_acesso}` : ''}`;
       const { data: num } = await supabase
         .from('whatsapp_numbers_safe')
         .select('provider')
@@ -1387,7 +1389,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     const status = String(fiscalDoc?.status || '').toLowerCase();
                     const isAuthorized = ['authorized','autorizada','autorizado'].includes(status);
                     const isPending = status === 'pending' || status === 'pending_sefaz';
-                    const tipoEmitido = fiscalDoc?.numero ? (sale.sale_type === 'online' ? 'NF-e' : 'NFC-e') : '';
+                    const tipoEmitido = fiscalDoc?.numero ? (isRemoteSale ? 'NF-e' : 'NFC-e') : '';
 
                     if (isAuthorized || isPending) {
                       return (
@@ -1446,7 +1448,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
 
                 {fiscalDoc?.status === 'pending_sefaz' && (
                   <div className="rounded-md border border-yellow-300 bg-yellow-50 p-2.5 text-[11px] text-yellow-900">
-                    ⏳ SEFAZ indisponível. A NFC-e será emitida automaticamente quando voltar.
+                    ⏳ SEFAZ indisponível. A {isRemoteSale ? 'NF-e' : 'NFC-e'} será emitida automaticamente quando voltar.
                   </div>
                 )}
 
@@ -1454,7 +1456,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   <div className="rounded-md border border-emerald-200 bg-emerald-50/60 p-2.5 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-[11px] text-emerald-900">
-                        <p className="font-bold">✅ {sale.sale_type === 'online' ? 'NF-e' : 'NFC-e'} autorizada{fiscalDoc.numero ? ` — nº ${fiscalDoc.numero}/${fiscalDoc.serie ?? '-'}` : ''}</p>
+                        <p className="font-bold">✅ {isRemoteSale ? 'NF-e' : 'NFC-e'} autorizada{fiscalDoc.numero ? ` — nº ${fiscalDoc.numero}/${fiscalDoc.serie ?? '-'}` : ''}</p>
                         {fiscalDoc.ambiente === 'homologacao' && (
                           <p className="mt-0.5 inline-block rounded bg-amber-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-900">⚠️ Homologação — sem valor fiscal</p>
                         )}
