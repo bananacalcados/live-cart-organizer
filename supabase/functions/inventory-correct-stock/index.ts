@@ -154,7 +154,7 @@ serve(async (req) => {
         await supabase.from('pos_stock_adjustments').insert({
           store_id: item.store_id,
           product_id: updatedId,
-          tiny_id: Number.isNaN(tinyIdNum) ? null : tinyIdNum,
+          tiny_id: tinyIdNum,
           product_name: item.product_name || 'Unknown',
           direction: 'balance',
           quantity: newQty,
