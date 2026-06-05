@@ -539,19 +539,115 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
+  // Select a customer result. If it came from customer_registrations (checkout),
+  // materialize it into pos_customers first so it gets a real id usable in the sale.
+  const selectCustomerResult = async (c: any) => {
+    if (!c?._fromRegistration) {
+      setSelectedCustomer(c);
+      lookupCashback(c);
+      return;
+    }
+    try {
+      const cpfDigits = (c.cpf || '').replace(/\D/g, '');
+      let existing: any = null;
+      if (cpfDigits.length === 11) {
+        const { data } = await supabase
+          .from('pos_customers')
+          .select('*')
+          .eq('cpf', cpfDigits)
+          .maybeSingle();
+        existing = data;
+      }
+      if (existing) {
+        setSelectedCustomer(existing);
+        lookupCashback(existing);
+        setCustomerResults([]);
+        return;
+      }
+      const { data: inserted, error } = await supabase
+        .from('pos_customers')
+        .insert({
+          name: c.name || 'Cliente',
+          cpf: cpfDigits || null,
+          email: c.email || null,
+          whatsapp: c.whatsapp || null,
+          cep: c.cep || null,
+          address: c.address || null,
+          address_number: c.address_number || null,
+          complement: c.complement || null,
+          neighborhood: c.neighborhood || null,
+          city: c.city || null,
+          state: c.state || null,
+        } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      toast.success('Cliente do checkout importado para o PDV!');
+      setSelectedCustomer(inserted);
+      lookupCashback(inserted);
+      setCustomerResults([]);
+    } catch (e) {
+      console.error('selectCustomerResult error:', e);
+      toast.error('Erro ao importar cliente do cadastro');
+    }
+  };
+
   const searchCustomerByTerm = async () => {
     if (!customerSearch.trim()) return;
     setSearchingCustomer(true);
     setRfmMatches([]);
     try {
       const term = customerSearch.trim();
+      const digits = term.replace(/\D/g, '');
       // Search POS customers
       const { data: posData } = await supabase
         .from('pos_customers')
         .select('*')
         .or(`cpf.ilike.%${term}%,name.ilike.%${term}%,whatsapp.ilike.%${term}%`)
         .limit(10);
-      setCustomerResults(posData || []);
+      let results: any[] = posData || [];
+
+      // Fallback: customers who registered via checkout live only in customer_registrations.
+      // Search there (by CPF/name/whatsapp) and surface them so PDV can find them by CPF.
+      if (results.length === 0) {
+        const regOr: string[] = [];
+        if (digits.length === 11) regOr.push(`cpf.eq.${digits}`);
+        if (digits.length >= 4) regOr.push(`whatsapp.ilike.%${digits}%`);
+        regOr.push(`full_name.ilike.%${term}%`);
+        const { data: regData } = await supabase
+          .from('customer_registrations')
+          .select('full_name,cpf,email,whatsapp,cep,address,address_number,complement,neighborhood,city,state,created_at')
+          .or(regOr.join(','))
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        // Dedupe by CPF (keep most recent registration per CPF)
+        const seen = new Set<string>();
+        const mapped = (regData || [])
+          .filter((r: any) => {
+            const key = (r.cpf || '').replace(/\D/g, '') || (r.whatsapp || '');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .map((r: any) => ({
+            id: `reg:${(r.cpf || '').replace(/\D/g, '')}:${r.whatsapp || ''}`,
+            _fromRegistration: true,
+            name: r.full_name,
+            cpf: (r.cpf || '').replace(/\D/g, ''),
+            email: r.email,
+            whatsapp: r.whatsapp,
+            cep: r.cep,
+            address: r.address,
+            address_number: r.address_number,
+            complement: r.complement,
+            neighborhood: r.neighborhood,
+            city: r.city,
+            state: r.state,
+          }));
+        results = mapped;
+      }
+      setCustomerResults(results);
 
       // Also search zoppy_customers (RFM) by phone, cpf, name or email
       const phoneTerm = term.replace(/\D/g, '');
@@ -1724,13 +1820,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <div className="space-y-2">
                   <p className="text-xs text-pos-orange font-medium">Clientes cadastrados:</p>
                   {customerResults.map(c => (
-                    <div key={c.id} className="cursor-pointer rounded-lg border border-pos-orange/20 bg-pos-white/5 p-3 hover:border-pos-orange transition-all" onClick={() => { setSelectedCustomer(c); lookupCashback(c); }}>
+                    <div key={c.id} className="cursor-pointer rounded-lg border border-pos-orange/20 bg-pos-white/5 p-3 hover:border-pos-orange transition-all" onClick={() => selectCustomerResult(c)}>
                       <p className="font-medium text-pos-white">{c.name || 'Sem nome'}</p>
                       <div className="flex gap-3 text-xs text-pos-white/50 mt-1">
                         {c.cpf && <span>CPF: {c.cpf}</span>}
                         {c.whatsapp && <span>WhatsApp: {c.whatsapp}</span>}
                         {c.email && <span>{c.email}</span>}
                       </div>
+                      {c._fromRegistration && <span className="text-[10px] text-pos-orange/70">cadastro do checkout</span>}
                     </div>
                   ))}
                 </div>
