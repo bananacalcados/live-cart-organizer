@@ -545,13 +545,56 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setRfmMatches([]);
     try {
       const term = customerSearch.trim();
+      const digits = term.replace(/\D/g, '');
       // Search POS customers
       const { data: posData } = await supabase
         .from('pos_customers')
         .select('*')
         .or(`cpf.ilike.%${term}%,name.ilike.%${term}%,whatsapp.ilike.%${term}%`)
         .limit(10);
-      setCustomerResults(posData || []);
+      let results = posData || [];
+
+      // Fallback: customers who registered via checkout live only in customer_registrations.
+      // Search there (by CPF/name/whatsapp) and surface them so PDV can find them by CPF.
+      if (results.length === 0) {
+        const regOr: string[] = [];
+        if (digits.length === 11) regOr.push(`cpf.eq.${digits}`);
+        if (digits.length >= 4) regOr.push(`whatsapp.ilike.%${digits}%`);
+        regOr.push(`full_name.ilike.%${term}%`);
+        const { data: regData } = await supabase
+          .from('customer_registrations')
+          .select('full_name,cpf,email,whatsapp,cep,address,address_number,complement,neighborhood,city,state,created_at')
+          .or(regOr.join(','))
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        // Dedupe by CPF (keep most recent registration per CPF)
+        const seen = new Set<string>();
+        const mapped = (regData || [])
+          .filter((r: any) => {
+            const key = (r.cpf || '').replace(/\D/g, '') || (r.whatsapp || '');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .map((r: any) => ({
+            id: `reg:${(r.cpf || '').replace(/\D/g, '')}:${r.whatsapp || ''}`,
+            _fromRegistration: true,
+            name: r.full_name,
+            cpf: (r.cpf || '').replace(/\D/g, ''),
+            email: r.email,
+            whatsapp: r.whatsapp,
+            cep: r.cep,
+            address: r.address,
+            address_number: r.address_number,
+            complement: r.complement,
+            neighborhood: r.neighborhood,
+            city: r.city,
+            state: r.state,
+          }));
+        results = mapped;
+      }
+      setCustomerResults(results);
 
       // Also search zoppy_customers (RFM) by phone, cpf, name or email
       const phoneTerm = term.replace(/\D/g, '');
