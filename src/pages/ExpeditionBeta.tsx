@@ -391,6 +391,7 @@ export default function ExpeditionBeta() {
           <>
             {activeStep === 'whatsapp' && <ExpeditionWhatsApp />}
             {activeStep === 'support' && <SupportDashboard />}
+            {activeStep === 'shipments' && <BetaShipmentsList />}
             {(activeStep === 'orders' || activeStep === 'grouping') && (
               <BetaOrdersList
                 orders={orders}
