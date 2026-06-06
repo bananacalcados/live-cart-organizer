@@ -19,6 +19,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { BetaOrdersList } from '@/components/expedition-beta/BetaOrdersList';
 import { BetaPickingList } from '@/components/expedition-beta/BetaPickingList';
 import { BetaPackingStation } from '@/components/expedition-beta/BetaPackingStation';
+import { BetaShipmentsList } from '@/components/expedition-beta/BetaShipmentsList';
 import { ExpeditionWhatsApp } from '@/components/expedition/ExpeditionWhatsApp';
 import { SupportDashboard } from '@/components/expedition/SupportDashboard';
 
