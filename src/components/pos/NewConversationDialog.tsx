@@ -84,6 +84,14 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
   );
   const provider: Provider = (selectedInstance?.provider as Provider) || "zapi";
 
+  // Pre-fill phone/name when the dialog opens with initial values.
+  useEffect(() => {
+    if (!open) return;
+    if (initialPhone) setContactPhone(initialPhone.replace(/\D/g, ""));
+    if (initialName) setContactName(initialName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialPhone, initialName]);
+
   // Auto-select the first online instance when the dialog opens / list changes.
   useEffect(() => {
     if (!open) return;
