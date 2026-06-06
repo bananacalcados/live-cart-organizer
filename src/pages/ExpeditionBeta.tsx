@@ -300,6 +300,17 @@ export default function ExpeditionBeta() {
               <span className="hidden md:inline font-medium">WhatsApp</span>
             </button>
             <button
+              onClick={() => setActiveStep('shipments')}
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
+                activeStep === 'shipments'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`}
+            >
+              <Truck className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden md:inline font-medium">Envios</span>
+            </button>
+            <button
               onClick={() => setActiveStep('support')}
               className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
                 activeStep === 'support'
