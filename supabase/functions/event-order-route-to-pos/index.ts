@@ -54,36 +54,50 @@ Deno.serve(async (req) => {
     const customerName = reg?.full_name || customer?.instagram_handle || "Cliente Live";
     const whatsapp = reg?.whatsapp || customer?.whatsapp || "";
 
-    // Upsert pos_customer by phone suffix
+    // Resolve pos_customer: prefer CPF match (most reliable), fallback to phone suffix.
     let posCustomerId: string | null = null;
-    if (whatsapp) {
+    const cpfDigits = (reg?.cpf || "").replace(/\D/g, "");
+    const payload: any = {
+      name: customerName,
+      whatsapp: whatsapp || null,
+      cpf: reg?.cpf || null,
+      email: reg?.email || null,
+      address: reg?.address || null,
+      address_number: reg?.address_number || null,
+      complement: reg?.complement || null,
+      neighborhood: reg?.neighborhood || null,
+      city: reg?.city || null,
+      state: reg?.state || null,
+      cep: reg?.cep || null,
+    };
+
+    let existingId: string | null = null;
+    if (cpfDigits.length === 11) {
+      const { data: byCpf } = await supabase
+        .from("pos_customers")
+        .select("id")
+        .ilike("cpf", `%${cpfDigits}%`)
+        .limit(1)
+        .maybeSingle();
+      existingId = byCpf?.id || null;
+    }
+    if (!existingId && whatsapp) {
       const suffix = whatsapp.replace(/\D/g, "").slice(-8);
-      const { data: existing } = await supabase
+      const { data: byPhone } = await supabase
         .from("pos_customers")
         .select("id")
         .ilike("whatsapp", `%${suffix}`)
         .limit(1)
         .maybeSingle();
-      const payload: any = {
-        name: customerName,
-        whatsapp,
-        cpf: reg?.cpf || null,
-        email: reg?.email || null,
-        address: reg?.address || null,
-        address_number: reg?.address_number || null,
-        complement: reg?.complement || null,
-        neighborhood: reg?.neighborhood || null,
-        city: reg?.city || null,
-        state: reg?.state || null,
-        cep: reg?.cep || null,
-      };
-      if (existing) {
-        await supabase.from("pos_customers").update(payload).eq("id", existing.id);
-        posCustomerId = existing.id;
-      } else {
-        const { data: created } = await supabase.from("pos_customers").insert(payload).select("id").single();
-        posCustomerId = created?.id || null;
-      }
+      existingId = byPhone?.id || null;
+    }
+
+    if (existingId) {
+      await supabase.from("pos_customers").update(payload).eq("id", existingId);
+      posCustomerId = existingId;
+    } else if (whatsapp || cpfDigits.length === 11) {
+      const { data: created } = await supabase.from("pos_customers").insert(payload).select("id").single();
+      posCustomerId = created?.id || null;
     }
 
     const products = (order.products as any[]) || [];
