@@ -17,6 +17,10 @@ interface Props {
   onConversationCreated: (phone: string, whatsappNumberId?: string | null) => void;
   /** Instances available to this POS/store. If omitted, falls back to all numbers from the store. */
   instances?: WhatsAppNumber[];
+  /** Pre-fill the phone field when opening (e.g. from a customer list). */
+  initialPhone?: string;
+  /** Pre-fill the contact name field when opening. */
+  initialName?: string;
 }
 
 interface MetaTemplate {
@@ -46,7 +50,7 @@ const PROVIDER_LABEL: Record<string, string> = {
   uazapi: "UAZAPI",
 };
 
-export function NewConversationDialog({ open, onOpenChange, onConversationCreated, instances }: Props) {
+export function NewConversationDialog({ open, onOpenChange, onConversationCreated, instances, initialPhone, initialName }: Props) {
   const [contactName, setContactName] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [selectedInstanceId, setSelectedInstanceId] = useState<string | null>(null);
