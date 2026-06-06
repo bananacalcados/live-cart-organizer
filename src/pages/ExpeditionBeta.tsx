@@ -380,6 +380,8 @@ export default function ExpeditionBeta() {
             )}
           </div>
         </div>
+        )}
+
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
