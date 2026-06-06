@@ -31,7 +31,7 @@ import { POSSellerDashboard } from "@/components/pos/POSSellerDashboard";
 import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineHub } from "@/components/pos/POSOnlineHub";
 import { POSCheckoutMonitor } from "@/components/pos/POSCheckoutMonitor";
-import { POSCustomer360 } from "@/components/pos/POSCustomer360";
+import { POSCustomersHub } from "@/components/pos/POSCustomersHub";
 import { POSMetaPixelDashboard } from "@/components/pos/POSMetaPixelDashboard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -320,7 +320,7 @@ export default function POS() {
         {section === "slowmoving" && <POSSlowMovingProducts storeId={selectedStore} />}
         {section === "shipments" && <POSShipments storeId={selectedStore} />}
         {section === "seller-dashboard" && <POSSellerDashboard storeId={selectedStore} />}
-        {section === "customers" && <POSCustomer360 storeId={selectedStore} initialQuery={customer360Query} />}
+        {section === "customers" && <POSCustomersHub storeId={selectedStore} initialQuery={customer360Query} />}
       </div>
 
       {/* Config PIN Dialog */}

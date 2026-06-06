@@ -19,6 +19,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { BetaOrdersList } from '@/components/expedition-beta/BetaOrdersList';
 import { BetaPickingList } from '@/components/expedition-beta/BetaPickingList';
 import { BetaPackingStation } from '@/components/expedition-beta/BetaPackingStation';
+import { BetaShipmentsList } from '@/components/expedition-beta/BetaShipmentsList';
 import { ExpeditionWhatsApp } from '@/components/expedition/ExpeditionWhatsApp';
 import { SupportDashboard } from '@/components/expedition/SupportDashboard';
 
@@ -107,14 +108,14 @@ export default function ExpeditionBeta() {
     }
   };
 
-  // Auto-sync from Tiny on mount
+  // Auto-sync from Shopify on mount
   useEffect(() => {
     const autoSync = async () => {
       setIsInitialSyncing(true);
       try {
         const data = await invokeSyncWithTimeout();
         if (data?.success && data.synced > 0) {
-          toast.success(`${data.synced} pedidos importados do Tiny!`);
+          toast.success(`${data.synced} pedidos importados da Shopify!`);
         }
       } catch (e) {
         console.error('Auto-sync failed:', e);
@@ -222,7 +223,7 @@ export default function ExpeditionBeta() {
                 Expedição
                 <Badge variant="secondary" className="text-[10px]">BETA</Badge>
               </h1>
-              <p className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">Sincronizado via Tiny ERP</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground hidden sm:block">Sincronizado via Shopify</p>
             </div>
           </div>
           <div className="flex items-center gap-1 md:gap-2">
@@ -234,7 +235,7 @@ export default function ExpeditionBeta() {
             </div>
             <Button onClick={handleInitialSync} disabled={isInitialSyncing} variant="outline" size="sm" className="gap-1 md:gap-2 text-xs md:text-sm">
               {isInitialSyncing ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <Package className="h-3 w-3 md:h-4 md:w-4" />}
-              <span className="hidden sm:inline">Buscar do Tiny</span>
+              <span className="hidden sm:inline">Buscar da Shopify</span>
             </Button>
             <Button onClick={handleResyncItems} disabled={isInitialSyncing} variant="outline" size="sm" className="gap-1 md:gap-2 text-xs md:text-sm">
               {isInitialSyncing ? <Loader2 className="h-3 w-3 md:h-4 md:w-4 animate-spin" /> : <RotateCcw className="h-3 w-3 md:h-4 md:w-4" />}
@@ -299,6 +300,17 @@ export default function ExpeditionBeta() {
               <span className="hidden md:inline font-medium">WhatsApp</span>
             </button>
             <button
+              onClick={() => setActiveStep('shipments')}
+              className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
+                activeStep === 'shipments'
+                  ? 'bg-primary text-primary-foreground shadow-md'
+                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`}
+            >
+              <Truck className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden md:inline font-medium">Envios</span>
+            </button>
+            <button
               onClick={() => setActiveStep('support')}
               className={`flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-lg text-xs md:text-sm whitespace-nowrap transition-all shrink-0 ${
                 activeStep === 'support'
@@ -314,7 +326,8 @@ export default function ExpeditionBeta() {
       </div>
 
       <div className="container py-3 md:py-4 px-3 md:px-6">
-        {/* Search + Date Filter */}
+        {/* Search + Date Filter (hidden for self-filtered tabs) */}
+        {activeStep !== 'shipments' && activeStep !== 'whatsapp' && activeStep !== 'support' && (
         <div className="mb-4 flex flex-col md:flex-row gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -367,6 +380,8 @@ export default function ExpeditionBeta() {
             )}
           </div>
         </div>
+        )}
+
 
         {isLoading ? (
           <div className="flex items-center justify-center py-20">
@@ -376,6 +391,7 @@ export default function ExpeditionBeta() {
           <>
             {activeStep === 'whatsapp' && <ExpeditionWhatsApp />}
             {activeStep === 'support' && <SupportDashboard />}
+            {activeStep === 'shipments' && <BetaShipmentsList />}
             {(activeStep === 'orders' || activeStep === 'grouping') && (
               <BetaOrdersList
                 orders={orders}
