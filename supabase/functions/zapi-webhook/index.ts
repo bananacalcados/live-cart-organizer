@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
+import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
