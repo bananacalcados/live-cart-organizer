@@ -1376,7 +1376,18 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               </div>
             )}
 
+            {/* Delivery cost (entrega) — apenas vendas remotas (online/live/site) */}
+            {isRemoteSale && (
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-wider text-gray-500 font-bold">Entrega</p>
+                <Button onClick={() => setShowDeliveryCost(true)} variant="outline" className="w-full gap-2 h-10 text-xs border-orange-300 text-orange-800 hover:bg-orange-50">
+                  <Truck className="h-4 w-4" /> Registrar custo de entrega (mototaxista/transportadora)
+                </Button>
+              </div>
+            )}
+
             {/* Print / Fiscal Actions */}
+
             {!isTinyOnly && (
               <div className="space-y-2">
                 <p className="text-[11px] uppercase tracking-wider text-gray-500 font-bold">Imprimir / Emitir Nota</p>
