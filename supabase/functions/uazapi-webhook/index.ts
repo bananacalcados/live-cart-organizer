@@ -83,7 +83,8 @@ async function resolveNumberId(
   url: URL,
   payload: AnyObj,
 ): Promise<UazapiResolution> {
-  // 1. owner (strong key)
+  // 1. owner (strong key) — is_active guard: a match on an INACTIVE instance is
+  // treated as no-match → message becomes "não identificada", never attributed.
   const owner = asString(payload.owner) || asString((payload.message as AnyObj)?.owner);
   if (owner) {
     const { data } = await supabase
@@ -91,12 +92,14 @@ async function resolveNumberId(
       .select("id")
       .eq("provider", "uazapi")
       .eq("uazapi_owner", owner)
+      .eq("is_active", true)
       .limit(1)
       .maybeSingle();
     if (data) return { numberId: data.id as string, method: 'owner', rawIdentifier: owner, matched: true };
+    console.warn(`[uazapi-webhook] owner ${owner} não corresponde a instância ATIVA (inativa ou inexistente)`);
   }
 
-  // 2. token (strong key)
+  // 2. token (strong key) — same is_active guard
   const token = asString(payload.token);
   if (token) {
     const { data } = await supabase
@@ -104,9 +107,11 @@ async function resolveNumberId(
       .select("id")
       .eq("provider", "uazapi")
       .eq("uazapi_token", token)
+      .eq("is_active", true)
       .limit(1)
       .maybeSingle();
     if (data) return { numberId: data.id as string, method: 'token', rawIdentifier: owner || token, matched: true };
+    console.warn(`[uazapi-webhook] token não corresponde a instância ATIVA (inativa ou inexistente)`);
   }
 
   // 3. Query param (last resort — may be shared/misconfigured across instances)

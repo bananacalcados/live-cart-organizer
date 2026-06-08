@@ -167,6 +167,8 @@ async function resolveWhatsappNumberId(
   payload: AnyPayload,
 ): Promise<ZapiResolution> {
   // 1. instanceId lookup (highest priority — the payload always carries the real source instance)
+  // is_active guard: only ACTIVE instances may receive. A match on an INACTIVE
+  // instance is treated as no-match → message becomes "não identificada".
   const instanceId = asString(payload.instanceId);
   if (instanceId) {
     const { data: numRow } = await supabase
@@ -174,13 +176,14 @@ async function resolveWhatsappNumberId(
       .select('id')
       .eq('zapi_instance_id', instanceId)
       .eq('provider', 'zapi')
+      .eq('is_active', true)
       .limit(1)
       .maybeSingle();
     if (numRow) {
       console.log(`Resolved whatsapp_number_id from instanceId ${instanceId}: ${numRow.id}`);
       return { numberId: numRow.id, method: 'instanceId', rawIdentifier: instanceId, matched: true };
     }
-    console.warn(`instanceId ${instanceId} not found in whatsapp_numbers table`);
+    console.warn(`instanceId ${instanceId} not found among ACTIVE whatsapp_numbers (inactive or missing)`);
   }
 
   // 2. connectedPhone lookup (fallback) — match by last-8-digit suffix on phone_display
@@ -191,6 +194,7 @@ async function resolveWhatsappNumberId(
       .from('whatsapp_numbers')
       .select('id')
       .eq('provider', 'zapi')
+      .eq('is_active', true)
       .ilike('phone_display', `%${cleanPhone.slice(-8)}%`)
       .limit(1)
       .maybeSingle();
@@ -198,7 +202,7 @@ async function resolveWhatsappNumberId(
       console.log(`Resolved whatsapp_number_id from connectedPhone ${connectedPhone}: ${numRow.id}`);
       return { numberId: numRow.id, method: 'connectedPhone', rawIdentifier: connectedPhone, matched: true };
     }
-    console.warn(`connectedPhone ${connectedPhone} not found in whatsapp_numbers table`);
+    console.warn(`connectedPhone ${connectedPhone} not found among ACTIVE whatsapp_numbers (inactive or missing)`);
   }
 
   // 3. Query param (last resort — proxy may share the same param for all instances)

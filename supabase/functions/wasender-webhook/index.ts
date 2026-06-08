@@ -46,12 +46,16 @@ serve(async (req) => {
     console.log("[wasender-webhook] event:", payload?.event, "number_id:", numberId);
 
     // Resolve a linha local (para validar assinatura e obter api_key de decrypt)
+    // is_active guard: só instâncias ATIVAS podem receber. Se a linha não for
+    // encontrada por estar INATIVA, `row` fica null e a mensagem vira
+    // "não identificada" (igual aos demais provedores) — nunca atribuída.
     let row: { id: string; wasender_webhook_secret: string | null; wasender_api_key: string | null } | null = null;
     if (numberId) {
       const { data } = await supabase
         .from("whatsapp_numbers")
         .select("id, wasender_webhook_secret, wasender_api_key")
         .eq("id", numberId)
+        .eq("is_active", true)
         .maybeSingle();
       row = data as typeof row;
     }
@@ -322,17 +326,23 @@ serve(async (req) => {
         zPayload.text = extraText || messageBody;
       }
 
+      // is_active guard: se a linha não pôde ser carregada (instância inativa ou
+      // inexistente), a mensagem NÃO pode ser atribuída a ela — tratamos como
+      // "não identificada", exatamente como o no-match dos outros provedores.
+      const effectiveNumberId = row ? numberId : null;
+
       // Diagnostic: log how this incoming message was routed. WaSender relies on
-      // the per-instance ?number_id= param; if it is missing the message cannot be
-      // attributed to an instance (saved as "não identificada" downstream).
+      // the per-instance ?number_id= param; if it is missing OR points to an
+      // inactive instance the message cannot be attributed (saved as "não
+      // identificada" downstream).
       if (!fromMe && !isGroup) {
         await logRouting(supabase, {
           provider: "wasender",
           senderPhone: cleanedPhone,
-          resolutionMethod: numberId ? "query_param" : "none",
-          resolvedWhatsappNumberId: numberId,
+          resolutionMethod: effectiveNumberId ? "query_param" : "none",
+          resolvedWhatsappNumberId: effectiveNumberId,
           rawIdentifier: numberId,
-          matched: Boolean(numberId && row),
+          matched: Boolean(effectiveNumberId),
           rawPayload: { event, number_id: numberId, messageId },
         });
       }
@@ -341,7 +351,7 @@ serve(async (req) => {
       // Marca `via=wasender` para o zapi-webhook não duplicar o log de roteamento.
       try {
         const res = await fetch(
-          `${supabaseUrl}/functions/v1/zapi-webhook?number_id=${numberId || ""}&via=wasender`,
+          `${supabaseUrl}/functions/v1/zapi-webhook?number_id=${effectiveNumberId || ""}&via=wasender`,
           {
             method: "POST",
             headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },

@@ -101,16 +101,19 @@ export async function resolveUazapiCredentials(
   const supabase = getServiceClient();
 
   if (whatsappNumberId) {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("whatsapp_numbers")
       .select("uazapi_token")
       .eq("id", whatsappNumberId)
       .eq("provider", "uazapi")
-      .single();
-    if (!error && data?.uazapi_token) {
+      .eq("is_active", true)
+      .maybeSingle();
+    if (data?.uazapi_token) {
       return { token: data.uazapi_token };
     }
-    console.warn(`Não foi possível resolver credenciais uazapi para whatsapp_number_id=${whatsappNumberId}`);
+    // Explicit instance requested but inactive/not found → fail instead of using
+    // default. NEVER silently fall back: that would send via the wrong number.
+    throw new Error(`Instância uazapi ${whatsappNumberId} não encontrada ou inativa — envio cancelado para evitar número errado.`);
   }
 
   // Fallback: única instância uazapi ativa
