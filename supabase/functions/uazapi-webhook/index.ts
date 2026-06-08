@@ -63,15 +63,27 @@ function normalizeJid(jid: string | null): { phone: string; isGroup: boolean; is
   return { phone: digits, isGroup: false, isLid };
 }
 
-/** Resolve whatsapp_number_id: query param > owner > token. */
+/**
+ * Resolve whatsapp_number_id.
+ * Strong keys first: owner → token (these uniquely identify the real instance).
+ * The ?number_id= query param is only a LAST resort and is flagged as suspect,
+ * because a shared/misconfigured webhook URL would otherwise send every
+ * instance's messages to the same number. When nothing matches, returns
+ * numberId=null so the message is saved as "não identificada".
+ */
+interface UazapiResolution {
+  numberId: string | null;
+  method: ResolutionMethod;
+  rawIdentifier: string | null;
+  matched: boolean;
+}
+
 async function resolveNumberId(
   supabase: any,
   url: URL,
   payload: AnyObj,
-): Promise<string | null> {
-  const fromParam = url.searchParams.get("number_id");
-  if (fromParam) return fromParam;
-
+): Promise<UazapiResolution> {
+  // 1. owner (strong key)
   const owner = asString(payload.owner) || asString((payload.message as AnyObj)?.owner);
   if (owner) {
     const { data } = await supabase
@@ -81,9 +93,10 @@ async function resolveNumberId(
       .eq("uazapi_owner", owner)
       .limit(1)
       .maybeSingle();
-    if (data) return data.id as string;
+    if (data) return { numberId: data.id as string, method: 'owner', rawIdentifier: owner, matched: true };
   }
 
+  // 2. token (strong key)
   const token = asString(payload.token);
   if (token) {
     const { data } = await supabase
@@ -93,11 +106,18 @@ async function resolveNumberId(
       .eq("uazapi_token", token)
       .limit(1)
       .maybeSingle();
-    if (data) return data.id as string;
+    if (data) return { numberId: data.id as string, method: 'token', rawIdentifier: owner || token, matched: true };
+  }
+
+  // 3. Query param (last resort — may be shared/misconfigured across instances)
+  const fromParam = url.searchParams.get("number_id");
+  if (fromParam) {
+    console.warn(`[uazapi-webhook] resolved via query param (SUSPECT fallback): ${fromParam}`);
+    return { numberId: fromParam, method: 'query_param', rawIdentifier: owner || token || fromParam, matched: true };
   }
 
   console.error("[uazapi-webhook] não foi possível resolver whatsapp_number_id");
-  return null;
+  return { numberId: null, method: 'none', rawIdentifier: owner || token || null, matched: false };
 }
 
 /** Helpers de envio: usam SEMPRE os senders uazapi (respeita binding de instância). */
