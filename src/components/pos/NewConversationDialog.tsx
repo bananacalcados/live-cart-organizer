@@ -386,8 +386,12 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
             <div>
               <Label className="text-xs">Instância (somente online)</Label>
               {onlineInstances.length === 0 ? (
-                <p className="mt-1 text-xs text-muted-foreground p-3 rounded-lg border border-dashed text-center">
-                  Nenhuma instância online disponível para esta loja.
+                <p className="mt-1 text-xs text-muted-foreground p-3 rounded-lg border border-dashed text-center flex items-center justify-center gap-2">
+                  {loadingNumbers ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando instâncias...</>
+                  ) : (
+                    "Nenhuma instância online disponível para esta loja."
+                  )}
                 </p>
               ) : (
                 <div className="mt-1 space-y-1.5">
