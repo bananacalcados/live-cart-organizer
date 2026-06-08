@@ -19,6 +19,7 @@ import { POSCustomerForm } from "./POSCustomerForm";
 import { POSTinyProductPicker } from "./POSTinyProductPicker";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
+import { DeliveryCostDialog } from "./DeliveryCostDialog";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
@@ -117,6 +118,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [savingTracking, setSavingTracking] = useState(false);
   const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
   const [sendingTracking, setSendingTracking] = useState(false);
+  const [showDeliveryCost, setShowDeliveryCost] = useState(false);
   const isRemoteSale = sale?.sale_type === 'online' || sale?.sale_type === 'live';
 
   useEffect(() => {
@@ -1374,7 +1376,18 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               </div>
             )}
 
+            {/* Delivery cost (entrega) — apenas vendas remotas (online/live/site) */}
+            {isRemoteSale && (
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-wider text-gray-500 font-bold">Entrega</p>
+                <Button onClick={() => setShowDeliveryCost(true)} variant="outline" className="w-full gap-2 h-10 text-xs border-orange-300 text-orange-800 hover:bg-orange-50">
+                  <Truck className="h-4 w-4" /> Registrar custo de entrega (mototaxista/transportadora)
+                </Button>
+              </div>
+            )}
+
             {/* Print / Fiscal Actions */}
+
             {!isTinyOnly && (
               <div className="space-y-2">
                 <p className="text-[11px] uppercase tracking-wider text-gray-500 font-bold">Imprimir / Emitir Nota</p>
@@ -1624,6 +1637,16 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
           />
         )}
       </DialogContent>
+      {sale && (
+        <DeliveryCostDialog
+          open={showDeliveryCost}
+          onOpenChange={setShowDeliveryCost}
+          source={sale.sale_type === 'live' ? 'live' : 'pos'}
+          storeId={storeId}
+          posSaleId={sale.id}
+          customerName={customer?.name || (sale as any).customer_name || null}
+        />
+      )}
     </Dialog>
   );
 }

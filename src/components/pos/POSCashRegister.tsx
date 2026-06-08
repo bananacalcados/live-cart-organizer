@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ProviderPayablesPanel } from "./ProviderPayablesPanel";
+import { Truck } from "lucide-react";
 
 interface Props {
   storeId: string;
@@ -483,7 +485,11 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
             <TabsTrigger value="electronic" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
               <CreditCard className="h-4 w-4" /> Comprovantes Eletrônicos
             </TabsTrigger>
+            <TabsTrigger value="providers" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
+              <Truck className="h-4 w-4" /> Prestadores
+            </TabsTrigger>
           </TabsList>
+
 
           {/* ===== TAB: DINHEIRO ===== */}
           <TabsContent value="cash" className="space-y-4">
@@ -645,7 +651,17 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
               </div>
             )}
           </TabsContent>
+
+          {/* ===== TAB: PRESTADORES ===== */}
+          <TabsContent value="providers" className="space-y-4">
+            <ProviderPayablesPanel
+              storeId={storeId}
+              cashRegisterId={register.id}
+              onPaid={loadOpenRegister}
+            />
+          </TabsContent>
         </Tabs>
+
       )}
 
       {/* Open Dialog */}
