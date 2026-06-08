@@ -62,6 +62,7 @@ export function BetaShipmentsList() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
+  const [deliveryCostFor, setDeliveryCostFor] = useState<ShipmentRow | null>(null);
 
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
