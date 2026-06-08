@@ -43,7 +43,7 @@ interface ProductMasterFormProps {
   };
 }
 
-export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: ProductMasterFormProps) {
+export function ProductMasterForm({ open, onOpenChange, onCreated, initial, initialStoreId }: ProductMasterFormProps) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
