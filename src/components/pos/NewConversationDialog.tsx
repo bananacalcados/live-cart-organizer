@@ -383,31 +383,62 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
           whatsapp_number_id: numberId,
         });
       } else {
-        if (!messageText.trim()) { toast.error("Digite uma mensagem"); setSending(false); return; }
         const text = messageText.trim();
+        const hasMedia = !!pendingFile;
+        const hasAudio = !!audioBlob;
 
-        if (provider === "meta") {
-          await supabase.functions.invoke("meta-whatsapp-send", {
-            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
-          });
-        } else if (provider === "wasender") {
-          await supabase.functions.invoke("wasender-send-message", {
-            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
-          });
-        } else if (provider === "uazapi") {
-          await supabase.functions.invoke("uazapi-send-message", {
-            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
-          });
-        } else {
-          await supabase.functions.invoke("zapi-send-message", {
-            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
-          });
+        if (!text && !hasMedia && !hasAudio) {
+          toast.error("Digite uma mensagem ou anexe um arquivo");
+          setSending(false);
+          return;
         }
 
-        await supabase.from("whatsapp_messages").insert({
-          phone: cleanPhone, message: text, direction: "outgoing", status: "sent",
-          whatsapp_number_id: numberId,
-        });
+        // Audio
+        if (hasAudio) {
+          const { getAudioExtension, getAudioContentType } = await import("@/lib/audioRecorder");
+          const ext = getAudioExtension(recordingMimeRef.current);
+          const ct = getAudioContentType(recordingMimeRef.current);
+          const audioFile = new File([audioBlob!], `audio-${Date.now()}.${ext}`, { type: ct });
+          const url = await uploadMediaToStorage(audioFile);
+          if (!url) throw new Error("upload audio failed");
+          await sendMediaUrl(numberId, cleanPhone, url, "audio");
+        }
+
+        // Media (image/video/document)
+        if (hasMedia) {
+          const mediaType = pendingFile!.type.startsWith("image/") ? "image"
+            : pendingFile!.type.startsWith("video/") ? "video"
+            : pendingFile!.type.startsWith("audio/") ? "audio" : "document";
+          const url = await uploadMediaToStorage(pendingFile!);
+          if (!url) throw new Error("upload media failed");
+          await sendMediaUrl(numberId, cleanPhone, url, mediaType, text || undefined);
+        }
+
+        // Plain text (only if no media carried the caption)
+        if (text && !hasMedia) {
+          if (provider === "meta") {
+            await supabase.functions.invoke("meta-whatsapp-send", {
+              body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+            });
+          } else if (provider === "wasender") {
+            await supabase.functions.invoke("wasender-send-message", {
+              body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+            });
+          } else if (provider === "uazapi") {
+            await supabase.functions.invoke("uazapi-send-message", {
+              body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+            });
+          } else {
+            await supabase.functions.invoke("zapi-send-message", {
+              body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+            });
+          }
+
+          await supabase.from("whatsapp_messages").insert({
+            phone: cleanPhone, message: text, direction: "outgoing", status: "sent",
+            whatsapp_number_id: numberId,
+          });
+        }
       }
 
       // Save contact
