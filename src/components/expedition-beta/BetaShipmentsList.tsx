@@ -283,6 +283,14 @@ export function BetaShipmentsList() {
           </Button>
         </div>
       </div>
+
+      <DeliveryCostDialog
+        open={!!deliveryCostFor}
+        onOpenChange={(o) => !o && setDeliveryCostFor(null)}
+        source="expedition_beta"
+        expeditionOrderId={deliveryCostFor?.id || null}
+        customerName={deliveryCostFor?.customer_name || null}
+      />
     </div>
   );
 }
