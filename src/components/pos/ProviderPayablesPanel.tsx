@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { Truck, Loader2, DollarSign, Printer, Upload, FileText, Plus, CheckCircle, History, ChevronRight, Paperclip } from "lucide-react";
+import { Truck, Loader2, DollarSign, Printer, FileText, Plus, CheckCircle, History, ChevronRight, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
