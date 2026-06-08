@@ -105,6 +105,16 @@ export function NfeDetailEditor({
   const [showSearch, setShowSearch] = useState(false);
   const [linking, setLinking] = useState(false);
 
+  // Prévia (novas vs atualizadas) antes de confirmar o vínculo
+  const [linkPreview, setLinkPreview] = useState<{
+    parentSku: string;
+    parentName: string;
+    ids: string[];
+    created: string[];
+    updated: string[];
+  } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
   async function loadGtinMatches(its: Item[]) {
     const eans = its.map((i) => i.ean).filter((e): e is string => !!e && /^\d{8,14}$/.test(e));
     if (eans.length === 0) {
