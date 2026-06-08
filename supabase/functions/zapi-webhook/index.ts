@@ -147,16 +147,25 @@ async function resolveLidToPhone(
 }
 
 /**
- * Resolve whatsapp_number_id from multiple sources:
- * 1. ?number_id= query param
- * 2. instanceId in payload → lookup in whatsapp_numbers table
- * 3. connectedPhone in payload → lookup in whatsapp_numbers table
+ * Resolve whatsapp_number_id from the payload.
+ * Strong keys first: instanceId → connectedPhone. The ?number_id= query param
+ * is only a LAST resort (the proxy may share the same param across instances),
+ * and when used it is flagged as a suspect 'query_param' resolution.
+ * When nothing matches, returns numberId=null so the message is saved as
+ * "não identificada" instead of being guessed into the wrong instance.
  */
+interface ZapiResolution {
+  numberId: string | null;
+  method: ResolutionMethod;
+  rawIdentifier: string | null;
+  matched: boolean;
+}
+
 async function resolveWhatsappNumberId(
   supabase: any,
   url: URL,
-  payload: AnyPayload
-): Promise<string | null> {
+  payload: AnyPayload,
+): Promise<ZapiResolution> {
   // 1. instanceId lookup (highest priority — the payload always carries the real source instance)
   const instanceId = asString(payload.instanceId);
   if (instanceId) {
@@ -169,12 +178,12 @@ async function resolveWhatsappNumberId(
       .maybeSingle();
     if (numRow) {
       console.log(`Resolved whatsapp_number_id from instanceId ${instanceId}: ${numRow.id}`);
-      return numRow.id;
+      return { numberId: numRow.id, method: 'instanceId', rawIdentifier: instanceId, matched: true };
     }
     console.warn(`instanceId ${instanceId} not found in whatsapp_numbers table`);
   }
 
-  // 2. connectedPhone lookup (fallback)
+  // 2. connectedPhone lookup (fallback) — match by last-8-digit suffix on phone_display
   const connectedPhone = asString(payload.connectedPhone);
   if (connectedPhone) {
     const cleanPhone = connectedPhone.replace(/\D/g, '');
@@ -182,12 +191,12 @@ async function resolveWhatsappNumberId(
       .from('whatsapp_numbers')
       .select('id')
       .eq('provider', 'zapi')
-      .or(`phone_number.eq.${cleanPhone},phone_number.eq.+${cleanPhone},phone_number.ilike.%${cleanPhone.slice(-8)}%`)
+      .ilike('phone_display', `%${cleanPhone.slice(-8)}%`)
       .limit(1)
       .maybeSingle();
     if (numRow) {
       console.log(`Resolved whatsapp_number_id from connectedPhone ${connectedPhone}: ${numRow.id}`);
-      return numRow.id;
+      return { numberId: numRow.id, method: 'connectedPhone', rawIdentifier: connectedPhone, matched: true };
     }
     console.warn(`connectedPhone ${connectedPhone} not found in whatsapp_numbers table`);
   }
@@ -195,12 +204,12 @@ async function resolveWhatsappNumberId(
   // 3. Query param (last resort — proxy may share the same param for all instances)
   const fromParam = url.searchParams.get('number_id');
   if (fromParam) {
-    console.log(`Resolved whatsapp_number_id from query param (fallback): ${fromParam}`);
-    return fromParam;
+    console.warn(`Resolved whatsapp_number_id from query param (SUSPECT fallback): ${fromParam}`);
+    return { numberId: fromParam, method: 'query_param', rawIdentifier: instanceId || connectedPhone || fromParam, matched: true };
   }
 
   console.error('FAILED to resolve whatsapp_number_id from any source');
-  return null;
+  return { numberId: null, method: 'none', rawIdentifier: instanceId || connectedPhone || null, matched: false };
 }
 
 serve(async (req) => {
