@@ -588,15 +588,79 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
               </div>
             )}
 
-            {/* Normal Message */}
+            {/* Normal Message + rich composer */}
             {!(provider === "meta" && messageType === "template") && (
               <div>
                 <Label className="text-xs">Mensagem</Label>
-                <Textarea
-                  value={messageText}
-                  onChange={e => setMessageText(e.target.value)}
-                  placeholder="Digite sua mensagem..."
-                  className="text-sm mt-1 min-h-[80px]"
+
+                {/* Image / file preview */}
+                {pendingFile && (
+                  <div className="mt-1.5 flex items-center gap-2 p-2 rounded-lg border bg-muted/40">
+                    {pendingFile.type.startsWith("image/") && pendingPreviewUrl ? (
+                      <img src={pendingPreviewUrl} alt="preview" className="h-12 w-12 rounded object-cover" />
+                    ) : (
+                      <Paperclip className="h-5 w-5 text-muted-foreground shrink-0" />
+                    )}
+                    <span className="text-xs truncate flex-1">{pendingFile.name}</span>
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={clearPendingFile}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Audio preview */}
+                {audioUrl && !isRecording && (
+                  <div className="mt-1.5 flex items-center gap-2 p-2 rounded-lg border bg-muted/40">
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={toggleAudioPlay}>
+                      {audioPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                    <span className="text-xs flex-1 text-muted-foreground">Áudio gravado</span>
+                    <audio ref={audioElRef} src={audioUrl} onEnded={() => setAudioPlaying(false)} className="hidden" />
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={clearAudio}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Recording indicator */}
+                {isRecording ? (
+                  <div className="mt-1.5 flex items-center gap-2 p-3 rounded-lg border border-red-300 bg-red-50">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-sm text-red-600 flex-1">Gravando... {fmtTime(recordingTime)}</span>
+                    <Button type="button" size="sm" className="h-8 gap-1 bg-red-500 hover:bg-red-600" onClick={stopRecording}>
+                      <Square className="h-3.5 w-3.5" /> Parar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-1 flex items-end gap-1.5">
+                    <div className="flex-1">
+                      <Textarea
+                        value={messageText}
+                        onChange={e => setMessageText(e.target.value)}
+                        placeholder={pendingFile ? "Legenda (opcional)..." : "Digite sua mensagem..."}
+                        className="text-sm min-h-[80px]"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1 pb-1">
+                      <EmojiPickerButton
+                        onEmojiSelect={(emoji) => setMessageText(prev => prev + emoji)}
+                        className="h-8 w-8"
+                      />
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => fileInputRef.current?.click()} title="Anexar imagem/arquivo">
+                        <Paperclip className="h-5 w-5 text-gray-500" />
+                      </Button>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={startRecording} title="Gravar áudio">
+                        <Mic className="h-5 w-5 text-gray-500" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*,audio/*,application/pdf"
+                  className="hidden"
+                  onChange={handleFilePick}
                 />
               </div>
             )}
