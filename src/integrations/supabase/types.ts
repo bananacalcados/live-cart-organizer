@@ -12304,6 +12304,9 @@ export type Database = {
           ean: string | null
           id: string
           invoice_id: string
+          linked_at: string | null
+          linked_parent_sku: string | null
+          linked_store_id: string | null
           master_id: string | null
           ncm: string | null
           parsed_color: string | null
@@ -12324,6 +12327,9 @@ export type Database = {
           ean?: string | null
           id?: string
           invoice_id: string
+          linked_at?: string | null
+          linked_parent_sku?: string | null
+          linked_store_id?: string | null
           master_id?: string | null
           ncm?: string | null
           parsed_color?: string | null
@@ -12344,6 +12350,9 @@ export type Database = {
           ean?: string | null
           id?: string
           invoice_id?: string
+          linked_at?: string | null
+          linked_parent_sku?: string | null
+          linked_store_id?: string | null
           master_id?: string | null
           ncm?: string | null
           parsed_color?: string | null
