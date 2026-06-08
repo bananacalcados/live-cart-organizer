@@ -1,12 +1,13 @@
-import { useState, useEffect, useMemo } from "react";
-import { UserPlus, Send, Loader2, Search, FileText, MessageCircle, Wifi, Check } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { UserPlus, Send, Loader2, Search, FileText, MessageCircle, Wifi, Check, Paperclip, Mic, Square, X, Play, Pause, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmojiPickerButton } from "@/components/EmojiPickerButton";
+import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useWhatsAppNumberStore, WhatsAppNumber } from "@/stores/whatsappNumberStore";
 import { toast } from "sonner";
