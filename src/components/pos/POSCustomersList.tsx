@@ -77,6 +77,10 @@ export function POSCustomersList({ onOpenProfile }: Props) {
   const [waPhone, setWaPhone] = useState("");
   const [waName, setWaName] = useState("");
 
+  // Edit dialog
+  const [editOpen, setEditOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+
   // Load stores + sellers once
   useEffect(() => {
     supabase.from("pos_stores").select("id, name").order("name").then(({ data }) => {
