@@ -30,6 +30,7 @@ interface ProductMasterFormProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onCreated?: (masterId: string) => void;
+  initialStoreId?: string;
   initial?: {
     name?: string;
     description?: string;
