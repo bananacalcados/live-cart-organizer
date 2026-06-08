@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ProviderPayablesPanel } from "./ProviderPayablesPanel";
+import { Truck } from "lucide-react";
 
 interface Props {
   storeId: string;
