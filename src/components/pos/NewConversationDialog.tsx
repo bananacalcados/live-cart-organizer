@@ -1,12 +1,13 @@
-import { useState, useEffect, useMemo } from "react";
-import { UserPlus, Send, Loader2, Search, FileText, MessageCircle, Wifi, Check } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { UserPlus, Send, Loader2, Search, FileText, MessageCircle, Wifi, Check, Paperclip, Mic, Square, X, Play, Pause, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmojiPickerButton } from "@/components/EmojiPickerButton";
+import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { supabase } from "@/integrations/supabase/client";
 import { useWhatsAppNumberStore, WhatsAppNumber } from "@/stores/whatsappNumberStore";
 import { toast } from "sonner";
@@ -68,6 +69,23 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
   // Lead data auto-fill
   const [leadData, setLeadData] = useState<LeadData | null>(null);
   const [lookingUpLead, setLookingUpLead] = useState(false);
+
+  // Media attachment
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Audio recording
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingMimeRef = useRef<string>("");
+  const timerRef = useRef<number | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
 
   const { numbers: storeNumbers, fetchNumbers, isLoading: loadingNumbers } = useWhatsAppNumberStore();
 
@@ -241,6 +259,91 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
     setTemplateVars(initial);
   };
 
+  // ---- Media attachment ----
+  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingFile(file);
+    setPendingPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const clearPendingFile = () => {
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingFile(null);
+    setPendingPreviewUrl(null);
+  };
+
+  // ---- Audio recording ----
+  const startRecording = async () => {
+    try {
+      clearAudio();
+      const { getAudioMimeType } = await import("@/lib/audioRecorder");
+      const mime = getAudioMimeType();
+      recordingMimeRef.current = mime;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (ev) => { if (ev.data.size > 0) audioChunksRef.current.push(ev.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        setIsRecording(false);
+        const { getAudioContentType } = await import("@/lib/audioRecorder");
+        const ct = getAudioContentType(recordingMimeRef.current);
+        const blob = new Blob(audioChunksRef.current, { type: ct });
+        if (blob.size === 0) return;
+        setAudioBlob(blob);
+        setAudioUrl(URL.createObjectURL(blob));
+      };
+      recorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = window.setInterval(() => setRecordingTime(p => p + 1), 1000);
+    } catch (err) {
+      console.error("mic error", err);
+      toast.error("Não foi possível acessar o microfone.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+  };
+
+  const clearAudio = () => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioBlob(null);
+    setAudioUrl(null);
+    setAudioPlaying(false);
+  };
+
+  const toggleAudioPlay = () => {
+    if (!audioElRef.current) return;
+    if (audioPlaying) { audioElRef.current.pause(); setAudioPlaying(false); }
+    else { audioElRef.current.play(); setAudioPlaying(true); }
+  };
+
+  const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  const sendMediaUrl = async (numberId: string, phone: string, mediaUrl: string, mediaType: string, caption?: string) => {
+    const body: Record<string, any> = { phone, mediaUrl, mediaType, caption: caption || "", whatsapp_number_id: numberId };
+    if (provider === "meta") {
+      await supabase.functions.invoke("meta-whatsapp-send", { body: { ...body, type: mediaType } });
+    } else if (provider === "wasender") {
+      await supabase.functions.invoke("wasender-send-media", { body });
+    } else if (provider === "uazapi") {
+      await supabase.functions.invoke("uazapi-send-media", { body });
+    } else {
+      await supabase.functions.invoke("zapi-send-media", { body });
+    }
+    await supabase.from("whatsapp_messages").insert({
+      phone, message: caption || "", direction: "outgoing", status: "sent",
+      whatsapp_number_id: numberId, media_url: mediaUrl, media_type: mediaType,
+    });
+  };
+
   const handleSend = async () => {
     const cleanPhone = contactPhone.replace(/\D/g, "");
     if (!cleanPhone || cleanPhone.length < 10) {
@@ -280,31 +383,62 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
           whatsapp_number_id: numberId,
         });
       } else {
-        if (!messageText.trim()) { toast.error("Digite uma mensagem"); setSending(false); return; }
         const text = messageText.trim();
+        const hasMedia = !!pendingFile;
+        const hasAudio = !!audioBlob;
 
-        if (provider === "meta") {
-          await supabase.functions.invoke("meta-whatsapp-send", {
-            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
-          });
-        } else if (provider === "wasender") {
-          await supabase.functions.invoke("wasender-send-message", {
-            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
-          });
-        } else if (provider === "uazapi") {
-          await supabase.functions.invoke("uazapi-send-message", {
-            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
-          });
-        } else {
-          await supabase.functions.invoke("zapi-send-message", {
-            body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
-          });
+        if (!text && !hasMedia && !hasAudio) {
+          toast.error("Digite uma mensagem ou anexe um arquivo");
+          setSending(false);
+          return;
         }
 
-        await supabase.from("whatsapp_messages").insert({
-          phone: cleanPhone, message: text, direction: "outgoing", status: "sent",
-          whatsapp_number_id: numberId,
-        });
+        // Audio
+        if (hasAudio) {
+          const { getAudioExtension, getAudioContentType } = await import("@/lib/audioRecorder");
+          const ext = getAudioExtension(recordingMimeRef.current);
+          const ct = getAudioContentType(recordingMimeRef.current);
+          const audioFile = new File([audioBlob!], `audio-${Date.now()}.${ext}`, { type: ct });
+          const url = await uploadMediaToStorage(audioFile);
+          if (!url) throw new Error("upload audio failed");
+          await sendMediaUrl(numberId, cleanPhone, url, "audio");
+        }
+
+        // Media (image/video/document)
+        if (hasMedia) {
+          const mediaType = pendingFile!.type.startsWith("image/") ? "image"
+            : pendingFile!.type.startsWith("video/") ? "video"
+            : pendingFile!.type.startsWith("audio/") ? "audio" : "document";
+          const url = await uploadMediaToStorage(pendingFile!);
+          if (!url) throw new Error("upload media failed");
+          await sendMediaUrl(numberId, cleanPhone, url, mediaType, text || undefined);
+        }
+
+        // Plain text (only if no media carried the caption)
+        if (text && !hasMedia) {
+          if (provider === "meta") {
+            await supabase.functions.invoke("meta-whatsapp-send", {
+              body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+            });
+          } else if (provider === "wasender") {
+            await supabase.functions.invoke("wasender-send-message", {
+              body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+            });
+          } else if (provider === "uazapi") {
+            await supabase.functions.invoke("uazapi-send-message", {
+              body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+            });
+          } else {
+            await supabase.functions.invoke("zapi-send-message", {
+              body: { phone: cleanPhone, message: text, whatsapp_number_id: numberId },
+            });
+          }
+
+          await supabase.from("whatsapp_messages").insert({
+            phone: cleanPhone, message: text, direction: "outgoing", status: "sent",
+            whatsapp_number_id: numberId,
+          });
+        }
       }
 
       // Save contact
@@ -333,6 +467,8 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
     setTemplateVars({});
     setMessageType("normal");
     setLeadData(null);
+    clearPendingFile();
+    clearAudio();
   };
 
   const filteredTemplates = templates.filter(t =>
@@ -349,7 +485,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="px-4 pb-4 space-y-4">
             {/* Contact Info */}
             <div className="space-y-3">
@@ -394,13 +530,14 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
                   )}
                 </p>
               ) : (
-                <ScrollArea className="mt-1 max-h-72 rounded-lg border border-border/60 pr-3">
-                  <div className="space-y-1.5 p-1">
+                <div className="mt-1 max-h-60 overflow-y-auto rounded-lg border border-border/60">
+                  <div className="space-y-1.5 p-1.5">
                     {onlineInstances.map(inst => {
                       const active = inst.id === selectedInstanceId;
                       return (
                         <button
                           key={inst.id}
+                          type="button"
                           onClick={() => setSelectedInstanceId(inst.id)}
                           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
                             active
@@ -420,7 +557,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
                       );
                     })}
                   </div>
-                </ScrollArea>
+                </div>
               )}
             </div>
 
@@ -451,15 +588,79 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
               </div>
             )}
 
-            {/* Normal Message */}
+            {/* Normal Message + rich composer */}
             {!(provider === "meta" && messageType === "template") && (
               <div>
                 <Label className="text-xs">Mensagem</Label>
-                <Textarea
-                  value={messageText}
-                  onChange={e => setMessageText(e.target.value)}
-                  placeholder="Digite sua mensagem..."
-                  className="text-sm mt-1 min-h-[80px]"
+
+                {/* Image / file preview */}
+                {pendingFile && (
+                  <div className="mt-1.5 flex items-center gap-2 p-2 rounded-lg border bg-muted/40">
+                    {pendingFile.type.startsWith("image/") && pendingPreviewUrl ? (
+                      <img src={pendingPreviewUrl} alt="preview" className="h-12 w-12 rounded object-cover" />
+                    ) : (
+                      <Paperclip className="h-5 w-5 text-muted-foreground shrink-0" />
+                    )}
+                    <span className="text-xs truncate flex-1">{pendingFile.name}</span>
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={clearPendingFile}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Audio preview */}
+                {audioUrl && !isRecording && (
+                  <div className="mt-1.5 flex items-center gap-2 p-2 rounded-lg border bg-muted/40">
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={toggleAudioPlay}>
+                      {audioPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                    </Button>
+                    <span className="text-xs flex-1 text-muted-foreground">Áudio gravado</span>
+                    <audio ref={audioElRef} src={audioUrl} onEnded={() => setAudioPlaying(false)} className="hidden" />
+                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={clearAudio}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Recording indicator */}
+                {isRecording ? (
+                  <div className="mt-1.5 flex items-center gap-2 p-3 rounded-lg border border-red-300 bg-red-50">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+                    <span className="text-sm text-red-600 flex-1">Gravando... {fmtTime(recordingTime)}</span>
+                    <Button type="button" size="sm" className="h-8 gap-1 bg-red-500 hover:bg-red-600" onClick={stopRecording}>
+                      <Square className="h-3.5 w-3.5" /> Parar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-1 flex items-end gap-1.5">
+                    <div className="flex-1">
+                      <Textarea
+                        value={messageText}
+                        onChange={e => setMessageText(e.target.value)}
+                        placeholder={pendingFile ? "Legenda (opcional)..." : "Digite sua mensagem..."}
+                        className="text-sm min-h-[80px]"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1 pb-1">
+                      <EmojiPickerButton
+                        onEmojiSelect={(emoji) => setMessageText(prev => prev + emoji)}
+                        className="h-8 w-8"
+                      />
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => fileInputRef.current?.click()} title="Anexar imagem/arquivo">
+                        <Paperclip className="h-5 w-5 text-gray-500" />
+                      </Button>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={startRecording} title="Gravar áudio">
+                        <Mic className="h-5 w-5 text-gray-500" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/*,audio/*,application/pdf"
+                  className="hidden"
+                  onChange={handleFilePick}
                 />
               </div>
             )}
@@ -554,7 +755,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Footer */}
         <div className="border-t px-4 py-3 flex justify-end gap-2">
