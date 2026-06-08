@@ -530,13 +530,14 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
                   )}
                 </p>
               ) : (
-                <ScrollArea className="mt-1 max-h-72 rounded-lg border border-border/60 pr-3">
-                  <div className="space-y-1.5 p-1">
+                <div className="mt-1 max-h-60 overflow-y-auto rounded-lg border border-border/60">
+                  <div className="space-y-1.5 p-1.5">
                     {onlineInstances.map(inst => {
                       const active = inst.id === selectedInstanceId;
                       return (
                         <button
                           key={inst.id}
+                          type="button"
                           onClick={() => setSelectedInstanceId(inst.id)}
                           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
                             active
@@ -556,7 +557,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
                       );
                     })}
                   </div>
-                </ScrollArea>
+                </div>
               )}
             </div>
 
