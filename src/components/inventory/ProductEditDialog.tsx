@@ -92,6 +92,12 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       .eq("is_active", true)
       .order("name")
       .then(({ data }) => setCategories((data || []) as any));
+    supabase
+      .from("pos_stores")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setStores((data || []) as any));
   }, [open]);
 
   async function loadData() {
