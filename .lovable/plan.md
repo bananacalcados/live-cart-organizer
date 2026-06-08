@@ -1,55 +1,81 @@
-# Plano completo — PDV, Clientes Unificados e Expedição Beta
+## Objetivo
 
-Antes de tudo, o diagnóstico-chave: **já existe a tabela unificada de clientes** que você deseja — ela se chama `customers_unified` (87.784 clientes) e já junta automaticamente clientes do Marketing (zoppy/Clientes 360), do PDV (`pos_customers`), do checkout (`customer_registrations`) e de campanhas. O cliente Matthews (CPF 150.231.397-94, registro "Rafael Silva de Jesus") **já está nela**. O problema é que o PDV (aba Cliente 360 e aba Clientes) busca **apenas** em `pos_customers`, que é menor.
+Controlar todo o custo de entrega das vendas online (Live, Site, PDV Online) e da Expedição, vinculando cada corrida a um prestador (mototaxista ou transportadora). Acumular o que devemos a cada prestador de forma **universal** (somando Centro + Pérola + Expedição) e dar baixa pelo caixa, com saída de dinheiro e recibo consolidado para impressão, assinatura, digitalização e upload como prova.
 
-Recomendação técnica: manter `customers_unified` como a **fonte de leitura/busca** de TODOS os módulos (ela já agrega tudo), e usar `pos_customers` como tabela **transacional** (onde existe a chave estrangeira das vendas, trocas, condicionais). Quando um cliente é selecionado para uma venda/ação, ele é "materializado" em `pos_customers`. Assim você nunca quebra as vendas existentes e ainda enxerga 100% dos clientes.
+## Como vai funcionar (visão do usuário)
 
-Vou dividir em **6 etapas independentes**, cada uma testável isoladamente.
+1. **Cadastro de prestadores** — nova tela em PDV > Configurações com lista de prestadores: nome, telefone, tipo (mototaxista ou transportadora), CPF/CNPJ, dados pessoais, observação, ativo/inativo.
+2. **Lançar o custo da entrega** — em dois momentos (como você escolheu):
+   - **Na finalização da venda** (PDV Online / Live / Site): campo "Tipo de entrega" (mototaxista/transportadora) → ao escolher, abre a lista de prestadores daquele tipo → digita o valor.
+   - **Na Expedição (no despacho)**: mesmo campo, para ajustar/confirmar ou lançar quando não foi feito na venda.
+   - Cada lançamento vira uma "corrida/entrega" com status **A pagar**.
+3. **Contas a pagar (universal)** — local na aba **Caixa** mostrando, por prestador, o total devido somando TODAS as lojas/módulos. Ex.: "Mototaxista João — R$ 240,00 a pagar (12 corridas: 7 Centro, 3 Pérola, 2 Expedição)".
+4. **Dar baixa / pagar** — na hora da retirada no caixa aparece a opção **"Pagar prestador"**:
+   - Seleciona o prestador → mostra o total pendente e a lista de corridas.
+   - Pode pagar tudo ou marcar corridas específicas (pagamento parcial).
+   - Ao confirmar: o valor **sai do caixa do PDV** (registra sangria) e as corridas viram **Pagas**.
+   - A baixa pode ocorrer a qualquer momento, em qualquer loja — mesmo que as corridas tenham sido de outra loja/módulo (contas universais).
+5. **Recibo consolidado** — gera um recibo único (PDF/impressão) com todas as corridas pagas, valor total, data e espaço para assinatura do prestador. Depois de assinado e escaneado, o arquivo é enviado de volta ao sistema e fica anexado ao pagamento como prova.
+6. **Relatório por prestador** — quanto gastamos com cada um, por período, com cada corrida detalhada (data, valor, venda de origem, loja/módulo: Centro / Pérola / Expedição Beta) e status pago/pendente.
 
----
+## Telas afetadas
 
-## Etapa 1 — Corrigir forma de pagamento "VPS" (rápida, sem risco)
-A lista de formas de pagamento do PDV vem da tabela `pos_payment_methods` (espelho do Tiny). "VPS" não existe lá, por isso não aparece.
-- Adicionar "VPS" como método ativo em `pos_payment_methods` para as lojas.
-- O resto do sistema (dashboard, modal de vendas) já reconhece "VPS" — só falta cadastrar.
+- **PDV > Configurações**: nova seção "Prestadores de Serviço" (cadastro/edição).
+- **PDV > Online / Live / Site (finalização de venda)**: campo tipo de entrega + prestador + valor.
+- **Módulo Expedição (Beta e/ou clássico, no despacho)**: mesmo campo de entrega/prestador/valor.
+- **PDV > Caixa**: nova aba/seção "Prestadores" com contas a pagar universais + botão "Pagar prestador" no fluxo de retirada + histórico de pagamentos e recibos.
+- **Relatório de prestadores** (dentro da aba Caixa ou Gestão): gastos e corridas por prestador/período/loja.
 
-## Etapa 2 — Busca de clientes unificada no PDV (Cliente 360 + materialização)
-Trocar a fonte de busca de `pos_customers` para `customers_unified` no `POSCustomer360` e na função de busca de vendas (`POSSalesView`).
-- Busca por CPF, telefone (sufixo 8 dígitos), nome ou email passa a achar **todos** os clientes, independente de loja ou origem de cadastro (resolve o caso do Matthews).
-- Ao selecionar um cliente que ainda não existe em `pos_customers`, materializar automaticamente (criar o registro com CPF/whatsapp/endereço) para a venda/NF-e funcionar — lógica de dedup por CPF normalizado.
+## Detalhes técnicos
 
-## Etapa 3 — Aba "Clientes" do PDV: paginada + filtros + WhatsApp
-Reformular a aba Clientes para listar clientes recentes (lendo de `customers_unified`), com:
-- **Paginação** (ex.: 30 por página) para não pesar.
-- **Filtros**: loja, vendedor, ticket médio (faixas), data de última compra.
-- **Busca** por CPF/telefone/nome/email achando todos os clientes.
-- **Botão "Enviar WhatsApp"** no cliente, reaproveitando o seletor de instância ONLINE já criado (NewConversationDialog), enviando pela instância escolhida (provedor derivado automaticamente).
+### Banco de dados (novas tabelas)
 
-## Etapa 4 — Sincronizar checkout/links de pagamento → `pos_customers`
-Garantir que clientes do checkout/link de pagamento entrem em `pos_customers`:
-- Criar trigger que espelha `customer_registrations` → `pos_customers` (dedup por CPF; atualiza endereço/whatsapp se já existir).
-- No fluxo de pagamento por link, ao confirmar pagamento, casar pelo CPF um cliente já existente e vincular a venda a ele (sem criar duplicado).
-- Backfill único dos registros de checkout existentes que ainda não têm correspondente no PDV.
+```text
+service_providers            (prestadores, universal — sem amarrar a loja)
+  - name, phone, document (cpf/cnpj), provider_type ('mototaxi' | 'transportadora')
+  - notes, is_active
 
-## Etapa 5 — Aba "Envios" na Expedição Beta (antes de Suporte)
-Nova aba **Envios** posicionada antes de **Suporte**, com a lista de todos os envios já realizados (status despachado/entregue), mostrando nome, endereço, código de rastreio, método de envio e data.
-- **Paginação** server-side (ex.: 25 por página) para carregamento leve.
-- **Filtros**: dia, semana, mês e período personalizado.
-- Leitura de `expedition_beta_orders` (já tem `tracking_code`, `shipping_address`, `customer_name`).
+delivery_costs               (uma linha por corrida/entrega)
+  - provider_id  -> service_providers
+  - provider_type
+  - amount (numeric)
+  - source ('pos_centro' | 'pos_perola' | 'live' | 'site' | 'expedition_beta' | 'expedition')
+  - store_id (nullable, loja de origem quando houver)
+  - pos_sale_id (nullable)        -> pos_sales
+  - expedition_order_id (nullable)
+  - status ('pending' | 'paid')
+  - payment_id (nullable)         -> provider_payments
+  - created_at, updated_at
 
-## Etapa 6 — Migrar fonte da Expedição Beta: Tiny → Shopify
-Hoje `expedition-beta-initial-sync` puxa do Tiny (`api.tiny.com.br`). Migrar para puxar pedidos direto da **Shopify** (API de Orders), mantendo o mesmo formato de `expedition_beta_orders` para não quebrar as telas.
-- Reescrever a sincronização para ler pedidos pagos/abertos da Shopify (status financeiro e de fulfillment), mapeando para `expedition_status`.
-- Trazer rastreio da Shopify quando disponível (fulfillment tracking).
-- Por ser a etapa de maior risco, fica por último e será testada isoladamente antes de desligar o caminho do Tiny.
+provider_payments            (a baixa / pagamento semanal)
+  - provider_id -> service_providers
+  - paid_store_id               (loja onde o pagamento saiu do caixa)
+  - cash_register_id            (caixa que gerou a sangria)
+  - total_amount
+  - receipt_pdf_url (nullable)  (recibo gerado)
+  - proof_file_url (nullable)   (recibo assinado/escaneado enviado depois)
+  - paid_at, created_by, notes
+```
 
----
+- Cada `provider_payments` agrupa N `delivery_costs` (marca status='paid' e seta payment_id).
+- Todas as tabelas no schema public com `GRANT` para authenticated/service_role + RLS.
+- `total_amount` calculado pela soma das corridas selecionadas; trigger de `updated_at`.
 
-## Observações importantes
-- **`pos_customers` definitiva**: para os módulos PDV/Eventos/Expedição/Marketing, a busca passa a enxergar tudo via `customers_unified`, e `pos_customers` recebe os clientes materializados — efetivamente vira a base operacional única, sem quebrar as FKs de vendas existentes.
-- **Clientes Shopify**: já vão para `pos_customers` via `shopify-sync-to-pos` (dedup por CPF/whatsapp). Vou confirmar/garantir isso na Etapa 4.
-- **Clientes 360 do Marketing**: continua usando a mesma base unificada — fica consistente com o PDV.
-- Nada nesta sequência altera/exclui dados existentes de forma destrutiva; são adições e troca de fonte de leitura.
+### Saída do caixa
 
-## Pergunta antes de começar
-Sobre o **VPS**: ele deve aparecer nas **duas lojas** (Centro e a outra) e como forma à vista (sem parcelas), igual Dinheiro/Pix? Confirmando isso, começo pela Etapa 1 imediatamente.
+- Ao confirmar um `provider_payments`, inserir em `pos_cash_movements` (type `withdraw`) e somar em `pos_cash_registers.withdrawals`, reaproveitando exatamente a mesma lógica de sangria já existente em `POSCashRegister.tsx` (`handleMovement`), com `description` = "Pagamento prestador <nome>".
+
+### Recibo
+
+- Geração do recibo consolidado em PDF no front (mesma abordagem já usada para impressão no projeto), com cabeçalho Banana Calçados, lista de corridas, total, data e linha de assinatura.
+- Upload do recibo assinado/escaneado para um bucket de storage (reaproveitar `payment-receipts` ou criar `provider-receipts`), gravando a URL em `proof_file_url`.
+
+### Reaproveitamento
+
+- O campo de tipo de entrega na finalização e na expedição usa a lista de `service_providers` filtrada por `provider_type`.
+- `shipping_cost` já existe em `pos_sales` e `freight_price`/`total_shipping` na expedição — o custo do prestador é registrado em `delivery_costs` (separado, pois `shipping_cost` é o que o cliente paga; aqui é o que NÓS pagamos ao prestador).
+
+## Fora do escopo (confirmar depois se quiser)
+
+- Integração automática do custo de transportadora vindo da cotação Frenet (por enquanto o valor pago ao prestador é digitado/confirmado manualmente).
+- Pagamento via PIX/transferência bancária automatizado (a baixa registra a saída; o pagamento em si continua manual).

@@ -3394,6 +3394,86 @@ export type Database = {
         }
         Relationships: []
       }
+      delivery_costs: {
+        Row: {
+          amount: number
+          created_at: string
+          customer_name: string | null
+          expedition_order_id: string | null
+          id: string
+          notes: string | null
+          payment_id: string | null
+          pos_sale_id: string | null
+          provider_id: string | null
+          provider_type: string
+          source: string
+          status: string
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          customer_name?: string | null
+          expedition_order_id?: string | null
+          id?: string
+          notes?: string | null
+          payment_id?: string | null
+          pos_sale_id?: string | null
+          provider_id?: string | null
+          provider_type?: string
+          source?: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          customer_name?: string | null
+          expedition_order_id?: string | null
+          id?: string
+          notes?: string | null
+          payment_id?: string | null
+          pos_sale_id?: string | null
+          provider_id?: string | null
+          provider_type?: string
+          source?: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_costs_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "provider_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_pos_sale_id_fkey"
+            columns: ["pos_sale_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "service_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_costs_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dispatch_history: {
         Row: {
           audience_filters: Json | null
@@ -12099,6 +12179,73 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_payments: {
+        Row: {
+          cash_register_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          paid_at: string
+          paid_store_id: string | null
+          proof_file_url: string | null
+          provider_id: string
+          receipt_pdf_url: string | null
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          cash_register_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          paid_at?: string
+          paid_store_id?: string | null
+          proof_file_url?: string | null
+          provider_id: string
+          receipt_pdf_url?: string | null
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          cash_register_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          paid_at?: string
+          paid_store_id?: string | null
+          proof_file_url?: string | null
+          provider_id?: string
+          receipt_pdf_url?: string | null
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_payments_cash_register_id_fkey"
+            columns: ["cash_register_id"]
+            isOneToOne: false
+            referencedRelation: "pos_cash_registers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_payments_paid_store_id_fkey"
+            columns: ["paid_store_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_payments_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "service_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_invoice_installments: {
         Row: {
           amount: number
@@ -12920,6 +13067,42 @@ export type Database = {
           weekly_reminder_day?: number | null
           weekly_reminder_hour?: number | null
           whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
+      service_providers: {
+        Row: {
+          created_at: string
+          document: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          phone: string | null
+          provider_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          document?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          phone?: string | null
+          provider_type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          document?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          provider_type?: string
+          updated_at?: string
         }
         Relationships: []
       }
