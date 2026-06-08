@@ -992,6 +992,11 @@ export function POSConfig({ storeId }: Props) {
         {/* Crediário gateways (global) */}
         <POSCrediarioGatewaysManager />
 
+        {/* Service providers (mototaxistas / transportadoras) */}
+        <ServiceProvidersManager />
+
+
+
 
         {/* Product Sync */}
         <Card className="bg-pos-white/5 border-pos-orange/20">
