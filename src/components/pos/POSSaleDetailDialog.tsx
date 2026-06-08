@@ -19,6 +19,7 @@ import { POSCustomerForm } from "./POSCustomerForm";
 import { POSTinyProductPicker } from "./POSTinyProductPicker";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
+import { DeliveryCostDialog } from "./DeliveryCostDialog";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
