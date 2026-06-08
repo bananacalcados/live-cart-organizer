@@ -1637,6 +1637,16 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
           />
         )}
       </DialogContent>
+      {sale && (
+        <DeliveryCostDialog
+          open={showDeliveryCost}
+          onOpenChange={setShowDeliveryCost}
+          source={sale.sale_type === 'live' ? 'live' : 'pos'}
+          storeId={storeId}
+          posSaleId={sale.id}
+          customerName={customer?.name || (sale as any).customer_name || null}
+        />
+      )}
     </Dialog>
   );
 }
