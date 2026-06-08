@@ -71,6 +71,14 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [removedVariantIds, setRemovedVariantIds] = useState<string[]>([]);
 
+  // Lote: gerador de matriz cor × tamanho + loja que recebe o estoque das variações novas
+  const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
+  const [stockStoreId, setStockStoreId] = useState<string>("");
+  const [matrixColors, setMatrixColors] = useState("");
+  const [matrixSizes, setMatrixSizes] = useState("");
+  const [batchStock, setBatchStock] = useState("0");
+  const [batchCost, setBatchCost] = useState("");
+
   useEffect(() => {
     if (!open || !masterId) return;
     loadData();
