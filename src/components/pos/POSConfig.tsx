@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Settings, Store, Users, Save, Plus, Trash2, Receipt, RefreshCw, Loader2, CheckCircle, AlertCircle, Phone, Trophy, Target, ListChecks, Check, Sparkles, Calendar, Star, Gift, Pencil, DollarSign, Truck } from "lucide-react";
 import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { POSCrediarioGatewaysManager } from "./POSCrediarioGatewaysManager";
+import { ServiceProvidersManager } from "./ServiceProvidersManager";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
