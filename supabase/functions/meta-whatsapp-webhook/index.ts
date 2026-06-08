@@ -196,15 +196,27 @@ serve(async (req) => {
         if (change.field !== 'messages') continue;
         const value = change.value;
 
-        // Determine which WhatsApp number received this
+        // Determine which WhatsApp number received this (strong keys only — never guess)
         const metaPhoneNumberId = value.metadata?.phone_number_id || '';
-        const creds = await getAccessTokenForPhoneNumberId(supabase, metaPhoneNumberId);
-        const accessToken = creds?.accessToken || '';
-        const whatsappNumberDbId = creds?.numberId || null;
+        const metaDisplayPhoneNumber = value.metadata?.display_phone_number || '';
+        const resolution = await resolveMetaInstance(supabase, metaPhoneNumberId, metaDisplayPhoneNumber);
+        const accessToken = resolution.accessToken || '';
+        const whatsappNumberDbId = resolution.numberId;
 
         // Process incoming messages
         if (value.messages) {
           for (const msg of value.messages) {
+            // Diagnostic: record how this incoming message was routed
+            await logRouting(supabase, {
+              provider: 'meta',
+              senderPhone: normalizePhone(msg.from),
+              resolutionMethod: resolution.method,
+              resolvedWhatsappNumberId: whatsappNumberDbId,
+              rawIdentifier: resolution.rawIdentifier,
+              matched: resolution.matched,
+              rawPayload: { metadata: value.metadata, message_id: msg.id, type: msg.type },
+            });
+
             const phone = normalizePhone(msg.from);
             const messageId = msg.id;
             const timestamp = msg.timestamp
