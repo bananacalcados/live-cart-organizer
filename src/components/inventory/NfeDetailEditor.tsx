@@ -225,6 +225,33 @@ export function NfeDetailEditor({
   }
 
   // ---- Vincular linhas selecionadas a um pai existente ----
+  // Passo 1: prévia (dry_run) — mostra quais variações são NOVAS vs ATUALIZADAS antes de gravar.
+  async function requestLink(parentSku: string, ids: string[], parentName = "") {
+    if (!stockStoreId) { toast.error("Escolha a loja que recebe o estoque."); return; }
+    if (!ids.length) return;
+    setPreviewLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("nfe-link-items-pos", {
+        body: { invoice_id: invoiceId, store_id: stockStoreId, parent_sku: parentSku, item_ids: ids, dry_run: true },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setShowSearch(false);
+      setLinkPreview({
+        parentSku,
+        parentName: parentName || parentSku,
+        ids,
+        created: data?.created || [],
+        updated: data?.updated || [],
+      });
+    } catch (err: any) {
+      toast.error("Erro ao calcular prévia: " + (err.message || err));
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  // Passo 2: confirma e grava de fato.
   async function linkToParent(parentSku: string, ids: string[]) {
     if (!stockStoreId) { toast.error("Escolha a loja que recebe o estoque."); return; }
     if (!ids.length) return;
@@ -236,6 +263,7 @@ export function NfeDetailEditor({
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       toast.success(data?.message || "Linhas vinculadas e estoque lançado.");
+      setLinkPreview(null);
       setShowSearch(false);
       setSelectedIds(new Set());
       await load();
@@ -248,7 +276,7 @@ export function NfeDetailEditor({
   }
 
   function quickLinkLine(item: Item, match: GtinMatch) {
-    linkToParent(match.parent_sku, [item.id]);
+    requestLink(match.parent_sku, [item.id], match.name);
   }
 
   // ---- Parcelas ----
