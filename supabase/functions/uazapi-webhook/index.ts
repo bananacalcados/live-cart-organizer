@@ -174,7 +174,8 @@ serve(async (req) => {
 
     console.log(`[uazapi-webhook] event=${eventType} number_id=${url.searchParams.get("number_id")}`);
 
-    const numberId = await resolveNumberId(supabase, url, payload);
+    const resolution = await resolveNumberId(supabase, url, payload);
+    const numberId = resolution.numberId;
 
     // ───────────────────────── connection / qrcode ─────────────────────────
     if (eventType === "connection" || eventType === "qrcode") {
