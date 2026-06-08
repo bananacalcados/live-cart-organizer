@@ -259,7 +259,91 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
     setTemplateVars(initial);
   };
 
-  const handleSend = async () => {
+  // ---- Media attachment ----
+  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingFile(file);
+    setPendingPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const clearPendingFile = () => {
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingFile(null);
+    setPendingPreviewUrl(null);
+  };
+
+  // ---- Audio recording ----
+  const startRecording = async () => {
+    try {
+      clearAudio();
+      const { getAudioMimeType } = await import("@/lib/audioRecorder");
+      const mime = getAudioMimeType();
+      recordingMimeRef.current = mime;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (ev) => { if (ev.data.size > 0) audioChunksRef.current.push(ev.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        setIsRecording(false);
+        const { getAudioContentType } = await import("@/lib/audioRecorder");
+        const ct = getAudioContentType(recordingMimeRef.current);
+        const blob = new Blob(audioChunksRef.current, { type: ct });
+        if (blob.size === 0) return;
+        setAudioBlob(blob);
+        setAudioUrl(URL.createObjectURL(blob));
+      };
+      recorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = window.setInterval(() => setRecordingTime(p => p + 1), 1000);
+    } catch (err) {
+      console.error("mic error", err);
+      toast.error("Não foi possível acessar o microfone.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+  };
+
+  const clearAudio = () => {
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioBlob(null);
+    setAudioUrl(null);
+    setAudioPlaying(false);
+  };
+
+  const toggleAudioPlay = () => {
+    if (!audioElRef.current) return;
+    if (audioPlaying) { audioElRef.current.pause(); setAudioPlaying(false); }
+    else { audioElRef.current.play(); setAudioPlaying(true); }
+  };
+
+  const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  const sendMediaUrl = async (numberId: string, phone: string, mediaUrl: string, mediaType: string, caption?: string) => {
+    const body: Record<string, any> = { phone, mediaUrl, mediaType, caption: caption || "", whatsapp_number_id: numberId };
+    if (provider === "meta") {
+      await supabase.functions.invoke("meta-whatsapp-send", { body: { ...body, type: mediaType } });
+    } else if (provider === "wasender") {
+      await supabase.functions.invoke("wasender-send-media", { body });
+    } else if (provider === "uazapi") {
+      await supabase.functions.invoke("uazapi-send-media", { body });
+    } else {
+      await supabase.functions.invoke("zapi-send-media", { body });
+    }
+    await supabase.from("whatsapp_messages").insert({
+      phone, message: caption || "", direction: "outgoing", status: "sent",
+      whatsapp_number_id: numberId, media_url: mediaUrl, media_type: mediaType,
+    });
+  };
+
     const cleanPhone = contactPhone.replace(/\D/g, "");
     if (!cleanPhone || cleanPhone.length < 10) {
       toast.error("Telefone inválido");
