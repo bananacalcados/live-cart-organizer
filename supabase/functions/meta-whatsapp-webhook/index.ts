@@ -98,26 +98,59 @@ async function downloadMetaMedia(mediaId: string, accessToken: string, supabase:
   }
 }
 
-async function getAccessTokenForPhoneNumberId(supabase: ReturnType<typeof createClient>, metaPhoneNumberId: string): Promise<{ accessToken: string; numberId: string } | null> {
-  const { data } = await supabase
-    .from('whatsapp_numbers')
-    .select('id, access_token')
-    .eq('phone_number_id', metaPhoneNumberId)
-    .eq('is_active', true)
-    .maybeSingle();
-  if (data) return { accessToken: data.access_token, numberId: data.id };
+interface MetaInstanceResolution {
+  /** Access token used ONLY for media download (best effort when unresolved) */
+  accessToken: string;
+  /** Resolved whatsapp_number_id, or null when the instance could NOT be identified */
+  numberId: string | null;
+  method: 'phone_number_id' | 'display_phone_number' | 'none';
+  matched: boolean;
+  rawIdentifier: string;
+}
 
-  // Fallback to default
-  const { data: def } = await supabase
-    .from('whatsapp_numbers')
-    .select('id, access_token')
-    .eq('is_default', true)
-    .eq('is_active', true)
-    .maybeSingle();
-  if (def) return { accessToken: def.access_token, numberId: def.id };
+/**
+ * Resolve which of OUR Meta instances received the message.
+ * Strong keys only: phone_number_id (primary) → display_phone_number (secondary).
+ * NEVER falls back to the is_default instance — guessing the instance causes
+ * customer replies to land in the wrong store inbox. When nothing matches we
+ * return numberId=null so the message is saved as "não identificada".
+ */
+async function resolveMetaInstance(
+  supabase: ReturnType<typeof createClient>,
+  metaPhoneNumberId: string,
+  metaDisplayPhoneNumber: string,
+): Promise<MetaInstanceResolution> {
+  // 1. Primary: phone_number_id
+  if (metaPhoneNumberId) {
+    const { data } = await supabase
+      .from('whatsapp_numbers')
+      .select('id, access_token')
+      .eq('phone_number_id', metaPhoneNumberId)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (data) {
+      return { accessToken: data.access_token, numberId: data.id, method: 'phone_number_id', matched: true, rawIdentifier: metaPhoneNumberId };
+    }
+  }
 
+  // 2. Secondary: display_phone_number (e.g. "5533936180823")
+  if (metaDisplayPhoneNumber) {
+    const cleanDisplay = metaDisplayPhoneNumber.replace(/\D/g, '');
+    const { data } = await supabase
+      .from('whatsapp_numbers')
+      .select('id, access_token')
+      .eq('provider', 'meta')
+      .eq('is_active', true)
+      .ilike('phone_display', `%${cleanDisplay.slice(-8)}%`)
+      .maybeSingle();
+    if (data) {
+      return { accessToken: data.access_token, numberId: data.id, method: 'display_phone_number', matched: true, rawIdentifier: metaPhoneNumberId || cleanDisplay };
+    }
+  }
+
+  // 3. UNRESOLVED — do NOT guess. Use env token only for best-effort media download.
   const fallbackToken = Deno.env.get('META_WHATSAPP_ACCESS_TOKEN') || '';
-  return fallbackToken ? { accessToken: fallbackToken, numberId: '' } : null;
+  return { accessToken: fallbackToken, numberId: null, method: 'none', matched: false, rawIdentifier: metaPhoneNumberId || metaDisplayPhoneNumber || '' };
 }
 
 serve(async (req) => {
