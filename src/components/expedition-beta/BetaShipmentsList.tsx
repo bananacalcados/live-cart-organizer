@@ -16,6 +16,7 @@ import { format, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { DeliveryCostDialog } from '@/components/pos/DeliveryCostDialog';
 
 const PAGE_SIZE = 25;
 
