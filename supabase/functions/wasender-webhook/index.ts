@@ -46,12 +46,16 @@ serve(async (req) => {
     console.log("[wasender-webhook] event:", payload?.event, "number_id:", numberId);
 
     // Resolve a linha local (para validar assinatura e obter api_key de decrypt)
+    // is_active guard: só instâncias ATIVAS podem receber. Se a linha não for
+    // encontrada por estar INATIVA, `row` fica null e a mensagem vira
+    // "não identificada" (igual aos demais provedores) — nunca atribuída.
     let row: { id: string; wasender_webhook_secret: string | null; wasender_api_key: string | null } | null = null;
     if (numberId) {
       const { data } = await supabase
         .from("whatsapp_numbers")
         .select("id, wasender_webhook_secret, wasender_api_key")
         .eq("id", numberId)
+        .eq("is_active", true)
         .maybeSingle();
       row = data as typeof row;
     }
