@@ -935,6 +935,23 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           } catch (e) { console.error('[crediario_gateway update]', e); }
         }
 
+        // Custo de entrega → fica "a pagar" ao entregador e aparece no Caixa da Loja
+        if (saleId && deliveryEnabled && deliveryProviderId && parseFloat(deliveryAmount) > 0) {
+          try {
+            await createDeliveryCost({
+              provider_id: deliveryProviderId,
+              provider_type: deliveryType,
+              amount: parseFloat(deliveryAmount),
+              source: storeNameToSource(storeName),
+              store_id: storeId,
+              pos_sale_id: saleId,
+              customer_name: selectedCustomer?.name ?? null,
+            });
+          } catch (e) { console.error('[delivery_cost create]', e); }
+        }
+
+
+
 
 
         // Se for venda ONLINE: marca pos_sales pra aparecer na aba Envios
