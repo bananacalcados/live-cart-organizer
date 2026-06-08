@@ -251,12 +251,16 @@ export function BetaShipmentsList() {
                       )}
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="text-right shrink-0 flex flex-col items-end gap-1.5">
                     <p className="font-medium text-sm">{fmtMoney(s.total_price)}</p>
                     <p className="text-[11px] text-muted-foreground">{fmtDate(s.shopify_created_at)}</p>
+                    <Button size="sm" variant="outline" className="h-7 gap-1 text-[11px]" onClick={() => setDeliveryCostFor(s)}>
+                      <Truck className="h-3 w-3" /> Custo entrega
+                    </Button>
                   </div>
                 </div>
               </div>
+
             );
           })}
         </div>
