@@ -137,6 +137,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [receiptDone, setReceiptDone] = useState(false);
   const [currentRegisterId, setCurrentRegisterId] = useState<string | null>(null);
 
+  // Custo de entrega (mototaxista/transportadora) — fica "a pagar" e aparece no Caixa da Loja
+  const [storeName, setStoreName] = useState<string>("");
+  const [deliveryEnabled, setDeliveryEnabled] = useState(false);
+  const [deliveryProviders, setDeliveryProviders] = useState<ServiceProvider[]>([]);
+  const [deliveryType, setDeliveryType] = useState<ProviderType>("mototaxi");
+  const [deliveryProviderId, setDeliveryProviderId] = useState("");
+  const [deliveryAmount, setDeliveryAmount] = useState("");
+
   // Cash register gate
   const [hasOpenRegister, setHasOpenRegister] = useState<boolean | null>(null);
   const [checkingRegister, setCheckingRegister] = useState(true);
