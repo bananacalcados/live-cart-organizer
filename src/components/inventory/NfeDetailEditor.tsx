@@ -458,7 +458,7 @@ export function NfeDetailEditor({
                                   size="sm"
                                   variant="ghost"
                                   className="h-6 px-2 text-xs"
-                                  disabled={linking}
+                                  disabled={linking || previewLoading}
                                   onClick={() => quickLinkLine(it, match)}
                                 >
                                   <Link2 className="h-3 w-3 mr-1" /> Vincular esta
