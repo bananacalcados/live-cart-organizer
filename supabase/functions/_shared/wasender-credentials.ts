@@ -120,17 +120,20 @@ export async function resolveWasenderCredentials(
   const supabase = getServiceClient();
 
   if (whatsappNumberId) {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("whatsapp_numbers")
       .select("wasender_api_key, wasender_session_id")
       .eq("id", whatsappNumberId)
       .eq("provider", "wasender")
-      .single();
+      .eq("is_active", true)
+      .maybeSingle();
 
-    if (!error && data?.wasender_api_key) {
+    if (data?.wasender_api_key) {
       return { apiKey: data.wasender_api_key, sessionId: data.wasender_session_id ?? null };
     }
-    console.warn(`Não foi possível resolver credenciais WaSender para whatsapp_number_id=${whatsappNumberId}`);
+    // Explicit instance requested but inactive/not found → fail instead of using
+    // default. NEVER silently fall back: that would send via the wrong number.
+    throw new Error(`Instância WaSender ${whatsappNumberId} não encontrada ou inativa — envio cancelado para evitar número errado.`);
   }
 
   // Fallback: única instância wasender ativa
