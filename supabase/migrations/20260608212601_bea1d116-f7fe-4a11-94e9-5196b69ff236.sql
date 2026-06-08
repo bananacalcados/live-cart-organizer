@@ -1,0 +1,1 @@
+ALTER TABLE public.purchase_invoice_items ADD COLUMN IF NOT EXISTS line_number integer;

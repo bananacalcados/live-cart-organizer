@@ -39,6 +39,7 @@ interface Invoice {
 
 interface Item {
   id: string;
+  line_number: number | null;
   description: string;
   ncm: string | null;
   quantity: number;
@@ -130,7 +131,7 @@ export function NfeDetailEditor({
     setLoading(true);
     const [{ data: inv }, { data: its }, { data: ins }, { data: st }] = await Promise.all([
       supabase.from("purchase_invoices").select("*").eq("id", invoiceId).single(),
-      supabase.from("purchase_invoice_items").select("*").eq("invoice_id", invoiceId).order("created_at"),
+      supabase.from("purchase_invoice_items").select("*").eq("invoice_id", invoiceId).order("line_number", { ascending: true, nullsFirst: false }).order("created_at"),
       supabase.from("purchase_invoice_installments").select("*").eq("invoice_id", invoiceId).order("installment_number"),
       supabase.from("pos_stores").select("id, name").eq("is_active", true).order("name"),
     ]);
