@@ -57,7 +57,9 @@ export async function logRouting(
         `[routing-log] UNRESOLVED ${input.provider} message from ${input.senderPhone ?? "?"} ` +
           `(method=${input.resolutionMethod}, id=${input.rawIdentifier ?? "?"}) — saved with NULL instance`,
       );
-    } else if (input.resolutionMethod === "query_param") {
+    } else if (input.resolutionMethod === "query_param" && input.provider !== "wasender") {
+      // WaSender legitimately uses a per-instance ?number_id= param, so it is not
+      // suspect there. For zapi/uazapi the param is a shared/last-resort fallback.
       console.warn(
         `[routing-log] SUSPECT ${input.provider} message from ${input.senderPhone ?? "?"} ` +
           `resolved via query_param fallback → ${input.resolvedWhatsappNumberId}`,
