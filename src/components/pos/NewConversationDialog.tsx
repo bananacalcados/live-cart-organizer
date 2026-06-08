@@ -755,7 +755,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Footer */}
         <div className="border-t px-4 py-3 flex justify-end gap-2">
