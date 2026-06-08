@@ -572,8 +572,62 @@ export function NfeDetailEditor({
       <ExistingParentSearchDialog
         open={showSearch}
         onOpenChange={setShowSearch}
-        onSelect={(parentSku) => linkToParent(parentSku, [...selectedIds])}
+        onSelect={(parentSku, name) => requestLink(parentSku, [...selectedIds], name)}
       />
+
+      {/* Confirmação com prévia de variações novas vs atualizadas */}
+      <Dialog open={!!linkPreview} onOpenChange={(v) => { if (!v) setLinkPreview(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" /> Confirmar vínculo
+            </DialogTitle>
+          </DialogHeader>
+          {linkPreview && (
+            <div className="space-y-3 text-sm">
+              <p>
+                Vincular <strong>{linkPreview.ids.length}</strong> linha(s) ao pai{" "}
+                <strong>{linkPreview.parentName}</strong>. Estoque entra em{" "}
+                <strong>{selectedStoreName || "loja"}</strong>.
+              </p>
+              {linkPreview.created.length > 0 && (
+                <div className="rounded-md border border-green-500/30 bg-green-500/10 p-2">
+                  <div className="font-medium text-green-700 dark:text-green-400 flex items-center gap-1 mb-1">
+                    <Sparkles className="h-3.5 w-3.5" /> {linkPreview.created.length} variação(ões) NOVA(S)
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {linkPreview.created.map((c, i) => (
+                      <Badge key={i} variant="outline" className="bg-green-500/10 border-green-500/30">{c}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {linkPreview.updated.length > 0 && (
+                <div className="rounded-md border bg-muted/40 p-2">
+                  <div className="font-medium flex items-center gap-1 mb-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {linkPreview.updated.length} já existe(m) — soma estoque
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {linkPreview.updated.map((u, i) => (
+                      <Badge key={i} variant="secondary">{u}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkPreview(null)} disabled={linking}>Cancelar</Button>
+            <Button
+              onClick={() => linkPreview && linkToParent(linkPreview.parentSku, linkPreview.ids)}
+              disabled={linking}
+            >
+              {linking ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Link2 className="h-4 w-4 mr-1" />}
+              Confirmar e lançar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
