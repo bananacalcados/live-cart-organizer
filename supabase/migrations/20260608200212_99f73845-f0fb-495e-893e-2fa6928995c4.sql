@@ -1,0 +1,2 @@
+DELETE FROM public.whatsapp_messages WHERE message_id LIKE 'AUDIT_TEST_%';
+DELETE FROM public.webhook_routing_log WHERE sender_phone = '5533999990001' AND raw_identifier = '3ED1FDEB6708F2DCEB626A599C5ED5B8';
