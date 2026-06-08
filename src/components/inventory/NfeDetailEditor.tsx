@@ -3,15 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
-import { Loader2, Save, Package, Plus, Trash2, Calendar, FileText } from "lucide-react";
+import { Loader2, Save, Package, Plus, Trash2, FileText, Link2, Store as StoreIcon, CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { ProductMasterForm } from "./ProductMasterForm";
+import { ExistingParentSearchDialog } from "./ExistingParentSearchDialog";
 
 interface Invoice {
   id: string;
@@ -44,6 +49,9 @@ interface Item {
   ean: string | null;
   variant_id: string | null;
   master_id: string | null;
+  linked_parent_sku: string | null;
+  linked_store_id: string | null;
+  linked_at: string | null;
 }
 
 interface Installment {
@@ -53,6 +61,11 @@ interface Installment {
   amount: number;
   paid: boolean;
   paid_at: string | null;
+}
+
+interface GtinMatch {
+  parent_sku: string;
+  name: string;
 }
 
 export function NfeDetailEditor({
@@ -71,24 +84,69 @@ export function NfeDetailEditor({
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Loja única que recebe o estoque desta NF
+  const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
+  const [stockStoreId, setStockStoreId] = useState<string>("");
+
+  // Seleção de linhas
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Match por GTIN: ean -> produto existente
+  const [gtinMatches, setGtinMatches] = useState<Record<string, GtinMatch>>({});
+
+  // Produto novo (subconjunto de linhas)
   const [showProductForm, setShowProductForm] = useState(false);
   const [productInitial, setProductInitial] = useState<any>(null);
+  const [productFormItemIds, setProductFormItemIds] = useState<string[]>([]);
+
+  // Vincular a pai existente
+  const [showSearch, setShowSearch] = useState(false);
+  const [linking, setLinking] = useState(false);
+
+  async function loadGtinMatches(its: Item[]) {
+    const eans = its.map((i) => i.ean).filter((e): e is string => !!e && /^\d{8,14}$/.test(e));
+    if (eans.length === 0) {
+      setGtinMatches({});
+      return;
+    }
+    const { data } = await supabase
+      .from("pos_products")
+      .select("barcode, parent_sku, name")
+      .in("barcode", eans)
+      .not("parent_sku", "is", null);
+    const map: Record<string, GtinMatch> = {};
+    for (const r of (data || []) as any[]) {
+      if (!r.barcode || map[r.barcode]) continue;
+      const baseName = (r.name || "").includes(" - ")
+        ? (r.name as string).slice(0, (r.name as string).lastIndexOf(" - "))
+        : r.name;
+      map[r.barcode] = { parent_sku: r.parent_sku, name: baseName || r.parent_sku };
+    }
+    setGtinMatches(map);
+  }
 
   async function load() {
     setLoading(true);
-    const [{ data: inv }, { data: its }, { data: ins }] = await Promise.all([
+    const [{ data: inv }, { data: its }, { data: ins }, { data: st }] = await Promise.all([
       supabase.from("purchase_invoices").select("*").eq("id", invoiceId).single(),
       supabase.from("purchase_invoice_items").select("*").eq("invoice_id", invoiceId).order("created_at"),
       supabase.from("purchase_invoice_installments").select("*").eq("invoice_id", invoiceId).order("installment_number"),
+      supabase.from("pos_stores").select("id, name").eq("is_active", true).order("name"),
     ]);
     setInvoice(inv as any);
-    setItems((its || []) as any);
+    const itemsData = (its || []) as any as Item[];
+    setItems(itemsData);
     setInstallments((ins || []) as any);
+    setStores((st || []) as any);
+    setSelectedIds(new Set());
+    await loadGtinMatches(itemsData);
     setLoading(false);
   }
 
   useEffect(() => {
     if (open) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceId, open]);
 
   async function saveInvoice() {
@@ -108,12 +166,8 @@ export function NfeDetailEditor({
       })
       .eq("id", invoice.id);
     setSaving(false);
-    if (error) {
-      toast.error("Erro ao salvar: " + error.message);
-    } else {
-      toast.success("NF salva.");
-      onChanged?.();
-    }
+    if (error) toast.error("Erro ao salvar: " + error.message);
+    else { toast.success("NF salva."); onChanged?.(); }
   }
 
   async function updateItem(id: string, patch: Partial<Item>) {
@@ -122,66 +176,34 @@ export function NfeDetailEditor({
     if (error) toast.error("Erro: " + error.message);
   }
 
-  async function addInstallment() {
-    const next = installments.length + 1;
-    const { data, error } = await supabase
-      .from("purchase_invoice_installments")
-      .insert({
-        invoice_id: invoiceId,
-        installment_number: next,
-        due_date: new Date().toISOString().slice(0, 10),
-        amount: 0,
-      })
-      .select()
-      .single();
-    if (error) toast.error("Erro: " + error.message);
-    else setInstallments((i) => [...i, data as any]);
-  }
-
-  async function updateInstallment(id: string, patch: Partial<Installment>) {
-    setInstallments((ins) => ins.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-    const { error } = await supabase.from("purchase_invoice_installments").update(patch).eq("id", id);
-    if (error) toast.error("Erro: " + error.message);
-  }
-
-  async function deleteInstallment(id: string) {
-    const { error } = await supabase.from("purchase_invoice_installments").delete().eq("id", id);
-    if (error) toast.error("Erro: " + error.message);
-    else setInstallments((i) => i.filter((x) => x.id !== id));
-  }
-
-  async function togglePaid(inst: Installment) {
-    const newPaid = !inst.paid;
-    await updateInstallment(inst.id, {
-      paid: newPaid,
-      paid_at: newPaid ? new Date().toISOString() : null,
-    } as any);
-  }
-
-  function openCreateProductFromItem(item: Item) {
-    setProductInitial({
-      name: item.description,
-      cost_price: item.unit_cost,
-      ncm: item.ncm || "64039900",
-      items: [
-        {
-          color: item.parsed_color || "",
-          size: item.parsed_size || "",
-          quantity: item.quantity,
-          unit_cost: item.unit_cost,
-        },
-      ],
+  function toggleSelect(id: string) {
+    setSelectedIds((s) => {
+      const next = new Set(s);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
-    setShowProductForm(true);
   }
 
-  function openCreateAllProducts() {
-    if (!items.length) return;
+  const linkableItems = items.filter((i) => !i.master_id && !i.linked_parent_sku);
+  function toggleSelectAll() {
+    setSelectedIds((s) =>
+      s.size === linkableItems.length && linkableItems.length > 0
+        ? new Set()
+        : new Set(linkableItems.map((i) => i.id))
+    );
+  }
+
+  // ---- Criar novo produto pai a partir das linhas selecionadas ----
+  function openCreateFromSelected() {
+    if (!stockStoreId) { toast.error("Escolha a loja que recebe o estoque."); return; }
+    const sel = items.filter((i) => selectedIds.has(i.id));
+    if (!sel.length) return;
+    setProductFormItemIds(sel.map((i) => i.id));
     setProductInitial({
-      name: items[0].description.split(" ").slice(0, 4).join(" "),
-      cost_price: items[0].unit_cost,
-      ncm: items[0].ncm || "64039900",
-      items: items.map((it) => ({
+      name: sel[0].description.replace(/\s+\d{2,3}$/, "").trim(),
+      cost_price: sel[0].unit_cost,
+      ncm: sel[0].ncm || "64039900",
+      items: sel.map((it) => ({
         color: it.parsed_color || "",
         size: it.parsed_size || "",
         quantity: it.quantity,
@@ -190,6 +212,61 @@ export function NfeDetailEditor({
     });
     setShowProductForm(true);
   }
+
+  // ---- Vincular linhas selecionadas a um pai existente ----
+  async function linkToParent(parentSku: string, ids: string[]) {
+    if (!stockStoreId) { toast.error("Escolha a loja que recebe o estoque."); return; }
+    if (!ids.length) return;
+    setLinking(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("nfe-link-items-pos", {
+        body: { invoice_id: invoiceId, store_id: stockStoreId, parent_sku: parentSku, item_ids: ids },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success(data?.message || "Linhas vinculadas e estoque lançado.");
+      setShowSearch(false);
+      setSelectedIds(new Set());
+      await load();
+      onChanged?.();
+    } catch (err: any) {
+      toast.error("Erro ao vincular: " + (err.message || err));
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  function quickLinkLine(item: Item, match: GtinMatch) {
+    linkToParent(match.parent_sku, [item.id]);
+  }
+
+  // ---- Parcelas ----
+  async function addInstallment() {
+    const next = installments.length + 1;
+    const { data, error } = await supabase
+      .from("purchase_invoice_installments")
+      .insert({ invoice_id: invoiceId, installment_number: next, due_date: new Date().toISOString().slice(0, 10), amount: 0 })
+      .select().single();
+    if (error) toast.error("Erro: " + error.message);
+    else setInstallments((i) => [...i, data as any]);
+  }
+  async function updateInstallment(id: string, patch: Partial<Installment>) {
+    setInstallments((ins) => ins.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    const { error } = await supabase.from("purchase_invoice_installments").update(patch).eq("id", id);
+    if (error) toast.error("Erro: " + error.message);
+  }
+  async function deleteInstallment(id: string) {
+    const { error } = await supabase.from("purchase_invoice_installments").delete().eq("id", id);
+    if (error) toast.error("Erro: " + error.message);
+    else setInstallments((i) => i.filter((x) => x.id !== id));
+  }
+  async function togglePaid(inst: Installment) {
+    const newPaid = !inst.paid;
+    await updateInstallment(inst.id, { paid: newPaid, paid_at: newPaid ? new Date().toISOString() : null } as any);
+  }
+
+  const selectedStoreName = stores.find((s) => s.id === stockStoreId)?.name;
+  const pendingCount = linkableItems.length;
 
   if (loading || !invoice) {
     return (
@@ -214,7 +291,7 @@ export function NfeDetailEditor({
             </DialogTitle>
           </DialogHeader>
 
-          <Tabs defaultValue="header">
+          <Tabs defaultValue="items">
             <TabsList className="w-full">
               <TabsTrigger value="header" className="flex-1">Cabeçalho</TabsTrigger>
               <TabsTrigger value="items" className="flex-1">Itens ({items.length})</TabsTrigger>
@@ -237,20 +314,11 @@ export function NfeDetailEditor({
                 </div>
                 <div>
                   <Label>Emissão</Label>
-                  <Input
-                    type="date"
-                    value={invoice.emission_date ? invoice.emission_date.slice(0, 10) : ""}
-                    onChange={(e) => setInvoice({ ...invoice, emission_date: e.target.value })}
-                  />
+                  <Input type="date" value={invoice.emission_date ? invoice.emission_date.slice(0, 10) : ""} onChange={(e) => setInvoice({ ...invoice, emission_date: e.target.value })} />
                 </div>
                 <div>
                   <Label>Valor Total (R$)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={invoice.total_value || 0}
-                    onChange={(e) => setInvoice({ ...invoice, total_value: parseFloat(e.target.value) })}
-                  />
+                  <Input type="number" step="0.01" value={invoice.total_value || 0} onChange={(e) => setInvoice({ ...invoice, total_value: parseFloat(e.target.value) })} />
                 </div>
                 <div>
                   <Label>Forma de Pagamento</Label>
@@ -268,78 +336,130 @@ export function NfeDetailEditor({
             </TabsContent>
 
             <TabsContent value="items" className="space-y-3 mt-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  {items.length} itens · Total R$ {items.reduce((s, i) => s + (i.total_cost || 0), 0).toFixed(2)}
+              {/* Loja única da NF */}
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-3">
+                <Label className="flex items-center gap-1.5 mb-1">
+                  <StoreIcon className="h-4 w-4 text-primary" />
+                  Loja que recebe o estoque desta NF *
+                </Label>
+                <Select value={stockStoreId} onValueChange={setStockStoreId}>
+                  <SelectTrigger className="max-w-sm">
+                    <SelectValue placeholder="Escolha a loja" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stores.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  O estoque de entrada entra nesta loja. Os produtos ficam bipáveis em todas as lojas (estoque compartilhado para Shopify).
                 </p>
-                <Button size="sm" onClick={openCreateAllProducts} disabled={!items.length}>
-                  <Package className="h-4 w-4 mr-1" /> Criar Produto a partir de todos
-                </Button>
               </div>
+
+              {/* Barra de seleção / ações */}
+              <div className="flex flex-wrap items-center justify-between gap-2 sticky top-0 z-10 bg-background py-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={pendingCount > 0 && selectedIds.size === pendingCount}
+                    onCheckedChange={toggleSelectAll}
+                    disabled={pendingCount === 0}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {selectedIds.size > 0 ? `${selectedIds.size} selecionada(s)` : `Selecionar todas (${pendingCount})`}
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={selectedIds.size === 0 || linking}
+                    onClick={() => setShowSearch(true)}
+                  >
+                    <Link2 className="h-4 w-4 mr-1" /> Vincular a pai existente
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={selectedIds.size === 0 || linking}
+                    onClick={openCreateFromSelected}
+                  >
+                    <Sparkles className="h-4 w-4 mr-1" /> Criar novo produto pai
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Marque as linhas de um mesmo modelo e agrupe-as em um produto pai (novo ou existente).
+              </p>
+
               <div className="space-y-2 max-h-[50vh] overflow-y-auto">
-                {items.map((it) => (
-                  <Card key={it.id}>
-                    <CardContent className="p-3 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium truncate">{it.description}</div>
-                          <div className="text-xs text-muted-foreground">
-                            NCM {it.ncm || "—"} · EAN {it.ean || "—"}
+                {items.map((it) => {
+                  const isLinked = !!it.master_id || !!it.linked_parent_sku;
+                  const match = it.ean ? gtinMatches[it.ean] : undefined;
+                  return (
+                    <Card key={it.id} className={isLinked ? "opacity-70" : selectedIds.has(it.id) ? "ring-2 ring-primary" : ""}>
+                      <CardContent className="p-3 space-y-2">
+                        <div className="flex items-start gap-2">
+                          <Checkbox
+                            className="mt-1"
+                            checked={selectedIds.has(it.id)}
+                            onCheckedChange={() => toggleSelect(it.id)}
+                            disabled={isLinked}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate">{it.description}</div>
+                            <div className="text-xs text-muted-foreground">
+                              NCM {it.ncm || "—"} · EAN {it.ean || "—"}
+                            </div>
+                            {match && !isLinked && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge variant="outline" className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30">
+                                  GTIN encontrado: {match.name}
+                                </Badge>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 px-2 text-xs"
+                                  disabled={linking}
+                                  onClick={() => quickLinkLine(it, match)}
+                                >
+                                  <Link2 className="h-3 w-3 mr-1" /> Vincular esta
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                          {isLinked && (
+                            <Badge variant="secondary" className="shrink-0">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              {it.master_id ? "Produto criado" : "Vinculado"}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pl-7">
+                          <div>
+                            <Label className="text-[10px]">Qtd</Label>
+                            <Input className="h-8" type="number" value={it.quantity} disabled={isLinked}
+                              onChange={(e) => updateItem(it.id, { quantity: parseFloat(e.target.value) || 0 })} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">Custo Unit.</Label>
+                            <Input className="h-8" type="number" step="0.01" value={it.unit_cost} disabled={isLinked}
+                              onChange={(e) => updateItem(it.id, { unit_cost: parseFloat(e.target.value) || 0 })} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">Cor</Label>
+                            <Input className="h-8" value={it.parsed_color || ""} disabled={isLinked}
+                              onChange={(e) => updateItem(it.id, { parsed_color: e.target.value })} />
+                          </div>
+                          <div>
+                            <Label className="text-[10px]">Tamanho</Label>
+                            <Input className="h-8" value={it.parsed_size || ""} disabled={isLinked}
+                              onChange={(e) => updateItem(it.id, { parsed_size: e.target.value })} />
                           </div>
                         </div>
-                        {it.master_id && <Badge variant="secondary">Produto criado</Badge>}
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                        <div>
-                          <Label className="text-[10px]">Qtd</Label>
-                          <Input
-                            className="h-8"
-                            type="number"
-                            value={it.quantity}
-                            onChange={(e) => updateItem(it.id, { quantity: parseFloat(e.target.value) || 0 })}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-[10px]">Custo Unit.</Label>
-                          <Input
-                            className="h-8"
-                            type="number"
-                            step="0.01"
-                            value={it.unit_cost}
-                            onChange={(e) => updateItem(it.id, { unit_cost: parseFloat(e.target.value) || 0 })}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-[10px]">Cor</Label>
-                          <Input
-                            className="h-8"
-                            value={it.parsed_color || ""}
-                            onChange={(e) => updateItem(it.id, { parsed_color: e.target.value })}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-[10px]">Tamanho</Label>
-                          <Input
-                            className="h-8"
-                            value={it.parsed_size || ""}
-                            onChange={(e) => updateItem(it.id, { parsed_size: e.target.value })}
-                          />
-                        </div>
-                        <div className="flex items-end">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full h-8 text-xs"
-                            onClick={() => openCreateProductFromItem(it)}
-                            disabled={!!it.master_id}
-                          >
-                            <Package className="h-3 w-3 mr-1" /> Criar
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </TabsContent>
 
@@ -358,30 +478,14 @@ export function NfeDetailEditor({
                     <div className="col-span-1 text-center font-mono text-sm">{inst.installment_number}</div>
                     <div className="col-span-4">
                       <Label className="text-[10px]">Vencimento</Label>
-                      <Input
-                        className="h-8"
-                        type="date"
-                        value={inst.due_date}
-                        onChange={(e) => updateInstallment(inst.id, { due_date: e.target.value })}
-                      />
+                      <Input className="h-8" type="date" value={inst.due_date} onChange={(e) => updateInstallment(inst.id, { due_date: e.target.value })} />
                     </div>
                     <div className="col-span-3">
                       <Label className="text-[10px]">Valor</Label>
-                      <Input
-                        className="h-8"
-                        type="number"
-                        step="0.01"
-                        value={inst.amount}
-                        onChange={(e) => updateInstallment(inst.id, { amount: parseFloat(e.target.value) || 0 })}
-                      />
+                      <Input className="h-8" type="number" step="0.01" value={inst.amount} onChange={(e) => updateInstallment(inst.id, { amount: parseFloat(e.target.value) || 0 })} />
                     </div>
                     <div className="col-span-3 flex items-end">
-                      <Button
-                        size="sm"
-                        variant={inst.paid ? "default" : "outline"}
-                        className="w-full h-8"
-                        onClick={() => togglePaid(inst)}
-                      >
+                      <Button size="sm" variant={inst.paid ? "default" : "outline"} className="w-full h-8" onClick={() => togglePaid(inst)}>
                         {inst.paid ? "✓ Pago" : "Marcar Pago"}
                       </Button>
                     </div>
@@ -393,18 +497,14 @@ export function NfeDetailEditor({
                   </div>
                 ))}
                 {installments.length === 0 && (
-                  <p className="text-center text-sm text-muted-foreground py-6">
-                    Nenhuma parcela cadastrada.
-                  </p>
+                  <p className="text-center text-sm text-muted-foreground py-6">Nenhuma parcela cadastrada.</p>
                 )}
               </div>
             </TabsContent>
           </Tabs>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Fechar
-            </Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -412,21 +512,29 @@ export function NfeDetailEditor({
       {showProductForm && productInitial && (
         <ProductMasterForm
           open={showProductForm}
-          onOpenChange={(v) => {
-            setShowProductForm(v);
-            if (!v) load();
-          }}
+          initialStoreId={stockStoreId}
+          onOpenChange={(v) => { setShowProductForm(v); if (!v) load(); }}
           initial={productInitial}
           onCreated={async (masterId) => {
-            // Marca itens como vinculados
-            await supabase
-              .from("purchase_invoices")
-              .update({ status: "products_created" })
-              .eq("id", invoiceId);
-            toast.success("NF marcada como 'Produtos Criados'.");
+            if (productFormItemIds.length > 0) {
+              await supabase
+                .from("purchase_invoice_items")
+                .update({ master_id: masterId })
+                .in("id", productFormItemIds);
+            }
+            await supabase.from("purchase_invoices").update({ status: "products_created" }).eq("id", invoiceId);
+            setProductFormItemIds([]);
+            setSelectedIds(new Set());
+            toast.success("Produto criado e linhas vinculadas.");
           }}
         />
       )}
+
+      <ExistingParentSearchDialog
+        open={showSearch}
+        onOpenChange={setShowSearch}
+        onSelect={(parentSku) => linkToParent(parentSku, [...selectedIds])}
+      />
     </>
   );
 }
