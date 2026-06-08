@@ -231,9 +231,10 @@ serve(async (req) => {
     console.log('Webhook received:', JSON.stringify(payload));
 
     const url = new URL(req.url);
-    const whatsappNumberId = await resolveWhatsappNumberId(supabase, url, payload);
+    const resolution = await resolveWhatsappNumberId(supabase, url, payload);
+    const whatsappNumberId = resolution.numberId;
 
-    console.log(`Final resolved whatsapp_number_id: ${whatsappNumberId}`);
+    console.log(`Final resolved whatsapp_number_id: ${whatsappNumberId} (method=${resolution.method})`);
 
     // 1) ReceivedCallback (text and/or media messages)
     const rawPhone = asString(payload.phone);
