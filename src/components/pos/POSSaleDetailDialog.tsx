@@ -118,6 +118,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [savingTracking, setSavingTracking] = useState(false);
   const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
   const [sendingTracking, setSendingTracking] = useState(false);
+  const [showDeliveryCost, setShowDeliveryCost] = useState(false);
   const isRemoteSale = sale?.sale_type === 'online' || sale?.sale_type === 'live';
 
   useEffect(() => {
