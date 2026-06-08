@@ -34,7 +34,10 @@ async function getCredentials(supabase: any, whatsappNumberId?: string) {
       .eq('is_active', true)
       .maybeSingle();
     if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token };
+    // Explicit instance requested but inactive/not found → fail instead of using default.
+    throw new Error(`Instância ${whatsappNumberId} não encontrada ou inativa — envio cancelado para evitar número errado.`);
   }
+
   const { data } = await supabase
     .from('whatsapp_numbers')
     .select('phone_number_id, access_token')
