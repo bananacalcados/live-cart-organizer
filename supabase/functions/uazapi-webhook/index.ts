@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
 import { uazapiInstance, rehostMedia } from "../_shared/uazapi-credentials.ts";
+import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -62,15 +63,27 @@ function normalizeJid(jid: string | null): { phone: string; isGroup: boolean; is
   return { phone: digits, isGroup: false, isLid };
 }
 
-/** Resolve whatsapp_number_id: query param > owner > token. */
+/**
+ * Resolve whatsapp_number_id.
+ * Strong keys first: owner → token (these uniquely identify the real instance).
+ * The ?number_id= query param is only a LAST resort and is flagged as suspect,
+ * because a shared/misconfigured webhook URL would otherwise send every
+ * instance's messages to the same number. When nothing matches, returns
+ * numberId=null so the message is saved as "não identificada".
+ */
+interface UazapiResolution {
+  numberId: string | null;
+  method: ResolutionMethod;
+  rawIdentifier: string | null;
+  matched: boolean;
+}
+
 async function resolveNumberId(
   supabase: any,
   url: URL,
   payload: AnyObj,
-): Promise<string | null> {
-  const fromParam = url.searchParams.get("number_id");
-  if (fromParam) return fromParam;
-
+): Promise<UazapiResolution> {
+  // 1. owner (strong key)
   const owner = asString(payload.owner) || asString((payload.message as AnyObj)?.owner);
   if (owner) {
     const { data } = await supabase
@@ -80,9 +93,10 @@ async function resolveNumberId(
       .eq("uazapi_owner", owner)
       .limit(1)
       .maybeSingle();
-    if (data) return data.id as string;
+    if (data) return { numberId: data.id as string, method: 'owner', rawIdentifier: owner, matched: true };
   }
 
+  // 2. token (strong key)
   const token = asString(payload.token);
   if (token) {
     const { data } = await supabase
@@ -92,11 +106,18 @@ async function resolveNumberId(
       .eq("uazapi_token", token)
       .limit(1)
       .maybeSingle();
-    if (data) return data.id as string;
+    if (data) return { numberId: data.id as string, method: 'token', rawIdentifier: owner || token, matched: true };
+  }
+
+  // 3. Query param (last resort — may be shared/misconfigured across instances)
+  const fromParam = url.searchParams.get("number_id");
+  if (fromParam) {
+    console.warn(`[uazapi-webhook] resolved via query param (SUSPECT fallback): ${fromParam}`);
+    return { numberId: fromParam, method: 'query_param', rawIdentifier: owner || token || fromParam, matched: true };
   }
 
   console.error("[uazapi-webhook] não foi possível resolver whatsapp_number_id");
-  return null;
+  return { numberId: null, method: 'none', rawIdentifier: owner || token || null, matched: false };
 }
 
 /** Helpers de envio: usam SEMPRE os senders uazapi (respeita binding de instância). */
@@ -153,7 +174,8 @@ serve(async (req) => {
 
     console.log(`[uazapi-webhook] event=${eventType} number_id=${url.searchParams.get("number_id")}`);
 
-    const numberId = await resolveNumberId(supabase, url, payload);
+    const resolution = await resolveNumberId(supabase, url, payload);
+    const numberId = resolution.numberId;
 
     // ───────────────────────── connection / qrcode ─────────────────────────
     if (eventType === "connection" || eventType === "qrcode") {
@@ -284,6 +306,19 @@ serve(async (req) => {
       asString(message.senderName) || asString(message.groupName) || null;
     const statusRaw = asString(message.status);
     const status = statusRaw ? statusRaw.toLowerCase() : fromMe ? "sent" : "received";
+
+    // Diagnostic: log how incoming (customer) messages were routed to an instance
+    if (!fromMe && !isGroup) {
+      await logRouting(supabase, {
+        provider: "uazapi",
+        senderPhone: phone,
+        resolutionMethod: resolution.method,
+        resolvedWhatsappNumberId: numberId,
+        rawIdentifier: resolution.rawIdentifier,
+        matched: resolution.matched,
+        rawPayload: { owner: payload.owner, token: payload.token ? "***" : null, messageId },
+      });
+    }
 
     // Resolve URL de mídia (baixa link acessível via /message/download e re-hospeda)
     let mediaUrl: string | null = null;

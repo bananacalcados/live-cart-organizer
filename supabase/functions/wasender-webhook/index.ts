@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { WASENDER_BASE, rehostMedia } from "../_shared/wasender-credentials.ts";
+import { logRouting } from "../_shared/routing-log.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -321,10 +322,26 @@ serve(async (req) => {
         zPayload.text = extraText || messageBody;
       }
 
-      // Reaproveita TODA a lógica existente (dedup, roteamento IA, leads, campanhas, NPS)
+      // Diagnostic: log how this incoming message was routed. WaSender relies on
+      // the per-instance ?number_id= param; if it is missing the message cannot be
+      // attributed to an instance (saved as "não identificada" downstream).
+      if (!fromMe && !isGroup) {
+        await logRouting(supabase, {
+          provider: "wasender",
+          senderPhone: cleanedPhone,
+          resolutionMethod: numberId ? "query_param" : "none",
+          resolvedWhatsappNumberId: numberId,
+          rawIdentifier: numberId,
+          matched: Boolean(numberId && row),
+          rawPayload: { event, number_id: numberId, messageId },
+        });
+      }
+
+      // Reaproveita TODA a lógica existente (dedup, roteamento IA, leads, campanhas, NPS).
+      // Marca `via=wasender` para o zapi-webhook não duplicar o log de roteamento.
       try {
         const res = await fetch(
-          `${supabaseUrl}/functions/v1/zapi-webhook?number_id=${numberId || ""}`,
+          `${supabaseUrl}/functions/v1/zapi-webhook?number_id=${numberId || ""}&via=wasender`,
           {
             method: "POST",
             headers: { Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json" },

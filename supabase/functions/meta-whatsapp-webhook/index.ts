@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
+import { logRouting } from "../_shared/routing-log.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -98,26 +99,59 @@ async function downloadMetaMedia(mediaId: string, accessToken: string, supabase:
   }
 }
 
-async function getAccessTokenForPhoneNumberId(supabase: ReturnType<typeof createClient>, metaPhoneNumberId: string): Promise<{ accessToken: string; numberId: string } | null> {
-  const { data } = await supabase
-    .from('whatsapp_numbers')
-    .select('id, access_token')
-    .eq('phone_number_id', metaPhoneNumberId)
-    .eq('is_active', true)
-    .maybeSingle();
-  if (data) return { accessToken: data.access_token, numberId: data.id };
+interface MetaInstanceResolution {
+  /** Access token used ONLY for media download (best effort when unresolved) */
+  accessToken: string;
+  /** Resolved whatsapp_number_id, or null when the instance could NOT be identified */
+  numberId: string | null;
+  method: 'phone_number_id' | 'display_phone_number' | 'none';
+  matched: boolean;
+  rawIdentifier: string;
+}
 
-  // Fallback to default
-  const { data: def } = await supabase
-    .from('whatsapp_numbers')
-    .select('id, access_token')
-    .eq('is_default', true)
-    .eq('is_active', true)
-    .maybeSingle();
-  if (def) return { accessToken: def.access_token, numberId: def.id };
+/**
+ * Resolve which of OUR Meta instances received the message.
+ * Strong keys only: phone_number_id (primary) → display_phone_number (secondary).
+ * NEVER falls back to the is_default instance — guessing the instance causes
+ * customer replies to land in the wrong store inbox. When nothing matches we
+ * return numberId=null so the message is saved as "não identificada".
+ */
+async function resolveMetaInstance(
+  supabase: ReturnType<typeof createClient>,
+  metaPhoneNumberId: string,
+  metaDisplayPhoneNumber: string,
+): Promise<MetaInstanceResolution> {
+  // 1. Primary: phone_number_id
+  if (metaPhoneNumberId) {
+    const { data } = await supabase
+      .from('whatsapp_numbers')
+      .select('id, access_token')
+      .eq('phone_number_id', metaPhoneNumberId)
+      .eq('is_active', true)
+      .maybeSingle();
+    if (data) {
+      return { accessToken: data.access_token, numberId: data.id, method: 'phone_number_id', matched: true, rawIdentifier: metaPhoneNumberId };
+    }
+  }
 
+  // 2. Secondary: display_phone_number (e.g. "5533936180823")
+  if (metaDisplayPhoneNumber) {
+    const cleanDisplay = metaDisplayPhoneNumber.replace(/\D/g, '');
+    const { data } = await supabase
+      .from('whatsapp_numbers')
+      .select('id, access_token')
+      .eq('provider', 'meta')
+      .eq('is_active', true)
+      .ilike('phone_display', `%${cleanDisplay.slice(-8)}%`)
+      .maybeSingle();
+    if (data) {
+      return { accessToken: data.access_token, numberId: data.id, method: 'display_phone_number', matched: true, rawIdentifier: metaPhoneNumberId || cleanDisplay };
+    }
+  }
+
+  // 3. UNRESOLVED — do NOT guess. Use env token only for best-effort media download.
   const fallbackToken = Deno.env.get('META_WHATSAPP_ACCESS_TOKEN') || '';
-  return fallbackToken ? { accessToken: fallbackToken, numberId: '' } : null;
+  return { accessToken: fallbackToken, numberId: null, method: 'none', matched: false, rawIdentifier: metaPhoneNumberId || metaDisplayPhoneNumber || '' };
 }
 
 serve(async (req) => {
@@ -162,15 +196,27 @@ serve(async (req) => {
         if (change.field !== 'messages') continue;
         const value = change.value;
 
-        // Determine which WhatsApp number received this
+        // Determine which WhatsApp number received this (strong keys only — never guess)
         const metaPhoneNumberId = value.metadata?.phone_number_id || '';
-        const creds = await getAccessTokenForPhoneNumberId(supabase, metaPhoneNumberId);
-        const accessToken = creds?.accessToken || '';
-        const whatsappNumberDbId = creds?.numberId || null;
+        const metaDisplayPhoneNumber = value.metadata?.display_phone_number || '';
+        const resolution = await resolveMetaInstance(supabase, metaPhoneNumberId, metaDisplayPhoneNumber);
+        const accessToken = resolution.accessToken || '';
+        const whatsappNumberDbId = resolution.numberId;
 
         // Process incoming messages
         if (value.messages) {
           for (const msg of value.messages) {
+            // Diagnostic: record how this incoming message was routed
+            await logRouting(supabase, {
+              provider: 'meta',
+              senderPhone: normalizePhone(msg.from),
+              resolutionMethod: resolution.method,
+              resolvedWhatsappNumberId: whatsappNumberDbId,
+              rawIdentifier: resolution.rawIdentifier,
+              matched: resolution.matched,
+              rawPayload: { metadata: value.metadata, message_id: msg.id, type: msg.type },
+            });
+
             const phone = normalizePhone(msg.from);
             const messageId = msg.id;
             const timestamp = msg.timestamp

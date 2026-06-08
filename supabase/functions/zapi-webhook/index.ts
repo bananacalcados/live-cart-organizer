@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
+import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -146,16 +147,25 @@ async function resolveLidToPhone(
 }
 
 /**
- * Resolve whatsapp_number_id from multiple sources:
- * 1. ?number_id= query param
- * 2. instanceId in payload → lookup in whatsapp_numbers table
- * 3. connectedPhone in payload → lookup in whatsapp_numbers table
+ * Resolve whatsapp_number_id from the payload.
+ * Strong keys first: instanceId → connectedPhone. The ?number_id= query param
+ * is only a LAST resort (the proxy may share the same param across instances),
+ * and when used it is flagged as a suspect 'query_param' resolution.
+ * When nothing matches, returns numberId=null so the message is saved as
+ * "não identificada" instead of being guessed into the wrong instance.
  */
+interface ZapiResolution {
+  numberId: string | null;
+  method: ResolutionMethod;
+  rawIdentifier: string | null;
+  matched: boolean;
+}
+
 async function resolveWhatsappNumberId(
   supabase: any,
   url: URL,
-  payload: AnyPayload
-): Promise<string | null> {
+  payload: AnyPayload,
+): Promise<ZapiResolution> {
   // 1. instanceId lookup (highest priority — the payload always carries the real source instance)
   const instanceId = asString(payload.instanceId);
   if (instanceId) {
@@ -168,12 +178,12 @@ async function resolveWhatsappNumberId(
       .maybeSingle();
     if (numRow) {
       console.log(`Resolved whatsapp_number_id from instanceId ${instanceId}: ${numRow.id}`);
-      return numRow.id;
+      return { numberId: numRow.id, method: 'instanceId', rawIdentifier: instanceId, matched: true };
     }
     console.warn(`instanceId ${instanceId} not found in whatsapp_numbers table`);
   }
 
-  // 2. connectedPhone lookup (fallback)
+  // 2. connectedPhone lookup (fallback) — match by last-8-digit suffix on phone_display
   const connectedPhone = asString(payload.connectedPhone);
   if (connectedPhone) {
     const cleanPhone = connectedPhone.replace(/\D/g, '');
@@ -181,12 +191,12 @@ async function resolveWhatsappNumberId(
       .from('whatsapp_numbers')
       .select('id')
       .eq('provider', 'zapi')
-      .or(`phone_number.eq.${cleanPhone},phone_number.eq.+${cleanPhone},phone_number.ilike.%${cleanPhone.slice(-8)}%`)
+      .ilike('phone_display', `%${cleanPhone.slice(-8)}%`)
       .limit(1)
       .maybeSingle();
     if (numRow) {
       console.log(`Resolved whatsapp_number_id from connectedPhone ${connectedPhone}: ${numRow.id}`);
-      return numRow.id;
+      return { numberId: numRow.id, method: 'connectedPhone', rawIdentifier: connectedPhone, matched: true };
     }
     console.warn(`connectedPhone ${connectedPhone} not found in whatsapp_numbers table`);
   }
@@ -194,12 +204,12 @@ async function resolveWhatsappNumberId(
   // 3. Query param (last resort — proxy may share the same param for all instances)
   const fromParam = url.searchParams.get('number_id');
   if (fromParam) {
-    console.log(`Resolved whatsapp_number_id from query param (fallback): ${fromParam}`);
-    return fromParam;
+    console.warn(`Resolved whatsapp_number_id from query param (SUSPECT fallback): ${fromParam}`);
+    return { numberId: fromParam, method: 'query_param', rawIdentifier: instanceId || connectedPhone || fromParam, matched: true };
   }
 
   console.error('FAILED to resolve whatsapp_number_id from any source');
-  return null;
+  return { numberId: null, method: 'none', rawIdentifier: instanceId || connectedPhone || null, matched: false };
 }
 
 serve(async (req) => {
@@ -221,9 +231,10 @@ serve(async (req) => {
     console.log('Webhook received:', JSON.stringify(payload));
 
     const url = new URL(req.url);
-    const whatsappNumberId = await resolveWhatsappNumberId(supabase, url, payload);
+    const resolution = await resolveWhatsappNumberId(supabase, url, payload);
+    const whatsappNumberId = resolution.numberId;
 
-    console.log(`Final resolved whatsapp_number_id: ${whatsappNumberId}`);
+    console.log(`Final resolved whatsapp_number_id: ${whatsappNumberId} (method=${resolution.method})`);
 
     // 1) ReceivedCallback (text and/or media messages)
     const rawPhone = asString(payload.phone);
@@ -239,6 +250,20 @@ serve(async (req) => {
       const fromMe = Boolean(payload.fromMe);
       const statusRaw = asString(payload.status);
       const status = (statusRaw ? statusRaw.toLowerCase() : (fromMe ? 'sent' : 'received'));
+
+      // Diagnostic: log how incoming (customer) messages were routed to an instance.
+      // Skip when forwarded from wasender-webhook (it already logged with provider=wasender).
+      if (!fromMe && !isGroup && url.searchParams.get('via') !== 'wasender') {
+        await logRouting(supabase, {
+          provider: 'zapi',
+          senderPhone: phone,
+          resolutionMethod: resolution.method,
+          resolvedWhatsappNumberId: whatsappNumberId,
+          rawIdentifier: resolution.rawIdentifier,
+          matched: resolution.matched,
+          rawPayload: { instanceId: payload.instanceId, connectedPhone: payload.connectedPhone, messageId: payload.messageId },
+        });
+      }
 
       // Build display message: use caption/text or fallback to media type label
       const displayMessage = messageText || mediaInfo?.caption || (mediaInfo ? `📎 ${mediaInfo.mediaType}` : '');
