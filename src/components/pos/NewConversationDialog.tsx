@@ -70,6 +70,23 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
   const [leadData, setLeadData] = useState<LeadData | null>(null);
   const [lookingUpLead, setLookingUpLead] = useState(false);
 
+  // Media attachment
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Audio recording
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingMimeRef = useRef<string>("");
+  const timerRef = useRef<number | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+
   const { numbers: storeNumbers, fetchNumbers, isLoading: loadingNumbers } = useWhatsAppNumberStore();
 
   // Ensure the global WhatsApp instances are loaded when the dialog opens
