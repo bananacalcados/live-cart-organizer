@@ -4,6 +4,7 @@
  */
 
 export interface NfeItem {
+  line_number?: number;
   supplier_product_code?: string;
   description: string;
   ncm?: string;
@@ -97,11 +98,13 @@ export function parseNfeXml(xmlString: string): ParsedNfe {
 
   // Itens
   const dets = Array.from(infNFe.getElementsByTagName("det"));
-  const items: NfeItem[] = dets.map((det) => {
+  const items: NfeItem[] = dets.map((det, idx) => {
     const prod = det.getElementsByTagName("prod")[0];
     const description = pickText(prod, "xProd") || "";
     const cs = extractColorSize(description);
+    const nItem = parseInt(det.getAttribute("nItem") || "", 10);
     return {
+      line_number: Number.isFinite(nItem) && nItem > 0 ? nItem : idx + 1,
       supplier_product_code: pickText(prod, "cProd"),
       description,
       ncm: pickText(prod, "NCM"),
