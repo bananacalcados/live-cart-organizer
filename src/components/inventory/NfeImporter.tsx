@@ -96,8 +96,9 @@ export function NfeImporter() {
         const { error: itErr } = await supabase
           .from("purchase_invoice_items")
           .insert(
-            parsed.items.map((it) => ({
+            parsed.items.map((it, idx) => ({
               invoice_id: data.id,
+              line_number: it.line_number ?? idx + 1,
               supplier_product_code: it.supplier_product_code,
               description: it.description,
               ncm: it.ncm,
