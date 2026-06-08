@@ -385,12 +385,31 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   };
 
   const loadMessages = async () => {
-    // Load messages matching any phone variation
-    const { data, error } = await supabase
+    // Resolve which instance THIS conversation belongs to (the latest message
+    // that carries an instance). Same rule as the unified chat: a conversation
+    // is (phone + instance), so we must not mix messages from other instances.
+    const { data: instRow } = await supabase
+      .from('whatsapp_messages')
+      .select('whatsapp_number_id')
+      .in('phone', phoneVariations)
+      .not('whatsapp_number_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const convNumberId = (instRow as any)?.whatsapp_number_id ?? null;
+
+    // Load messages scoped to that instance (mirrors pages/Chat.tsx L416-418).
+    // When the conversation has no instance history at all, show only the
+    // unattributed (NULL) messages instead of merging every instance.
+    let query = supabase
       .from('whatsapp_messages')
       .select('*')
-      .in('phone', phoneVariations)
-      .order('created_at', { ascending: true });
+      .in('phone', phoneVariations);
+    query = convNumberId
+      ? query.eq('whatsapp_number_id', convNumberId)
+      : query.is('whatsapp_number_id', null);
+
+    const { data, error } = await query.order('created_at', { ascending: true });
 
     if (error) {
       console.error('Error loading messages:', error);
