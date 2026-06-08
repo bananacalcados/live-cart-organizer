@@ -3,7 +3,7 @@ import {
   ScanBarcode, Search, Plus, Minus, Trash2, User, CreditCard,
   Receipt, Printer, Camera, ShoppingCart, Package, Check,
   QrCode, Banknote, FileText, ChevronRight, Loader2, Users,
-  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag, Star, Gift, AlertTriangle
+  Lock, MessageSquare, RotateCcw, Phone, Bell, Tag, Star, Gift, AlertTriangle, Truck
 } from "lucide-react";
 import { CancelFiscalDocDialog } from "@/components/fiscal/CancelFiscalDocDialog";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
 import { searchUnifiedCustomers, materializePosCustomer } from "@/lib/posCustomerResolve";
+import { fetchProviders, createDeliveryCost, storeNameToSource, ServiceProvider, ProviderType } from "@/lib/deliveryProviders";
 
 interface CartItem {
   id: string;
@@ -136,6 +137,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [receiptDone, setReceiptDone] = useState(false);
   const [currentRegisterId, setCurrentRegisterId] = useState<string | null>(null);
 
+  // Custo de entrega (mototaxista/transportadora) — fica "a pagar" e aparece no Caixa da Loja
+  const [storeName, setStoreName] = useState<string>("");
+  const [deliveryEnabled, setDeliveryEnabled] = useState(false);
+  const [deliveryProviders, setDeliveryProviders] = useState<ServiceProvider[]>([]);
+  const [deliveryType, setDeliveryType] = useState<ProviderType>("mototaxi");
+  const [deliveryProviderId, setDeliveryProviderId] = useState("");
+  const [deliveryAmount, setDeliveryAmount] = useState("");
+
   // Cash register gate
   const [hasOpenRegister, setHasOpenRegister] = useState<boolean | null>(null);
   const [checkingRegister, setCheckingRegister] = useState(true);
@@ -174,6 +183,13 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       setValidatingCoupon(false);
     }
   };
+
+  // Load delivery providers + store name (for delivery cost source)
+  useEffect(() => {
+    fetchProviders(true).then(setDeliveryProviders).catch(() => {});
+    supabase.from("pos_stores").select("name").eq("id", storeId).maybeSingle()
+      .then(({ data }) => setStoreName((data as any)?.name || ""));
+  }, [storeId]);
 
   // Check if cash register is open
   useEffect(() => {
@@ -919,6 +935,23 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           } catch (e) { console.error('[crediario_gateway update]', e); }
         }
 
+        // Custo de entrega → fica "a pagar" ao entregador e aparece no Caixa da Loja
+        if (saleId && deliveryEnabled && deliveryProviderId && parseFloat(deliveryAmount) > 0) {
+          try {
+            await createDeliveryCost({
+              provider_id: deliveryProviderId,
+              provider_type: deliveryType,
+              amount: parseFloat(deliveryAmount),
+              source: storeNameToSource(storeName),
+              store_id: storeId,
+              pos_sale_id: saleId,
+              customer_name: selectedCustomer?.name ?? null,
+            });
+          } catch (e) { console.error('[delivery_cost create]', e); }
+        }
+
+
+
 
 
         // Se for venda ONLINE: marca pos_sales pra aparecer na aba Envios
@@ -1404,6 +1437,10 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setMultiInstallments("1");
     setDiscount("");
     setDiscountType("value");
+    setDeliveryEnabled(false);
+    setDeliveryProviderId("");
+    setDeliveryAmount("");
+    setDeliveryType("mototaxi");
     setShowWheel(false);
     setShowLoyaltyScreen(false);
     setReceiptDone(false);
@@ -2330,6 +2367,60 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-pos-white/50">Desconto aplicado:</span>
                     <span className="font-bold text-red-400">-R$ {discountValue.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Custo de Entrega Section */}
+              <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-pos-white flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-pos-orange" /> Entrega (mototaxista / transportadora)
+                  </Label>
+                  <Switch checked={deliveryEnabled} onCheckedChange={(v) => { setDeliveryEnabled(v); if (!v) { setDeliveryProviderId(""); setDeliveryAmount(""); } }} />
+                </div>
+                {deliveryEnabled && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] text-pos-white/40">O valor fica como "a pagar" ao entregador e aparece no Caixa da Loja.</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-pos-white/60 text-xs">Tipo</Label>
+                        <Select value={deliveryType} onValueChange={(v) => { setDeliveryType(v as ProviderType); setDeliveryProviderId(""); }}>
+                          <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="mototaxi">🏍️ Mototaxista</SelectItem>
+                            <SelectItem value="transportadora">🚚 Transportadora</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-pos-white/60 text-xs">Valor (R$)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={deliveryAmount}
+                          onChange={(e) => setDeliveryAmount(e.target.value)}
+                          placeholder="0,00"
+                          className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-pos-white/60 text-xs">Entregador</Label>
+                      <Select value={deliveryProviderId} onValueChange={setDeliveryProviderId}>
+                        <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                          <SelectValue placeholder={deliveryProviders.filter(p => p.provider_type === deliveryType).length ? "Selecione o entregador..." : "Nenhum cadastrado deste tipo"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {deliveryProviders.filter(p => p.provider_type === deliveryType).map(p => (
+                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {deliveryProviders.filter(p => p.provider_type === deliveryType).length === 0 && (
+                        <p className="text-[10px] text-pos-white/40 mt-1">Cadastre entregadores em Config &gt; Prestadores de Serviço.</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
