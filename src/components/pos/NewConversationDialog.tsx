@@ -467,6 +467,8 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
     setTemplateVars({});
     setMessageType("normal");
     setLeadData(null);
+    clearPendingFile();
+    clearAudio();
   };
 
   const filteredTemplates = templates.filter(t =>
