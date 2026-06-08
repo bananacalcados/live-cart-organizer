@@ -412,7 +412,7 @@ export function NfeDetailEditor({
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={selectedIds.size === 0 || linking}
+                    disabled={selectedIds.size === 0 || linking || previewLoading}
                     onClick={() => setShowSearch(true)}
                   >
                     <Link2 className="h-4 w-4 mr-1" /> Vincular a pai existente
