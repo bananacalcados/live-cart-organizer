@@ -67,7 +67,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
 
   // Loja que recebe o estoque inicial / envio ao PDV
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
-  const [stockStoreId, setStockStoreId] = useState<string>("");
+  const [stockStoreId, setStockStoreId] = useState<string>(initialStoreId || "");
 
   useEffect(() => {
     if (!open) return;
