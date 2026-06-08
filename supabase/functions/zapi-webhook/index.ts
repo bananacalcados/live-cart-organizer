@@ -251,8 +251,9 @@ serve(async (req) => {
       const statusRaw = asString(payload.status);
       const status = (statusRaw ? statusRaw.toLowerCase() : (fromMe ? 'sent' : 'received'));
 
-      // Diagnostic: log how incoming (customer) messages were routed to an instance
-      if (!fromMe && !isGroup) {
+      // Diagnostic: log how incoming (customer) messages were routed to an instance.
+      // Skip when forwarded from wasender-webhook (it already logged with provider=wasender).
+      if (!fromMe && !isGroup && url.searchParams.get('via') !== 'wasender') {
         await logRouting(supabase, {
           provider: 'zapi',
           senderPhone: phone,
