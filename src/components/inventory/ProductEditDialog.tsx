@@ -261,7 +261,14 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     if (!masterId) return;
     if (!name.trim()) { toast.error("Informe o nome."); return; }
 
+    const hasNewVariants = variants.some((v) => !v.id && v.color && v.size);
+    if (hasNewVariants && !stockStoreId) {
+      toast.error("Há variações novas: escolha a loja que recebe o estoque (no topo das Variações).");
+      return;
+    }
+
     setSaving(true);
+    const newVariantIds: string[] = [];
     try {
       // 1. Atualiza pai
       const { error: e1 } = await supabase
