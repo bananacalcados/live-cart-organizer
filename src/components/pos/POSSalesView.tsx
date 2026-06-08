@@ -1437,6 +1437,10 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setMultiInstallments("1");
     setDiscount("");
     setDiscountType("value");
+    setDeliveryEnabled(false);
+    setDeliveryProviderId("");
+    setDeliveryAmount("");
+    setDeliveryType("mototaxi");
     setShowWheel(false);
     setShowLoyaltyScreen(false);
     setReceiptDone(false);
