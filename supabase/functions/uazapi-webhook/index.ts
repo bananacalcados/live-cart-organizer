@@ -307,6 +307,19 @@ serve(async (req) => {
     const statusRaw = asString(message.status);
     const status = statusRaw ? statusRaw.toLowerCase() : fromMe ? "sent" : "received";
 
+    // Diagnostic: log how incoming (customer) messages were routed to an instance
+    if (!fromMe && !isGroup) {
+      await logRouting(supabase, {
+        provider: "uazapi",
+        senderPhone: phone,
+        resolutionMethod: resolution.method,
+        resolvedWhatsappNumberId: numberId,
+        rawIdentifier: resolution.rawIdentifier,
+        matched: resolution.matched,
+        rawPayload: { owner: payload.owner, token: payload.token ? "***" : null, messageId },
+      });
+    }
+
     // Resolve URL de mídia (baixa link acessível via /message/download e re-hospeda)
     let mediaUrl: string | null = null;
     if (sysMediaType && messageId) {
