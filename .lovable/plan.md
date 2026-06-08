@@ -1,76 +1,69 @@
-# Corrigir mistura de mensagens entre instâncias do WhatsApp
-
-## O que está acontecendo (diagnóstico confirmado)
-
-- **Jeanderson**: o disparo saiu pela **Ravena** (Meta) às 17:48, mas a resposta "Pode" (17:51) foi gravada na **Banana Calçados** — a instância marcada como `is_default`.
-- **Karol**: a conversa se fragmentou entre **Teste centro** (uazapi) e **Whats Perola** (Z-API).
-- Causa raiz no código: as 4 funções de webhook (Meta, Z-API, uazapi, WaSender) e o envio Meta têm **fallbacks silenciosos** que, quando não conseguem identificar com certeza a instância, **jogam a mensagem na instância padrão (Banana Calçados)** ou em um `?number_id=` da URL — em vez de avisar que falhou.
-
 ## Objetivo
 
-1. **Nunca** atribuir uma mensagem à instância padrão/errada por adivinhação.
-2. Quando a instância não for identificada com certeza, gravar **sem instância** e mandar para uma fila de "Não identificadas" para revisão.
-3. Criar **registro permanente de roteamento** para pegar o próximo erro no flagrante.
-4. **Verificar as configurações** de cada instância e entregar checklist das URLs externas.
+Resolver duas situações no módulo **Estoque**:
 
-## Mudanças no banco
+1. **Adicionar variações (cor/tamanho) em lote** a um produto que já existe — sem cadastrar uma por uma.
+2. Quando entra uma **NF-e** com variações novas (cor nova, tamanho novo, ou os dois) de um produto **que já existe**, vincular ao produto pai e **criar a nova cor/tamanho automaticamente** sob esse pai, somando estoque.
 
-### 1. Tabela `webhook_routing_log` (diagnóstico)
-Grava, para cada mensagem recebida, como o roteamento foi decidido:
-- `provider` (meta / zapi / uazapi / wasender)
-- `sender_phone` (telefone do cliente)
-- `resolution_method` (`phone_number_id` / `instanceId` / `connectedPhone` / `owner` / `token` / `query_param` / `none`)
-- `resolved_whatsapp_number_id` (nulo quando falha)
-- `raw_identifier` (o identificador que veio no payload, ex.: phone_number_id/instanceId)
-- `matched` (boolean)
-- `raw_payload` (jsonb, payload bruto)
-- `created_at`
+---
 
-Inclui limpeza automática (registros com mais de 14 dias são apagados por uma rotina diária) para a tabela não crescer indefinidamente. RLS: leitura para usuários autenticados, escrita só via service_role (edge functions).
+## Situação 1 — Adicionar variações em lote (cadastro manual)
 
-### 2. Marcação de "Não identificadas"
-Mensagens em que a instância não pôde ser resolvida continuam sendo gravadas em `whatsapp_messages` com `whatsapp_number_id = NULL`. Será criada uma forma de listá-las para revisão (filtro "Não identificadas").
+Hoje a tela de edição do produto (`ProductEditDialog`) só tem o botão **"+ Adicionar"**, que cria **uma linha vazia por vez**. O cadastro de produto novo (`ProductMasterForm`) já tem um **"Gerador de Matriz Cor × Tamanho"** (digita "Preto, Bege, Rosa" e "35, 36, 37" e ele gera todas as combinações). A ideia é levar essa mesma capacidade para a edição.
 
-## Mudanças nas edge functions
+### O que vai mudar
+- Adicionar na tela de edição do produto um bloco **"Gerar variações em lote (Cor × Tamanho)"**:
+  - Campo de cores (separadas por vírgula) + campo de tamanhos (separados por vírgula) + grades rápidas (chinelo, infantil, etc.).
+  - Botão **"Gerar"** cria todas as combinações de uma vez como variações novas.
+  - **Anti-duplicidade**: combinações de cor+tamanho que já existem no produto são ignoradas (não duplica).
+  - Campo opcional de **estoque inicial** e **custo** aplicado às novas linhas geradas.
+- Corrigir uma lacuna importante: hoje, quando você adiciona uma variação nova pela edição, ela entra em `product_variants` mas **não vai para o PDV** (não aparece para vender/bipar). Vou fazer com que, ao salvar, as variações novas sejam **empurradas ao PDV em todas as lojas** (estoque compartilhado p/ Shopify), com o estoque entrando na **loja escolhida** — igual ao fluxo de criação de produto.
+  - Para isso, será adicionado um seletor de **"Loja que recebe o estoque"** na edição (só aparece quando há variações novas).
 
-### `meta-whatsapp-webhook`
-- Resolver por `phone_number_id` (atual).
-- **Adicionar 2ª chave**: se não casar por `phone_number_id`, tentar por `display_phone_number` (que também vem no payload Meta).
-- **Remover o fallback para `is_default`**: se nada casar, gravar a mensagem com `whatsapp_number_id = NULL` e registrar em `webhook_routing_log` com `matched=false`.
-- Registrar todas as resoluções (sucesso e falha) em `webhook_routing_log`.
+Resultado: você abre o produto, digita as cores e tamanhos novos, clica em **Gerar**, escolhe a loja, salva — e tudo aparece no PDV/Shopify de uma vez.
 
-### `zapi-webhook`
-- Manter prioridade: `instanceId` → `connectedPhone`.
-- **Rebaixar o `?number_id=`**: só usar se o payload realmente não tiver `instanceId` e `connectedPhone`. Quando cair no param, registrar como `query_param` (suspeito) no log.
-- Se nada resolver, gravar com `whatsapp_number_id = NULL` em vez de adivinhar.
-- Corrigir a busca por `connectedPhone` (hoje usa coluna `phone_number` que não existe na tabela; passar a casar por `phone_display`/sufixo de 8 dígitos).
+---
 
-### `uazapi-webhook`
-- **Inverter a prioridade**: hoje o `?number_id=` da URL vence o payload. Passar a resolver primeiro por `owner` → `token`, e só usar `?number_id=` como último recurso (registrando como `query_param`).
-- Sem resolução → `whatsapp_number_id = NULL` + log.
+## Situação 2 — NF-e com cor/tamanho novo de produto existente
 
-### `wasender-webhook`
-- Hoje depende 100% do `?number_id=` e repassa para `zapi-webhook` sem `instanceId`. Passar a registrar em `webhook_routing_log` quando o `number_id` estiver ausente/forçado, para flagrar configuração errada.
+Boa notícia: o caminho principal **já existe**. Na Entrada de NF-e, ao selecionar linhas e clicar em **"Vincular a pai existente"** (ou no atalho "Vincular esta" quando o GTIN bate), a função `nfe-link-items-pos` já:
+- Procura a variação por GTIN e, se não achar, por **pai + cor + tamanho**;
+- Se **não existir**, **cria a variação nova** (cor nova e/ou tamanho novo) sob o mesmo pai, em todas as lojas, com estoque entrando na loja escolhida;
+- Se existir, **soma** a quantidade ao estoque.
 
-### Envio Meta (`meta-whatsapp-send`, `meta-template-send`, `meta-whatsapp-send-template`)
-- Quando o chamador **especifica** `whatsapp_number_id` mas ele está inativo/não encontrado, **falhar com erro claro** em vez de cair silenciosamente na instância padrão (isso evita disparo sair por número errado, gerando resposta na instância errada). O fallback para padrão continua válido **apenas** quando nenhum instância é informada.
+Ou seja, "cor nova / tamanho novo / os dois" para um pai existente **já é tratado**. As melhorias do plano são para deixar isso claro e robusto:
 
-## Verificação de configuração (entregue como checklist + checagem automática)
+### O que vai melhorar
+- **Prévia antes de confirmar**: ao vincular, mostrar um resumo do tipo "3 linhas → 2 variações NOVAS serão criadas (Rosa 39, Verde 40) e 1 atualizada", para você confirmar conscientemente que está criando cor/tamanho novo.
+- **Match de pai por GTIN parcial**: quando o GTIN de uma linha não bate com nada, mas **outra linha da mesma NF** já casou com um pai existente, sugerir vincular as demais linhas ao **mesmo pai** automaticamente (um clique para o grupo todo).
+- **Espelhar no catálogo (opcional, recomendado)**: hoje o vínculo de NF-e grava só em `pos_products` (fonte da verdade do estoque, conforme definido). As variações novas criadas pela NF-e **não aparecem** na tela de edição do produto (que lê `product_variants`). Vou alinhar isso para que a cor/tamanho novo criado pela NF-e **também apareça** no cadastro do pai, evitando a sensação de "sumiu". (Confirmar se você quer esse espelhamento — ver pergunta abaixo.)
 
-- Script de verificação que aponta instâncias ativas com identificadores faltando:
-  - Meta sem `phone_number_id`
-  - Z-API sem `zapi_instance_id`
-  - uazapi sem `uazapi_owner`/`uazapi_token`
-  - WaSender sem `wasender_session_id`
-- Checklist das URLs de webhook que precisam estar com o identificador correto **por instância** nos painéis externos (Z-API, uazapi, Meta), já que o roteamento por payload só funciona se a instância estiver corretamente conectada e enviando seu próprio identificador.
+---
 
-## Como vamos validar
+## Detalhes técnicos
 
-1. Disparar mensagens de teste e conferir em `webhook_routing_log` que cada uma resolveu pelo método forte (`phone_number_id`/`instanceId`/`owner`) e não pelo `query_param`.
-2. Confirmar que mensagens sem instância resolvível aparecem como "Não identificadas" (e não mais na Banana Calçados).
-3. Monitorar o log por alguns dias para identificar instâncias mal configuradas e corrigir as URLs externas com base no checklist.
+**Arquivos afetados**
+- `src/components/inventory/ProductEditDialog.tsx`: novo bloco de matriz cor×tamanho; dedupe contra variações existentes; seletor de loja; ao salvar, chamar `create-master-product-pos` (idempotente, faz upsert de todas as variações) para empurrar as novas ao PDV com estoque na loja escolhida.
+- `src/components/inventory/NfeDetailEditor.tsx`: prévia de "novas vs atualizadas" antes de vincular; sugestão de pai por grupo via GTIN já casado.
+- `supabase/functions/nfe-link-items-pos/index.ts`: retornar no payload quais variações foram criadas vs atualizadas (para a prévia); opcionalmente espelhar em `products_master`/`product_variants`.
 
-## Notas técnicas
+**Confirmações da base (já verificadas)**
+- Não há trigger ligando `product_variants` → `pos_products` (por isso variações novas na edição não chegam hoje ao PDV — será corrigido).
+- `create-master-product-pos` lê todas as variações do master e faz upsert no PDV em todas as lojas — reaproveitável para empurrar as novas.
+- `nfe-link-items-pos` já cria variação nova por cor/tamanho inexistente sob o pai e soma estoque.
 
-- Nenhuma mensagem existente é alterada; a correção vale para mensagens novas.
-- A regra de memória "Conversa = (telefone+instância)" é reforçada: a instância passa a vir sempre do identificador real do payload, nunca de adivinhação.
+```text
+NF-e (linha: cor/tam novo)
+        │  "Vincular a pai existente" / atalho GTIN
+        ▼
+ nfe-link-items-pos
+        │  acha por GTIN? acha por pai+cor+tam?
+        ├── não → CRIA variação nova (cor/tam novo) em todas as lojas + estoque na loja escolhida
+        └── sim → SOMA estoque
+```
+
+---
+
+## Pergunta antes de implementar
+
+No vínculo de NF-e, quando uma **cor/tamanho novo** é criado, você quer que ele apareça **também na tela de edição do produto** (catálogo `product_variants`), além de já aparecer no PDV/Shopify? Isso evita a sensação de "criei pela NF-e mas não vejo no cadastro". Sem isso, a variação existe e vende normalmente, mas só aparece na listagem do PDV.
