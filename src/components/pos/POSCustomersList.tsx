@@ -408,6 +408,13 @@ export function POSCustomersList({ onOpenProfile }: Props) {
         initialName={waName}
         onConversationCreated={() => setWaOpen(false)}
       />
+
+      <EditCustomerDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        unifiedId={editId}
+        onSaved={fetchPage}
+      />
     </div>
   );
 }
