@@ -184,6 +184,13 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   };
 
+  // Load delivery providers + store name (for delivery cost source)
+  useEffect(() => {
+    fetchProviders(true).then(setDeliveryProviders).catch(() => {});
+    supabase.from("pos_stores").select("name").eq("id", storeId).maybeSingle()
+      .then(({ data }) => setStoreName((data as any)?.name || ""));
+  }, [storeId]);
+
   // Check if cash register is open
   useEffect(() => {
     checkCashRegister();
