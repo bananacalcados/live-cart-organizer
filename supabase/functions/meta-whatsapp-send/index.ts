@@ -43,7 +43,12 @@ async function getCredentials(supabase: ReturnType<typeof createClient>, whatsap
       .eq('is_active', true)
       .maybeSingle();
     if (data) return { phoneNumberId: data.phone_number_id, accessToken: data.access_token };
+    // An instance was explicitly requested but is inactive/not found.
+    // NEVER silently fall back to the default instance — that would send via the
+    // wrong number and make the customer's reply land in the wrong inbox.
+    throw new Error(`Instância ${whatsappNumberId} não encontrada ou inativa — envio cancelado para evitar número errado.`);
   }
+
 
   const { data } = await supabase
     .from('whatsapp_numbers')
