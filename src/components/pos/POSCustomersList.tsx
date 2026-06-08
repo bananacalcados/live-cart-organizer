@@ -8,10 +8,11 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Loader2, MessageCircle, User, ChevronLeft, ChevronRight,
-  Eye, MapPin, Wallet,
+  Eye, MapPin, Wallet, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { NewConversationDialog } from "./NewConversationDialog";
+import { EditCustomerDialog } from "./EditCustomerDialog";
 
 interface Props {
   /** Open the 360 profile for a given query (cpf or phone). */
@@ -75,6 +76,10 @@ export function POSCustomersList({ onOpenProfile }: Props) {
   const [waOpen, setWaOpen] = useState(false);
   const [waPhone, setWaPhone] = useState("");
   const [waName, setWaName] = useState("");
+
+  // Edit dialog
+  const [editOpen, setEditOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
 
   // Load stores + sellers once
   useEffect(() => {
@@ -344,6 +349,15 @@ export function POSCustomersList({ onOpenProfile }: Props) {
                   </Button>
                   <Button
                     size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-pos-white/70 hover:text-pos-white hover:bg-pos-white/10"
+                    title="Editar dados"
+                    onClick={() => { setEditId(c.id); setEditOpen(true); }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
                     className="h-8 w-8 bg-[#00a884] hover:bg-[#00a884]/90 text-white"
                     title="Enviar WhatsApp"
                     onClick={() => handleSendWhatsApp(c)}
@@ -393,6 +407,13 @@ export function POSCustomersList({ onOpenProfile }: Props) {
         initialPhone={waPhone}
         initialName={waName}
         onConversationCreated={() => setWaOpen(false)}
+      />
+
+      <EditCustomerDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        unifiedId={editId}
+        onSaved={fetchPage}
       />
     </div>
   );
