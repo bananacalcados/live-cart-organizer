@@ -2349,6 +2349,60 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                   </div>
                 )}
               </div>
+
+              {/* Custo de Entrega Section */}
+              <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-pos-white flex items-center gap-2">
+                    <Truck className="h-4 w-4 text-pos-orange" /> Entrega (mototaxista / transportadora)
+                  </Label>
+                  <Switch checked={deliveryEnabled} onCheckedChange={(v) => { setDeliveryEnabled(v); if (!v) { setDeliveryProviderId(""); setDeliveryAmount(""); } }} />
+                </div>
+                {deliveryEnabled && (
+                  <div className="space-y-3">
+                    <p className="text-[11px] text-pos-white/40">O valor fica como "a pagar" ao entregador e aparece no Caixa da Loja.</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-pos-white/60 text-xs">Tipo</Label>
+                        <Select value={deliveryType} onValueChange={(v) => { setDeliveryType(v as ProviderType); setDeliveryProviderId(""); }}>
+                          <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="mototaxi">🏍️ Mototaxista</SelectItem>
+                            <SelectItem value="transportadora">🚚 Transportadora</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-pos-white/60 text-xs">Valor (R$)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={deliveryAmount}
+                          onChange={(e) => setDeliveryAmount(e.target.value)}
+                          placeholder="0,00"
+                          className="bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-pos-white/60 text-xs">Entregador</Label>
+                      <Select value={deliveryProviderId} onValueChange={setDeliveryProviderId}>
+                        <SelectTrigger className="bg-pos-white/5 border-pos-orange/30 text-pos-white">
+                          <SelectValue placeholder={deliveryProviders.filter(p => p.provider_type === deliveryType).length ? "Selecione o entregador..." : "Nenhum cadastrado deste tipo"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {deliveryProviders.filter(p => p.provider_type === deliveryType).map(p => (
+                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {deliveryProviders.filter(p => p.provider_type === deliveryType).length === 0 && (
+                        <p className="text-[10px] text-pos-white/40 mt-1">Cadastre entregadores em Config &gt; Prestadores de Serviço.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
