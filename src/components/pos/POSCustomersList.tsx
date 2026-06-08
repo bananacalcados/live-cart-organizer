@@ -8,10 +8,11 @@ import {
 } from "@/components/ui/select";
 import {
   Search, Loader2, MessageCircle, User, ChevronLeft, ChevronRight,
-  Eye, MapPin, Wallet,
+  Eye, MapPin, Wallet, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { NewConversationDialog } from "./NewConversationDialog";
+import { EditCustomerDialog } from "./EditCustomerDialog";
 
 interface Props {
   /** Open the 360 profile for a given query (cpf or phone). */
