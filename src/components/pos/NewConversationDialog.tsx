@@ -344,6 +344,7 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
     });
   };
 
+  const handleSend = async () => {
     const cleanPhone = contactPhone.replace(/\D/g, "");
     if (!cleanPhone || cleanPhone.length < 10) {
       toast.error("Telefone inválido");
