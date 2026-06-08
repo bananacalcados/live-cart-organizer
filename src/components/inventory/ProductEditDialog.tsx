@@ -600,6 +600,68 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                 </Button>
               </CardHeader>
               <CardContent>
+                {/* Gerador de variações em lote (Cor × Tamanho) */}
+                <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 mb-3 space-y-2">
+                  <Label className="flex items-center gap-1.5 text-sm">
+                    <Sparkles className="h-4 w-4 text-primary" /> Gerar variações em lote (Cor × Tamanho)
+                  </Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Cores (separadas por vírgula)</Label>
+                      <Input className="h-8" value={matrixColors} onChange={(e) => setMatrixColors(e.target.value)} placeholder="Preto, Bege, Rosa" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Tamanhos (separados por vírgula)</Label>
+                      <Input className="h-8" value={matrixSizes} onChange={(e) => setMatrixSizes(e.target.value)} placeholder="35, 36, 37, 38" />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[11px] text-muted-foreground self-center">Grades rápidas:</span>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setMatrixSizes("33/34, 35/36, 37/38, 39/40")}>Chinelo (33/34…)</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setMatrixSizes("25/26, 27/28, 29/30, 31/32, 33/34")}>Chinelo Infantil</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setMatrixSizes("34, 35, 36, 37, 38, 39, 40")}>Numérico 34-40</Button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Estoque inicial p/ cada</Label>
+                      <Input className="h-8" type="number" min="0" value={batchStock} onChange={(e) => setBatchStock(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Custo R$ (opcional)</Label>
+                      <Input className="h-8" type="number" step="0.01" value={batchCost} onChange={(e) => setBatchCost(e.target.value)} placeholder={costPrice || "—"} />
+                    </div>
+                    <Button type="button" size="sm" variant="secondary" className="h-8" onClick={generateMatrix}>
+                      <Sparkles className="h-4 w-4 mr-1" /> Gerar variações
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Combinações que já existem neste produto são ignoradas (sem duplicar).
+                  </p>
+                </div>
+
+                {/* Loja que recebe o estoque das variações novas */}
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-3 mb-3">
+                  <Label className="flex items-center gap-1.5 text-sm mb-1">
+                    <StoreIcon className="h-4 w-4 text-primary" /> Loja que recebe o estoque das variações novas
+                  </Label>
+                  <Select value={stockStoreId} onValueChange={setStockStoreId}>
+                    <SelectTrigger className="max-w-sm h-9">
+                      <SelectValue placeholder="Escolha a loja" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stores.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Obrigatório só quando há variações novas. Elas ficam bipáveis em todas as lojas; o estoque entra nesta.
+                  </p>
+                </div>
+
                 <div className="space-y-2 max-h-[400px] overflow-y-auto">
                   {variants.map((v, idx) => {
                     const delta = v.current_stock - v.original_stock;
