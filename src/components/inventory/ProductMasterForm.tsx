@@ -30,6 +30,7 @@ interface ProductMasterFormProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onCreated?: (masterId: string) => void;
+  initialStoreId?: string;
   initial?: {
     name?: string;
     description?: string;
@@ -42,7 +43,7 @@ interface ProductMasterFormProps {
   };
 }
 
-export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: ProductMasterFormProps) {
+export function ProductMasterForm({ open, onOpenChange, onCreated, initial, initialStoreId }: ProductMasterFormProps) {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -66,7 +67,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial }: Pr
 
   // Loja que recebe o estoque inicial / envio ao PDV
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
-  const [stockStoreId, setStockStoreId] = useState<string>("");
+  const [stockStoreId, setStockStoreId] = useState<string>(initialStoreId || "");
 
   useEffect(() => {
     if (!open) return;
