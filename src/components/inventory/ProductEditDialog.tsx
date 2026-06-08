@@ -187,6 +187,52 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     ]);
   }
 
+  function generateMatrix() {
+    const colors = matrixColors.split(",").map((c) => c.trim()).filter(Boolean);
+    const sizes = matrixSizes.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!colors.length || !sizes.length) {
+      toast.error("Informe pelo menos uma cor e um tamanho.");
+      return;
+    }
+    const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+    const stock = parseInt(batchStock, 10) || 0;
+    const newRows: VariantRow[] = [];
+    let skipped = 0;
+    setVariants((arr) => {
+      const existing = new Set(arr.map((v) => `${norm(v.color)}|${norm(v.size)}`));
+      for (const c of colors) {
+        for (const s of sizes) {
+          const key = `${norm(c)}|${norm(s)}`;
+          if (existing.has(key)) { skipped++; continue; }
+          existing.add(key);
+          newRows.push({
+            _isNew: true,
+            color: c,
+            size: s,
+            cost_price_override: batchCost.trim() || "",
+            sale_price_override: "",
+            weight_kg_override: "",
+            current_stock: stock,
+            original_stock: 0,
+            is_active: true,
+          });
+        }
+      }
+      return [...arr, ...newRows];
+    });
+    setTimeout(() => {
+      if (newRows.length === 0) {
+        toast.info("Todas as combinações já existem neste produto.");
+      } else {
+        toast.success(
+          `${newRows.length} variação(ões) gerada(s)${skipped ? ` · ${skipped} já existia(m), ignorada(s)` : ""}.`
+        );
+      }
+    }, 0);
+    setMatrixColors("");
+    setMatrixSizes("");
+  }
+
   function removeVariant(idx: number) {
     const v = variants[idx];
     if (v.id) setRemovedVariantIds((ids) => [...ids, v.id!]);
