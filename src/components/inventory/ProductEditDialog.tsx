@@ -384,6 +384,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
             .select("id")
             .single();
           if (eIns) throw eIns;
+          if (ins) newVariantIds.push(ins.id);
 
           if (v.current_stock > 0 && ins) {
             await supabase.from("product_stock_movements").insert({
@@ -394,6 +395,22 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
               reason: "Estoque inicial - variação criada na edição",
             } as any);
           }
+        }
+      }
+
+      // 4. Empurra as variações NOVAS ao PDV (todas as lojas, estoque na loja escolhida)
+      if (newVariantIds.length > 0 && stockStoreId) {
+        const { data: posData, error: posErr } = await supabase.functions.invoke("pos-add-variants", {
+          body: { master_id: masterId, store_id: stockStoreId, variant_ids: newVariantIds },
+        });
+        if (posErr || posData?.error) {
+          toast.warning(
+            "Variações salvas no cadastro, mas falhou ao enviar ao PDV: " +
+            (posData?.error || posErr?.message || "erro desconhecido")
+          );
+        } else {
+          const storeName = stores.find((s) => s.id === stockStoreId)?.name || "loja";
+          toast.success(`${newVariantIds.length} variação(ões) nova(s) enviada(s) ao PDV (${storeName}).`);
         }
       }
 
