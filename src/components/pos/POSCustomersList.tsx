@@ -349,6 +349,15 @@ export function POSCustomersList({ onOpenProfile }: Props) {
                   </Button>
                   <Button
                     size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-pos-white/70 hover:text-pos-white hover:bg-pos-white/10"
+                    title="Editar dados"
+                    onClick={() => { setEditId(c.id); setEditOpen(true); }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
                     className="h-8 w-8 bg-[#00a884] hover:bg-[#00a884]/90 text-white"
                     title="Enviar WhatsApp"
                     onClick={() => handleSendWhatsApp(c)}
