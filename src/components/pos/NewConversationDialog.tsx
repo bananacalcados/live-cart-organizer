@@ -394,31 +394,33 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
                   )}
                 </p>
               ) : (
-                <div className="mt-1 space-y-1.5">
-                  {onlineInstances.map(inst => {
-                    const active = inst.id === selectedInstanceId;
-                    return (
-                      <button
-                        key={inst.id}
-                        onClick={() => setSelectedInstanceId(inst.id)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
-                          active
-                            ? "bg-[#00a884]/10 border-[#00a884]"
-                            : "bg-background border-border hover:border-[#00a884]/50"
-                        }`}
-                      >
-                        <Wifi className={`h-3.5 w-3.5 shrink-0 ${active ? "text-[#00a884]" : "text-emerald-500"}`} />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{inst.label}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">
-                            {inst.phone_display} · {PROVIDER_LABEL[inst.provider || "zapi"] || inst.provider}
-                          </p>
-                        </div>
-                        {active && <Check className="h-4 w-4 text-[#00a884] shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
+                <ScrollArea className="mt-1 max-h-72 rounded-lg border border-border/60 pr-3">
+                  <div className="space-y-1.5 p-1">
+                    {onlineInstances.map(inst => {
+                      const active = inst.id === selectedInstanceId;
+                      return (
+                        <button
+                          key={inst.id}
+                          onClick={() => setSelectedInstanceId(inst.id)}
+                          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border text-left transition-all ${
+                            active
+                              ? "bg-[#00a884]/10 border-[#00a884]"
+                              : "bg-background border-border hover:border-[#00a884]/50"
+                          }`}
+                        >
+                          <Wifi className={`h-3.5 w-3.5 shrink-0 ${active ? "text-[#00a884]" : "text-emerald-500"}`} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{inst.label}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {inst.phone_display} · {PROVIDER_LABEL[inst.provider || "zapi"] || inst.provider}
+                            </p>
+                          </div>
+                          {active && <Check className="h-4 w-4 text-[#00a884] shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
               )}
             </div>
 
