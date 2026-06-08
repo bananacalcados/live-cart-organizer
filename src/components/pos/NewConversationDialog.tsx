@@ -69,7 +69,16 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
   const [leadData, setLeadData] = useState<LeadData | null>(null);
   const [lookingUpLead, setLookingUpLead] = useState(false);
 
-  const { numbers: storeNumbers } = useWhatsAppNumberStore();
+  const { numbers: storeNumbers, fetchNumbers, isLoading: loadingNumbers } = useWhatsAppNumberStore();
+
+  // Ensure the global WhatsApp instances are loaded when the dialog opens
+  // (e.g. opened from the POS Clientes list where nothing else fetched them).
+  useEffect(() => {
+    if (open && (!instances || instances.length === 0) && storeNumbers.length === 0) {
+      fetchNumbers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Only ONLINE instances are selectable. Meta numbers don't expose a realtime
   // connection flag (always reachable via API), so they're always considered online.
@@ -377,8 +386,12 @@ export function NewConversationDialog({ open, onOpenChange, onConversationCreate
             <div>
               <Label className="text-xs">Instância (somente online)</Label>
               {onlineInstances.length === 0 ? (
-                <p className="mt-1 text-xs text-muted-foreground p-3 rounded-lg border border-dashed text-center">
-                  Nenhuma instância online disponível para esta loja.
+                <p className="mt-1 text-xs text-muted-foreground p-3 rounded-lg border border-dashed text-center flex items-center justify-center gap-2">
+                  {loadingNumbers ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Carregando instâncias...</>
+                  ) : (
+                    "Nenhuma instância online disponível para esta loja."
+                  )}
                 </p>
               ) : (
                 <div className="mt-1 space-y-1.5">
