@@ -485,7 +485,11 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
             <TabsTrigger value="electronic" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
               <CreditCard className="h-4 w-4" /> Comprovantes Eletrônicos
             </TabsTrigger>
+            <TabsTrigger value="providers" className="data-[state=active]:bg-pos-orange data-[state=active]:text-pos-black text-pos-white/70 gap-1.5">
+              <Truck className="h-4 w-4" /> Prestadores
+            </TabsTrigger>
           </TabsList>
+
 
           {/* ===== TAB: DINHEIRO ===== */}
           <TabsContent value="cash" className="space-y-4">
