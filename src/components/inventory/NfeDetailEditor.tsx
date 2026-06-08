@@ -39,6 +39,7 @@ interface Invoice {
 
 interface Item {
   id: string;
+  line_number: number | null;
   description: string;
   ncm: string | null;
   quantity: number;
