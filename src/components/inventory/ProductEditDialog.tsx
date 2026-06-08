@@ -17,7 +17,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Save, Trash2, Plus, Upload, X, Package } from "lucide-react";
+import { Loader2, Save, Trash2, Plus, Upload, X, Package, Sparkles, Store as StoreIcon } from "lucide-react";
 import { toast } from "sonner";
 import { generateEan13 } from "@/lib/ean13";
 
@@ -71,6 +71,14 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
   const [variants, setVariants] = useState<VariantRow[]>([]);
   const [removedVariantIds, setRemovedVariantIds] = useState<string[]>([]);
 
+  // Lote: gerador de matriz cor × tamanho + loja que recebe o estoque das variações novas
+  const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
+  const [stockStoreId, setStockStoreId] = useState<string>("");
+  const [matrixColors, setMatrixColors] = useState("");
+  const [matrixSizes, setMatrixSizes] = useState("");
+  const [batchStock, setBatchStock] = useState("0");
+  const [batchCost, setBatchCost] = useState("");
+
   useEffect(() => {
     if (!open || !masterId) return;
     loadData();
@@ -84,6 +92,12 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       .eq("is_active", true)
       .order("name")
       .then(({ data }) => setCategories((data || []) as any));
+    supabase
+      .from("pos_stores")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setStores((data || []) as any));
   }, [open]);
 
   async function loadData() {
@@ -173,6 +187,52 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     ]);
   }
 
+  function generateMatrix() {
+    const colors = matrixColors.split(",").map((c) => c.trim()).filter(Boolean);
+    const sizes = matrixSizes.split(",").map((s) => s.trim()).filter(Boolean);
+    if (!colors.length || !sizes.length) {
+      toast.error("Informe pelo menos uma cor e um tamanho.");
+      return;
+    }
+    const norm = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+    const stock = parseInt(batchStock, 10) || 0;
+    const newRows: VariantRow[] = [];
+    let skipped = 0;
+    setVariants((arr) => {
+      const existing = new Set(arr.map((v) => `${norm(v.color)}|${norm(v.size)}`));
+      for (const c of colors) {
+        for (const s of sizes) {
+          const key = `${norm(c)}|${norm(s)}`;
+          if (existing.has(key)) { skipped++; continue; }
+          existing.add(key);
+          newRows.push({
+            _isNew: true,
+            color: c,
+            size: s,
+            cost_price_override: batchCost.trim() || "",
+            sale_price_override: "",
+            weight_kg_override: "",
+            current_stock: stock,
+            original_stock: 0,
+            is_active: true,
+          });
+        }
+      }
+      return [...arr, ...newRows];
+    });
+    setTimeout(() => {
+      if (newRows.length === 0) {
+        toast.info("Todas as combinações já existem neste produto.");
+      } else {
+        toast.success(
+          `${newRows.length} variação(ões) gerada(s)${skipped ? ` · ${skipped} já existia(m), ignorada(s)` : ""}.`
+        );
+      }
+    }, 0);
+    setMatrixColors("");
+    setMatrixSizes("");
+  }
+
   function removeVariant(idx: number) {
     const v = variants[idx];
     if (v.id) setRemovedVariantIds((ids) => [...ids, v.id!]);
@@ -201,7 +261,14 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     if (!masterId) return;
     if (!name.trim()) { toast.error("Informe o nome."); return; }
 
+    const hasNewVariants = variants.some((v) => !v.id && v.color && v.size);
+    if (hasNewVariants && !stockStoreId) {
+      toast.error("Há variações novas: escolha a loja que recebe o estoque (no topo das Variações).");
+      return;
+    }
+
     setSaving(true);
+    const newVariantIds: string[] = [];
     try {
       // 1. Atualiza pai
       const { error: e1 } = await supabase
@@ -317,6 +384,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
             .select("id")
             .single();
           if (eIns) throw eIns;
+          if (ins) newVariantIds.push(ins.id);
 
           if (v.current_stock > 0 && ins) {
             await supabase.from("product_stock_movements").insert({
@@ -327,6 +395,22 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
               reason: "Estoque inicial - variação criada na edição",
             } as any);
           }
+        }
+      }
+
+      // 4. Empurra as variações NOVAS ao PDV (todas as lojas, estoque na loja escolhida)
+      if (newVariantIds.length > 0 && stockStoreId) {
+        const { data: posData, error: posErr } = await supabase.functions.invoke("pos-add-variants", {
+          body: { master_id: masterId, store_id: stockStoreId, variant_ids: newVariantIds },
+        });
+        if (posErr || posData?.error) {
+          toast.warning(
+            "Variações salvas no cadastro, mas falhou ao enviar ao PDV: " +
+            (posData?.error || posErr?.message || "erro desconhecido")
+          );
+        } else {
+          const storeName = stores.find((s) => s.id === stockStoreId)?.name || "loja";
+          toast.success(`${newVariantIds.length} variação(ões) nova(s) enviada(s) ao PDV (${storeName}).`);
         }
       }
 
@@ -516,6 +600,68 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                 </Button>
               </CardHeader>
               <CardContent>
+                {/* Gerador de variações em lote (Cor × Tamanho) */}
+                <div className="rounded-md border border-dashed border-primary/40 bg-primary/5 p-3 mb-3 space-y-2">
+                  <Label className="flex items-center gap-1.5 text-sm">
+                    <Sparkles className="h-4 w-4 text-primary" /> Gerar variações em lote (Cor × Tamanho)
+                  </Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Cores (separadas por vírgula)</Label>
+                      <Input className="h-8" value={matrixColors} onChange={(e) => setMatrixColors(e.target.value)} placeholder="Preto, Bege, Rosa" />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Tamanhos (separados por vírgula)</Label>
+                      <Input className="h-8" value={matrixSizes} onChange={(e) => setMatrixSizes(e.target.value)} placeholder="35, 36, 37, 38" />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[11px] text-muted-foreground self-center">Grades rápidas:</span>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setMatrixSizes("33/34, 35/36, 37/38, 39/40")}>Chinelo (33/34…)</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setMatrixSizes("25/26, 27/28, 29/30, 31/32, 33/34")}>Chinelo Infantil</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setMatrixSizes("34, 35, 36, 37, 38, 39, 40")}>Numérico 34-40</Button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Estoque inicial p/ cada</Label>
+                      <Input className="h-8" type="number" min="0" value={batchStock} onChange={(e) => setBatchStock(e.target.value)} />
+                    </div>
+                    <div>
+                      <Label className="text-[10px] text-muted-foreground">Custo R$ (opcional)</Label>
+                      <Input className="h-8" type="number" step="0.01" value={batchCost} onChange={(e) => setBatchCost(e.target.value)} placeholder={costPrice || "—"} />
+                    </div>
+                    <Button type="button" size="sm" variant="secondary" className="h-8" onClick={generateMatrix}>
+                      <Sparkles className="h-4 w-4 mr-1" /> Gerar variações
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Combinações que já existem neste produto são ignoradas (sem duplicar).
+                  </p>
+                </div>
+
+                {/* Loja que recebe o estoque das variações novas */}
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-3 mb-3">
+                  <Label className="flex items-center gap-1.5 text-sm mb-1">
+                    <StoreIcon className="h-4 w-4 text-primary" /> Loja que recebe o estoque das variações novas
+                  </Label>
+                  <Select value={stockStoreId} onValueChange={setStockStoreId}>
+                    <SelectTrigger className="max-w-sm h-9">
+                      <SelectValue placeholder="Escolha a loja" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stores.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Obrigatório só quando há variações novas. Elas ficam bipáveis em todas as lojas; o estoque entra nesta.
+                  </p>
+                </div>
+
                 <div className="space-y-2 max-h-[400px] overflow-y-auto">
                   {variants.map((v, idx) => {
                     const delta = v.current_stock - v.original_stock;

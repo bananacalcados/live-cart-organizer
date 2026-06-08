@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { invoice_id, store_id, parent_sku, item_ids } = await req.json();
+    const { invoice_id, store_id, parent_sku, item_ids, dry_run } = await req.json();
 
     if (!store_id) throw new Error("store_id é obrigatório (loja que recebe o estoque).");
     if (!parent_sku) throw new Error("parent_sku é obrigatório.");
@@ -71,6 +71,39 @@ Deno.serve(async (req) => {
       .in("id", item_ids);
     if (itErr) throw itErr;
     if (!items || items.length === 0) throw new Error("Linhas da NF não encontradas.");
+
+    // ===== PRÉVIA (dry_run): diz quais variações seriam NOVAS vs ATUALIZADAS, sem gravar =====
+    if (dry_run) {
+      const created: string[] = [];
+      const updated: string[] = [];
+      for (const it of items) {
+        const color = (it.parsed_color || "").toString().trim();
+        const size = (it.parsed_size || "").toString().trim();
+        const label = `${color} ${size}`.trim().replace(/\s+/g, " ") || "(sem cor/tam)";
+        const barcode = (it.ean && /^\d{8,14}$/.test(it.ean)) ? it.ean : null;
+
+        let exists = false;
+        if (barcode) {
+          const { data } = await supabase
+            .from("pos_products").select("id")
+            .eq("store_id", store_id).eq("barcode", barcode).maybeSingle();
+          exists = !!data;
+        }
+        if (!exists && color && size) {
+          const { data } = await supabase
+            .from("pos_products").select("id")
+            .eq("store_id", store_id).eq("parent_sku", parent_sku)
+            .eq("color", color).eq("size", size).maybeSingle();
+          exists = !!data;
+        }
+        (exists ? updated : created).push(label);
+      }
+      return new Response(
+        JSON.stringify({ success: true, dry_run: true, created, updated }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
 
     // Produto pai existente (qualquer linha desse parent_sku serve de modelo)
     const { data: template, error: tplErr } = await supabase

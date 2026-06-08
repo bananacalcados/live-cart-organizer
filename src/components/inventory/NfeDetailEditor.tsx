@@ -105,6 +105,16 @@ export function NfeDetailEditor({
   const [showSearch, setShowSearch] = useState(false);
   const [linking, setLinking] = useState(false);
 
+  // Prévia (novas vs atualizadas) antes de confirmar o vínculo
+  const [linkPreview, setLinkPreview] = useState<{
+    parentSku: string;
+    parentName: string;
+    ids: string[];
+    created: string[];
+    updated: string[];
+  } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
   async function loadGtinMatches(its: Item[]) {
     const eans = its.map((i) => i.ean).filter((e): e is string => !!e && /^\d{8,14}$/.test(e));
     if (eans.length === 0) {
@@ -215,6 +225,33 @@ export function NfeDetailEditor({
   }
 
   // ---- Vincular linhas selecionadas a um pai existente ----
+  // Passo 1: prévia (dry_run) — mostra quais variações são NOVAS vs ATUALIZADAS antes de gravar.
+  async function requestLink(parentSku: string, ids: string[], parentName = "") {
+    if (!stockStoreId) { toast.error("Escolha a loja que recebe o estoque."); return; }
+    if (!ids.length) return;
+    setPreviewLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("nfe-link-items-pos", {
+        body: { invoice_id: invoiceId, store_id: stockStoreId, parent_sku: parentSku, item_ids: ids, dry_run: true },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setShowSearch(false);
+      setLinkPreview({
+        parentSku,
+        parentName: parentName || parentSku,
+        ids,
+        created: data?.created || [],
+        updated: data?.updated || [],
+      });
+    } catch (err: any) {
+      toast.error("Erro ao calcular prévia: " + (err.message || err));
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  // Passo 2: confirma e grava de fato.
   async function linkToParent(parentSku: string, ids: string[]) {
     if (!stockStoreId) { toast.error("Escolha a loja que recebe o estoque."); return; }
     if (!ids.length) return;
@@ -226,6 +263,7 @@ export function NfeDetailEditor({
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       toast.success(data?.message || "Linhas vinculadas e estoque lançado.");
+      setLinkPreview(null);
       setShowSearch(false);
       setSelectedIds(new Set());
       await load();
@@ -238,7 +276,7 @@ export function NfeDetailEditor({
   }
 
   function quickLinkLine(item: Item, match: GtinMatch) {
-    linkToParent(match.parent_sku, [item.id]);
+    requestLink(match.parent_sku, [item.id], match.name);
   }
 
   // ---- Parcelas ----
@@ -374,7 +412,7 @@ export function NfeDetailEditor({
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled={selectedIds.size === 0 || linking}
+                    disabled={selectedIds.size === 0 || linking || previewLoading}
                     onClick={() => setShowSearch(true)}
                   >
                     <Link2 className="h-4 w-4 mr-1" /> Vincular a pai existente
@@ -420,7 +458,7 @@ export function NfeDetailEditor({
                                   size="sm"
                                   variant="ghost"
                                   className="h-6 px-2 text-xs"
-                                  disabled={linking}
+                                  disabled={linking || previewLoading}
                                   onClick={() => quickLinkLine(it, match)}
                                 >
                                   <Link2 className="h-3 w-3 mr-1" /> Vincular esta
@@ -534,8 +572,62 @@ export function NfeDetailEditor({
       <ExistingParentSearchDialog
         open={showSearch}
         onOpenChange={setShowSearch}
-        onSelect={(parentSku) => linkToParent(parentSku, [...selectedIds])}
+        onSelect={(parentSku, name) => requestLink(parentSku, [...selectedIds], name)}
       />
+
+      {/* Confirmação com prévia de variações novas vs atualizadas */}
+      <Dialog open={!!linkPreview} onOpenChange={(v) => { if (!v) setLinkPreview(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" /> Confirmar vínculo
+            </DialogTitle>
+          </DialogHeader>
+          {linkPreview && (
+            <div className="space-y-3 text-sm">
+              <p>
+                Vincular <strong>{linkPreview.ids.length}</strong> linha(s) ao pai{" "}
+                <strong>{linkPreview.parentName}</strong>. Estoque entra em{" "}
+                <strong>{selectedStoreName || "loja"}</strong>.
+              </p>
+              {linkPreview.created.length > 0 && (
+                <div className="rounded-md border border-green-500/30 bg-green-500/10 p-2">
+                  <div className="font-medium text-green-700 dark:text-green-400 flex items-center gap-1 mb-1">
+                    <Sparkles className="h-3.5 w-3.5" /> {linkPreview.created.length} variação(ões) NOVA(S)
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {linkPreview.created.map((c, i) => (
+                      <Badge key={i} variant="outline" className="bg-green-500/10 border-green-500/30">{c}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {linkPreview.updated.length > 0 && (
+                <div className="rounded-md border bg-muted/40 p-2">
+                  <div className="font-medium flex items-center gap-1 mb-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> {linkPreview.updated.length} já existe(m) — soma estoque
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {linkPreview.updated.map((u, i) => (
+                      <Badge key={i} variant="secondary">{u}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkPreview(null)} disabled={linking}>Cancelar</Button>
+            <Button
+              onClick={() => linkPreview && linkToParent(linkPreview.parentSku, linkPreview.ids)}
+              disabled={linking}
+            >
+              {linking ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Link2 className="h-4 w-4 mr-1" />}
+              Confirmar e lançar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
