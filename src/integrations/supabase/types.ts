@@ -14531,6 +14531,42 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_routing_log: {
+        Row: {
+          created_at: string
+          id: string
+          matched: boolean
+          provider: string
+          raw_identifier: string | null
+          raw_payload: Json | null
+          resolution_method: string
+          resolved_whatsapp_number_id: string | null
+          sender_phone: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          matched?: boolean
+          provider: string
+          raw_identifier?: string | null
+          raw_payload?: Json | null
+          resolution_method?: string
+          resolved_whatsapp_number_id?: string | null
+          sender_phone?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          matched?: boolean
+          provider?: string
+          raw_identifier?: string | null
+          raw_payload?: Json | null
+          resolution_method?: string
+          resolved_whatsapp_number_id?: string | null
+          sender_phone?: string | null
+        }
+        Relationships: []
+      }
       whatsapp_ad_keywords: {
         Row: {
           campaign_label: string
@@ -15640,6 +15676,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      cleanup_webhook_routing_log: { Args: never; Returns: undefined }
       clear_event_live_active: {
         Args: { p_event_id: string }
         Returns: undefined
