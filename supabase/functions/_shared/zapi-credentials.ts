@@ -49,14 +49,15 @@ export async function resolveZApiCredentials(
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const supabase = supabaseUrl && serviceKey ? createClient(supabaseUrl, serviceKey) : null;
 
-  // If a whatsapp_number_id is provided, look up from DB
+  // If a whatsapp_number_id is provided, look up from DB (ACTIVE only).
   if (whatsappNumberId && supabase) {
     const { data, error } = await supabase
       .from("whatsapp_numbers")
       .select("zapi_instance_id, zapi_token, zapi_client_token")
       .eq("id", whatsappNumberId)
       .eq("provider", "zapi")
-      .single();
+      .eq("is_active", true)
+      .maybeSingle();
 
     if (!error && data?.zapi_instance_id && data?.zapi_token && data?.zapi_client_token) {
       return {
@@ -65,7 +66,9 @@ export async function resolveZApiCredentials(
         clientToken: data.zapi_client_token,
       };
     }
-    console.warn(`Could not resolve Z-API credentials for whatsapp_number_id=${whatsappNumberId}, falling back to env vars`);
+    // Explicit instance requested but inactive/not found → fail instead of using
+    // default. NEVER silently fall back: that would send via the wrong number.
+    throw new Error(`Instância Z-API ${whatsappNumberId} não encontrada ou inativa — envio cancelado para evitar número errado.`);
   }
 
   if (supabase) {
