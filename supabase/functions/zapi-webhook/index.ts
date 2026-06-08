@@ -251,6 +251,19 @@ serve(async (req) => {
       const statusRaw = asString(payload.status);
       const status = (statusRaw ? statusRaw.toLowerCase() : (fromMe ? 'sent' : 'received'));
 
+      // Diagnostic: log how incoming (customer) messages were routed to an instance
+      if (!fromMe && !isGroup) {
+        await logRouting(supabase, {
+          provider: 'zapi',
+          senderPhone: phone,
+          resolutionMethod: resolution.method,
+          resolvedWhatsappNumberId: whatsappNumberId,
+          rawIdentifier: resolution.rawIdentifier,
+          matched: resolution.matched,
+          rawPayload: { instanceId: payload.instanceId, connectedPhone: payload.connectedPhone, messageId: payload.messageId },
+        });
+      }
+
       // Build display message: use caption/text or fallback to media type label
       const displayMessage = messageText || mediaInfo?.caption || (mediaInfo ? `📎 ${mediaInfo.mediaType}` : '');
 
