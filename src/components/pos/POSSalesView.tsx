@@ -31,6 +31,7 @@ import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { toast } from "sonner";
 import { openFiscalDocument } from "@/lib/openFiscalDocument";
 import { searchUnifiedCustomers, materializePosCustomer } from "@/lib/posCustomerResolve";
+import { fetchProviders, createDeliveryCost, storeNameToSource, ServiceProvider, ProviderType } from "@/lib/deliveryProviders";
 
 interface CartItem {
   id: string;
