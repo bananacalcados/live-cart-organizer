@@ -651,7 +651,17 @@ export function POSCashRegister({ storeId, sellerId }: Props) {
               </div>
             )}
           </TabsContent>
+
+          {/* ===== TAB: PRESTADORES ===== */}
+          <TabsContent value="providers" className="space-y-4">
+            <ProviderPayablesPanel
+              storeId={storeId}
+              cashRegisterId={register.id}
+              onPaid={loadOpenRegister}
+            />
+          </TabsContent>
         </Tabs>
+
       )}
 
       {/* Open Dialog */}
