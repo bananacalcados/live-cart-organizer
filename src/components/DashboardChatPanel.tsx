@@ -212,10 +212,13 @@ export function DashboardChatPanel() {
   }, [loadConversations, selectedPhone, selectedConvNumberId]);
 
   // New WhatsApp messages broadcast (postgres_changes removed).
+  // Open chat refetches immediately; conversation list reload is debounced.
   useWaMessageBroadcast(() => {
-    loadConversations();
     if (selectedPhone) loadMessages(selectedPhone, selectedConvNumberId);
   });
+  useWaMessageBroadcast(() => {
+    loadConversations();
+  }, { debounceMs: 800 });
 
   // Status (✓✓) refresh: lightweight refetch every 15s on the open chat.
   useEffect(() => {
