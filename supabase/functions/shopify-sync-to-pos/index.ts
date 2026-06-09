@@ -38,8 +38,11 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const days = Number(body.days || 30);
     const limit = Number(body.limit || 250);
+    // Incremental by default. `days` only used as fallback window when there is
+    // no stored watermark, or when caller explicitly forces a full backfill.
+    const fallbackDays = Number(body.days || 2);
+    const forceFull = body.full === true || body.days != null;
 
     const SHOPIFY_DOMAIN = Deno.env.get("SHOPIFY_STORE_DOMAIN");
     const SHOPIFY_TOKEN = Deno.env.get("SHOPIFY_ACCESS_TOKEN");
@@ -54,11 +57,31 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const since = new Date(Date.now() - days * 86400000).toISOString();
-    let url: string | null = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/orders.json?status=any&financial_status=paid&created_at_min=${since}&limit=${limit}&fields=id,name,total_price,subtotal_price,total_discounts,total_shipping_price_set,line_items,created_at,financial_status,customer,phone,email,gateway,payment_gateway_names,shipping_address,billing_address,note_attributes`;
+    const SYNC_KEY = "shopify_sync_to_pos_watermark";
+    // Determine the incremental "since" using the stored watermark.
+    let watermark: string | null = null;
+    if (!forceFull) {
+      const { data: wm } = await supabase
+        .from("system_settings")
+        .select("value")
+        .eq("key", SYNC_KEY)
+        .maybeSingle();
+      watermark = (wm?.value as any)?.last_updated_at || null;
+    }
+    // 10-min overlap buffer so we never miss orders updated right at the boundary.
+    const since = watermark
+      ? new Date(new Date(watermark).getTime() - 10 * 60000).toISOString()
+      : new Date(Date.now() - fallbackDays * 86400000).toISOString();
+    const runStartedAt = new Date().toISOString();
 
-    let inserted = 0, skipped = 0, errors = 0, pages = 0;
+    // status=any + no financial_status filter so we also see cancellations/refunds.
+    // Filter by updated_at_min (not created_at_min) so status changes on old
+    // orders are caught while keeping the page count tiny on each run.
+    let url: string | null = `https://${SHOPIFY_DOMAIN}/admin/api/2024-01/orders.json?status=any&updated_at_min=${since}&limit=${limit}&fields=id,name,total_price,subtotal_price,total_discounts,total_shipping_price_set,line_items,created_at,updated_at,cancelled_at,financial_status,customer,phone,email,gateway,payment_gateway_names,shipping_address,billing_address,note_attributes`;
+
+    let inserted = 0, skipped = 0, errors = 0, pages = 0, cancelled = 0;
     const safetyMax = 20;
+
 
     while (url && pages < safetyMax) {
       pages++;
