@@ -297,7 +297,11 @@ Deno.serve(async (req) => {
         if (!target[k] || String(src[k]) > String(target[k])) (target as any)[k] = src[k];
       };
 
-      ["name","cpf","email","birth_date","gender","instagram_handle","instagram_user_id",
+      // NOTA: "cpf" NÃO entra aqui de propósito. CPF é identidade forte e só pode
+      // ser adotado por um match de CPF ou na criação do registro. Adotar CPF num
+      // match por telefone/email/IG contamina a ficha com o CPF de outra pessoa
+      // (ex.: alguém digitou o CPF do cliente A no telefone do cliente B).
+      ["name","email","birth_date","gender","instagram_handle","instagram_user_id",
        "cep","address","address_number","complement","neighborhood","city","state",
        "shoe_size","preferred_style","age_range","children_age_range",
        "rfm_segment","region_type","ddd","ban_reason"].forEach((k) => prefer(k as any));
