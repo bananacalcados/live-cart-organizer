@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { User, Star, Save, Trash2, UserSearch } from "lucide-react";
+import { User, Star, Save, Trash2, UserSearch, Search, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { savePosCustomer, removePreviousWhatsApp } from "./customerFormUtils";
+import { searchUnifiedCustomers, type UnifiedSearchResult } from "@/lib/posCustomerResolve";
 
 const AGE_RANGES = ["18-24", "25-34", "35-44", "45-54", "55+"];
 const STYLES = ["Casual", "Esportivo", "Clássico", "Streetwear", "Romântico", "Minimalista", "Boho", "Fashion"];
