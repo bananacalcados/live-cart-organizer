@@ -142,7 +142,7 @@ export function GlobalWhatsAppChat() {
   // whatsapp_messages was removed to cut DB CPU).
   useWaMessageBroadcast(() => {
     if (isOpen) setWaMsgTick((t) => t + 1);
-  });
+  }, { debounceMs: 800 });
 
   const loadMessages = async (phone: string, numberId?: string | null) => {
     // Load ALL messages for this phone across all instances so full history is visible
