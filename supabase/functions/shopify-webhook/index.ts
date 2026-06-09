@@ -51,8 +51,52 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Only paid orders count as revenue
     const financial = (o.financial_status || "").toLowerCase();
+    const topicLc = topic.toLowerCase();
+
+    // --- Cancellation / refund handling ---
+    // Triggered by orders/cancelled, refunds/create, or orders/updated with
+    // cancelled_at set or financial_status refunded/voided. Marks the matching
+    // pos_sales row as cancelled so it leaves revenue immediately (event-driven).
+    const refundOrderId = o.order_id ? String(o.order_id) : null; // refunds/create payload
+    const isCancelEvent =
+      topicLc.includes("cancel") ||
+      topicLc.includes("refund") ||
+      !!o.cancelled_at ||
+      ["refunded", "voided", "partially_refunded"].includes(financial);
+
+    if (isCancelEvent) {
+      const targetId = refundOrderId || String(o.id);
+      const { data: row } = await supabase
+        .from("pos_sales")
+        .select("id, status, notes")
+        .eq("external_source", "shopify")
+        .eq("external_order_id", targetId)
+        .maybeSingle();
+      if (!row) {
+        return new Response(JSON.stringify({ ok: true, cancel_skipped: "sale not found" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (row.status === "cancelled") {
+        return new Response(JSON.stringify({ ok: true, already_cancelled: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const reason = topicLc.includes("refund") || financial.includes("refund") ? "estorno" : "cancelamento";
+      await supabase
+        .from("pos_sales")
+        .update({
+          status: "cancelled",
+          notes: `${row.notes || ""} | Shopify ${reason} (${topic || financial})`.trim(),
+        })
+        .eq("id", row.id);
+      return new Response(JSON.stringify({ ok: true, cancelled: true, sale_id: row.id }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Only paid orders count as revenue
     if (!["paid", "partially_paid"].includes(financial)) {
       return new Response(JSON.stringify({ ok: true, skipped: "not paid" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
