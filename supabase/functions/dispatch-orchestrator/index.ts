@@ -1,7 +1,8 @@
 // dispatch-orchestrator
-// Runs every 30s via pg_cron. Looks at active dispatches with pending work
-// and spawns N workers per dispatch (fire-and-forget). Workers self-coordinate
-// via lease lock — extra workers just find nothing to claim, no duplication.
+// Runs every minute via pg_cron (job: dispatch-orchestrator-every-minute).
+// Looks at active dispatches with pending work and spawns N workers per dispatch
+// (fire-and-forget). Workers self-coordinate via lease lock — extra workers just
+// find nothing to claim, no duplication.
 //
 // Also: promotes scheduled→sending and finalizes empty dispatches.
 
@@ -16,7 +17,17 @@ const corsHeaders = {
 function isInternalRequest(req: Request, serviceKey: string) {
   const authHeader = req.headers.get('Authorization') || '';
   const apiKey = req.headers.get('apikey') || '';
-  return authHeader === `Bearer ${serviceKey}` || apiKey === serviceKey;
+  // Accept the service role key (internal calls from other functions) OR the
+  // anon key (pg_cron jobs can only carry the anon key). This matches how the
+  // project's other internal crons authenticate. The function itself does no
+  // sensitive data work — it only spawns idempotent, lease-guarded workers for
+  // dispatches that already have pending recipients.
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+  return (
+    authHeader === `Bearer ${serviceKey}` ||
+    apiKey === serviceKey ||
+    (!!anonKey && (authHeader === `Bearer ${anonKey}` || apiKey === anonKey))
+  );
 }
 
 const MAX_WORKERS_PER_DISPATCH = 8; // raised: each worker is HTTP-bound, DB ops are bulk
