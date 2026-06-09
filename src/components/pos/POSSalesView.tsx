@@ -957,17 +957,28 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         // Se for venda ONLINE: marca pos_sales pra aparecer na aba Envios
         if (saleId && saleType === 'online') {
           try {
-            const shippingAddr = selectedCustomer ? {
-              name: selectedCustomer.name,
-              cpf: selectedCustomer.cpf,
-              phone: selectedCustomer.whatsapp,
-              cep: selectedCustomer.cep,
-              address: selectedCustomer.address,
-              number: selectedCustomer.address_number,
-              complement: selectedCustomer.complement,
-              neighborhood: selectedCustomer.neighborhood,
-              city: selectedCustomer.city,
-              state: selectedCustomer.state,
+            // Snapshot do endereço a partir do cadastro VIVO (pos_customers) — evita
+            // gravar dados parciais que estavam no estado local na hora da venda.
+            let custFull: any = selectedCustomer;
+            if (selectedCustomer?.id) {
+              const { data: live } = await supabase
+                .from('pos_customers')
+                .select('name, cpf, whatsapp, cep, address, address_number, complement, neighborhood, city, state')
+                .eq('id', selectedCustomer.id)
+                .maybeSingle();
+              if (live) custFull = { ...selectedCustomer, ...live };
+            }
+            const shippingAddr = custFull ? {
+              name: custFull.name,
+              cpf: custFull.cpf,
+              phone: custFull.whatsapp,
+              cep: custFull.cep,
+              address: custFull.address,
+              number: custFull.address_number,
+              complement: custFull.complement,
+              neighborhood: custFull.neighborhood,
+              city: custFull.city,
+              state: custFull.state,
             } : null;
             await supabase.from('pos_sales').update({
               sale_type: 'online',
