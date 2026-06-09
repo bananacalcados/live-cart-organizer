@@ -358,11 +358,15 @@ export default function ChatPage() {
 
   // New WhatsApp messages: broadcast-based (postgres_changes was removed
   // from this table to cut DB CPU). See useWaMessageBroadcast.
+  // The OPEN conversation refetches immediately (client replies appear at once);
+  // the heavy conversation LIST reload is debounced to coalesce bursts.
   useWaMessageBroadcast(() => {
-    loadConversations();
     const active = activeConversationRef.current;
     if (active.phone) loadMessages(active.phone, false, active.numberId);
   });
+  useWaMessageBroadcast(() => {
+    loadConversations();
+  }, { debounceMs: 800 });
 
   // Status updates (✓✓ azul) no longer broadcast — lightweight refetch
   // of the OPEN conversation every 15s keeps the ticks reasonably fresh.
