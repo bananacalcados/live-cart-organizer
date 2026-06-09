@@ -29,6 +29,12 @@ interface Props {
 export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer }: Props) {
   const [saving, setSaving] = useState(false);
   const [previousNumbers, setPreviousNumbers] = useState<string[]>([]);
+  // Busca de cliente já existente (base unificada)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<UnifiedSearchResult[]>([]);
+  const [linkedId, setLinkedId] = useState<string | null>(existingCustomer?.id || null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initForm = () => ({
     name: existingCustomer?.name || "", email: existingCustomer?.email || "", whatsapp: existingCustomer?.whatsapp || "", cpf: existingCustomer?.cpf || "",
     cep: existingCustomer?.cep || "", address: existingCustomer?.address || "", address_number: existingCustomer?.address_number || "", complement: existingCustomer?.complement || "",
