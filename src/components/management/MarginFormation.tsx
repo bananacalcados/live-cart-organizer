@@ -159,22 +159,41 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
 
   // Consolidated KPIs (real stores only, exclude simulations)
   const realStoreIds = useMemo(() => new Set(realStores.map(s => s.id)), [realStores]);
+
+  // Which stores enter the consolidated calculation (empty = all real stores)
+  const [consolidatedStoreIds, setConsolidatedStoreIds] = useState<string[]>([]);
+  const consolidatedStores = useMemo(
+    () => realStores.filter(s => consolidatedStoreIds.length === 0 || consolidatedStoreIds.includes(s.id)),
+    [realStores, consolidatedStoreIds],
+  );
+  const consolidatedStoreIdSet = useMemo(() => new Set(consolidatedStores.map(s => s.id)), [consolidatedStores]);
+  const toggleConsolidatedStore = (id: string) => {
+    setConsolidatedStoreIds(prev => {
+      // Start from the effective selection (empty means all)
+      const base = prev.length === 0 ? realStores.map(s => s.id) : prev;
+      const next = base.includes(id) ? base.filter(i => i !== id) : [...base, id];
+      // If everything ends up selected, store as empty (= all)
+      if (next.length === 0) return prev; // keep at least one store selected
+      return next.length === realStores.length ? [] : next;
+    });
+  };
+
   const consolidatedFixed = useMemo(() => {
     return allStoreFixedCosts
-      .filter(s => s.is_active && realStoreIds.has(s.store_id))
+      .filter(s => s.is_active && consolidatedStoreIdSet.has(s.store_id))
       .reduce((sum, s) => sum + Number(s.amount), 0);
-  }, [allStoreFixedCosts, realStoreIds]);
+  }, [allStoreFixedCosts, consolidatedStoreIdSet]);
   const consolidatedRevenue = useMemo(() => {
-    return realStores.reduce((sum, s) => sum + (s.revenue_target ?? 100000), 0);
-  }, [realStores]);
+    return consolidatedStores.reduce((sum, s) => sum + (s.revenue_target ?? 100000), 0);
+  }, [consolidatedStores]);
   const consolidatedVariablePct = useMemo(() => {
     if (consolidatedRevenue <= 0) return 0;
-    const totalVarValue = realStores.reduce((sum, s) => {
+    const totalVarValue = consolidatedStores.reduce((sum, s) => {
       const pct = allVariableCosts.filter(v => v.is_active && v.store_id === s.id).reduce((a, v) => a + Number(v.percentage), 0);
       return sum + (s.revenue_target ?? 100000) * (pct / 100);
     }, 0);
     return (totalVarValue / consolidatedRevenue) * 100;
-  }, [allVariableCosts, realStores, consolidatedRevenue]);
+  }, [allVariableCosts, consolidatedStores, consolidatedRevenue]);
 
   const loadData = async () => {
     setLoading(true);
