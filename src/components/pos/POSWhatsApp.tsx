@@ -681,7 +681,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // are handled internally by useChatMessages above).
   useWaMessageBroadcast(() => {
     setWaMsgTick((t) => t + 1);
-  });
+  }, { debounceMs: 800 });
 
   // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
   // This handles cross-device realtime updates without disrupting the current UI
