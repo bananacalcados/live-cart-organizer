@@ -8,7 +8,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
   DropdownMenuLabel, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes, Sparkles, Tag } from "lucide-react";
+import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes, Sparkles, Tag, Unlink } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
 import { ProductStockManagerDialog } from "./ProductStockManagerDialog";
@@ -161,6 +161,32 @@ export function ProductsList() {
       load();
     } catch (err: any) {
       toast.error("Erro ao criar na Shopify: " + err.message);
+    } finally {
+      setSendingTo(null);
+    }
+  }
+
+  // Desvincula o produto da Shopify (limpa os IDs locais) para permitir reenviar
+  // como produto novo — usado quando o anúncio foi APAGADO na Shopify mas o sistema
+  // ainda acha que existe vínculo.
+  async function unlinkShopify(masterId: string) {
+    if (!confirm("Desvincular este produto da Shopify? Isso limpa o vínculo local (IDs Shopify do produto e variações) para você poder criar um novo produto na Shopify. Não apaga nada na Shopify.")) return;
+    setSendingTo(masterId);
+    try {
+      const { error: e1 } = await supabase
+        .from("products_master")
+        .update({ shopify_product_id: null } as any)
+        .eq("id", masterId);
+      if (e1) throw e1;
+      const { error: e2 } = await supabase
+        .from("product_variants")
+        .update({ shopify_variant_id: null } as any)
+        .eq("master_id", masterId);
+      if (e2) throw e2;
+      toast.success("Produto desvinculado da Shopify. Agora você pode criar um novo produto.");
+      load();
+    } catch (err: any) {
+      toast.error("Erro ao desvincular: " + err.message);
     } finally {
       setSendingTo(null);
     }
@@ -393,6 +419,14 @@ export function ProductsList() {
                             <DropdownMenuItem onClick={() => syncStock(p.id, "shopify")}>
                               <Boxes className="h-3 w-3 mr-2" />
                               Sincronizar estoque
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => unlinkShopify(p.id)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Unlink className="h-3 w-3 mr-2" />
+                              Desvincular da Shopify (apagado lá)
                             </DropdownMenuItem>
                           </>
                         )}

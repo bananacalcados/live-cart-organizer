@@ -166,22 +166,35 @@ Deno.serve(async (req) => {
       // Cliente: vem de pos_customers se houver customer_id, senão usa shipping_address
       let cpf: string | null = null;
       let email: string | null = null;
+      let custRec: any = null;
       if ((sale as any).customer_id) {
         const { data: c } = await supabase
           .from("pos_customers")
           .select("cpf, email, address, address_number, complement, neighborhood, city, state, cep, name, whatsapp")
           .eq("id", (sale as any).customer_id).maybeSingle();
-        if (c) { cpf = (c as any).cpf || null; email = (c as any).email || null; }
+        if (c) { cpf = (c as any).cpf || null; email = (c as any).email || null; custRec = c; }
       }
 
       // Normaliza shipping_address (pode vir tanto do PDV {address, number, ...} quanto do checkout {address1, province, zip})
+      // FONTE DA VERDADE: quando há customer_id, o cadastro vivo em pos_customers tem prioridade
+      // sobre o snapshot da venda (que pode estar parcial/desatualizado — ex.: logradouro "L",
+      // bairro "C"). O snapshot só preenche campos que o cadastro não tiver.
       const sa = ((sale as any).shipping_address || {}) as any;
+      const pickAddr = (live: any, snap: any) => {
+        const l = live != null ? String(live).trim() : "";
+        return l ? l : snap;
+      };
+      const liveAddress1 = custRec
+        ? [pickAddr(custRec.address, sa.address), pickAddr(custRec.address_number, sa.number)].filter(Boolean).join(", ")
+        : null;
       const shipping_address = {
-        zip: sa.zip || sa.cep,
-        province: sa.province || sa.state,
-        city: sa.city,
-        address1: sa.address1 || [sa.address, sa.number].filter(Boolean).join(", "),
-        address2: sa.address2 || sa.neighborhood || sa.complement,
+        zip: pickAddr(custRec?.cep, sa.zip || sa.cep),
+        province: pickAddr(custRec?.state, sa.province || sa.state),
+        city: pickAddr(custRec?.city, sa.city),
+        address1: (liveAddress1 || sa.address1 || [sa.address, sa.number].filter(Boolean).join(", ")),
+        address2: pickAddr(custRec?.neighborhood, sa.address2 || sa.neighborhood || sa.complement),
+        number: pickAddr(custRec?.address_number, sa.number),
+        neighborhood: pickAddr(custRec?.neighborhood, sa.neighborhood),
       };
 
       // company do store
