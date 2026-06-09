@@ -50,6 +50,9 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
   useEffect(() => {
     if (open) {
       setForm(initForm());
+      setLinkedId(existingCustomer?.id || null);
+      setSearchTerm("");
+      setSearchResults([]);
       if (existingCustomer?.id) {
         // Load previous numbers from DB
         supabase
@@ -66,9 +69,53 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
     } else {
       // Ao fechar, limpa o estado para a próxima abertura nascer limpa
       setPreviousNumbers([]);
+      setSearchTerm("");
+      setSearchResults([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existingCustomer?.id]);
+
+  // Busca com debounce na base unificada de clientes
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    const q = searchTerm.trim();
+    if (q.length < 3) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      const results = await searchUnifiedCustomers(q, 15);
+      setSearchResults(results);
+      setSearching(false);
+    }, 350);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [searchTerm]);
+
+  const handleSelectExisting = (c: UnifiedSearchResult) => {
+    setForm(f => ({
+      ...f,
+      name: c.name || "",
+      email: c.email || "",
+      whatsapp: c.whatsapp || "",
+      cpf: c.cpf || "",
+      cep: c.cep || "",
+      address: c.address || "",
+      address_number: c.address_number || "",
+      complement: c.complement || "",
+      neighborhood: c.neighborhood || "",
+      city: c.city || "",
+      state: c.state || "",
+    }));
+    // pos_customers será materializado no save por CPF/telefone, então não fixamos linkedId aqui
+    setLinkedId(null);
+    setSearchResults([]);
+    setSearchTerm("");
+    toast.success(`Cliente "${c.name || "selecionado"}" carregado — confira e salve`);
+  };
 
   const update = (field: string, value: string | boolean) => setForm(f => ({ ...f, [field]: value }));
 
