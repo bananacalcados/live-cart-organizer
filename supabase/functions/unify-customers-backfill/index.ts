@@ -297,7 +297,11 @@ Deno.serve(async (req) => {
         if (!target[k] || String(src[k]) > String(target[k])) (target as any)[k] = src[k];
       };
 
-      ["name","cpf","email","birth_date","gender","instagram_handle","instagram_user_id",
+      // NOTA: "cpf" NÃO entra aqui de propósito. CPF é identidade forte e só pode
+      // ser adotado por um match de CPF ou na criação do registro. Adotar CPF num
+      // match por telefone/email/IG contamina a ficha com o CPF de outra pessoa
+      // (ex.: alguém digitou o CPF do cliente A no telefone do cliente B).
+      ["name","email","birth_date","gender","instagram_handle","instagram_user_id",
        "cep","address","address_number","complement","neighborhood","city","state",
        "shoe_size","preferred_style","age_range","children_age_range",
        "rfm_segment","region_type","ddd","ban_reason"].forEach((k) => prefer(k as any));
@@ -340,35 +344,48 @@ Deno.serve(async (req) => {
     let internalSeq = 0;
     for (const src of sources) {
       for (const row of src.rows) {
-        // Match cascade
+        // Match cascade — CPF é identidade FORTE; telefone/email/IG são fracos.
         const suf = phoneSuffix8(row.phone || null);
-        let matchId: string | undefined =
-          (row.cpf && byCpf.get(row.cpf)) ||
+        const cpfMatch = row.cpf ? byCpf.get(row.cpf) : undefined;
+        const weakMatch =
           (row.phone && byPhoneFull.get(row.phone)) ||
           (suf && byPhoneSuf.get(suf)) ||
           (row.email && byEmail.get(row.email)) ||
           (row.instagram_handle && byIg.get(row.instagram_handle)) || undefined;
 
-        if (matchId) {
-          const u = unifiedById.get(matchId)!;
-          // CPF é a fonte de verdade. Se diverge, são clientes diferentes que
-          // compartilham telefone (família/vendedora cadastrou número genérico).
-          // Cria registro independente SEM telefone — será preenchido quando voltar.
-          if (row.cpf && u.cpf && u.cpf !== row.cpf) {
-            conflicts.push(`CPF conflito em ${matchId}: ${u.cpf} vs ${row.cpf} (${row.origin}) — criado como independente sem telefone`);
-            const id = `tmp-${++internalSeq}`;
-            const isolated: Unified = { ...row, phone: null, _origins: [row.origin], _list_ids: new Set(row.list_id ? [row.list_id] : []) };
-            unifiedById.set(id, isolated);
-            // indexa só por CPF/email/IG (sem telefone para não re-colidir)
-            if (isolated.cpf) byCpf.set(isolated.cpf, id);
-            if (isolated.email) byEmail.set(isolated.email, id);
-            if (isolated.instagram_handle) byIg.set(isolated.instagram_handle, id);
-            created++;
-            continue;
-          }
+        // Cria uma identidade isolada para o CPF do row (sem telefone p/ não
+        // re-colidir). Usado quando o CPF não pode ser fundido no match fraco.
+        const createIsolated = () => {
+          const id = `tmp-${++internalSeq}`;
+          const isolated: Unified = { ...row, phone: null, _origins: [row.origin], _list_ids: new Set(row.list_id ? [row.list_id] : []) };
+          unifiedById.set(id, isolated);
+          if (isolated.cpf) byCpf.set(isolated.cpf, id);
+          if (isolated.email) byEmail.set(isolated.email, id);
+          if (isolated.instagram_handle) byIg.set(isolated.instagram_handle, id);
+          created++;
+        };
+
+        if (cpfMatch) {
+          // Mesma identidade confirmada por CPF → fusão segura.
+          const u = unifiedById.get(cpfMatch)!;
           mergeFields(u, row);
-          indexKeys(matchId, u);
+          if (!u.cpf) u.cpf = row.cpf!;
+          indexKeys(cpfMatch, u);
           merged++;
+        } else if (weakMatch) {
+          const u = unifiedById.get(weakMatch)!;
+          if (row.cpf && u.cpf !== row.cpf) {
+            // Telefone/email/IG batem, mas o CPF é de OUTRA pessoa (ou a ficha de
+            // contato ainda não tem CPF). O CPF manda: NÃO contaminamos o registro
+            // de contato — criamos uma identidade própria para o CPF.
+            conflicts.push(`CPF '${row.cpf}' NÃO adotado em ${weakMatch} (alvo cpf=${u.cpf ?? "null"}) — criado como identidade independente (${row.origin})`);
+            createIsolated();
+          } else {
+            // Sem CPF no row (apenas enriquecendo contato) ou CPF idêntico → seguro.
+            mergeFields(u, row);
+            indexKeys(weakMatch, u);
+            merged++;
+          }
         } else {
           const id = `tmp-${++internalSeq}`;
           const u: Unified = { ...row, _origins: [row.origin], _list_ids: new Set(row.list_id ? [row.list_id] : []) };
