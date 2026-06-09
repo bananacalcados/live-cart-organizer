@@ -100,13 +100,39 @@ Deno.serve(async (req) => {
       for (const o of orders) {
         const externalId = String(o.id);
         try {
+          const fin = (o.financial_status || "").toLowerCase();
+          const isCancelled = !!o.cancelled_at || ["refunded", "voided", "partially_refunded"].includes(fin);
+
           const { data: existing } = await supabase
             .from("pos_sales")
-            .select("id")
+            .select("id, status, notes")
             .eq("external_source", "shopify")
             .eq("external_order_id", externalId)
             .maybeSingle();
+
+          // Cancellation/refund fallback (when webhook missed it).
+          if (isCancelled) {
+            if (existing && existing.status !== "cancelled") {
+              const reason = fin.includes("refund") ? "estorno" : "cancelamento";
+              await supabase
+                .from("pos_sales")
+                .update({
+                  status: "cancelled",
+                  notes: `${existing.notes || ""} | Shopify ${reason} (sync)`.trim(),
+                })
+                .eq("id", existing.id);
+              cancelled++;
+            } else {
+              skipped++;
+            }
+            continue;
+          }
+
           if (existing) { skipped++; continue; }
+
+          // Only paid orders become revenue rows.
+          if (!["paid", "partially_paid"].includes(fin)) { skipped++; continue; }
+
 
           const total = Number(o.total_price || 0);
           const subtotal = Number(o.subtotal_price || total);
