@@ -149,14 +149,14 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
 
     setSaving(true);
     try {
-      const data = await savePosCustomer(existingCustomer?.id, form);
+      const data = await savePosCustomer(linkedId, form);
 
-      toast.success(existingCustomer?.id ? "Cadastro atualizado! +pontos de gamificação 🎯" : "Cliente cadastrado!");
+      toast.success(linkedId ? "Cadastro atualizado! +pontos de gamificação 🎯" : "Cliente salvo!");
       onSaved({ id: data.id, name: data.name || '', cpf: data.cpf || undefined });
       setForm({ name: "", email: "", whatsapp: "", cpf: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", age_range: "", preferred_style: "", notes: "", shoe_size: "", gender: "", has_children: false, children_age_range: "" });
     } catch (e: any) {
       console.error("Erro ao salvar cliente POS:", e);
-      toast.error("Erro ao salvar cliente");
+      toast.error("Erro ao salvar cliente: " + (e?.message || "tente novamente"));
     } finally {
       setSaving(false);
     }
