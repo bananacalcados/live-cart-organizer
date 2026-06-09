@@ -1662,6 +1662,88 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
                       </CardContent>
                     </Card>
 
+                    {/* Fixed costs by store and department */}
+                    {(() => {
+                      const norm = (c: string | null | undefined) => (c && c.trim() ? c.trim() : "Outros");
+                      // Per-store grouping by department (category)
+                      const perStore = storeMetrics.map(m => {
+                        const sfc = allStoreFixedCosts.filter(s => s.store_id === m.store.id && s.is_active);
+                        const byCat = new Map<string, number>();
+                        sfc.forEach(s => {
+                          if (!s.amount) return;
+                          const fc = fixedCosts.find(f => f.id === s.fixed_cost_id);
+                          const cat = norm(fc?.category);
+                          byCat.set(cat, (byCat.get(cat) || 0) + s.amount);
+                        });
+                        const rows = [...byCat.entries()].sort((a, b) => b[1] - a[1]);
+                        return { store: m.store, total: m.totalFixed, rows };
+                      }).filter(p => p.rows.length > 0);
+
+                      if (perStore.length === 0) return null;
+
+                      // Consolidated by department across all stores
+                      const consolByCat = new Map<string, number>();
+                      perStore.forEach(p => p.rows.forEach(([cat, val]) => consolByCat.set(cat, (consolByCat.get(cat) || 0) + val)));
+                      const consolRows = [...consolByCat.entries()].sort((a, b) => b[1] - a[1]);
+                      const consolTotal = consolRows.reduce((s, [, v]) => s + v, 0);
+
+                      return (
+                        <Card>
+                          <CardContent className="pt-4 space-y-5">
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4 text-destructive" />
+                              <span className="text-sm font-bold">Custos Fixos por Loja e Departamento</span>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                              {perStore.map(p => (
+                                <div key={p.store.id} className="rounded-lg border p-3 space-y-1">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-xs font-semibold">{p.store.name}</span>
+                                    <span className="text-xs font-bold text-destructive">{fmt(p.total)}</span>
+                                  </div>
+                                  <Table>
+                                    <TableBody>
+                                      {p.rows.map(([cat, val]) => (
+                                        <TableRow key={cat}>
+                                          <TableCell className="text-xs py-1.5 capitalize">{cat}</TableCell>
+                                          <TableCell className="text-right text-xs py-1.5 text-destructive">{fmt(val)}</TableCell>
+                                          <TableCell className="text-right text-[10px] py-1.5 text-muted-foreground w-14">
+                                            {p.total > 0 ? `${((val / p.total) * 100).toFixed(0)}%` : "—"}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Consolidated by department */}
+                            <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-1">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-bold">CONSOLIDADO por Departamento</span>
+                                <span className="text-xs font-bold text-destructive">{fmt(consolTotal)}</span>
+                              </div>
+                              <Table>
+                                <TableBody>
+                                  {consolRows.map(([cat, val]) => (
+                                    <TableRow key={cat}>
+                                      <TableCell className="text-xs py-1.5 capitalize font-medium">{cat}</TableCell>
+                                      <TableCell className="text-right text-xs py-1.5 text-destructive font-semibold">{fmt(val)}</TableCell>
+                                      <TableCell className="text-right text-[10px] py-1.5 text-muted-foreground w-14">
+                                        {consolTotal > 0 ? `${((val / consolTotal) * 100).toFixed(0)}%` : "—"}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })()}
+
                     {/* Consolidated simulator */}
                     <ProfitSimulator
                       title="Simulador Consolidado"
