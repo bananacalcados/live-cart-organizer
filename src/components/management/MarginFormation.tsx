@@ -158,7 +158,6 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
   }, [selectedStore]);
 
   // Consolidated KPIs (real stores only, exclude simulations)
-  const realStoreIds = useMemo(() => new Set(realStores.map(s => s.id)), [realStores]);
 
   // Which stores enter the consolidated calculation (empty = all real stores)
   const [consolidatedStoreIds, setConsolidatedStoreIds] = useState<string[]>([]);
