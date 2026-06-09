@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,9 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { User, Star, Save, Trash2, UserSearch } from "lucide-react";
+import { User, Star, Save, Trash2, UserSearch, Search, Loader2, Check } from "lucide-react";
 import { toast } from "sonner";
 import { savePosCustomer, removePreviousWhatsApp } from "./customerFormUtils";
+import { searchUnifiedCustomers, type UnifiedSearchResult } from "@/lib/posCustomerResolve";
 
 const AGE_RANGES = ["18-24", "25-34", "35-44", "45-54", "55+"];
 const STYLES = ["Casual", "Esportivo", "Clássico", "Streetwear", "Romântico", "Minimalista", "Boho", "Fashion"];
@@ -28,6 +29,12 @@ interface Props {
 export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer }: Props) {
   const [saving, setSaving] = useState(false);
   const [previousNumbers, setPreviousNumbers] = useState<string[]>([]);
+  // Busca de cliente já existente (base unificada)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<UnifiedSearchResult[]>([]);
+  const [linkedId, setLinkedId] = useState<string | null>(existingCustomer?.id || null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initForm = () => ({
     name: existingCustomer?.name || "", email: existingCustomer?.email || "", whatsapp: existingCustomer?.whatsapp || "", cpf: existingCustomer?.cpf || "",
     cep: existingCustomer?.cep || "", address: existingCustomer?.address || "", address_number: existingCustomer?.address_number || "", complement: existingCustomer?.complement || "",
@@ -43,6 +50,9 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
   useEffect(() => {
     if (open) {
       setForm(initForm());
+      setLinkedId(existingCustomer?.id || null);
+      setSearchTerm("");
+      setSearchResults([]);
       if (existingCustomer?.id) {
         // Load previous numbers from DB
         supabase
@@ -59,9 +69,53 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
     } else {
       // Ao fechar, limpa o estado para a próxima abertura nascer limpa
       setPreviousNumbers([]);
+      setSearchTerm("");
+      setSearchResults([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, existingCustomer?.id]);
+
+  // Busca com debounce na base unificada de clientes
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    const q = searchTerm.trim();
+    if (q.length < 3) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      const results = await searchUnifiedCustomers(q, 15);
+      setSearchResults(results);
+      setSearching(false);
+    }, 350);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [searchTerm]);
+
+  const handleSelectExisting = (c: UnifiedSearchResult) => {
+    setForm(f => ({
+      ...f,
+      name: c.name || "",
+      email: c.email || "",
+      whatsapp: c.whatsapp || "",
+      cpf: c.cpf || "",
+      cep: c.cep || "",
+      address: c.address || "",
+      address_number: c.address_number || "",
+      complement: c.complement || "",
+      neighborhood: c.neighborhood || "",
+      city: c.city || "",
+      state: c.state || "",
+    }));
+    // pos_customers será materializado no save por CPF/telefone, então não fixamos linkedId aqui
+    setLinkedId(null);
+    setSearchResults([]);
+    setSearchTerm("");
+    toast.success(`Cliente "${c.name || "selecionado"}" carregado — confira e salve`);
+  };
 
   const update = (field: string, value: string | boolean) => setForm(f => ({ ...f, [field]: value }));
 
@@ -95,14 +149,14 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
 
     setSaving(true);
     try {
-      const data = await savePosCustomer(existingCustomer?.id, form);
+      const data = await savePosCustomer(linkedId, form);
 
-      toast.success(existingCustomer?.id ? "Cadastro atualizado! +pontos de gamificação 🎯" : "Cliente cadastrado!");
+      toast.success(linkedId ? "Cadastro atualizado! +pontos de gamificação 🎯" : "Cliente salvo!");
       onSaved({ id: data.id, name: data.name || '', cpf: data.cpf || undefined });
       setForm({ name: "", email: "", whatsapp: "", cpf: "", cep: "", address: "", address_number: "", complement: "", neighborhood: "", city: "", state: "", age_range: "", preferred_style: "", notes: "", shoe_size: "", gender: "", has_children: false, children_age_range: "" });
     } catch (e: any) {
       console.error("Erro ao salvar cliente POS:", e);
-      toast.error("Erro ao salvar cliente");
+      toast.error("Erro ao salvar cliente: " + (e?.message || "tente novamente"));
     } finally {
       setSaving(false);
     }
@@ -129,6 +183,46 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
 
         <ScrollArea className="max-h-[calc(90vh-120px)]">
           <div className="p-4 space-y-4">
+            {/* Buscar cliente já existente */}
+            <div className="space-y-2 rounded-xl bg-pos-orange/5 border border-pos-orange/20 p-3">
+              <h3 className="text-sm font-bold text-pos-orange uppercase tracking-wider flex items-center gap-2">
+                <UserSearch className="h-4 w-4" /> Buscar cliente existente
+              </h3>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-white/40" />
+                <Input
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Nome, CPF ou telefone (mín. 3 caracteres)"
+                  className="pl-8 bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange"
+                />
+                {searching && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-orange animate-spin" />}
+              </div>
+              {searchResults.length > 0 && (
+                <div className="max-h-52 overflow-y-auto rounded-lg border border-pos-orange/20 divide-y divide-pos-orange/10">
+                  {searchResults.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => handleSelectExisting(c)}
+                      className="w-full text-left px-3 py-2 hover:bg-pos-orange/10 transition-colors flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-pos-white truncate">{c.name || "Sem nome"}</p>
+                        <p className="text-xs text-pos-white/50 truncate">
+                          {[c.cpf ? `CPF ${c.cpf}` : null, c.whatsapp, [c.city, c.state].filter(Boolean).join("/")].filter(Boolean).join(" • ")}
+                        </p>
+                      </div>
+                      <Check className="h-4 w-4 text-pos-orange shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {searchTerm.trim().length >= 3 && !searching && searchResults.length === 0 && (
+                <p className="text-xs text-pos-white/40">Nenhum cliente encontrado — preencha abaixo para cadastrar um novo.</p>
+              )}
+            </div>
+
             {/* Personal Info */}
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-pos-orange uppercase tracking-wider">Dados Pessoais</h3>

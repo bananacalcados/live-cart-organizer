@@ -1618,17 +1618,33 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
               state: currentCustomer.state || undefined,
             } : null}
             onSaved={async (savedCustomer) => {
-              // Link customer to sale if not already linked
-              await supabase
-                .from("pos_sales")
-                .update({ customer_id: savedCustomer.id } as any)
-                .eq("id", sale.id);
-              // Refresh customer data
+              // Refresh full customer data first
               const { data: freshCust } = await supabase
                 .from("pos_customers")
-                .select("name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
+                .select("id, name, cpf, whatsapp, email, address, address_number, complement, neighborhood, city, state, cep")
                 .eq("id", savedCustomer.id)
                 .maybeSingle();
+              // Link customer to sale + denormalize so it shows up in the orders list
+              const { data: linked, error: linkErr } = await supabase
+                .from("pos_sales")
+                .update({
+                  customer_id: savedCustomer.id,
+                  customer_name: freshCust?.name ?? savedCustomer.name ?? null,
+                  customer_phone: (freshCust as any)?.whatsapp ?? null,
+                  customer_cpf: freshCust?.cpf ?? null,
+                  customer_email: (freshCust as any)?.email ?? null,
+                } as any)
+                .eq("id", sale.id)
+                .select("id");
+              if (linkErr) {
+                console.error("Erro ao vincular cliente ao pedido:", linkErr);
+                toast.error("Cliente salvo, mas falhou ao vincular no pedido: " + linkErr.message);
+                return;
+              }
+              if (!linked || linked.length === 0) {
+                toast.error("Sem permissão para vincular o cliente neste pedido.");
+                return;
+              }
               if (freshCust) setCurrentCustomer(freshCust as CustomerInfo);
               toast.success("Cliente vinculado à venda!");
               setShowCustomerForm(false);
