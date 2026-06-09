@@ -158,23 +158,41 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
   }, [selectedStore]);
 
   // Consolidated KPIs (real stores only, exclude simulations)
-  const realStoreIds = useMemo(() => new Set(realStores.map(s => s.id)), [realStores]);
+
+  // Which stores enter the consolidated calculation (empty = all real stores)
+  const [consolidatedStoreIds, setConsolidatedStoreIds] = useState<string[]>([]);
+  const consolidatedStores = useMemo(
+    () => realStores.filter(s => consolidatedStoreIds.length === 0 || consolidatedStoreIds.includes(s.id)),
+    [realStores, consolidatedStoreIds],
+  );
+  const consolidatedStoreIdSet = useMemo(() => new Set(consolidatedStores.map(s => s.id)), [consolidatedStores]);
+  const toggleConsolidatedStore = (id: string) => {
+    setConsolidatedStoreIds(prev => {
+      // Start from the effective selection (empty means all)
+      const base = prev.length === 0 ? realStores.map(s => s.id) : prev;
+      const next = base.includes(id) ? base.filter(i => i !== id) : [...base, id];
+      // If everything ends up selected, store as empty (= all)
+      if (next.length === 0) return prev; // keep at least one store selected
+      return next.length === realStores.length ? [] : next;
+    });
+  };
+
   const consolidatedFixed = useMemo(() => {
     return allStoreFixedCosts
-      .filter(s => s.is_active && realStoreIds.has(s.store_id))
+      .filter(s => s.is_active && consolidatedStoreIdSet.has(s.store_id))
       .reduce((sum, s) => sum + Number(s.amount), 0);
-  }, [allStoreFixedCosts, realStoreIds]);
+  }, [allStoreFixedCosts, consolidatedStoreIdSet]);
   const consolidatedRevenue = useMemo(() => {
-    return realStores.reduce((sum, s) => sum + (s.revenue_target ?? 100000), 0);
-  }, [realStores]);
+    return consolidatedStores.reduce((sum, s) => sum + (s.revenue_target ?? 100000), 0);
+  }, [consolidatedStores]);
   const consolidatedVariablePct = useMemo(() => {
     if (consolidatedRevenue <= 0) return 0;
-    const totalVarValue = realStores.reduce((sum, s) => {
+    const totalVarValue = consolidatedStores.reduce((sum, s) => {
       const pct = allVariableCosts.filter(v => v.is_active && v.store_id === s.id).reduce((a, v) => a + Number(v.percentage), 0);
       return sum + (s.revenue_target ?? 100000) * (pct / 100);
     }, 0);
     return (totalVarValue / consolidatedRevenue) * 100;
-  }, [allVariableCosts, realStores, consolidatedRevenue]);
+  }, [allVariableCosts, consolidatedStores, consolidatedRevenue]);
 
   const loadData = async () => {
     setLoading(true);
@@ -735,6 +753,41 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
           )}
         </div>
       </div>
+
+      {/* Consolidated store picker — choose which stores enter the consolidation */}
+      {isConsolidatedView && realStores.length > 1 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="py-3 px-4">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span className="text-xs font-semibold text-muted-foreground">Lojas no consolidado:</span>
+              {realStores.map(s => {
+                const checked = consolidatedStoreIdSet.has(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleConsolidatedStore(s.id)}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Checkbox checked={checked} />
+                    <span className={checked ? "font-medium" : "text-muted-foreground"}>{s.name}</span>
+                  </button>
+                );
+              })}
+              {consolidatedStoreIds.length > 0 && (
+                <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={() => setConsolidatedStoreIds([])}>
+                  Selecionar todas
+                </Button>
+              )}
+              <Badge variant="outline" className="text-[10px] border-primary/50 text-primary">
+                {consolidatedStores.length} de {realStores.length} lojas
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1400,7 +1453,7 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
           ) : (
             <>
               {(() => {
-                const storeMetrics = stores.filter(s => !s.is_simulation).map(store => {
+                const storeMetrics = stores.filter(s => !s.is_simulation && consolidatedStoreIdSet.has(s.id)).map(store => {
                   const sfc = allStoreFixedCosts.filter(s => s.store_id === store.id && s.is_active);
                   const vc = allVariableCosts.filter(v => v.store_id === store.id && v.is_active);
                   const totalFixed = sfc.reduce((sum, s) => sum + s.amount, 0);
@@ -1433,7 +1486,7 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
                 const consolidatedVarCutPct = totalRevTarget > 0 ? avgVarPct - (totalReducedVarCostR$ / totalRevTarget) * 100 : 0;
 
                 // Build consolidated items for simulator
-                const realStoreIdSet = new Set(stores.filter(s => !s.is_simulation).map(s => s.id));
+                const realStoreIdSet = new Set(stores.filter(s => !s.is_simulation && consolidatedStoreIdSet.has(s.id)).map(s => s.id));
                 const consolidatedFixedItems = fixedCosts.map(fc => {
                   const totalAmount = allStoreFixedCosts
                     .filter(s => s.fixed_cost_id === fc.id && s.is_active && realStoreIdSet.has(s.store_id))
