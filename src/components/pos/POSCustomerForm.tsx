@@ -183,6 +183,46 @@ export function POSCustomerForm({ open, onOpenChange, onSaved, existingCustomer 
 
         <ScrollArea className="max-h-[calc(90vh-120px)]">
           <div className="p-4 space-y-4">
+            {/* Buscar cliente já existente */}
+            <div className="space-y-2 rounded-xl bg-pos-orange/5 border border-pos-orange/20 p-3">
+              <h3 className="text-sm font-bold text-pos-orange uppercase tracking-wider flex items-center gap-2">
+                <UserSearch className="h-4 w-4" /> Buscar cliente existente
+              </h3>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-white/40" />
+                <Input
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Nome, CPF ou telefone (mín. 3 caracteres)"
+                  className="pl-8 bg-pos-white/5 border-pos-orange/30 text-pos-white placeholder:text-pos-white/30 focus:border-pos-orange"
+                />
+                {searching && <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-pos-orange animate-spin" />}
+              </div>
+              {searchResults.length > 0 && (
+                <div className="max-h-52 overflow-y-auto rounded-lg border border-pos-orange/20 divide-y divide-pos-orange/10">
+                  {searchResults.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => handleSelectExisting(c)}
+                      className="w-full text-left px-3 py-2 hover:bg-pos-orange/10 transition-colors flex items-center justify-between gap-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-pos-white truncate">{c.name || "Sem nome"}</p>
+                        <p className="text-xs text-pos-white/50 truncate">
+                          {[c.cpf ? `CPF ${c.cpf}` : null, c.whatsapp, [c.city, c.state].filter(Boolean).join("/")].filter(Boolean).join(" • ")}
+                        </p>
+                      </div>
+                      <Check className="h-4 w-4 text-pos-orange shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {searchTerm.trim().length >= 3 && !searching && searchResults.length === 0 && (
+                <p className="text-xs text-pos-white/40">Nenhum cliente encontrado — preencha abaixo para cadastrar um novo.</p>
+              )}
+            </div>
+
             {/* Personal Info */}
             <div className="space-y-3">
               <h3 className="text-sm font-bold text-pos-orange uppercase tracking-wider">Dados Pessoais</h3>
