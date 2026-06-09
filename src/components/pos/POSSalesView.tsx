@@ -933,7 +933,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           store_id: storeId,
           seller_id: selectedSeller || undefined,
           tiny_seller_id: sellers.find(s => s.id === selectedSeller)?.tiny_seller_id || undefined,
-          customer: selectedCustomer || undefined,
+          customer: effectiveCustomer || undefined,
           items: cart.map(item => ({
             tiny_id: item.tiny_id,
             sku: item.sku,
