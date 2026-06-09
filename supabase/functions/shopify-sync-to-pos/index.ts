@@ -252,7 +252,16 @@ Deno.serve(async (req) => {
       url = next ? next[1] : null;
     }
 
-    return new Response(JSON.stringify({ ok: true, inserted, skipped, errors, pages }), {
+    // Advance the watermark only on a successful full pass (not forced backfills),
+    // so the next run starts from here and reads almost nothing.
+    if (!forceFull) {
+      await supabase.from("system_settings").upsert(
+        { key: SYNC_KEY, value: { last_updated_at: runStartedAt }, description: "Shopify->POS incremental sync watermark", updated_at: new Date().toISOString() },
+        { onConflict: "key" },
+      );
+    }
+
+    return new Response(JSON.stringify({ ok: true, inserted, skipped, cancelled, errors, pages, since }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
