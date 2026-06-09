@@ -883,6 +883,40 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       }
     }
 
+    // 👤 CLIENTE: resolve o cliente que será gravado na venda.
+    // Caso o vendedor tenha digitado um nome/CPF/telefone na busca mas NÃO tenha
+    // clicado no cartão do cliente (ou tenha clicado em "Trocar" e esquecido de
+    // reselecionar), aproveitamos o texto digitado como fallback para nunca
+    // perder a identificação do cliente. Só então, se ainda não houver cliente
+    // algum, confirmamos a venda sem identificação.
+    let effectiveCustomer: any = selectedCustomer || undefined;
+    if (!effectiveCustomer) {
+      const term = (customerSearch || '').trim();
+      if (term) {
+        const digits = term.replace(/\D/g, '');
+        const compact = term.replace(/\s/g, '');
+        const looksNumeric = digits.length >= 8 && compact.length > 0 && digits.length / compact.length > 0.6;
+        if (looksNumeric) {
+          effectiveCustomer = {
+            name: 'Cliente',
+            whatsapp: digits.length === 10 || digits.length === 11 ? term : undefined,
+            cpf: digits.length === 11 ? digits : undefined,
+          };
+        } else {
+          effectiveCustomer = { name: term };
+        }
+      }
+    }
+    if (!effectiveCustomer) {
+      const proceedNoCustomer = window.confirm(
+        "Esta venda será finalizada SEM cliente identificado (não aparecerá nome do cliente em Pedidos).\n\nDeseja continuar mesmo assim?\n\nClique em Cancelar para voltar e selecionar o cliente.",
+      );
+      if (!proceedNoCustomer) {
+        setStep("customer");
+        return;
+      }
+    }
+
     setFinalizingSale(true);
     try {
       let paymentMethodName = '';
@@ -899,7 +933,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           store_id: storeId,
           seller_id: selectedSeller || undefined,
           tiny_seller_id: sellers.find(s => s.id === selectedSeller)?.tiny_seller_id || undefined,
-          customer: selectedCustomer || undefined,
+          customer: effectiveCustomer || undefined,
           items: cart.map(item => ({
             tiny_id: item.tiny_id,
             sku: item.sku,
@@ -2709,6 +2743,21 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               <span className="text-sm font-bold text-pos-white">Total</span>
               <span className="font-bold text-lg text-pos-orange">R$ {totalWithDiscount.toFixed(2)}</span>
             </div>
+            {step === "payment" && (
+              selectedCustomer ? (
+                <div className="flex items-center gap-2 text-xs text-emerald-400">
+                  <User className="h-3 w-3" /> Cliente: {selectedCustomer.name}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setStep("customer")}
+                  className="flex w-full items-center gap-2 text-xs text-amber-400 hover:underline"
+                >
+                  <User className="h-3 w-3" /> Cliente não identificado — toque para selecionar
+                </button>
+              )
+            )}
             <Button
               className="w-full h-10 text-sm gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
               disabled={cart.length === 0 || finalizingSale}
