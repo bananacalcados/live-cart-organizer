@@ -755,6 +755,41 @@ export function MarginFormation({ stores, onStoresChanged }: Props) {
         </div>
       </div>
 
+      {/* Consolidated store picker — choose which stores enter the consolidation */}
+      {isConsolidatedView && realStores.length > 1 && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="py-3 px-4">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span className="text-xs font-semibold text-muted-foreground">Lojas no consolidado:</span>
+              {realStores.map(s => {
+                const checked = consolidatedStoreIdSet.has(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => toggleConsolidatedStore(s.id)}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <Checkbox checked={checked} />
+                    <span className={checked ? "font-medium" : "text-muted-foreground"}>{s.name}</span>
+                  </button>
+                );
+              })}
+              {consolidatedStoreIds.length > 0 && (
+                <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={() => setConsolidatedStoreIds([])}>
+                  Selecionar todas
+                </Button>
+              )}
+              <Badge variant="outline" className="text-[10px] border-primary/50 text-primary">
+                {consolidatedStores.length} de {realStores.length} lojas
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
