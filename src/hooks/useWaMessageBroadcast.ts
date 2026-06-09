@@ -44,21 +44,60 @@ function teardownIfIdle() {
   }
 }
 
+export interface UseWaMessageBroadcastOptions {
+  /**
+   * Coalesce bursts of broadcasts: instead of running the handler on every
+   * event, wait this many ms of "silence" and then fire ONCE with the most
+   * recent payload. Use for heavy list refreshers (get_conversations) so a
+   * burst of inserts triggers a single reload instead of dozens.
+   *
+   * Default 0 = fire immediately on every event (original behavior). Keep 0
+   * for the currently-open chat so client replies appear instantly.
+   *
+   * NOTE: no message is ever lost — rows are always persisted in the DB. The
+   * debounce only delays the UI refresh by up to `debounceMs`.
+   */
+  debounceMs?: number;
+}
+
 /**
  * Subscribe to WhatsApp message INSERT broadcasts.
  * The handler does not need to be memoized — we use a ref internally.
  */
 export function useWaMessageBroadcast(
-  handler: (payload: WaMessageInsertPayload) => void
+  handler: (payload: WaMessageInsertPayload) => void,
+  options: UseWaMessageBroadcastOptions = {}
 ) {
+  const { debounceMs = 0 } = options;
   const handlerRef = useRef(handler);
   handlerRef.current = handler;
+  const debounceRef = useRef(debounceMs);
+  debounceRef.current = debounceMs;
 
   useEffect(() => {
-    const fn = (p: WaMessageInsertPayload) => handlerRef.current(p);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastPayload: WaMessageInsertPayload | null = null;
+
+    const fn = (p: WaMessageInsertPayload) => {
+      const ms = debounceRef.current;
+      if (!ms || ms <= 0) {
+        handlerRef.current(p);
+        return;
+      }
+      lastPayload = p;
+      if (timer) return; // already scheduled within this window
+      timer = setTimeout(() => {
+        timer = null;
+        const payload = lastPayload;
+        lastPayload = null;
+        if (payload) handlerRef.current(payload);
+      }, ms);
+    };
+
     listeners.add(fn);
     ensureChannel();
     return () => {
+      if (timer) clearTimeout(timer);
       listeners.delete(fn);
       teardownIfIdle();
     };
