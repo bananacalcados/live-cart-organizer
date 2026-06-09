@@ -1,7 +1,8 @@
 // dispatch-orchestrator
-// Runs every 30s via pg_cron. Looks at active dispatches with pending work
-// and spawns N workers per dispatch (fire-and-forget). Workers self-coordinate
-// via lease lock — extra workers just find nothing to claim, no duplication.
+// Runs every minute via pg_cron (job: dispatch-orchestrator-every-minute).
+// Looks at active dispatches with pending work and spawns N workers per dispatch
+// (fire-and-forget). Workers self-coordinate via lease lock — extra workers just
+// find nothing to claim, no duplication.
 //
 // Also: promotes scheduled→sending and finalizes empty dispatches.
 
