@@ -2743,6 +2743,21 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               <span className="text-sm font-bold text-pos-white">Total</span>
               <span className="font-bold text-lg text-pos-orange">R$ {totalWithDiscount.toFixed(2)}</span>
             </div>
+            {step === "payment" && (
+              selectedCustomer ? (
+                <div className="flex items-center gap-2 text-xs text-emerald-400">
+                  <User className="h-3 w-3" /> Cliente: {selectedCustomer.name}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setStep("customer")}
+                  className="flex w-full items-center gap-2 text-xs text-amber-400 hover:underline"
+                >
+                  <User className="h-3 w-3" /> Cliente não identificado — toque para selecionar
+                </button>
+              )
+            )}
             <Button
               className="w-full h-10 text-sm gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
               disabled={cart.length === 0 || finalizingSale}
