@@ -420,6 +420,14 @@ export function ProductsList() {
                               <Boxes className="h-3 w-3 mr-2" />
                               Sincronizar estoque
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => unlinkShopify(p.id)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Unlink className="h-3 w-3 mr-2" />
+                              Desvincular da Shopify (apagado lá)
+                            </DropdownMenuItem>
                           </>
                         )}
                       </DropdownMenuContent>
