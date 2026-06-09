@@ -210,6 +210,58 @@ Deno.serve(async (req) => {
       perStore.push({ store_id: store.id, store_name: store.name, inserted, updated, errors });
     }
 
+    // ===== Espelha as variações no CATÁLOGO (products_master + product_variants) =====
+    // Assim a variação criada pela NF-e também aparece na tela de cadastro do produto pai.
+    let catalogCreated = 0;
+    try {
+      const { data: master } = await supabase
+        .from("products_master")
+        .select("id, sku_root, name, cost_price, sale_price")
+        .eq("sku_root", parent_sku)
+        .maybeSingle();
+      if (master) {
+        for (const it of items) {
+          const color = (it.parsed_color || "").toString().trim();
+          const size = (it.parsed_size || "").toString().trim();
+          const barcode = (it.ean && /^\d{8,14}$/.test(it.ean)) ? it.ean : null;
+          const cost = Number(it.unit_cost) || master.cost_price || 0;
+
+          // Já existe essa variação no catálogo? (por gtin ou cor+tamanho)
+          let exists = false;
+          if (barcode) {
+            const { data } = await supabase
+              .from("product_variants").select("id")
+              .eq("master_id", master.id).eq("gtin", barcode).maybeSingle();
+            exists = !!data;
+          }
+          if (!exists && color && size) {
+            const { data } = await supabase
+              .from("product_variants").select("id")
+              .eq("master_id", master.id).eq("color", color).eq("size", size).maybeSingle();
+            exists = !!data;
+          }
+          if (exists) continue;
+
+          const vSku = `${parent_sku}-${(color || "UN").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 10) || "UN"}-${size || "U"}`;
+          const { error: cvErr } = await supabase.from("product_variants").insert({
+            master_id: master.id,
+            sku: vSku,
+            gtin: barcode,
+            color: color || null,
+            size: size || null,
+            cost_price_override: cost || null,
+            initial_stock: 0,
+            is_active: true,
+            last_sync_source: "nfe",
+          });
+          if (!cvErr) catalogCreated++;
+          else console.error("[catalog mirror]", cvErr.message);
+        }
+      }
+    } catch (e) {
+      console.error("[catalog mirror] falhou:", e instanceof Error ? e.message : String(e));
+    }
+
     // Marca as linhas como vinculadas
     await supabase
       .from("purchase_invoice_items")
@@ -219,6 +271,7 @@ Deno.serve(async (req) => {
         linked_at: new Date().toISOString(),
       })
       .in("id", item_ids);
+
 
     const totalInserted = perStore.reduce((s, r) => s + r.inserted, 0);
     const totalUpdated = perStore.reduce((s, r) => s + r.updated, 0);

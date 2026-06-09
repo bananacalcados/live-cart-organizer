@@ -374,7 +374,15 @@ Deno.serve(async (req) => {
       }
 
       const ncmRaw: string | null = prodFiscal?.ncm || null;
-      const ncmDigits = ncmRaw ? ncmRaw.replace(/\D/g, "") : "";
+      let ncmDigits = ncmRaw ? ncmRaw.replace(/\D/g, "") : "";
+      // Correção de NCMs comuns inválidos (existem 8 dígitos mas NÃO existem na
+      // tabela da Receita → SEFAZ rejeita com "NCM inexistente", cód. 778).
+      const NCM_FIX: Record<string, string> = {
+        "64039900": "64039990", // calçado couro "outros" — .00 não existe, válido é .90
+        "64029900": "64029990",
+        "23901635": "64039990", // claramente errado (cap. 23) → fallback calçado
+      };
+      if (NCM_FIX[ncmDigits]) ncmDigits = NCM_FIX[ncmDigits];
       // Fallback calçados de couro (64039990) — não trava a emissão quando o produto
       // não tem cadastro fiscal vinculável (mesma regra de segurança da NFC-e).
       const ncm = (ncmDigits.length === 8 ? ncmDigits : "") || "64039990";
