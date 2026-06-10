@@ -182,7 +182,9 @@ export function POSStatusDialog({ open, onOpenChange, numbers }: Props) {
       if (data?.success === false) throw new Error(data?.error || "Falha ao publicar status");
 
       toast.success("Status publicado! 🎉");
-      handleClose(false);
+      reset();
+      // Recarrega a lista para permitir apagar caso tenha publicado errado.
+      setTimeout(loadRecent, 1500);
     } catch (e) {
       console.error("publish status error:", e);
       toast.error(e instanceof Error ? e.message : "Erro ao publicar status");
