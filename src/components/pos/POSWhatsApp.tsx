@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed } from "lucide-react";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
 import { POSWhatsAppDashboard } from "./POSWhatsAppDashboard";
 import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
 import { POSSendTemplateDialog } from "./POSSendTemplateDialog";
+import { POSStatusDialog } from "./POSStatusDialog";
 import { AgentFilterSelector } from "@/components/chat/AgentFilterSelector";
 import { MultiInstanceFilter } from "@/components/chat/MultiInstanceFilter";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
@@ -93,6 +94,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showCheckout, setShowCheckout] = useState(false);
   const [showPix, setShowPix] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
+  const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [showSellerGate, setShowSellerGate] = useState(true);
   const sellerKey = `pos_whatsapp_seller_id_${storeId}`;
@@ -1223,6 +1225,18 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             <UserPlus className="h-4 w-4" />
             <span className="hidden sm:inline">Nova Conversa</span>
           </Button>
+          {storeNumbers.some((n) => n.provider === "uazapi" && n.is_active) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+              onClick={() => setShowStatusDialog(true)}
+              title="Publicar Status"
+            >
+              <CircleDashed className="h-4 w-4" />
+              <span className="hidden sm:inline">Status</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -1575,6 +1589,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           handleSelectConversation(phone, whatsappNumberId);
         }}
       />
+
+      {/* Publicar Status (uazapi) */}
+      <POSStatusDialog
+        open={showStatusDialog}
+        onOpenChange={setShowStatusDialog}
+        numbers={storeNumbers}
+      />
+
 
       {/* Seller Gate */}
       <POSWhatsAppSellerGate
