@@ -14390,6 +14390,60 @@ export type Database = {
           },
         ]
       }
+      uazapi_contact_backfill_state: {
+        Row: {
+          created_at: string
+          done: boolean
+          last_failed: number
+          last_succeeded: number
+          locked_at: string | null
+          offset: number
+          total_failed: number
+          total_succeeded: number
+          updated_at: string
+          whatsapp_number_id: string
+        }
+        Insert: {
+          created_at?: string
+          done?: boolean
+          last_failed?: number
+          last_succeeded?: number
+          locked_at?: string | null
+          offset?: number
+          total_failed?: number
+          total_succeeded?: number
+          updated_at?: string
+          whatsapp_number_id: string
+        }
+        Update: {
+          created_at?: string
+          done?: boolean
+          last_failed?: number
+          last_succeeded?: number
+          locked_at?: string | null
+          offset?: number
+          total_failed?: number
+          total_succeeded?: number
+          updated_at?: string
+          whatsapp_number_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uazapi_contact_backfill_state_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uazapi_contact_backfill_state_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_module_permissions: {
         Row: {
           created_at: string
