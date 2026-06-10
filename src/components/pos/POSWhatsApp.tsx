@@ -1590,6 +1590,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         }}
       />
 
+      {/* Publicar Status (uazapi) */}
+      <POSStatusDialog
+        open={showStatusDialog}
+        onOpenChange={setShowStatusDialog}
+        numbers={storeNumbers}
+      />
+
+
       {/* Seller Gate */}
       <POSWhatsAppSellerGate
         storeId={storeId}
