@@ -457,8 +457,26 @@ Deno.serve(async (req) => {
     // (NCM agora tem fallback 64039990 por item — não há mais bloqueio por NCM ausente.)
 
 
-    // 5. Frete (a ser somado ao total da nota como vFrete; opcional)
+    // 5. Frete — RATEADO POR ITEM (ValorFrete em cada Produto).
+    // ⚠️ A API BrasilNFe NÃO possui campo ValorFrete em nível de nota: o frete só
+    // entra no total da nota (vNF da SEFAZ) quando é informado dentro de cada produto.
+    // Sem ratear, o pagamento (que inclui frete) fica MAIOR que o total da nota →
+    // rejeição "Ausência de troco quando o valor dos pagamentos for maior que o total".
     const vFrete = round2(Number(order.total_shipping || 0));
+    if (vFrete > 0 && produtos.length > 0) {
+      const baseSoma = produtos.reduce((acc, p) => acc + Number(p.ValorTotal || 0), 0);
+      let distribuido = 0;
+      produtos.forEach((p, i) => {
+        let parcela: number;
+        if (i === produtos.length - 1) {
+          parcela = round2(vFrete - distribuido); // sobra no último item para fechar exato
+        } else {
+          parcela = baseSoma > 0 ? round2(vFrete * (Number(p.ValorTotal || 0) / baseSoma)) : 0;
+          distribuido = round2(distribuido + parcela);
+        }
+        if (parcela > 0) p.ValorFrete = parcela;
+      });
+    }
     const valorTotalNota = round2(totalProd - totalDesc + vFrete);
 
     // 6. Cria registro pendente
