@@ -15073,6 +15073,54 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_status_posts: {
+        Row: {
+          caption: string | null
+          created_at: string
+          id: string
+          media_url: string | null
+          message_id: string
+          text_content: string | null
+          type: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          media_url?: string | null
+          message_id: string
+          text_content?: string | null
+          type?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          id?: string
+          media_url?: string | null
+          message_id?: string
+          text_content?: string | null
+          type?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_status_posts_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_status_posts_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       zoppy_customers: {
         Row: {
           address1: string | null
