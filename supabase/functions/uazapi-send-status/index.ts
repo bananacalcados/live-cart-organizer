@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { resolveUazapiCredentials, uazapiInstance } from "../_shared/uazapi-credentials.ts";
+import {
+  resolveUazapiCredentials,
+  uazapiInstance,
+  getServiceClient,
+} from "../_shared/uazapi-credentials.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -62,6 +66,27 @@ serve(async (req) => {
 
     const messageId =
       r.data?.messageid || r.data?.id || r.data?.message?.messageid || r.data?.message?.id || null;
+
+    // Grava o status publicado para depois resolver a miniatura quando alguém responder.
+    if (messageId) {
+      try {
+        const supabase = getServiceClient();
+        await supabase.from("whatsapp_status_posts").upsert(
+          {
+            message_id: String(messageId),
+            whatsapp_number_id: whatsapp_number_id || null,
+            type: statusType,
+            media_url: statusType === "text" ? null : (mediaUrl || null),
+            caption: statusType === "text" ? null : (caption || null),
+            text_content: statusType === "text" ? String(text).trim() : null,
+          },
+          { onConflict: "message_id" },
+        );
+      } catch (e) {
+        console.error("[uazapi-send-status] falha ao gravar whatsapp_status_posts:", (e as Error).message);
+      }
+    }
+
     return new Response(JSON.stringify({ success: true, messageId, data: r.data }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

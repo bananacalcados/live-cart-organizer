@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { QuotedMessagePreview, QuotedMessageData } from "./QuotedMessagePreview";
 import { QuotedMessageBubble } from "./QuotedMessageBubble";
+import { useStatusQuotes } from "@/hooks/chat/useStatusQuotes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -131,6 +132,11 @@ export function ChatView({
   const [actionLoading, setActionLoading] = useState(false);
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
+
+  // Miniaturas de STATUS citados (status não pertence à conversa, lookup global).
+  const statusQuotes = useStatusQuotes(messages as any);
+
+
 
   // ---- Bloqueio nativo de contato (Z-API / WaSender / Meta) ----
   const [isBlocked, setIsBlocked] = useState(false);
@@ -696,6 +702,7 @@ export function ChatView({
 
             const quotedMsgId = (msg as any).quoted_message_id;
             const quotedOriginal = quotedMsgId ? messages.find(m => m.message_id === quotedMsgId) : null;
+            const quotedStatus = quotedMsgId && !quotedOriginal ? statusQuotes[quotedMsgId] : null;
 
             const prevMsg = idx > 0 ? messages[idx - 1] : null;
             const msgDate = new Date(msg.created_at);
@@ -843,6 +850,14 @@ export function ChatView({
                         originalMediaType={quotedOriginal.media_type}
                         contactName={conversation?.customerName}
                         onClick={() => scrollToMessage(quotedOriginal.message_id || '')}
+                      />
+                    )}
+                    {quotedStatus && (
+                      <QuotedMessageBubble
+                        isStatus
+                        originalMessage={quotedStatus.caption || quotedStatus.text_content}
+                        originalMediaType={quotedStatus.type}
+                        thumbnailUrl={quotedStatus.media_url}
                       />
                     )}
                     <InstagramReferralCard referral={msg.referral} />
