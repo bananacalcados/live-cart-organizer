@@ -1,5 +1,3 @@
-import { Camera, Video, Mic, FileText } from "lucide-react";
-
 interface Props {
   originalMessage?: string | null;
   originalDirection?: string;
@@ -7,6 +5,10 @@ interface Props {
   originalMediaType?: string | null;
   contactName?: string;
   onClick?: () => void;
+  /** Miniatura (status com mídia). */
+  thumbnailUrl?: string | null;
+  /** Marca como resposta a um Status/Story. */
+  isStatus?: boolean;
 }
 
 function getMediaLabel(mediaType?: string | null) {
@@ -26,24 +28,52 @@ export function QuotedMessageBubble({
   originalMediaType,
   contactName,
   onClick,
+  thumbnailUrl,
+  isStatus,
 }: Props) {
-  const senderLabel = originalDirection === 'incoming'
-    ? (originalSenderName || contactName || 'Contato')
-    : 'Você';
+  const senderLabel = isStatus
+    ? 'Status'
+    : originalDirection === 'incoming'
+      ? (originalSenderName || contactName || 'Contato')
+      : 'Você';
 
-  const borderColor = originalDirection === 'outgoing' ? 'border-[#7c57d1]' : 'border-[#00a884]';
-  const nameColor = originalDirection === 'outgoing' ? 'text-[#7c57d1]' : 'text-[#00a884]';
+  const borderColor = isStatus
+    ? 'border-[#00a884]'
+    : originalDirection === 'outgoing' ? 'border-[#7c57d1]' : 'border-[#00a884]';
+  const nameColor = isStatus
+    ? 'text-[#00a884]'
+    : originalDirection === 'outgoing' ? 'text-[#7c57d1]' : 'text-[#00a884]';
 
   const mediaLabel = getMediaLabel(originalMediaType);
-  const displayText = originalMessage?.replace(/^\[AUTO\] /, '') || mediaLabel || '...';
+  const isVideoThumb = originalMediaType === 'video';
+  const displayText =
+    originalMessage?.replace(/^\[AUTO\] /, '') ||
+    mediaLabel ||
+    (isStatus ? (isVideoThumb ? '🎥 Vídeo' : '📷 Status') : '...');
 
   return (
     <div
-      className={`bg-black/10 rounded-lg p-2 mb-1 border-l-4 ${borderColor} cursor-pointer hover:bg-black/20 transition-colors`}
+      className={`bg-black/10 rounded-lg p-2 mb-1 border-l-4 ${borderColor} cursor-pointer hover:bg-black/20 transition-colors flex gap-2 items-center`}
       onClick={onClick}
     >
-      <p className={`text-[11px] font-medium ${nameColor}`}>{senderLabel}</p>
-      <p className="text-[12px] text-[#8696a0] line-clamp-2">{displayText}</p>
+      <div className="min-w-0 flex-1">
+        <p className={`text-[11px] font-medium ${nameColor}`}>
+          {isStatus ? '↩️ Resposta ao seu Status' : senderLabel}
+        </p>
+        <p className="text-[12px] text-[#8696a0] line-clamp-2">{displayText}</p>
+      </div>
+      {thumbnailUrl && (
+        <div className="relative shrink-0">
+          <img
+            src={thumbnailUrl}
+            alt="status"
+            className="h-10 w-10 rounded object-cover"
+          />
+          {isVideoThumb && (
+            <span className="absolute inset-0 flex items-center justify-center text-white text-[10px]">▶</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
