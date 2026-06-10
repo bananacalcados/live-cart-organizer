@@ -28,7 +28,8 @@ serve(async (req) => {
   }
 
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  if (!isInternalRequest(req, serviceKey)) {
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+  if (!isInternalRequest(req, serviceKey, anonKey)) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
