@@ -13,6 +13,7 @@ import {
 import { QuotedMessagePreview, QuotedMessageData } from "./QuotedMessagePreview";
 import { QuotedMessageBubble } from "./QuotedMessageBubble";
 import { useStatusQuotes } from "@/hooks/chat/useStatusQuotes";
+import { StatusViewerDialog, StatusViewerData } from "./StatusViewerDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -135,6 +136,7 @@ export function ChatView({
 
   // Miniaturas de STATUS citados (status não pertence à conversa, lookup global).
   const statusQuotes = useStatusQuotes(messages as any);
+  const [statusViewer, setStatusViewer] = useState<StatusViewerData | null>(null);
 
 
 
@@ -858,6 +860,13 @@ export function ChatView({
                         originalMessage={quotedStatus.caption || quotedStatus.text_content}
                         originalMediaType={quotedStatus.type}
                         thumbnailUrl={quotedStatus.media_url}
+                        onClick={() =>
+                          setStatusViewer({
+                            type: quotedStatus.type,
+                            mediaUrl: quotedStatus.media_url,
+                            caption: quotedStatus.caption || quotedStatus.text_content,
+                          })
+                        }
                       />
                     )}
                     <InstagramReferralCard referral={msg.referral} />
@@ -1177,6 +1186,8 @@ export function ChatView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <StatusViewerDialog data={statusViewer} onOpenChange={(o) => !o && setStatusViewer(null)} />
     </div>
   );
 }
