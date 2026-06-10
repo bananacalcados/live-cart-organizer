@@ -1141,12 +1141,33 @@ serve(async (req) => {
     }
 
     // ── Update processing record with final status ──
+    // Pré-autorização (result.pending) é registrada como "pending" — NÃO como "failed" —
+    // para que o DUPLICATE-GUARD bloqueie retentativas enquanto a captura está em curso.
+    const finalAttemptStatus = result.success ? "success" : (result.pending ? "pending" : "failed");
     if (paymentAttemptId) {
       await supabase.from("pos_checkout_attempts")
-        .update({ status: result.success ? "success" : "failed", gateway: result.gateway || null, error_message: result.error || null } as any)
+        .update({ status: finalAttemptStatus, gateway: result.gateway || null, error_message: result.error || null } as any)
         .eq("transaction_id", paymentAttemptId)
         .eq("status", "processing")
         .then(() => {});
+    }
+
+    // ── PRÉ-AUTORIZAÇÃO EM ANÁLISE: vincula o gateway ao pedido para o webhook localizar
+    // o pagamento e para evitar cobrança dupla, mesmo sem captura final ainda. ──
+    if (!result.success && result.pending && result.transactionId) {
+      const preAuthField: Record<string, string> = {};
+      if (result.gateway === "appmax") preAuthField.appmax_order_id = String(result.transactionId);
+      else if (result.gateway === "vindi") preAuthField.vindi_transaction_id = String(result.transactionId);
+      else if (result.gateway === "pagarme") preAuthField.pagarme_order_id = String(result.transactionId);
+      else if (result.gateway === "mercadopago") preAuthField.mercadopago_payment_id = String(result.transactionId);
+      if (Object.keys(preAuthField).length) {
+        if (orderSource === "orders") {
+          await supabase.from("orders").update(preAuthField).eq("id", params.orderId);
+        } else {
+          await supabase.from("pos_sales").update(preAuthField as any).eq("id", params.orderId);
+        }
+        console.log(`[PRE-AUTH] ${result.gateway} pré-autorizou o pedido ${params.orderId} (tx ${result.transactionId}). Vinculado para evitar duplicidade.`);
+      }
     }
 
     if (result.success) {
