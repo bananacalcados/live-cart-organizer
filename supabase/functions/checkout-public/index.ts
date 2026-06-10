@@ -111,6 +111,9 @@ const REGISTRATION_KEYS = new Set([
   "neighborhood",
   "city",
   "state",
+  // Meta browser cookies captured at checkout (for server-side CAPI match)
+  "fbp",
+  "fbc",
 ]);
 
 const LIVE_VIEWER_KEYS = new Set([

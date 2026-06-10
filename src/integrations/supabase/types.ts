@@ -3126,6 +3126,8 @@ export type Database = {
           created_at: string
           customer_id: string | null
           email: string
+          fbc: string | null
+          fbp: string | null
           full_name: string
           id: string
           neighborhood: string
@@ -3147,6 +3149,8 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           email: string
+          fbc?: string | null
+          fbp?: string | null
           full_name: string
           id?: string
           neighborhood: string
@@ -3168,6 +3172,8 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           email?: string
+          fbc?: string | null
+          fbp?: string | null
           full_name?: string
           id?: string
           neighborhood?: string
@@ -15893,6 +15899,8 @@ export type Database = {
           created_at: string
           customer_id: string | null
           email: string
+          fbc: string | null
+          fbp: string | null
           full_name: string
           id: string
           neighborhood: string
