@@ -133,6 +133,11 @@ export function ChatView({
   const [showScheduleDialog, setShowScheduleDialog] = useState(false);
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
 
+  // Miniaturas de STATUS citados (status não pertence à conversa, lookup global).
+  const statusQuotes = useStatusQuotes(messages as any);
+
+
+
   // ---- Bloqueio nativo de contato (Z-API / WaSender / Meta) ----
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockLoading, setBlockLoading] = useState(false);
