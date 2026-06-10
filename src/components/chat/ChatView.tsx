@@ -852,6 +852,14 @@ export function ChatView({
                         onClick={() => scrollToMessage(quotedOriginal.message_id || '')}
                       />
                     )}
+                    {quotedStatus && (
+                      <QuotedMessageBubble
+                        isStatus
+                        originalMessage={quotedStatus.caption || quotedStatus.text_content}
+                        originalMediaType={quotedStatus.type}
+                        thumbnailUrl={quotedStatus.media_url}
+                      />
+                    )}
                     <InstagramReferralCard referral={msg.referral} />
                     <WhatsAppMediaAttachment
                       mediaUrl={msg.media_url}
