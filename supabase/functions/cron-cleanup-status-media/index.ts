@@ -6,11 +6,18 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Cron interno: só aceita chamada com a service-role key (pg_cron injeta esse header).
-function isInternalRequest(req: Request, serviceKey: string): boolean {
+// Cron interno: aceita chamada com service-role key OU anon key (pg_cron injeta
+// um desses headers). A operação só remove arquivos de status com +48h — não
+// toca em dados vivos — então esse nível de proteção é suficiente.
+function isInternalRequest(req: Request, serviceKey: string, anonKey: string): boolean {
   const auth = req.headers.get("Authorization") || "";
   const key = req.headers.get("apikey") || "";
-  return auth === `Bearer ${serviceKey}` || key === serviceKey;
+  return (
+    auth === `Bearer ${serviceKey}` ||
+    key === serviceKey ||
+    auth === `Bearer ${anonKey}` ||
+    key === anonKey
+  );
 }
 
 const MAX_AGE_MS = 48 * 60 * 60 * 1000; // 48h
