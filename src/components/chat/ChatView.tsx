@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { QuotedMessagePreview, QuotedMessageData } from "./QuotedMessagePreview";
 import { QuotedMessageBubble } from "./QuotedMessageBubble";
+import { useStatusQuotes } from "@/hooks/chat/useStatusQuotes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
