@@ -1,10 +1,10 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ImageIcon, Video, Type, Loader2, X } from "lucide-react";
+import { ImageIcon, Video, Type, Loader2, X, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -42,6 +42,17 @@ async function uploadStatusMedia(file: File): Promise<string | null> {
   }
 }
 
+interface RecentStatus {
+  message_id: string;
+  type: string;
+  media_url: string | null;
+  caption: string | null;
+  text_content: string | null;
+  created_at: string;
+}
+
+
+
 export function POSStatusDialog({ open, onOpenChange, numbers }: Props) {
   const uazapiNumbers = useMemo(
     () => numbers.filter((n) => n.provider === "uazapi" && n.is_active),
@@ -59,6 +70,57 @@ export function POSStatusDialog({ open, onOpenChange, numbers }: Props) {
 
   const resolvedNumberId =
     numberId || (uazapiNumbers.length === 1 ? uazapiNumbers[0].id : "");
+
+  // Status recentes (últimas 48h) da instância selecionada — para apagar status errados.
+  const [recent, setRecent] = useState<RecentStatus[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const loadRecent = useCallback(async () => {
+    if (!resolvedNumberId) {
+      setRecent([]);
+      return;
+    }
+    setLoadingRecent(true);
+    try {
+      const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("whatsapp_status_posts")
+        .select("message_id, type, media_url, caption, text_content, created_at")
+        .eq("whatsapp_number_id", resolvedNumberId)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false });
+      setRecent((data as RecentStatus[]) || []);
+    } catch (e) {
+      console.error("load recent status error:", e);
+    } finally {
+      setLoadingRecent(false);
+    }
+  }, [resolvedNumberId]);
+
+  useEffect(() => {
+    if (open) loadRecent();
+  }, [open, loadRecent]);
+
+  const handleDelete = async (s: RecentStatus) => {
+    setDeletingId(s.message_id);
+    try {
+      const { data, error } = await supabase.functions.invoke("uazapi-delete-status", {
+        body: { whatsapp_number_id: resolvedNumberId, message_id: s.message_id },
+      });
+      if (error) throw error;
+      if (data?.success === false && !data?.localRemoved) {
+        throw new Error(data?.error || "Falha ao apagar status");
+      }
+      toast.success("Status apagado");
+      setRecent((prev) => prev.filter((r) => r.message_id !== s.message_id));
+    } catch (e) {
+      console.error("delete status error:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao apagar status");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const reset = () => {
     setText("");
@@ -120,7 +182,9 @@ export function POSStatusDialog({ open, onOpenChange, numbers }: Props) {
       if (data?.success === false) throw new Error(data?.error || "Falha ao publicar status");
 
       toast.success("Status publicado! 🎉");
-      handleClose(false);
+      reset();
+      // Recarrega a lista para permitir apagar caso tenha publicado errado.
+      setTimeout(loadRecent, 1500);
     } catch (e) {
       console.error("publish status error:", e);
       toast.error(e instanceof Error ? e.message : "Erro ao publicar status");
@@ -243,6 +307,63 @@ export function POSStatusDialog({ open, onOpenChange, numbers }: Props) {
                   onChange={(e) => setCaption(e.target.value)}
                   rows={2}
                 />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Status recentes (48h) — apagar status publicados por engano */}
+        {uazapiNumbers.length > 0 && (
+          <div className="space-y-2 border-t pt-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-muted-foreground">Status recentes (48h)</Label>
+              {loadingRecent && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            </div>
+            {recent.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhum status publicado nas últimas 48h.</p>
+            ) : (
+              <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+                {recent.map((s) => (
+                  <div
+                    key={s.message_id}
+                    className="flex items-center gap-2 rounded-md border p-1.5"
+                  >
+                    {s.type === "text" || !s.media_url ? (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-muted">
+                        <Type className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    ) : s.type === "video" ? (
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded bg-muted">
+                        <video src={s.media_url} className="h-full w-full object-cover" />
+                        <span className="absolute inset-0 flex items-center justify-center text-white text-xs">▶</span>
+                      </div>
+                    ) : (
+                      <img src={s.media_url} alt="status" className="h-10 w-10 shrink-0 rounded object-cover" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs">
+                        {s.caption || s.text_content || (s.type === "video" ? "Vídeo" : s.type === "image" ? "Foto" : "Status")}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(s.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(s)}
+                      disabled={deletingId === s.message_id}
+                    >
+                      {deletingId === s.message_id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
