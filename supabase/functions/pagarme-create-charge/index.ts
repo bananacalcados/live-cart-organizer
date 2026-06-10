@@ -1010,18 +1010,25 @@ serve(async (req) => {
       } as any).then(() => {});
     }
 
-    // ── DUPLICATE CHARGE GUARD: check if there's already a successful charge for this order ──
-    const { data: recentSuccess } = await supabase
+    // ── DUPLICATE CHARGE GUARD ──
+    // Bloqueia nova cobrança quando o pedido já tem:
+    //   (a) cobrança APROVADA (status="success"), ou
+    //   (b) PRÉ-AUTORIZAÇÃO em análise (status="pending") — captura assíncrona em curso.
+    // A pré-autorização (ex.: AppMax/Vindi) segura o valor no cartão e a aprovação
+    // final vem por webhook. Sem este guard, o cliente vê "não aprovado", tenta de
+    // novo e acaba cobrado em dobro. Por isso a janela de 20min para o "pending".
+    const PENDING_BLOCK_WINDOW_MS = 20 * 60 * 1000;
+    const { data: recentBlocking } = await supabase
       .from("pos_checkout_attempts")
-      .select("id, gateway, transaction_id, created_at")
+      .select("id, gateway, transaction_id, status, created_at")
       .eq("sale_id", params.orderId)
-      .eq("status", "success")
+      .in("status", ["success", "pending"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (recentSuccess) {
-      console.log(`[DUPLICATE-GUARD] Order ${params.orderId} already has a successful charge (gateway=${recentSuccess.gateway}, tx=${recentSuccess.transaction_id}). Blocking duplicate.`);
+    if (recentBlocking?.status === "success") {
+      console.log(`[DUPLICATE-GUARD] Order ${params.orderId} already has a successful charge (gateway=${recentBlocking.gateway}, tx=${recentBlocking.transaction_id}). Blocking duplicate.`);
       // Also ensure the order is marked as paid (in case webhook hasn't arrived yet)
       if (orderSource === "orders") {
         await supabase.from("orders").update({ is_paid: true, paid_at: new Date().toISOString(), stage: "paid" }).eq("id", params.orderId).eq("is_paid", false);
@@ -1029,9 +1036,27 @@ serve(async (req) => {
         await supabase.from("pos_sales").update({ status: "paid", paid_at: new Date().toISOString() } as any).eq("id", params.orderId).not("status", "in", '("paid","completed")');
       }
       return new Response(
-        JSON.stringify({ success: true, already_paid: true, gateway: recentSuccess.gateway || "cached" }),
+        JSON.stringify({ success: true, already_paid: true, gateway: recentBlocking.gateway || "cached" }),
         { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
+    }
+
+    if (recentBlocking?.status === "pending") {
+      const pendingAgeMs = Date.now() - new Date(recentBlocking.created_at).getTime();
+      if (pendingAgeMs < PENDING_BLOCK_WINDOW_MS) {
+        console.log(`[DUPLICATE-GUARD] Order ${params.orderId} tem pré-autorização em análise (gateway=${recentBlocking.gateway}, tx=${recentBlocking.transaction_id}, há ${Math.round(pendingAgeMs / 1000)}s). Bloqueando nova cobrança para evitar duplicidade.`);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            pending: true,
+            already_processing: true,
+            gateway: recentBlocking.gateway || null,
+            error: "Já existe um pagamento em análise para este pedido. Aguarde a confirmação — NÃO tente novamente para evitar cobrança duplicada.",
+          }),
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+        );
+      }
+      console.log(`[DUPLICATE-GUARD] Pré-autorização pendente do pedido ${params.orderId} expirou (${Math.round(pendingAgeMs / 1000)}s > janela). Permitindo nova tentativa.`);
     }
 
     // ── Gateway #1: Mercado Pago (só quando o frontend enviou token via SDK) ──
@@ -1116,12 +1141,33 @@ serve(async (req) => {
     }
 
     // ── Update processing record with final status ──
+    // Pré-autorização (result.pending) é registrada como "pending" — NÃO como "failed" —
+    // para que o DUPLICATE-GUARD bloqueie retentativas enquanto a captura está em curso.
+    const finalAttemptStatus = result.success ? "success" : (result.pending ? "pending" : "failed");
     if (paymentAttemptId) {
       await supabase.from("pos_checkout_attempts")
-        .update({ status: result.success ? "success" : "failed", gateway: result.gateway || null, error_message: result.error || null } as any)
+        .update({ status: finalAttemptStatus, gateway: result.gateway || null, error_message: result.error || null } as any)
         .eq("transaction_id", paymentAttemptId)
         .eq("status", "processing")
         .then(() => {});
+    }
+
+    // ── PRÉ-AUTORIZAÇÃO EM ANÁLISE: vincula o gateway ao pedido para o webhook localizar
+    // o pagamento e para evitar cobrança dupla, mesmo sem captura final ainda. ──
+    if (!result.success && result.pending && result.transactionId) {
+      const preAuthField: Record<string, string> = {};
+      if (result.gateway === "appmax") preAuthField.appmax_order_id = String(result.transactionId);
+      else if (result.gateway === "vindi") preAuthField.vindi_transaction_id = String(result.transactionId);
+      else if (result.gateway === "pagarme") preAuthField.pagarme_order_id = String(result.transactionId);
+      else if (result.gateway === "mercadopago") preAuthField.mercadopago_payment_id = String(result.transactionId);
+      if (Object.keys(preAuthField).length) {
+        if (orderSource === "orders") {
+          await supabase.from("orders").update(preAuthField).eq("id", params.orderId);
+        } else {
+          await supabase.from("pos_sales").update(preAuthField as any).eq("id", params.orderId);
+        }
+        console.log(`[PRE-AUTH] ${result.gateway} pré-autorizou o pedido ${params.orderId} (tx ${result.transactionId}). Vinculado para evitar duplicidade.`);
+      }
     }
 
     if (result.success) {
