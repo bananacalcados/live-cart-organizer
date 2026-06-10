@@ -42,6 +42,17 @@ async function uploadStatusMedia(file: File): Promise<string | null> {
   }
 }
 
+interface RecentStatus {
+  message_id: string;
+  type: string;
+  media_url: string | null;
+  caption: string | null;
+  text_content: string | null;
+  created_at: string;
+}
+
+
+
 export function POSStatusDialog({ open, onOpenChange, numbers }: Props) {
   const uazapiNumbers = useMemo(
     () => numbers.filter((n) => n.provider === "uazapi" && n.is_active),
