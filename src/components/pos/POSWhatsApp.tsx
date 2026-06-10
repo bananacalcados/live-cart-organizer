@@ -1225,6 +1225,18 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             <UserPlus className="h-4 w-4" />
             <span className="hidden sm:inline">Nova Conversa</span>
           </Button>
+          {storeNumbers.some((n) => n.provider === "uazapi" && n.is_active) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white/80 hover:text-white hover:bg-white/10 gap-1 text-xs"
+              onClick={() => setShowStatusDialog(true)}
+              title="Publicar Status"
+            >
+              <CircleDashed className="h-4 w-4" />
+              <span className="hidden sm:inline">Status</span>
+            </Button>
+          )}
         </div>
       </div>
 
