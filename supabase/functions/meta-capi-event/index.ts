@@ -164,13 +164,16 @@ Deno.serve(async (req) => {
     let _state = state as string | undefined;
     let _zip = zip as string | undefined;
     let _phone = phone as string | undefined;
+    let _cpf = cpf as string | undefined;
+    let _fbp = fbp as string | undefined;
+    let _fbc = fbc as string | undefined;
 
     // If order_id is provided, enrich PII from customer_registrations (gold source for checkout)
     if (order_id) {
       try {
         const { data: cr } = await supabase
           .from("customer_registrations")
-          .select("full_name, email, whatsapp, city, state, cep")
+          .select("full_name, email, whatsapp, city, state, cep, cpf, fbp, fbc")
           .eq("order_id", order_id)
           .maybeSingle();
         if (cr) {
@@ -180,6 +183,9 @@ Deno.serve(async (req) => {
           _city = _city ?? (cr.city as string | undefined) ?? undefined;
           _state = _state ?? (cr.state as string | undefined) ?? undefined;
           _zip = _zip ?? (cr.cep as string | undefined) ?? undefined;
+          _cpf = _cpf ?? (cr.cpf as string | undefined) ?? undefined;
+          _fbp = _fbp ?? (cr.fbp as string | undefined) ?? undefined;
+          _fbc = _fbc ?? (cr.fbc as string | undefined) ?? undefined;
         }
       } catch (e) {
         console.warn("[meta-capi-event] order enrichment failed:", e);
@@ -227,8 +233,8 @@ Deno.serve(async (req) => {
 
     // Optional external_id from CPF (digits only)
     let externalId: string | undefined;
-    if (cpf) {
-      const cpfDigits = (cpf as string).replace(/\D/g, "");
+    if (_cpf) {
+      const cpfDigits = (_cpf as string).replace(/\D/g, "");
       if (cpfDigits.length >= 11) externalId = await sha256Hex(cpfDigits);
     }
 
@@ -245,8 +251,8 @@ Deno.serve(async (req) => {
       zp: zp ? [zp] : undefined,
       country: co ? [co] : undefined,
       external_id: externalId ? [externalId] : undefined,
-      fbc: fbc || undefined,
-      fbp: fbp || undefined,
+      fbc: _fbc || undefined,
+      fbp: _fbp || undefined,
       client_user_agent: clientUa,
       client_ip_address: clientIp,
     };
@@ -305,7 +311,7 @@ Deno.serve(async (req) => {
             enriched: {
               has_phone: !!ph, has_email: !!em, has_name: !!fn,
               has_city: !!ct, has_state: !!st, has_zip: !!zp,
-              has_external_id: !!externalId, has_fbc: !!fbc, has_fbp: !!fbp,
+              has_external_id: !!externalId, has_fbc: !!_fbc, has_fbp: !!_fbp,
               has_ip: !!clientIp,
             },
             action_source: actionSource,
@@ -373,8 +379,8 @@ Deno.serve(async (req) => {
           has_state: !!st,
           has_zip: !!zp,
           has_external_id: !!externalId,
-          has_fbc: !!fbc,
-          has_fbp: !!fbp,
+          has_fbc: !!_fbc,
+          has_fbp: !!_fbp,
           has_ip: !!clientIp,
         },
         meta_response: respJson,
