@@ -531,7 +531,8 @@ Deno.serve(async (req) => {
         },
       },
       Produtos: produtos,
-      ...(vFrete > 0 ? { ValorFrete: vFrete } : {}),
+      // Frete vai RATEADO dentro de cada Produto (ValorFrete por item) — ver bloco de rateio acima.
+      // Não existe ValorFrete em nível de nota na API BrasilNFe.
       Pagamentos: [{
         IndicadorPagamento: 0,
         FormaPagamento: formaPagamento,
