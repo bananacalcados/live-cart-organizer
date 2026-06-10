@@ -1,5 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { resolveUazapiCredentials, uazapiInstance } from "../_shared/uazapi-credentials.ts";
+import {
+  resolveUazapiCredentials,
+  uazapiInstance,
+  getServiceClient,
+} from "../_shared/uazapi-credentials.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
