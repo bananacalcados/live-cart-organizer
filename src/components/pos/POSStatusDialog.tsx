@@ -312,6 +312,63 @@ export function POSStatusDialog({ open, onOpenChange, numbers }: Props) {
           </div>
         )}
 
+        {/* Status recentes (48h) — apagar status publicados por engano */}
+        {uazapiNumbers.length > 0 && (
+          <div className="space-y-2 border-t pt-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-muted-foreground">Status recentes (48h)</Label>
+              {loadingRecent && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            </div>
+            {recent.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Nenhum status publicado nas últimas 48h.</p>
+            ) : (
+              <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+                {recent.map((s) => (
+                  <div
+                    key={s.message_id}
+                    className="flex items-center gap-2 rounded-md border p-1.5"
+                  >
+                    {s.type === "text" || !s.media_url ? (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-muted">
+                        <Type className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    ) : s.type === "video" ? (
+                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded bg-muted">
+                        <video src={s.media_url} className="h-full w-full object-cover" />
+                        <span className="absolute inset-0 flex items-center justify-center text-white text-xs">▶</span>
+                      </div>
+                    ) : (
+                      <img src={s.media_url} alt="status" className="h-10 w-10 shrink-0 rounded object-cover" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs">
+                        {s.caption || s.text_content || (s.type === "video" ? "Vídeo" : s.type === "image" ? "Foto" : "Status")}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(s.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(s)}
+                      disabled={deletingId === s.message_id}
+                    >
+                      {deletingId === s.message_id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="ghost" onClick={() => handleClose(false)} disabled={sending}>
             Cancelar
