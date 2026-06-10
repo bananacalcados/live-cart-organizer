@@ -60,6 +60,57 @@ export function POSStatusDialog({ open, onOpenChange, numbers }: Props) {
   const resolvedNumberId =
     numberId || (uazapiNumbers.length === 1 ? uazapiNumbers[0].id : "");
 
+  // Status recentes (últimas 48h) da instância selecionada — para apagar status errados.
+  const [recent, setRecent] = useState<RecentStatus[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const loadRecent = useCallback(async () => {
+    if (!resolvedNumberId) {
+      setRecent([]);
+      return;
+    }
+    setLoadingRecent(true);
+    try {
+      const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const { data } = await supabase
+        .from("whatsapp_status_posts")
+        .select("message_id, type, media_url, caption, text_content, created_at")
+        .eq("whatsapp_number_id", resolvedNumberId)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false });
+      setRecent((data as RecentStatus[]) || []);
+    } catch (e) {
+      console.error("load recent status error:", e);
+    } finally {
+      setLoadingRecent(false);
+    }
+  }, [resolvedNumberId]);
+
+  useEffect(() => {
+    if (open) loadRecent();
+  }, [open, loadRecent]);
+
+  const handleDelete = async (s: RecentStatus) => {
+    setDeletingId(s.message_id);
+    try {
+      const { data, error } = await supabase.functions.invoke("uazapi-delete-status", {
+        body: { whatsapp_number_id: resolvedNumberId, message_id: s.message_id },
+      });
+      if (error) throw error;
+      if (data?.success === false && !data?.localRemoved) {
+        throw new Error(data?.error || "Falha ao apagar status");
+      }
+      toast.success("Status apagado");
+      setRecent((prev) => prev.filter((r) => r.message_id !== s.message_id));
+    } catch (e) {
+      console.error("delete status error:", e);
+      toast.error(e instanceof Error ? e.message : "Erro ao apagar status");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const reset = () => {
     setText("");
     setCaption("");
