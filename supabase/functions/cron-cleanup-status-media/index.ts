@@ -68,7 +68,22 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ success: true, deleted }), {
+    // Remove também os registros de status (tipo/mídia/legenda/instância) com +48h
+    // para a tabela whatsapp_status_posts não crescer indefinidamente.
+    const cutoff = new Date(now - MAX_AGE_MS).toISOString();
+    let rowsDeleted = 0;
+    const { data: removedRows, error: delErr } = await supabase
+      .from("whatsapp_status_posts")
+      .delete()
+      .lt("created_at", cutoff)
+      .select("id");
+    if (delErr) {
+      console.error("cleanup whatsapp_status_posts error:", delErr.message);
+    } else {
+      rowsDeleted = removedRows?.length ?? 0;
+    }
+
+    return new Response(JSON.stringify({ success: true, deleted, rowsDeleted }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
