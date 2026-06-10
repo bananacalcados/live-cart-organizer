@@ -67,10 +67,10 @@ export function QuotedMessageBubble({
           <img
             src={thumbnailUrl}
             alt="status"
-            className="h-10 w-10 rounded object-cover"
+            className="h-20 w-20 rounded-md object-cover"
           />
           {isVideoThumb && (
-            <span className="absolute inset-0 flex items-center justify-center text-white text-[10px]">▶</span>
+            <span className="absolute inset-0 flex items-center justify-center text-white text-base drop-shadow">▶</span>
           )}
         </div>
       )}
