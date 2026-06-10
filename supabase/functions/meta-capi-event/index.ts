@@ -233,8 +233,8 @@ Deno.serve(async (req) => {
 
     // Optional external_id from CPF (digits only)
     let externalId: string | undefined;
-    if (cpf) {
-      const cpfDigits = (cpf as string).replace(/\D/g, "");
+    if (_cpf) {
+      const cpfDigits = (_cpf as string).replace(/\D/g, "");
       if (cpfDigits.length >= 11) externalId = await sha256Hex(cpfDigits);
     }
 
@@ -251,8 +251,8 @@ Deno.serve(async (req) => {
       zp: zp ? [zp] : undefined,
       country: co ? [co] : undefined,
       external_id: externalId ? [externalId] : undefined,
-      fbc: fbc || undefined,
-      fbp: fbp || undefined,
+      fbc: _fbc || undefined,
+      fbp: _fbp || undefined,
       client_user_agent: clientUa,
       client_ip_address: clientIp,
     };
