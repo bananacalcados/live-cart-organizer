@@ -3,7 +3,7 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { cpGetAttemptStatus, cpUpdateOrder, cpUpsertRegistration } from "@/lib/checkoutPublic";
 import { lpUpdateViewer } from "@/lib/livePublic";
-import { initMetaPixel, trackPixelEvent, trackPageView } from "@/lib/metaPixel";
+import { initMetaPixel, trackPixelEvent, trackPageView, getFbp, getFbc } from "@/lib/metaPixel";
 import { initMercadoPago, tokenizeCardMP } from "@/lib/mercadopago";
 import {
   fireInitiateCheckout,
@@ -1640,6 +1640,9 @@ export default function TransparentCheckout() {
         neighborhood: isAddressStep ? customerForm.neighborhood.trim() : (normalizeTextField(customerForm.neighborhood) || "Pendente"),
         city: isAddressStep ? customerForm.city.trim() : (normalizeTextField(customerForm.city) || "Pendente"),
         state: isAddressStep ? customerForm.state.trim().toUpperCase() : (customerForm.state.trim().toUpperCase() || "SP"),
+        // Meta cookies (capture in browser) so the server-side CAPI Purchase can match strongly
+        ...(getFbp() ? { fbp: getFbp() } : {}),
+        ...(getFbc() ? { fbc: getFbc() } : {}),
         ...(orderData.customerId ? { customer_id: orderData.customerId } : {}),
       };
 
