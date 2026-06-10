@@ -115,6 +115,13 @@ Deno.serve(async (req) => {
       complement: reg.complement, neighborhood: reg.neighborhood, city: reg.city, state: reg.state,
     } : null;
 
+    // Pedido de live JÁ PAGO online (PIX) → entra como receita ('paid' + paid_at),
+    // contando no Faturamento Live. Só pedidos NÃO pagos ficam como 'pending_pickup'
+    // (aguardando pagamento na retirada / aba Retiradas).
+    const isPaid = !!(order as any).is_paid;
+    const saleStatus = isPaid ? "paid" : "pending_pickup";
+    const paidAt = isPaid ? new Date().toISOString() : null;
+
     const { data: sale, error: saleErr } = await supabase
       .from("pos_sales")
       .insert({
@@ -125,7 +132,8 @@ Deno.serve(async (req) => {
         customer_phone: whatsapp,
         shipping_address,
         subtotal, discount, total,
-        status: "pending_pickup",
+        status: saleStatus,
+        paid_at: paidAt,
         sale_type: "live",
         source_order_id: order.id,
         event_id: order.event_id,
