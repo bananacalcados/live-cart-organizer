@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
+import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações
@@ -306,12 +307,19 @@ serve(async (req) => {
         });
       }
       if (isPaid && !record.is_paid) {
+        const payTypeRaw = (data.payment_type || data.payment?.type || data.type || "").toString().toLowerCase();
+        const payLabel = normalizeGatewayPaymentLabel({
+          gateway: "appmax",
+          paymentMethodId: payTypeRaw.includes("pix") ? "pix" : "credit_card",
+        });
+        const paidAt = new Date().toISOString();
         const { error } = await supabase
           .from("orders")
           .update({
             is_paid: true,
-            paid_at: new Date().toISOString(),
+            paid_at: paidAt,
             stage: "paid",
+            ...(payLabel ? { payment_method_label: payLabel } : {}),
             notes: `${record.notes || ""}\n🔔 Webhook AppMax: pago (${transactionId})`.trim(),
             appmax_order_id: String(appmaxOrderId),
           })
@@ -321,6 +329,14 @@ serve(async (req) => {
           updated = true;
           console.log(`orders ${ourOrderId} marked as paid via AppMax webhook`);
           console.log(`[appmax] Vinculado appmax_order_id=${appmaxOrderId} ao pedido ${ourOrderId}`);
+          await syncOrderPaymentToPosSale(supabase, {
+            orderId: ourOrderId,
+            paymentMethodLabel: payLabel,
+            paymentGateway: "appmax",
+            transactionField: "appmax_order_id",
+            transactionValue: String(appmaxOrderId),
+            paidAt,
+          });
           await notifyPaymentConfirmed({
             pedido_id: ourOrderId,
             loja: 'centro',

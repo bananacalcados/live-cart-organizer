@@ -754,12 +754,15 @@ async function updateOrder(
   statusId: number
 ): Promise<boolean> {
   if (isPaid && !order.is_paid) {
+    const payLabel = normalizeGatewayPaymentLabel({ gateway: "vindi", paymentMethodId: "credit_card" });
+    const paidAt = new Date().toISOString();
     const { error } = await supabase
       .from("orders")
       .update({
         is_paid: true,
-        paid_at: new Date().toISOString(),
+        paid_at: paidAt,
         stage: "paid",
+        ...(payLabel ? { payment_method_label: payLabel } : {}),
         notes: `${order.notes || ""}\n🔔 Webhook VINDI: aprovado (${tokenTransaction})`.trim(),
         vindi_transaction_id: String(tokenTransaction),
       })
@@ -767,6 +770,14 @@ async function updateOrder(
     if (error) { console.error("Error updating orders:", error); return false; }
     console.log(`orders ${orderId} marked as paid via VINDI webhook`);
     console.log(`[vindi] Vinculado vindi_transaction_id=${tokenTransaction} ao pedido ${orderId}`);
+    await syncOrderPaymentToPosSale(supabase, {
+      orderId,
+      paymentMethodLabel: payLabel,
+      paymentGateway: "vindi",
+      transactionField: "vindi_transaction_id",
+      transactionValue: String(tokenTransaction),
+      paidAt,
+    });
     // Busca store_id real do pedido
     let lojaName = 'centro'; // fallback
     if (sale?.store_id) {
