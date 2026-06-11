@@ -14,21 +14,23 @@ export function ComposerRuleBar({ nudges, onDismiss }: ComposerRuleBarProps) {
   if (nudges.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-1 px-3 py-1.5 border-t border-border/50 bg-sky-50/70 dark:bg-sky-950/20">
+    <div className="flex flex-col gap-1.5 px-3 py-2.5 border-t-2 border-amber-300/70 bg-amber-50 dark:bg-amber-950/40">
       {nudges.map((n) => (
         <div
           key={n.ruleKey}
-          className="flex items-center gap-2 text-xs text-sky-800 dark:text-sky-200"
+          className="flex items-center gap-2.5 text-sm font-semibold text-amber-900 dark:text-amber-100"
         >
-          <HelpCircle className="h-3.5 w-3.5 shrink-0 text-sky-500" />
-          <span className="flex-1">{n.message}</span>
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400/30 text-amber-600 dark:text-amber-400">
+            <HelpCircle className="h-4.5 w-4.5" />
+          </span>
+          <span className="flex-1 leading-snug">{n.message}</span>
           <button
             type="button"
             onClick={() => onDismiss(n.ruleKey)}
-            className="flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-amber-700/70 hover:bg-amber-200/60 dark:text-amber-300/70 dark:hover:bg-amber-800/40"
             title="Ignorar"
           >
-            <X className="h-3 w-3" />
+            <X className="h-4 w-4" />
           </button>
         </div>
       ))}
