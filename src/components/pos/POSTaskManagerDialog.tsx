@@ -99,11 +99,19 @@ export function POSTaskManagerDialog({ open, onClose, stores }: Props) {
           </div>
         ) : (
           <Tabs defaultValue="defs" className="flex-1 overflow-hidden flex flex-col">
+            <div className="px-6 pt-3 flex items-center gap-2">
+              <Label className="text-xs text-zinc-400">Loja:</Label>
+              <Select value={storeId || ""} onValueChange={setStoreId}>
+                <SelectTrigger className="w-56 h-8 bg-zinc-900 border-zinc-700"><SelectValue placeholder="Selecione a loja" /></SelectTrigger>
+                <SelectContent>{stores.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
             <TabsList className="mx-6 mt-3 bg-zinc-900 border border-zinc-800">
               <TabsTrigger value="defs" className="gap-1"><ClipboardList className="h-3.5 w-3.5" /> Tarefas</TabsTrigger>
               <TabsTrigger value="sellers" className="gap-1"><Users className="h-3.5 w-3.5" /> Vendedoras</TabsTrigger>
               <TabsTrigger value="dispatch" className="gap-1"><Send className="h-3.5 w-3.5" /> Disparos</TabsTrigger>
             </TabsList>
+
             <ScrollArea className="flex-1 max-h-[68vh] px-6 py-4">
               <TabsContent value="defs" className="mt-0"><DefinitionsTab storeId={storeId} /></TabsContent>
               <TabsContent value="sellers" className="mt-0"><SellersTab storeId={storeId} /></TabsContent>
