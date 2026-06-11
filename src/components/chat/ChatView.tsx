@@ -118,6 +118,10 @@ export function ChatView({
 }: ChatViewProps) {
   const { suggestions: spellSuggestions, dismiss: dismissSpell, addToDictionary: addSpellWord } =
     useSpellAssist(newMessage);
+  const { nudges: composerNudges, dismiss: dismissNudge } = useComposerNudges(newMessage, {
+    isFinished: conversation?.isFinished,
+    isPaid: conversation?.isAwaitingPayment === false ? undefined : undefined,
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
