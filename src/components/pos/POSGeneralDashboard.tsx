@@ -16,6 +16,7 @@ import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/b
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
+import { POSSellerTaskProgress } from "./POSSellerTaskProgress";
 
 
 
