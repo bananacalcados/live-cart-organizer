@@ -1,92 +1,89 @@
-# Plano: Sistema de Tarefas + Pop-up de Lembrete por Vendedora
 
-Análise do sistema atual e plano para implementar sem quebrar nada.
+# Reformulação do Link Pages (Marketing)
 
-## O que já existe (reaproveitar)
-- **Seleção de vendedora já acontece nos dois lugares:** `POSSellerGate` (ao entrar em Vendas, em `POSSalesView`) e `POSWhatsAppSellerGate` (ao entrar no chat, em `POSWhatsApp`, persistido em `sessionStorage`). Vamos **pendurar o novo pop-up logo após essas seleções** — sem mexer no fluxo de venda.
-- **Tabela `pos_seller_tasks`** já existe (tarefas de contato com cliente, RFM, pontos, `status`, `completed_at`). Hoje é usada em `POSConfig` (gera lista de clientes p/ contato) e `POSDashboard`. Vamos **estender o conceito**, não substituir.
-- **Disparo de template Meta** já existe: `meta-template-send`, `meta-whatsapp-send-template`, fila `meta_message_queue`, e vários crons (`cron-send-scheduled-messages`, etc.). Vamos seguir esse padrão.
-- **Fontes de dados para auto-tarefas** já existem: `customers_unified` (RFM/clientes antigos), leads de WhatsApp (chat), `whatsapp_status_posts` (status), grupos VIP.
+## Como funciona hoje (análise)
+- **Tabelas:** `link_pages` (página), `link_page_items` (botões), `link_page_visits` (cliques/views com UTM).
+- **Editor:** `src/components/marketing/LinkPageManager.tsx` — cria página, adiciona itens manuais (link, whatsapp, endereço, catálogo, instagram...), escolhe gradiente de uma lista fixa (visual monótono), e seleciona produtos do catálogo **manualmente** via Shopify Storefront API.
+- **Página pública:** `src/pages/LinkPageView.tsx` (rota `/l/:slug`) — botões pequenos estilo Linktree antigo, grid de produtos do catálogo, registra view/click direto do client.
+- **Limitações:** botões pequenos; cores fixas; WhatsApp/catálogo digitados na mão; sem status de instância; sem QR/vendedora; sem captura de lead; produtos desatualizam.
 
-## Parte 1 — Banco de dados (migração nova)
+Já existe na base o que precisamos reaproveitar:
+- `whatsapp_numbers` com `is_online`, `last_health_check`, `provider` (meta/zapi/wasender/uazapi) e telefones por provider.
+- `zapi-instance-health-check` (cron de status) + webhooks `wasender-webhook`, `uazapi-webhook`, `meta-whatsapp-webhook`.
+- `shopify-webhook` (HMAC, orders/paid) e `src/lib/shopify.ts` (Storefront API com variants/quantidade/imagens).
+- `ad_leads` (leads) e `customers_unified` (clientes) + `pos_sellers` para vínculo de vendedora.
 
-### A) `pos_sellers`: novas colunas
-- `is_manager boolean default false` — gerente vê tarefas das outras.
-- `whatsapp_phone text` — número pessoal para receber os disparos de template.
+---
 
-### B) `pos_task_definitions` (o que é configurado no Dashboard Geral)
-Campos principais:
-- `store_id`, `title`, `description`, `category` (ex.: `contact_old_customers`, `post_sale`, `vip_capture`, `status_upload`, `cold_leads`, `som_car`, `size_offer`, `vip_post`, `conditional`, `referrals`, `google_reviews`, `custom`).
-- `verification_mode`: `manual` (vendedora só marca) ou `auto` (sistema confirma via ação real).
-- `target_count int` (ex.: 5 clientes / 5 leads / 5 indicações).
-- `recurrence`: `once` | `daily` | `weekly` | `weekly_specific` | `monthly` | `monthly_specific`.
-- `recurrence_config jsonb` (data única, dia da semana, semana do mês, mês específico, etc.).
-- `assignment`: `all` | `managers` | `specific`; + `assigned_seller_ids uuid[]`.
-- `points_reward`, `is_active`, `auto_config jsonb` (parâmetros da geração automática: segmento RFM, janela de dias dos leads, etc.).
+## Parte 1 — Visual (botões grandes, logo, cores)
+- Novo render no `LinkPageView.tsx`: **cards grandes** estilo o modelo da direita (imagem de fundo + título sobreposto + descrição), em vez de botões finos. Tipo de card por item (`card` grande vs `compact`).
+- **Header de impacto:** logo Banana em destaque, com opção de banner/cor de marca.
+- **Paletas vibrantes:** substituir os gradientes fixos por presets vivos da marca + opção de cor de destaque por botão, fugindo do padrão monótono atual.
+- Catálogo de produtos redesenhado para "vender": cards maiores com preço, selo de novidade/desconto e CTA claro.
 
-### C) `pos_seller_task_instances` (instâncias por vendedora/dia)
-Geradas a partir das definições para cada vendedora no dia/período válido:
-- `definition_id`, `seller_id`, `store_id`, `due_date`.
-- `status`: `pending` | `completed`.
-- `progress_current int` / `progress_target int` (ex.: 3/5).
-- `completed_at`, `completion_mode` (`manual`/`auto`), `payload jsonb` (a lista gerada — 5 clientes, 5 leads, etc.).
+## Parte 2 — Instâncias de WhatsApp automáticas
+- O editor **puxa as instâncias** de `whatsapp_numbers` (todas os providers) automaticamente — você só:
+  - define o **nome do botão** (ex.: "Whats Pérola" → outro nome),
+  - liga/desliga visibilidade (**ocultar** instância no link),
+  - escolhe a **mensagem pré-configurada** que o cliente envia.
+- O link gera automaticamente o `wa.me/<telefone-da-instância>?text=<mensagem>` com base no telefone real do provider (meta/zapi/wasender/uazapi).
+- **Status online em tempo real:** a página pública só mostra botões de instâncias `is_online = true`. Estendo o cron `zapi-instance-health-check` para cobrir todos os providers e, nos webhooks de status (`wasender-webhook`/`uazapi-webhook`), atualizo `is_online=false` quando a instância cair → botão some/desativa sozinho.
 
-### D) `pos_task_contacts` (itens verificáveis das auto-tarefas)
-Um registro por cliente/lead da lista de uma instância:
-- `instance_id`, `customer_phone`, `customer_name`, `contacted boolean`, `contacted_at`.
-- Marcar `contacted=true` quando a vendedora **realmente enviar** a mensagem pelo WhatsApp integrado → ao bater o `target_count`, a instância vira `completed` automaticamente.
+## Parte 3 — Catálogo Shopify auto-atualizado (sem varrer a loja toda)
+- Nova tabela `link_page_catalog_products`: só os produtos **marcados** para aparecer no link (não a loja inteira).
+- Edge function `link-page-catalog-sync`: importa/atualiza esses produtos aplicando regras:
+  - **só com foto** cadastrada;
+  - **grade de tamanhos ≥ 60% completa** (calculada das variants disponíveis vs total da grade) → abaixo disso o produto **sai** automaticamente.
+- Modo de seleção por página: **Lançamentos**, **Mais vendidos** ou **Todos** (via coleções Shopify).
+- **Tempo real:** estendo `shopify-webhook` (orders/paid) para recalcular a grade **apenas dos produtos marcados** vendidos e remover/reativar conforme o 60%. Sem varredura global.
 
-### E) `pos_task_dispatch_schedules` (disparos de template no WhatsApp pessoal)
-- `store_id`, `template_name`, `template_variables jsonb` (mapeamento de variáveis, incluindo a variável especial `{{tarefas_do_dia}}`).
-- `target`: `all_sellers` | `managers`.
-- `send_times time[]` (vários horários por dia; gerentes podem ter mais horários).
-- `is_active`.
+## Parte 4 — Link Pages por vendedora (QR + captura + rastreamento)
+- Adiciono `seller_id` em `link_pages` (vínculo opcional com `pos_sellers`).
+- **QR Code** gerado no editor para impressão em crachá.
+- **Gate de captura (opcional por página):** ao escanear, antes de ver os botões a pessoa registra **Nome + Telefone**:
+  - cliente existente → marca no cadastro origem "cadastro por vendedora";
+  - lead novo → salvo em `ad_leads` com `source=link_page` + **tag do link page** e vendedora.
+- Cada clique grava `seller_id` + identidade do lead em `link_page_visits` (antifraude: cliques contam por lead registrado).
+- **Painel no Dashboard Geral do PDV:** progresso por vendedora (cliques em grupo VIP / live / avaliação) e % de conclusão da tarefa de captação — reaproveitando o componente de progresso de tarefas já existente.
 
-Todas as tabelas com GRANTs corretos (`authenticated` + `service_role`) e RLS.
+## Parte 5 — Preenchimentos automáticos
+- Botão **Site** já vem com `https://bananacalcados.com.br/`.
+- Botão **WhatsApp** já vem com link redirecionador + mensagem pré-configurada do número da instância.
+- Botões de **redes sociais** (Instagram, TikTok, etc.), **Localização das lojas** (Google Maps) e **Grupos VIP** como tipos prontos.
 
-## Parte 2 — Pop-up de Lembrete (PDV)
+## Parte 6 — Captação de dados / analytics
+- Por botão: total de cliques, taxa de engajamento (cliques/views), e (no WhatsApp) a mensagem automática configurada.
+- Dashboard de analytics na página, com recorte por vendedora quando aplicável.
 
-Novo componente `SellerTaskReminderPopup.tsx`:
-- **Modal grande, central, que incomoda** (overlay escuro, `max-w-2xl`, impede fechar clicando fora).
-- Lista as instâncias de tarefa do dia da vendedora logada, cada uma com **checkbox**.
-- **Tarefas manuais:** checkbox marca como concluída direto.
-- **Tarefas auto-verificadas:** mostram a lista gerada (ex.: 5 clientes) + **botão "Enviar no WhatsApp"** por contato (abre o chat já carregado, via `POSTaskWhatsAppDialog`). Checkbox bloqueado; a barra de progresso (3/5) só fecha quando as mensagens forem realmente enviadas.
-- Botão **"VOU REALIZAR AINDA"** fecha o pop-up sem concluir.
-- **Gatilhos:** abre após a seleção de vendedora em `POSSellerGate` (Vendas) e em `POSWhatsAppSellerGate` (chat). Anti-irritação: reabre 1x por turno/sessão se ainda houver pendências (configurável).
-- **Gerente:** vê uma aba extra com as tarefas/progresso das outras vendedoras + atalho para métricas (já existe `POSSellerDashboard`).
+---
 
-## Parte 3 — Configuração no Dashboard Geral (com senha 3021)
+## Mudanças técnicas (resumo)
+**Migração de banco:**
+- `link_pages`: + `seller_id`, `require_lead_capture` (bool), `catalog_mode` (lancamentos/mais_vendidos/todos), paleta/branding em `theme_config`.
+- `link_page_items`: + `whatsapp_number_id`, `prefill_message`, `card_style`, `social_network`.
+- nova `link_page_catalog_products` (produtos marcados + grade % + ativo).
+- nova `link_page_leads` (ou reuso de `ad_leads` com tag) para captura.
+- `link_page_visits`: + `seller_id`, `lead_id`/`lead_phone`.
+- GRANTs + RLS (público lê páginas/itens ativos e insere visitas/leads; autenticado gerencia).
 
-Em `POSGeneralDashboard.tsx`, adicionar uma seção/botão **"Tarefas das Vendedoras"** protegida por senha **3021** (gate client-side simples; libera por sessão). Dentro dela:
-1. **CRUD de definições de tarefa** (Parte 1B): título, categoria, modo de verificação, recorrência (dia único / semanal / semana específica / mensal / mês específico), atribuição (todas / específicas / gerentes), meta e pontos.
-2. **Vendedoras:** marcar `is_manager` e cadastrar `whatsapp_phone`.
-3. **Disparos de template:** selecionar template do WhatsApp API, mapear variáveis (incluindo `{{tarefas_do_dia}}`), definir horários (vários por dia) e público (todas / gerentes com mais frequência).
+**Edge functions:**
+- `link-page-catalog-sync` (nova) — importa/recalcula produtos marcados.
+- estender `shopify-webhook` — recalcula grade dos produtos marcados em venda.
+- estender `zapi-instance-health-check` + webhooks — status online multi-provider.
+- `link-page-capture-lead` (nova) — registra nome/telefone, roteia para cliente/lead.
 
-## Parte 4 — Geração e verificação automática
+**Frontend:**
+- `LinkPageManager.tsx` — novo editor (instâncias automáticas, catálogo por regras, QR, vendedora, captura opcional).
+- `LinkPageView.tsx` — novo visual (cards grandes, header com logo, gate de captura, botões filtrados por instância online).
+- Novo painel no Dashboard Geral do PDV para progresso por vendedora.
 
-- **Cron de geração diária** (`pos-tasks-generate-cron`): a cada manhã cria as `pos_seller_task_instances` das definições ativas válidas para o dia. Para auto-tarefas, monta o `payload` e os `pos_task_contacts`:
-  - *5 clientes antigos:* puxa de `customers_unified` por RFM/última compra.
-  - *Pós-venda dia anterior:* clientes das `pos_sales` de ontem.
-  - *5 leads frios (7 dias):* leads de WhatsApp sem compra na janela.
-  - *Status/VIP/etc.:* metas com verificação própria (status via `whatsapp_status_posts`).
-- **Verificação real:** ao enviar mensagem pelo WhatsApp integrado a partir do pop-up, marca o `pos_task_contacts.contacted` e incrementa o progresso; ao bater a meta, conclui a instância (sem depender da palavra da vendedora). Status conta posts publicados; VIP conta entradas no grupo; etc.
-- **Tarefas manuais** permanecem com conclusão por checkbox.
+---
 
-## Parte 5 — Disparo de template no WhatsApp pessoal
+## Sugestão de faseamento
+1. **Migração de banco** (estruturas acima).
+2. **Visual novo** (editor + página pública com botões grandes, logo, paletas).
+3. **Instâncias automáticas + status online**.
+4. **Catálogo Shopify por regras + webhook de estoque**.
+5. **Vendedora + QR + captura de leads + painel PDV**.
 
-- Novo cron `pos-task-dispatch-cron` (segue `cron-send-scheduled-messages`): nos horários configurados, para cada vendedora/gerente alvo, monta a string `tarefas_do_dia` (lista das pendências da pessoa) e dispara o template via `meta-template-send`.
-- Suporta **vários disparos por dia** e **mais frequência para gerentes**.
-
-## Detalhes técnicos / segurança
-- Senha 3021: gate de UI por sessão; **não** é controle de acesso real (dados continuam protegidos por RLS por loja). Se quiser segurança forte depois, migramos para senha no servidor.
-- Verificação anti-burla: conclusão automática só por **ação registrada** (mensagem enviada, status publicado), não por clique.
-- Sem alterar o fluxo de venda nem o envio de mensagens existente — só adicionamos hooks/listeners.
-- Arquivos novos: migração; `SellerTaskReminderPopup.tsx`; seção de config no Dashboard Geral; hook `useSellerTasks.ts`; crons `pos-tasks-generate-cron` e `pos-task-dispatch-cron`.
-- Arquivos tocados: `POSSalesView.tsx` e `POSWhatsApp.tsx` (abrir o pop-up pós-seleção), `POSGeneralDashboard.tsx` (config), `pos_sellers` (colunas novas).
-
-## Fases de entrega sugeridas
-1. Migração + colunas (`is_manager`, `whatsapp_phone`) + tabelas novas.
-2. Config no Dashboard Geral (senha 3021, CRUD de definições, gerente, números).
-3. Pop-up central + gatilhos pós-seleção (manual primeiro).
-4. Geração automática + verificação real (5 clientes, pós-venda, leads, status).
-5. Disparo de template com variável `{{tarefas_do_dia}}` e múltiplos horários.
+Posso começar pela **Parte 1 (visual)** já entregando impacto rápido, ou pela **migração + estrutura** para destravar tudo. Qual prefere?

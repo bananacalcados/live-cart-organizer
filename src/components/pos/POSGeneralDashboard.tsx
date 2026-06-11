@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings, CalendarIcon, ClipboardList } from "lucide-react";
+import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings, CalendarIcon, ClipboardList, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -17,6 +17,7 @@ import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
 import { POSSellerTaskProgress } from "./POSSellerTaskProgress";
+import { POSSellerLinkPageProgress } from "./POSSellerLinkPageProgress";
 
 
 
@@ -512,6 +513,12 @@ export function POSGeneralDashboard({ onBack }: Props) {
           <Panel title="Progresso de tarefas das vendedoras" icon={ClipboardList}>
             <POSSellerTaskProgress stores={stores} />
           </Panel>
+
+          {/* SELLER LINK PAGE PROGRESS */}
+          <Panel title="Captação por Link Page (vendedoras)" icon={QrCode}>
+            <POSSellerLinkPageProgress stores={stores} />
+          </Panel>
+
 
           {/* PAYMENT BREAKDOWN */}
           <Panel title="Faturamento por forma de pagamento" icon={CreditCard}>
