@@ -42,7 +42,18 @@ Deno.serve(async (req) => {
     let sent = 0;
     let failed = 0;
 
+    // Bloqueio cross-instância: contato bloqueado em qualquer instância não recebe.
+    const blockedSuffixes = await loadBlockedSuffixes(supabase);
+
     for (const d of ready) {
+      // Pula contatos bloqueados (marca como terminal para não reprocessar).
+      if (d.phone && isBlocked(blockedSuffixes, d.phone)) {
+        await supabase
+          .from("live_campaign_dispatches")
+          .update({ status: "blocked", locked_until: null, error: "contato bloqueado" })
+          .eq("id", d.id);
+        continue;
+      }
       // Trava
       const { data: claimed } = await supabase
         .from("live_campaign_dispatches")
@@ -52,6 +63,7 @@ Deno.serve(async (req) => {
         .select("id")
         .maybeSingle();
       if (!claimed) continue;
+
 
       try {
         // Carrega a mensagem e a campanha (pra obter número de fallback)
