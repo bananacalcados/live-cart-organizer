@@ -203,7 +203,7 @@ export default function ChatPage() {
   const { sendMessage: zapiSend, sendMedia: zapiSendMedia } = useZapi();
   const { enrichConversations, finishConversation, finishedPhones, archivedPhones, awaitingPaymentPhones, resolveAiTransfer } = useConversationEnrichment();
   const { hasActiveSupport, supportCount } = useSupportPhones();
-  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
+  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo, getAssignedName, assignConversation } = useConversationAssignments();
 
   // Profiles cache for sender names
   const [profilesMap, setProfilesMap] = useState<Record<string, string>>({});
