@@ -141,6 +141,14 @@ interface ChatContact {
 export default function ChatPage() {
   const navigate = useNavigate();
   const currentUserId = useCurrentUserId();
+
+  // Esconde o botão flutuante de tarefas enquanto o chat de WhatsApp está aberto.
+  useEffect(() => {
+    const { enter, leave } = useWhatsAppViewStore.getState();
+    enter();
+    return () => leave();
+  }, []);
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [stickyConversationKeys, setStickyConversationKeys] = useState<Set<string>>(new Set());
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
