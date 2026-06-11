@@ -452,12 +452,26 @@ export function ConversationList({
                           </span>
                         )}
                       </div>
-                      <span className={cn(
-                        "text-xs flex-shrink-0",
-                        conv.hasUnansweredMessage ? "text-[#00a884] font-medium" : "text-[#475360] dark:text-[#667781]"
-                      )}>
-                        {formatConversationTime(conv.lastMessageAt)}
-                      </span>
+                      <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+                        <span className={cn(
+                          "text-xs",
+                          conv.hasUnansweredMessage ? "text-[#00a884] font-medium" : "text-[#475360] dark:text-[#667781]"
+                        )}>
+                          {formatConversationTime(conv.lastMessageAt)}
+                        </span>
+                        {(() => {
+                          const attendant = getAssignedName?.(conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || 'none'}`);
+                          if (!attendant) return null;
+                          return (
+                            <span
+                              className="inline-flex items-center gap-0.5 max-w-[110px] px-1.5 py-[1px] rounded-full text-[9px] font-semibold bg-[#00a884]/15 text-[#017561] dark:text-[#25d366] border border-[#00a884]/30 truncate"
+                              title={`Atendente: ${attendant}`}
+                            >
+                              👤 <span className="truncate">{attendant}</span>
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm text-[#475360] dark:text-[#8696a0] truncate flex-1">
