@@ -99,6 +99,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState<number>(subMonths(new Date(), 1).getFullYear());
   const [goalsDialogOpen, setGoalsDialogOpen] = useState(false);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [salesRows, setSalesRows] = useState<any[]>([]);
   const [goals, setGoals] = useState<GoalRow[]>([]);
