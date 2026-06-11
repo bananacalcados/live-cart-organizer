@@ -21,7 +21,7 @@ export function ComposerRuleBar({ nudges, onDismiss }: ComposerRuleBarProps) {
           className="flex items-center gap-2.5 text-sm font-semibold text-amber-900 dark:text-amber-100"
         >
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400/30 text-amber-600 dark:text-amber-400">
-            <HelpCircle className="h-4.5 w-4.5" />
+            <HelpCircle className="h-4 w-4" />
           </span>
           <span className="flex-1 leading-snug">{n.message}</span>
           <button
