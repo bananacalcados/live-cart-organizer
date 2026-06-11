@@ -940,6 +940,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       if (result.success) {
         setQuotedMessage(null);
         appendOptimistic("[áudio]", { media_type: "audio", media_url: audioUrl, message_id: result.messageId });
+        autoAssignCurrentConversation();
         loadMessages(selectedPhone, selectedConvNumberId);
         toast.success("Áudio enviado!");
       }
