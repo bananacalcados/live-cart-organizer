@@ -144,7 +144,10 @@ serve(async (req) => {
         if (!appliesToday(def, dateStr)) continue;
         if (!appliesToSeller(def, seller)) continue;
 
-        const target = Math.max(1, Number(def.target_count) || 1);
+        const baseTarget = Math.max(1, Number(def.target_count) || 1);
+        const isAuto = def.verification_mode === "auto";
+        const isContactAuto = isAuto && CONTACT_CATEGORIES.has(def.category);
+        const dynamic = isAuto && (def.auto_config?.dynamic_target === true);
 
         // Já existe?
         const { data: existing } = await supabase
@@ -156,6 +159,19 @@ serve(async (req) => {
           .maybeSingle();
         if (existing) continue;
 
+        // Para tarefas automáticas de contato, monta a lista primeiro
+        // (a meta dinâmica vira o nº real de clientes encontrados).
+        let contacts: { phone: string; name: string; meta?: any }[] = [];
+        if (isContactAuto) {
+          const cap = dynamic ? 500 : baseTarget;
+          contacts = await buildContacts(supabase, def, storeId, cap, dateStr);
+        }
+
+        let target: number;
+        if (!isAuto) target = 1;
+        else if (dynamic) target = isContactAuto ? Math.max(1, contacts.length) : baseTarget;
+        else target = baseTarget;
+
         const { data: inst, error: instErr } = await supabase
           .from("pos_seller_task_instances")
           .insert({
@@ -165,7 +181,7 @@ serve(async (req) => {
             due_date: dateStr,
             status: "pending",
             progress_current: 0,
-            progress_target: def.verification_mode === "auto" ? target : 1,
+            progress_target: target,
             payload: {},
           })
           .select("id")
@@ -173,9 +189,7 @@ serve(async (req) => {
         if (instErr || !inst) continue;
         created++;
 
-        // Gera contatos para tarefas automáticas baseadas em contato
-        if (def.verification_mode === "auto" && CONTACT_CATEGORIES.has(def.category)) {
-          const contacts = await buildContacts(supabase, def, storeId, target);
+        if (isContactAuto) {
           if (contacts.length > 0) {
             await supabase.from("pos_task_contacts").insert(
               contacts.map((c) => ({
@@ -185,6 +199,12 @@ serve(async (req) => {
                 customer_meta: c.meta || {},
               })),
             );
+          } else if (dynamic) {
+            // Meta dinâmica sem clientes hoje: nada a fazer, conclui na hora.
+            await supabase
+              .from("pos_seller_task_instances")
+              .update({ status: "completed", completion_mode: "auto", completed_at: new Date().toISOString() })
+              .eq("id", inst.id);
           }
         }
       }
