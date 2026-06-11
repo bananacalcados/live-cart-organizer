@@ -7,6 +7,7 @@ interface WorkloadConversation {
   conversationStatus?: string;
   isFinished?: boolean;
   isArchived?: boolean;
+  isAwaitingProduct?: boolean;
 }
 
 export interface AttendantWorkload {
