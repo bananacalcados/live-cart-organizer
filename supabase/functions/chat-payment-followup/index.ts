@@ -332,9 +332,11 @@ serve(async (req) => {
         if (sent + abandonedSent >= MAX_SENDS_PER_RUN) break;
         if (isBlocked(blockedSuffixes, fu.phone)) {
           await supabase.from('chat_payment_followups')
-            .update({ status: 'cancelled' }).eq('id', fu.id);
+            .update({ is_active: false, completed_at: new Date().toISOString() })
+            .eq('id', fu.id);
           continue;
         }
+
 
 
         // ── Check if human operator is actively chatting ──
