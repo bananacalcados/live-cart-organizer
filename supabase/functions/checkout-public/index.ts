@@ -272,6 +272,11 @@ serve(async (req) => {
       case "complete_sale": {
         const { saleId } = body;
         if (!isUuid(saleId)) return json({ error: "invalid saleId" }, 400);
+        const { data: sale } = await supabase
+          .from("pos_sales")
+          .select("payment_method, payment_details")
+          .eq("id", saleId)
+          .maybeSingle();
         const customer = pick(body?.customer || {}, CUSTOMER_KEYS);
         customer.cpf = digits(customer.cpf) || null;
         customer.whatsapp = digits(customer.whatsapp) || null;
@@ -296,8 +301,21 @@ serve(async (req) => {
           customerId = data?.id || null;
         }
 
+        const paymentDetails = (sale?.payment_details as Record<string, unknown> | null) || {};
+        const rawMethod = String(paymentDetails.payment_method || "").toLowerCase();
+        const installments = Number(paymentDetails.installments || 1);
+        const paymentMethodLabel = sale?.payment_method || (
+          rawMethod === "pix"
+            ? "PIX"
+            : rawMethod === "credit_card"
+              ? (installments > 1 ? `Cartão de Crédito ${installments}x` : "Cartão de Crédito")
+              : rawMethod === "debit_card"
+                ? "Cartão de Débito"
+                : null
+        );
+
         await supabase.from("pos_sales")
-          .update({ status: "completed", customer_id: customerId })
+          .update({ status: "completed", customer_id: customerId, ...(paymentMethodLabel ? { payment_method: paymentMethodLabel } : {}) })
           .eq("id", saleId);
 
         return json({ ok: true, customerId });
