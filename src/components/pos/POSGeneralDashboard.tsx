@@ -306,7 +306,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
 
     // Ritmo por DIAS ÚTEIS (seg-sáb, excluindo domingos e feriados nacionais).
     // Meta diária = meta total ÷ dias úteis do mês de referência.
-    const refDate = (period === "last_month" || period === "custom") ? periodRange.start : now;
+    const refDate = (period === "month_pick" || period === "custom") ? periodRange.start : now;
     const monthStart = startOfMonth(refDate);
     const monthEnd = endOfMonth(refDate);
     const holidays = getBrazilianHolidays(refDate.getFullYear());
