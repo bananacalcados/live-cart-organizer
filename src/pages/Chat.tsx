@@ -1164,9 +1164,15 @@ export default function ChatPage() {
 
         {/* ── Right panel: chat area ── */}
         <div className={cn(
-          "flex-1 flex flex-col",
+          "flex-1 flex flex-col relative",
           !selectedPhone && "hidden md:flex"
         )}>
+          {selectedPhone && (
+            <AttendantNudgeCard
+              conversations={conversations}
+              onShowAwaiting={() => setStatusFilter('awaiting_reply')}
+            />
+          )}
           {!selectedPhone ? (
             <div className="flex-1 flex flex-col items-center justify-center bg-[#222e35]">
               <div className="text-center">
