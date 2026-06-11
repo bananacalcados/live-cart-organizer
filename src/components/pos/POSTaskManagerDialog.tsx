@@ -393,7 +393,7 @@ const VAR_OPTIONS = [
 
 function extractBodyVars(t: MetaTemplate): string[] {
   const body = t.components?.find((c: any) => c.type === "BODY");
-  const matches = (body?.text || "").match(/\{\{(\d+)\}\}/g) || [];
+  const matches: string[] = (body?.text || "").match(/\{\{(\d+)\}\}/g) || [];
   return Array.from(new Set(matches)).sort((a, b) =>
     Number(a.replace(/\D/g, "")) - Number(b.replace(/\D/g, "")));
 }
