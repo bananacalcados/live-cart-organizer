@@ -733,6 +733,7 @@ export default function ChatPage() {
       } as any);
       // Mark AI handoff as picked up by human
       resolveAiTransfer(selectedPhone);
+      if (currentUserId) assignConversation({ phone: selectedPhone, whatsappNumberId: numberId, userId: currentUserId, onlyIfUnassigned: true });
       loadMessages(selectedPhone, false, selectedConvNumberId);
     }
     setIsSending(false);
