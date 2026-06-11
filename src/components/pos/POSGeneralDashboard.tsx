@@ -513,6 +513,12 @@ export function POSGeneralDashboard({ onBack }: Props) {
             <POSSellerTaskProgress stores={stores} />
           </Panel>
 
+          {/* SELLER LINK PAGE PROGRESS */}
+          <Panel title="Captação por Link Page (vendedoras)" icon={QrCode}>
+            <POSSellerLinkPageProgress stores={stores} />
+          </Panel>
+
+
           {/* PAYMENT BREAKDOWN */}
           <Panel title="Faturamento por forma de pagamento" icon={CreditCard}>
             {paymentBuckets.length === 0 ? (
