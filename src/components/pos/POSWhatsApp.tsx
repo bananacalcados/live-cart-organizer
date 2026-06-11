@@ -1877,9 +1877,27 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           setShowSellerGate(false);
           setShowDashboard(true);
           toast.success(`Vendedora: ${name}`);
+          if (sessionStorage.getItem(`pos_task_popup_${storeId}_${id}`) !== taskTodayKey()) {
+            setShowTaskPopup(true);
+          }
         }}
         onSkip={() => setShowSellerGate(false)}
       />
+
+      {selectedSellerId && (
+        <SellerTaskReminderPopup
+          open={showTaskPopup}
+          onClose={() => {
+            setShowTaskPopup(false);
+            sessionStorage.setItem(`pos_task_popup_${storeId}_${selectedSellerId}`, taskTodayKey());
+          }}
+          storeId={storeId}
+          sellerId={selectedSellerId}
+          sellerName={selectedSellerName || ""}
+          onOpenWhatsApp={(phone) => { setSelectedPhone(phone); }}
+        />
+      )}
+
 
       {/* Finish Conversation Dialog */}
       <POSFinishConversationDialog
