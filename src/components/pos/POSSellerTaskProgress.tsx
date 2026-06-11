@@ -136,10 +136,7 @@ export function POSSellerTaskProgress({ stores }: Props) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-sm font-bold flex items-center gap-2 text-zinc-100">
-          <ClipboardList className="h-4 w-4 text-zinc-300" /> Progresso de tarefas por vendedora
-        </h3>
+      <div className="flex items-center justify-end gap-2 flex-wrap">
         <div className="flex items-center gap-2">
           <Select value={storeFilter} onValueChange={setStoreFilter}>
             <SelectTrigger className="h-8 w-[160px] bg-zinc-900 border-zinc-700 text-zinc-200 text-xs">
