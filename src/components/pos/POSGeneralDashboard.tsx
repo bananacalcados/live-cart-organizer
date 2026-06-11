@@ -16,7 +16,7 @@ import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/b
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
-import { ClipboardList } from "lucide-react";
+
 
 
 interface Props { onBack: () => void }
