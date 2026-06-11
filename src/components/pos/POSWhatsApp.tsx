@@ -1590,6 +1590,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       <Archive className="h-3.5 w-3.5" />
       <span className="hidden xl:inline">{conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}</span>
     </Button>
+                {selectedConversation && !selectedConversation.isGroup && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
+                  <BlockContactButton
+                    phone={selectedPhone}
+                    whatsappNumberId={messageBoundNumberId ?? selectedSendNumberId}
+                    customerName={selectedConversation?.customerName}
+                  />
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
