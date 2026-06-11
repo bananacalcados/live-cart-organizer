@@ -23,6 +23,17 @@ interface Props {
 
 type Period = '7d' | '30d';
 
+interface AggResult {
+  incoming: number;
+  outgoing: number;
+  conversations: number;
+  response_rate: number;
+  avg_response_minutes: number | null;
+  evolution: { date: string; incoming: number; outgoing: number }[];
+  hourly: Record<string, number>;
+  heatmap: { dow: number; hour: number; count: number }[];
+}
+
 const DAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
