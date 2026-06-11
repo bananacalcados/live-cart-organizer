@@ -7,8 +7,9 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useSellerTasks, type TaskInstance } from "@/hooks/useSellerTasks";
+import { POSTaskMessageDialog } from "./POSTaskMessageDialog";
 import {
-  ClipboardList, MessageCircle, CheckCircle2, Clock, Sparkles, ShieldCheck, Hand, Users, Phone,
+  ClipboardList, MessageCircle, CheckCircle2, Clock, Sparkles, ShieldCheck, Hand, Users, Phone, Target,
 } from "lucide-react";
 
 interface Props {
@@ -28,12 +29,15 @@ export function SellerTaskReminderPopup({
   const { instances, loading, pendingCount, completeManual, uncomplete, markContacted } =
     useSellerTasks(storeId, sellerId);
 
+  const [compose, setCompose] = useState<{ phone: string; name?: string; contactId: string } | null>(null);
+
   if (!open) return null;
 
   const total = instances.length;
   const completed = total - pendingCount;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent
         className="max-w-2xl w-[95vw] max-h-[88vh] bg-pos-black border-2 border-pos-orange/60 text-pos-white p-0 overflow-hidden shadow-[0_0_60px_rgba(255,140,0,0.35)]"
@@ -74,8 +78,7 @@ export function SellerTaskReminderPopup({
                   inst={inst}
                   onCompleteManual={() => completeManual(inst.id)}
                   onUncomplete={() => uncomplete(inst.id)}
-                  onMarkContacted={markContacted}
-                  onOpenWhatsApp={onOpenWhatsApp}
+                  onCompose={(phone, name, contactId) => setCompose({ phone, name, contactId })}
                 />
               ))}
             </div>
@@ -97,17 +100,28 @@ export function SellerTaskReminderPopup({
         </div>
       </DialogContent>
     </Dialog>
+
+    {compose && (
+      <POSTaskMessageDialog
+        open={!!compose}
+        onClose={() => setCompose(null)}
+        phone={compose.phone}
+        name={compose.name}
+        sellerName={sellerName}
+        onSent={() => { if (compose.contactId) markContacted(compose.contactId); }}
+      />
+    )}
+    </>
   );
 }
 
 function TaskCard({
-  inst, onCompleteManual, onUncomplete, onMarkContacted, onOpenWhatsApp,
+  inst, onCompleteManual, onUncomplete, onCompose,
 }: {
   inst: TaskInstance;
   onCompleteManual: () => void;
   onUncomplete: () => void;
-  onMarkContacted: (contactId: string) => void;
-  onOpenWhatsApp?: (phone: string, name?: string) => void;
+  onCompose: (phone: string, name: string | undefined, contactId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const done = inst.status === "completed";
@@ -146,6 +160,11 @@ function TaskCard({
             {inst.points_reward > 0 && (
               <Badge variant="outline" className="border-pos-white/20 text-pos-white/60 text-[10px]">
                 +{inst.points_reward} pts
+              </Badge>
+            )}
+            {inst.target_count > 1 && (
+              <Badge variant="outline" className="border-pos-orange/50 text-pos-orange text-[10px] gap-1 font-semibold">
+                <Target className="h-2.5 w-2.5" /> Meta: {inst.target_count}
               </Badge>
             )}
           </div>
@@ -193,8 +212,7 @@ function TaskCard({
                           size="sm"
                           className="h-7 bg-[#00a884] hover:bg-[#00916f] text-white text-[11px] gap-1 px-2"
                           onClick={() => {
-                            if (c.customer_phone) onOpenWhatsApp?.(c.customer_phone, c.customer_name || undefined);
-                            onMarkContacted(c.id);
+                            if (c.customer_phone) onCompose(c.customer_phone, c.customer_name || undefined, c.id);
                           }}
                         >
                           <MessageCircle className="h-3 w-3" /> WhatsApp
