@@ -117,6 +117,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [selectedCrediarioGateway, setSelectedCrediarioGateway] = useState<string>("");
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [selectedSeller, setSelectedSeller] = useState<string>("");
+  const [showTaskPopup, setShowTaskPopup] = useState(false);
+
   const [loadingSellers, setLoadingSellers] = useState(false);
   const [finalizingSale, setFinalizingSale] = useState(false);
   const [saleResult, setSaleResult] = useState<{ tiny_order_id?: string; tiny_order_number?: string; sale_id?: string } | null>(null);
