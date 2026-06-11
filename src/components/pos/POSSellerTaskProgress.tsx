@@ -19,18 +19,36 @@ interface Seller {
   is_manager: boolean;
 }
 
-interface Instance {
+interface Definition {
   id: string;
+  store_id: string;
+  title: string;
+  category: string;
+  recurrence: string;
+  recurrence_config: any;
+  assignment: string;
+  assigned_seller_ids: string[];
+}
+
+interface Instance {
   definition_id: string;
   seller_id: string;
-  store_id: string;
   due_date: string;
   status: string;
   progress_current: number;
   progress_target: number;
+}
+
+// A row shown in the dashboard = a task definition that applies to a seller,
+// overlaid with the latest instance (progress) when one exists.
+interface TaskRow {
+  definition_id: string;
   title: string;
   recurrence: string;
-  category: string;
+  recurrence_config: any;
+  status: string;
+  progress_current: number;
+  progress_target: number;
 }
 
 // Map recurrence -> group bucket
@@ -44,9 +62,35 @@ function groupOf(recurrence: string): GroupKey {
     case "weekly_specific":
       return "weekly";
     case "monthly":
+    case "monthly_specific":
       return "monthly";
     default:
       return "custom";
+  }
+}
+
+const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+// Human label describing the recurrence filter of a task.
+function recurrenceLabel(recurrence: string, cfg: any): string {
+  cfg = cfg || {};
+  switch (recurrence) {
+    case "daily": return "Todo dia";
+    case "weekdays": return "Dias úteis (seg-sex)";
+    case "weekly":
+      return cfg.weekday != null ? `Semanal · ${WEEKDAYS[Number(cfg.weekday)] || ""}` : "Semanal";
+    case "weekly_specific":
+      return `Semana ${cfg.week_of_month || "?"} do mês${cfg.weekday != null ? ` · ${WEEKDAYS[Number(cfg.weekday)] || ""}` : ""}`;
+    case "monthly":
+      return cfg.day_of_month ? `Mensal · dia ${cfg.day_of_month}` : "Mensal";
+    case "monthly_specific":
+      return `${MONTHS[Number(cfg.month) - 1] || "?"}${cfg.day_of_month ? ` · dia ${cfg.day_of_month}` : ""}`;
+    case "once":
+      return cfg.date ? `Data: ${cfg.date}` : "Data específica";
+    case "custom_range":
+      return `${cfg.start_date || "?"} → ${cfg.end_date || "?"}`;
+    default: return recurrence;
   }
 }
 
@@ -66,15 +110,23 @@ function monthStartSaoPaulo(): string {
   return todaySaoPaulo().slice(0, 7) + "-01";
 }
 
+function appliesToSeller(def: Definition, seller: Seller): boolean {
+  if (def.assignment === "all") return true;
+  if (def.assignment === "managers") return !!seller.is_manager;
+  if (def.assignment === "specific") return (def.assigned_seller_ids || []).includes(seller.id);
+  return false;
+}
+
 // per-task completion ratio 0..1
-function taskRatio(i: Instance): number {
-  if (i.status === "completed") return 1;
-  if (i.progress_target > 0) return Math.min(i.progress_current / i.progress_target, 1);
+function rowRatio(r: TaskRow): number {
+  if (r.status === "completed") return 1;
+  if (r.progress_target > 0) return Math.min(r.progress_current / r.progress_target, 1);
   return 0;
 }
 
 export function POSSellerTaskProgress({ stores }: Props) {
   const [sellers, setSellers] = useState<Seller[]>([]);
+  const [definitions, setDefinitions] = useState<Definition[]>([]);
   const [instances, setInstances] = useState<Instance[]>([]);
   const [loading, setLoading] = useState(false);
   const [storeFilter, setStoreFilter] = useState<string>("all");
@@ -82,31 +134,39 @@ export function POSSellerTaskProgress({ stores }: Props) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: sd }, { data: idata }] = await Promise.all([
+      const [{ data: sd }, { data: dd }, { data: idata }] = await Promise.all([
         supabase
           .from("pos_sellers")
           .select("id, name, store_id, is_manager")
           .eq("is_active", true),
         supabase
+          .from("pos_task_definitions" as any)
+          .select("id, store_id, title, category, recurrence, recurrence_config, assignment, assigned_seller_ids")
+          .eq("is_active", true),
+        supabase
           .from("pos_seller_task_instances" as any)
-          .select("id, definition_id, seller_id, store_id, due_date, status, progress_current, progress_target, pos_task_definitions(title, recurrence, category)")
+          .select("definition_id, seller_id, due_date, status, progress_current, progress_target")
           .gte("due_date", monthStartSaoPaulo()),
       ]);
       setSellers((sd || []) as Seller[]);
-      const mapped: Instance[] = ((idata || []) as any[]).map((i) => ({
-        id: i.id,
+      setDefinitions(((dd || []) as any[]).map((d) => ({
+        id: d.id,
+        store_id: d.store_id,
+        title: d.title || "Tarefa",
+        category: d.category || "custom",
+        recurrence: d.recurrence || "daily",
+        recurrence_config: d.recurrence_config || {},
+        assignment: d.assignment || "all",
+        assigned_seller_ids: d.assigned_seller_ids || [],
+      })));
+      setInstances(((idata || []) as any[]).map((i) => ({
         definition_id: i.definition_id,
         seller_id: i.seller_id,
-        store_id: i.store_id,
         due_date: i.due_date,
         status: i.status,
         progress_current: i.progress_current ?? 0,
         progress_target: i.progress_target ?? 0,
-        title: i.pos_task_definitions?.title || "Tarefa",
-        recurrence: i.pos_task_definitions?.recurrence || "daily",
-        category: i.pos_task_definitions?.category || "custom",
-      }));
-      setInstances(mapped);
+      })));
     } finally {
       setLoading(false);
     }
@@ -119,20 +179,49 @@ export function POSSellerTaskProgress({ stores }: Props) {
     [stores],
   );
 
-  const visibleSellers = useMemo(() => {
-    const list = storeFilter === "all" ? sellers : sellers.filter((s) => s.store_id === storeFilter);
-    // only sellers that have at least one instance
-    const withTasks = new Set(instances.map((i) => i.seller_id));
-    return list
-      .filter((s) => withTasks.has(s.id))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [sellers, instances, storeFilter]);
+  const defsByStore = useMemo(() => {
+    const m: Record<string, Definition[]> = {};
+    for (const d of definitions) (m[d.store_id] ||= []).push(d);
+    return m;
+  }, [definitions]);
 
-  const instancesBySeller = useMemo(() => {
-    const m: Record<string, Instance[]> = {};
-    for (const i of instances) (m[i.seller_id] ||= []).push(i);
+  // latest instance per (definition_id, seller_id)
+  const latestInstance = useMemo(() => {
+    const m: Record<string, Instance> = {};
+    for (const i of instances) {
+      const key = `${i.definition_id}|${i.seller_id}`;
+      const cur = m[key];
+      if (!cur || i.due_date > cur.due_date) m[key] = i;
+    }
     return m;
   }, [instances]);
+
+  const visibleSellers = useMemo(() => {
+    const list = storeFilter === "all" ? sellers : sellers.filter((s) => s.store_id === storeFilter);
+    // only sellers in a store that has task definitions, and that have at least one applicable task
+    return list
+      .filter((s) => {
+        const defs = defsByStore[s.store_id] || [];
+        return defs.some((d) => appliesToSeller(d, s));
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [sellers, defsByStore, storeFilter]);
+
+  const rowsForSeller = useCallback((seller: Seller): TaskRow[] => {
+    const defs = (defsByStore[seller.store_id] || []).filter((d) => appliesToSeller(d, seller));
+    return defs.map((d) => {
+      const inst = latestInstance[`${d.id}|${seller.id}`];
+      return {
+        definition_id: d.id,
+        title: d.title,
+        recurrence: d.recurrence,
+        recurrence_config: d.recurrence_config,
+        status: inst?.status || "pending",
+        progress_current: inst?.progress_current ?? 0,
+        progress_target: inst?.progress_target ?? 1,
+      };
+    });
+  }, [defsByStore, latestInstance]);
 
   return (
     <div className="space-y-3">
@@ -158,12 +247,12 @@ export function POSSellerTaskProgress({ stores }: Props) {
         </div>
       </div>
 
-      {loading && instances.length === 0 ? (
+      {loading && sellers.length === 0 ? (
         <div className="flex items-center justify-center py-8 text-zinc-500 text-sm gap-2">
           <Loader2 className="h-4 w-4 animate-spin" /> Carregando tarefas...
         </div>
       ) : visibleSellers.length === 0 ? (
-        <p className="text-zinc-500 text-sm text-center py-6">Nenhuma tarefa gerada para as vendedoras ainda.</p>
+        <p className="text-zinc-500 text-sm text-center py-6">Nenhuma vendedora com tarefas atribuídas.</p>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {visibleSellers.map((seller) => (
@@ -171,7 +260,7 @@ export function POSSellerTaskProgress({ stores }: Props) {
               key={seller.id}
               seller={seller}
               storeName={storesById[seller.store_id] || ""}
-              instances={instancesBySeller[seller.id] || []}
+              rows={rowsForSeller(seller)}
             />
           ))}
         </div>
@@ -180,20 +269,20 @@ export function POSSellerTaskProgress({ stores }: Props) {
   );
 }
 
-function SellerCard({ seller, storeName, instances }: { seller: Seller; storeName: string; instances: Instance[] }) {
+function SellerCard({ seller, storeName, rows }: { seller: Seller; storeName: string; rows: TaskRow[] }) {
   const overall = useMemo(() => {
-    if (!instances.length) return 0;
-    const sum = instances.reduce((acc, i) => acc + taskRatio(i), 0);
-    return (sum / instances.length) * 100;
-  }, [instances]);
+    if (!rows.length) return 0;
+    const sum = rows.reduce((acc, r) => acc + rowRatio(r), 0);
+    return (sum / rows.length) * 100;
+  }, [rows]);
 
-  const completedCount = instances.filter((i) => i.status === "completed").length;
+  const completedCount = rows.filter((r) => r.status === "completed").length;
 
   const grouped = useMemo(() => {
-    const m: Record<GroupKey, Instance[]> = { daily: [], weekly: [], monthly: [], custom: [] };
-    for (const i of instances) m[groupOf(i.recurrence)].push(i);
+    const m: Record<GroupKey, TaskRow[]> = { daily: [], weekly: [], monthly: [], custom: [] };
+    for (const r of rows) m[groupOf(r.recurrence)].push(r);
     return m;
-  }, [instances]);
+  }, [rows]);
 
   return (
     <div className="bg-gradient-to-br from-zinc-900/90 to-zinc-950/90 border border-zinc-800 rounded-xl p-4 shadow-lg">
@@ -215,7 +304,7 @@ function SellerCard({ seller, storeName, instances }: { seller: Seller; storeNam
         </div>
         <div className="text-right">
           <p className="text-2xl font-bold text-zinc-100 drop-shadow">{overall.toFixed(0)}%</p>
-          <p className="text-[10px] text-zinc-500">{completedCount}/{instances.length} concluídas</p>
+          <p className="text-[10px] text-zinc-500">{completedCount}/{rows.length} concluídas</p>
         </div>
       </div>
 
@@ -234,16 +323,14 @@ function SellerCard({ seller, storeName, instances }: { seller: Seller; storeNam
   );
 }
 
-function TaskGroup({ group, items }: { group: { key: GroupKey; label: string; icon: any; tint: string }; items: Instance[] }) {
+function TaskGroup({ group, items }: { group: { key: GroupKey; label: string; icon: any; tint: string }; items: TaskRow[] }) {
   const [open, setOpen] = useState(true);
   const Icon = group.icon;
-  const ratio = items.reduce((a, i) => a + taskRatio(i), 0) / items.length * 100;
+  const ratio = items.reduce((a, r) => a + rowRatio(r), 0) / items.length * 100;
   // unique by title (newest instance wins) so weekly/monthly don't list duplicate days
   const rows = useMemo(() => {
-    const byTitle = new Map<string, Instance>();
-    for (const i of [...items].sort((a, b) => b.due_date.localeCompare(a.due_date))) {
-      if (!byTitle.has(i.title)) byTitle.set(i.title, i);
-    }
+    const byTitle = new Map<string, TaskRow>();
+    for (const r of items) if (!byTitle.has(r.title)) byTitle.set(r.title, r);
     return [...byTitle.values()];
   }, [items]);
 
@@ -261,24 +348,29 @@ function TaskGroup({ group, items }: { group: { key: GroupKey; label: string; ic
       </button>
       {open && (
         <div className="px-3 pb-2 space-y-1.5">
-          {rows.map((i) => {
-            const pct = taskRatio(i) * 100;
-            const done = i.status === "completed";
+          {rows.map((r) => {
+            const pct = rowRatio(r) * 100;
+            const done = r.status === "completed";
             return (
-              <div key={i.id} className="flex items-center gap-2">
+              <div key={r.definition_id} className="flex items-center gap-2">
                 {done
                   ? <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0" />
                   : <Clock className="h-3.5 w-3.5 text-zinc-600 shrink-0" />}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <span className={`text-[11px] truncate ${done ? "text-zinc-500 line-through" : "text-zinc-200"}`}>
-                      {i.title}
+                      {r.title}
                     </span>
                     <span className="text-[10px] text-zinc-400 shrink-0">
-                      {i.progress_target > 1 ? `${i.progress_current}/${i.progress_target}` : `${pct.toFixed(0)}%`}
+                      {r.progress_target > 1 ? `${r.progress_current}/${r.progress_target}` : `${pct.toFixed(0)}%`}
                     </span>
                   </div>
-                  <Progress value={pct} className="h-1 bg-zinc-800 mt-0.5" />
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="border-zinc-700 text-zinc-500 text-[9px] px-1 py-0 h-4 shrink-0">
+                      {recurrenceLabel(r.recurrence, r.recurrence_config)}
+                    </Badge>
+                    <Progress value={pct} className="h-1 bg-zinc-800 flex-1" />
+                  </div>
                 </div>
               </div>
             );
