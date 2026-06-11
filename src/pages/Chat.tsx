@@ -42,6 +42,10 @@ import { AutoReplySettings } from "@/components/chat/AutoReplySettings";
 import { AiTransferBell } from "@/components/chat/AiTransferBell";
 import { AttendantMetrics } from "@/components/chat/AttendantMetrics";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
+import { SpellSuggestionBar } from "@/components/chat/SpellSuggestionBar";
+import { useSpellAssist } from "@/hooks/useSpellAssist";
+import { capitalizeSentences } from "@/lib/spellAssist/capitalize";
+import { applySuggestion } from "@/lib/spellAssist/dictionary";
 import {
   Select,
   SelectContent,
