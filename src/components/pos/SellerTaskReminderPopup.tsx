@@ -29,6 +29,8 @@ export function SellerTaskReminderPopup({
   const { instances, loading, pendingCount, completeManual, uncomplete, markContacted } =
     useSellerTasks(storeId, sellerId);
 
+  const [compose, setCompose] = useState<{ phone: string; name?: string; contactId: string } | null>(null);
+
   if (!open) return null;
 
   const total = instances.length;
