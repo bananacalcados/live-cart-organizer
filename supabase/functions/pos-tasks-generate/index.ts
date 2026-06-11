@@ -57,6 +57,12 @@ function appliesToday(def: any, dateStr: string): boolean {
     }
     case "once":
       return cfg.date === dateStr;
+    case "custom_range": {
+      // período personalizado (start_date..end_date, inclusivo)
+      if (cfg.start_date && dateStr < cfg.start_date) return false;
+      if (cfg.end_date && dateStr > cfg.end_date) return false;
+      return true;
+    }
     case "weekly": {
       // todo dia da semana indicado (0=domingo..6=sábado)
       if (cfg.weekday === undefined || cfg.weekday === null) return true;
