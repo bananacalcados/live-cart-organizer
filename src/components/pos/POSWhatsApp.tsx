@@ -1549,7 +1549,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   </DialogTitle>
                 </DialogHeader>
                 <div className="max-h-[70vh] overflow-y-auto">
-                  {fullCustomerInfoPanel}
+                  {(crmData || liveOrderRef) ? (
+                    fullCustomerInfoPanel
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      Nenhum pedido encontrado para este cliente.
+                    </p>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>
