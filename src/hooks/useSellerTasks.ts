@@ -26,6 +26,8 @@ export interface TaskInstance {
   category: string;
   verification_mode: "manual" | "auto";
   points_reward: number;
+  /** Meta de quantidade configurada na definição da tarefa (ex.: captar X pessoas). */
+  target_count: number;
   contacts: TaskContact[];
 }
 
