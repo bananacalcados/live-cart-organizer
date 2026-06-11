@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import { POSCustomerForm } from "./POSCustomerForm";
 import { POSBarcodeScanner } from "./POSBarcodeScanner";
 import { POSSellerGate } from "./POSSellerGate";
+import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
+
 import { POSPrizeWheel } from "./POSPrizeWheel";
 import { POSLoyaltyScreen } from "./POSLoyaltyScreen";
 import { POSSlotMachine } from "./POSSlotMachine";
