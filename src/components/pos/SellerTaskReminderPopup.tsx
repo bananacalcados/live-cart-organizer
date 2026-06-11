@@ -162,6 +162,11 @@ function TaskCard({
                 +{inst.points_reward} pts
               </Badge>
             )}
+            {inst.target_count > 1 && (
+              <Badge variant="outline" className="border-pos-orange/50 text-pos-orange text-[10px] gap-1 font-semibold">
+                <Target className="h-2.5 w-2.5" /> Meta: {inst.target_count}
+              </Badge>
+            )}
           </div>
           {inst.description && (
             <p className="text-xs text-pos-white/50 mt-0.5">{inst.description}</p>
