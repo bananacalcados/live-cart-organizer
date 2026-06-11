@@ -419,6 +419,11 @@ serve(async (req) => {
 
           const components: unknown[] = [];
 
+          // Track the header media so the chat record shows the image/video/file
+          // that was actually sent with the template (not just text).
+          let chatMediaType = 'text';
+          let chatMediaUrl: string | null = null;
+
           if (config.headerMediaUrl) {
             const isVideo = /\.(mp4|mov|avi|webm)/i.test(config.headerMediaUrl as string);
             const isDocument = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx)/i.test(config.headerMediaUrl as string);
@@ -429,6 +434,8 @@ serve(async (req) => {
               type: 'HEADER',
               parameters: [{ type: headerType, [headerType]: { link: config.headerMediaUrl } }],
             });
+            chatMediaType = headerType;
+            chatMediaUrl = config.headerMediaUrl as string;
           }
 
           const templateVars = config.templateVars as Record<string, string> | undefined;
