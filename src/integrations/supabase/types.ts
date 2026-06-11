@@ -11132,6 +11132,62 @@ export type Database = {
           },
         ]
       }
+      pos_seller_task_instances: {
+        Row: {
+          completed_at: string | null
+          completion_mode: string | null
+          created_at: string
+          definition_id: string
+          due_date: string
+          id: string
+          payload: Json
+          progress_current: number
+          progress_target: number
+          seller_id: string
+          status: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completion_mode?: string | null
+          created_at?: string
+          definition_id: string
+          due_date?: string
+          id?: string
+          payload?: Json
+          progress_current?: number
+          progress_target?: number
+          seller_id: string
+          status?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          completed_at?: string | null
+          completion_mode?: string | null
+          created_at?: string
+          definition_id?: string
+          due_date?: string
+          id?: string
+          payload?: Json
+          progress_current?: number
+          progress_target?: number
+          seller_id?: string
+          status?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_seller_task_instances_definition_id_fkey"
+            columns: ["definition_id"]
+            isOneToOne: false
+            referencedRelation: "pos_task_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_seller_tasks: {
         Row: {
           avg_ticket: number | null
@@ -11224,34 +11280,40 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_manager: boolean
           linked_user_id: string | null
           name: string
           pin_code: string | null
           store_id: string | null
           tiny_seller_id: string | null
           updated_at: string
+          whatsapp_phone: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_manager?: boolean
           linked_user_id?: string | null
           name: string
           pin_code?: string | null
           store_id?: string | null
           tiny_seller_id?: string | null
           updated_at?: string
+          whatsapp_phone?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_manager?: boolean
           linked_user_id?: string | null
           name?: string
           pin_code?: string | null
           store_id?: string | null
           tiny_seller_id?: string | null
           updated_at?: string
+          whatsapp_phone?: string | null
         }
         Relationships: [
           {
@@ -11504,6 +11566,152 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pos_task_contacts: {
+        Row: {
+          contacted: boolean
+          contacted_at: string | null
+          created_at: string
+          customer_meta: Json
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          instance_id: string
+        }
+        Insert: {
+          contacted?: boolean
+          contacted_at?: string | null
+          created_at?: string
+          customer_meta?: Json
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          instance_id: string
+        }
+        Update: {
+          contacted?: boolean
+          contacted_at?: string | null
+          created_at?: string
+          customer_meta?: Json
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          instance_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_task_contacts_instance_id_fkey"
+            columns: ["instance_id"]
+            isOneToOne: false
+            referencedRelation: "pos_seller_task_instances"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_task_definitions: {
+        Row: {
+          assigned_seller_ids: string[]
+          assignment: string
+          auto_config: Json
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          points_reward: number
+          recurrence: string
+          recurrence_config: Json
+          store_id: string
+          target_count: number
+          title: string
+          updated_at: string
+          verification_mode: string
+        }
+        Insert: {
+          assigned_seller_ids?: string[]
+          assignment?: string
+          auto_config?: Json
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          points_reward?: number
+          recurrence?: string
+          recurrence_config?: Json
+          store_id: string
+          target_count?: number
+          title: string
+          updated_at?: string
+          verification_mode?: string
+        }
+        Update: {
+          assigned_seller_ids?: string[]
+          assignment?: string
+          auto_config?: Json
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          points_reward?: number
+          recurrence?: string
+          recurrence_config?: Json
+          store_id?: string
+          target_count?: number
+          title?: string
+          updated_at?: string
+          verification_mode?: string
+        }
+        Relationships: []
+      }
+      pos_task_dispatch_schedules: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          last_run_at: string | null
+          name: string | null
+          send_times: string[]
+          store_id: string
+          target: string
+          template_language: string
+          template_name: string
+          template_variables: Json
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          name?: string | null
+          send_times?: string[]
+          store_id: string
+          target?: string
+          template_language?: string
+          template_name: string
+          template_variables?: Json
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          name?: string | null
+          send_times?: string[]
+          store_id?: string
+          target?: string
+          template_language?: string
+          template_name?: string
+          template_variables?: Json
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
       }
       price_tiers: {
         Row: {
