@@ -1402,7 +1402,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               ) : (
                 <button
                   type="button"
-                  onClick={() => setShowOrdersModal(true)}
+                  onClick={() => { setShowCrmPanel(true); setShowOrdersModal(true); }}
                   className="flex flex-col min-w-0 flex-1 items-start text-left rounded-md px-1 py-0.5 hover:bg-muted/60 transition"
                   title="Ver pedidos do cliente"
                 >
