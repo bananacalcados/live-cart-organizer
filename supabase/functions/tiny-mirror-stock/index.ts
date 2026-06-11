@@ -148,34 +148,47 @@ serve(async (req) => {
 
     // ============ MODO LIVE (trigger) ============
     const { sale_id, store_id, sale_event, items } = body as {
-      sale_id: string; store_id: string; sale_event: string; items: Item[];
+      sale_id: string; store_id: string; sale_event: string; items: (Item & { store_id?: string })[];
     };
 
-    if (!store_id || !Array.isArray(items) || items.length === 0) {
+    if (!Array.isArray(items) || items.length === 0) {
       return new Response(JSON.stringify({ ok: true, skipped: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { data: store, error: storeErr } = await supabase
-      .from("pos_stores")
-      .select("tiny_token, tiny_deposit_name")
-      .eq("id", store_id)
-      .single();
-
-    if (storeErr || !store?.tiny_token) {
-      await supabase.from("pos_stock_adjustments")
-        .update({ tiny_mirror_status: "ok", tiny_mirrored_at: new Date().toISOString() })
-        .in("id", items.map((i) => i.adjustment_id));
-      return new Response(JSON.stringify({ ok: true, no_token: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // A baixa pode sair de lojas DIFERENTES (estoque compartilhado), então
+    // resolvemos token/depósito por loja de cada item (fallback no store_id topo).
+    const storeCache = new Map<string, { token: string; deposit: string | null }>();
+    async function getStore(sid: string) {
+      if (storeCache.has(sid)) return storeCache.get(sid)!;
+      const { data: s } = await supabase
+        .from("pos_stores")
+        .select("tiny_token, tiny_deposit_name")
+        .eq("id", sid)
+        .maybeSingle();
+      const cfg = { token: s?.tiny_token ?? "", deposit: s?.tiny_deposit_name ?? null };
+      storeCache.set(sid, cfg);
+      return cfg;
     }
 
     const results: any[] = [];
     for (const it of items) {
-      const res = await mirrorOne(supabase, store.tiny_token, store.tiny_deposit_name,
-                                  sale_id, sale_event, it);
+      const itemStore = it.store_id || store_id;
+      const cfg = itemStore ? await getStore(itemStore) : { token: "", deposit: null };
+
+      if (!cfg.token) {
+        // Loja sem integração Tiny — marca como ok (estoque local já é a fonte da verdade)
+        if (it.adjustment_id) {
+          await supabase.from("pos_stock_adjustments")
+            .update({ tiny_mirror_status: "ok", tiny_mirrored_at: new Date().toISOString() })
+            .eq("id", it.adjustment_id);
+        }
+        results.push({ adjustment_id: it.adjustment_id, ok: true, no_token: true });
+        continue;
+      }
+
+      const res = await mirrorOne(supabase, cfg.token, cfg.deposit, sale_id, sale_event, it);
       if (res.ok) {
         await supabase.from("pos_stock_adjustments")
           .update({ tiny_mirror_status: "ok", tiny_mirrored_at: new Date().toISOString() })
@@ -185,7 +198,7 @@ serve(async (req) => {
           .update({ tiny_mirror_status: "error" })
           .eq("id", it.adjustment_id);
         await supabase.from("tiny_stock_sync_errors").insert({
-          sale_id, product_id: it.product_id, store_id,
+          sale_id, product_id: it.product_id, store_id: itemStore,
           tiny_id: it.tiny_id, sku: it.sku,
           attempted_stock: it.new_stock,
           direction: it.direction, quantity: it.quantity,
