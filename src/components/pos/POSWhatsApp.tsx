@@ -1607,7 +1607,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#00a884]/15 text-[#00a884]">
-                        <Phone className="h-4.5 w-4.5" />
+                        <Phone className="h-4 w-4" />
                       </span>
                       <div className="min-w-0">
                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">WhatsApp</p>
@@ -1616,7 +1616,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     </div>
                     <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600">
-                        <CreditCard className="h-4.5 w-4.5" />
+                        <CreditCard className="h-4 w-4" />
                       </span>
                       <div className="min-w-0">
                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">CPF</p>
@@ -1626,7 +1626,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     {crmData?.email && (
                       <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5">
                         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600">
-                          <Mail className="h-4.5 w-4.5" />
+                          <Mail className="h-4 w-4" />
                         </span>
                         <div className="min-w-0">
                           <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">E-mail</p>
@@ -1636,7 +1636,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     )}
                     <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5 sm:col-span-2">
                       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600">
-                        <MapPin className="h-4.5 w-4.5" />
+                        <MapPin className="h-4 w-4" />
                       </span>
                       <div className="min-w-0">
                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Endereço</p>
