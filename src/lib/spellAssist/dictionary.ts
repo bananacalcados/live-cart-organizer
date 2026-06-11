@@ -1,10 +1,13 @@
 /**
  * Engine de ortografia offline (sem IA) baseado em nspell + dicionário Hunspell pt-BR.
  *
- * - Carregamento LAZY: o dicionário (~5 MB) só é baixado quando o primeiro chat
- *   precisa verificar uma mensagem. Fica em cache no módulo (1x por sessão).
+ * - Carregamento LAZY do DICIONÁRIO (~5 MB via fetch): só é baixado quando o
+ *   primeiro chat precisa verificar uma mensagem. Fica em cache no módulo (1x por sessão).
+ * - nspell (lib pequena CommonJS) é importado estaticamente para evitar falha de
+ *   import dinâmico no browser.
  * - Allowlist de gírias/marcas para reduzir falsos positivos do dicionário.
  */
+import nspell from "nspell";
 
 export interface Misspelling {
   word: string;
@@ -42,13 +45,11 @@ async function getSpell(): Promise<NspellLike> {
   if (!spellPromise) {
     spellPromise = (async () => {
       const base = import.meta.env.BASE_URL || "/";
-      const [nspellMod, aff, dic] = await Promise.all([
-        import("nspell"),
+      const [aff, dic] = await Promise.all([
         fetch(`${base}dict/pt/index.aff`).then((r) => r.text()),
         fetch(`${base}dict/pt/index.dic`).then((r) => r.text()),
       ]);
-      const nspell = (nspellMod as { default: (aff: string, dic: string) => NspellLike }).default;
-      return nspell(aff, dic);
+      return (nspell as unknown as (aff: string, dic: string) => NspellLike)(aff, dic);
     })();
   }
   return spellPromise;
