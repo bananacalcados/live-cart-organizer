@@ -62,6 +62,8 @@ export interface Conversation {
   isDispatchOnly?: boolean;
   /** Whether IA transferred this conversation to a human (forces "Novas" tab) */
   isAiTransferred?: boolean;
+  /** Whether this conversation has a pending "waiting for product restock" note */
+  isAwaitingProduct?: boolean;
   /** Channel: whatsapp, instagram, messenger */
   channel?: string | null;
 }
