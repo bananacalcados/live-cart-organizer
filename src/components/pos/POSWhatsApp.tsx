@@ -1370,8 +1370,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         )}>
           <ConversationList
             conversations={multiInstanceFilter.length > 0
-              ? mergedConversations.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
-              : mergedConversations}
+              ? mergedConversationsFlagged.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
+              : mergedConversationsFlagged}
+            productArrivedCount={waitlist.arrivedCount}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onSelectConversation={handleSelectConversation}
