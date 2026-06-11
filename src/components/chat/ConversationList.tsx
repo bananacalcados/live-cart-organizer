@@ -134,6 +134,7 @@ export function ConversationList({
       if (statusFilter === 'dispatch') return c.isDispatchOnly && !c.isArchived;
       if (statusFilter === 'archived') return c.isArchived;
       if (statusFilter === 'awaiting_payment') return c.isAwaitingPayment && !c.isArchived;
+      if (statusFilter === 'awaiting_product') return c.isAwaitingProduct && !c.isArchived;
       if (statusFilter === 'finished') return c.isFinished && !c.isArchived;
       if (statusFilter === 'ai_transferred') return c.isAiTransferred && !c.isFinished && !c.isArchived;
       if (c.isFinished || c.isArchived || c.isDispatchOnly) return false;
