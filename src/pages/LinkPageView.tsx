@@ -76,18 +76,8 @@ export default function LinkPageView() {
         }
         if (!res.page.require_lead_capture) setGatePassed(true);
 
-        // track page view
-        await supabase.from("link_page_visits").insert({
-          page_id: res.page.id,
-          event_type: "page_view",
-          seller_id: res.page.seller_id,
-          utm_source: searchParams.get("utm_source"),
-          utm_medium: searchParams.get("utm_medium"),
-          utm_campaign: searchParams.get("utm_campaign"),
-          referrer: document.referrer || null,
-          user_agent: navigator.userAgent,
-        });
-        await supabase.from("link_pages").update({ total_views: (res.page.total_views || 0) + 1 }).eq("id", res.page.id);
+        // page_view é registrado server-side pela função link-page-public
+
 
         if (res.page.meta_pixel_id) {
           const s = document.createElement("script");
