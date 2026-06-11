@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -138,6 +139,10 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Bloqueio cross-instância: contato bloqueado não recebe follow-up de pagamento.
+    const blockedSuffixes = await loadBlockedSuffixes(supabase);
+
+
     // ── BUSINESS HOURS GATE ──
     // If outside business hours, reschedule any pending followups and exit
     if (!isBusinessHours()) {
@@ -217,6 +222,8 @@ serve(async (req) => {
         if (!customer?.whatsapp) continue;
         const phone = customer.whatsapp;
         const pSuffix = phone.replace(/\D/g, '').slice(-8);
+        if (isBlocked(blockedSuffixes, phone)) continue;
+
 
         if (alreadySentPhones.has(pSuffix)) continue;
 
@@ -323,6 +330,14 @@ serve(async (req) => {
 
       for (const fu of followups) {
         if (sent + abandonedSent >= MAX_SENDS_PER_RUN) break;
+        if (isBlocked(blockedSuffixes, fu.phone)) {
+          await supabase.from('chat_payment_followups')
+            .update({ is_active: false, completed_at: new Date().toISOString() })
+            .eq('id', fu.id);
+          continue;
+        }
+
+
 
         // ── Check if human operator is actively chatting ──
         const humanActiveChat = await isHumanActivelyChattingWith(supabase, fu.phone);
@@ -508,6 +523,14 @@ serve(async (req) => {
     if (scheduledItems?.length) {
       for (const item of scheduledItems) {
         if (abandonedSent + sent + scheduledSent >= MAX_SENDS_PER_RUN) break;
+        if (isBlocked(blockedSuffixes, item.phone)) {
+          await supabase.from('chat_scheduled_followups')
+            .update({ is_sent: true, sent_at: new Date().toISOString() })
+            .eq('id', item.id);
+          continue;
+        }
+
+
 
         // ── Check if human operator is actively chatting ──
         const humanActiveScheduled = await isHumanActivelyChattingWith(supabase, item.phone);

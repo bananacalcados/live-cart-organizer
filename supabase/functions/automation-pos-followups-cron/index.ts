@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,7 +36,15 @@ Deno.serve(async (req) => {
 
     let sent = 0, errors = 0;
 
+    // Bloqueio cross-instância: não dispara follow-up para contato bloqueado.
+    const blockedSuffixes = await loadBlockedSuffixes(supabase);
+
     for (const f of due) {
+      if (isBlocked(blockedSuffixes, f.customer_phone)) {
+        await supabase.from("automation_pos_followups")
+          .update({ cancelled_at: new Date().toISOString() }).eq("id", f.id);
+        continue;
+      }
       const payload = (f.payload || {}) as any;
       const cfg = payload.action_config || {};
       const action = payload.action_type;

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,6 +42,16 @@ serve(async (req) => {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Bloqueio cross-instância: não envia NPS para contato bloqueado.
+    const blockedSuffixes = await loadBlockedSuffixes(supabase);
+    if (isBlocked(blockedSuffixes, phone)) {
+      console.log(`[nps] Skipping ${phone} - contato bloqueado`);
+      return new Response(JSON.stringify({ skipped: true, reason: 'blocked' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
 
     // Create NPS survey record
     const { data: survey, error: insertErr } = await supabase

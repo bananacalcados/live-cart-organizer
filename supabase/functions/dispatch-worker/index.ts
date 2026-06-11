@@ -8,6 +8,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -216,6 +218,10 @@ serve(async (req) => {
     let totalFailed = 0;
     let loops = 0;
 
+    // Bloqueio cross-instância: contatos bloqueados em QUALQUER instância nunca
+    // recebem disparo em massa. Carregado uma vez por execução do worker.
+    const blockedSuffixes = await loadBlockedSuffixes(supabase);
+
     // Main loop: claim → send → mark, until time runs out or queue empty
     while (Date.now() - startedAt < MAX_RUNTIME_MS) {
       loops++;
@@ -231,6 +237,27 @@ serve(async (req) => {
         break;
       }
       if (!claimed || claimed.length === 0) break;
+
+      // Remove contatos bloqueados deste lote: marca como terminal ('blocked') para
+      // não serem reenviados nem contarem como falha. Mutamos `claimed` no lugar
+      // para manter o restante do fluxo intacto.
+      if (blockedSuffixes.size > 0) {
+        const blockedIds: string[] = [];
+        for (let i = claimed.length - 1; i >= 0; i--) {
+          if (isBlocked(blockedSuffixes, claimed[i].phone)) {
+            blockedIds.push(claimed[i].id);
+            claimed.splice(i, 1);
+          }
+        }
+        if (blockedIds.length > 0) {
+          await supabase.from('dispatch_recipients')
+            .update({ status: 'blocked', last_error: 'contato bloqueado', lease_until: null })
+            .in('id', blockedIds);
+          console.log(`[${workerId}] ${blockedIds.length} destinatário(s) bloqueado(s) ignorado(s)`);
+        }
+        if (claimed.length === 0) continue;
+      }
+
 
       // Enrich with WhatsApp display names (priority over CRM name)
       const variations: string[] = [];
