@@ -303,16 +303,22 @@ export function POSGeneralDashboard({ onBack }: Props) {
     const total = Array.from(byStore.values()).reduce((a, b) => a + b, 0);
 
     // Ritmo por DIAS ÚTEIS (seg-sáb, excluindo domingos e feriados nacionais).
-    // Meta diária = meta total ÷ dias úteis do mês. Esperado = meta diária × dias úteis decorridos.
-    const monthStart = startOfMonth(now);
-    const monthEnd = endOfMonth(now);
-    const holidays = getBrazilianHolidays(now.getFullYear());
+    // Meta diária = meta total ÷ dias úteis do mês de referência.
+    const refDate = (period === "last_month" || period === "custom") ? periodRange.start : now;
+    const monthStart = startOfMonth(refDate);
+    const monthEnd = endOfMonth(refDate);
+    const holidays = getBrazilianHolidays(refDate.getFullYear());
     const totalBusinessDays = countBusinessDays(monthStart, monthEnd, holidays);
     const dailyTarget = totalBusinessDays > 0 ? total / totalBusinessDays : 0;
 
     // Dias úteis decorridos conforme o período selecionado
-    const elapsedStart = period === "month" ? monthStart : period === "week" ? periodRange.start : startOfDay(now);
-    const elapsedBusinessDays = countBusinessDays(elapsedStart, now, holidays);
+    let elapsedStart: Date;
+    let elapsedEnd: Date;
+    if (period === "month") { elapsedStart = monthStart; elapsedEnd = now; }
+    else if (period === "week") { elapsedStart = periodRange.start; elapsedEnd = now; }
+    else if (period === "today") { elapsedStart = startOfDay(now); elapsedEnd = now; }
+    else { elapsedStart = periodRange.start; elapsedEnd = periodRange.end; } // last_month / custom
+    const elapsedBusinessDays = countBusinessDays(elapsedStart, elapsedEnd, holidays);
     const expected = dailyTarget * elapsedBusinessDays;
 
     return { byStore, total, expected, dailyTarget, totalBusinessDays, elapsedBusinessDays };
