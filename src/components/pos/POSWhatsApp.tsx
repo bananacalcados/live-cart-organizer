@@ -288,6 +288,30 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     [ghostConversations, conversations]
   );
 
+  // Marca conversas cujo cliente está aguardando reposição de produto, para
+  // movê-las à aba "Espera Produtos" e removê-las das métricas de atendimento aberto.
+  const waitSuffixes = waitlist.waitingSuffixes;
+  const flagWait = useCallback(
+    (list: Conversation[]) =>
+      waitSuffixes.size === 0
+        ? list
+        : list.map((c) =>
+            waitSuffixes.has(String(c.phone || "").replace(/\D/g, "").slice(-8))
+              ? { ...c, isAwaitingProduct: true }
+              : c,
+          ),
+    [waitSuffixes],
+  );
+  const mergedConversationsFlagged = useMemo(
+    () => flagWait(mergedConversations),
+    [mergedConversations, flagWait],
+  );
+  const conversationsFlagged = useMemo(
+    () => flagWait(conversations),
+    [conversations, flagWait],
+  );
+
+
   // Badge count must match what the "Pedidos da Live" filter actually shows:
   // exclude finalized/archived conversations so finishing chats lowers the number.
   const liveCount = useMemo(() => {
