@@ -41,14 +41,14 @@ let spellPromise: Promise<NspellLike> | null = null;
 async function getSpell(): Promise<NspellLike> {
   if (!spellPromise) {
     spellPromise = (async () => {
-      const [nspellMod, affMod, dicMod] = await Promise.all([
+      const base = import.meta.env.BASE_URL || "/";
+      const [nspellMod, aff, dic] = await Promise.all([
         import("nspell"),
-        // dicionários carregados como texto cru (compatível com browser/Vite)
-        import("dictionary-pt/index.aff?raw"),
-        import("dictionary-pt/index.dic?raw"),
+        fetch(`${base}dict/pt/index.aff`).then((r) => r.text()),
+        fetch(`${base}dict/pt/index.dic`).then((r) => r.text()),
       ]);
       const nspell = (nspellMod as { default: (aff: string, dic: string) => NspellLike }).default;
-      return nspell((affMod as { default: string }).default, (dicMod as { default: string }).default);
+      return nspell(aff, dic);
     })();
   }
   return spellPromise;
