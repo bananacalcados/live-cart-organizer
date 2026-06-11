@@ -139,6 +139,10 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Bloqueio cross-instância: contato bloqueado não recebe follow-up de pagamento.
+    const blockedSuffixes = await loadBlockedSuffixes(supabase);
+
+
     // ── BUSINESS HOURS GATE ──
     // If outside business hours, reschedule any pending followups and exit
     if (!isBusinessHours()) {
