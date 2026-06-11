@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
+import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações
@@ -236,11 +237,12 @@ serve(async (req) => {
                   ? "Boleto"
                   : (chargeMethod ? chargeMethod.toUpperCase() : null);
 
+        const paidAt = new Date().toISOString();
         const { error } = await supabase
           .from("orders")
           .update({
             is_paid: true,
-            paid_at: new Date().toISOString(),
+            paid_at: paidAt,
             stage: "paid",
             pagarme_order_id: String(ourOrderId),
             ...(payLabel ? { payment_method_label: payLabel, installments: inst } : {}),
@@ -252,6 +254,15 @@ serve(async (req) => {
         else {
           updated = true;
           console.log(`orders ${order.id} marked as paid via webhook`);
+          await syncOrderPaymentToPosSale(supabase, {
+            orderId: order.id,
+            paymentMethodLabel: payLabel,
+            installments: inst,
+            paymentGateway: "pagarme",
+            transactionField: "pagarme_order_id",
+            transactionValue: String(ourOrderId),
+            paidAt,
+          });
           await notifyPaymentConfirmed({
             pedido_id: order.id,
             loja: 'centro',
@@ -272,13 +283,18 @@ serve(async (req) => {
         });
       }
       if (isPaid && sale.status !== "paid" && sale.status !== "completed") {
+        const paymentLabel = normalizeGatewayPaymentLabel({
+          gateway: "pagarme",
+          paymentMethodId: String(chargeObj?.payment_method || ""),
+          installments: Number(chargeObj?.last_transaction?.installments || chargeObj?.installments || 1),
+        }) || "Cartão de Crédito";
         const { error } = await supabase
           .from("pos_sales")
           .update({
             status: "paid",
             paid_at: new Date().toISOString(),
             payment_gateway: "pagarme",
-            payment_method: (sale as any).payment_method || "Cartão de Crédito",
+            payment_method: (sale as any).payment_method || paymentLabel,
             pagarme_order_id: String(ourOrderId),
             notes: `🔔 Webhook Pagar.me: pago (${transactionId})`,
           })
