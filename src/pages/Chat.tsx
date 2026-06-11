@@ -1470,6 +1470,10 @@ export default function ChatPage() {
               )}
 
               {!isRecording && (
+                <ComposerRuleBar nudges={composerNudges} onDismiss={dismissNudge} />
+              )}
+
+              {!isRecording && (
                 <SpellSuggestionBar
                   suggestions={spellSuggestions}
                   onApply={(m, replacement) => setNewMessage(applySuggestion(newMessage, m, replacement))}
