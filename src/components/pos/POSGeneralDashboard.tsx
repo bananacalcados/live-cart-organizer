@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings, CalendarIcon, ClipboardList } from "lucide-react";
+import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings, CalendarIcon, ClipboardList, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -17,6 +17,7 @@ import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
 import { POSSellerTaskProgress } from "./POSSellerTaskProgress";
+import { POSSellerLinkPageProgress } from "./POSSellerLinkPageProgress";
 
 
 
