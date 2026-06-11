@@ -285,10 +285,17 @@ serve(async (req) => {
     }
 
     const filters = { selectedStates: presetFilters.length > 0 ? [] : selectedStates, selectedCities: presetFilters.length > 0 ? [] : selectedCities, selectedRegions: presetFilters.length > 0 ? [] : selectedRegions, selectedGenders: presetFilters.length > 0 ? [] : selectedGenders };
-    const fullAudience = buildAudience(rfmData, leadsData, filters, seenPhones);
+    const builtAudience = buildAudience(rfmData, leadsData, filters, seenPhones);
+    // Bloqueio cross-instância: nunca dispara automação para contato bloqueado
+    // em qualquer instância.
+    const blockedSuffixes = await loadBlockedSuffixes(supabase);
+    const fullAudience = blockedSuffixes.size > 0
+      ? builtAudience.filter((a) => !isBlocked(blockedSuffixes, a.phone))
+      : builtAudience;
     const totalAudience = fullAudience.length;
 
     console.log(`[dispatch] New audience (after dedup): ${totalAudience}, offset: ${offset}, batchSize: ${batchSize}`);
+
 
     // Dry run: return counts
     if (dryRun) {
