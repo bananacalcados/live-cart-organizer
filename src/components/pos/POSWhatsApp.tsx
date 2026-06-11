@@ -14,6 +14,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatView } from "@/components/chat/ChatView";
+import { AttendantNudgeCard } from "@/components/chat/AttendantNudgeCard";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useSupportPhones } from "@/hooks/useSupportPhones";
