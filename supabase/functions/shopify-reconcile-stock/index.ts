@@ -23,6 +23,12 @@ const corsHeaders = {
 const API_VER = "2024-10";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+function pickPrimaryLocation(locations: Array<{ id: number; name?: string | null; active?: boolean }>) {
+  const active = (locations || []).filter((loc) => loc?.active !== false);
+  const preferred = active.find((loc) => String(loc.name || "").toLowerCase().includes("tiny shopify"));
+  return preferred || active[0] || locations?.[0] || null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -69,7 +75,9 @@ Deno.serve(async (req) => {
     // Location principal da Shopify (uma vez)
     const locRes = await fetch(`https://${SHOPIFY_DOMAIN}/admin/api/${API_VER}/locations.json`, { headers });
     const locJson = await locRes.json().catch(() => ({}));
-    const locationId = locJson?.locations?.[0]?.id;
+    const locations = Array.isArray(locJson?.locations) ? locJson.locations : [];
+    const primaryLocation = pickPrimaryLocation(locations);
+    const locationId = primaryLocation?.id;
     if (!locationId) {
       return new Response(JSON.stringify({ ok: false, error: "Shopify location not found" }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -111,7 +119,32 @@ Deno.serve(async (req) => {
           { method: "PUT", headers, body: JSON.stringify({ inventory_item: { id: inventoryItemId, tracked: true } }) },
         ).catch(() => {});
 
-        // SET absoluto
+        const levelsRes = await fetch(
+          `https://${SHOPIFY_DOMAIN}/admin/api/${API_VER}/inventory_levels.json?inventory_item_ids=${inventoryItemId}`,
+          { headers },
+        );
+        const levelsJson = await levelsRes.json().catch(() => ({}));
+        const levels = Array.isArray(levelsJson?.inventory_levels) ? levelsJson.inventory_levels : [];
+
+        for (const level of levels) {
+          const currentLocationId = level?.location_id;
+          if (!currentLocationId || Number(currentLocationId) === Number(locationId)) continue;
+          await fetch(
+            `https://${SHOPIFY_DOMAIN}/admin/api/${API_VER}/inventory_levels/set.json`,
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                location_id: currentLocationId,
+                inventory_item_id: inventoryItemId,
+                available: 0,
+              }),
+            },
+          );
+          await sleep(650);
+        }
+
+        // SET absoluto no location canônico
         const setRes = await fetch(
           `https://${SHOPIFY_DOMAIN}/admin/api/${API_VER}/inventory_levels/set.json`,
           {
@@ -125,7 +158,7 @@ Deno.serve(async (req) => {
           },
         );
         if (setRes.ok) {
-          results.push({ variant: v.shopify_variant_id, gtin: barcode, ok: true, available: shared });
+          results.push({ variant: v.shopify_variant_id, gtin: barcode, ok: true, available: shared, location_id: locationId });
         } else {
           const errText = await setRes.text().catch(() => "");
           results.push({ variant: v.shopify_variant_id, gtin: barcode, ok: false, error: errText.slice(0, 200) });
