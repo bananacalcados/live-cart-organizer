@@ -17,6 +17,7 @@ import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { useWhatsAppViewStore } from "@/stores/whatsappViewStore";
 import { useZapi } from "@/hooks/useZapi";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
