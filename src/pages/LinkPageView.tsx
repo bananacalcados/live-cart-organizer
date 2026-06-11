@@ -50,7 +50,18 @@ export default function LinkPageView() {
     if (!slug) return;
     (async () => {
       try {
-        const { data: res, error } = await supabase.functions.invoke("link-page-public", { body: { slug } });
+        const { data: res, error } = await supabase.functions.invoke("link-page-public", {
+          body: {
+            slug,
+            track: {
+              utm_source: searchParams.get("utm_source"),
+              utm_medium: searchParams.get("utm_medium"),
+              utm_campaign: searchParams.get("utm_campaign"),
+              referrer: document.referrer || null,
+              user_agent: navigator.userAgent,
+            },
+          },
+        });
         if (error || !res || res.error) { setNotFound(true); setLoading(false); return; }
         setData(res as PageData);
 
