@@ -221,7 +221,7 @@ serve(async (req) => {
   }
 });
 
-async function buildContacts(supabase: any, def: any, storeId: string, target: number) {
+async function buildContacts(supabase: any, def: any, storeId: string, target: number, dateStr: string) {
   const cfg = def.auto_config || {};
   const out: { phone: string; name: string; meta?: any }[] = [];
 
@@ -242,17 +242,29 @@ async function buildContacts(supabase: any, def: any, storeId: string, target: n
       if (out.length >= target) break;
     }
   } else if (def.category === "post_sale") {
-    // Pós-venda: clientes que compraram ontem nesta loja
-    const since = new Date(Date.now() - 36 * 3600 * 1000).toISOString();
+    // Pós-venda: clientes que compraram no(s) dia(s) anterior(es) nesta loja.
+    // Em recorrência "dias úteis", a segunda-feira puxa sexta + sábado + domingo.
+    const wd = weekdaySaoPaulo(dateStr);
+    let startDate: string;
+    let endDate: string;
+    if (def.recurrence === "weekdays" && wd === 1) {
+      startDate = shiftDate(dateStr, -3); // sexta
+      endDate = shiftDate(dateStr, -1);   // domingo
+    } else {
+      startDate = endDate = shiftDate(dateStr, -1); // ontem
+    }
+    const startIso = `${startDate}T00:00:00-03:00`;
+    const endIso = `${endDate}T23:59:59-03:00`;
     const { data } = await supabase
       .from("pos_sales")
       .select("customer_name, customer_phone, created_at")
       .eq("store_id", storeId)
       .neq("status", "cancelled")
-      .gte("created_at", since)
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
       .not("customer_phone", "is", null)
       .order("created_at", { ascending: false })
-      .limit(target * 2);
+      .limit(Math.max(target * 2, 50));
     const seen = new Set<string>();
     for (const s of data || []) {
       const ph = (s.customer_phone || "").replace(/\D/g, "");
