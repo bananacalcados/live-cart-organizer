@@ -80,6 +80,8 @@ const PAYMENT_STYLE: Record<string, { icon: any; gradient: string }> = {
   "Crediário":     { icon: Receipt,   gradient: "from-orange-500/20 to-orange-700/10" },
   "Vale Presente": { icon: Wallet,    gradient: "from-fuchsia-500/20 to-fuchsia-700/10" },
   "VPS":           { icon: Wallet,    gradient: "from-pink-500/20 to-pink-700/10" },
+  "Mercado Pago":  { icon: Wallet,    gradient: "from-sky-500/20 to-sky-700/10" },
+  "Checkout Transparente": { icon: CreditCard, gradient: "from-violet-500/20 to-violet-700/10" },
   "Não informado": { icon: Receipt,   gradient: "from-red-500/20 to-red-700/10" },
   "Outros":        { icon: DollarSign, gradient: "from-zinc-500/20 to-zinc-700/10" },
 };
