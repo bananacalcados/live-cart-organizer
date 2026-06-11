@@ -108,18 +108,19 @@ export default function LinkPageView() {
     setSubmittingLead(false);
   };
 
-  const handleClick = useCallback(async (item: any) => {
+  const handleClick = useCallback((item: any) => {
     if (!data) return;
-    await supabase.from("link_page_visits").insert({
-      page_id: data.page.id,
-      item_id: item.id,
-      event_type: "click",
-      seller_id: data.page.seller_id,
-      lead_id: leadId,
-      utm_source: searchParams.get("utm_source"),
-      referrer: document.referrer || null,
-    });
-    supabase.from("link_page_items").update({ clicks: (item.clicks || 0) + 1 }).eq("id", item.id).then(() => {});
+    // tracking server-side (fire-and-forget)
+    supabase.functions.invoke("link-page-track-click", {
+      body: {
+        pageId: data.page.id,
+        itemId: item.id,
+        sellerId: data.page.seller_id,
+        leadId,
+        utm_source: searchParams.get("utm_source"),
+        referrer: document.referrer || null,
+      },
+    }).catch(() => {});
     if ((window as any).fbq) (window as any).fbq("trackCustom", "LinkClick", { label: item.label, type: item.item_type });
     if (item.url) window.open(item.url, "_blank");
   }, [data, leadId, searchParams]);
