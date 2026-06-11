@@ -1,5 +1,7 @@
 // Cron: processa fila de despachos pendentes da Live, envia via Z-API na ordem
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
