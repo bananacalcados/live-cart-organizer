@@ -43,7 +43,10 @@ import { AiTransferBell } from "@/components/chat/AiTransferBell";
 import { AttendantMetrics } from "@/components/chat/AttendantMetrics";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import { SpellSuggestionBar } from "@/components/chat/SpellSuggestionBar";
+import { ComposerRuleBar } from "@/components/chat/ComposerRuleBar";
+import { AttendantNudgeCard } from "@/components/chat/AttendantNudgeCard";
 import { useSpellAssist } from "@/hooks/useSpellAssist";
+import { useComposerNudges } from "@/hooks/useComposerNudges";
 import { capitalizeSentences } from "@/lib/spellAssist/capitalize";
 import { applySuggestion } from "@/lib/spellAssist/dictionary";
 import {
