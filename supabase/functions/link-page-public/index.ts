@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { slug } = await req.json();
+    const { slug, track } = await req.json();
     if (!slug) {
       return new Response(JSON.stringify({ error: "slug required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -43,6 +43,22 @@ Deno.serve(async (req) => {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Registra page_view (server-side, sem depender de grants do anon)
+    if (track) {
+      await supabase.from("link_page_visits").insert({
+        page_id: page.id,
+        event_type: "page_view",
+        seller_id: page.seller_id,
+        utm_source: track.utm_source || null,
+        utm_medium: track.utm_medium || null,
+        utm_campaign: track.utm_campaign || null,
+        referrer: track.referrer || null,
+        user_agent: track.user_agent || null,
+      });
+      await supabase.from("link_pages").update({ total_views: (page.total_views || 0) + 1 }).eq("id", page.id);
+    }
+
 
     const [{ data: items }, { data: catalog }, sellerRes, instancesRes] = await Promise.all([
       supabase.from("link_page_items").select("*").eq("page_id", page.id).eq("is_active", true).order("sort_order"),
