@@ -222,6 +222,8 @@ serve(async (req) => {
         if (!customer?.whatsapp) continue;
         const phone = customer.whatsapp;
         const pSuffix = phone.replace(/\D/g, '').slice(-8);
+        if (isBlocked(blockedSuffixes, phone)) continue;
+
 
         if (alreadySentPhones.has(pSuffix)) continue;
 
