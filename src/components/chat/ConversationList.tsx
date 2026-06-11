@@ -289,6 +289,7 @@ export function ConversationList({
         <RailBtn icon={CheckCircle2} label="Finalizadas" active={statusFilter === 'finished'} count={0} onClick={() => pickRailStatus('finished')} accent="bg-emerald-600 text-white" />
         <RailBtn icon={Archive} label="Arquivadas" active={statusFilter === 'archived'} count={archivedCount} onClick={() => pickRailStatus('archived')} accent="bg-zinc-500 text-white" />
         <RailBtn icon={Megaphone} label="Disparos" active={statusFilter === 'dispatch'} count={dispatchCount} onClick={() => pickRailStatus('dispatch')} accent="bg-violet-500 text-white" />
+        <RailBtn icon={PackageCheck} label="Espera Produtos" active={statusFilter === 'awaiting_product'} count={productArrivedCount || awaitingProductCount} onClick={() => pickRailStatus('awaiting_product')} accent="bg-amber-500 text-white" />
       </div>
 
       {/* === Main column === */}
