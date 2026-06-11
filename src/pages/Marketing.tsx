@@ -36,6 +36,7 @@ import { CampaignCardExpanded } from "@/components/marketing/CampaignCardExpande
 import { AutomationFlowBuilder } from "@/components/marketing/AutomationFlowBuilder";
 import { LeadWhatsAppDialog } from "@/components/marketing/LeadWhatsAppDialog";
 import { SectorManager } from "@/components/marketing/SectorManager";
+import { AttendanceRulesSettings } from "@/components/settings/AttendanceRulesSettings";
 import { GroupsVipManager } from "@/components/marketing/GroupsVipManager";
 import { LiveSessionManager } from "@/components/LiveSessionManager";
 import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispatcher";
