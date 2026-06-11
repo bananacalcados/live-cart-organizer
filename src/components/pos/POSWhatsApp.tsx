@@ -17,6 +17,7 @@ import { ChatView } from "@/components/chat/ChatView";
 import { AttendantNudgeCard } from "@/components/chat/AttendantNudgeCard";
 import { ProductWaitlistDialog } from "@/components/chat/ProductWaitlistDialog";
 import { ProductArrivalCard } from "@/components/chat/ProductArrivalCard";
+import { BlockContactButton } from "@/components/chat/BlockContactButton";
 import { useProductWaitlist } from "@/hooks/useProductWaitlist";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
@@ -1589,6 +1590,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       <Archive className="h-3.5 w-3.5" />
       <span className="hidden xl:inline">{conversations.find(c => c.phone === selectedPhone)?.isArchived ? 'Desarquivar' : 'Arquivar'}</span>
     </Button>
+                {selectedConversation && !selectedConversation.isGroup && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
+                  <BlockContactButton
+                    phone={selectedPhone}
+                    whatsappNumberId={messageBoundNumberId ?? selectedSendNumberId}
+                    customerName={selectedConversation?.customerName}
+                  />
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
