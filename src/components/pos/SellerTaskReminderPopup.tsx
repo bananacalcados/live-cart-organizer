@@ -7,8 +7,9 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useSellerTasks, type TaskInstance } from "@/hooks/useSellerTasks";
+import { POSTaskMessageDialog } from "./POSTaskMessageDialog";
 import {
-  ClipboardList, MessageCircle, CheckCircle2, Clock, Sparkles, ShieldCheck, Hand, Users, Phone,
+  ClipboardList, MessageCircle, CheckCircle2, Clock, Sparkles, ShieldCheck, Hand, Users, Phone, Target,
 } from "lucide-react";
 
 interface Props {
