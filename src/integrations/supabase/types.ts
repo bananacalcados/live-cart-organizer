@@ -16157,6 +16157,10 @@ export type Database = {
           vindi_transaction_id: string
         }[]
       }
+      get_pos_whatsapp_dashboard: {
+        Args: { p_days?: number; p_store_id: string }
+        Returns: Json
+      }
       get_reactivation_candidates: { Args: { p_limit?: number }; Returns: Json }
       get_registration_by_cpf: { Args: { p_cpf: string }; Returns: Json }
       get_user_allowed_modules: {

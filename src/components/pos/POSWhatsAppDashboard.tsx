@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { subDays, startOfDay, format, getDay, getHours, parseISO } from 'date-fns';
+import { subDays, startOfDay, format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Legend, Cell } from 'recharts';
 import { ConversationStatusFilter } from '@/components/chat/ChatTypes';
@@ -23,37 +23,45 @@ interface Props {
 
 type Period = '7d' | '30d';
 
+interface AggResult {
+  incoming: number;
+  outgoing: number;
+  conversations: number;
+  response_rate: number;
+  avg_response_minutes: number | null;
+  evolution: { date: string; incoming: number; outgoing: number }[];
+  hourly: Record<string, number>;
+  heatmap: { dow: number; hour: number; count: number }[];
+}
+
 const DAYS_PT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat, onChangeSeller }: Props) {
   const [period, setPeriod] = useState<Period>('7d');
   const [messages, setMessages] = useState<any[]>([]);
-  const [assignments, setAssignments] = useState<any[]>([]);
   const [finishedConvos, setFinishedConvos] = useState<any[]>([]);
   const [storeNumberIds, setStoreNumberIds] = useState<Set<string>>(new Set());
+  const [agg, setAgg] = useState<AggResult | null>(null);
   const [loading, setLoading] = useState(true);
 
   const { enrichConversations, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
 
+  const periodDays = period === '7d' ? 7 : 30;
   const dateFilter = useMemo(() => {
-    const days = period === '7d' ? 7 : 30;
-    return startOfDay(subDays(new Date(), days)).toISOString();
-  }, [period]);
+    return startOfDay(subDays(new Date(), periodDays)).toISOString();
+  }, [periodDays]);
 
   const loadData = async () => {
     setLoading(true);
-    const [msgsRes, assignRes, finishedRes, storeNumsRes] = await Promise.all([
+    // Status counters need the latest message per conversation, so we still load
+    // recent raw messages. Chart/KPI aggregates come from a server-side function
+    // that scans the FULL period (raw queries are capped at 1000 rows).
+    const [msgsRes, finishedRes, storeNumsRes, aggRes] = await Promise.all([
       supabase
         .from('whatsapp_messages')
         .select('id, phone, direction, created_at, status, whatsapp_number_id, is_group')
         .order('created_at', { ascending: false }),
-      supabase
-        .from('chat_seller_assignments')
-        .select('*')
-        .eq('seller_id', sellerId)
-        .eq('store_id', storeId)
-        .gte('assigned_at', dateFilter),
       supabase
         .from('chat_finished_conversations')
         .select('*')
@@ -63,11 +71,12 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
         .from('pos_store_whatsapp_numbers')
         .select('whatsapp_number_id')
         .eq('store_id', storeId),
+      (supabase as any).rpc('get_pos_whatsapp_dashboard', { p_store_id: storeId, p_days: periodDays }),
     ]);
     setMessages(msgsRes.data || []);
-    setAssignments(assignRes.data || []);
     setFinishedConvos(finishedRes.data || []);
     setStoreNumberIds(new Set((storeNumsRes.data || []).map((r: any) => r.whatsapp_number_id)));
+    setAgg((aggRes.data as unknown as AggResult) || null);
     setLoading(false);
   };
 
@@ -120,25 +129,8 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
     return { notStarted, awaitingReply, awaitingPayment, followUp };
   }, [messages, finishedPhones, archivedPhones, awaitingPaymentPhones, isStoreMessage]);
 
-  // ── KPI metrics ──
+  // ── KPI metrics (aggregated server-side over the full period) ──
   const kpis = useMemo(() => {
-    const incoming = messages.filter(m => m.direction === 'incoming').length;
-    const outgoing = messages.filter(m => m.direction === 'outgoing').length;
-    const totalConvos = assignments.length;
-    const replied = assignments.filter(a => a.first_reply_at);
-    const responseRate = totalConvos > 0 ? (replied.length / totalConvos * 100) : 0;
-
-    const responseTimes = replied
-      .map(a => {
-        const opened = new Date(a.opened_at).getTime();
-        const reply = new Date(a.first_reply_at).getTime();
-        return (reply - opened) / 60000;
-      })
-      .filter(t => t > 0 && t < 1440);
-    const avgResponseMin = responseTimes.length > 0
-      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
-      : null;
-
     const reasons = { compra: 0, duvida: 0, suporte: 0 };
     for (const f of finishedConvos) {
       if (f.finish_reason === 'compra') reasons.compra++;
@@ -146,31 +138,34 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
       else if (f.finish_reason === 'suporte') reasons.suporte++;
     }
 
-    return { incoming, outgoing, totalConvos, responseRate, avgResponseMin, reasons };
-  }, [messages, assignments, finishedConvos]);
+    return {
+      incoming: agg?.incoming ?? 0,
+      outgoing: agg?.outgoing ?? 0,
+      totalConvos: agg?.conversations ?? 0,
+      responseRate: agg?.response_rate ?? 0,
+      avgResponseMin: agg?.avg_response_minutes ?? null,
+      reasons,
+    };
+  }, [agg, finishedConvos]);
 
-  // ── Heatmap data ──
+  // ── Heatmap data (incoming messages by weekday × hour) ──
   const heatmapData = useMemo(() => {
     const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
-    for (const msg of messages.filter(m => m.direction === 'incoming')) {
-      const d = parseISO(msg.created_at);
-      grid[getDay(d)][getHours(d)]++;
+    for (const cell of agg?.heatmap ?? []) {
+      if (grid[cell.dow] && cell.hour >= 0 && cell.hour < 24) {
+        grid[cell.dow][cell.hour] = cell.count;
+      }
     }
-    // Find max for color scaling
     let max = 1;
     for (const row of grid) for (const v of row) if (v > max) max = v;
     return { grid, max };
-  }, [messages]);
+  }, [agg]);
 
-  // ── Evolution chart data ──
+  // ── Evolution chart data (daily, chronological) ──
   const evolutionData = useMemo(() => {
     const dayMap = new Map<string, { date: string; incoming: number; outgoing: number; finished: number }>();
-    for (const msg of messages) {
-      const day = format(parseISO(msg.created_at), 'dd/MM');
-      if (!dayMap.has(day)) dayMap.set(day, { date: day, incoming: 0, outgoing: 0, finished: 0 });
-      const entry = dayMap.get(day)!;
-      if (msg.direction === 'incoming') entry.incoming++;
-      else entry.outgoing++;
+    for (const e of agg?.evolution ?? []) {
+      dayMap.set(e.date, { date: e.date, incoming: e.incoming, outgoing: e.outgoing, finished: 0 });
     }
     for (const f of finishedConvos) {
       const day = format(parseISO(f.finished_at), 'dd/MM');
@@ -178,16 +173,18 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
       dayMap.get(day)!.finished++;
     }
     return Array.from(dayMap.values());
-  }, [messages, finishedConvos]);
+  }, [agg, finishedConvos]);
 
   // ── Hourly volume bar chart ──
   const hourlyData = useMemo(() => {
     const hours = Array(24).fill(0);
-    for (const msg of messages) {
-      hours[getHours(parseISO(msg.created_at))]++;
+    for (const [h, count] of Object.entries(agg?.hourly ?? {})) {
+      const idx = Number(h);
+      if (idx >= 0 && idx < 24) hours[idx] = count as number;
     }
     return hours.map((count, h) => ({ hour: `${String(h).padStart(2, '0')}h`, msgs: count }));
-  }, [messages]);
+  }, [agg]);
+
 
   const formatTime = (minutes: number | null) => {
     if (minutes === null) return '—';
