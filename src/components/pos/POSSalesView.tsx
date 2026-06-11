@@ -1544,11 +1544,18 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       <POSSellerGate
         storeId={storeId}
         sellers={sellers}
-        onSellerSelected={(id) => { setSelectedSeller(id); setShowSaleTypeModal(true); }}
+        onSellerSelected={(id) => {
+          setSelectedSeller(id);
+          setShowSaleTypeModal(true);
+          if (sessionStorage.getItem(`pos_task_popup_${storeId}_${id}`) !== todayKey()) {
+            setShowTaskPopup(true);
+          }
+        }}
         onClose={onCloseSalesView}
       />
     );
   }
+
 
   // Sale-type gate: depois de escolher vendedor, escolher Presencial vs Online
   if (selectedSeller && !saleType) {
