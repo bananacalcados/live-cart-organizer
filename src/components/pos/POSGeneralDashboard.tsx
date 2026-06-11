@@ -319,7 +319,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
     if (period === "month") { elapsedStart = monthStart; elapsedEnd = now; }
     else if (period === "week") { elapsedStart = periodRange.start; elapsedEnd = now; }
     else if (period === "today") { elapsedStart = startOfDay(now); elapsedEnd = now; }
-    else { elapsedStart = periodRange.start; elapsedEnd = periodRange.end; } // last_month / custom
+    else { elapsedStart = periodRange.start; elapsedEnd = periodRange.end; } // month_pick / custom
     const elapsedBusinessDays = countBusinessDays(elapsedStart, elapsedEnd, holidays);
     const expected = dailyTarget * elapsedBusinessDays;
 
