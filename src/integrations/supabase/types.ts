@@ -2185,6 +2185,7 @@ export type Database = {
       chat_conversation_assignments: {
         Row: {
           assigned_by: string | null
+          assigned_name: string | null
           assigned_to: string
           created_at: string
           id: string
@@ -2195,6 +2196,7 @@ export type Database = {
         }
         Insert: {
           assigned_by?: string | null
+          assigned_name?: string | null
           assigned_to: string
           created_at?: string
           id?: string
@@ -2205,6 +2207,7 @@ export type Database = {
         }
         Update: {
           assigned_by?: string | null
+          assigned_name?: string | null
           assigned_to?: string
           created_at?: string
           id?: string

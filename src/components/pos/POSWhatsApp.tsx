@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
 import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed } from "lucide-react";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
@@ -297,7 +297,21 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
   const { hasActiveSupport, supportCount } = useSupportPhones();
-  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
+  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo, getAssignedName, assignConversation } = useConversationAssignments();
+
+  // Auto-attribute the current conversation to whoever is sending (first interaction wins)
+  const autoAssignCurrentConversation = useCallback(() => {
+    if (!selectedPhone) return;
+    const userId = sellerLinkedUserId || currentUserId;
+    if (!userId) return;
+    assignConversation({
+      phone: selectedPhone,
+      whatsappNumberId: selectedConvNumberId,
+      userId,
+      name: selectedSellerName || null,
+      onlyIfUnassigned: true,
+    });
+  }, [selectedPhone, selectedConvNumberId, sellerLinkedUserId, currentUserId, selectedSellerName, assignConversation]);
 
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
@@ -898,6 +912,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       }
       setQuotedMessage(null);
       appendOptimistic(messageText, { message_id: result.messageId });
+      autoAssignCurrentConversation();
       loadMessages(selectedPhone, selectedConvNumberId);
     } finally {
       setIsSending(false);
@@ -925,6 +940,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       if (result.success) {
         setQuotedMessage(null);
         appendOptimistic("[áudio]", { media_type: "audio", media_url: audioUrl, message_id: result.messageId });
+        autoAssignCurrentConversation();
         loadMessages(selectedPhone, selectedConvNumberId);
         toast.success("Áudio enviado!");
       }
@@ -956,6 +972,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       if (result.success) {
         setQuotedMessage(null);
         appendOptimistic(caption || `[${mediaType}]`, { media_type: mediaType, media_url: mediaUrl, message_id: result.messageId });
+        autoAssignCurrentConversation();
         loadMessages(selectedPhone, selectedConvNumberId);
         toast.success("Mídia enviada!");
       }
@@ -1288,6 +1305,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             contactNames={chatContacts}
             selectedPhone={selectedPhone}
             selectedConversationKey={selectedConvKey}
+            getAssignedName={getAssignedName}
             onBulkFinish={(phones) => {
               setBulkFinishPhones(phones);
               setShowBulkFinishDialog(true);

@@ -5,15 +5,19 @@ interface Assignment {
   phone: string;
   whatsapp_number_id: string | null;
   assigned_to: string;
+  assigned_name?: string | null;
 }
 
 /**
  * Manages conversation assignments and admin visibility.
  * - Admins/moderators see all conversations
  * - Regular users see only conversations assigned to them (or unassigned)
+ * - Each conversation shows the name of the attendant handling it
  */
 export function useConversationAssignments() {
   const [assignments, setAssignments] = useState<Map<string, string>>(new Map());
+  const [assignedNames, setAssignedNames] = useState<Map<string, string>>(new Map());
+  const [profileNames, setProfileNames] = useState<Map<string, string>>(new Map());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isReady, setIsReady] = useState(false);
@@ -38,19 +42,37 @@ export function useConversationAssignments() {
     init();
   }, []);
 
+  // Load profile names (user_id -> display_name) for fallback name resolution
+  useEffect(() => {
+    const loadProfiles = async () => {
+      const { data } = await supabase.from("profiles").select("user_id, display_name");
+      if (data) {
+        const map = new Map<string, string>();
+        for (const p of data as any[]) {
+          if (p.user_id && p.display_name) map.set(p.user_id, p.display_name);
+        }
+        setProfileNames(map);
+      }
+    };
+    loadProfiles();
+  }, []);
+
   // Load assignments + realtime
   useEffect(() => {
     const load = async () => {
       const { data } = await supabase
         .from("chat_conversation_assignments")
-        .select("phone, whatsapp_number_id, assigned_to");
+        .select("phone, whatsapp_number_id, assigned_to, assigned_name");
       if (data) {
         const map = new Map<string, string>();
+        const nameMap = new Map<string, string>();
         for (const a of data as Assignment[]) {
           const key = `${a.phone}__${a.whatsapp_number_id || "none"}`;
           map.set(key, a.assigned_to);
+          if (a.assigned_name) nameMap.set(key, a.assigned_name);
         }
         setAssignments(map);
+        setAssignedNames(nameMap);
       }
     };
     load();
@@ -68,6 +90,53 @@ export function useConversationAssignments() {
   const getAssignedTo = useCallback((conversationKey: string): string | null => {
     return assignments.get(conversationKey) || null;
   }, [assignments]);
+
+  /**
+   * Returns the display name of the attendant handling a conversation, or null.
+   * Falls back to the profile display name when no stored name exists.
+   */
+  const getAssignedName = useCallback((conversationKey: string): string | null => {
+    const stored = assignedNames.get(conversationKey);
+    if (stored) return stored;
+    const userId = assignments.get(conversationKey);
+    if (userId) return profileNames.get(userId) || null;
+    return null;
+  }, [assignedNames, assignments, profileNames]);
+
+  /**
+   * Assigns a conversation to a user (an attendant).
+   * When onlyIfUnassigned is true, it won't override an existing assignment —
+   * used to auto-attribute a conversation to whoever replies first.
+   */
+  const assignConversation = useCallback(async (params: {
+    phone: string;
+    whatsappNumberId?: string | null;
+    userId: string;
+    name?: string | null;
+    onlyIfUnassigned?: boolean;
+  }) => {
+    const { phone, whatsappNumberId = null, userId, name = null, onlyIfUnassigned } = params;
+    if (!phone || !userId) return;
+    const key = `${phone}__${whatsappNumberId || "none"}`;
+    if (onlyIfUnassigned && assignments.get(key)) return;
+
+    const resolvedName = name || profileNames.get(userId) || null;
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("chat_conversation_assignments").upsert({
+      phone,
+      whatsapp_number_id: whatsappNumberId,
+      assigned_to: userId,
+      assigned_name: resolvedName,
+      assigned_by: user?.id || null,
+    } as any, { onConflict: "phone,whatsapp_number_id" });
+    if (error) {
+      console.error("assignConversation error:", error);
+      return;
+    }
+    // Optimistic local update (realtime will reconcile)
+    setAssignments(prev => new Map(prev).set(key, userId));
+    if (resolvedName) setAssignedNames(prev => new Map(prev).set(key, resolvedName));
+  }, [assignments, profileNames]);
 
   /**
    * Filters conversations based on current user's role:
@@ -105,6 +174,8 @@ export function useConversationAssignments() {
     viewAsUserId,
     setViewAsUserId,
     getAssignedTo,
+    getAssignedName,
+    assignConversation,
     filterByAssignment,
   };
 }

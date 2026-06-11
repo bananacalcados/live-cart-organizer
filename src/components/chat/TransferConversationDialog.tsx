@@ -60,6 +60,7 @@ export function TransferConversationDialog({
         phone,
         whatsapp_number_id: whatsappNumberId || null,
         assigned_to: agent.user_id,
+        assigned_name: agent.display_name || null,
         assigned_by: user?.id || null,
       } as any, { onConflict: "phone,whatsapp_number_id" });
 
