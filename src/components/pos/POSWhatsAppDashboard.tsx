@@ -71,7 +71,7 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
         .from('pos_store_whatsapp_numbers')
         .select('whatsapp_number_id')
         .eq('store_id', storeId),
-      supabase.rpc('get_pos_whatsapp_dashboard', { p_store_id: storeId, p_days: periodDays }),
+      (supabase as any).rpc('get_pos_whatsapp_dashboard', { p_store_id: storeId, p_days: periodDays }),
     ]);
     setMessages(msgsRes.data || []);
     setFinishedConvos(finishedRes.data || []);
