@@ -1532,17 +1532,33 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               onDeleteMessage={handleDeleteMessage}
               onEditMessage={handleEditMessage}
               isSending={isSending}
-              customerInfoPanel={fullCustomerInfoPanel}
+              hideTagsBar
               quotedMessage={quotedMessage}
               onQuoteMessage={setQuotedMessage}
               onCancelQuote={() => setQuotedMessage(null)}
               onExtraSent={() => loadMessages(selectedPhone, selectedConvNumberId)}
             />
+
+            {/* Modal de pedidos do cliente (aberto pelo cabeçalho) */}
+            <Dialog open={showOrdersModal} onOpenChange={setShowOrdersModal}>
+              <DialogContent className="max-w-md p-0 overflow-hidden gap-0">
+                <DialogHeader className="px-4 py-3 border-b">
+                  <DialogTitle className="text-base flex items-center gap-2">
+                    <User className="h-4 w-4 text-[#00a884]" />
+                    {selectedConversation?.customerName || selectedPhone}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="max-h-[70vh] overflow-y-auto">
+                  {fullCustomerInfoPanel}
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         ) : (
           <div className="hidden md:flex flex-1 items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35]">
-            <div className="text-center text-[#667781]">
-              <MessageCircle className="h-16 w-16 mx-auto mb-4 opacity-30" />
+            <div className="flex flex-col items-center text-center text-[#667781]">
+              <AttendantNudgeCard conversations={conversations} variant="inline" />
+              <MessageCircle className="h-16 w-16 mx-auto mb-4 mt-6 opacity-30" />
               <p className="text-lg font-light">Selecione uma conversa</p>
               <p className="text-sm mt-1">para começar a atender</p>
             </div>
