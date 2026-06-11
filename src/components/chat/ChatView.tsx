@@ -120,7 +120,6 @@ export function ChatView({
     useSpellAssist(newMessage);
   const { nudges: composerNudges, dismiss: dismissNudge } = useComposerNudges(newMessage, {
     isFinished: conversation?.isFinished,
-    isPaid: conversation?.isAwaitingPayment === false ? undefined : undefined,
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
