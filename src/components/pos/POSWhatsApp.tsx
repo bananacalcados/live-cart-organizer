@@ -1545,6 +1545,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   <ShoppingBag className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Catálogo</span>
                 </Button>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-amber-600 hover:text-amber-500" onClick={() => setShowWaitlistDialog(true)} title="Aguardando produto">
+                  <Package className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Aguarda</span>
+                </Button>
                 {selectedSendNumber?.provider === 'meta' && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
                   <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-violet-600 hover:text-violet-500" onClick={() => setShowSendTemplate(true)} title="Enviar Template Meta">
                     <FileText className="h-3.5 w-3.5" />
