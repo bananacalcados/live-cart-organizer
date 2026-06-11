@@ -70,6 +70,13 @@ interface CrmCustomerData {
 export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props) {
   const currentUserId = useCurrentUserId();
   const sender = useChatSender();
+
+  // Sinaliza que o chat de WhatsApp está aberto (esconde o botão flutuante de tarefas).
+  useEffect(() => {
+    const { enter, leave } = useWhatsAppViewStore.getState();
+    enter();
+    return () => leave();
+  }, []);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [waMsgTick, setWaMsgTick] = useState(0);
   const [teamChatActive, setTeamChatActive] = useState(false);
