@@ -156,17 +156,21 @@ export function ConversationList({
     });
 
   const groupsCount = conversations.filter(c => c.isGroup && !c.isArchived && !c.isFinished).length;
-  const newCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'not_started').length;
+  const newCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && !c.isAwaitingProduct && c.conversationStatus === 'not_started').length;
   // "Não lidas" = number of conversations awaiting our reply (chats, not messages).
   // `conversations` is already scoped to the store's accessible instances, so this
   // badge automatically reflects only the unread count for the current PDV.
+  // Conversations marked as "waiting for product restock" are intentionally
+  // excluded so they don't inflate the unanswered/open metrics.
   const unreadCount = conversations.filter(c =>
-    !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_reply'
+    !c.isFinished && !c.isArchived && !c.isDispatchOnly && !c.isAwaitingProduct && c.conversationStatus === 'awaiting_reply'
   ).length;
 
   // Rail counts
-  const followUpCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_customer').length;
+  const followUpCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && !c.isAwaitingProduct && c.conversationStatus === 'awaiting_customer').length;
   const aiCount = conversations.filter(c => c.isAiTransferred && !c.isFinished && !c.isArchived).length;
+  // "Espera Produtos": clients waiting for a restock note (kept out of open metrics).
+  const awaitingProductCount = conversations.filter(c => c.isAwaitingProduct && !c.isArchived).length;
   // Finalizadas intentionally has no count badge — its purpose is to declutter
   // the chat list, not to track how many are finished.
   const archivedCount = conversations.filter(c => c.isArchived).length;
