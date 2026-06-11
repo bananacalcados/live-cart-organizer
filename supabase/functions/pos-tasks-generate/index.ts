@@ -26,6 +26,23 @@ function todaySaoPaulo(): string {
   return fmt.format(now); // YYYY-MM-DD
 }
 
+// Dia da semana em São Paulo (0=domingo..6=sábado)
+function weekdaySaoPaulo(dateStr: string): number {
+  const d = new Date(dateStr + "T12:00:00-03:00");
+  const wd = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" }).format(d);
+  return ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 } as Record<string, number>)[wd] ?? 0;
+}
+
+// Desloca uma data (YYYY-MM-DD) em N dias, mantendo o fuso de São Paulo.
+function shiftDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T12:00:00-03:00");
+  d.setDate(d.getDate() + days);
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  return fmt.format(d);
+}
+
 // Verifica se a definição se aplica hoje conforme recorrência.
 function appliesToday(def: any, dateStr: string): boolean {
   const d = new Date(dateStr + "T12:00:00-03:00");
@@ -33,6 +50,11 @@ function appliesToday(def: any, dateStr: string): boolean {
   switch (def.recurrence) {
     case "daily":
       return true;
+    case "weekdays": {
+      // Dias úteis: segunda a sexta (São Paulo)
+      const wd = weekdaySaoPaulo(dateStr);
+      return wd >= 1 && wd <= 5;
+    }
     case "once":
       return cfg.date === dateStr;
     case "weekly": {
