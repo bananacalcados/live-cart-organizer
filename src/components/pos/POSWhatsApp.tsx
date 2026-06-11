@@ -94,6 +94,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [editNameValue, setEditNameValue] = useState("");
   const [crmData, setCrmData] = useState<CrmCustomerData | null>(null);
   const [showCrmPanel, setShowCrmPanel] = useState(false);
+  const [showOrdersModal, setShowOrdersModal] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showPix, setShowPix] = useState(false);
