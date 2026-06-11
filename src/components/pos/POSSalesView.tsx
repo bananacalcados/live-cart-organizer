@@ -1601,6 +1601,21 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
+      {selectedSeller && (
+        <SellerTaskReminderPopup
+          open={showTaskPopup}
+          onClose={() => {
+            setShowTaskPopup(false);
+            sessionStorage.setItem(`pos_task_popup_${storeId}_${selectedSeller}`, todayKey());
+          }}
+          storeId={storeId}
+          sellerId={selectedSeller}
+          sellerName={sellers.find(s => s.id === selectedSeller)?.name || ""}
+          isManager={(sellers.find(s => s.id === selectedSeller) as any)?.is_manager}
+          onOpenWhatsApp={(phone) => onNavigateToWhatsApp?.()}
+        />
+      )}
+
       {/* Notification Dashboard */}
       {step === "scan" && (
         <div className="flex items-stretch gap-2 md:gap-3 px-3 md:px-4 pt-2 md:pt-3 pb-1 overflow-x-auto scrollbar-hide">
