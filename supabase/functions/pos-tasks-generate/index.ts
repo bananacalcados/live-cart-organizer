@@ -226,15 +226,16 @@ async function buildContacts(supabase: any, def: any, storeId: string, target: n
     const start = new Date(Date.now() - (daysAgo + 1) * 86400000).toISOString();
     const { data } = await supabase
       .from("chat_contacts")
-      .select("name, phone, created_at")
+      .select("display_name, custom_name, phone, created_at")
       .gte("created_at", start)
       .lte("created_at", end)
       .limit(target * 4);
     for (const c of data || []) {
       if (!c.phone) continue;
-      out.push({ phone: c.phone, name: c.name || "Lead", meta: { lead_at: c.created_at } });
+      out.push({ phone: c.phone, name: c.custom_name || c.display_name || "Lead", meta: { lead_at: c.created_at } });
       if (out.length >= target) break;
     }
+
   }
 
   return out;
