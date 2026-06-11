@@ -1736,9 +1736,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             </Dialog>
           </div>
         ) : (
-          <div className="hidden md:flex flex-1 items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35]">
+          <div className="relative hidden md:flex flex-1 items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35]">
+            <ProductArrivalCard
+              arrived={waitlist.arrived}
+              onOpenConversation={handleSelectConversation}
+              onDismiss={waitlist.markNotified}
+            />
             <div className="flex flex-col items-center text-center text-[#667781]">
-              <AttendantNudgeCard conversations={conversations} variant="inline" />
+              <AttendantNudgeCard conversations={conversationsFlagged} variant="inline" />
               <MessageCircle className="h-16 w-16 mx-auto mb-4 mt-6 opacity-30" />
               <p className="text-lg font-light">Selecione uma conversa</p>
               <p className="text-sm mt-1">para começar a atender</p>
