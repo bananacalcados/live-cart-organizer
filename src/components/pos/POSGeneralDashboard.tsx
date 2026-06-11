@@ -114,7 +114,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
     }
     const s = startOfMonth(now);
     return { start: s, end: endOfDay(now), label: "Mês", days: differenceInDays(endOfDay(now), s) + 1 };
-  }, [period, customRange]);
+  }, [period, customRange, pickedMonth]);
 
   const load = async () => {
     setLoading(true);
