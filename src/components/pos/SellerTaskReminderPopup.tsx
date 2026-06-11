@@ -37,6 +37,7 @@ export function SellerTaskReminderPopup({
   const completed = total - pendingCount;
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent
         className="max-w-2xl w-[95vw] max-h-[88vh] bg-pos-black border-2 border-pos-orange/60 text-pos-white p-0 overflow-hidden shadow-[0_0_60px_rgba(255,140,0,0.35)]"
