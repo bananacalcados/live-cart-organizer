@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useIsAdmin } from "@/hooks/useIsAdmin";
 import { supabase } from "@/integrations/supabase/client";
+import { useWhatsAppViewStore } from "@/stores/whatsappViewStore";
 import { useStickyNotes } from "./useStickyNotes";
 import { StickyNoteCard } from "./StickyNoteCard";
 
@@ -12,7 +13,8 @@ const HIDE_ON = ["/login", "/checkout", "/register", "/lp/", "/live", "/cat/", "
 
 export function StickyNotesFloatingButton() {
   const location = useLocation();
-  const shouldHide = location.pathname === "/" || HIDE_ON.some((p) => location.pathname === p || location.pathname.startsWith(p + "/") || location.pathname.startsWith(p));
+  const whatsAppActive = useWhatsAppViewStore((s) => s.activeCount > 0);
+  const shouldHide = location.pathname === "/" || whatsAppActive || HIDE_ON.some((p) => location.pathname === p || location.pathname.startsWith(p + "/") || location.pathname.startsWith(p));
   const { isAdmin, ready } = useIsAdmin(!shouldHide);
   const [open, setOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);

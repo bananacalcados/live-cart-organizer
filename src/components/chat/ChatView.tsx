@@ -85,6 +85,8 @@ interface ChatViewProps {
   onCancelQuote?: () => void;
   /** Recarrega o histórico após envio de contato/localização/enquete (WaSender). */
   onExtraSent?: () => void;
+  /** Esconde a barra de tags interna (quando o cabeçalho externo já gerencia tags). */
+  hideTagsBar?: boolean;
 }
 
 const PREDEFINED_TAGS = [
@@ -115,6 +117,7 @@ export function ChatView({
   onQuoteMessage,
   onCancelQuote,
   onExtraSent,
+  hideTagsBar,
 }: ChatViewProps) {
   const { suggestions: spellSuggestions, dismiss: dismissSpell, addToDictionary: addSpellWord } =
     useSpellAssist(newMessage);
@@ -624,7 +627,7 @@ export function ChatView({
       )}
 
       {/* Tags bar */}
-      {conversation && !conversation.isGroup && (
+      {!hideTagsBar && conversation && !conversation.isGroup && (
         <div className="px-3 py-2 border-b bg-muted/30 flex items-center gap-2 flex-wrap flex-shrink-0">
           <Tag className="h-3 w-3 text-muted-foreground" />
           {/* Event tags */}
