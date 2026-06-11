@@ -99,11 +99,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
     const now = new Date();
     if (period === "today") return { start: startOfDay(now), end: endOfDay(now), label: "Hoje", days: 1 };
     if (period === "week") return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfDay(now), label: "Semana", days: 7 };
-    if (period === "last_month") {
-      const lm = subMonths(now, 1);
-      const s = startOfMonth(lm);
-      const e = endOfMonth(lm);
-      return { start: s, end: e, label: format(s, "MMM/yyyy", { locale: ptBR }), days: differenceInDays(e, s) + 1 };
+    if (period === "month_pick") {
+      const s = startOfMonth(pickedMonth);
+      const e = endOfMonth(pickedMonth);
+      return { start: s, end: e, label: format(s, "MMMM 'de' yyyy", { locale: ptBR }), days: differenceInDays(e, s) + 1 };
     }
     if (period === "custom" && customRange?.from) {
       const s = startOfDay(customRange.from);
