@@ -14,6 +14,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatView } from "@/components/chat/ChatView";
+import { AttendantNudgeCard } from "@/components/chat/AttendantNudgeCard";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useSupportPhones } from "@/hooks/useSupportPhones";
@@ -1361,7 +1362,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         {teamChatActive ? (
           <TeamChatPanel onBack={() => setTeamChatActive(false)} />
         ) : selectedPhone ? (
-          <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+          <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden relative">
+            <AttendantNudgeCard conversations={conversations} />
             {/* Contact Header Bar */}
             <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
               <Button variant="ghost" size="icon" className="h-7 w-7 hidden md:flex" onClick={() => setSelectedPhone(null)}>

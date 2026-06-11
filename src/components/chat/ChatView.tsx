@@ -48,7 +48,9 @@ import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
 import { AiTransferBanner } from "./AiTransferBanner";
 import { ChatExtraSender } from "./ChatExtraSender";
 import { SpellSuggestionBar } from "./SpellSuggestionBar";
+import { ComposerRuleBar } from "./ComposerRuleBar";
 import { useSpellAssist } from "@/hooks/useSpellAssist";
+import { useComposerNudges } from "@/hooks/useComposerNudges";
 import { capitalizeSentences } from "@/lib/spellAssist/capitalize";
 import { applySuggestion } from "@/lib/spellAssist/dictionary";
 
@@ -116,6 +118,9 @@ export function ChatView({
 }: ChatViewProps) {
   const { suggestions: spellSuggestions, dismiss: dismissSpell, addToDictionary: addSpellWord } =
     useSpellAssist(newMessage);
+  const { nudges: composerNudges, dismiss: dismissNudge } = useComposerNudges(newMessage, {
+    isFinished: conversation?.isFinished,
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -958,6 +963,8 @@ export function ChatView({
           onCancel={onCancelQuote}
         />
       )}
+
+      <ComposerRuleBar nudges={composerNudges} onDismiss={dismissNudge} />
 
       <SpellSuggestionBar
         suggestions={spellSuggestions}

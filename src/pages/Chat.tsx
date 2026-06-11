@@ -43,7 +43,10 @@ import { AiTransferBell } from "@/components/chat/AiTransferBell";
 import { AttendantMetrics } from "@/components/chat/AttendantMetrics";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
 import { SpellSuggestionBar } from "@/components/chat/SpellSuggestionBar";
+import { ComposerRuleBar } from "@/components/chat/ComposerRuleBar";
+import { AttendantNudgeCard } from "@/components/chat/AttendantNudgeCard";
 import { useSpellAssist } from "@/hooks/useSpellAssist";
+import { useComposerNudges } from "@/hooks/useComposerNudges";
 import { capitalizeSentences } from "@/lib/spellAssist/capitalize";
 import { applySuggestion } from "@/lib/spellAssist/dictionary";
 import {
@@ -907,6 +910,9 @@ export default function ChatPage() {
   const selectedConv = conversations.find(c => c.conversationKey === selectedConvKey) || conversations.find(c => c.phone === selectedPhone);
   const contactsCount = conversations.filter(c => !c.isGroup).length;
   const groupsCount = conversations.filter(c => c.isGroup).length;
+  const { nudges: composerNudges, dismiss: dismissNudge } = useComposerNudges(newMessage, {
+    isFinished: (selectedConv as { isFinished?: boolean } | undefined)?.isFinished,
+  });
 
   const filteredTemplates = templates.filter(t =>
     t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
@@ -1158,9 +1164,15 @@ export default function ChatPage() {
 
         {/* ── Right panel: chat area ── */}
         <div className={cn(
-          "flex-1 flex flex-col",
+          "flex-1 flex flex-col relative",
           !selectedPhone && "hidden md:flex"
         )}>
+          {selectedPhone && (
+            <AttendantNudgeCard
+              conversations={conversations}
+              onShowAwaiting={() => setStatusFilter('awaiting_reply')}
+            />
+          )}
           {!selectedPhone ? (
             <div className="flex-1 flex flex-col items-center justify-center bg-[#222e35]">
               <div className="text-center">
@@ -1467,6 +1479,10 @@ export default function ChatPage() {
                     <Square className="h-5 w-5 fill-current" />
                   </Button>
                 </div>
+              )}
+
+              {!isRecording && (
+                <ComposerRuleBar nudges={composerNudges} onDismiss={dismissNudge} />
               )}
 
               {!isRecording && (

@@ -36,6 +36,7 @@ import { CampaignCardExpanded } from "@/components/marketing/CampaignCardExpande
 import { AutomationFlowBuilder } from "@/components/marketing/AutomationFlowBuilder";
 import { LeadWhatsAppDialog } from "@/components/marketing/LeadWhatsAppDialog";
 import { SectorManager } from "@/components/marketing/SectorManager";
+import { AttendanceRulesSettings } from "@/components/settings/AttendanceRulesSettings";
 import { GroupsVipManager } from "@/components/marketing/GroupsVipManager";
 import { LiveSessionManager } from "@/components/LiveSessionManager";
 import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispatcher";
@@ -1114,6 +1115,7 @@ export default function Marketing() {
                 <SelectItem value="disparos">📨 Disparos</SelectItem>
                 <SelectItem value="automations">⚡ Automações</SelectItem>
                 <SelectItem value="sectors">🏪 Setores</SelectItem>
+                <SelectItem value="attendance_rules">🗣️ Regras de Atendimento</SelectItem>
                 <SelectItem value="landing_pages">🔗 Landing Pages</SelectItem>
                 <SelectItem value="leads">📋 Leads</SelectItem>
                 <SelectItem value="groups_vip">👑 Grupos VIP</SelectItem>
@@ -1139,6 +1141,7 @@ export default function Marketing() {
                 <TabsTrigger value="disparos" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Send className="h-3.5 w-3.5" />Disparos</TabsTrigger>
                 <TabsTrigger value="automations" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Zap className="h-3.5 w-3.5" />Automações</TabsTrigger>
                 <TabsTrigger value="sectors" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Store className="h-3.5 w-3.5" />Setores</TabsTrigger>
+                <TabsTrigger value="attendance_rules" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><MessageSquare className="h-3.5 w-3.5" />Atendimento</TabsTrigger>
                 <TabsTrigger value="landing_pages" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Link className="h-3.5 w-3.5" />Landing Pages</TabsTrigger>
                 <TabsTrigger value="leads" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><FileSpreadsheet className="h-3.5 w-3.5" />Leads</TabsTrigger>
                 <TabsTrigger value="groups_vip" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Crown className="h-3.5 w-3.5" />Grupos VIP</TabsTrigger>
@@ -1670,6 +1673,11 @@ export default function Marketing() {
           {/* ── SETORES ── */}
           <TabsContent value="sectors" className="space-y-4">
             <SectorManager />
+          </TabsContent>
+
+          {/* ── REGRAS DE ATENDIMENTO ── */}
+          <TabsContent value="attendance_rules" className="space-y-4">
+            <AttendanceRulesSettings />
           </TabsContent>
 
           {/* ── LANDING PAGES ── */}
