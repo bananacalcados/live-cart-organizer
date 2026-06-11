@@ -959,6 +959,13 @@ export function ChatView({
         />
       )}
 
+      <SpellSuggestionBar
+        suggestions={spellSuggestions}
+        onApply={(m, replacement) => onNewMessageChange(applySuggestion(newMessage, m, replacement))}
+        onDismiss={dismissSpell}
+        onAddToDictionary={addSpellWord}
+      />
+
       {/* Input */}
       <div className="p-2 border-t bg-[#f0f0f0] dark:bg-[#202c33] flex items-center gap-2 flex-shrink-0">
         {audioPreviewUrl ? (
@@ -1069,7 +1076,7 @@ export function ChatView({
             <textarea
               placeholder="Digite uma mensagem..."
               value={newMessage}
-              onChange={(e) => onNewMessageChange(e.target.value)}
+              onChange={(e) => onNewMessageChange(capitalizeSentences(e.target.value))}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
