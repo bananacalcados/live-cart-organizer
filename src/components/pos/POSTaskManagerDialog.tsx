@@ -383,9 +383,35 @@ function SellersTab({ storeId }: { storeId: string | null }) {
 }
 
 // ---------------- Disparos ----------------
+interface MetaTemplate { name: string; status: string; language: string; category: string; components: any[]; }
+
+const VAR_OPTIONS = [
+  { value: "tarefas_do_dia", label: "📋 Tarefas do dia" },
+  { value: "nome", label: "👤 Nome da vendedora" },
+  { value: "__fixed__", label: "✏️ Texto fixo" },
+];
+
+function extractBodyVars(t: MetaTemplate): string[] {
+  const body = t.components?.find((c: any) => c.type === "BODY");
+  const matches: string[] = (body?.text || "").match(/\{\{(\d+)\}\}/g) || [];
+  return Array.from(new Set(matches)).sort((a, b) =>
+    Number(a.replace(/\D/g, "")) - Number(b.replace(/\D/g, "")));
+}
+
 function DispatchTab({ storeId }: { storeId: string | null }) {
   const [schedules, setSchedules] = useState<any[]>([]);
-  const [form, setForm] = useState({ template_name: "", template_language: "pt_BR", target: "all_sellers", send_times: "", variables: "{{nome}}, {{tarefas_do_dia}}" });
+  const [instances, setInstances] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<MetaTemplate[]>([]);
+  const [loadingTpl, setLoadingTpl] = useState(false);
+  const [firingId, setFiringId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const blank = { instanceId: "", templateName: "", target: "all_sellers", send_times: "" };
+  const [form, setForm] = useState(blank);
+  // mapeamento por variável: { "{{1}}": { mode: "tarefas_do_dia" | "nome" | "__fixed__", text?: string } }
+  const [varMap, setVarMap] = useState<Record<string, { mode: string; text?: string }>>({});
+
+  const selectedTpl = templates.find((t) => t.name === form.templateName) || null;
 
   const load = useCallback(async () => {
     if (!storeId) return;
@@ -394,39 +420,111 @@ function DispatchTab({ storeId }: { storeId: string | null }) {
   }, [storeId]);
   useEffect(() => { load(); }, [load]);
 
+  // Instâncias Meta (templates só existem no provedor Meta)
+  useEffect(() => {
+    supabase.from("whatsapp_numbers").select("id, label, phone_display").eq("provider", "meta").eq("is_active", true).order("label")
+      .then(({ data }) => setInstances((data as any[]) || []));
+  }, []);
+
+  // Carrega templates da instância selecionada
+  useEffect(() => {
+    if (!form.instanceId) { setTemplates([]); return; }
+    setLoadingTpl(true);
+    supabase.functions.invoke("meta-whatsapp-get-templates", { body: { whatsappNumberId: form.instanceId, status: "APPROVED" } })
+      .then(({ data }) => setTemplates((data?.templates || []).filter((t: MetaTemplate) => t.status === "APPROVED")))
+      .catch(() => setTemplates([]))
+      .finally(() => setLoadingTpl(false));
+  }, [form.instanceId]);
+
+  // Ao trocar de template, inicializa o mapeamento das variáveis
+  const onPickTemplate = (name: string) => {
+    setForm({ ...form, templateName: name });
+    const t = templates.find((x) => x.name === name);
+    if (!t) { setVarMap({}); return; }
+    const vars = extractBodyVars(t);
+    const next: Record<string, { mode: string; text?: string }> = {};
+    vars.forEach((v, i) => {
+      next[v] = { mode: i === 0 ? "nome" : "tarefas_do_dia" };
+    });
+    setVarMap(next);
+  };
+
+  const buildBody = (): string[] => {
+    if (!selectedTpl) return [];
+    return extractBodyVars(selectedTpl).map((v) => {
+      const m = varMap[v];
+      if (!m) return "";
+      if (m.mode === "__fixed__") return m.text || "";
+      return m.mode; // token resolvido na edge function
+    });
+  };
+
   const save = async () => {
-    if (!storeId || !form.template_name.trim()) { toast.error("Informe o nome do template"); return; }
+    if (!storeId || !form.instanceId || !form.templateName) { toast.error("Selecione instância e template"); return; }
     const times = form.send_times.split(",").map((t) => t.trim()).filter(Boolean);
-    const body = form.variables.split(",").map((v) => v.trim()).filter(Boolean);
+    setSaving(true);
     const { error } = await supabase.from("pos_task_dispatch_schedules" as any).insert({
       store_id: storeId,
-      template_name: form.template_name.trim(),
-      template_language: form.template_language,
+      whatsapp_number_id: form.instanceId,
+      template_name: form.templateName,
+      template_language: selectedTpl?.language || "pt_BR",
       target: form.target,
       send_times: times,
-      template_variables: { body },
+      template_variables: { body: buildBody() },
     });
+    setSaving(false);
     if (error) { toast.error("Erro: " + error.message); return; }
     toast.success("Disparo criado");
-    setForm({ template_name: "", template_language: "pt_BR", target: "all_sellers", send_times: "", variables: "{{nome}}, {{tarefas_do_dia}}" });
+    setForm(blank); setVarMap({}); setTemplates([]);
     load();
   };
+
   const remove = async (id: string) => { await supabase.from("pos_task_dispatch_schedules" as any).delete().eq("id", id); load(); };
   const toggle = async (id: string, v: boolean) => { await supabase.from("pos_task_dispatch_schedules" as any).update({ is_active: v }).eq("id", id); load(); };
+
+  const fireNow = async (id: string) => {
+    setFiringId(id);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-task-dispatch-cron", { body: { scheduleId: id, force: true } });
+      if (error) throw error;
+      const sent = data?.sent ?? 0;
+      const errs: string[] = data?.errors || [];
+      if (sent > 0) toast.success(`Disparado para ${sent} número(s)${errs.length ? ` · ${errs.length} falha(s)` : ""}`);
+      else if (errs.length) toast.error("Falha: " + errs[0]);
+      else toast.warning("Nenhum destinatário (verifique WhatsApp das vendedoras na aba Vendedoras).");
+      load();
+    } catch (e: any) {
+      toast.error("Erro ao disparar: " + (e?.message || e));
+    } finally {
+      setFiringId(null);
+    }
+  };
 
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
         <h3 className="font-semibold text-sm flex items-center gap-2"><Send className="h-4 w-4 text-orange-400" /> Novo disparo automático</h3>
-        <p className="text-[11px] text-zinc-500">Use a variável <code className="text-orange-400">{"{{tarefas_do_dia}}"}</code> para inserir a lista de pendências da vendedora, e <code className="text-orange-400">{"{{nome}}"}</code> para o nome.</p>
+        <p className="text-[11px] text-zinc-500">Escolha a instância e o template aprovado. Depois, defina cada variável do template como <span className="text-orange-400">Tarefas do dia</span>, <span className="text-orange-400">Nome</span> ou um texto fixo.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <Label className="text-xs text-zinc-400">Nome do template (Meta)</Label>
-            <Input value={form.template_name} onChange={(e) => setForm({ ...form, template_name: e.target.value })} className="bg-zinc-900 border-zinc-700" placeholder="ex.: tarefas_diarias" />
+            <Label className="text-xs text-zinc-400">Instância (WhatsApp Meta)</Label>
+            <Select value={form.instanceId} onValueChange={(v) => { setForm({ ...form, instanceId: v, templateName: "" }); setVarMap({}); }}>
+              <SelectTrigger className="bg-zinc-900 border-zinc-700"><SelectValue placeholder="Selecione a instância" /></SelectTrigger>
+              <SelectContent>
+                {instances.map((n) => <SelectItem key={n.id} value={n.id}>{n.label} <span className="text-zinc-500">{n.phone_display}</span></SelectItem>)}
+                {instances.length === 0 && <SelectItem value="none" disabled>Nenhuma instância Meta ativa</SelectItem>}
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <Label className="text-xs text-zinc-400">Idioma</Label>
-            <Input value={form.template_language} onChange={(e) => setForm({ ...form, template_language: e.target.value })} className="bg-zinc-900 border-zinc-700" />
+            <Label className="text-xs text-zinc-400">Template aprovado</Label>
+            <Select value={form.templateName} onValueChange={onPickTemplate} disabled={!form.instanceId || loadingTpl}>
+              <SelectTrigger className="bg-zinc-900 border-zinc-700"><SelectValue placeholder={loadingTpl ? "Carregando..." : "Selecione o template"} /></SelectTrigger>
+              <SelectContent>
+                {templates.map((t) => <SelectItem key={t.name} value={t.name}>{t.name} <span className="text-zinc-500">({t.language})</span></SelectItem>)}
+                {!loadingTpl && templates.length === 0 && form.instanceId && <SelectItem value="none" disabled>Nenhum template aprovado</SelectItem>}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label className="text-xs text-zinc-400">Público</Label>
@@ -439,15 +537,44 @@ function DispatchTab({ storeId }: { storeId: string | null }) {
             </Select>
           </div>
           <div>
-            <Label className="text-xs text-zinc-400">Horários (HH:MM, separados por vírgula)</Label>
+            <Label className="text-xs text-zinc-400">Horários — horário de Brasília (HH:MM, separados por vírgula)</Label>
             <Input value={form.send_times} onChange={(e) => setForm({ ...form, send_times: e.target.value })} className="bg-zinc-900 border-zinc-700" placeholder="09:00, 13:00, 17:00" />
-          </div>
-          <div className="md:col-span-2">
-            <Label className="text-xs text-zinc-400">Variáveis do corpo (ordem dos {"{{N}}"})</Label>
-            <Input value={form.variables} onChange={(e) => setForm({ ...form, variables: e.target.value })} className="bg-zinc-900 border-zinc-700" />
+            <p className="text-[10px] text-zinc-500 mt-1">Os horários são interpretados em America/Sao_Paulo (Brasília).</p>
           </div>
         </div>
-        <Button onClick={save} className="bg-orange-500 hover:bg-orange-600 text-white gap-2"><Plus className="h-4 w-4" /> Criar disparo</Button>
+
+        {/* Preview + mapeamento de variáveis */}
+        {selectedTpl && (
+          <div className="space-y-3">
+            <div className="p-3 rounded-lg bg-[#005c4b]/20 border border-zinc-800 text-xs whitespace-pre-wrap text-zinc-200">
+              {selectedTpl.components?.find((c: any) => c.type === "BODY")?.text || "(sem corpo)"}
+            </div>
+            {extractBodyVars(selectedTpl).length > 0 ? (
+              <div className="space-y-2">
+                <Label className="text-xs text-zinc-400">Variáveis do template</Label>
+                {extractBodyVars(selectedTpl).map((v) => {
+                  const m = varMap[v] || { mode: "tarefas_do_dia" };
+                  return (
+                    <div key={v} className="flex items-center gap-2 flex-wrap">
+                      <Badge variant="outline" className="border-orange-500/40 text-orange-400 text-[10px] shrink-0">{v}</Badge>
+                      <Select value={m.mode} onValueChange={(mode) => setVarMap((p) => ({ ...p, [v]: { ...p[v], mode } }))}>
+                        <SelectTrigger className="bg-zinc-900 border-zinc-700 h-8 w-48"><SelectValue /></SelectTrigger>
+                        <SelectContent>{VAR_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                      </Select>
+                      {m.mode === "__fixed__" && (
+                        <Input value={m.text || ""} onChange={(e) => setVarMap((p) => ({ ...p, [v]: { ...p[v], text: e.target.value } }))} placeholder="Texto fixo" className="bg-zinc-900 border-zinc-700 h-8 flex-1 min-w-[160px]" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[11px] text-zinc-500">Este template não possui variáveis no corpo.</p>
+            )}
+          </div>
+        )}
+
+        <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600 text-white gap-2"><Plus className="h-4 w-4" /> Criar disparo</Button>
       </div>
 
       <div className="space-y-2">
@@ -459,8 +586,12 @@ function DispatchTab({ storeId }: { storeId: string | null }) {
               <div className="flex gap-1.5 mt-1 flex-wrap">
                 <Badge variant="outline" className="border-zinc-700 text-zinc-400 text-[10px]">{s.target === "managers" ? "Gerentes" : "Vendedoras"}</Badge>
                 {(s.send_times || []).map((t: string, i: number) => <Badge key={i} variant="outline" className="border-orange-500/40 text-orange-400 text-[10px]">{t}</Badge>)}
+                {s.last_run_at && <Badge variant="outline" className="border-zinc-700 text-zinc-500 text-[10px]">último: {new Date(s.last_run_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</Badge>}
               </div>
             </div>
+            <Button size="sm" variant="outline" disabled={firingId === s.id} onClick={() => fireNow(s.id)} className="h-8 gap-1.5 border-orange-500/50 text-orange-400 hover:bg-orange-500/10">
+              <Send className="h-3.5 w-3.5" /> {firingId === s.id ? "Enviando..." : "Disparar agora"}
+            </Button>
             <Switch checked={s.is_active} onCheckedChange={(v) => toggle(s.id, v)} />
             <Button size="icon" variant="ghost" onClick={() => remove(s.id)} className="h-8 w-8 text-red-400 hover:bg-red-500/10"><Trash2 className="h-4 w-4" /></Button>
           </div>
