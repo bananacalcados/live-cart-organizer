@@ -52,14 +52,52 @@ export function useAttendantWorkload(conversations: WorkloadConversation[]): Att
   const showFollowups = (rule?.config?.show_followups as boolean | undefined) !== false;
 
   const [followupCount, setFollowupCount] = useState(0);
+  // tick a cada minuto pra recalcular o tempo de espera mesmo sem novas mensagens
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
-  const awaitingCount = useMemo(
+  const awaitingConversations = useMemo(
     () =>
       conversations.filter(
         (c) => c.conversationStatus === "awaiting_reply" && !c.isFinished && !c.isArchived && !c.isAwaitingProduct,
-      ).length,
+      ),
     [conversations],
   );
+
+  const awaitingCount = awaitingConversations.length;
+
+  // Maior tempo de espera entre os clientes aguardando resposta.
+  const longestWaitMinutes = useMemo(() => {
+    let oldest = 0;
+    for (const c of awaitingConversations) {
+      const t = c.lastMessageAt instanceof Date ? c.lastMessageAt.getTime() : 0;
+      if (!t) continue;
+      const mins = Math.max(0, Math.floor((now - t) / 60_000));
+      if (mins > oldest) oldest = mins;
+    }
+    return oldest;
+  }, [awaitingConversations, now]);
+
+  // Taxa de resposta: conversas já respondidas (aguardando cliente) sobre o total
+  // ativo (respondidas + aguardando nós). 100% = nenhum cliente esperando.
+  const responseRate = useMemo(() => {
+    const active = conversations.filter(
+      (c) =>
+        !c.isFinished &&
+        !c.isArchived &&
+        !c.isAwaitingProduct &&
+        (c.conversationStatus === "awaiting_reply" ||
+          c.conversationStatus === "awaiting_customer" ||
+          c.conversationStatus === "not_started"),
+    );
+    if (active.length === 0) return 100;
+    const responded = active.filter((c) => c.conversationStatus === "awaiting_customer").length;
+    return Math.round((responded / active.length) * 100);
+  }, [conversations]);
+
 
   // "Follow-ups pra fazer": mesma base do badge "Follow Up" da lista —
   // conversas aguardando o cliente (status `awaiting_customer`). Assim o card
