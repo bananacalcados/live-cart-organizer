@@ -15,6 +15,9 @@ import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatView } from "@/components/chat/ChatView";
 import { AttendantNudgeCard } from "@/components/chat/AttendantNudgeCard";
+import { ProductWaitlistDialog } from "@/components/chat/ProductWaitlistDialog";
+import { ProductArrivalCard } from "@/components/chat/ProductArrivalCard";
+import { useProductWaitlist } from "@/hooks/useProductWaitlist";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useSupportPhones } from "@/hooks/useSupportPhones";
@@ -127,7 +130,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showSendTemplate, setShowSendTemplate] = useState(false);
+  const [showWaitlistDialog, setShowWaitlistDialog] = useState(false);
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
+
+  // Espera de produtos: clientes aguardando reposição de uma variação específica.
+  const waitlist = useProductWaitlist();
 
   // Live filter (pedidos da Live / eventos)
   const [liveFilterActive, setLiveFilterActive] = useState(false);
@@ -280,6 +287,30 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     },
     [ghostConversations, conversations]
   );
+
+  // Marca conversas cujo cliente está aguardando reposição de produto, para
+  // movê-las à aba "Espera Produtos" e removê-las das métricas de atendimento aberto.
+  const waitSuffixes = waitlist.waitingSuffixes;
+  const flagWait = useCallback(
+    (list: Conversation[]) =>
+      waitSuffixes.size === 0
+        ? list
+        : list.map((c) =>
+            waitSuffixes.has(String(c.phone || "").replace(/\D/g, "").slice(-8))
+              ? { ...c, isAwaitingProduct: true }
+              : c,
+          ),
+    [waitSuffixes],
+  );
+  const mergedConversationsFlagged = useMemo(
+    () => flagWait(mergedConversations),
+    [mergedConversations, flagWait],
+  );
+  const conversationsFlagged = useMemo(
+    () => flagWait(conversations),
+    [conversations, flagWait],
+  );
+
 
   // Badge count must match what the "Pedidos da Live" filter actually shows:
   // exclude finalized/archived conversations so finishing chats lowers the number.
@@ -1339,8 +1370,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         )}>
           <ConversationList
             conversations={multiInstanceFilter.length > 0
-              ? mergedConversations.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
-              : mergedConversations}
+              ? mergedConversationsFlagged.filter(c => multiInstanceFilter.includes(c.whatsapp_number_id || ''))
+              : mergedConversationsFlagged}
+            productArrivedCount={waitlist.arrivedCount}
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onSelectConversation={handleSelectConversation}
@@ -1414,7 +1446,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           <TeamChatPanel onBack={() => setTeamChatActive(false)} />
         ) : selectedPhone ? (
           <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden relative">
-            <AttendantNudgeCard conversations={conversations} />
+            <AttendantNudgeCard conversations={conversationsFlagged} />
+            <ProductArrivalCard
+              arrived={waitlist.arrived}
+              onOpenConversation={handleSelectConversation}
+              onDismiss={waitlist.markNotified}
+            />
             {/* Cabeçalho compacto: nome/telefone (clicável p/ pedidos) + instância + tags + ações */}
             <div className="flex items-center gap-1.5 px-2 py-1.5 border-b bg-muted/30 flex-shrink-0 flex-wrap">
               <Button variant="ghost" size="icon" className="h-7 w-7 hidden md:flex flex-shrink-0" onClick={() => setSelectedPhone(null)}>
@@ -1507,6 +1544,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => setShowCatalog(true)} title="Catálogo" disabled={requiresInstanceSelection}>
                   <ShoppingBag className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Catálogo</span>
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-amber-600 hover:text-amber-500" onClick={() => setShowWaitlistDialog(true)} title="Aguardando produto">
+                  <Package className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Aguarda</span>
                 </Button>
                 {selectedSendNumber?.provider === 'meta' && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
                   <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-violet-600 hover:text-violet-500" onClick={() => setShowSendTemplate(true)} title="Enviar Template Meta">
@@ -1699,9 +1740,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             </Dialog>
           </div>
         ) : (
-          <div className="hidden md:flex flex-1 items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35]">
+          <div className="relative hidden md:flex flex-1 items-center justify-center bg-[#f0f2f5] dark:bg-[#222e35]">
+            <ProductArrivalCard
+              arrived={waitlist.arrived}
+              onOpenConversation={handleSelectConversation}
+              onDismiss={waitlist.markNotified}
+            />
             <div className="flex flex-col items-center text-center text-[#667781]">
-              <AttendantNudgeCard conversations={conversations} variant="inline" />
+              <AttendantNudgeCard conversations={conversationsFlagged} variant="inline" />
               <MessageCircle className="h-16 w-16 mx-auto mb-4 mt-6 opacity-30" />
               <p className="text-lg font-light">Selecione uma conversa</p>
               <p className="text-sm mt-1">para começar a atender</p>
@@ -1723,6 +1769,22 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           onOpenChange={setShowCatalog}
         />
       )}
+
+      {/* Aguardando produto (espera de reposição) */}
+      {selectedPhone && (
+        <ProductWaitlistDialog
+          open={showWaitlistDialog}
+          onOpenChange={setShowWaitlistDialog}
+          phone={selectedPhone}
+          customerName={selectedConversation?.customerName}
+          whatsappNumberId={selectedConvNumberId}
+          storeId={storeId === "expedition" ? null : storeId}
+          sellerName={selectedSellerName}
+          onSaved={() => waitlist.refresh()}
+        />
+      )}
+
+
 
       {/* Checkout Dialog */}
       {selectedPhone && (

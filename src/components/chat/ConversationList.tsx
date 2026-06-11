@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Search, Users, MessageCircle, Wifi, CheckSquare, PhoneOff, Send,
-  Radio, Bell, Bot, CheckCircle2, Archive, Megaphone, Eye
+  Radio, Bell, Bot, CheckCircle2, Archive, Megaphone, Eye, PackageCheck
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,8 @@ interface ConversationListProps {
   liveStageMap?: Record<string, { stageTitle: string; eventName?: string; color?: string }>;
   teamChatActive?: boolean;
   onTeamChatClick?: () => void;
+  /** Number of arrived (restocked) product-wait notifications, drives the pulsing badge */
+  productArrivedCount?: number;
   /** Resolves the attendant name handling a conversation, by conversation key */
   getAssignedName?: (conversationKey: string) => string | null;
 }
@@ -81,6 +83,7 @@ export function ConversationList({
   liveStageMap = {},
   teamChatActive,
   onTeamChatClick,
+  productArrivedCount = 0,
   getAssignedName,
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
@@ -131,6 +134,7 @@ export function ConversationList({
       if (statusFilter === 'dispatch') return c.isDispatchOnly && !c.isArchived;
       if (statusFilter === 'archived') return c.isArchived;
       if (statusFilter === 'awaiting_payment') return c.isAwaitingPayment && !c.isArchived;
+      if (statusFilter === 'awaiting_product') return c.isAwaitingProduct && !c.isArchived;
       if (statusFilter === 'finished') return c.isFinished && !c.isArchived;
       if (statusFilter === 'ai_transferred') return c.isAiTransferred && !c.isFinished && !c.isArchived;
       if (c.isFinished || c.isArchived || c.isDispatchOnly) return false;
@@ -152,17 +156,21 @@ export function ConversationList({
     });
 
   const groupsCount = conversations.filter(c => c.isGroup && !c.isArchived && !c.isFinished).length;
-  const newCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'not_started').length;
+  const newCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && !c.isAwaitingProduct && c.conversationStatus === 'not_started').length;
   // "Não lidas" = number of conversations awaiting our reply (chats, not messages).
   // `conversations` is already scoped to the store's accessible instances, so this
   // badge automatically reflects only the unread count for the current PDV.
+  // Conversations marked as "waiting for product restock" are intentionally
+  // excluded so they don't inflate the unanswered/open metrics.
   const unreadCount = conversations.filter(c =>
-    !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_reply'
+    !c.isFinished && !c.isArchived && !c.isDispatchOnly && !c.isAwaitingProduct && c.conversationStatus === 'awaiting_reply'
   ).length;
 
   // Rail counts
-  const followUpCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && c.conversationStatus === 'awaiting_customer').length;
+  const followUpCount = conversations.filter(c => !c.isFinished && !c.isArchived && !c.isDispatchOnly && !c.isAwaitingProduct && c.conversationStatus === 'awaiting_customer').length;
   const aiCount = conversations.filter(c => c.isAiTransferred && !c.isFinished && !c.isArchived).length;
+  // "Espera Produtos": clients waiting for a restock note (kept out of open metrics).
+  const awaitingProductCount = conversations.filter(c => c.isAwaitingProduct && !c.isArchived).length;
   // Finalizadas intentionally has no count badge — its purpose is to declutter
   // the chat list, not to track how many are finished.
   const archivedCount = conversations.filter(c => c.isArchived).length;
@@ -281,6 +289,7 @@ export function ConversationList({
         <RailBtn icon={CheckCircle2} label="Finalizadas" active={statusFilter === 'finished'} count={0} onClick={() => pickRailStatus('finished')} accent="bg-emerald-600 text-white" />
         <RailBtn icon={Archive} label="Arquivadas" active={statusFilter === 'archived'} count={archivedCount} onClick={() => pickRailStatus('archived')} accent="bg-zinc-500 text-white" />
         <RailBtn icon={Megaphone} label="Disparos" active={statusFilter === 'dispatch'} count={dispatchCount} onClick={() => pickRailStatus('dispatch')} accent="bg-violet-500 text-white" />
+        <RailBtn icon={PackageCheck} label="Espera Produtos" active={statusFilter === 'awaiting_product'} count={productArrivedCount || awaitingProductCount} onClick={() => pickRailStatus('awaiting_product')} accent="bg-amber-500 text-white" />
       </div>
 
       {/* === Main column === */}
@@ -314,6 +323,7 @@ export function ConversationList({
           <Pill label="Finalizadas" active={statusFilter === 'finished' && !liveFilterActive} onClick={() => pickRailStatus('finished')} />
           <Pill label="Arquivadas" active={statusFilter === 'archived' && !liveFilterActive} count={archivedCount} onClick={() => pickRailStatus('archived')} />
           <Pill label="Disparos" active={statusFilter === 'dispatch' && !liveFilterActive} count={dispatchCount} onClick={() => pickRailStatus('dispatch')} />
+          <Pill label="Espera Produtos" active={statusFilter === 'awaiting_product' && !liveFilterActive} count={awaitingProductCount} badge={productArrivedCount > 0 && statusFilter !== 'awaiting_product'} onClick={() => pickRailStatus('awaiting_product')} />
         </div>
 
 

@@ -7,6 +7,7 @@ interface WorkloadConversation {
   conversationStatus?: string;
   isFinished?: boolean;
   isArchived?: boolean;
+  isAwaitingProduct?: boolean;
 }
 
 export interface AttendantWorkload {
@@ -39,7 +40,7 @@ export function useAttendantWorkload(conversations: WorkloadConversation[]): Att
   const awaitingCount = useMemo(
     () =>
       conversations.filter(
-        (c) => c.conversationStatus === "awaiting_reply" && !c.isFinished && !c.isArchived,
+        (c) => c.conversationStatus === "awaiting_reply" && !c.isFinished && !c.isArchived && !c.isAwaitingProduct,
       ).length,
     [conversations],
   );
@@ -50,7 +51,7 @@ export function useAttendantWorkload(conversations: WorkloadConversation[]): Att
   const conversationFollowups = useMemo(
     () =>
       conversations.filter(
-        (c) => c.conversationStatus === "awaiting_customer" && !c.isFinished && !c.isArchived,
+        (c) => c.conversationStatus === "awaiting_customer" && !c.isFinished && !c.isArchived && !c.isAwaitingProduct,
       ).length,
     [conversations],
   );

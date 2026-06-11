@@ -12058,6 +12058,78 @@ export type Database = {
         }
         Relationships: []
       }
+      product_wait_notifications: {
+        Row: {
+          arrived_at: string | null
+          barcode: string | null
+          color: string | null
+          created_at: string
+          customer_name: string | null
+          id: string
+          image_url: string | null
+          matched_pos_product_id: string | null
+          notes: string | null
+          notified_at: string | null
+          parent_sku: string | null
+          phone: string
+          pos_product_id: string | null
+          product_name: string
+          requested_by_name: string | null
+          requested_by_user_id: string | null
+          size: string | null
+          status: string
+          store_id: string | null
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          arrived_at?: string | null
+          barcode?: string | null
+          color?: string | null
+          created_at?: string
+          customer_name?: string | null
+          id?: string
+          image_url?: string | null
+          matched_pos_product_id?: string | null
+          notes?: string | null
+          notified_at?: string | null
+          parent_sku?: string | null
+          phone: string
+          pos_product_id?: string | null
+          product_name: string
+          requested_by_name?: string | null
+          requested_by_user_id?: string | null
+          size?: string | null
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          arrived_at?: string | null
+          barcode?: string | null
+          color?: string | null
+          created_at?: string
+          customer_name?: string | null
+          id?: string
+          image_url?: string | null
+          matched_pos_product_id?: string | null
+          notes?: string | null
+          notified_at?: string | null
+          parent_sku?: string | null
+          phone?: string
+          pos_product_id?: string | null
+          product_name?: string
+          requested_by_name?: string | null
+          requested_by_user_id?: string | null
+          size?: string | null
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
       products_master: {
         Row: {
           age_group: string | null
