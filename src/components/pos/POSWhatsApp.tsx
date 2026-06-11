@@ -1770,6 +1770,22 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         />
       )}
 
+      {/* Aguardando produto (espera de reposição) */}
+      {selectedPhone && (
+        <ProductWaitlistDialog
+          open={showWaitlistDialog}
+          onOpenChange={setShowWaitlistDialog}
+          phone={selectedPhone}
+          customerName={selectedConversation?.customerName}
+          whatsappNumberId={selectedConvNumberId}
+          storeId={storeId === "expedition" ? null : storeId}
+          sellerName={selectedSellerName}
+          onSaved={() => waitlist.refresh()}
+        />
+      )}
+
+
+
       {/* Checkout Dialog */}
       {selectedPhone && (
         <POSWhatsAppCheckoutDialog
