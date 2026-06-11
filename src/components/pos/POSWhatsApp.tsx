@@ -297,7 +297,21 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
   const { hasActiveSupport, supportCount } = useSupportPhones();
-  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo } = useConversationAssignments();
+  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo, getAssignedName, assignConversation } = useConversationAssignments();
+
+  // Auto-attribute the current conversation to whoever is sending (first interaction wins)
+  const autoAssignCurrentConversation = useCallback(() => {
+    if (!selectedPhone) return;
+    const userId = sellerLinkedUserId || currentUserId;
+    if (!userId) return;
+    assignConversation({
+      phone: selectedPhone,
+      whatsappNumberId: selectedConvNumberId,
+      userId,
+      name: selectedSellerName || null,
+      onlyIfUnassigned: true,
+    });
+  }, [selectedPhone, selectedConvNumberId, sellerLinkedUserId, currentUserId, selectedSellerName, assignConversation]);
 
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
