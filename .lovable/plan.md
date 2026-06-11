@@ -1,85 +1,88 @@
-# Plano 2 — Notificações discretas no atendimento
+# Plano: filtro de período + sincronização ativa de estoque com a Shopify
 
-Dois tipos de aviso, cada um no seu formato, sem nunca bloquear o envio:
-
-1. **Barra de regra acima do input** (enquanto digita) — ex.: "Sua mensagem não termina com pergunta. Que tal puxar uma resposta da cliente?"
-2. **Card flutuante no canto do chat** — contadores da vendedora logada: "X clientes aguardando sua resposta" e "Y follow-ups pra fazer hoje".
-
-Tudo é camada de UI por cima do que já existe. Não mexe em `handleSend`, `useChatSender`, roteamento de instância nem nas tabelas de mensagens.
+Duas frentes independentes. Nada será executado agora — isto é só o plano.
 
 ---
 
-## Parte A — Regra "terminar com pergunta" (enquanto digita)
+## Parte 1 — Filtro de período do Dashboard Geral
 
-### Como funciona
-- Avalia o rascunho atual a cada digitação (debounce ~400ms, igual à barra de ortografia).
-- Se a mensagem tem conteúdo e **não** termina com `?`, mostra a barra de aviso acima do input.
-- **Exceções** (não mostra o aviso):
-  - Mensagem contém frase de fechamento (lista pré-cadastrada).
-  - Conversa está marcada como paga/finalizada (status já existente no enriquecimento da conversa).
-  - Mensagem muito curta (ex.: "ok", "👍") ou só emoji/link.
-- É só lembrete visual com botão "ok, ignorar" — **nunca** impede o envio nem altera o texto.
+**Onde:** `src/components/pos/POSGeneralDashboard.tsx` (apenas frontend).
 
-### Lista inicial de frases de fechamento (já entregue no código)
-`obrigada`, `obrigado`, `agradeço`, `pedido enviado`, `pedido a caminho`, `enviado pelos correios`, `código de rastreio`, `até logo`, `até mais`, `volte sempre`, `qualquer coisa estou à disposição`, `estou à disposição`, `tenha um ótimo dia`, `boa compra`, `seja bem-vinda de volta`, `finalizado`, `pagamento confirmado`, `compra concluída`.
+Hoje o seletor só tem `Hoje / Semana / Mês` e calcula tudo a partir de `now()`. Vamos adicionar:
 
----
+- **Meses anteriores:** opções pré-prontas (ex.: "Mês passado", e/ou um seletor de mês/ano) que definem `start = início do mês escolhido` e `end = fim do mês escolhido`.
+- **Período personalizado:** um seletor de intervalo de datas (Popover + Calendar já existentes no projeto) com data inicial e final livres.
 
-## Parte B — Card flutuante de contadores (por vendedora logada)
+**Detalhes técnicos:**
+- Estender o estado `period` para aceitar `"last_month"` e `"custom"`, guardando `customRange {from, to}`.
+- Ajustar o `useMemo` `periodRange` para devolver `start/end/label/days` conforme a opção.
+- A query de vendas já usa `startIso/endIso`, então só muda a origem das datas — nenhuma lógica de negócio do dashboard precisa mudar.
+- A comparação de metas (`elapsedStart`) deve usar o início do período selecionado.
 
-### Conteúdo
-- **"X clientes aguardando você"** → conversas atribuídas à vendedora logada cuja última mensagem é da cliente (estado `awaiting_reply` que o app já calcula).
-- **"Y follow-ups pra fazer"** → follow-ups agendados/de pagamento vencidos atribuídos a ela.
-
-### Comportamento
-- Card discreto no canto inferior da área de chat, recolhível, com badge de total.
-- Atualiza ao abrir o chat e a cada ~60s (e no realtime que já existe).
-- Clicar num contador filtra/destaca as conversas correspondentes na lista.
-- Escopo sempre a vendedora logada, usando o sistema de atribuição que já criamos (`chat_conversation_assignments`).
+```text
+[ Período ▼ ]  -> Hoje | Semana | Mês | Mês passado | Personalizado…
+                                              └─ abre calendário (intervalo)
+```
 
 ---
 
-## Parte C — Tela de configuração de regras
+## Parte 2 — Sincronização ATIVA de estoque com a Shopify (sem cron)
 
-Nova aba em configurações do chat (admin) para ligar/desligar e ajustar sem mexer em código:
+### Como o sistema funciona hoje (descoberto na investigação)
+- Toda venda grava em `pos_sales` + `pos_sale_items`.
+- O trigger `trg_pos_sales_stock_movement` (função `apply_pos_sale_stock_movement`) roda **na hora** da venda: abate `pos_products.stock` na loja de origem, registra em `pos_stock_adjustments` e **já dispara `net.http_post` para a edge function `tiny-mirror-stock`** (push event-driven para o Tiny).
+- O mapa para a Shopify existe em `product_variants`: `gtin` (= barcode), `sku`, `shopify_variant_id`, `master_id`.
+- Vendas do site chegam por `shopify-webhook`, que insere `pos_sales` com `store_id = loja Tiny Shopify`.
 
-- Ativar/desativar a regra "terminar com pergunta".
-- Editar a **lista de frases de fechamento** (exceções) — já vem populada com a lista acima.
-- Ativar/desativar e configurar os contadores (limite de follow-ups considerado "do dia", on/off do card).
-- Estrutura pensada para receber **novas regras** no futuro (ex.: tempo de resposta), sem refatorar.
+Ou seja: a "tubulação" event-driven já existe para o Tiny. Vamos espelhar para a Shopify e corrigir a regra de estoque compartilhado.
+
+### A) Corrigir a baixa para respeitar o estoque compartilhado
+**Onde:** migração na função `apply_pos_sale_stock_movement`.
+
+Problema do print (On Cloud): a loja Tiny Shopify tem **0** daquela variação, mas o estoque do site é a soma de todas as lojas. Hoje o trigger só abate na loja-alvo da venda.
+
+Nova regra por item vendido (casado por `barcode`, senão `sku`):
+1. Se a loja-alvo da venda tem saldo suficiente daquela variação → abate nela (comportamento atual).
+2. Se **não** tem saldo (caso Tiny Shopify = 0) → escolhe automaticamente a loja que tiver saldo daquela variação (maior saldo primeiro) e abate de lá.
+3. Registra em `pos_stock_adjustments` a loja real de onde saiu.
+
+Isso garante que vendas do site retirem o par da loja Pérola/Centro/etc. quando a Tiny Shopify não tem o item, e da própria Tiny Shopify quando ela tem.
+
+### B) Nova edge function `shopify-mirror-stock` (push na venda)
+**Onde:** `supabase/functions/shopify-mirror-stock/index.ts` (nova), nos moldes da `tiny-mirror-stock`.
+
+- Recebe os itens da venda (barcodes/skus afetados).
+- Para cada barcode → encontra `product_variants.shopify_variant_id` (via `gtin`/`sku`).
+- Calcula o **estoque compartilhado** = `SUM(pos_products.stock)` daquele barcode em **todas** as lojas.
+- Chama a Shopify `inventory_levels/set.json` com o **valor absoluto** (a soma), não um decremento.
+  - Usar valor absoluto (igual à `sync-master-product-stock`) é mais robusto: evita drift e divergências por corrida/retry; o número no site sempre reflete o saldo real do sistema.
+- Usa as credenciais já existentes (`SHOPIFY_STORE_DOMAIN` / `SHOPIFY_ACCESS_TOKEN`).
+
+### C) Disparo automático a partir do trigger
+**Onde:** mesma migração da função do trigger.
+
+- Depois de abater o estoque, montar um payload com os itens que possuem `shopify_variant_id` e disparar `net.http_post` para `shopify-mirror-stock` — exatamente como já é feito para o `tiny-mirror-stock`.
+- Resultado: venda no PDV / Live / Site → estoque abatido no sistema → Shopify atualizada na hora, automaticamente. Sem cron.
+
+### D) Garantir a baixa correta nas vendas vindas do site
+**Onde:** `supabase/functions/shopify-webhook/index.ts`.
+
+- Hoje o webhook grava `pos_sale_items` só com `sku` (sem `barcode`), o que pode falhar no casamento.
+- Enriquecer cada `line_item`: usar `line_item.variant_id` → `product_variants.shopify_variant_id` → preencher `sku` + `barcode (gtin)` corretos no item.
+- Assim o trigger casa o item e a regra (A) abate do estoque certo (Tiny Shopify se tiver, senão outra loja com saldo).
+- Como a Shopify já reduz o próprio inventário quando o pedido é feito no site, o push da Shopify usa **set absoluto = soma das lojas** — fica idempotente e auto-corretivo mesmo para pedidos originados no site (sem dupla baixa).
 
 ---
 
-## Detalhes técnicos
+## Pontos de atenção / decisões
+- **Set absoluto vs decremento:** recomendo set absoluto (soma das lojas) para a Shopify — robusto contra reprocessamento e corridas. Confirme se concorda.
+- **Loops:** o push à Shopify é seguro mesmo para vendas que vieram da Shopify, porque é um "set" para o saldo verdadeiro do sistema (não um decremento que poderia contar duas vezes).
+- **Variações sem `shopify_variant_id`:** simplesmente ignoradas no push (produto não publicado na Shopify) — sem erro.
+- **Cancelamento/estorno:** o trigger já trata `cancelled` devolvendo estoque; o push à Shopify (set = nova soma) refletirá a devolução automaticamente.
+- **Logs:** registrar resultado do push (sucesso/erro por variante) para auditoria, sem cron de verificação.
 
-### Banco (1 migração)
-- Tabela `chat_attendance_rules` (config global do tenant):
-  - `id`, `rule_key` (ex.: `end_with_question`), `enabled` (bool), `config` (jsonb — guarda a lista de frases, limites etc.), `updated_at`.
-  - GRANT para `authenticated`/`service_role`; RLS com leitura para usuários autenticados e escrita para admin (`has_role`).
-  - Seed inicial da regra `end_with_question` com `enabled=true` e a lista de frases no `config`.
-
-### Frontend
-- `src/lib/attendance/closingPhrases.ts` — lista padrão + normalização (sem acento/minúsculo).
-- `src/lib/attendance/rules.ts` — engine puro: `evaluateDraft(text, ctx, config)` → retorna avisos. Fácil de adicionar regras novas.
-- `src/hooks/useAttendanceRules.ts` — carrega config de `chat_attendance_rules` (cache), expõe regras ativas.
-- `src/hooks/useComposerNudges.ts` — debounce do rascunho + `evaluateDraft`, devolve avisos da conversa aberta.
-- `src/components/chat/ComposerRuleBar.tsx` — barra discreta acima do input (mesmo padrão visual da barra de ortografia), com "ignorar".
-- `src/hooks/useAttendantWorkload.ts` — calcula contadores da vendedora logada a partir do enriquecimento de conversas já existente + `chat_scheduled_followups`/`chat_payment_followups`.
-- `src/components/chat/AttendantNudgeCard.tsx` — card flutuante recolhível.
-- `src/components/settings/AttendanceRulesSettings.tsx` — tela de configuração (admin).
-
-### Integração
-- `ChatView.tsx` (POS) e `Chat.tsx` (geral): renderizar `ComposerRuleBar` acima do input (junto da barra de ortografia) e `AttendantNudgeCard` no canto.
-- Reaproveitar `awaiting_reply` do enriquecimento atual; **nenhuma** mudança no fluxo de envio.
-
-### Fora de escopo (fases futuras)
-- Avaliação de qualidade do atendimento.
-- Revisão de texto com IA.
-- Regras subjetivas (tom de voz, empatia).
-
----
-
-## Riscos e mitigação
-- **Quebrar o envio:** nada toca em `handleSend`/`useChatSender` — só leitura e UI.
-- **Falso positivo na regra:** lista de exceções editável + botão ignorar + nunca bloqueia.
-- **Performance dos contadores:** usa dados já carregados + intervalo de 60s, sem queries pesadas por tecla.
+## Resumo dos arquivos a tocar (na execução)
+- `src/components/pos/POSGeneralDashboard.tsx` — filtro de período (mês anterior + personalizado).
+- Migração — ajustar `apply_pos_sale_stock_movement` (estoque compartilhado + disparo Shopify).
+- `supabase/functions/shopify-mirror-stock/index.ts` — nova função de push.
+- `supabase/functions/shopify-webhook/index.ts` — enriquecer itens com barcode.

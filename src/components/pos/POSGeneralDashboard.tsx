@@ -1,20 +1,24 @@
 import { useEffect, useState, useMemo } from "react";
-import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings } from "lucide-react";
+import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings, CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import type { DateRange } from "react-day-picker";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { startOfMonth, endOfMonth, startOfDay, startOfWeek, endOfDay, differenceInDays, isAfter, isBefore } from "date-fns";
+import { startOfMonth, endOfMonth, startOfDay, startOfWeek, endOfDay, differenceInDays, isAfter, isBefore, subMonths, format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/businessDays";
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 
 interface Props { onBack: () => void }
 
-type Period = "today" | "week" | "month";
+type Period = "today" | "week" | "month" | "last_month" | "custom";
 
 interface StoreData {
   id: string;
@@ -79,6 +83,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [period, setPeriod] = useState<Period>("month");
+  const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [goalsDialogOpen, setGoalsDialogOpen] = useState(false);
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [salesRows, setSalesRows] = useState<any[]>([]);
@@ -90,9 +96,23 @@ export function POSGeneralDashboard({ onBack }: Props) {
     const now = new Date();
     if (period === "today") return { start: startOfDay(now), end: endOfDay(now), label: "Hoje", days: 1 };
     if (period === "week") return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfDay(now), label: "Semana", days: 7 };
+    if (period === "last_month") {
+      const lm = subMonths(now, 1);
+      const s = startOfMonth(lm);
+      const e = endOfMonth(lm);
+      return { start: s, end: e, label: format(s, "MMM/yyyy", { locale: ptBR }), days: differenceInDays(e, s) + 1 };
+    }
+    if (period === "custom" && customRange?.from) {
+      const s = startOfDay(customRange.from);
+      const e = endOfDay(customRange.to ?? customRange.from);
+      const label = customRange.to
+        ? `${format(s, "dd/MM", { locale: ptBR })} – ${format(e, "dd/MM", { locale: ptBR })}`
+        : format(s, "dd/MM/yyyy", { locale: ptBR });
+      return { start: s, end: e, label, days: differenceInDays(e, s) + 1 };
+    }
     const s = startOfMonth(now);
     return { start: s, end: endOfDay(now), label: "Mês", days: differenceInDays(endOfDay(now), s) + 1 };
-  }, [period]);
+  }, [period, customRange]);
 
   const load = async () => {
     setLoading(true);
@@ -182,7 +202,12 @@ export function POSGeneralDashboard({ onBack }: Props) {
     }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [period]);
+  useEffect(() => {
+    // Espera o usuário escolher as duas datas no modo personalizado
+    if (period === "custom" && !customRange?.from) return;
+    load();
+    /* eslint-disable-next-line */
+  }, [period, customRange?.from, customRange?.to]);
 
   const storeData: StoreData[] = useMemo(() => {
     return stores.map(s => {
@@ -278,16 +303,22 @@ export function POSGeneralDashboard({ onBack }: Props) {
     const total = Array.from(byStore.values()).reduce((a, b) => a + b, 0);
 
     // Ritmo por DIAS ÚTEIS (seg-sáb, excluindo domingos e feriados nacionais).
-    // Meta diária = meta total ÷ dias úteis do mês. Esperado = meta diária × dias úteis decorridos.
-    const monthStart = startOfMonth(now);
-    const monthEnd = endOfMonth(now);
-    const holidays = getBrazilianHolidays(now.getFullYear());
+    // Meta diária = meta total ÷ dias úteis do mês de referência.
+    const refDate = (period === "last_month" || period === "custom") ? periodRange.start : now;
+    const monthStart = startOfMonth(refDate);
+    const monthEnd = endOfMonth(refDate);
+    const holidays = getBrazilianHolidays(refDate.getFullYear());
     const totalBusinessDays = countBusinessDays(monthStart, monthEnd, holidays);
     const dailyTarget = totalBusinessDays > 0 ? total / totalBusinessDays : 0;
 
     // Dias úteis decorridos conforme o período selecionado
-    const elapsedStart = period === "month" ? monthStart : period === "week" ? periodRange.start : startOfDay(now);
-    const elapsedBusinessDays = countBusinessDays(elapsedStart, now, holidays);
+    let elapsedStart: Date;
+    let elapsedEnd: Date;
+    if (period === "month") { elapsedStart = monthStart; elapsedEnd = now; }
+    else if (period === "week") { elapsedStart = periodRange.start; elapsedEnd = now; }
+    else if (period === "today") { elapsedStart = startOfDay(now); elapsedEnd = now; }
+    else { elapsedStart = periodRange.start; elapsedEnd = periodRange.end; } // last_month / custom
+    const elapsedBusinessDays = countBusinessDays(elapsedStart, elapsedEnd, holidays);
     const expected = dailyTarget * elapsedBusinessDays;
 
     return { byStore, total, expected, dailyTarget, totalBusinessDays, elapsedBusinessDays };
@@ -322,14 +353,50 @@ export function POSGeneralDashboard({ onBack }: Props) {
           </h2>
           <p className="text-[11px] text-zinc-500">Faturamento · margem · metas em tempo real</p>
         </div>
-        <Select value={period} onValueChange={v => setPeriod(v as Period)}>
-          <SelectTrigger className="w-32 h-9 bg-zinc-800 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
+        <Select
+          value={period}
+          onValueChange={v => {
+            const p = v as Period;
+            setPeriod(p);
+            if (p === "custom") setCalendarOpen(true);
+          }}
+        >
+          <SelectTrigger className="w-36 h-9 bg-zinc-800 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="today">Hoje</SelectItem>
             <SelectItem value="week">Semana</SelectItem>
             <SelectItem value="month">Mês</SelectItem>
+            <SelectItem value="last_month">Mês passado</SelectItem>
+            <SelectItem value="custom">Personalizado…</SelectItem>
           </SelectContent>
         </Select>
+        {period === "custom" && (
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="h-9 gap-2 bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700">
+                <CalendarIcon className="h-3.5 w-3.5" />
+                {customRange?.from
+                  ? (customRange.to
+                      ? `${format(customRange.from, "dd/MM", { locale: ptBR })} – ${format(customRange.to, "dd/MM", { locale: ptBR })}`
+                      : format(customRange.from, "dd/MM/yyyy", { locale: ptBR }))
+                  : "Escolher datas"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-700" align="end">
+              <Calendar
+                mode="range"
+                selected={customRange}
+                onSelect={(r) => {
+                  setCustomRange(r);
+                  if (r?.from && r?.to) setCalendarOpen(false);
+                }}
+                numberOfMonths={2}
+                locale={ptBR}
+                className="pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+        )}
         <Button size="sm" onClick={() => setGoalsDialogOpen(true)} className="gap-2 bg-zinc-800 border border-zinc-700 text-zinc-200 hover:bg-zinc-700">
           <Settings className="h-3.5 w-3.5" /> Metas
         </Button>
