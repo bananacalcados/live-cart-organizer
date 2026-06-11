@@ -483,6 +483,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
         <Button size="sm" onClick={() => setGoalsDialogOpen(true)} className="gap-2 bg-zinc-800 border border-zinc-700 text-zinc-200 hover:bg-zinc-700">
           <Settings className="h-3.5 w-3.5" /> Metas
         </Button>
+        <Button size="sm" onClick={() => setTaskDialogOpen(true)} className="gap-2 bg-zinc-800 border border-zinc-700 text-zinc-200 hover:bg-zinc-700">
+          <ClipboardList className="h-3.5 w-3.5" /> Tarefas
+        </Button>
+
         <Button size="sm" onClick={handleSyncShopify} disabled={syncing} className="gap-2 bg-gradient-to-r from-zinc-200 to-zinc-400 text-zinc-900 hover:from-white hover:to-zinc-300">
           {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           Sync Shopify
