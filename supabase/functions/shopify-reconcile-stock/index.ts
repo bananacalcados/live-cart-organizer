@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
         const inventoryItemId = varJson?.variant?.inventory_item_id;
         if (!inventoryItemId) {
           results.push({ variant: v.shopify_variant_id, gtin: barcode, ok: false, error: "inventory_item_id not found" });
-          await sleep(300);
+          await sleep(650);
           continue;
         }
 
@@ -130,10 +130,10 @@ Deno.serve(async (req) => {
           const errText = await setRes.text().catch(() => "");
           results.push({ variant: v.shopify_variant_id, gtin: barcode, ok: false, error: errText.slice(0, 200) });
         }
-        await sleep(350);
+        await sleep(650);
       } catch (e: any) {
         results.push({ variant: v.shopify_variant_id, ok: false, error: String(e?.message || e) });
-        await sleep(300);
+        await sleep(650);
       }
     }
 
