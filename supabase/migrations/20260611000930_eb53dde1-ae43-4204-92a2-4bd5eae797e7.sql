@@ -1,0 +1,1 @@
+ALTER TABLE public.chat_conversation_assignments ADD COLUMN IF NOT EXISTS assigned_name text;
