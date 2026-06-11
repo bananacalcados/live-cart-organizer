@@ -42,6 +42,10 @@ import { AutoReplySettings } from "@/components/chat/AutoReplySettings";
 import { AiTransferBell } from "@/components/chat/AiTransferBell";
 import { AttendantMetrics } from "@/components/chat/AttendantMetrics";
 import { useConversationAssignments } from "@/hooks/useConversationAssignments";
+import { SpellSuggestionBar } from "@/components/chat/SpellSuggestionBar";
+import { useSpellAssist } from "@/hooks/useSpellAssist";
+import { capitalizeSentences } from "@/lib/spellAssist/capitalize";
+import { applySuggestion } from "@/lib/spellAssist/dictionary";
 import {
   Select,
   SelectContent,
@@ -142,6 +146,8 @@ export default function ChatPage() {
   const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const { suggestions: spellSuggestions, dismiss: dismissSpell, addToDictionary: addSpellWord } =
+    useSpellAssist(newMessage);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
@@ -1463,6 +1469,15 @@ export default function ChatPage() {
                 </div>
               )}
 
+              {!isRecording && (
+                <SpellSuggestionBar
+                  suggestions={spellSuggestions}
+                  onApply={(m, replacement) => setNewMessage(applySuggestion(newMessage, m, replacement))}
+                  onDismiss={dismissSpell}
+                  onAddToDictionary={addSpellWord}
+                />
+              )}
+
               {/* Input bar */}
               {!isRecording && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-[#202c33] border-t border-[#2a3942]">
@@ -1502,7 +1517,7 @@ export default function ChatPage() {
                     ref={inputRef}
                     placeholder="Digite uma mensagem"
                     value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
+                    onChange={(e) => setNewMessage(capitalizeSentences(e.target.value))}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                     className="flex-1 bg-[#2a3942] border-none text-[#e9edef] placeholder:text-[#8696a0] focus-visible:ring-0 h-10 rounded-lg"
                   />

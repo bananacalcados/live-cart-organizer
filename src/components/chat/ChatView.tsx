@@ -47,6 +47,10 @@ import { QuickReplyPicker } from "./QuickReplyPicker";
 import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
 import { AiTransferBanner } from "./AiTransferBanner";
 import { ChatExtraSender } from "./ChatExtraSender";
+import { SpellSuggestionBar } from "./SpellSuggestionBar";
+import { useSpellAssist } from "@/hooks/useSpellAssist";
+import { capitalizeSentences } from "@/lib/spellAssist/capitalize";
+import { applySuggestion } from "@/lib/spellAssist/dictionary";
 
 /** Format a raw BR phone (digits only) for friendly display in group sender labels. */
 function formatPhoneDisplay(raw: string): string {
@@ -110,6 +114,8 @@ export function ChatView({
   onCancelQuote,
   onExtraSent,
 }: ChatViewProps) {
+  const { suggestions: spellSuggestions, dismiss: dismissSpell, addToDictionary: addSpellWord } =
+    useSpellAssist(newMessage);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -953,6 +959,13 @@ export function ChatView({
         />
       )}
 
+      <SpellSuggestionBar
+        suggestions={spellSuggestions}
+        onApply={(m, replacement) => onNewMessageChange(applySuggestion(newMessage, m, replacement))}
+        onDismiss={dismissSpell}
+        onAddToDictionary={addSpellWord}
+      />
+
       {/* Input */}
       <div className="p-2 border-t bg-[#f0f0f0] dark:bg-[#202c33] flex items-center gap-2 flex-shrink-0">
         {audioPreviewUrl ? (
@@ -1063,7 +1076,7 @@ export function ChatView({
             <textarea
               placeholder="Digite uma mensagem..."
               value={newMessage}
-              onChange={(e) => onNewMessageChange(e.target.value)}
+              onChange={(e) => onNewMessageChange(capitalizeSentences(e.target.value))}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
