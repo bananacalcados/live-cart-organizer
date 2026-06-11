@@ -361,17 +361,75 @@ export function POSGeneralDashboard({ onBack }: Props) {
             const p = v as Period;
             setPeriod(p);
             if (p === "custom") setCalendarOpen(true);
+            if (p === "month_pick") {
+              setPickerYear(pickedMonth.getFullYear());
+              setMonthPickerOpen(true);
+            }
           }}
         >
-          <SelectTrigger className="w-36 h-9 bg-zinc-800 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-40 h-9 bg-zinc-800 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="today">Hoje</SelectItem>
             <SelectItem value="week">Semana</SelectItem>
             <SelectItem value="month">Mês</SelectItem>
-            <SelectItem value="last_month">Mês passado</SelectItem>
+            <SelectItem value="month_pick">Meses anteriores</SelectItem>
             <SelectItem value="custom">Personalizado…</SelectItem>
           </SelectContent>
         </Select>
+        {period === "month_pick" && (
+          <Popover open={monthPickerOpen} onOpenChange={setMonthPickerOpen}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="h-9 gap-2 bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700 capitalize">
+                <CalendarIcon className="h-3.5 w-3.5" />
+                {format(pickedMonth, "MMMM 'de' yyyy", { locale: ptBR })}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3 bg-zinc-900 border-zinc-700 text-zinc-100" align="end">
+              <div className="flex items-center justify-between mb-3">
+                <Button
+                  size="icon" variant="ghost"
+                  className="h-7 w-7 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                  onClick={() => setPickerYear(y => y - 1)}
+                >
+                  ‹
+                </Button>
+                <span className="text-sm font-semibold text-zinc-100">{pickerYear}</span>
+                <Button
+                  size="icon" variant="ghost"
+                  className="h-7 w-7 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                  onClick={() => setPickerYear(y => Math.min(y + 1, new Date().getFullYear()))}
+                  disabled={pickerYear >= new Date().getFullYear()}
+                >
+                  ›
+                </Button>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {Array.from({ length: 12 }).map((_, m) => {
+                  const d = new Date(pickerYear, m, 1);
+                  const isFuture = isAfter(startOfMonth(d), startOfMonth(new Date()));
+                  const selected = pickedMonth.getFullYear() === pickerYear && pickedMonth.getMonth() === m;
+                  return (
+                    <Button
+                      key={m}
+                      size="sm"
+                      variant={selected ? "default" : "ghost"}
+                      disabled={isFuture}
+                      onClick={() => {
+                        setPickedMonth(startOfMonth(d));
+                        setMonthPickerOpen(false);
+                      }}
+                      className={selected
+                        ? "h-9 capitalize bg-orange-500 hover:bg-orange-600 text-white"
+                        : "h-9 capitalize text-zinc-200 hover:bg-zinc-800 hover:text-white"}
+                    >
+                      {format(d, "MMM", { locale: ptBR })}
+                    </Button>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
         {period === "custom" && (
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
@@ -384,7 +442,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
                   : "Escolher datas"}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-700" align="end">
+            <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-700 text-zinc-100" align="end">
               <Calendar
                 mode="range"
                 selected={customRange}
@@ -395,6 +453,17 @@ export function POSGeneralDashboard({ onBack }: Props) {
                 numberOfMonths={2}
                 locale={ptBR}
                 className="pointer-events-auto"
+                classNames={{
+                  caption_label: "text-sm font-medium text-zinc-100 capitalize",
+                  nav_button: "h-7 w-7 bg-transparent p-0 text-zinc-300 hover:text-white opacity-80 hover:opacity-100 border border-zinc-700 rounded-md",
+                  head_cell: "text-zinc-400 rounded-md w-9 font-normal text-[0.8rem]",
+                  day: "h-9 w-9 p-0 font-normal text-zinc-200 hover:bg-zinc-700 hover:text-white rounded-md aria-selected:opacity-100",
+                  day_selected: "bg-orange-500 text-white hover:bg-orange-600 hover:text-white focus:bg-orange-500 focus:text-white",
+                  day_today: "bg-zinc-700 text-white",
+                  day_outside: "text-zinc-600 opacity-50",
+                  day_disabled: "text-zinc-700 opacity-40",
+                  day_range_middle: "aria-selected:bg-zinc-700 aria-selected:text-white",
+                }}
               />
             </PopoverContent>
           </Popover>
