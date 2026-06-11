@@ -77,8 +77,7 @@ export function SellerTaskReminderPopup({
                   inst={inst}
                   onCompleteManual={() => completeManual(inst.id)}
                   onUncomplete={() => uncomplete(inst.id)}
-                  onMarkContacted={markContacted}
-                  onOpenWhatsApp={onOpenWhatsApp}
+                  onCompose={(phone, name, contactId) => setCompose({ phone, name, contactId })}
                 />
               ))}
             </div>
