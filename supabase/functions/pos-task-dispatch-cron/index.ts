@@ -1,6 +1,11 @@
 // Dispara templates do WhatsApp pessoal das vendedoras/gerentes com a lista
-// de tarefas pendentes do dia. Roda por cron (a cada 5 min) e respeita os
-// horários configurados em pos_task_dispatch_schedules.send_times.
+// de tarefas pendentes do dia.
+//
+// Modos:
+//  1) Cron (sem body / {}): roda a cada 5 min e dispara apenas os agendamentos
+//     cujo horário (America/Sao_Paulo) cai na janela atual.
+//  2) Disparar agora (body { scheduleId, force: true }): ignora horário/last_run
+//     e dispara imediatamente aquele agendamento — usado para testar o template.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -36,6 +41,8 @@ function normalizePhone(raw: string): string {
   return p;
 }
 
+const WINDOW = 5; // minutos de tolerância (cron a cada 5 min)
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -47,28 +54,32 @@ serve(async (req) => {
     const fnBase = `${Deno.env.get("SUPABASE_URL")}/functions/v1`;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
+    let opts: { scheduleId?: string; force?: boolean } = {};
+    try { opts = (await req.json()) || {}; } catch { /* cron sem body */ }
+
     const { date, minutes } = nowSaoPaulo();
 
-    const { data: schedules } = await supabase
-      .from("pos_task_dispatch_schedules")
-      .select("*")
-      .eq("is_active", true);
+    let q = supabase.from("pos_task_dispatch_schedules").select("*").eq("is_active", true);
+    if (opts.scheduleId) q = q.eq("id", opts.scheduleId);
+    const { data: schedules } = await q;
 
     let sent = 0;
-    const WINDOW = 5; // minutos de tolerância (cron a cada 5 min)
+    const errors: string[] = [];
 
     for (const sch of schedules || []) {
-      // Algum horário cai na janela atual?
-      const times: string[] = sch.send_times || [];
-      const due = times.some((t) => {
-        const m = parseHHMM(t);
-        return m !== null && minutes >= m && minutes < m + WINDOW;
-      });
-      if (!due) continue;
+      if (!opts.force) {
+        // Algum horário cai na janela atual?
+        const times: string[] = sch.send_times || [];
+        const due = times.some((t) => {
+          const m = parseHHMM(t);
+          return m !== null && minutes >= m && minutes < m + WINDOW;
+        });
+        if (!due) continue;
 
-      // Evita reenvio no mesmo horário/dia
-      const lastRun = sch.last_run_at ? new Date(sch.last_run_at) : null;
-      if (lastRun && Date.now() - lastRun.getTime() < (WINDOW - 1) * 60000) continue;
+        // Evita reenvio no mesmo horário/dia
+        const lastRun = sch.last_run_at ? new Date(sch.last_run_at) : null;
+        if (lastRun && Date.now() - lastRun.getTime() < (WINDOW - 1) * 60000) continue;
+      }
 
       // Vendedoras alvo
       let sellersQ = supabase
@@ -79,6 +90,10 @@ serve(async (req) => {
         .not("whatsapp_phone", "is", null);
       if (sch.target === "managers") sellersQ = sellersQ.eq("is_manager", true);
       const { data: sellers } = await sellersQ;
+
+      if (!sellers || sellers.length === 0) {
+        errors.push("Nenhuma vendedora com WhatsApp cadastrado para este público.");
+      }
 
       for (const seller of sellers || []) {
         const phone = normalizePhone(seller.whatsapp_phone);
@@ -118,18 +133,27 @@ serve(async (req) => {
           else bodyParameters.push(String(v ?? ""));
         }
 
-        await fetch(`${fnBase}/meta-template-send`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-          body: JSON.stringify({
-            phone,
-            whatsappNumberId: sch.whatsapp_number_id || undefined,
-            templateName: sch.template_name,
-            language: sch.template_language || "pt_BR",
-            bodyParameters,
-          }),
-        }).catch((e) => console.error("send error", e));
-        sent++;
+        try {
+          const resp = await fetch(`${fnBase}/meta-template-send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+            body: JSON.stringify({
+              phone,
+              whatsappNumberId: sch.whatsapp_number_id || undefined,
+              templateName: sch.template_name,
+              language: sch.template_language || "pt_BR",
+              bodyParameters,
+            }),
+          });
+          const out = await resp.json().catch(() => ({}));
+          if (!resp.ok || out?.error) {
+            errors.push(`${seller.name}: ${out?.error || resp.status} ${JSON.stringify(out?.details || "")}`.slice(0, 300));
+          } else {
+            sent++;
+          }
+        } catch (e) {
+          errors.push(`${seller.name}: ${String(e)}`.slice(0, 200));
+        }
       }
 
       await supabase
@@ -138,7 +162,7 @@ serve(async (req) => {
         .eq("id", sch.id);
     }
 
-    return new Response(JSON.stringify({ ok: true, sent }), {
+    return new Response(JSON.stringify({ ok: true, sent, errors }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
