@@ -32,6 +32,7 @@ const CATEGORIES: { value: string; label: string; auto?: boolean }[] = [
 
 const RECURRENCES = [
   { value: "daily", label: "Todo dia" },
+  { value: "weekdays", label: "Dias úteis (seg–sex)" },
   { value: "weekly", label: "Semanal (dia da semana)" },
   { value: "weekly_specific", label: "Semana específica do mês" },
   { value: "monthly", label: "Mensal (dia do mês)" },
@@ -206,7 +207,27 @@ function DefinitionsTab({ storeId }: { storeId: string | null }) {
           </div>
           <div>
             <Label className="text-xs text-zinc-400">Meta (quantidade)</Label>
-            <Input type="number" min={1} value={form.target_count} onChange={(e) => setForm({ ...form, target_count: e.target.value })} className="bg-zinc-900 border-zinc-700" />
+            {canAuto && (
+              <div className="flex items-center gap-2 mb-1">
+                <Switch
+                  checked={!!form.auto_config?.dynamic_target}
+                  onCheckedChange={(v) => setForm({ ...form, auto_config: { ...(form.auto_config || {}), dynamic_target: v } })}
+                />
+                <span className="text-[11px] text-zinc-400">Meta automática (todos os clientes encontrados)</span>
+              </div>
+            )}
+            <Input
+              type="number"
+              min={1}
+              value={form.target_count}
+              onChange={(e) => setForm({ ...form, target_count: e.target.value })}
+              className="bg-zinc-900 border-zinc-700"
+              disabled={canAuto && !!form.auto_config?.dynamic_target}
+              placeholder={canAuto && !!form.auto_config?.dynamic_target ? "Definida pelo sistema" : undefined}
+            />
+            {canAuto && !!form.auto_config?.dynamic_target && (
+              <p className="text-[10px] text-zinc-500 mt-1">A meta vira o nº real de clientes do dia (ex.: pós-venda).</p>
+            )}
           </div>
           <div>
             <Label className="text-xs text-zinc-400">Verificação</Label>
@@ -292,6 +313,11 @@ function RecurrenceConfig({ form, setForm }: { form: any; setForm: (f: any) => v
   const cfg = form.recurrence_config || {};
   const set = (patch: any) => setForm({ ...form, recurrence_config: { ...cfg, ...patch } });
   if (r === "daily") return <div />;
+  if (r === "weekdays") return (
+    <div className="md:col-span-1 self-end">
+      <p className="text-[10px] text-zinc-500">Roda seg–sex. Pós-venda de sex/sáb/dom entra na segunda.</p>
+    </div>
+  );
   if (r === "once") return (
     <div><Label className="text-xs text-zinc-400">Data</Label>
       <Input type="date" value={cfg.date || ""} onChange={(e) => set({ date: e.target.value })} className="bg-zinc-900 border-zinc-700" /></div>

@@ -26,6 +26,23 @@ function todaySaoPaulo(): string {
   return fmt.format(now); // YYYY-MM-DD
 }
 
+// Dia da semana em São Paulo (0=domingo..6=sábado)
+function weekdaySaoPaulo(dateStr: string): number {
+  const d = new Date(dateStr + "T12:00:00-03:00");
+  const wd = new Intl.DateTimeFormat("en-US", { timeZone: "America/Sao_Paulo", weekday: "short" }).format(d);
+  return ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 } as Record<string, number>)[wd] ?? 0;
+}
+
+// Desloca uma data (YYYY-MM-DD) em N dias, mantendo o fuso de São Paulo.
+function shiftDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + "T12:00:00-03:00");
+  d.setDate(d.getDate() + days);
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  return fmt.format(d);
+}
+
 // Verifica se a definição se aplica hoje conforme recorrência.
 function appliesToday(def: any, dateStr: string): boolean {
   const d = new Date(dateStr + "T12:00:00-03:00");
@@ -33,6 +50,11 @@ function appliesToday(def: any, dateStr: string): boolean {
   switch (def.recurrence) {
     case "daily":
       return true;
+    case "weekdays": {
+      // Dias úteis: segunda a sexta (São Paulo)
+      const wd = weekdaySaoPaulo(dateStr);
+      return wd >= 1 && wd <= 5;
+    }
     case "once":
       return cfg.date === dateStr;
     case "weekly": {
@@ -122,7 +144,10 @@ serve(async (req) => {
         if (!appliesToday(def, dateStr)) continue;
         if (!appliesToSeller(def, seller)) continue;
 
-        const target = Math.max(1, Number(def.target_count) || 1);
+        const baseTarget = Math.max(1, Number(def.target_count) || 1);
+        const isAuto = def.verification_mode === "auto";
+        const isContactAuto = isAuto && CONTACT_CATEGORIES.has(def.category);
+        const dynamic = isAuto && (def.auto_config?.dynamic_target === true);
 
         // Já existe?
         const { data: existing } = await supabase
@@ -134,6 +159,19 @@ serve(async (req) => {
           .maybeSingle();
         if (existing) continue;
 
+        // Para tarefas automáticas de contato, monta a lista primeiro
+        // (a meta dinâmica vira o nº real de clientes encontrados).
+        let contacts: { phone: string; name: string; meta?: any }[] = [];
+        if (isContactAuto) {
+          const cap = dynamic ? 500 : baseTarget;
+          contacts = await buildContacts(supabase, def, storeId, cap, dateStr);
+        }
+
+        let target: number;
+        if (!isAuto) target = 1;
+        else if (dynamic) target = isContactAuto ? Math.max(1, contacts.length) : baseTarget;
+        else target = baseTarget;
+
         const { data: inst, error: instErr } = await supabase
           .from("pos_seller_task_instances")
           .insert({
@@ -143,7 +181,7 @@ serve(async (req) => {
             due_date: dateStr,
             status: "pending",
             progress_current: 0,
-            progress_target: def.verification_mode === "auto" ? target : 1,
+            progress_target: target,
             payload: {},
           })
           .select("id")
@@ -151,9 +189,7 @@ serve(async (req) => {
         if (instErr || !inst) continue;
         created++;
 
-        // Gera contatos para tarefas automáticas baseadas em contato
-        if (def.verification_mode === "auto" && CONTACT_CATEGORIES.has(def.category)) {
-          const contacts = await buildContacts(supabase, def, storeId, target);
+        if (isContactAuto) {
           if (contacts.length > 0) {
             await supabase.from("pos_task_contacts").insert(
               contacts.map((c) => ({
@@ -163,6 +199,12 @@ serve(async (req) => {
                 customer_meta: c.meta || {},
               })),
             );
+          } else if (dynamic) {
+            // Meta dinâmica sem clientes hoje: nada a fazer, conclui na hora.
+            await supabase
+              .from("pos_seller_task_instances")
+              .update({ status: "completed", completion_mode: "auto", completed_at: new Date().toISOString() })
+              .eq("id", inst.id);
           }
         }
       }
@@ -179,7 +221,7 @@ serve(async (req) => {
   }
 });
 
-async function buildContacts(supabase: any, def: any, storeId: string, target: number) {
+async function buildContacts(supabase: any, def: any, storeId: string, target: number, dateStr: string) {
   const cfg = def.auto_config || {};
   const out: { phone: string; name: string; meta?: any }[] = [];
 
@@ -200,17 +242,29 @@ async function buildContacts(supabase: any, def: any, storeId: string, target: n
       if (out.length >= target) break;
     }
   } else if (def.category === "post_sale") {
-    // Pós-venda: clientes que compraram ontem nesta loja
-    const since = new Date(Date.now() - 36 * 3600 * 1000).toISOString();
+    // Pós-venda: clientes que compraram no(s) dia(s) anterior(es) nesta loja.
+    // Em recorrência "dias úteis", a segunda-feira puxa sexta + sábado + domingo.
+    const wd = weekdaySaoPaulo(dateStr);
+    let startDate: string;
+    let endDate: string;
+    if (def.recurrence === "weekdays" && wd === 1) {
+      startDate = shiftDate(dateStr, -3); // sexta
+      endDate = shiftDate(dateStr, -1);   // domingo
+    } else {
+      startDate = endDate = shiftDate(dateStr, -1); // ontem
+    }
+    const startIso = `${startDate}T00:00:00-03:00`;
+    const endIso = `${endDate}T23:59:59-03:00`;
     const { data } = await supabase
       .from("pos_sales")
       .select("customer_name, customer_phone, created_at")
       .eq("store_id", storeId)
       .neq("status", "cancelled")
-      .gte("created_at", since)
+      .gte("created_at", startIso)
+      .lte("created_at", endIso)
       .not("customer_phone", "is", null)
       .order("created_at", { ascending: false })
-      .limit(target * 2);
+      .limit(Math.max(target * 2, 50));
     const seen = new Set<string>();
     for (const s of data || []) {
       const ph = (s.customer_phone || "").replace(/\D/g, "");
