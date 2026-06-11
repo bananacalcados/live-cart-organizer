@@ -51,6 +51,8 @@ interface ConversationListProps {
   liveStageMap?: Record<string, { stageTitle: string; eventName?: string; color?: string }>;
   teamChatActive?: boolean;
   onTeamChatClick?: () => void;
+  /** Number of arrived (restocked) product-wait notifications, drives the pulsing badge */
+  productArrivedCount?: number;
   /** Resolves the attendant name handling a conversation, by conversation key */
   getAssignedName?: (conversationKey: string) => string | null;
 }
