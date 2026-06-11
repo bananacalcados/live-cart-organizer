@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
+import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações.
@@ -324,12 +325,25 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       });
     }
 
+    const mpTypeId = String(mpPayment.payment_type_id || "");
+    const mpMethodId = String(mpPayment.payment_method_id || "");
+    const inst = Number(mpPayment.installments || 1);
+    const payLabel = normalizeGatewayPaymentLabel({
+      gateway: "mercadopago",
+      paymentTypeId: mpTypeId,
+      paymentMethodId: mpMethodId,
+      installments: inst,
+    }) || "PIX";
+    const paidAt = new Date().toISOString();
+
     const { error } = await supabase
       .from("orders")
       .update({
         is_paid: true,
-        paid_at: new Date().toISOString(),
+        paid_at: paidAt,
         stage: "paid",
+        payment_method_label: payLabel,
+        installments: inst,
         notes: `🔔 Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
       })
       .eq("id", order.id);
@@ -339,6 +353,16 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     } else {
       console.log(`[mercadopago] Order ${order.id} marked as paid via webhook`);
       updated = true;
+
+      await syncOrderPaymentToPosSale(supabase, {
+        orderId: order.id,
+        paymentMethodLabel: payLabel,
+        installments: inst,
+        paymentGateway: "mercadopago",
+        transactionField: "mercadopago_payment_id",
+        transactionValue: mpIdStr,
+        paidAt,
+      });
 
       // Deactivate AI session and send payment confirmation to customer
       try {
