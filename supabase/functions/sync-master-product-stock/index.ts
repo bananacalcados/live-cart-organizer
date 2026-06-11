@@ -103,12 +103,20 @@ Deno.serve(async (req) => {
           "Content-Type": "application/json",
         };
 
-        // Pega o location_id principal (assumindo conta padrão)
+        const pickPrimaryLocation = (locations: Array<{ id: number; name?: string | null; active?: boolean }>) => {
+          const active = (locations || []).filter((loc) => loc?.active !== false);
+          const preferred = active.find((loc) => String(loc.name || "").toLowerCase().includes("tiny shopify"));
+          return preferred || active[0] || locations?.[0] || null;
+        };
+
+        // Pega o location_id canônico
         const locRes = await fetch(`https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/locations.json`, {
           headers,
         });
         const locJson = await locRes.json().catch(() => ({}));
-        const locationId = locJson?.locations?.[0]?.id;
+        const locations = Array.isArray(locJson?.locations) ? locJson.locations : [];
+        const primaryLocation = pickPrimaryLocation(locations);
+        const locationId = primaryLocation?.id;
 
         if (!locationId) {
           result.shopify = { error: "Location não encontrado na Shopify" };
@@ -154,6 +162,30 @@ Deno.serve(async (req) => {
                 body: JSON.stringify({ inventory_item: { id: inventoryItemId, tracked: true } }),
               },
             ).catch(() => {});
+
+            const levelsRes = await fetch(
+              `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels.json?inventory_item_ids=${inventoryItemId}`,
+              { headers },
+            );
+            const levelsJson = await levelsRes.json().catch(() => ({}));
+            const levels = Array.isArray(levelsJson?.inventory_levels) ? levelsJson.inventory_levels : [];
+
+            for (const level of levels) {
+              const currentLocationId = level?.location_id;
+              if (!currentLocationId || Number(currentLocationId) === Number(locationId)) continue;
+              await fetch(
+                `https://${SHOPIFY_DOMAIN}/admin/api/${apiVer}/inventory_levels/set.json`,
+                {
+                  method: "POST",
+                  headers,
+                  body: JSON.stringify({
+                    location_id: currentLocationId,
+                    inventory_item_id: inventoryItemId,
+                    available: 0,
+                  }),
+                },
+              ).catch(() => {});
+            }
 
             // Define o estoque (compartilhado entre todas as lojas)
             const sharedStock = v.gtin && sharedStockByGtin[String(v.gtin)] !== undefined

@@ -1,7 +1,7 @@
 // Verifica se os itens de um pedido (orders.products JSONB) têm estoque
-// disponível considerando a soma de:
-//   - pos_products (lojas físicas: PEROLA + CENTRO)
-//   - Shopify (Admin API: inventory_levels por variante)
+// disponível usando o estoque COMPARTILHADO do sistema como fonte da verdade.
+// A Shopify é consultada apenas como fallback quando a variação ainda não foi
+// encontrada internamente.
 //
 // Retorna ok=true quando todos os itens têm estoque suficiente (ou não estão
 // cadastrados em nenhum dos sistemas — controle externo). Retorna ok=false e a
@@ -112,7 +112,7 @@ export async function checkOrderStock(supabase: any, products: OrderProductLike[
     }
   }
 
-  // 3) Para cada item, soma estoque PDV + Shopify
+  // 3) Para cada item, usa POS como fonte de verdade e Shopify só como fallback
   const SHOPIFY_DOMAIN = Deno.env.get("SHOPIFY_STORE_DOMAIN") || Deno.env.get("SHOPIFY_DOMAIN");
   const SHOPIFY_TOKEN = Deno.env.get("SHOPIFY_ADMIN_ACCESS_TOKEN") || Deno.env.get("SHOPIFY_ACCESS_TOKEN");
   const shopifyEnabled = Boolean(SHOPIFY_DOMAIN && SHOPIFY_TOKEN);
@@ -129,7 +129,7 @@ export async function checkOrderStock(supabase: any, products: OrderProductLike[
 
     let shopifyStock = 0;
     let shopifyKnown = false;
-    if (shopifyEnabled && variantId) {
+    if (shopifyEnabled && variantId && !posKnown) {
       const v = await fetchShopifyVariantStock(SHOPIFY_DOMAIN!, SHOPIFY_TOKEN!, variantId);
       if (v !== null) {
         shopifyKnown = true;
@@ -143,7 +143,7 @@ export async function checkOrderStock(supabase: any, products: OrderProductLike[
       continue;
     }
 
-    const available = (posKnown ? posStock : 0) + (shopifyKnown ? shopifyStock : 0);
+    const available = posKnown ? posStock : (shopifyKnown ? shopifyStock : 0);
     checked++;
     if (available < qty) {
       issues.push({
