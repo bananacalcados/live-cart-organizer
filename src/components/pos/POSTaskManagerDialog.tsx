@@ -44,19 +44,22 @@ const WEEKDAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "
 interface Props {
   open: boolean;
   onClose: () => void;
-  storeId: string | null;
+  stores: { id: string; name: string }[];
 }
 
-export function POSTaskManagerDialog({ open, onClose, storeId }: Props) {
+export function POSTaskManagerDialog({ open, onClose, stores }: Props) {
   const [unlocked, setUnlocked] = useState(false);
   const [pwd, setPwd] = useState("");
+  const [storeId, setStoreId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setUnlocked(sessionStorage.getItem("pos_task_cfg_unlocked") === "1");
       setPwd("");
+      setStoreId((prev) => prev || stores[0]?.id || null);
     }
-  }, [open]);
+  }, [open, stores]);
+
 
   const tryUnlock = () => {
     if (pwd === TASK_PASSWORD) {
