@@ -6866,8 +6866,83 @@ export type Database = {
           },
         ]
       }
+      link_page_catalog_products: {
+        Row: {
+          compare_at_price: number | null
+          created_at: string
+          grade_available: number
+          grade_pct: number
+          grade_total: number
+          handle: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          is_bestseller: boolean
+          is_new_arrival: boolean
+          last_synced_at: string
+          page_id: string
+          price: number | null
+          product_type: string | null
+          shopify_product_id: string
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          compare_at_price?: number | null
+          created_at?: string
+          grade_available?: number
+          grade_pct?: number
+          grade_total?: number
+          handle?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          is_bestseller?: boolean
+          is_new_arrival?: boolean
+          last_synced_at?: string
+          page_id: string
+          price?: number | null
+          product_type?: string | null
+          shopify_product_id: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          compare_at_price?: number | null
+          created_at?: string
+          grade_available?: number
+          grade_pct?: number
+          grade_total?: number
+          handle?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          is_bestseller?: boolean
+          is_new_arrival?: boolean
+          last_synced_at?: string
+          page_id?: string
+          price?: number | null
+          product_type?: string | null
+          shopify_product_id?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_page_catalog_products_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "link_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       link_page_items: {
         Row: {
+          card_style: string
           clicks: number
           created_at: string
           description: string | null
@@ -6877,13 +6952,17 @@ export type Database = {
           item_type: string
           label: string
           page_id: string
+          prefill_message: string | null
+          social_network: string | null
           sort_order: number
           style_config: Json
           thumbnail_url: string | null
           updated_at: string
           url: string | null
+          whatsapp_number_id: string | null
         }
         Insert: {
+          card_style?: string
           clicks?: number
           created_at?: string
           description?: string | null
@@ -6893,13 +6972,17 @@ export type Database = {
           item_type?: string
           label: string
           page_id: string
+          prefill_message?: string | null
+          social_network?: string | null
           sort_order?: number
           style_config?: Json
           thumbnail_url?: string | null
           updated_at?: string
           url?: string | null
+          whatsapp_number_id?: string | null
         }
         Update: {
+          card_style?: string
           clicks?: number
           created_at?: string
           description?: string | null
@@ -6909,11 +6992,14 @@ export type Database = {
           item_type?: string
           label?: string
           page_id?: string
+          prefill_message?: string | null
+          social_network?: string | null
           sort_order?: number
           style_config?: Json
           thumbnail_url?: string | null
           updated_at?: string
           url?: string | null
+          whatsapp_number_id?: string | null
         }
         Relationships: [
           {
@@ -6921,6 +7007,71 @@ export type Database = {
             columns: ["page_id"]
             isOneToOne: false
             referencedRelation: "link_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "link_page_items_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "link_page_items_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      link_page_leads: {
+        Row: {
+          ad_lead_id: string | null
+          created_at: string
+          customer_id: string | null
+          id: string
+          is_existing_customer: boolean
+          name: string
+          page_id: string
+          phone: string
+          seller_id: string | null
+        }
+        Insert: {
+          ad_lead_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          is_existing_customer?: boolean
+          name: string
+          page_id: string
+          phone: string
+          seller_id?: string | null
+        }
+        Update: {
+          ad_lead_id?: string | null
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          is_existing_customer?: boolean
+          name?: string
+          page_id?: string
+          phone?: string
+          seller_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "link_page_leads_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "link_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "link_page_leads_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
             referencedColumns: ["id"]
           },
         ]
@@ -6932,8 +7083,11 @@ export type Database = {
           id: string
           ip_hash: string | null
           item_id: string | null
+          lead_id: string | null
+          lead_phone: string | null
           page_id: string
           referrer: string | null
+          seller_id: string | null
           user_agent: string | null
           utm_campaign: string | null
           utm_content: string | null
@@ -6947,8 +7101,11 @@ export type Database = {
           id?: string
           ip_hash?: string | null
           item_id?: string | null
+          lead_id?: string | null
+          lead_phone?: string | null
           page_id: string
           referrer?: string | null
+          seller_id?: string | null
           user_agent?: string | null
           utm_campaign?: string | null
           utm_content?: string | null
@@ -6962,8 +7119,11 @@ export type Database = {
           id?: string
           ip_hash?: string | null
           item_id?: string | null
+          lead_id?: string | null
+          lead_phone?: string | null
           page_id?: string
           referrer?: string | null
+          seller_id?: string | null
           user_agent?: string | null
           utm_campaign?: string | null
           utm_content?: string | null
@@ -6993,10 +7153,15 @@ export type Database = {
           avatar_url: string | null
           background_type: string
           background_value: string
+          catalog_auto_sync: boolean
+          catalog_mode: string
           created_at: string
           id: string
           is_active: boolean
+          logo_url: string | null
           meta_pixel_id: string | null
+          require_lead_capture: boolean
+          seller_id: string | null
           slug: string
           store_id: string | null
           subtitle: string | null
@@ -7010,10 +7175,15 @@ export type Database = {
           avatar_url?: string | null
           background_type?: string
           background_value?: string
+          catalog_auto_sync?: boolean
+          catalog_mode?: string
           created_at?: string
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           meta_pixel_id?: string | null
+          require_lead_capture?: boolean
+          seller_id?: string | null
           slug: string
           store_id?: string | null
           subtitle?: string | null
@@ -7027,10 +7197,15 @@ export type Database = {
           avatar_url?: string | null
           background_type?: string
           background_value?: string
+          catalog_auto_sync?: boolean
+          catalog_mode?: string
           created_at?: string
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           meta_pixel_id?: string | null
+          require_lead_capture?: boolean
+          seller_id?: string | null
           slug?: string
           store_id?: string | null
           subtitle?: string | null
@@ -7041,6 +7216,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "link_pages_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "link_pages_store_id_fkey"
             columns: ["store_id"]
