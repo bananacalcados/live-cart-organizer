@@ -85,6 +85,8 @@ interface ChatViewProps {
   onCancelQuote?: () => void;
   /** Recarrega o histórico após envio de contato/localização/enquete (WaSender). */
   onExtraSent?: () => void;
+  /** Esconde a barra de tags interna (quando o cabeçalho externo já gerencia tags). */
+  hideTagsBar?: boolean;
 }
 
 const PREDEFINED_TAGS = [
