@@ -8,15 +8,31 @@ interface WorkloadConversation {
   isFinished?: boolean;
   isArchived?: boolean;
   isAwaitingProduct?: boolean;
+  lastMessageAt?: Date;
 }
 
 export interface AttendantWorkload {
   awaitingCount: number;
   followupCount: number;
+  /** Maior tempo (em minutos) que um cliente está aguardando resposta. */
+  longestWaitMinutes: number;
+  /** Rótulo amigável do maior tempo de espera (ex.: "25 min", "1h 10"). */
+  longestWaitLabel: string;
+  /** Taxa de resposta (0-100): conversas já respondidas / total ativo. */
+  responseRate: number;
   showAwaiting: boolean;
   showFollowups: boolean;
   enabled: boolean;
 }
+
+function formatWait(minutes: number): string {
+  if (minutes <= 0) return "agora";
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${String(m).padStart(2, "0")}` : `${h}h`;
+}
+
 
 const suffix = (p: string) => p.replace(/\D/g, "").slice(-8);
 
