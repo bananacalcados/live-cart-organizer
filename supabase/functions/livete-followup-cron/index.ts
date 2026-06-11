@@ -237,6 +237,9 @@ serve(async (req) => {
     // single run — even when they have several unpaid orders (anti-ban).
     const seenPhones = new Set<string>();
 
+    // Bloqueio cross-instância: contato bloqueado não recebe follow-up.
+    const blockedSuffixes = await loadBlockedSuffixes(supabase);
+
     for (const fu of followups) {
       const dedupeKey = `phone:${fu.phone}`;
       if (seenPhones.has(dedupeKey)) {
@@ -249,6 +252,17 @@ serve(async (req) => {
         continue;
       }
       seenPhones.add(dedupeKey);
+
+      // Contato bloqueado: desativa o follow-up e não envia.
+      if (isBlocked(blockedSuffixes, fu.phone)) {
+        await supabase.from('livete_followups').update({
+          is_active: false, completed_at: now.toISOString(), updated_at: now.toISOString(),
+        }).eq('id', fu.id);
+        deactivated++;
+        console.log(`[livete-followup] ${fu.phone} contato bloqueado, desativado`);
+        continue;
+      }
+
       // Check if order is now paid
       if (fu.order_id) {
         const { data: paidCheck } = await supabase.rpc('check_order_paid', { p_order_id: fu.order_id });
