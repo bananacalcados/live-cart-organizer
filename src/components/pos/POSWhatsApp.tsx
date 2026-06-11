@@ -1446,7 +1446,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           <TeamChatPanel onBack={() => setTeamChatActive(false)} />
         ) : selectedPhone ? (
           <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden relative">
-            <AttendantNudgeCard conversations={conversations} />
+            <AttendantNudgeCard conversations={conversationsFlagged} />
+            <ProductArrivalCard
+              arrived={waitlist.arrived}
+              onOpenConversation={handleSelectConversation}
+              onDismiss={waitlist.markNotified}
+            />
             {/* Cabeçalho compacto: nome/telefone (clicável p/ pedidos) + instância + tags + ações */}
             <div className="flex items-center gap-1.5 px-2 py-1.5 border-b bg-muted/30 flex-shrink-0 flex-wrap">
               <Button variant="ghost" size="icon" className="h-7 w-7 hidden md:flex flex-shrink-0" onClick={() => setSelectedPhone(null)}>
