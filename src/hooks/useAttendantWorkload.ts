@@ -168,6 +168,9 @@ export function useAttendantWorkload(conversations: WorkloadConversation[]): Att
     awaitingCount,
     // o card mostra o maior sinal entre status da conversa e tabelas de follow-up
     followupCount: Math.max(conversationFollowups, followupCount),
+    longestWaitMinutes,
+    longestWaitLabel: formatWait(longestWaitMinutes),
+    responseRate,
     showAwaiting,
     showFollowups,
     enabled,
