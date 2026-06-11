@@ -673,6 +673,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
       </ScrollArea>
 
       <POSGoalsManagerDialog open={goalsDialogOpen} onClose={() => setGoalsDialogOpen(false)} onSaved={load} />
+      <POSTaskManagerDialog open={taskDialogOpen} onClose={() => setTaskDialogOpen(false)} stores={stores} />
+
 
       <POSPaymentSalesModal
         open={paymentModal.open}
