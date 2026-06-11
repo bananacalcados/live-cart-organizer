@@ -202,7 +202,12 @@ export function POSGeneralDashboard({ onBack }: Props) {
     }
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [period]);
+  useEffect(() => {
+    // Espera o usuário escolher as duas datas no modo personalizado
+    if (period === "custom" && !customRange?.from) return;
+    load();
+    /* eslint-disable-next-line */
+  }, [period, customRange?.from, customRange?.to]);
 
   const storeData: StoreData[] = useMemo(() => {
     return stores.map(s => {
