@@ -121,6 +121,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [showSellerGate, setShowSellerGate] = useState(true);
+  const [showTaskPopup, setShowTaskPopup] = useState(false);
+
   const sellerKey = `pos_whatsapp_seller_id_${storeId}`;
   const sellerNameKey = `pos_whatsapp_seller_name_${storeId}`;
   const sellerLinkedKey = `pos_whatsapp_seller_linked_${storeId}`;
