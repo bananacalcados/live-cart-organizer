@@ -40,7 +40,7 @@ export function useAttendantWorkload(conversations: WorkloadConversation[]): Att
   const awaitingCount = useMemo(
     () =>
       conversations.filter(
-        (c) => c.conversationStatus === "awaiting_reply" && !c.isFinished && !c.isArchived,
+        (c) => c.conversationStatus === "awaiting_reply" && !c.isFinished && !c.isArchived && !c.isAwaitingProduct,
       ).length,
     [conversations],
   );
