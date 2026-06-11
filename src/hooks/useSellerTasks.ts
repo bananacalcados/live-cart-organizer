@@ -49,7 +49,7 @@ export function useSellerTasks(storeId: string | null, sellerId: string | null) 
     const date = todaySaoPaulo();
     const { data, error } = await supabase
       .from("pos_seller_task_instances" as any)
-      .select("*, pos_task_definitions(title, description, category, verification_mode, points_reward)")
+      .select("*, pos_task_definitions(title, description, category, verification_mode, points_reward, target_count)")
       .eq("seller_id", sellerId)
       .eq("due_date", date);
     if (error) { console.error(error); return; }
@@ -81,6 +81,7 @@ export function useSellerTasks(storeId: string | null, sellerId: string | null) 
       category: i.pos_task_definitions?.category || "custom",
       verification_mode: i.pos_task_definitions?.verification_mode || "manual",
       points_reward: i.pos_task_definitions?.points_reward || 0,
+      target_count: i.pos_task_definitions?.target_count || 1,
       contacts: contactsByInstance[i.id] || [],
     }));
     setInstances(mapped);
