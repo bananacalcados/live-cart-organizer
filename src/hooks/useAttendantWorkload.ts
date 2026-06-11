@@ -51,7 +51,7 @@ export function useAttendantWorkload(conversations: WorkloadConversation[]): Att
   const conversationFollowups = useMemo(
     () =>
       conversations.filter(
-        (c) => c.conversationStatus === "awaiting_customer" && !c.isFinished && !c.isArchived,
+        (c) => c.conversationStatus === "awaiting_customer" && !c.isFinished && !c.isArchived && !c.isAwaitingProduct,
       ).length,
     [conversations],
   );
