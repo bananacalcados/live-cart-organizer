@@ -81,6 +81,7 @@ export function ConversationList({
   liveStageMap = {},
   teamChatActive,
   onTeamChatClick,
+  getAssignedName,
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
