@@ -83,6 +83,7 @@ export function ConversationList({
   liveStageMap = {},
   teamChatActive,
   onTeamChatClick,
+  productArrivedCount = 0,
   getAssignedName,
 }: ConversationListProps) {
   const [selectMode, setSelectMode] = useState(false);
