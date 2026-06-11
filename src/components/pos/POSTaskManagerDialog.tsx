@@ -323,6 +323,14 @@ function RecurrenceConfig({ form, setForm }: { form: any; setForm: (f: any) => v
     <div><Label className="text-xs text-zinc-400">Data</Label>
       <Input type="date" value={cfg.date || ""} onChange={(e) => set({ date: e.target.value })} className="bg-zinc-900 border-zinc-700" /></div>
   );
+  if (r === "custom_range") return (
+    <div className="md:col-span-2 grid grid-cols-2 gap-2">
+      <div><Label className="text-xs text-zinc-400">Início</Label>
+        <Input type="date" value={cfg.start_date || ""} onChange={(e) => set({ start_date: e.target.value })} className="bg-zinc-900 border-zinc-700" /></div>
+      <div><Label className="text-xs text-zinc-400">Fim</Label>
+        <Input type="date" value={cfg.end_date || ""} onChange={(e) => set({ end_date: e.target.value })} className="bg-zinc-900 border-zinc-700" /></div>
+    </div>
+  );
   if (r === "weekly") return (
     <div><Label className="text-xs text-zinc-400">Dia da semana</Label>
       <Select value={String(cfg.weekday ?? "")} onValueChange={(v) => set({ weekday: Number(v) })}>
@@ -331,16 +339,32 @@ function RecurrenceConfig({ form, setForm }: { form: any; setForm: (f: any) => v
       </Select></div>
   );
   if (r === "weekly_specific") return (
-    <div><Label className="text-xs text-zinc-400">Semana do mês (1-5)</Label>
-      <Input type="number" min={1} max={5} value={cfg.week_of_month || ""} onChange={(e) => set({ week_of_month: Number(e.target.value) })} className="bg-zinc-900 border-zinc-700" /></div>
+    <div><Label className="text-xs text-zinc-400">Semana do mês</Label>
+      <Select value={String(cfg.week_of_month ?? "")} onValueChange={(v) => set({ week_of_month: Number(v) })}>
+        <SelectTrigger className="bg-zinc-900 border-zinc-700"><SelectValue placeholder="Escolher" /></SelectTrigger>
+        <SelectContent>{[1, 2, 3, 4, 5].map((n) => <SelectItem key={n} value={String(n)}>{n}ª semana</SelectItem>)}</SelectContent>
+      </Select></div>
   );
   if (r === "monthly") return (
-    <div><Label className="text-xs text-zinc-400">Dia do mês (1-31)</Label>
-      <Input type="number" min={1} max={31} value={cfg.day_of_month || ""} onChange={(e) => set({ day_of_month: Number(e.target.value) })} className="bg-zinc-900 border-zinc-700" /></div>
+    <div><Label className="text-xs text-zinc-400">Dia do mês</Label>
+      <Select value={String(cfg.day_of_month ?? "")} onValueChange={(v) => set({ day_of_month: Number(v) })}>
+        <SelectTrigger className="bg-zinc-900 border-zinc-700"><SelectValue placeholder="Escolher" /></SelectTrigger>
+        <SelectContent className="max-h-60">{Array.from({ length: 31 }, (_, i) => i + 1).map((n) => <SelectItem key={n} value={String(n)}>Dia {n}</SelectItem>)}</SelectContent>
+      </Select></div>
   );
   if (r === "monthly_specific") return (
-    <div><Label className="text-xs text-zinc-400">Mês (1-12)</Label>
-      <Input type="number" min={1} max={12} value={cfg.month || ""} onChange={(e) => set({ month: Number(e.target.value) })} className="bg-zinc-900 border-zinc-700" /></div>
+    <div className="grid grid-cols-2 gap-2 md:col-span-2">
+      <div><Label className="text-xs text-zinc-400">Mês</Label>
+        <Select value={String(cfg.month ?? "")} onValueChange={(v) => set({ month: Number(v) })}>
+          <SelectTrigger className="bg-zinc-900 border-zinc-700"><SelectValue placeholder="Mês" /></SelectTrigger>
+          <SelectContent className="max-h-60">{MONTHS.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
+        </Select></div>
+      <div><Label className="text-xs text-zinc-400">Dia (opcional)</Label>
+        <Select value={String(cfg.day_of_month ?? "")} onValueChange={(v) => set({ day_of_month: Number(v) })}>
+          <SelectTrigger className="bg-zinc-900 border-zinc-700"><SelectValue placeholder="Qualquer" /></SelectTrigger>
+          <SelectContent className="max-h-60">{Array.from({ length: 31 }, (_, i) => i + 1).map((n) => <SelectItem key={n} value={String(n)}>Dia {n}</SelectItem>)}</SelectContent>
+        </Select></div>
+    </div>
   );
   return <div />;
 }
