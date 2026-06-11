@@ -37,14 +37,29 @@ export function useChatMessages(
   const conversationKey = `${phone ?? ''}|${numberId ?? ''}|${phoneVariations?.join(',') ?? ''}`;
   // Guarda a chave da requisição mais recente para descartar respostas fora de ordem.
   const latestKeyRef = useRef(conversationKey);
+  // Assinatura do último conjunto de mensagens renderizado. Usada para evitar
+  // re-render/scroll desnecessários quando o refetch traz exatamente os mesmos dados
+  // (causa do "piscar" do chat a cada polling/broadcast).
+  const sigRef = useRef('');
 
-  const load = useCallback(async () => {
+  const buildSignature = (rows: Message[]) =>
+    rows
+      .map(
+        (r) =>
+          `${r.id}:${r.status ?? ''}:${(r as any).sender_name ?? ''}:${r.message ?? ''}:${r.media_url ?? ''}`,
+      )
+      .join('|');
+
+  // `silent = true` → atualização em segundo plano (polling/broadcast): não mexe no
+  // estado de loading e só troca o array de mensagens se algo realmente mudou.
+  const load = useCallback(async (silent = false) => {
     if (!phone) {
+      sigRef.current = '';
       setMessages([]);
       return;
     }
     const requestKey = conversationKey;
-    setIsLoading(true);
+    if (!silent) setIsLoading(true);
     let query = supabase
       .from('whatsapp_messages')
       .select('*')
@@ -65,21 +80,28 @@ export function useChatMessages(
     const { data } = await query;
     // Descarta respostas de uma conversa que já não está mais aberta (race condition).
     if (latestKeyRef.current !== requestKey) return;
-    setMessages((data as Message[]) || []);
-    setIsLoading(false);
+    const rows = (data as Message[]) || [];
+    const sig = buildSignature(rows);
+    // Só atualiza o estado (e dispara re-render/auto-scroll) quando os dados mudaram.
+    if (sig !== sigRef.current) {
+      sigRef.current = sig;
+      setMessages(rows);
+    }
+    if (!silent) setIsLoading(false);
   }, [phone, numberId, conversationKey, phoneVariations?.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ao trocar de conversa: limpa imediatamente o histórico antigo e marca a nova chave
   // como a mais recente, evitando que mensagens do chat anterior fiquem visíveis.
   useEffect(() => {
     latestKeyRef.current = conversationKey;
+    sigRef.current = '';
     setMessages([]);
     if (phone) setIsLoading(true);
   }, [conversationKey, phone]);
 
-  // Initial + reactive load
+  // Initial + reactive load (mostra loading apenas na carga inicial/troca de conversa)
   useEffect(() => {
-    load();
+    load(false);
   }, [load]);
 
   // Realtime via broadcast (low CPU, replaces postgres_changes)
@@ -91,13 +113,14 @@ export function useChatMessages(
       const variations = phoneVariations && phoneVariations.length > 0 ? phoneVariations : [phone];
       if (!variations.includes(payload.phone)) return;
     }
-    load();
+    // Atualização silenciosa: não pisca o chat se nada mudou.
+    load(true);
   });
 
-  // Status polling (✓✓ refresh)
+  // Status polling (✓✓ refresh) — silencioso para não recarregar a tela
   useEffect(() => {
     if (disablePolling || !phone) return;
-    const interval = setInterval(() => load(), 15000);
+    const interval = setInterval(() => load(true), 15000);
     return () => clearInterval(interval);
   }, [phone, disablePolling, load]);
 
