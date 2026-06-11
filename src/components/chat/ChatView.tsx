@@ -964,6 +964,8 @@ export function ChatView({
         />
       )}
 
+      <ComposerRuleBar nudges={composerNudges} onDismiss={dismissNudge} />
+
       <SpellSuggestionBar
         suggestions={spellSuggestions}
         onApply={(m, replacement) => onNewMessageChange(applySuggestion(newMessage, m, replacement))}
