@@ -323,6 +323,7 @@ export function ConversationList({
           <Pill label="Finalizadas" active={statusFilter === 'finished' && !liveFilterActive} onClick={() => pickRailStatus('finished')} />
           <Pill label="Arquivadas" active={statusFilter === 'archived' && !liveFilterActive} count={archivedCount} onClick={() => pickRailStatus('archived')} />
           <Pill label="Disparos" active={statusFilter === 'dispatch' && !liveFilterActive} count={dispatchCount} onClick={() => pickRailStatus('dispatch')} />
+          <Pill label="Espera Produtos" active={statusFilter === 'awaiting_product' && !liveFilterActive} count={awaitingProductCount} badge={productArrivedCount > 0 && statusFilter !== 'awaiting_product'} onClick={() => pickRailStatus('awaiting_product')} />
         </div>
 
 
