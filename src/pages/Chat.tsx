@@ -910,6 +910,9 @@ export default function ChatPage() {
   const selectedConv = conversations.find(c => c.conversationKey === selectedConvKey) || conversations.find(c => c.phone === selectedPhone);
   const contactsCount = conversations.filter(c => !c.isGroup).length;
   const groupsCount = conversations.filter(c => c.isGroup).length;
+  const { nudges: composerNudges, dismiss: dismissNudge } = useComposerNudges(newMessage, {
+    isFinished: (selectedConv as { isFinished?: boolean } | undefined)?.isFinished,
+  });
 
   const filteredTemplates = templates.filter(t =>
     t.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
