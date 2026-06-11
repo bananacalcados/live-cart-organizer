@@ -18,7 +18,7 @@ import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 
 interface Props { onBack: () => void }
 
-type Period = "today" | "week" | "month" | "last_month" | "custom";
+type Period = "today" | "week" | "month" | "month_pick" | "custom";
 
 interface StoreData {
   id: string;
