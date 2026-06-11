@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 import { POSCustomerForm } from "./POSCustomerForm";
 import { POSBarcodeScanner } from "./POSBarcodeScanner";
 import { POSSellerGate } from "./POSSellerGate";
+import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
+
 import { POSPrizeWheel } from "./POSPrizeWheel";
 import { POSLoyaltyScreen } from "./POSLoyaltyScreen";
 import { POSSlotMachine } from "./POSSlotMachine";
@@ -78,6 +80,11 @@ interface Props {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+const todayKey = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
+
+
 export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPreloaded, onNavigateToWhatsApp, onCloseSalesView }: Props) {
   const [cart, setCart] = useState<CartItem[]>([]);
   // Tipo de venda (Presencial=NFC-e, Online=NF-e + Envios)
@@ -115,6 +122,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [selectedCrediarioGateway, setSelectedCrediarioGateway] = useState<string>("");
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [selectedSeller, setSelectedSeller] = useState<string>("");
+  const [showTaskPopup, setShowTaskPopup] = useState(false);
+
   const [loadingSellers, setLoadingSellers] = useState(false);
   const [finalizingSale, setFinalizingSale] = useState(false);
   const [saleResult, setSaleResult] = useState<{ tiny_order_id?: string; tiny_order_number?: string; sale_id?: string } | null>(null);
@@ -1544,11 +1553,18 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       <POSSellerGate
         storeId={storeId}
         sellers={sellers}
-        onSellerSelected={(id) => { setSelectedSeller(id); setShowSaleTypeModal(true); }}
+        onSellerSelected={(id) => {
+          setSelectedSeller(id);
+          setShowSaleTypeModal(true);
+          if (sessionStorage.getItem(`pos_task_popup_${storeId}_${id}`) !== todayKey()) {
+            setShowTaskPopup(true);
+          }
+        }}
         onClose={onCloseSalesView}
       />
     );
   }
+
 
   // Sale-type gate: depois de escolher vendedor, escolher Presencial vs Online
   if (selectedSeller && !saleType) {
@@ -1585,6 +1601,21 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
+      {selectedSeller && (
+        <SellerTaskReminderPopup
+          open={showTaskPopup}
+          onClose={() => {
+            setShowTaskPopup(false);
+            sessionStorage.setItem(`pos_task_popup_${storeId}_${selectedSeller}`, todayKey());
+          }}
+          storeId={storeId}
+          sellerId={selectedSeller}
+          sellerName={sellers.find(s => s.id === selectedSeller)?.name || ""}
+          isManager={(sellers.find(s => s.id === selectedSeller) as any)?.is_manager}
+          onOpenWhatsApp={(phone) => onNavigateToWhatsApp?.()}
+        />
+      )}
+
       {/* Notification Dashboard */}
       {step === "scan" && (
         <div className="flex items-stretch gap-2 md:gap-3 px-3 md:px-4 pt-2 md:pt-3 pb-1 overflow-x-auto scrollbar-hide">

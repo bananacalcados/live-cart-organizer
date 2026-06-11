@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings, CalendarIcon } from "lucide-react";
+import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings, CalendarIcon, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -15,6 +15,9 @@ import { ptBR } from "date-fns/locale";
 import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/businessDays";
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
+import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
+
+
 
 interface Props { onBack: () => void }
 
@@ -96,6 +99,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState<number>(subMonths(new Date(), 1).getFullYear());
   const [goalsDialogOpen, setGoalsDialogOpen] = useState(false);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [salesRows, setSalesRows] = useState<any[]>([]);
   const [goals, setGoals] = useState<GoalRow[]>([]);
@@ -478,6 +483,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
         <Button size="sm" onClick={() => setGoalsDialogOpen(true)} className="gap-2 bg-zinc-800 border border-zinc-700 text-zinc-200 hover:bg-zinc-700">
           <Settings className="h-3.5 w-3.5" /> Metas
         </Button>
+        <Button size="sm" onClick={() => setTaskDialogOpen(true)} className="gap-2 bg-zinc-800 border border-zinc-700 text-zinc-200 hover:bg-zinc-700">
+          <ClipboardList className="h-3.5 w-3.5" /> Tarefas
+        </Button>
+
         <Button size="sm" onClick={handleSyncShopify} disabled={syncing} className="gap-2 bg-gradient-to-r from-zinc-200 to-zinc-400 text-zinc-900 hover:from-white hover:to-zinc-300">
           {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
           Sync Shopify
@@ -664,6 +673,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
       </ScrollArea>
 
       <POSGoalsManagerDialog open={goalsDialogOpen} onClose={() => setGoalsDialogOpen(false)} onSaved={load} />
+      <POSTaskManagerDialog open={taskDialogOpen} onClose={() => setTaskDialogOpen(false)} stores={stores} />
+
 
       <POSPaymentSalesModal
         open={paymentModal.open}

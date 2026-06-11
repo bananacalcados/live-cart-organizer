@@ -34,6 +34,11 @@ import { CreateSupportTicketDialog } from "@/components/CreateSupportTicketDialo
 import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
+import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
+
+const taskTodayKey = () =>
+  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
 import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
 import { POSWhatsAppDashboard } from "./POSWhatsAppDashboard";
 import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
@@ -116,6 +121,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
   const [showSellerGate, setShowSellerGate] = useState(true);
+  const [showTaskPopup, setShowTaskPopup] = useState(false);
+
   const sellerKey = `pos_whatsapp_seller_id_${storeId}`;
   const sellerNameKey = `pos_whatsapp_seller_name_${storeId}`;
   const sellerLinkedKey = `pos_whatsapp_seller_linked_${storeId}`;
@@ -1877,9 +1884,27 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           setShowSellerGate(false);
           setShowDashboard(true);
           toast.success(`Vendedora: ${name}`);
+          if (sessionStorage.getItem(`pos_task_popup_${storeId}_${id}`) !== taskTodayKey()) {
+            setShowTaskPopup(true);
+          }
         }}
         onSkip={() => setShowSellerGate(false)}
       />
+
+      {selectedSellerId && (
+        <SellerTaskReminderPopup
+          open={showTaskPopup}
+          onClose={() => {
+            setShowTaskPopup(false);
+            sessionStorage.setItem(`pos_task_popup_${storeId}_${selectedSellerId}`, taskTodayKey());
+          }}
+          storeId={storeId}
+          sellerId={selectedSellerId}
+          sellerName={selectedSellerName || ""}
+          onOpenWhatsApp={(phone) => { setSelectedPhone(phone); }}
+        />
+      )}
+
 
       {/* Finish Conversation Dialog */}
       <POSFinishConversationDialog
