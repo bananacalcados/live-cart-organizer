@@ -912,6 +912,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       }
       setQuotedMessage(null);
       appendOptimistic(messageText, { message_id: result.messageId });
+      autoAssignCurrentConversation();
       loadMessages(selectedPhone, selectedConvNumberId);
     } finally {
       setIsSending(false);
