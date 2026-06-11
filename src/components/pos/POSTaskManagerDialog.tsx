@@ -32,6 +32,7 @@ const CATEGORIES: { value: string; label: string; auto?: boolean }[] = [
 
 const RECURRENCES = [
   { value: "daily", label: "Todo dia" },
+  { value: "weekdays", label: "Dias úteis (seg–sex)" },
   { value: "weekly", label: "Semanal (dia da semana)" },
   { value: "weekly_specific", label: "Semana específica do mês" },
   { value: "monthly", label: "Mensal (dia do mês)" },
