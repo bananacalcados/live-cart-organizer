@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getFollowupPrompt } from "../_shared/livete-stage-prompts.ts";
+import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
