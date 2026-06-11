@@ -209,7 +209,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
     if (period === "custom" && !customRange?.from) return;
     load();
     /* eslint-disable-next-line */
-  }, [period, customRange?.from, customRange?.to]);
+  }, [period, customRange?.from, customRange?.to, pickedMonth]);
 
   const storeData: StoreData[] = useMemo(() => {
     return stores.map(s => {
