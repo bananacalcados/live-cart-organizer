@@ -45,13 +45,11 @@ async function getSpell(): Promise<NspellLike> {
   if (!spellPromise) {
     spellPromise = (async () => {
       const base = import.meta.env.BASE_URL || "/";
-      const [nspellMod, aff, dic] = await Promise.all([
-        import("nspell"),
+      const [aff, dic] = await Promise.all([
         fetch(`${base}dict/pt/index.aff`).then((r) => r.text()),
         fetch(`${base}dict/pt/index.dic`).then((r) => r.text()),
       ]);
-      const nspell = (nspellMod as { default: (aff: string, dic: string) => NspellLike }).default;
-      return nspell(aff, dic);
+      return (nspell as unknown as (aff: string, dic: string) => NspellLike)(aff, dic);
     })();
   }
   return spellPromise;
