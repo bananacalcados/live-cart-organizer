@@ -593,11 +593,48 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         || lead?.name
         || customer?.instagram_handle;
 
+      // CPF: prioriza cadastro do PDV, depois pedidos de expedição
+      const resolvedCpf = posCustomer?.cpf
+        || (expOrders || []).find((o: any) => o.customer_cpf)?.customer_cpf
+        || undefined;
+
+      // Endereço montado a partir do cadastro do PDV ou do shipping_address de um pedido
+      let resolvedAddress: string | undefined;
+      if (posCustomer?.address) {
+        resolvedAddress = [
+          posCustomer.address,
+          posCustomer.address_number,
+          posCustomer.complement,
+          posCustomer.neighborhood,
+          posCustomer.city && posCustomer.state ? `${posCustomer.city}/${posCustomer.state}` : posCustomer.city || posCustomer.state,
+          posCustomer.cep,
+        ].filter(Boolean).join(', ');
+      } else {
+        const ship = (expOrders || []).find((o: any) => o.shipping_address)?.shipping_address as any;
+        if (ship && typeof ship === 'object') {
+          resolvedAddress = [
+            ship.address1 || ship.street || ship.logradouro,
+            ship.number || ship.numero,
+            ship.complement || ship.complemento,
+            ship.neighborhood || ship.bairro,
+            (ship.city || ship.cidade) && (ship.province_code || ship.state || ship.uf)
+              ? `${ship.city || ship.cidade}/${ship.province_code || ship.state || ship.uf}`
+              : ship.city || ship.cidade,
+            ship.zip || ship.cep,
+          ].filter(Boolean).join(', ') || undefined;
+        }
+      }
+
+      const resolvedEmail = posCustomer?.email || zoppyCustomer?.email || lead?.email || undefined;
+
       setCrmData({
         name: resolvedName || undefined,
         instagram: customer?.instagram_handle,
         tags: customer?.tags || [],
         profilePicUrl: contactPhotos[selectedPhone],
+        cpf: resolvedCpf,
+        address: resolvedAddress,
+        email: resolvedEmail,
         orders: (expOrders || []).map(o => ({
           id: o.id,
           orderName: o.shopify_order_name || undefined,
