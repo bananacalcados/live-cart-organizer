@@ -1109,12 +1109,26 @@ export default function ChatPage() {
                           <span className="text-[8px] text-orange-400 flex-shrink-0">🔗</span>
                         )}
                       </div>
-                      <span className={cn(
-                        "text-xs flex-shrink-0 ml-2",
-                        conv.unreadCount > 0 ? "text-[#00a884]" : "text-[#8696a0]"
-                      )}>
-                        {formatConvTime(conv.lastMessageAt)}
-                      </span>
+                      <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-2">
+                        <span className={cn(
+                          "text-xs",
+                          conv.unreadCount > 0 ? "text-[#00a884]" : "text-[#8696a0]"
+                        )}>
+                          {formatConvTime(conv.lastMessageAt)}
+                        </span>
+                        {(() => {
+                          const attendant = getAssignedName?.(conv.conversationKey || `${conv.phone}__${conv.whatsapp_number_id || 'none'}`);
+                          if (!attendant) return null;
+                          return (
+                            <span
+                              className="inline-flex items-center gap-0.5 max-w-[110px] px-1.5 py-[1px] rounded-full text-[9px] font-semibold bg-[#00a884]/20 text-[#25d366] border border-[#00a884]/30 truncate"
+                              title={`Atendente: ${attendant}`}
+                            >
+                              👤 <span className="truncate">{attendant}</span>
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-0.5">
                       <p className="text-sm text-[#8696a0] truncate flex-1">{conv.lastMessage}</p>
