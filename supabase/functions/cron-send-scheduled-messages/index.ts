@@ -36,8 +36,17 @@ serve(async (req) => {
     console.log(`Processing ${pending.length} scheduled messages`);
     let sentCount = 0;
 
+    // Bloqueio cross-instância: não envia mensagem agendada para contato bloqueado.
+    const blockedSuffixes = await loadBlockedSuffixes(supabase);
+
     for (const msg of pending) {
       try {
+        if (isBlocked(blockedSuffixes, msg.phone)) {
+          await supabase.from("scheduled_messages")
+            .update({ status: "blocked", error_message: "contato bloqueado" })
+            .eq("id", msg.id).eq("status", "pending");
+          continue;
+        }
         // Lock: set status to 'sending' to prevent duplicates
         const { error: lockErr } = await supabase
           .from("scheduled_messages")
