@@ -313,6 +313,11 @@ function RecurrenceConfig({ form, setForm }: { form: any; setForm: (f: any) => v
   const cfg = form.recurrence_config || {};
   const set = (patch: any) => setForm({ ...form, recurrence_config: { ...cfg, ...patch } });
   if (r === "daily") return <div />;
+  if (r === "weekdays") return (
+    <div className="md:col-span-1 self-end">
+      <p className="text-[10px] text-zinc-500">Roda seg–sex. Pós-venda de sex/sáb/dom entra na segunda.</p>
+    </div>
+  );
   if (r === "once") return (
     <div><Label className="text-xs text-zinc-400">Data</Label>
       <Input type="date" value={cfg.date || ""} onChange={(e) => set({ date: e.target.value })} className="bg-zinc-900 border-zinc-700" /></div>
