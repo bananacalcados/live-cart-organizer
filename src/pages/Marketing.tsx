@@ -1675,6 +1675,11 @@ export default function Marketing() {
             <SectorManager />
           </TabsContent>
 
+          {/* ── REGRAS DE ATENDIMENTO ── */}
+          <TabsContent value="attendance_rules" className="space-y-4">
+            <AttendanceRulesSettings />
+          </TabsContent>
+
           {/* ── LANDING PAGES ── */}
           <TabsContent value="landing_pages" className="space-y-4">
             <div className="flex items-center justify-between">
