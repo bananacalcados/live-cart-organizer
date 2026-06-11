@@ -212,8 +212,7 @@ function TaskCard({
                           size="sm"
                           className="h-7 bg-[#00a884] hover:bg-[#00916f] text-white text-[11px] gap-1 px-2"
                           onClick={() => {
-                            if (c.customer_phone) onOpenWhatsApp?.(c.customer_phone, c.customer_name || undefined);
-                            onMarkContacted(c.id);
+                            if (c.customer_phone) onCompose(c.customer_phone, c.customer_name || undefined, c.id);
                           }}
                         >
                           <MessageCircle className="h-3 w-3" /> WhatsApp
