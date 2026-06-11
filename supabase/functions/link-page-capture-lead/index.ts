@@ -72,8 +72,8 @@ Deno.serve(async (req) => {
     // Procura cliente existente por sufixo de 8 dígitos
     const { data: existingCustomers } = await supabase
       .from("customers_unified")
-      .select("id, phone, name")
-      .ilike("phone", `%${suffix}`)
+      .select("id, name, tags")
+      .eq("phone_suffix8", suffix)
       .limit(1);
     const existingCustomer = existingCustomers?.[0] || null;
 
@@ -82,10 +82,12 @@ Deno.serve(async (req) => {
 
     if (existingCustomer) {
       customerId = existingCustomer.id;
-      // marca origem por vendedora (sem sobrescrever dados fortes)
-      await supabase.from("customers_unified").update({
-        origin: sellerName ? `Cadastro por vendedora ${sellerName}` : "Link Page",
-      }).eq("id", existingCustomer.id);
+      // marca origem por vendedora via tags (sem sobrescrever dados fortes)
+      const tags: string[] = Array.isArray(existingCustomer.tags) ? existingCustomer.tags : [];
+      if (!tags.includes(tag)) tags.push(tag);
+      const sellerTag = sellerName ? `vendedora:${sellerName}` : null;
+      if (sellerTag && !tags.includes(sellerTag)) tags.push(sellerTag);
+      await supabase.from("customers_unified").update({ tags }).eq("id", existingCustomer.id);
     } else {
       // cria/atualiza ad_lead com tag da página
       const { data: existLead } = await supabase
