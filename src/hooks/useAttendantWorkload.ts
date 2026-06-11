@@ -44,6 +44,17 @@ export function useAttendantWorkload(conversations: WorkloadConversation[]): Att
     [conversations],
   );
 
+  // "Follow-ups pra fazer": mesma base do badge "Follow Up" da lista —
+  // conversas aguardando o cliente (status `awaiting_customer`). Assim o card
+  // sempre bate com o número que a vendedora vê na aba Follow Up.
+  const conversationFollowups = useMemo(
+    () =>
+      conversations.filter(
+        (c) => c.conversationStatus === "awaiting_customer" && !c.isFinished && !c.isArchived,
+      ).length,
+    [conversations],
+  );
+
   // sufixos das conversas da vendedora (estável o suficiente pra dependência)
   const phoneSuffixes = useMemo(() => {
     const set = new Set<string>();
@@ -53,6 +64,9 @@ export function useAttendantWorkload(conversations: WorkloadConversation[]): Att
     return set;
   }, [conversations]);
 
+  // Reforço opcional: follow-ups de pagamento/agendados vencidos cujos telefones
+  // batem com as conversas da vendedora. Usamos o MAIOR entre os dois sinais
+  // pra nunca subestimar o que a vendedora precisa fazer.
   useEffect(() => {
     if (!enabled || !showFollowups || phoneSuffixes.size === 0) {
       setFollowupCount(0);
@@ -95,5 +109,12 @@ export function useAttendantWorkload(conversations: WorkloadConversation[]): Att
     };
   }, [enabled, showFollowups, phoneSuffixes]);
 
-  return { awaitingCount, followupCount, showAwaiting, showFollowups, enabled };
+  return {
+    awaitingCount,
+    // o card mostra o maior sinal entre status da conversa e tabelas de follow-up
+    followupCount: Math.max(conversationFollowups, followupCount),
+    showAwaiting,
+    showFollowups,
+    enabled,
+  };
 }
