@@ -353,14 +353,50 @@ export function POSGeneralDashboard({ onBack }: Props) {
           </h2>
           <p className="text-[11px] text-zinc-500">Faturamento · margem · metas em tempo real</p>
         </div>
-        <Select value={period} onValueChange={v => setPeriod(v as Period)}>
-          <SelectTrigger className="w-32 h-9 bg-zinc-800 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
+        <Select
+          value={period}
+          onValueChange={v => {
+            const p = v as Period;
+            setPeriod(p);
+            if (p === "custom") setCalendarOpen(true);
+          }}
+        >
+          <SelectTrigger className="w-36 h-9 bg-zinc-800 border-zinc-700 text-zinc-100"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="today">Hoje</SelectItem>
             <SelectItem value="week">Semana</SelectItem>
             <SelectItem value="month">Mês</SelectItem>
+            <SelectItem value="last_month">Mês passado</SelectItem>
+            <SelectItem value="custom">Personalizado…</SelectItem>
           </SelectContent>
         </Select>
+        {period === "custom" && (
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" className="h-9 gap-2 bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700">
+                <CalendarIcon className="h-3.5 w-3.5" />
+                {customRange?.from
+                  ? (customRange.to
+                      ? `${format(customRange.from, "dd/MM", { locale: ptBR })} – ${format(customRange.to, "dd/MM", { locale: ptBR })}`
+                      : format(customRange.from, "dd/MM/yyyy", { locale: ptBR }))
+                  : "Escolher datas"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 bg-zinc-900 border-zinc-700" align="end">
+              <Calendar
+                mode="range"
+                selected={customRange}
+                onSelect={(r) => {
+                  setCustomRange(r);
+                  if (r?.from && r?.to) setCalendarOpen(false);
+                }}
+                numberOfMonths={2}
+                locale={ptBR}
+                className="pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+        )}
         <Button size="sm" onClick={() => setGoalsDialogOpen(true)} className="gap-2 bg-zinc-800 border border-zinc-700 text-zinc-200 hover:bg-zinc-700">
           <Settings className="h-3.5 w-3.5" /> Metas
         </Button>
