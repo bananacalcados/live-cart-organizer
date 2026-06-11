@@ -204,6 +204,14 @@ serve(async (req) => {
     const hasDynamicVars = dispatch.has_dynamic_vars || false;
     const headerMediaUrl = dispatch.header_media_url || null;
 
+    // Detect a media header (IMAGE/VIDEO/DOCUMENT) so the chat record shows the
+    // image/video/file that was actually sent with the template — not just text.
+    const headerComp = templateComponents.find((c: any) => c.type === 'HEADER');
+    const headerFormat = (headerComp?.format || 'TEXT').toUpperCase();
+    const isMediaHeader = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat) && !!headerMediaUrl;
+    const chatMediaType = isMediaHeader ? headerFormat.toLowerCase() : 'text';
+    const chatMediaUrl = isMediaHeader ? headerMediaUrl : null;
+
     let totalSent = 0;
     let totalFailed = 0;
     let loops = 0;
