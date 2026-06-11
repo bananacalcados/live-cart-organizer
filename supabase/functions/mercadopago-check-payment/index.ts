@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
 import { getMpAccountByPaymentId, getMpAccountForOrder, getMpAccountForSale } from "../_shared/mp-account.ts";
+import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -167,25 +168,34 @@ serve(async (req) => {
         const mpTypeId = String(mpPayment.payment_type_id || "");
         const mpMethodId = String(mpPayment.payment_method_id || "");
         const inst = Number(mpPayment.installments || 1);
-        const payLabel =
-          mpMethodId === "pix" || mpTypeId === "account_money" || mpTypeId === "bank_transfer"
-            ? "PIX"
-            : mpTypeId === "credit_card"
-              ? (inst > 1 ? `Cartão de Crédito ${inst}x` : "Cartão de Crédito")
-              : mpTypeId === "debit_card"
-                ? "Cartão de Débito"
-                : (mpMethodId ? mpMethodId.toUpperCase() : "PIX");
+        const payLabel = normalizeGatewayPaymentLabel({
+          gateway: "mercadopago",
+          paymentTypeId: mpTypeId,
+          paymentMethodId: mpMethodId,
+          installments: inst,
+        }) || "PIX";
+        const paidAt = new Date().toISOString();
 
         await supabase
           .from("orders")
           .update({
             is_paid: true,
-            paid_at: new Date().toISOString(),
+            paid_at: paidAt,
             stage: "paid",
             payment_method_label: payLabel,
             installments: inst,
           })
           .eq("id", orderId);
+
+        await syncOrderPaymentToPosSale(supabase, {
+          orderId,
+          paymentMethodLabel: payLabel,
+          installments: inst,
+          paymentGateway: "mercadopago",
+          transactionField: "mercadopago_payment_id",
+          transactionValue: String(paymentId),
+          paidAt,
+        });
 
 
         console.log("Order marked as paid:", orderId);
