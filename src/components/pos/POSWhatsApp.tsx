@@ -42,6 +42,9 @@ import { BulkMessageDialog, BulkRecipient } from "@/components/chat/BulkMessageD
 import { useChatSender, type SendRoute } from "@/hooks/chat/useChatSender";
 import { useChatMessages } from "@/hooks/chat/useChatMessages";
 import { TeamChatPanel } from "@/components/chat/TeamChatPanel";
+import { ContactTagsPopover } from "@/components/chat/ContactTagsPopover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useWhatsAppViewStore } from "@/stores/whatsappViewStore";
 
 interface Props {
   storeId: string;
