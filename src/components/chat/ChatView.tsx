@@ -48,7 +48,9 @@ import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
 import { AiTransferBanner } from "./AiTransferBanner";
 import { ChatExtraSender } from "./ChatExtraSender";
 import { SpellSuggestionBar } from "./SpellSuggestionBar";
+import { ComposerRuleBar } from "./ComposerRuleBar";
 import { useSpellAssist } from "@/hooks/useSpellAssist";
+import { useComposerNudges } from "@/hooks/useComposerNudges";
 import { capitalizeSentences } from "@/lib/spellAssist/capitalize";
 import { applySuggestion } from "@/lib/spellAssist/dictionary";
 
