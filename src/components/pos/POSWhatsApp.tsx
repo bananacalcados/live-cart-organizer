@@ -1579,23 +1579,121 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               onExtraSent={() => loadMessages(selectedPhone, selectedConvNumberId)}
             />
 
-            {/* Modal de pedidos do cliente (aberto pelo cabeçalho) */}
+            {/* Modal de dados do cliente (aberto pelo cabeçalho) */}
             <Dialog open={showOrdersModal} onOpenChange={setShowOrdersModal}>
-              <DialogContent className="max-w-md p-0 overflow-hidden gap-0">
-                <DialogHeader className="px-4 py-3 border-b">
-                  <DialogTitle className="text-base flex items-center gap-2">
-                    <User className="h-4 w-4 text-[#00a884]" />
-                    {selectedConversation?.customerName || selectedPhone}
+              <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] p-0 overflow-hidden gap-0">
+                <DialogHeader className="px-6 py-4 border-b bg-gradient-to-r from-[#00a884]/10 to-transparent">
+                  <DialogTitle className="text-lg flex items-center gap-3">
+                    <Avatar className="h-11 w-11">
+                      {selectedPhone && contactPhotos[selectedPhone] ? <AvatarImage src={contactPhotos[selectedPhone]} /> : null}
+                      <AvatarFallback className="bg-[#00a884]/20 text-[#00a884] font-bold">
+                        {getInitials(selectedConversation?.customerName || crmData?.name || selectedPhone || undefined)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col">
+                      <span className="font-bold">{selectedConversation?.customerName || crmData?.name || "Cliente"}</span>
+                      {crmData?.instagram && (
+                        <span className="text-xs font-normal text-muted-foreground">@{crmData.instagram}</span>
+                      )}
+                    </div>
                   </DialogTitle>
                 </DialogHeader>
-                <div className="max-h-[70vh] overflow-y-auto">
-                  {(crmData || liveOrderRef) ? (
-                    fullCustomerInfoPanel
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-8">
-                      Nenhum pedido encontrado para este cliente.
-                    </p>
+                <div className="max-h-[75vh] overflow-y-auto p-5 space-y-5">
+                  {liveOrderRef && (
+                    <POSLiveOrderPanel orderId={liveOrderRef.orderId} eventId={liveOrderRef.eventId} eventName={liveOrderRef.eventName} />
                   )}
+
+                  {/* Dados de contato */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#00a884]/15 text-[#00a884]">
+                        <Phone className="h-4.5 w-4.5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">WhatsApp</p>
+                        <p className="text-sm font-bold text-foreground break-all">{selectedPhone || "—"}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600">
+                        <CreditCard className="h-4.5 w-4.5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">CPF</p>
+                        <p className="text-sm font-bold text-foreground break-all">{crmData?.cpf || "Não informado"}</p>
+                      </div>
+                    </div>
+                    {crmData?.email && (
+                      <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600">
+                          <Mail className="h-4.5 w-4.5" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">E-mail</p>
+                          <p className="text-sm font-bold text-foreground break-all">{crmData.email}</p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-start gap-3 rounded-xl border bg-muted/30 p-3.5 sm:col-span-2">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600">
+                        <MapPin className="h-4.5 w-4.5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Endereço</p>
+                        <p className="text-sm font-medium text-foreground">{crmData?.address || "Não informado"}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  {crmData?.tags && crmData.tags.length > 0 && (
+                    <div className="flex gap-1.5 flex-wrap">
+                      {crmData.tags.map((t) => (
+                        <Badge key={t} variant="secondary" className="bg-[#00a884]/15 text-[#00a884] border-0">{t}</Badge>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Pedidos */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <ShoppingBag className="h-4 w-4 text-pos-orange" />
+                      <h3 className="text-sm font-bold text-foreground">
+                        Pedidos {crmData?.orders?.length ? `(${crmData.orders.length})` : ""}
+                      </h3>
+                    </div>
+                    {crmData?.orders && crmData.orders.length > 0 ? (
+                      <div className="space-y-2">
+                        {crmData.orders.map((o) => (
+                          <div key={o.id} className="flex items-center gap-3 rounded-xl border bg-card p-3.5 shadow-sm">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-pos-orange/15 text-pos-orange">
+                              <Package className="h-5 w-5" />
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono font-bold text-sm">{o.orderName || "—"}</span>
+                                <Badge variant="outline" className="text-[10px]">{statusLabels[o.status || ""] || o.status}</Badge>
+                              </div>
+                              {o.trackingCode && (
+                                <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Truck className="h-3 w-3" /> {o.trackingCode}
+                                </span>
+                              )}
+                            </div>
+                            {o.totalPrice != null && (
+                              <span className="text-base font-bold text-[#00a884] whitespace-nowrap">
+                                R$ {o.totalPrice.toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-6 rounded-xl border border-dashed">
+                        Nenhum pedido encontrado para este cliente.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </DialogContent>
             </Dialog>
