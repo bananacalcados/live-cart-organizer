@@ -353,10 +353,10 @@ export function LinkPageManager() {
                 </div>
                 <div>
                   <Label>Vincular a vendedora (opcional)</Label>
-                  <Select value={newSellerId} onValueChange={setNewSellerId}>
+                  <Select value={newSellerId || "none"} onValueChange={(v) => setNewSellerId(v === "none" ? "" : v)}>
                     <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Nenhuma</SelectItem>
+                      <SelectItem value="none">Nenhuma</SelectItem>
                       {sellers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
