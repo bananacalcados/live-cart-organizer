@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
       if (d.phone && isBlocked(blockedSuffixes, d.phone)) {
         await supabase
           .from("live_campaign_dispatches")
-          .update({ status: "blocked", locked_until: null, error: "contato bloqueado" })
+          .update({ status: "blocked", locked_until: null, error_message: "contato bloqueado" })
           .eq("id", d.id);
         continue;
       }
