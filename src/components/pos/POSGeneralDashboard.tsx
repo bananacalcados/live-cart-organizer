@@ -15,6 +15,9 @@ import { ptBR } from "date-fns/locale";
 import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/businessDays";
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
+import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
+import { ClipboardList } from "lucide-react";
+
 
 interface Props { onBack: () => void }
 
