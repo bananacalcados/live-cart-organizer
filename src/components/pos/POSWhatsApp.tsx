@@ -551,13 +551,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           .maybeSingle(),
         supabase
           .from("expedition_orders")
-          .select("id, shopify_order_name, expedition_status, freight_tracking_code, total_price, shopify_created_at")
+          .select("id, shopify_order_name, expedition_status, freight_tracking_code, total_price, shopify_created_at, customer_cpf, shipping_address")
           .or(`customer_phone.ilike.%${suffix}%`)
           .order("shopify_created_at", { ascending: false })
           .limit(5),
         supabase
           .from("pos_customers")
-          .select("id, name, whatsapp, email")
+          .select("id, name, whatsapp, email, cpf, address, address_number, neighborhood, city, state, cep, complement")
           .or(`whatsapp.ilike.%${suffix}%`)
           .limit(1)
           .maybeSingle(),
