@@ -130,7 +130,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const [showTransferDialog, setShowTransferDialog] = useState(false);
   const [showSendTemplate, setShowSendTemplate] = useState(false);
+  const [showWaitlistDialog, setShowWaitlistDialog] = useState(false);
   const [multiInstanceFilter, setMultiInstanceFilter] = useState<string[]>([]);
+
+  // Espera de produtos: clientes aguardando reposição de uma variação específica.
+  const waitlist = useProductWaitlist();
 
   // Live filter (pedidos da Live / eventos)
   const [liveFilterActive, setLiveFilterActive] = useState(false);
