@@ -29,31 +29,28 @@ const HOURS = Array.from({ length: 24 }, (_, i) => i);
 export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat, onChangeSeller }: Props) {
   const [period, setPeriod] = useState<Period>('7d');
   const [messages, setMessages] = useState<any[]>([]);
-  const [assignments, setAssignments] = useState<any[]>([]);
   const [finishedConvos, setFinishedConvos] = useState<any[]>([]);
   const [storeNumberIds, setStoreNumberIds] = useState<Set<string>>(new Set());
+  const [agg, setAgg] = useState<AggResult | null>(null);
   const [loading, setLoading] = useState(true);
 
   const { enrichConversations, finishedPhones, archivedPhones, awaitingPaymentPhones } = useConversationEnrichment();
 
+  const periodDays = period === '7d' ? 7 : 30;
   const dateFilter = useMemo(() => {
-    const days = period === '7d' ? 7 : 30;
-    return startOfDay(subDays(new Date(), days)).toISOString();
-  }, [period]);
+    return startOfDay(subDays(new Date(), periodDays)).toISOString();
+  }, [periodDays]);
 
   const loadData = async () => {
     setLoading(true);
-    const [msgsRes, assignRes, finishedRes, storeNumsRes] = await Promise.all([
+    // Status counters need the latest message per conversation, so we still load
+    // recent raw messages. Chart/KPI aggregates come from a server-side function
+    // that scans the FULL period (raw queries are capped at 1000 rows).
+    const [msgsRes, finishedRes, storeNumsRes, aggRes] = await Promise.all([
       supabase
         .from('whatsapp_messages')
         .select('id, phone, direction, created_at, status, whatsapp_number_id, is_group')
         .order('created_at', { ascending: false }),
-      supabase
-        .from('chat_seller_assignments')
-        .select('*')
-        .eq('seller_id', sellerId)
-        .eq('store_id', storeId)
-        .gte('assigned_at', dateFilter),
       supabase
         .from('chat_finished_conversations')
         .select('*')
@@ -63,11 +60,12 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
         .from('pos_store_whatsapp_numbers')
         .select('whatsapp_number_id')
         .eq('store_id', storeId),
+      supabase.rpc('get_pos_whatsapp_dashboard', { p_store_id: storeId, p_days: periodDays }),
     ]);
     setMessages(msgsRes.data || []);
-    setAssignments(assignRes.data || []);
     setFinishedConvos(finishedRes.data || []);
     setStoreNumberIds(new Set((storeNumsRes.data || []).map((r: any) => r.whatsapp_number_id)));
+    setAgg((aggRes.data as unknown as AggResult) || null);
     setLoading(false);
   };
 
