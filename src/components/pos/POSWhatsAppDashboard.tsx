@@ -129,25 +129,8 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
     return { notStarted, awaitingReply, awaitingPayment, followUp };
   }, [messages, finishedPhones, archivedPhones, awaitingPaymentPhones, isStoreMessage]);
 
-  // ── KPI metrics ──
+  // ── KPI metrics (aggregated server-side over the full period) ──
   const kpis = useMemo(() => {
-    const incoming = messages.filter(m => m.direction === 'incoming').length;
-    const outgoing = messages.filter(m => m.direction === 'outgoing').length;
-    const totalConvos = assignments.length;
-    const replied = assignments.filter(a => a.first_reply_at);
-    const responseRate = totalConvos > 0 ? (replied.length / totalConvos * 100) : 0;
-
-    const responseTimes = replied
-      .map(a => {
-        const opened = new Date(a.opened_at).getTime();
-        const reply = new Date(a.first_reply_at).getTime();
-        return (reply - opened) / 60000;
-      })
-      .filter(t => t > 0 && t < 1440);
-    const avgResponseMin = responseTimes.length > 0
-      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
-      : null;
-
     const reasons = { compra: 0, duvida: 0, suporte: 0 };
     for (const f of finishedConvos) {
       if (f.finish_reason === 'compra') reasons.compra++;
@@ -155,31 +138,34 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
       else if (f.finish_reason === 'suporte') reasons.suporte++;
     }
 
-    return { incoming, outgoing, totalConvos, responseRate, avgResponseMin, reasons };
-  }, [messages, assignments, finishedConvos]);
+    return {
+      incoming: agg?.incoming ?? 0,
+      outgoing: agg?.outgoing ?? 0,
+      totalConvos: agg?.conversations ?? 0,
+      responseRate: agg?.response_rate ?? 0,
+      avgResponseMin: agg?.avg_response_minutes ?? null,
+      reasons,
+    };
+  }, [agg, finishedConvos]);
 
-  // ── Heatmap data ──
+  // ── Heatmap data (incoming messages by weekday × hour) ──
   const heatmapData = useMemo(() => {
     const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
-    for (const msg of messages.filter(m => m.direction === 'incoming')) {
-      const d = parseISO(msg.created_at);
-      grid[getDay(d)][getHours(d)]++;
+    for (const cell of agg?.heatmap ?? []) {
+      if (grid[cell.dow] && cell.hour >= 0 && cell.hour < 24) {
+        grid[cell.dow][cell.hour] = cell.count;
+      }
     }
-    // Find max for color scaling
     let max = 1;
     for (const row of grid) for (const v of row) if (v > max) max = v;
     return { grid, max };
-  }, [messages]);
+  }, [agg]);
 
-  // ── Evolution chart data ──
+  // ── Evolution chart data (daily, chronological) ──
   const evolutionData = useMemo(() => {
     const dayMap = new Map<string, { date: string; incoming: number; outgoing: number; finished: number }>();
-    for (const msg of messages) {
-      const day = format(parseISO(msg.created_at), 'dd/MM');
-      if (!dayMap.has(day)) dayMap.set(day, { date: day, incoming: 0, outgoing: 0, finished: 0 });
-      const entry = dayMap.get(day)!;
-      if (msg.direction === 'incoming') entry.incoming++;
-      else entry.outgoing++;
+    for (const e of agg?.evolution ?? []) {
+      dayMap.set(e.date, { date: e.date, incoming: e.incoming, outgoing: e.outgoing, finished: 0 });
     }
     for (const f of finishedConvos) {
       const day = format(parseISO(f.finished_at), 'dd/MM');
@@ -187,16 +173,18 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
       dayMap.get(day)!.finished++;
     }
     return Array.from(dayMap.values());
-  }, [messages, finishedConvos]);
+  }, [agg, finishedConvos]);
 
   // ── Hourly volume bar chart ──
   const hourlyData = useMemo(() => {
     const hours = Array(24).fill(0);
-    for (const msg of messages) {
-      hours[getHours(parseISO(msg.created_at))]++;
+    for (const [h, count] of Object.entries(agg?.hourly ?? {})) {
+      const idx = Number(h);
+      if (idx >= 0 && idx < 24) hours[idx] = count as number;
     }
     return hours.map((count, h) => ({ hour: `${String(h).padStart(2, '0')}h`, msgs: count }));
-  }, [messages]);
+  }, [agg]);
+
 
   const formatTime = (minutes: number | null) => {
     if (minutes === null) return '—';
