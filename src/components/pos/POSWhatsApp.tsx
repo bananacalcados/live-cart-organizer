@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
 import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed } from "lucide-react";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
