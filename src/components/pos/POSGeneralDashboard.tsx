@@ -16,6 +16,7 @@ import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/b
 import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
+import { POSSellerTaskProgress } from "./POSSellerTaskProgress";
 
 
 
@@ -506,6 +507,11 @@ export function POSGeneralDashboard({ onBack }: Props) {
             <SilverKpi label="Ticket médio" value={BRL(totals.ticket)} icon={DollarSign} accent="fuchsia" />
             <SilverKpi label="Itens / venda" value={totals.itemsPerSale.toFixed(2)} icon={Package} accent="indigo" />
           </div>
+
+          {/* SELLER TASK PROGRESS */}
+          <Panel title="Progresso de tarefas das vendedoras" icon={ClipboardList}>
+            <POSSellerTaskProgress stores={stores} />
+          </Panel>
 
           {/* PAYMENT BREAKDOWN */}
           <Panel title="Faturamento por forma de pagamento" icon={CreditCard}>
