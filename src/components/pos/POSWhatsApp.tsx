@@ -1375,19 +1375,19 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         ) : selectedPhone ? (
           <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden relative">
             <AttendantNudgeCard conversations={conversations} />
-            {/* Contact Header Bar */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/30 flex-shrink-0">
-              <Button variant="ghost" size="icon" className="h-7 w-7 hidden md:flex" onClick={() => setSelectedPhone(null)}>
+            {/* Cabeçalho compacto: nome/telefone (clicável p/ pedidos) + instância + tags + ações */}
+            <div className="flex items-center gap-1.5 px-2 py-1.5 border-b bg-muted/30 flex-shrink-0 flex-wrap">
+              <Button variant="ghost" size="icon" className="h-7 w-7 hidden md:flex flex-shrink-0" onClick={() => setSelectedPhone(null)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Avatar className="h-8 w-8">
+              <Avatar className="h-8 w-8 flex-shrink-0">
                 {contactPhotos[selectedPhone] ? <AvatarImage src={contactPhotos[selectedPhone]} /> : null}
                 <AvatarFallback className="bg-[#dfe5e7] dark:bg-[#6b7b8a] text-[#54656f] dark:text-white text-xs font-bold">
                   {selectedConversation?.isGroup ? <Users className="h-4 w-4" /> : getInitials(selectedConversation?.customerName || selectedPhone)}
                 </AvatarFallback>
               </Avatar>
               {isEditingName ? (
-                <div className="flex items-center gap-1 flex-1 min-w-0">
+                <div className="flex items-center gap-1 flex-1 min-w-[140px]">
                   <Input
                     value={editNameValue}
                     onChange={e => setEditNameValue(e.target.value)}
@@ -1400,25 +1400,62 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   </Button>
                 </div>
               ) : (
-                <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center gap-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setShowOrdersModal(true)}
+                  className="flex flex-col min-w-0 flex-1 items-start text-left rounded-md px-1 py-0.5 hover:bg-muted/60 transition"
+                  title="Ver pedidos do cliente"
+                >
+                  <span className="flex items-center gap-1 min-w-0 w-full">
                     <span className="text-sm font-semibold truncate">{selectedConversation?.customerName || selectedPhone}</span>
-                    <Button variant="ghost" size="icon" className="h-5 w-5 text-muted-foreground" onClick={() => { setEditNameValue(selectedConversation?.customerName || ""); setIsEditingName(true); }}>
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  </div>
+                    {selectedChannel === "instagram" && <span className="text-xs">📷</span>}
+                    {selectedChannel === "messenger" && <span className="text-xs">💬</span>}
+                  </span>
                   {selectedConversation?.customerName && (
-                    <span className="text-[10px] text-muted-foreground truncate">{selectedPhone}</span>
+                    <span className="text-[10px] text-muted-foreground truncate w-full">{selectedPhone}</span>
                   )}
-                  {selectedChannel === "instagram" && (
-                    <Badge variant="secondary" className="mt-1 w-fit text-[10px]">📷 Instagram Direct</Badge>
-                  )}
-                  {selectedChannel === "messenger" && (
-                    <Badge variant="secondary" className="mt-1 w-fit text-[10px]">💬 Messenger</Badge>
-                  )}
-                </div>
+                </button>
               )}
-              <div className="flex items-center gap-0.5 flex-shrink-0">
+              {!isEditingName && (
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground flex-shrink-0" onClick={() => { setEditNameValue(selectedConversation?.customerName || ""); setIsEditingName(true); }} title="Editar nome">
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              )}
+
+              {/* Instância da conversa */}
+              {selectedChannel === "instagram" ? (
+                <Badge variant="secondary" className="text-[10px] px-2 py-0.5 flex-shrink-0">📷 Instagram</Badge>
+              ) : selectedChannel === "messenger" ? (
+                <Badge variant="secondary" className="text-[10px] px-2 py-0.5 flex-shrink-0">💬 Messenger</Badge>
+              ) : conversationBoundNumber ? (
+                <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium flex-shrink-0" title="Instância da conversa">
+                  {conversationBoundNumber.label}
+                </Badge>
+              ) : storeNumbers.length > 1 ? (
+                <WhatsAppNumberSelector
+                  className="h-7 min-w-[160px] text-xs flex-shrink-0"
+                  value={selectedSendNumberId}
+                  onValueChange={(id) => {
+                    setSelectedSendNumberId(id);
+                    const matchedNumber = storeNumbers.find((number) => number.id === id);
+                    if (matchedNumber) {
+                      setSendVia(matchedNumber.provider === 'meta' ? 'meta' : 'zapi');
+                    }
+                  }}
+                />
+              ) : selectedSendNumber ? (
+                <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium flex-shrink-0">
+                  {selectedSendNumber.label}
+                </Badge>
+              ) : null}
+
+              {/* Tags */}
+              {selectedConversation && !selectedConversation.isGroup && (
+                <ContactTagsPopover phone={selectedPhone} compact />
+              )}
+
+              {/* Ações */}
+              <div className="flex items-center gap-0.5 flex-shrink-0 ml-auto">
                 <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-[#00a884]" onClick={() => setShowCheckout(true)} title="Gerar Link Checkout" disabled={requiresInstanceSelection}>
                   <CreditCard className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Checkout</span>
@@ -1482,53 +1519,6 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   <span className="hidden xl:inline">Finalizar</span>
                 </Button>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[#e9edef] dark:border-[#313d45] bg-white dark:bg-[#202c33] text-xs flex-shrink-0">
-              {selectedChannel === "instagram" ? (
-                <Badge variant="secondary" className="text-[10px] px-2 py-0.5">📷 Instagram Direct</Badge>
-              ) : selectedChannel === "messenger" ? (
-                <Badge variant="secondary" className="text-[10px] px-2 py-0.5">💬 Messenger</Badge>
-              ) : conversationBoundNumber ? (
-                <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium gap-1">
-                  {conversationBoundNumber.label}
-                  <span className="opacity-70 ml-1">instância da conversa</span>
-                </Badge>
-              ) : storeNumbers.length > 1 ? (
-                <WhatsAppNumberSelector
-                  className="h-7 min-w-[220px] text-xs"
-                  value={selectedSendNumberId}
-                  onValueChange={(id) => {
-                    setSelectedSendNumberId(id);
-                    const matchedNumber = storeNumbers.find((number) => number.id === id);
-                    if (matchedNumber) {
-                      setSendVia(matchedNumber.provider === 'meta' ? 'meta' : 'zapi');
-                    }
-                  }}
-                />
-              ) : selectedSendNumber ? (
-                <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium gap-1">
-                  {selectedSendNumber.label}
-                  <span className="opacity-70 ml-1">{selectedSendNumber.phone_display}</span>
-                </Badge>
-              ) : (
-                <span className="text-muted-foreground">Nenhuma instância disponível</span>
-              )}
-              <span className="text-muted-foreground ml-auto">
-                {selectedChannel === "instagram"
-                  ? "Instagram Direct"
-                  : selectedChannel === "messenger"
-                    ? "Messenger"
-                    : requiresInstanceSelection
-                      ? 'Selecione a instância'
-                    : selectedSendNumber?.provider === 'meta'
-                      ? 'Meta API'
-                      : selectedSendNumber?.provider === 'wasender'
-                        ? 'WaSender'
-                        : selectedSendNumber?.provider === 'uazapi'
-                          ? 'uazapi'
-                          : 'Z-API'}
-              </span>
             </div>
 
             <ChatView
