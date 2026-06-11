@@ -146,6 +146,8 @@ export default function ChatPage() {
   const [selectedConvChannel, setSelectedConvChannel] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
+  const { suggestions: spellSuggestions, dismiss: dismissSpell, addToDictionary: addSpellWord } =
+    useSpellAssist(newMessage);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
