@@ -148,15 +148,39 @@ Deno.serve(async (req) => {
     if (error) throw error;
 
     if (items.length > 0) {
-      const rows = items.map((li: any) => ({
-        sale_id: sale.id,
-        product_name: li.title || li.name || "Item Shopify",
-        variant_name: li.variant_title || null,
-        sku: li.sku || null,
-        unit_price: Number(li.price || 0),
-        quantity: Number(li.quantity || 1),
-        total_price: Number(li.price || 0) * Number(li.quantity || 1),
-      }));
+      // Enriquece cada item com barcode (gtin) e sku reais via product_variants,
+      // casando pelo variant_id da Shopify. Isso garante que o trigger de baixa
+      // de estoque (apply_pos_sale_stock_movement) encontre o produto certo e
+      // abata do estoque compartilhado (loja que tiver saldo da variação).
+      const variantIds = Array.from(
+        new Set(items.map((li: any) => (li.variant_id != null ? String(li.variant_id) : "")).filter(Boolean)),
+      );
+      const variantInfo = new Map<string, { gtin: string | null; sku: string | null }>();
+      if (variantIds.length) {
+        const { data: pv } = await supabase
+          .from("product_variants")
+          .select("shopify_variant_id, gtin, sku")
+          .in("shopify_variant_id", variantIds);
+        for (const v of pv || []) {
+          if (v.shopify_variant_id) {
+            variantInfo.set(String(v.shopify_variant_id), { gtin: v.gtin ?? null, sku: v.sku ?? null });
+          }
+        }
+      }
+
+      const rows = items.map((li: any) => {
+        const info = li.variant_id != null ? variantInfo.get(String(li.variant_id)) : undefined;
+        return {
+          sale_id: sale.id,
+          product_name: li.title || li.name || "Item Shopify",
+          variant_name: li.variant_title || null,
+          sku: info?.sku || li.sku || null,
+          barcode: info?.gtin || li.barcode || null,
+          unit_price: Number(li.price || 0),
+          quantity: Number(li.quantity || 1),
+          total_price: Number(li.price || 0) * Number(li.quantity || 1),
+        };
+      });
       await supabase.from("pos_sale_items").insert(rows);
     }
 
