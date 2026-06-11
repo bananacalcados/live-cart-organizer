@@ -1115,6 +1115,7 @@ export default function Marketing() {
                 <SelectItem value="disparos">📨 Disparos</SelectItem>
                 <SelectItem value="automations">⚡ Automações</SelectItem>
                 <SelectItem value="sectors">🏪 Setores</SelectItem>
+                <SelectItem value="attendance_rules">🗣️ Regras de Atendimento</SelectItem>
                 <SelectItem value="landing_pages">🔗 Landing Pages</SelectItem>
                 <SelectItem value="leads">📋 Leads</SelectItem>
                 <SelectItem value="groups_vip">👑 Grupos VIP</SelectItem>
