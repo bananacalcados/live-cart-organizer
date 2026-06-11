@@ -1031,10 +1031,23 @@ serve(async (req) => {
     if (recentBlocking?.status === "success") {
       console.log(`[DUPLICATE-GUARD] Order ${params.orderId} already has a successful charge (gateway=${recentBlocking.gateway}, tx=${recentBlocking.transaction_id}). Blocking duplicate.`);
       // Also ensure the order is marked as paid (in case webhook hasn't arrived yet)
+      const paymentLabel = normalizeGatewayPaymentLabel({
+        gateway: recentBlocking.gateway,
+        paymentMethodId: recentBlocking.gateway === "mercadopago" ? "pix" : "credit_card",
+        installments: params.installments,
+      }) || (recentBlocking.gateway === "mercadopago" ? "PIX" : (params.installments > 1 ? `Cartão de Crédito ${params.installments}x` : "Cartão de Crédito"));
+      const paidAt = new Date().toISOString();
       if (orderSource === "orders") {
-        await supabase.from("orders").update({ is_paid: true, paid_at: new Date().toISOString(), stage: "paid" }).eq("id", params.orderId).eq("is_paid", false);
+        await supabase.from("orders").update({ is_paid: true, paid_at: paidAt, stage: "paid", payment_method_label: paymentLabel, installments: params.installments }).eq("id", params.orderId).eq("is_paid", false);
+        await syncOrderPaymentToPosSale(supabase, {
+          orderId: params.orderId,
+          paymentMethodLabel: paymentLabel,
+          installments: params.installments,
+          paymentGateway: recentBlocking.gateway,
+          paidAt,
+        });
       } else {
-        await supabase.from("pos_sales").update({ status: "paid", paid_at: new Date().toISOString() } as any).eq("id", params.orderId).not("status", "in", '("paid","completed")');
+        await supabase.from("pos_sales").update({ status: "paid", paid_at: paidAt, payment_gateway: recentBlocking.gateway || null, payment_method: paymentLabel } as any).eq("id", params.orderId).not("status", "in", '("paid","completed")');
       }
       return new Response(
         JSON.stringify({ success: true, already_paid: true, gateway: recentBlocking.gateway || "cached" }),
