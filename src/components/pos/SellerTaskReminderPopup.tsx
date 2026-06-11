@@ -100,17 +100,28 @@ export function SellerTaskReminderPopup({
         </div>
       </DialogContent>
     </Dialog>
+
+    {compose && (
+      <POSTaskMessageDialog
+        open={!!compose}
+        onClose={() => setCompose(null)}
+        phone={compose.phone}
+        name={compose.name}
+        sellerName={sellerName}
+        onSent={() => { if (compose.contactId) markContacted(compose.contactId); }}
+      />
+    )}
+    </>
   );
 }
 
 function TaskCard({
-  inst, onCompleteManual, onUncomplete, onMarkContacted, onOpenWhatsApp,
+  inst, onCompleteManual, onUncomplete, onCompose,
 }: {
   inst: TaskInstance;
   onCompleteManual: () => void;
   onUncomplete: () => void;
-  onMarkContacted: (contactId: string) => void;
-  onOpenWhatsApp?: (phone: string, name?: string) => void;
+  onCompose: (phone: string, name: string | undefined, contactId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const done = inst.status === "completed";
