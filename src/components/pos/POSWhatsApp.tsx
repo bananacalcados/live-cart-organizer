@@ -1305,6 +1305,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             contactNames={chatContacts}
             selectedPhone={selectedPhone}
             selectedConversationKey={selectedConvKey}
+            getAssignedName={getAssignedName}
             onBulkFinish={(phones) => {
               setBulkFinishPhones(phones);
               setShowBulkFinishDialog(true);
