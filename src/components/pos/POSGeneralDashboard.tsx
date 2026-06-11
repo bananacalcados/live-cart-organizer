@@ -83,6 +83,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [period, setPeriod] = useState<Period>("month");
+  const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [goalsDialogOpen, setGoalsDialogOpen] = useState(false);
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [salesRows, setSalesRows] = useState<any[]>([]);
@@ -94,9 +96,23 @@ export function POSGeneralDashboard({ onBack }: Props) {
     const now = new Date();
     if (period === "today") return { start: startOfDay(now), end: endOfDay(now), label: "Hoje", days: 1 };
     if (period === "week") return { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfDay(now), label: "Semana", days: 7 };
+    if (period === "last_month") {
+      const lm = subMonths(now, 1);
+      const s = startOfMonth(lm);
+      const e = endOfMonth(lm);
+      return { start: s, end: e, label: format(s, "MMM/yyyy", { locale: ptBR }), days: differenceInDays(e, s) + 1 };
+    }
+    if (period === "custom" && customRange?.from) {
+      const s = startOfDay(customRange.from);
+      const e = endOfDay(customRange.to ?? customRange.from);
+      const label = customRange.to
+        ? `${format(s, "dd/MM", { locale: ptBR })} – ${format(e, "dd/MM", { locale: ptBR })}`
+        : format(s, "dd/MM/yyyy", { locale: ptBR });
+      return { start: s, end: e, label, days: differenceInDays(e, s) + 1 };
+    }
     const s = startOfMonth(now);
     return { start: s, end: endOfDay(now), label: "Mês", days: differenceInDays(endOfDay(now), s) + 1 };
-  }, [period]);
+  }, [period, customRange]);
 
   const load = async () => {
     setLoading(true);
