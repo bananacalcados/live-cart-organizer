@@ -35,8 +35,9 @@ const RECURRENCES = [
   { value: "weekdays", label: "Dias úteis (seg–sex)" },
   { value: "weekly", label: "Semanal (dia da semana)" },
   { value: "weekly_specific", label: "Semana específica do mês" },
-  { value: "monthly", label: "Mensal (dia do mês)" },
+  { value: "monthly", label: "Dia específico do mês" },
   { value: "monthly_specific", label: "Mês específico" },
+  { value: "custom_range", label: "Data personalizada (período)" },
   { value: "once", label: "Uma vez (data única)" },
 ];
 
