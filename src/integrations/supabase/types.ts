@@ -2125,6 +2125,33 @@ export type Database = {
           },
         ]
       }
+      chat_attendance_rules: {
+        Row: {
+          config: Json
+          created_at: string
+          enabled: boolean
+          id: string
+          rule_key: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          rule_key: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          rule_key?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chat_awaiting_payment: {
         Row: {
           created_at: string
