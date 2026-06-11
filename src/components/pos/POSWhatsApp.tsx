@@ -57,6 +57,9 @@ interface CrmCustomerData {
   instagram?: string;
   tags?: string[];
   profilePicUrl?: string;
+  cpf?: string;
+  address?: string;
+  email?: string;
   orders: {
     id: string;
     orderName?: string;
