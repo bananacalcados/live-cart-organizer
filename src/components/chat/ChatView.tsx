@@ -117,6 +117,7 @@ export function ChatView({
   onQuoteMessage,
   onCancelQuote,
   onExtraSent,
+  hideTagsBar,
 }: ChatViewProps) {
   const { suggestions: spellSuggestions, dismiss: dismissSpell, addToDictionary: addSpellWord } =
     useSpellAssist(newMessage);
