@@ -43,6 +43,16 @@ serve(async (req) => {
       });
     }
 
+    // Bloqueio cross-instância: não envia NPS para contato bloqueado.
+    const blockedSuffixes = await loadBlockedSuffixes(supabase);
+    if (isBlocked(blockedSuffixes, phone)) {
+      console.log(`[nps] Skipping ${phone} - contato bloqueado`);
+      return new Response(JSON.stringify({ skipped: true, reason: 'blocked' }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+
     // Create NPS survey record
     const { data: survey, error: insertErr } = await supabase
       .from('chat_nps_surveys')
