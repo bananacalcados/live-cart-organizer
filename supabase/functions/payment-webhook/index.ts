@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { notifyPaymentConfirmed } from "../_shared/payment-confirmed.ts";
+import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 
 // REGRA DE NEGÓCIO (NÃO REATIVAR SEM AUTORIZAÇÃO DO USUÁRIO):
 // Criação automática de pedidos na Shopify está DESABILITADA em TODAS as situações.
@@ -324,12 +325,25 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       });
     }
 
+    const mpTypeId = String(mpPayment.payment_type_id || "");
+    const mpMethodId = String(mpPayment.payment_method_id || "");
+    const inst = Number(mpPayment.installments || 1);
+    const payLabel = normalizeGatewayPaymentLabel({
+      gateway: "mercadopago",
+      paymentTypeId: mpTypeId,
+      paymentMethodId: mpMethodId,
+      installments: inst,
+    }) || "PIX";
+    const paidAt = new Date().toISOString();
+
     const { error } = await supabase
       .from("orders")
       .update({
         is_paid: true,
-        paid_at: new Date().toISOString(),
+        paid_at: paidAt,
         stage: "paid",
+        payment_method_label: payLabel,
+        installments: inst,
         notes: `🔔 Webhook MercadoPago: PIX aprovado (${mpIdStr})`,
       })
       .eq("id", order.id);
@@ -339,6 +353,16 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     } else {
       console.log(`[mercadopago] Order ${order.id} marked as paid via webhook`);
       updated = true;
+
+      await syncOrderPaymentToPosSale(supabase, {
+        orderId: order.id,
+        paymentMethodLabel: payLabel,
+        installments: inst,
+        paymentGateway: "mercadopago",
+        transactionField: "mercadopago_payment_id",
+        transactionValue: mpIdStr,
+        paidAt,
+      });
 
       // Deactivate AI session and send payment confirmation to customer
       try {
@@ -730,12 +754,15 @@ async function updateOrder(
   statusId: number
 ): Promise<boolean> {
   if (isPaid && !order.is_paid) {
+    const payLabel = normalizeGatewayPaymentLabel({ gateway: "vindi", paymentMethodId: "credit_card" });
+    const paidAt = new Date().toISOString();
     const { error } = await supabase
       .from("orders")
       .update({
         is_paid: true,
-        paid_at: new Date().toISOString(),
+        paid_at: paidAt,
         stage: "paid",
+        ...(payLabel ? { payment_method_label: payLabel } : {}),
         notes: `${order.notes || ""}\n🔔 Webhook VINDI: aprovado (${tokenTransaction})`.trim(),
         vindi_transaction_id: String(tokenTransaction),
       })
@@ -743,6 +770,14 @@ async function updateOrder(
     if (error) { console.error("Error updating orders:", error); return false; }
     console.log(`orders ${orderId} marked as paid via VINDI webhook`);
     console.log(`[vindi] Vinculado vindi_transaction_id=${tokenTransaction} ao pedido ${orderId}`);
+    await syncOrderPaymentToPosSale(supabase, {
+      orderId,
+      paymentMethodLabel: payLabel,
+      paymentGateway: "vindi",
+      transactionField: "vindi_transaction_id",
+      transactionValue: String(tokenTransaction),
+      paidAt,
+    });
     // Busca store_id real do pedido
     let lojaName = 'centro'; // fallback
     if (sale?.store_id) {

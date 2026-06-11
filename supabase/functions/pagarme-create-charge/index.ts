@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
+import { normalizeGatewayPaymentLabel, syncOrderPaymentToPosSale } from "../_shared/payment-method-sync.ts";
 
 function maskCard(card: any) {
   if (!card) return card;
@@ -1030,10 +1031,23 @@ serve(async (req) => {
     if (recentBlocking?.status === "success") {
       console.log(`[DUPLICATE-GUARD] Order ${params.orderId} already has a successful charge (gateway=${recentBlocking.gateway}, tx=${recentBlocking.transaction_id}). Blocking duplicate.`);
       // Also ensure the order is marked as paid (in case webhook hasn't arrived yet)
+      const paymentLabel = normalizeGatewayPaymentLabel({
+        gateway: recentBlocking.gateway,
+        paymentMethodId: recentBlocking.gateway === "mercadopago" ? "pix" : "credit_card",
+        installments: params.installments,
+      }) || (recentBlocking.gateway === "mercadopago" ? "PIX" : (params.installments > 1 ? `Cartão de Crédito ${params.installments}x` : "Cartão de Crédito"));
+      const paidAt = new Date().toISOString();
       if (orderSource === "orders") {
-        await supabase.from("orders").update({ is_paid: true, paid_at: new Date().toISOString(), stage: "paid" }).eq("id", params.orderId).eq("is_paid", false);
+        await supabase.from("orders").update({ is_paid: true, paid_at: paidAt, stage: "paid", payment_method_label: paymentLabel, installments: params.installments }).eq("id", params.orderId).eq("is_paid", false);
+        await syncOrderPaymentToPosSale(supabase, {
+          orderId: params.orderId,
+          paymentMethodLabel: paymentLabel,
+          installments: params.installments,
+          paymentGateway: recentBlocking.gateway,
+          paidAt,
+        });
       } else {
-        await supabase.from("pos_sales").update({ status: "paid", paid_at: new Date().toISOString() } as any).eq("id", params.orderId).not("status", "in", '("paid","completed")');
+        await supabase.from("pos_sales").update({ status: "paid", paid_at: paidAt, payment_gateway: recentBlocking.gateway || null, payment_method: paymentLabel } as any).eq("id", params.orderId).not("status", "in", '("paid","completed")');
       }
       return new Response(
         JSON.stringify({ success: true, already_paid: true, gateway: recentBlocking.gateway || "cached" }),
@@ -1185,13 +1199,23 @@ serve(async (req) => {
       }
 
 
+      const paymentLabel = normalizeGatewayPaymentLabel({
+        gateway: result.gateway,
+        paymentTypeId: result.gateway === "mercadopago" ? "credit_card" : undefined,
+        paymentMethodId: result.gateway === "mercadopago" ? "credit_card" : undefined,
+        installments: params.installments,
+      }) || (params.installments > 1 ? `Cartão de Crédito ${params.installments}x` : "Cartão de Crédito");
+      const paidAt = new Date().toISOString();
+
       if (orderSource === "orders") {
         const { error: updErr } = await supabase
           .from("orders")
           .update({
             is_paid: true,
-            paid_at: new Date().toISOString(),
+            paid_at: paidAt,
             stage: "paid",
+            payment_method_label: paymentLabel,
+            installments: params.installments,
             notes: `${order?.notes || ""}\n💳 Pago via ${result.gateway} (${result.transactionId})`.trim(),
             ...gatewayIdField,
           })
@@ -1204,6 +1228,16 @@ serve(async (req) => {
             console.log(`[${result.gateway}] Vinculado ${field}=${val} ao pedido ${params.orderId}`);
           }
 
+          await syncOrderPaymentToPosSale(supabase, {
+            orderId: params.orderId,
+            paymentMethodLabel: paymentLabel,
+            installments: params.installments,
+            paymentGateway: result.gateway,
+            transactionField: Object.keys(gatewayIdField)[0] || null,
+            transactionValue: Object.values(gatewayIdField)[0] ? String(Object.values(gatewayIdField)[0]) : null,
+            paidAt,
+          });
+
           await notifyPaymentConfirmedLocal(params.orderId, result.gateway || "unknown", String(result.transactionId || params.orderId));
           await autoCreateShopifyOrder(params.orderId, orderSource, supabaseUrl, supabaseKey);
         }
@@ -1212,11 +1246,9 @@ serve(async (req) => {
           .from("pos_sales")
           .update({
             status: "paid",
-            paid_at: new Date().toISOString(),
+            paid_at: paidAt,
             payment_gateway: result.gateway,
-            payment_method: params.installments > 1
-              ? `Cartão de Crédito ${params.installments}x`
-              : "Cartão de Crédito",
+            payment_method: paymentLabel,
             notes: `💳 Pago via ${result.gateway} (${result.transactionId})`,
             ...gatewayIdField,
           })

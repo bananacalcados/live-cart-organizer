@@ -676,6 +676,8 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
           customer_city: form.city,
           customer_state: form.state,
           description: "PIX Checkout Loja",
+          payment_method: "pix",
+          installments: 1,
         },
       };
       await cpUpdateSale(saleId!, customerPayload);
@@ -845,6 +847,29 @@ function CardPaymentForm({ saleId, storeId, amount, form, installmentConfig, onP
     sessionStorage.setItem(`checkout_payment_${saleId}`, attemptId);
 
     try {
+      const existingRes = await cpGetSale(saleId!);
+      const existingPd = ((existingRes?.sale?.payment_details) as Record<string, unknown>) || {};
+      await cpUpdateSale(saleId!, {
+        customer_name: form.fullName,
+        customer_phone: form.whatsapp.replace(/\D/g, ""),
+        payment_details: {
+          ...existingPd,
+          customer_name: form.fullName,
+          customer_phone: form.whatsapp.replace(/\D/g, ""),
+          customer_email: form.email,
+          customer_cpf: form.cpf.replace(/\D/g, ""),
+          customer_cep: form.cep.replace(/\D/g, ""),
+          customer_address: form.address,
+          customer_address_number: form.addressNumber,
+          customer_complement: form.complement,
+          customer_neighborhood: form.neighborhood,
+          customer_city: form.city,
+          customer_state: form.state,
+          payment_method: "credit_card",
+          installments: selectedInstallments,
+        },
+      });
+
       const customerData = {
         name: form.fullName,
         email: form.email,
