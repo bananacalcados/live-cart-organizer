@@ -17,6 +17,7 @@ import { ChatView } from "@/components/chat/ChatView";
 import { AttendantNudgeCard } from "@/components/chat/AttendantNudgeCard";
 import { ProductWaitlistDialog } from "@/components/chat/ProductWaitlistDialog";
 import { ProductArrivalCard } from "@/components/chat/ProductArrivalCard";
+import { BlockContactButton } from "@/components/chat/BlockContactButton";
 import { useProductWaitlist } from "@/hooks/useProductWaitlist";
 import { Message, Conversation, ChatFilter, StageFilter, InstanceFilter, ConversationStatusFilter } from "@/components/chat/ChatTypes";
 import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
