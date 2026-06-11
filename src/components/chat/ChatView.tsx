@@ -745,7 +745,10 @@ export function ChatView({
                 if (gName && gPhone) senderLabel = `${gName} • ${formatPhoneDisplay(gPhone)}`;
                 else senderLabel = gName || (gPhone ? formatPhoneDisplay(gPhone) : 'Participante');
               } else {
-                senderLabel = (msg as any).sender_name || conversation?.customerName || msg.phone || null;
+                // Para conversas individuais, o nome resolvido do contato (CRM/chat_contacts)
+                // é a fonte confiável. O sender_name por mensagem pode vir como o nome da
+                // instância (ex.: "Ravena") em alguns webhooks, então priorizamos o customerName.
+                senderLabel = conversation?.customerName || (msg as any).sender_name || msg.phone || null;
               }
             }
 
