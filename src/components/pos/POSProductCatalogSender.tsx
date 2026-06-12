@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { posSendMedia, posSendButtons, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+import { posSendMedia, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 
 interface Props {
