@@ -210,26 +210,26 @@ serve(async (req) => {
 
     // ───────────────────────── status updates ─────────────────────────
     if (eventType === "messages_update" || eventType === "message_update") {
-      console.log("TEMP_DEBUG messages_update raw:", JSON.stringify(payload)); // TEMP_DEBUG remove later
-      const msg = (payload.message as AnyObj) || {};
-      const list: AnyObj[] = Array.isArray(payload.message)
-        ? (payload.message as AnyObj[])
-        : [msg];
-      for (const m of list) {
-        const mid = asString(m.messageid) || asString(m.id);
-        const status = asString(m.status);
-        if (mid && status) {
+      const ev = (payload.event as AnyObj) || {};
+      const statusRaw =
+        asString(ev.Type) || asString(payload.state) || asString((payload.message as AnyObj)?.status);
+      const ids: string[] = Array.isArray(ev.MessageIDs)
+        ? (ev.MessageIDs as unknown[]).map((x) => asString(x)).filter(Boolean) as string[]
+        : [asString((payload.message as AnyObj)?.messageid) || asString((payload.message as AnyObj)?.id)].filter(Boolean) as string[];
+      if (statusRaw && ids.length > 0) {
+        const status = statusRaw.toLowerCase();
+        for (const mid of ids) {
           const { data: updated } = await supabase
             .from("whatsapp_messages")
-            .update({ status: status.toLowerCase() })
+            .update({ status })
             .eq("message_id", mid)
             .select("id");
           if (!updated || updated.length === 0) {
-            // Race: status arrived before the outgoing row was inserted. Retry once.
+            // Race: status can arrive before the outgoing row is inserted. Retry once.
             await new Promise((r) => setTimeout(r, 2000));
             await supabase
               .from("whatsapp_messages")
-              .update({ status: status.toLowerCase() })
+              .update({ status })
               .eq("message_id", mid);
           }
         }
