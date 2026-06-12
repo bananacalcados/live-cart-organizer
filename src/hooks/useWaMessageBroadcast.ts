@@ -34,6 +34,16 @@ function ensureChannel() {
         }
       });
     })
+    .on("broadcast", { event: "wa_msg_update" }, (msg: any) => {
+      const payload = (msg?.payload ?? {}) as WaMessageInsertPayload;
+      listeners.forEach((fn) => {
+        try {
+          fn(payload);
+        } catch (e) {
+          console.error("[wa_msg_inserts] listener error", e);
+        }
+      });
+    })
     .subscribe();
 }
 
