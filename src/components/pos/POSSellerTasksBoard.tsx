@@ -61,7 +61,7 @@ export function POSSellerTasksBoard({ storeId }: Props) {
     if (!storeId) return;
     (async () => {
       const [s, d] = await Promise.all([
-        supabase.from("pos_sellers").select("id, name, is_manager").eq("store_id", storeId).eq("is_active", true).order("name"),
+        supabase.from("pos_sellers").select("id, name, is_manager").eq("store_id", storeId).eq("is_active", true).eq("excluded_from_tasks", false).order("name"),
         supabase.from("pos_task_definitions" as any).select("*").eq("store_id", storeId).eq("is_active", true),
       ]);
       setSellers((s.data as any[]) || []);
