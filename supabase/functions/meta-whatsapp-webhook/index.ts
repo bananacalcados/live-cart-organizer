@@ -379,6 +379,9 @@ serve(async (req) => {
                 continue;
               }
               console.error('Error saving incoming message:', error);
+              // Falha de persistência: a Meta recebeu 200 e NÃO vai reenviar.
+              // Deixa rastro na caixa-preta para reconciliação posterior.
+              await markSkip(`insert_failed:${(error as any).code || 'unknown'}:${messageId}`);
             } else {
               console.log(`Saved incoming message from ${phone} (${senderName || 'unknown'})`);
 
