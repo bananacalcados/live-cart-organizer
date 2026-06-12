@@ -222,27 +222,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
           });
         }
 
-        const buttons = [
-          { id: `delivery_${product.sku}`, title: `R$${deliveryPrice.toFixed(0)} Entrega` },
-          { id: `pickup_${product.sku}`, title: `R$${pickupPrice.toFixed(0)} Retira Loja` },
-          { id: `store_${product.sku}`, title: `R$${storePrice.toFixed(0)} Loja Fisica` },
-        ];
-        const buttonText = `Escolha como quer comprar:\n${displayName}`;
 
-        await posSendButtons({
-          provider: sendVia,
-          phone,
-          message: buttonText,
-          buttons,
-          numberId: resolvedNumberId,
-        });
-
-        await supabase.from("whatsapp_messages").insert({
-          phone,
-          message: `[Botões] ${displayName}\n• Entrega: R$ ${deliveryPrice.toFixed(2)}\n• Retirada: R$ ${pickupPrice.toFixed(2)}\n• Loja: R$ ${storePrice.toFixed(2)}`,
-          direction: "outgoing", status: "sent",
-          whatsapp_number_id: resolvedNumberId || null,
-        });
 
         successCount++;
         if (selected.indexOf(product) < selected.length - 1) {
