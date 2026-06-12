@@ -90,6 +90,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     return () => leave();
   }, []);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  // Assinatura do último conjunto de conversas renderizado. Usada pelo polling de
+  // segurança para NÃO re-renderizar a lista (evita "piscar") quando o refetch
+  // traz exatamente os mesmos dados.
+  const convSigRef = useRef('');
   const [waMsgTick, setWaMsgTick] = useState(0);
   const [teamChatActive, setTeamChatActive] = useState(false);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
@@ -799,7 +803,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       // TODAS as conversas ficam visíveis para TODOS os usuários/vendedoras —
       // a TAG da vendedora identifica de quem é o atendimento. Sem filtro de
       // atribuição: foco no bom atendimento (qualquer vendedora pode assumir).
-      setConversations(enrichConversations(convs, phoneMessages));
+      const enriched = enrichConversations(convs, phoneMessages);
+      // Guarda anti-flicker: só troca o estado (e re-renderiza a lista) se algo
+      // realmente mudou. Sem isso, o polling de segurança faria a lista "piscar"
+      // a cada 20s mesmo quando nada novo chegou.
+      const sig = enriched
+        .map(c => `${c.conversationKey ?? c.phone}:${c.lastMessageAt.getTime()}:${c.unreadCount}:${c.lastMessage ?? ''}:${c.isFinished ? 1 : 0}:${c.isArchived ? 1 : 0}:${c.isAwaitingPayment ? 1 : 0}`)
+        .join('|');
+      if (sig !== convSigRef.current) {
+        convSigRef.current = sig;
+        setConversations(enriched);
+      }
     };
 
     loadConversations();
@@ -811,6 +825,19 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   useWaMessageBroadcast(() => {
     setWaMsgTick((t) => t + 1);
   }, { debounceMs: 800 });
+
+  // Polling de SEGURANÇA da lista de conversas (a cada 20s). Rede de segurança
+  // para quando o broadcast em tempo real é perdido (rede/carga): garante que
+  // um card que já está no banco apareça sozinho em segundos, sem precisar
+  // atualizar a página. Não pisca a tela: o refetch é silencioso e a guarda de
+  // assinatura acima evita re-render quando nada mudou.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setWaMsgTick((t) => t + 1);
+    }, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
 
   // Re-enrich conversations when finish/archive/payment status changes (lightweight, no DB reload)
   // This handles cross-device realtime updates without disrupting the current UI
