@@ -196,6 +196,34 @@ serve(async (req) => {
     const eventType = (asString(payload.EventType) || asString(payload.event) || "").toLowerCase();
     const instanceToken = asString(payload.token);
 
+    // LOG BRUTO COMO PRIMEIRA AÇÃO (caixa-preta). Nunca pode bloquear o fluxo.
+    let rawEventId: string | null = null;
+    try {
+      const { data: rawRow } = await supabase
+        .from("webhook_events_raw")
+        .insert({
+          provider: "uazapi",
+          event_type: eventType || null,
+          owner: asString(payload.owner) || null,
+          payload,
+        })
+        .select("id")
+        .maybeSingle();
+      rawEventId = ((rawRow as AnyObj)?.id as string) ?? null;
+    } catch (e) {
+      console.error("[uazapi-webhook] raw log falhou:", (e as Error).message);
+    }
+
+    // Marca o motivo de descarte nas saídas silenciosas (deixa rastro).
+    const markSkip = async (reason: string) => {
+      if (!rawEventId) return;
+      try {
+        await supabase.from("webhook_events_raw").update({ skip_reason: reason }).eq("id", rawEventId);
+      } catch (e) {
+        console.error("[uazapi-webhook] markSkip falhou:", (e as Error).message);
+      }
+    };
+
     console.log(`[uazapi-webhook] event=${eventType} number_id=${url.searchParams.get("number_id")}`);
 
     const resolution = await resolveNumberId(supabase, url, payload);
