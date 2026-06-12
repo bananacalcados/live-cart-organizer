@@ -16722,6 +16722,7 @@ export type Database = {
           new_size: string
         }[]
       }
+      normalize_wa_status: { Args: { raw: string }; Returns: string }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
       pos_sale_to_faturamento: {
@@ -16951,6 +16952,7 @@ export type Database = {
         Args: { p_instagram: string; p_phone: string; p_tag: string }
         Returns: undefined
       }
+      wa_status_rank: { Args: { s: string }; Returns: number }
     }
     Enums: {
       ambiente_nfe: "homologacao" | "producao"
