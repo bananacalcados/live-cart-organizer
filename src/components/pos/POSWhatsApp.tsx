@@ -353,10 +353,18 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const { hasActiveSupport, supportCount } = useSupportPhones();
   const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo, getAssignedName, assignConversation } = useConversationAssignments();
 
+  // Stable per-seller identity for conversation ownership/visibility.
+  //  - Prefer the seller's linked auth user id (when cadastrada).
+  //  - Fall back to the seller's own id (pos_sellers.id) — always present after the gate —
+  //    so vendedoras SEM linked_user_id (ex.: Valéria, Viviane) também têm uma identidade
+  //    própria e estável entre aparelhos, em vez de caírem na conta logada do device
+  //    (o que misturava/escondia conversas entre vendedoras).
+  const sellerViewerId = sellerLinkedUserId || selectedSellerId || null;
+
   // Auto-attribute the current conversation to whoever is sending (first interaction wins)
   const autoAssignCurrentConversation = useCallback(() => {
     if (!selectedPhone) return;
-    const userId = sellerLinkedUserId || currentUserId;
+    const userId = sellerViewerId || currentUserId;
     if (!userId) return;
     assignConversation({
       phone: selectedPhone,
@@ -365,7 +373,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       name: selectedSellerName || null,
       onlyIfUnassigned: true,
     });
-  }, [selectedPhone, selectedConvNumberId, sellerLinkedUserId, currentUserId, selectedSellerName, assignConversation]);
+  }, [selectedPhone, selectedConvNumberId, sellerViewerId, currentUserId, selectedSellerName, assignConversation]);
 
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
