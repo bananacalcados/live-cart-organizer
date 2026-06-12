@@ -1253,7 +1253,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   return (
     <div className="h-full flex flex-col bg-[#f0f2f5] dark:bg-[#111b21] min-w-0 overflow-hidden">
       {/* WhatsApp-style Header - simplified */}
-      <div className="flex items-center justify-between px-4 py-3 bg-[#008069] dark:bg-[#202c33] flex-shrink-0">
+      <div className="flex items-center justify-between px-3 py-1.5 sm:px-4 sm:py-3 bg-[#008069] dark:bg-[#202c33] flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {selectedPhone && (
             <Button variant="ghost" size="icon" className="h-8 w-8 text-white/80 hover:text-white hover:bg-white/10 md:hidden" onClick={() => setSelectedPhone(null)}>
