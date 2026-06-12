@@ -15098,6 +15098,36 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_events_raw: {
+        Row: {
+          created_at: string
+          event_type: string | null
+          id: string
+          owner: string | null
+          payload: Json
+          provider: string
+          skip_reason: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          owner?: string | null
+          payload: Json
+          provider: string
+          skip_reason?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          owner?: string | null
+          payload?: Json
+          provider?: string
+          skip_reason?: string | null
+        }
+        Relationships: []
+      }
       webhook_routing_log: {
         Row: {
           created_at: string
