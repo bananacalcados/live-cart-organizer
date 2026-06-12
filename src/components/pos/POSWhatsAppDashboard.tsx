@@ -205,23 +205,23 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-[#f0f2f5] dark:bg-[#222e35]">
       {/* Header */}
-      <div className="p-4 border-b border-[#e9edef] dark:border-[#313d45] bg-[#f0f2f5] dark:bg-[#202c33] flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-[#00a884]/20 flex items-center justify-center text-[#00a884] font-bold text-lg">
+      <div className="p-3 sm:p-4 border-b border-[#e9edef] dark:border-[#313d45] bg-[#f0f2f5] dark:bg-[#202c33] flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-[#00a884]/20 flex items-center justify-center text-[#00a884] font-bold text-lg flex-shrink-0">
             {sellerName.charAt(0)}
           </div>
-          <div>
-            <h2 className="text-base font-bold">{sellerName}</h2>
+          <div className="min-w-0">
+            <h2 className="text-base font-bold truncate">{sellerName}</h2>
             <p className="text-xs text-muted-foreground">Dashboard de Atendimento</p>
           </div>
-          <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs text-muted-foreground hover:text-foreground" onClick={onChangeSeller} title="Trocar vendedora">
+          <Button variant="ghost" size="sm" className="h-8 gap-1 text-xs text-muted-foreground hover:text-foreground flex-shrink-0 ml-auto sm:ml-0" onClick={onChangeSeller} title="Trocar vendedora">
             <UserRoundCog className="h-4 w-4" />
             <span className="hidden sm:inline">Trocar</span>
           </Button>
         </div>
         <div className="flex items-center gap-2">
           <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-            <SelectTrigger className="h-8 w-32 text-xs">
+            <SelectTrigger className="h-9 w-28 sm:w-32 text-xs flex-shrink-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -229,10 +229,10 @@ export function POSWhatsAppDashboard({ storeId, sellerId, sellerName, onGoToChat
               <SelectItem value="30d">Últimos 30 dias</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="h-8 gap-1" onClick={loadData}>
+          <Button variant="outline" size="sm" className="h-9 w-9 p-0 flex-shrink-0" onClick={loadData} title="Atualizar">
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
-          <Button size="sm" className="h-8 gap-1 bg-[#00a884] hover:bg-[#00a884]/90 text-white" onClick={() => onGoToChat()}>
+          <Button size="sm" className="h-9 gap-1 bg-[#00a884] hover:bg-[#00a884]/90 text-white flex-1 sm:flex-none" onClick={() => onGoToChat()}>
             Ir para Chat <ArrowRight className="h-3.5 w-3.5" />
           </Button>
         </div>
