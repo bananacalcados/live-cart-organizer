@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { posSendMedia, posSendButtons, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
+import { posSendMedia, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 
 interface Props {
@@ -156,18 +156,6 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
     else setSelectedIds(new Set(filtered.map(p => p.id)));
   };
 
-  const calculatePrices = (product: ProductItem) => {
-    const basePrice = product.compare_at_price && product.compare_at_price > product.price
-      ? product.price : product.price;
-    const pickupDiscount = pricingRules?.pickup_discount_percent || 0;
-    const deliveryFee = pricingRules?.delivery_fee || 0;
-    const storeMarkup = pricingRules?.physical_store_markup_percent || 0;
-    return {
-      deliveryPrice: basePrice + deliveryFee,
-      pickupPrice: basePrice * (1 - pickupDiscount / 100),
-      storePrice: basePrice * (1 + storeMarkup / 100),
-    };
-  };
 
   const handleSend = async () => {
     if (selectedIds.size === 0) return;
@@ -187,7 +175,6 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
 
     for (const product of selected) {
       try {
-        const { deliveryPrice, pickupPrice, storePrice } = calculatePrices(product);
         const hasDiscount = product.compare_at_price && product.compare_at_price > product.price;
         // Nome do produto SEM tamanho/cor na legenda
         const displayName = product.productName;
@@ -222,27 +209,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
           });
         }
 
-        const buttons = [
-          { id: `delivery_${product.sku}`, title: `R$${deliveryPrice.toFixed(0)} Entrega` },
-          { id: `pickup_${product.sku}`, title: `R$${pickupPrice.toFixed(0)} Retira Loja` },
-          { id: `store_${product.sku}`, title: `R$${storePrice.toFixed(0)} Loja Fisica` },
-        ];
-        const buttonText = `Escolha como quer comprar:\n${displayName}`;
 
-        await posSendButtons({
-          provider: sendVia,
-          phone,
-          message: buttonText,
-          buttons,
-          numberId: resolvedNumberId,
-        });
-
-        await supabase.from("whatsapp_messages").insert({
-          phone,
-          message: `[Botões] ${displayName}\n• Entrega: R$ ${deliveryPrice.toFixed(2)}\n• Retirada: R$ ${pickupPrice.toFixed(2)}\n• Loja: R$ ${storePrice.toFixed(2)}`,
-          direction: "outgoing", status: "sent",
-          whatsapp_number_id: resolvedNumberId || null,
-        });
 
         successCount++;
         if (selected.indexOf(product) < selected.length - 1) {
@@ -254,7 +221,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
     }
 
 
-    toast.success(`${successCount} produto(s) enviado(s) com botões de preço!`);
+    toast.success(`${successCount} produto(s) enviado(s)!`);
     setSending(false);
     setSelectedIds(new Set());
     onOpenChange(false);
