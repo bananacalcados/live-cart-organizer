@@ -787,14 +787,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
       setConversations(
         filterByAssignment(enrichConversations(convs, phoneMessages), {
-          viewerUserId: sellerLinkedUserId,
+          viewerUserId: sellerViewerId,
         }),
       );
     };
 
     loadConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, filterByAssignment, mapRowsToConvs, waMsgTick, sellerLinkedUserId]);
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, filterByAssignment, mapRowsToConvs, waMsgTick, sellerViewerId]);
 
   // Bump conversation list when any new WA message arrives (messages of the open chat
   // are handled internally by useChatMessages above).
