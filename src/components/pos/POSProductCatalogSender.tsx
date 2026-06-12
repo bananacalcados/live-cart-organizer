@@ -3,7 +3,7 @@ import { Search, Send, Loader2, Check, ShoppingBag, Image, Filter } from "lucide
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
@@ -321,7 +321,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
         </div>
 
         {/* Product Grid */}
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -377,7 +377,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
               })}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         {/* Footer */}
         <div className="border-t px-4 py-3 flex items-center justify-between gap-3">
