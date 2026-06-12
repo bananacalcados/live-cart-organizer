@@ -1616,23 +1616,32 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               </div>
             </div>
 
-            <ChatView
-              messages={messages}
-              conversation={selectedConversation}
-              newMessage={newMessage}
-              onNewMessageChange={setNewMessage}
-              onSendMessage={handleSendMessage}
-              onSendAudio={handleSendAudio}
-              onSendMedia={handleSendMedia}
-              onDeleteMessage={handleDeleteMessage}
-              onEditMessage={handleEditMessage}
-              isSending={isSending}
-              hideTagsBar
-              quotedMessage={quotedMessage}
-              onQuoteMessage={setQuotedMessage}
-              onCancelQuote={() => setQuotedMessage(null)}
-              onExtraSent={() => loadMessages(selectedPhone, selectedConvNumberId)}
-            />
+            <div className="relative flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
+              <AttendantNudgeCard
+                conversations={conversationsFlagged}
+                arrivedCount={waitlist.arrivedCount}
+                onShowAwaiting={() => setStatusFilter("awaiting_reply")}
+                onShowFollowups={() => setStatusFilter("awaiting_customer")}
+                onShowArrived={() => setStatusFilter("awaiting_product")}
+              />
+              <ChatView
+                messages={messages}
+                conversation={selectedConversation}
+                newMessage={newMessage}
+                onNewMessageChange={setNewMessage}
+                onSendMessage={handleSendMessage}
+                onSendAudio={handleSendAudio}
+                onSendMedia={handleSendMedia}
+                onDeleteMessage={handleDeleteMessage}
+                onEditMessage={handleEditMessage}
+                isSending={isSending}
+                hideTagsBar
+                quotedMessage={quotedMessage}
+                onQuoteMessage={setQuotedMessage}
+                onCancelQuote={() => setQuotedMessage(null)}
+                onExtraSent={() => loadMessages(selectedPhone, selectedConvNumberId)}
+              />
+            </div>
 
             {/* Modal de dados do cliente (aberto pelo cabeçalho) */}
             <Dialog open={showOrdersModal} onOpenChange={setShowOrdersModal}>
