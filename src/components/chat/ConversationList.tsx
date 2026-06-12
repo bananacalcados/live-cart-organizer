@@ -295,8 +295,8 @@ export function ConversationList({
       {/* === Main column === */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         {/* WhatsApp-style header */}
-        <div className="px-4 pt-4 pb-2 bg-[#d6dde2] dark:bg-[#1a2329] flex-shrink-0">
-          <h1 className="text-[22px] font-bold text-[#1a2329] dark:text-white tracking-tight mb-3">
+        <div className="px-3 pt-2 pb-1.5 sm:px-4 sm:pt-4 sm:pb-2 bg-[#d6dde2] dark:bg-[#1a2329] flex-shrink-0">
+          <h1 className="text-base sm:text-[22px] font-bold text-[#1a2329] dark:text-white tracking-tight mb-1.5 sm:mb-3">
             WhatsApp
             <span className="ml-2 text-xs font-semibold text-[#00a884]">{instanceCounts['all'] || 0}</span>
           </h1>
@@ -306,13 +306,13 @@ export function ConversationList({
               placeholder="Pesquisar"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="pl-9 h-9 bg-white/80 dark:bg-[#0b1419] border-0 rounded-full text-sm"
+              className="pl-9 h-8 sm:h-9 bg-white/80 dark:bg-[#0b1419] border-0 rounded-full text-sm"
             />
           </div>
         </div>
 
-        {/* Native filter pills */}
-        <div className="px-3 py-2.5 bg-[#d6dde2] dark:bg-[#1a2329] flex flex-wrap gap-2 flex-shrink-0">
+        {/* Native filter pills — single scrollable row on mobile, wraps on desktop */}
+        <div className="px-3 py-1.5 sm:py-2.5 bg-[#d6dde2] dark:bg-[#1a2329] flex gap-2 overflow-x-auto scrollbar-hide sm:flex-wrap sm:overflow-visible flex-shrink-0">
           <Pill label="Todas" active={allActive} onClick={() => pickNativePill('all', 'all')} />
           <Pill label="Novas" active={newActive} count={newCount} onClick={() => pickNativePill('not_started', 'all')} />
           <Pill label="Não lidas" active={unreadActive} count={unreadCount} badge={unreadCount > 0 && !unreadActive} onClick={() => pickNativePill('awaiting_reply', 'all')} />
