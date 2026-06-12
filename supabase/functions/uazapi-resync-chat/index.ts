@@ -209,7 +209,7 @@ serve(async (req) => {
         message_id: x.ids[0],
         fromMe: x.fromMe,
         timestamp: x.tsMs ? new Date(x.tsMs).toISOString() : null,
-        preview: (x.text || "").slice(0, 60),
+        preview: (x.text || "").slice(0, 200),
         tipo: x.sysMediaType || "text",
       })),
       inserted: [] as AnyObj[],
