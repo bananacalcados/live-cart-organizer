@@ -187,7 +187,6 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
 
     for (const product of selected) {
       try {
-        const { deliveryPrice, pickupPrice, storePrice } = calculatePrices(product);
         const hasDiscount = product.compare_at_price && product.compare_at_price > product.price;
         // Nome do produto SEM tamanho/cor na legenda
         const displayName = product.productName;
