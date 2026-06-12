@@ -156,18 +156,6 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
     else setSelectedIds(new Set(filtered.map(p => p.id)));
   };
 
-  const calculatePrices = (product: ProductItem) => {
-    const basePrice = product.compare_at_price && product.compare_at_price > product.price
-      ? product.price : product.price;
-    const pickupDiscount = pricingRules?.pickup_discount_percent || 0;
-    const deliveryFee = pricingRules?.delivery_fee || 0;
-    const storeMarkup = pricingRules?.physical_store_markup_percent || 0;
-    return {
-      deliveryPrice: basePrice + deliveryFee,
-      pickupPrice: basePrice * (1 - pickupDiscount / 100),
-      storePrice: basePrice * (1 + storeMarkup / 100),
-    };
-  };
 
   const handleSend = async () => {
     if (selectedIds.size === 0) return;
