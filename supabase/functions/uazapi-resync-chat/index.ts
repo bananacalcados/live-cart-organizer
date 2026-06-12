@@ -231,8 +231,9 @@ serve(async (req) => {
         });
         if (typeof norm === "string" && norm) status = norm;
       }
-      const displayMessage =
-        x.text || (x.sysMediaType ? `📎 ${x.sysMediaType}` : "");
+      // Mídia sem texto → usa caption (já capturado em x.text) senão "[Mídia]".
+      // Nunca insere string vazia.
+      const displayMessage = x.text || (x.sysMediaType ? "[Mídia]" : "");
       if (!displayMessage) continue;
 
       const insertRow: AnyObj = {
