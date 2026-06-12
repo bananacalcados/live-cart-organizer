@@ -170,7 +170,7 @@ export function AttendantNudgeCard({
   }
 
   return (
-    <div className="pointer-events-auto absolute top-14 right-3 z-30 w-72 max-w-[calc(100%-1.5rem)] rounded-xl border-2 border-primary/30 bg-card/98 shadow-xl ring-2 ring-primary/10 backdrop-blur">
+    <div className="pointer-events-auto absolute top-3 right-3 z-30 w-72 max-w-[calc(100%-1.5rem)] rounded-xl border-2 border-primary/30 bg-card/98 shadow-xl ring-2 ring-primary/10 backdrop-blur">
       <button
         type="button"
         onClick={() => setCollapsed((v) => !v)}
