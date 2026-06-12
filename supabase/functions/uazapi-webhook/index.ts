@@ -78,6 +78,25 @@ interface UazapiResolution {
   matched: boolean;
 }
 
+/**
+ * Variantes do owner para casar com/sem o 9º dígito (BR). A uazapi costuma
+ * enviar o owner SEM o nono dígito (12 dígitos), enquanto whatsapp_numbers
+ * pode estar armazenado COM (13 dígitos). Geramos ambas as formas.
+ */
+function ownerVariants(owner: string): string[] {
+  const digits = owner.replace(/\D/g, "");
+  const variants = new Set<string>([digits]);
+  // BR sem nono dígito: 55 + DDD(2) + 8 dígitos = 12 → adiciona variante com 9
+  if (digits.startsWith("55") && digits.length === 12) {
+    variants.add(digits.slice(0, 4) + "9" + digits.slice(4));
+  }
+  // BR com nono dígito: 55 + DDD(2) + 9 dígitos = 13 → adiciona variante sem 9
+  if (digits.startsWith("55") && digits.length === 13 && digits[4] === "9") {
+    variants.add(digits.slice(0, 4) + digits.slice(5));
+  }
+  return [...variants];
+}
+
 async function resolveNumberId(
   supabase: any,
   url: URL,
@@ -91,7 +110,7 @@ async function resolveNumberId(
       .from("whatsapp_numbers")
       .select("id")
       .eq("provider", "uazapi")
-      .eq("uazapi_owner", owner)
+      .in("uazapi_owner", ownerVariants(owner))
       .eq("is_active", true)
       .limit(1)
       .maybeSingle();
