@@ -189,15 +189,21 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
       try {
         const { deliveryPrice, pickupPrice, storePrice } = calculatePrices(product);
         const hasDiscount = product.compare_at_price && product.compare_at_price > product.price;
-        const displayName = product.variantLabel
-          ? `${product.productName} - ${product.variantLabel}`
-          : product.productName;
+        // Nome do produto SEM tamanho/cor na legenda
+        const displayName = product.productName;
+        // Preço no formato brasileiro (vírgula decimal)
+        const priceBR = (v: number) =>
+          v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-        let caption = displayName;
+        // Legenda formatada para WhatsApp (negrito *, tachado ~, itálico _)
+        let caption: string;
         if (hasDiscount) {
-          caption += `\nDe R$ ${product.compare_at_price!.toFixed(2)} por R$ ${product.price.toFixed(2)}`;
+          caption =
+            `🛍 ${displayName}\n\n` +
+            `De _~R$ ${priceBR(product.compare_at_price!)}~_\n\n` +
+            `💸 Por *R$ ${priceBR(product.price)}* 🔥`;
         } else {
-          caption += `\nR$ ${product.price.toFixed(2)}`;
+          caption = `🛍 ${displayName}\n\n💸 *R$ ${priceBR(product.price)}*`;
         }
 
         if (product.image_url) {
