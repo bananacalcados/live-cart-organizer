@@ -22,23 +22,21 @@ function json(body: unknown, status = 200) {
   });
 }
 
-/** Mapeia o mediaType da uazapi para o tipo genérico do sistema. */
+/**
+ * Mapeia o mediaType/messageType da uazapi para o tipo genérico do sistema.
+ * Tolera tanto os valores curtos ("image") quanto os nomes do baileys
+ * ("ImageMessage", "AudioMessage", etc.) e mensagens de texto.
+ */
 function mapMediaType(t: string | null): string | null {
-  switch ((t || "").toLowerCase()) {
-    case "image":
-      return "image";
-    case "video":
-      return "video";
-    case "audio":
-    case "ptt":
-      return "audio";
-    case "sticker":
-      return "image";
-    case "document":
-      return "document";
-    default:
-      return null;
-  }
+  const s = (t || "").toLowerCase();
+  if (!s) return null;
+  if (s.includes("image")) return "image";
+  if (s.includes("video")) return "video";
+  if (s.includes("audio") || s === "ptt" || s.includes("ptt")) return "audio";
+  if (s.includes("sticker")) return "image";
+  if (s.includes("document")) return "document";
+  // ExtendedTextMessage / Conversation / text → não é mídia
+  return null;
 }
 
 /**
