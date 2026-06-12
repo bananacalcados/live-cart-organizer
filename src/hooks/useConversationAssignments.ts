@@ -142,9 +142,19 @@ export function useConversationAssignments() {
    * Filters conversations based on current user's role:
    * - Admin/moderator: sees all (or filtered by viewAsUserId)
    * - Regular user: sees only their assigned + unassigned conversations
+   *
+   * In the POS, a seller signs in through the "seller gate" and her replies are
+   * assigned to her linked user id (sellerLinkedUserId), which can differ from the
+   * device's auth account (currentUserId). Pass that id via `viewerUserId` so the
+   * seller sees the conversations assigned to her — not only the unassigned ones.
    */
-  const filterByAssignment = useCallback(<T extends { conversationKey?: string }>(conversations: T[]): T[] => {
-    if (!isReady || !currentUserId) return conversations;
+  const filterByAssignment = useCallback(<T extends { conversationKey?: string }>(
+    conversations: T[],
+    options?: { viewerUserId?: string | null },
+  ): T[] => {
+    const viewerUserId = options?.viewerUserId || null;
+    const effectiveUserId = viewerUserId || currentUserId;
+    if (!isReady || !effectiveUserId) return conversations;
 
     // Admin viewing a specific user's conversations
     if (isAdmin && viewAsUserId) {
@@ -158,11 +168,15 @@ export function useConversationAssignments() {
     // Admin sees all
     if (isAdmin) return conversations;
 
-    // Regular user: show assigned to them + unassigned
+    // Regular user / seller: show conversations assigned to them (either the
+    // device account or the selected seller's linked id) + unassigned ones.
+    const allowed = new Set<string>();
+    if (currentUserId) allowed.add(currentUserId);
+    if (viewerUserId) allowed.add(viewerUserId);
     return conversations.filter(c => {
       const key = c.conversationKey || "";
       const assigned = assignments.get(key);
-      return !assigned || assigned === currentUserId;
+      return !assigned || allowed.has(assigned);
     });
   }, [isReady, currentUserId, isAdmin, viewAsUserId, assignments]);
 
