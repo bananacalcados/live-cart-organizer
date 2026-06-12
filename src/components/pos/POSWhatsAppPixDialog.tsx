@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 
 interface Props {
@@ -13,7 +14,8 @@ interface Props {
   storeId: string;
   phone: string;
   customerName?: string;
-  sendVia: "zapi" | "meta";
+  /** Provider real da instância selecionada (meta | zapi | uazapi | wasender). */
+  sendVia: PosSendProvider;
   selectedNumberId: string | null;
 }
 
@@ -138,11 +140,7 @@ export function POSWhatsAppPixDialog({
     setSending(true);
     try {
       const message = `💰 *PIX - R$ ${parseFloat(amount).toFixed(2)}*\n${description ? `📝 ${description}\n` : ''}\nCopie o código abaixo para pagar:\n\n${pixCode}`;
-      if (sendVia === "meta" && selectedNumberId) {
-        await supabase.functions.invoke("meta-whatsapp-send", { body: { phone, message, whatsapp_number_id: selectedNumberId } });
-      } else {
-        await supabase.functions.invoke("zapi-send-message", { body: { phone, message, whatsapp_number_id: selectedNumberId } });
-      }
+      await posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId });
       await supabase.from("whatsapp_messages").insert({
         phone, message, direction: "outgoing", status: "sent",
         whatsapp_number_id: selectedNumberId || null,

@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts } from "@/lib/shopify";
+import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 
 interface CartItem {
@@ -30,7 +31,8 @@ interface Props {
   storeId: string;
   phone: string;
   customerName?: string;
-  sendVia: "zapi" | "meta";
+  /** Provider real da instância selecionada (meta | zapi | uazapi | wasender). */
+  sendVia: PosSendProvider;
   selectedNumberId: string | null;
 }
 
@@ -207,11 +209,7 @@ export function POSWhatsAppCheckoutDialog({
     setSending(true);
     try {
       const message = `Olá${customerName ? ` ${customerName.split(' ')[0]}` : ''}! 🛍️\n\nSeu link de compra está pronto:\n${generatedLink}\n\nÉ só clicar, conferir e finalizar! 😊`;
-      if (sendVia === "meta" && selectedNumberId) {
-        await supabase.functions.invoke("meta-whatsapp-send", { body: { phone, message, whatsapp_number_id: selectedNumberId } });
-      } else {
-        await supabase.functions.invoke("zapi-send-message", { body: { phone, message, whatsapp_number_id: selectedNumberId } });
-      }
+      await posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId });
       await supabase.from("whatsapp_messages").insert({
         phone, message, direction: "outgoing", status: "sent",
         whatsapp_number_id: selectedNumberId || null,

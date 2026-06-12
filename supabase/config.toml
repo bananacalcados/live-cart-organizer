@@ -290,3 +290,6 @@ verify_jwt = false
 
 [functions.wasender-groups]
 verify_jwt = false
+
+[functions.uazapi-send-buttons]
+verify_jwt = false

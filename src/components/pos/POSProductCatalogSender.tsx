@@ -9,12 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { posSendMedia, posSendButtons, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 
 interface Props {
   storeId: string;
   phone: string;
-  sendVia: "zapi" | "meta";
+  /** Provider real da instância selecionada (meta | zapi | uazapi | wasender). */
+  sendVia: PosSendProvider;
   selectedNumberId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -176,7 +178,6 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
     // Resolve the actual number ID - fallback to store's selectedNumberId if prop is missing
     const { getDefaultNumber, selectedNumberId: storeNumberId } = useWhatsAppNumberStore.getState();
     const resolvedNumberId = selectedNumberId || storeNumberId || getDefaultNumber()?.id || null;
-    const effectiveSendVia = sendVia === "meta" && resolvedNumberId ? "meta" : sendVia === "meta" ? "meta" : sendVia;
 
     if (sendVia === "meta" && !resolvedNumberId) {
       toast.error("Nenhum número Meta configurado para envio");
@@ -200,15 +201,14 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
         }
 
         if (product.image_url) {
-          if (sendVia === "meta" && resolvedNumberId) {
-            await supabase.functions.invoke("meta-whatsapp-send", {
-              body: { phone, type: "image", mediaUrl: product.image_url, caption, whatsappNumberId: resolvedNumberId },
-            });
-          } else {
-            await supabase.functions.invoke("zapi-send-media", {
-              body: { phone, mediaUrl: product.image_url, mediaType: "image", caption, whatsapp_number_id: resolvedNumberId },
-            });
-          }
+          await posSendMedia({
+            provider: sendVia,
+            phone,
+            mediaUrl: product.image_url,
+            mediaType: "image",
+            caption,
+            numberId: resolvedNumberId,
+          });
           await supabase.from("whatsapp_messages").insert({
             phone, message: caption, direction: "outgoing", status: "sent",
             media_type: "image", media_url: product.image_url,
@@ -223,15 +223,13 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
         ];
         const buttonText = `Escolha como quer comprar:\n${displayName}`;
 
-        if (sendVia === "meta" && resolvedNumberId) {
-          await supabase.functions.invoke("meta-whatsapp-send", {
-            body: { phone, type: "interactive", interactiveData: { body: buttonText, buttons }, whatsappNumberId: resolvedNumberId },
-          });
-        } else {
-          await supabase.functions.invoke("zapi-send-button-list", {
-            body: { phone, message: buttonText, buttons, whatsapp_number_id: resolvedNumberId },
-          });
-        }
+        await posSendButtons({
+          provider: sendVia,
+          phone,
+          message: buttonText,
+          buttons,
+          numberId: resolvedNumberId,
+        });
 
         await supabase.from("whatsapp_messages").insert({
           phone,
@@ -248,6 +246,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
         console.error(`Error sending product ${product.productName}:`, error);
       }
     }
+
 
     toast.success(`${successCount} produto(s) enviado(s) com botões de preço!`);
     setSending(false);
