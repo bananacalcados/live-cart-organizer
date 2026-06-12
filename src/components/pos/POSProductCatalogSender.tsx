@@ -194,7 +194,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
         }
 
         if (product.image_url) {
-          await posSendMedia({
+          const messageId = await posSendMedia({
             provider: sendVia,
             phone,
             mediaUrl: product.image_url,
@@ -205,6 +205,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
           await supabase.from("whatsapp_messages").insert({
             phone, message: caption, direction: "outgoing", status: "sent",
             media_type: "image", media_url: product.image_url,
+            message_id: messageId,
             whatsapp_number_id: resolvedNumberId || null,
           });
         }

@@ -140,9 +140,10 @@ export function POSWhatsAppPixDialog({
     setSending(true);
     try {
       const message = `💰 *PIX - R$ ${parseFloat(amount).toFixed(2)}*\n${description ? `📝 ${description}\n` : ''}\nCopie o código abaixo para pagar:\n\n${pixCode}`;
-      await posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId });
+      const messageId = await posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId });
       await supabase.from("whatsapp_messages").insert({
         phone, message, direction: "outgoing", status: "sent",
+        message_id: messageId,
         whatsapp_number_id: selectedNumberId || null,
       });
       toast.success("PIX enviado!");

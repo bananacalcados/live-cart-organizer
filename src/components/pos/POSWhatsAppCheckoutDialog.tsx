@@ -209,9 +209,10 @@ export function POSWhatsAppCheckoutDialog({
     setSending(true);
     try {
       const message = `Olá${customerName ? ` ${customerName.split(' ')[0]}` : ''}! 🛍️\n\nSeu link de compra está pronto:\n${generatedLink}\n\nÉ só clicar, conferir e finalizar! 😊`;
-      await posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId });
+      const messageId = await posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId });
       await supabase.from("whatsapp_messages").insert({
         phone, message, direction: "outgoing", status: "sent",
+        message_id: messageId,
         whatsapp_number_id: selectedNumberId || null,
       });
       toast.success("Link enviado!");
