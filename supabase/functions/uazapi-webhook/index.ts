@@ -386,11 +386,20 @@ serve(async (req) => {
       });
     }
 
-    // Resolve URL de mídia (baixa link acessível via /message/download e re-hospeda)
-    let mediaUrl: string | null = null;
-    if (sysMediaType && messageId) {
+    // Mídia é resolvida em SEGUNDO PLANO (após o insert e o return ok()).
+    // No fluxo síncrono media_url é null — o webhook nunca segura a resposta
+    // esperando download/rehost (que para vídeos grandes pode levar 30s+).
+    const mediaUrl: string | null = null;
+
+    /**
+     * Baixa (/message/download) + re-hospeda a mídia e grava media_url na linha
+     * já inserida, em background com EdgeRuntime.waitUntil. Nunca bloqueia o 200.
+     */
+    const scheduleMediaDownload = (rowId: string | null) => {
+      if (!rowId || !sysMediaType || !messageId || !instanceToken) return;
       const token = instanceToken;
-      if (token) {
+      const fileName = asString((message.content as AnyObj)?.fileName) || null;
+      const task = (async () => {
         try {
           const dl = await uazapiInstance("/message/download", token, {
             method: "POST",
@@ -398,24 +407,31 @@ serve(async (req) => {
           });
           const link = asString(dl.data?.url) || asString(dl.data?.fileURL);
           if (link) {
-            mediaUrl = await rehostMedia(
-              link,
-              sysMediaType,
-              asString((message.content as AnyObj)?.fileName) || null,
-            );
+            const url = await rehostMedia(link, sysMediaType, fileName);
+            if (url) {
+              await supabase.from("whatsapp_messages").update({ media_url: url }).eq("id", rowId);
+            }
           }
         } catch (e) {
-          console.error("[uazapi-webhook] download mídia falhou:", (e as Error).message);
+          console.error("[uazapi-webhook] download mídia (bg) falhou:", (e as Error).message);
         }
+      })();
+      try {
+        (globalThis as AnyObj).EdgeRuntime?.waitUntil?.(task);
+      } catch {
+        // Sem EdgeRuntime: deixa a task correr solta (best-effort).
       }
-    }
+    };
 
     const caption =
       sysMediaType && typeof message.content === "object"
         ? asString((message.content as AnyObj)?.caption)
         : null;
     const displayMessage = text || caption || (sysMediaType ? `📎 ${sysMediaType}` : "");
-    if (!displayMessage && !mediaUrl) return ok({ skipped: "empty" });
+    if (!displayMessage && !mediaUrl) {
+      await markSkip("empty");
+      return ok({ skipped: "empty" });
+    }
 
     const quotedId = asString(message.quoted) || null;
 
