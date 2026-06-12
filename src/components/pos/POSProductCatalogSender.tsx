@@ -234,7 +234,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
     }
 
 
-    toast.success(`${successCount} produto(s) enviado(s) com botões de preço!`);
+    toast.success(`${successCount} produto(s) enviado(s)!`);
     setSending(false);
     setSelectedIds(new Set());
     onOpenChange(false);
