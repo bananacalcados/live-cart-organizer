@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
-import { BarChart3, Clock, TrendingUp, Medal, Users, MessageCircle, ShoppingBag, Headphones, HelpCircle, Star, RefreshCw } from 'lucide-react';
+import { BarChart3, Clock, TrendingUp, Medal, Users, MessageCircle, ShoppingBag, Headphones, HelpCircle, Star, RefreshCw, ClipboardList } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { subDays, startOfDay } from 'date-fns';
+import { POSSellerTasksBoard } from './POSSellerTasksBoard';
 
 interface Props {
   storeId: string;
@@ -143,7 +145,19 @@ export function POSSellerDashboard({ storeId }: Props) {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-background">
+    <Tabs defaultValue="perf" className="flex-1 flex flex-col overflow-hidden bg-background">
+      <div className="px-3 pt-3 flex-shrink-0">
+        <TabsList>
+          <TabsTrigger value="perf" className="gap-1.5"><BarChart3 className="h-3.5 w-3.5" /> Desempenho</TabsTrigger>
+          <TabsTrigger value="tasks" className="gap-1.5"><ClipboardList className="h-3.5 w-3.5" /> Tarefas</TabsTrigger>
+        </TabsList>
+      </div>
+
+      <TabsContent value="tasks" className="flex-1 flex flex-col overflow-hidden mt-2 data-[state=inactive]:hidden">
+        <POSSellerTasksBoard storeId={storeId} />
+      </TabsContent>
+
+      <TabsContent value="perf" className="flex-1 flex flex-col overflow-hidden mt-2 data-[state=inactive]:hidden">
       <div className="p-4 border-b flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5 text-primary" />
@@ -307,6 +321,7 @@ export function POSSellerDashboard({ storeId }: Props) {
           </Card>
         </div>
       </ScrollArea>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }

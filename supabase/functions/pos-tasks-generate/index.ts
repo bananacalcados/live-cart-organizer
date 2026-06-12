@@ -120,7 +120,11 @@ serve(async (req) => {
       });
     }
 
-    const dateStr = todaySaoPaulo();
+    const today = todaySaoPaulo();
+    // Permite gerar instâncias para uma data específica (ex.: navegação no quadro de tarefas).
+    // Nunca geramos para datas FUTURAS para não congelar listas automáticas (pós-venda etc.) antes da hora.
+    const requested: string | undefined = typeof body.date === "string" ? body.date : undefined;
+    const dateStr = requested && requested <= today ? requested : today;
 
     // Vendedoras alvo
     let sellersQ = supabase
