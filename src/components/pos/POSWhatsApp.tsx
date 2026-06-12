@@ -90,6 +90,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     return () => leave();
   }, []);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  // Assinatura do último conjunto de conversas renderizado. Usada pelo polling de
+  // segurança para NÃO re-renderizar a lista (evita "piscar") quando o refetch
+  // traz exatamente os mesmos dados.
+  const convSigRef = useRef('');
   const [waMsgTick, setWaMsgTick] = useState(0);
   const [teamChatActive, setTeamChatActive] = useState(false);
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
