@@ -321,6 +321,7 @@ export function POSSellerDashboard({ storeId }: Props) {
           </Card>
         </div>
       </ScrollArea>
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }
