@@ -503,12 +503,12 @@ export function ConversationList({
                             💬 Messenger
                           </Badge>
                         )}
-                        {!conv.channel && conv.instanceLabel && (
+                        {!conv.channel && (conv.instanceLabel || conv.isGroup) && (
                           <Badge variant="outline" className={cn(
                             "text-[8px] px-1 py-0 leading-tight",
                             conv.whatsapp_number_id ? "text-blue-600 border-blue-400" : "text-green-600 border-green-400"
                           )}>
-                            {conv.instanceLabel}
+                            {conv.instanceLabel || 'WhatsApp'}
                           </Badge>
                         )}
                         {conv.unreadCount > 0 && (
