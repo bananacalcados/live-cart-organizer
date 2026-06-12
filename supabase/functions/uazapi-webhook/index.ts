@@ -578,13 +578,16 @@ serve(async (req) => {
       }
     }
 
-    // Nome de grupo
+    // Nome de grupo — usar SOMENTE o nome real do grupo (message.groupName),
+    // NUNCA o nome do remetente (senderName). Caso o nome do grupo seja
+    // desconhecido nesta mensagem, não sobrescreve o display_name existente,
+    // evitando que o card do grupo fique com o nome da última pessoa que falou.
     if (isGroup) {
-      const groupName = senderName || asString(message.groupName) || null;
-      if (groupName) {
+      const realGroupName = asString(message.groupName) || null;
+      if (realGroupName) {
         await supabase
           .from("chat_contacts")
-          .upsert({ phone, display_name: groupName }, { onConflict: "phone", ignoreDuplicates: false });
+          .upsert({ phone, display_name: realGroupName }, { onConflict: "phone", ignoreDuplicates: false });
       }
     }
 
