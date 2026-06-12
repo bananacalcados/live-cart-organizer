@@ -184,7 +184,39 @@ serve(async (req) => {
     const body = await req.json();
     console.log('Meta webhook received:', JSON.stringify(body));
 
+    // LOG BRUTO COMO PRIMEIRA AÇÃO (caixa-preta). Nunca pode bloquear o fluxo.
+    // Garante que TODO evento recebido da Meta fique registrado, mesmo que a
+    // resolução de instância ou o insert em whatsapp_messages falhem depois.
+    let rawEventId: string | null = null;
+    try {
+      const firstChange = body?.entry?.[0]?.changes?.[0];
+      const eventType = (firstChange?.field || body?.object || '').toString().toLowerCase() || null;
+      const owner =
+        firstChange?.value?.metadata?.display_phone_number ||
+        firstChange?.value?.metadata?.phone_number_id ||
+        null;
+      const { data: rawRow } = await supabase
+        .from('webhook_events_raw')
+        .insert({ provider: 'meta', event_type: eventType, owner, payload: body })
+        .select('id')
+        .maybeSingle();
+      rawEventId = (rawRow as { id?: string } | null)?.id ?? null;
+    } catch (e) {
+      console.error('[meta-wa] raw log falhou:', (e as Error).message);
+    }
+
+    // Marca o motivo de descarte nas saídas silenciosas (deixa rastro).
+    const markSkip = async (reason: string) => {
+      if (!rawEventId) return;
+      try {
+        await supabase.from('webhook_events_raw').update({ skip_reason: reason }).eq('id', rawEventId);
+      } catch (e) {
+        console.error('[meta-wa] markSkip falhou:', (e as Error).message);
+      }
+    };
+
     if (body.object !== 'whatsapp_business_account') {
+      await markSkip(`object_not_wa:${body?.object ?? 'null'}`);
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
