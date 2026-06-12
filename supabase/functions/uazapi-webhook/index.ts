@@ -210,6 +210,7 @@ serve(async (req) => {
 
     // ───────────────────────── status updates ─────────────────────────
     if (eventType === "messages_update" || eventType === "message_update") {
+      console.log("TEMP_DEBUG messages_update raw:", JSON.stringify(payload)); // TEMP_DEBUG remove later
       const msg = (payload.message as AnyObj) || {};
       const list: AnyObj[] = Array.isArray(payload.message)
         ? (payload.message as AnyObj[])
