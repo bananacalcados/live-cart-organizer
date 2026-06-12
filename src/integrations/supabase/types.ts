@@ -11460,6 +11460,7 @@ export type Database = {
       pos_sellers: {
         Row: {
           created_at: string
+          excluded_from_tasks: boolean
           id: string
           is_active: boolean
           is_manager: boolean
@@ -11473,6 +11474,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          excluded_from_tasks?: boolean
           id?: string
           is_active?: boolean
           is_manager?: boolean
@@ -11486,6 +11488,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          excluded_from_tasks?: boolean
           id?: string
           is_active?: boolean
           is_manager?: boolean
