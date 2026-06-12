@@ -6,10 +6,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// CEP range for Governador Valadares/MG: 35010-000 to 35064-999
+// CEP range for Governador Valadares/MG: 35010-000 to 35065-999
 function isGVCep(cep: string): boolean {
   const num = parseInt(cep.replace(/\D/g, ''), 10);
-  return num >= 35010000 && num <= 35064999;
+  return num >= 35010000 && num <= 35065999;
 }
 
 // Map CEP prefix to Brazilian state
