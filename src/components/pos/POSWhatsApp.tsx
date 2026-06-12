@@ -351,7 +351,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
   const { hasActiveSupport, supportCount } = useSupportPhones();
-  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo, getAssignedName, assignConversation } = useConversationAssignments();
+  const { isAdmin, viewAsUserId, setViewAsUserId, getAssignedTo, getAssignedName, assignConversation } = useConversationAssignments();
 
   // Stable per-seller identity for conversation ownership/visibility.
   //  - Prefer the seller's linked auth user id (when cadastrada).
