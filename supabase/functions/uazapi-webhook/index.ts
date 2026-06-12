@@ -344,11 +344,15 @@ serve(async (req) => {
     const message = (payload.message as AnyObj) || {};
     // Salvaguarda extra: nunca reprocessar o que enviamos via API.
     if (message.wasSentByApi === true) {
+      await markSkip("wasSentByApi");
       return ok({ skipped: "wasSentByApi" });
     }
 
     const chatid = asString(message.chatid);
-    if (!chatid) return ok({ skipped: "no_chatid" });
+    if (!chatid) {
+      await markSkip("no_chatid");
+      return ok({ skipped: "no_chatid" });
+    }
 
     const { phone: chatPhone, isGroup, isLid } = normalizeJid(chatid);
     let phone = chatPhone;
