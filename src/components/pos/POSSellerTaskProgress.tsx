@@ -138,7 +138,8 @@ export function POSSellerTaskProgress({ stores }: Props) {
         supabase
           .from("pos_sellers")
           .select("id, name, store_id, is_manager")
-          .eq("is_active", true),
+          .eq("is_active", true)
+          .eq("excluded_from_tasks", false),
         supabase
           .from("pos_task_definitions" as any)
           .select("id, store_id, title, category, recurrence, recurrence_config, assignment, assigned_seller_ids")
