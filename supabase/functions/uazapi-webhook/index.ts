@@ -493,7 +493,7 @@ serve(async (req) => {
         ? normalizeJid(asString(message.sender_pn) || asString(message.sender)).phone || null
         : null;
 
-    const { error: insErr } = await supabase.from("whatsapp_messages").insert({
+    const { data: insertedIncoming, error: insErr } = await supabase.from("whatsapp_messages").insert({
       phone,
       message: displayMessage,
       direction: "incoming",
@@ -504,13 +504,14 @@ serve(async (req) => {
       sender_phone: rawParticipant,
       whatsapp_number_id: numberId,
       quoted_message_id: quotedId,
-      ...(sysMediaType && mediaUrl ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
-    });
+      ...(sysMediaType ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
+    }).select("id").maybeSingle();
 
     if (insErr) {
       if ((insErr as AnyObj).code === "23505") return ok({ dedup: true });
       console.error("[uazapi-webhook] erro ao salvar incoming:", insErr);
     } else {
+      scheduleMediaDownload(((insertedIncoming as AnyObj)?.id as string) ?? null);
       // Detecta sinais de indicação (cupom / telefone) — fire & forget
       fetch(`${SB_URL}/functions/v1/referral-detect-incoming`, {
         method: "POST",
@@ -518,6 +519,7 @@ serve(async (req) => {
         body: JSON.stringify({ from_phone: phone, message_text: displayMessage }),
       }).catch(() => {});
     }
+
 
     // Reabre conversas finalizadas
     if (!isGroup) {
