@@ -78,6 +78,25 @@ interface UazapiResolution {
   matched: boolean;
 }
 
+/**
+ * Variantes do owner para casar com/sem o 9º dígito (BR). A uazapi costuma
+ * enviar o owner SEM o nono dígito (12 dígitos), enquanto whatsapp_numbers
+ * pode estar armazenado COM (13 dígitos). Geramos ambas as formas.
+ */
+function ownerVariants(owner: string): string[] {
+  const digits = owner.replace(/\D/g, "");
+  const variants = new Set<string>([digits]);
+  // BR sem nono dígito: 55 + DDD(2) + 8 dígitos = 12 → adiciona variante com 9
+  if (digits.startsWith("55") && digits.length === 12) {
+    variants.add(digits.slice(0, 4) + "9" + digits.slice(4));
+  }
+  // BR com nono dígito: 55 + DDD(2) + 9 dígitos = 13 → adiciona variante sem 9
+  if (digits.startsWith("55") && digits.length === 13 && digits[4] === "9") {
+    variants.add(digits.slice(0, 4) + digits.slice(5));
+  }
+  return [...variants];
+}
+
 async function resolveNumberId(
   supabase: any,
   url: URL,
@@ -91,7 +110,7 @@ async function resolveNumberId(
       .from("whatsapp_numbers")
       .select("id")
       .eq("provider", "uazapi")
-      .eq("uazapi_owner", owner)
+      .in("uazapi_owner", ownerVariants(owner))
       .eq("is_active", true)
       .limit(1)
       .maybeSingle();
@@ -176,6 +195,34 @@ serve(async (req) => {
     const payload = (await req.json().catch(() => ({}))) as AnyObj;
     const eventType = (asString(payload.EventType) || asString(payload.event) || "").toLowerCase();
     const instanceToken = asString(payload.token);
+
+    // LOG BRUTO COMO PRIMEIRA AÇÃO (caixa-preta). Nunca pode bloquear o fluxo.
+    let rawEventId: string | null = null;
+    try {
+      const { data: rawRow } = await supabase
+        .from("webhook_events_raw")
+        .insert({
+          provider: "uazapi",
+          event_type: eventType || null,
+          owner: asString(payload.owner) || null,
+          payload,
+        })
+        .select("id")
+        .maybeSingle();
+      rawEventId = ((rawRow as AnyObj)?.id as string) ?? null;
+    } catch (e) {
+      console.error("[uazapi-webhook] raw log falhou:", (e as Error).message);
+    }
+
+    // Marca o motivo de descarte nas saídas silenciosas (deixa rastro).
+    const markSkip = async (reason: string) => {
+      if (!rawEventId) return;
+      try {
+        await supabase.from("webhook_events_raw").update({ skip_reason: reason }).eq("id", rawEventId);
+      } catch (e) {
+        console.error("[uazapi-webhook] markSkip falhou:", (e as Error).message);
+      }
+    };
 
     console.log(`[uazapi-webhook] event=${eventType} number_id=${url.searchParams.get("number_id")}`);
 
@@ -297,11 +344,15 @@ serve(async (req) => {
     const message = (payload.message as AnyObj) || {};
     // Salvaguarda extra: nunca reprocessar o que enviamos via API.
     if (message.wasSentByApi === true) {
+      await markSkip("wasSentByApi");
       return ok({ skipped: "wasSentByApi" });
     }
 
     const chatid = asString(message.chatid);
-    if (!chatid) return ok({ skipped: "no_chatid" });
+    if (!chatid) {
+      await markSkip("no_chatid");
+      return ok({ skipped: "no_chatid" });
+    }
 
     const { phone: chatPhone, isGroup, isLid } = normalizeJid(chatid);
     let phone = chatPhone;
@@ -335,11 +386,20 @@ serve(async (req) => {
       });
     }
 
-    // Resolve URL de mídia (baixa link acessível via /message/download e re-hospeda)
-    let mediaUrl: string | null = null;
-    if (sysMediaType && messageId) {
+    // Mídia é resolvida em SEGUNDO PLANO (após o insert e o return ok()).
+    // No fluxo síncrono media_url é null — o webhook nunca segura a resposta
+    // esperando download/rehost (que para vídeos grandes pode levar 30s+).
+    const mediaUrl: string | null = null;
+
+    /**
+     * Baixa (/message/download) + re-hospeda a mídia e grava media_url na linha
+     * já inserida, em background com EdgeRuntime.waitUntil. Nunca bloqueia o 200.
+     */
+    const scheduleMediaDownload = (rowId: string | null) => {
+      if (!rowId || !sysMediaType || !messageId || !instanceToken) return;
       const token = instanceToken;
-      if (token) {
+      const fileName = asString((message.content as AnyObj)?.fileName) || null;
+      const task = (async () => {
         try {
           const dl = await uazapiInstance("/message/download", token, {
             method: "POST",
@@ -347,24 +407,31 @@ serve(async (req) => {
           });
           const link = asString(dl.data?.url) || asString(dl.data?.fileURL);
           if (link) {
-            mediaUrl = await rehostMedia(
-              link,
-              sysMediaType,
-              asString((message.content as AnyObj)?.fileName) || null,
-            );
+            const url = await rehostMedia(link, sysMediaType, fileName);
+            if (url) {
+              await supabase.from("whatsapp_messages").update({ media_url: url }).eq("id", rowId);
+            }
           }
         } catch (e) {
-          console.error("[uazapi-webhook] download mídia falhou:", (e as Error).message);
+          console.error("[uazapi-webhook] download mídia (bg) falhou:", (e as Error).message);
         }
+      })();
+      try {
+        (globalThis as AnyObj).EdgeRuntime?.waitUntil?.(task);
+      } catch {
+        // Sem EdgeRuntime: deixa a task correr solta (best-effort).
       }
-    }
+    };
 
     const caption =
       sysMediaType && typeof message.content === "object"
         ? asString((message.content as AnyObj)?.caption)
         : null;
     const displayMessage = text || caption || (sysMediaType ? `📎 ${sysMediaType}` : "");
-    if (!displayMessage && !mediaUrl) return ok({ skipped: "empty" });
+    if (!displayMessage && !mediaUrl) {
+      await markSkip("empty");
+      return ok({ skipped: "empty" });
+    }
 
     const quotedId = asString(message.quoted) || null;
 
@@ -392,7 +459,7 @@ serve(async (req) => {
           }
         }
       }
-      await supabase.from("whatsapp_messages").insert({
+      const { data: insertedFromMe } = await supabase.from("whatsapp_messages").insert({
         phone,
         message: displayMessage,
         direction: "outgoing",
@@ -401,8 +468,9 @@ serve(async (req) => {
         is_group: isGroup,
         whatsapp_number_id: numberId,
         quoted_message_id: quotedId,
-        ...(sysMediaType && mediaUrl ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
-      });
+        ...(sysMediaType ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
+      }).select("id").maybeSingle();
+      scheduleMediaDownload(((insertedFromMe as AnyObj)?.id as string) ?? null);
       return ok();
     }
 
@@ -425,7 +493,7 @@ serve(async (req) => {
         ? normalizeJid(asString(message.sender_pn) || asString(message.sender)).phone || null
         : null;
 
-    const { error: insErr } = await supabase.from("whatsapp_messages").insert({
+    const { data: insertedIncoming, error: insErr } = await supabase.from("whatsapp_messages").insert({
       phone,
       message: displayMessage,
       direction: "incoming",
@@ -436,13 +504,14 @@ serve(async (req) => {
       sender_phone: rawParticipant,
       whatsapp_number_id: numberId,
       quoted_message_id: quotedId,
-      ...(sysMediaType && mediaUrl ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
-    });
+      ...(sysMediaType ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
+    }).select("id").maybeSingle();
 
     if (insErr) {
       if ((insErr as AnyObj).code === "23505") return ok({ dedup: true });
       console.error("[uazapi-webhook] erro ao salvar incoming:", insErr);
     } else {
+      scheduleMediaDownload(((insertedIncoming as AnyObj)?.id as string) ?? null);
       // Detecta sinais de indicação (cupom / telefone) — fire & forget
       fetch(`${SB_URL}/functions/v1/referral-detect-incoming`, {
         method: "POST",
@@ -450,6 +519,7 @@ serve(async (req) => {
         body: JSON.stringify({ from_phone: phone, message_text: displayMessage }),
       }).catch(() => {});
     }
+
 
     // Reabre conversas finalizadas
     if (!isGroup) {
