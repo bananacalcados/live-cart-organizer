@@ -377,7 +377,7 @@ export function POSProductCatalogSender({ storeId, phone, sendVia, selectedNumbe
               })}
             </div>
           )}
-        </ScrollArea>
+        </div>
 
         {/* Footer */}
         <div className="border-t px-4 py-3 flex items-center justify-between gap-3">
