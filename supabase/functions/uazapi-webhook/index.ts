@@ -459,7 +459,7 @@ serve(async (req) => {
           }
         }
       }
-      await supabase.from("whatsapp_messages").insert({
+      const { data: insertedFromMe } = await supabase.from("whatsapp_messages").insert({
         phone,
         message: displayMessage,
         direction: "outgoing",
@@ -468,8 +468,9 @@ serve(async (req) => {
         is_group: isGroup,
         whatsapp_number_id: numberId,
         quoted_message_id: quotedId,
-        ...(sysMediaType && mediaUrl ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
-      });
+        ...(sysMediaType ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
+      }).select("id").maybeSingle();
+      scheduleMediaDownload(((insertedFromMe as AnyObj)?.id as string) ?? null);
       return ok();
     }
 
