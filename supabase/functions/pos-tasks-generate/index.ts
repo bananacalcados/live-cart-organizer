@@ -131,7 +131,8 @@ serve(async (req) => {
       .from("pos_sellers")
       .select("id, name, is_manager, whatsapp_phone")
       .eq("store_id", storeId)
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .eq("excluded_from_tasks", false); // ignora vendedores "fantasmas"
     if (sellerId) sellersQ = sellersQ.eq("id", sellerId);
     const { data: sellers } = await sellersQ;
 
