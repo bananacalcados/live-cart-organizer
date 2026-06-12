@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { posSendText, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 
 interface Props {
@@ -13,7 +14,8 @@ interface Props {
   storeId: string;
   phone: string;
   customerName?: string;
-  sendVia: "zapi" | "meta";
+  /** Provider real da instância selecionada (meta | zapi | uazapi | wasender). */
+  sendVia: PosSendProvider;
   selectedNumberId: string | null;
 }
 
