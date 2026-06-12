@@ -1804,7 +1804,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         <POSProductCatalogSender
           storeId={storeId}
           phone={selectedPhone}
-          sendVia={selectedSendNumber?.provider === 'meta' ? 'meta' : 'zapi'}
+          sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
           selectedNumberId={selectedSendNumberId}
           open={showCatalog}
           onOpenChange={setShowCatalog}
