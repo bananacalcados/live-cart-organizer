@@ -9,12 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { posSendMedia, posSendButtons, type PosSendProvider } from "@/lib/pos/posWhatsappSend";
 import { toast } from "sonner";
 
 interface Props {
   storeId: string;
   phone: string;
-  sendVia: "zapi" | "meta";
+  /** Provider real da instância selecionada (meta | zapi | uazapi | wasender). */
+  sendVia: PosSendProvider;
   selectedNumberId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
