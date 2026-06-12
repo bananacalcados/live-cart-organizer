@@ -351,7 +351,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const { numbers: metaNumbers, fetchNumbers } = useWhatsAppNumberStore();
   const { hasActiveSupport, supportCount } = useSupportPhones();
-  const { isAdmin, filterByAssignment, viewAsUserId, setViewAsUserId, getAssignedTo, getAssignedName, assignConversation } = useConversationAssignments();
+  const { isAdmin, viewAsUserId, setViewAsUserId, getAssignedTo, getAssignedName, assignConversation } = useConversationAssignments();
 
   // Stable per-seller identity for conversation ownership/visibility.
   //  - Prefer the seller's linked auth user id (when cadastrada).
@@ -785,16 +785,15 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
       const { convs, phoneMessages } = mapRowsToConvs(allRows);
       convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
-      setConversations(
-        filterByAssignment(enrichConversations(convs, phoneMessages), {
-          viewerUserId: sellerViewerId,
-        }),
-      );
+      // TODAS as conversas ficam visíveis para TODOS os usuários/vendedoras —
+      // a TAG da vendedora identifica de quem é o atendimento. Sem filtro de
+      // atribuição: foco no bom atendimento (qualquer vendedora pode assumir).
+      setConversations(enrichConversations(convs, phoneMessages));
     };
 
     loadConversations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, filterByAssignment, mapRowsToConvs, waMsgTick, sellerViewerId]);
+  }, [selectedPhone, chatContacts, crmMap, storeNumberIds, storeNumbers, statusFilter, multiInstanceFilter, enrichConversations, mapRowsToConvs, waMsgTick, sellerViewerId]);
 
   // Bump conversation list when any new WA message arrives (messages of the open chat
   // are handled internally by useChatMessages above).
