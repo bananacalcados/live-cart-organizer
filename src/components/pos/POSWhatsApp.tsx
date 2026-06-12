@@ -715,12 +715,23 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       phoneMessages.set(convKey, msgs);
 
       const senderNameFromRPC = row.sender_name || null;
+      // Para GRUPOS, nunca usar o nome do remetente (autor da última mensagem)
+      // como nome do grupo. Usa apenas o nome real conhecido (chat_contacts) e,
+      // se desconhecido, um rótulo neutro derivado do group_id — jamais nome de pessoa.
+      const groupFallbackName = (() => {
+        const digits = String(phone).replace(/\D/g, '');
+        const suffix = digits.slice(-4);
+        return suffix ? `Grupo ${suffix}` : 'Grupo';
+      })();
+      const customerName = isGroup
+        ? (chatContacts[phone] || groupFallbackName)
+        : (chatContacts[phone] || crmMap.get(phone)?.name || senderNameFromRPC);
       convs.push({
         phone,
         lastMessage: row.last_message,
         lastMessageAt: new Date(row.last_message_at),
         unreadCount: Number(row.unread_count),
-        customerName: chatContacts[phone] || crmMap.get(phone)?.name || senderNameFromRPC,
+        customerName,
         isGroup,
         hasUnansweredMessage: row.direction === 'incoming',
         whatsapp_number_id: rowNumberId,
