@@ -231,7 +231,7 @@ export function ConversationList({
     <button
       onClick={onClick}
       className={cn(
-        "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5",
+        "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 flex-shrink-0",
         active
           ? "bg-[#00a884] text-white"
           : "bg-[#d6dde2] dark:bg-[#202c33] text-[#3b4a52] dark:text-[#8696a0] hover:bg-[#c3cdd4] dark:hover:bg-[#2a3942]"
