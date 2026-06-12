@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
-import { BarChart3, Clock, TrendingUp, Medal, Users, MessageCircle, ShoppingBag, Headphones, HelpCircle, Star, RefreshCw } from 'lucide-react';
+import { BarChart3, Clock, TrendingUp, Medal, Users, MessageCircle, ShoppingBag, Headphones, HelpCircle, Star, RefreshCw, ClipboardList } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { subDays, startOfDay } from 'date-fns';
+import { POSSellerTasksBoard } from './POSSellerTasksBoard';
 
 interface Props {
   storeId: string;
