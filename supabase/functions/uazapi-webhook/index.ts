@@ -218,10 +218,19 @@ serve(async (req) => {
         const mid = asString(m.messageid) || asString(m.id);
         const status = asString(m.status);
         if (mid && status) {
-          await supabase
+          const { data: updated } = await supabase
             .from("whatsapp_messages")
             .update({ status: status.toLowerCase() })
-            .eq("message_id", mid);
+            .eq("message_id", mid)
+            .select("id");
+          if (!updated || updated.length === 0) {
+            // Race: status arrived before the outgoing row was inserted. Retry once.
+            await new Promise((r) => setTimeout(r, 2000));
+            await supabase
+              .from("whatsapp_messages")
+              .update({ status: status.toLowerCase() })
+              .eq("message_id", mid);
+          }
         }
       }
       return ok();
