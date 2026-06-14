@@ -139,7 +139,33 @@ export function GroupsVipManager() {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { fetchGroups(); fetchCampaigns(); }, [fetchGroups, fetchCampaigns]);
+  useEffect(() => { fetchGroups(); fetchCampaigns(); fetchInstances(); }, [fetchGroups, fetchCampaigns, fetchInstances]);
+
+  // Analisa quantas pessoas com DDD 33 (Gov. Valadares) cada grupo da instância selecionada tem.
+  const analyzeDdd33 = async () => {
+    const selected = resolveInstance(selectedNumberId);
+    if (!selectedNumberId || selected?.provider !== 'uazapi') {
+      toast.error("Selecione uma instância uazapi para analisar DDD 33");
+      return;
+    }
+    setIsAnalyzingDdd(true);
+    toast.info("Analisando participantes... isso pode levar alguns minutos.");
+    try {
+      const { data, error } = await supabase.functions.invoke('uazapi-groups', {
+        body: { action: 'dddStats', whatsapp_number_id: selectedNumberId },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`${data.processed}/${data.total} grupos analisados${data.remaining ? ` · ${data.remaining} restantes (rode de novo)` : ''}`);
+        fetchGroups();
+      } else {
+        toast.error(data?.error || "Erro na análise");
+      }
+    } catch { toast.error("Erro ao analisar DDD 33"); }
+    finally { setIsAnalyzingDdd(false); }
+  };
+
+
 
 
 
