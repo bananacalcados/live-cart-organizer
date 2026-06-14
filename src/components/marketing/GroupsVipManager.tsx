@@ -376,10 +376,13 @@ export function GroupsVipManager() {
                     <div className="grid gap-2">
                       {otherGroups.map(g => (
                         <GroupCard key={g.id} group={g} isSelected={selectedGroups.includes(g.id)}
+                          instance={resolveInstance(g.instance_id)}
+                          canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
                           onToggleSelect={id => setSelectedGroups(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
                           onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
                           onOpenSettings={() => setSettingsGroup(g)} />
                       ))}
+
                     </div>
                   </div>
                 )}
