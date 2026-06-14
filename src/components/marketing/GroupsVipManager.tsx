@@ -3,8 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Users, RefreshCw, Send, Plus, Search, Star, Loader2,
-  Settings, CheckCircle, XCircle, Crown, Link as LinkIcon
+  Settings, CheckCircle, XCircle, Crown, Link as LinkIcon,
+  MapPin, AlertTriangle, Smartphone
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
