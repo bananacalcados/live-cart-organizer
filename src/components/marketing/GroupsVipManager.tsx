@@ -479,17 +479,24 @@ export function GroupsVipManager() {
   );
 }
 
-function GroupCard({ group, isSelected, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings }: {
+function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings }: {
   group: WhatsAppGroup;
   isSelected: boolean;
+  instance: InstanceInfo | null;
+  canSend: boolean;
   onToggleSelect: (id: string) => void;
   onToggleVip: () => void;
   onToggleFull: () => void;
   onOpenSettings: () => void;
 }) {
+  const instanceLabel = instance ? instance.label : (group.instance_id ? "Instância desconhecida" : "Sem instância");
+  const ddd33 = group.ddd33_count;
+  const ddd33Pct = ddd33 != null && group.ddd33_total_resolved
+    ? Math.round((ddd33 / group.ddd33_total_resolved) * 100)
+    : null;
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
-      <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect(group.id)} />
+    <div className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${canSend ? 'bg-card hover:bg-muted/50' : 'bg-muted/40 opacity-70'}`}>
+      <Checkbox checked={isSelected} disabled={!canSend} onCheckedChange={() => onToggleSelect(group.id)} />
       {group.photo_url ? (
         <img src={group.photo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
       ) : (
@@ -499,13 +506,27 @@ function GroupCard({ group, isSelected, onToggleSelect, onToggleVip, onToggleFul
       )}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{group.name}</p>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">{group.participant_count}/{group.max_participants}</span>
+          <Badge variant="outline" className="text-[10px] gap-0.5">
+            <Smartphone className="h-2.5 w-2.5" />{instanceLabel}
+          </Badge>
+          {ddd33 != null && (
+            <Badge variant="secondary" className="text-[10px] gap-0.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+              <MapPin className="h-2.5 w-2.5" />DDD 33: {ddd33}{ddd33Pct != null && ` (${ddd33Pct}%)`}
+            </Badge>
+          )}
+          {!canSend && (
+            <Badge variant="outline" className="text-[10px] gap-0.5 border-amber-500/40 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-2.5 w-2.5" />Não envia por esta instância
+            </Badge>
+          )}
           {group.is_admin && <Badge variant="secondary" className="text-[10px]">Admin</Badge>}
           {group.is_full && <Badge variant="destructive" className="text-[10px]">Cheio</Badge>}
           {group.invite_link && <LinkIcon className="h-3 w-3 text-muted-foreground" />}
         </div>
       </div>
+
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); onToggleFull(); }}
           title={group.is_full ? "Marcar disponível" : "Marcar cheio"}>
