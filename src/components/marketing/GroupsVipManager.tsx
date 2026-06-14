@@ -297,7 +297,7 @@ export function GroupsVipManager() {
               <Input placeholder="Buscar grupos..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9" />
             </div>
             <Select value={groupFilter} onValueChange={setGroupFilter}>
-              <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="vip">⭐ VIP</SelectItem>
@@ -305,14 +305,41 @@ export function GroupsVipManager() {
                 <SelectItem value="available">🟢 Disponíveis</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={instanceFilter} onValueChange={setInstanceFilter}>
+              <SelectTrigger className="w-[190px]">
+                <Smartphone className="h-3.5 w-3.5 mr-1 shrink-0" />
+                <SelectValue placeholder="Instância" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as instâncias</SelectItem>
+                {instanceOptions.map(opt => (
+                  <SelectItem key={opt.key} value={opt.key}>{opt.label} ({opt.count})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant={sortByDdd33 ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSortByDdd33(v => !v)}
+              className="gap-1"
+              title="Ordenar pelos grupos com mais pessoas de Valadares (DDD 33)"
+            >
+              <MapPin className="h-3.5 w-3.5" />DDD 33
+            </Button>
             <WhatsAppNumberSelector allowedProviders={["zapi", "wasender", "uazapi"]} className="w-[180px] h-9 text-xs" />
             <Button variant="outline" size="sm" onClick={syncGroups} disabled={isSyncing} className="gap-1">
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sincronizar
+            </Button>
+            <Button variant="outline" size="sm" onClick={analyzeDdd33} disabled={isAnalyzingDdd} className="gap-1"
+              title="Conta quantas pessoas de Valadares (DDD 33) há em cada grupo da instância selecionada">
+              {isAnalyzingDdd ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MapPin className="h-3.5 w-3.5" />}
+              Analisar DDD 33
             </Button>
             <Button size="sm" onClick={() => setShowCreateGroup(true)} className="gap-1">
               <Plus className="h-3.5 w-3.5" />Criar Grupo
             </Button>
           </div>
+
 
           {isLoading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
