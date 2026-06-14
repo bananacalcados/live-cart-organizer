@@ -3,8 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Users, RefreshCw, Send, Plus, Search, Star, Loader2,
-  Settings, CheckCircle, XCircle, Crown, Link as LinkIcon
+  Settings, CheckCircle, XCircle, Crown, Link as LinkIcon,
+  MapPin, AlertTriangle, Smartphone
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +41,20 @@ interface WhatsAppGroup {
   invite_link: string | null;
   only_admins_send: boolean;
   only_admins_add: boolean;
+  ddd33_count: number | null;
+  ddd33_total_resolved: number | null;
+  ddd33_synced_at: string | null;
 }
+
+interface InstanceInfo {
+  id: string;
+  label: string;
+  provider: string | null;
+  is_active: boolean;
+  is_online: boolean | null;
+  zapi_instance_id: string | null;
+}
+
 
 interface GroupCampaign {
   id: string;
@@ -78,6 +93,25 @@ export function GroupsVipManager() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [settingsGroup, setSettingsGroup] = useState<WhatsAppGroup | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [instances, setInstances] = useState<InstanceInfo[]>([]);
+  const [instanceFilter, setInstanceFilter] = useState("all");
+  const [sortByDdd33, setSortByDdd33] = useState(false);
+  const [isAnalyzingDdd, setIsAnalyzingDdd] = useState(false);
+
+  const selectedNumberId = useWhatsAppNumberStore(s => s.selectedNumberId);
+
+  const fetchInstances = useCallback(async () => {
+    const { data } = await supabase
+      .from('whatsapp_numbers_safe')
+      .select('id, label, provider, is_active, is_online, zapi_instance_id');
+    setInstances((data || []) as InstanceInfo[]);
+  }, []);
+
+  // Resolve o instance_id de um grupo (uuid moderno OU zapi_instance_id legado).
+  const resolveInstance = useCallback((instanceId: string | null): InstanceInfo | null => {
+    if (!instanceId) return null;
+    return instances.find(i => i.id === instanceId || i.zapi_instance_id === instanceId) || null;
+  }, [instances]);
 
   const fetchGroups = useCallback(async () => {
     setIsLoading(true);
@@ -105,7 +139,33 @@ export function GroupsVipManager() {
     } catch { /* ignore */ }
   }, []);
 
-  useEffect(() => { fetchGroups(); fetchCampaigns(); }, [fetchGroups, fetchCampaigns]);
+  useEffect(() => { fetchGroups(); fetchCampaigns(); fetchInstances(); }, [fetchGroups, fetchCampaigns, fetchInstances]);
+
+  // Analisa quantas pessoas com DDD 33 (Gov. Valadares) cada grupo da instância selecionada tem.
+  const analyzeDdd33 = async () => {
+    const selected = resolveInstance(selectedNumberId);
+    if (!selectedNumberId || selected?.provider !== 'uazapi') {
+      toast.error("Selecione uma instância uazapi para analisar DDD 33");
+      return;
+    }
+    setIsAnalyzingDdd(true);
+    toast.info("Analisando participantes... isso pode levar alguns minutos.");
+    try {
+      const { data, error } = await supabase.functions.invoke('uazapi-groups', {
+        body: { action: 'dddStats', whatsapp_number_id: selectedNumberId },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        toast.success(`${data.processed}/${data.total} grupos analisados${data.remaining ? ` · ${data.remaining} restantes (rode de novo)` : ''}`);
+        fetchGroups();
+      } else {
+        toast.error(data?.error || "Erro na análise");
+      }
+    } catch { toast.error("Erro ao analisar DDD 33"); }
+    finally { setIsAnalyzingDdd(false); }
+  };
+
+
 
 
 
@@ -177,10 +237,31 @@ export function GroupsVipManager() {
     finally { setIsCreatingCampaign(false); }
   };
 
+  // Grupos por instância (chave = instance_id bruto do grupo) para o filtro.
+  const instanceGroupCounts = groups.reduce<Record<string, number>>((acc, g) => {
+    const key = g.instance_id || '__none__';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const instanceOptions = Object.keys(instanceGroupCounts).map(key => {
+    if (key === '__none__') return { key, label: 'Sem instância', count: instanceGroupCounts[key] };
+    const info = resolveInstance(key);
+    return { key, label: info ? info.label : `Desconhecida (${key.slice(0, 8)}…)`, count: instanceGroupCounts[key] };
+  });
+
+  const sortGroups = (arr: WhatsAppGroup[]) =>
+    sortByDdd33
+      ? [...arr].sort((a, b) => (b.ddd33_count ?? -1) - (a.ddd33_count ?? -1))
+      : arr;
+
   const filteredGroups = groups.filter(g => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (!g.name.toLowerCase().includes(q) && !g.group_id.includes(q)) return false;
+    }
+    if (instanceFilter !== 'all') {
+      const key = g.instance_id || '__none__';
+      if (key !== instanceFilter) return false;
     }
     if (groupFilter === 'vip') return g.is_vip;
     if (groupFilter === 'full') return g.is_full;
@@ -188,8 +269,9 @@ export function GroupsVipManager() {
     return true;
   });
 
-  const vipGroups = filteredGroups.filter(g => g.is_vip);
-  const otherGroups = filteredGroups.filter(g => !g.is_vip);
+  const vipGroups = sortGroups(filteredGroups.filter(g => g.is_vip));
+  const otherGroups = sortGroups(filteredGroups.filter(g => !g.is_vip));
+
 
   // If a campaign is selected, show detail view
   if (selectedCampaignId) {
@@ -215,7 +297,7 @@ export function GroupsVipManager() {
               <Input placeholder="Buscar grupos..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9" />
             </div>
             <Select value={groupFilter} onValueChange={setGroupFilter}>
-              <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[130px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="vip">⭐ VIP</SelectItem>
@@ -223,14 +305,41 @@ export function GroupsVipManager() {
                 <SelectItem value="available">🟢 Disponíveis</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={instanceFilter} onValueChange={setInstanceFilter}>
+              <SelectTrigger className="w-[190px]">
+                <Smartphone className="h-3.5 w-3.5 mr-1 shrink-0" />
+                <SelectValue placeholder="Instância" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as instâncias</SelectItem>
+                {instanceOptions.map(opt => (
+                  <SelectItem key={opt.key} value={opt.key}>{opt.label} ({opt.count})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant={sortByDdd33 ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSortByDdd33(v => !v)}
+              className="gap-1"
+              title="Ordenar pelos grupos com mais pessoas de Valadares (DDD 33)"
+            >
+              <MapPin className="h-3.5 w-3.5" />DDD 33
+            </Button>
             <WhatsAppNumberSelector allowedProviders={["zapi", "wasender", "uazapi"]} className="w-[180px] h-9 text-xs" />
             <Button variant="outline" size="sm" onClick={syncGroups} disabled={isSyncing} className="gap-1">
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />Sincronizar
+            </Button>
+            <Button variant="outline" size="sm" onClick={analyzeDdd33} disabled={isAnalyzingDdd} className="gap-1"
+              title="Conta quantas pessoas de Valadares (DDD 33) há em cada grupo da instância selecionada">
+              {isAnalyzingDdd ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MapPin className="h-3.5 w-3.5" />}
+              Analisar DDD 33
             </Button>
             <Button size="sm" onClick={() => setShowCreateGroup(true)} className="gap-1">
               <Plus className="h-3.5 w-3.5" />Criar Grupo
             </Button>
           </div>
+
 
           {isLoading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
@@ -251,10 +360,13 @@ export function GroupsVipManager() {
                     <div className="grid gap-2">
                       {vipGroups.map(g => (
                         <GroupCard key={g.id} group={g} isSelected={selectedGroups.includes(g.id)}
+                          instance={resolveInstance(g.instance_id)}
+                          canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
                           onToggleSelect={id => setSelectedGroups(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
                           onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
                           onOpenSettings={() => setSettingsGroup(g)} />
                       ))}
+
                     </div>
                   </div>
                 )}
@@ -264,10 +376,13 @@ export function GroupsVipManager() {
                     <div className="grid gap-2">
                       {otherGroups.map(g => (
                         <GroupCard key={g.id} group={g} isSelected={selectedGroups.includes(g.id)}
+                          instance={resolveInstance(g.instance_id)}
+                          canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
                           onToggleSelect={id => setSelectedGroups(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
                           onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
                           onOpenSettings={() => setSettingsGroup(g)} />
                       ))}
+
                     </div>
                   </div>
                 )}
@@ -364,17 +479,24 @@ export function GroupsVipManager() {
   );
 }
 
-function GroupCard({ group, isSelected, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings }: {
+function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings }: {
   group: WhatsAppGroup;
   isSelected: boolean;
+  instance: InstanceInfo | null;
+  canSend: boolean;
   onToggleSelect: (id: string) => void;
   onToggleVip: () => void;
   onToggleFull: () => void;
   onOpenSettings: () => void;
 }) {
+  const instanceLabel = instance ? instance.label : (group.instance_id ? "Instância desconhecida" : "Sem instância");
+  const ddd33 = group.ddd33_count;
+  const ddd33Pct = ddd33 != null && group.ddd33_total_resolved
+    ? Math.round((ddd33 / group.ddd33_total_resolved) * 100)
+    : null;
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
-      <Checkbox checked={isSelected} onCheckedChange={() => onToggleSelect(group.id)} />
+    <div className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${canSend ? 'bg-card hover:bg-muted/50' : 'bg-muted/40 opacity-70'}`}>
+      <Checkbox checked={isSelected} disabled={!canSend} onCheckedChange={() => onToggleSelect(group.id)} />
       {group.photo_url ? (
         <img src={group.photo_url} alt="" className="h-10 w-10 rounded-full object-cover" />
       ) : (
@@ -384,13 +506,27 @@ function GroupCard({ group, isSelected, onToggleSelect, onToggleVip, onToggleFul
       )}
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{group.name}</p>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">{group.participant_count}/{group.max_participants}</span>
+          <Badge variant="outline" className="text-[10px] gap-0.5">
+            <Smartphone className="h-2.5 w-2.5" />{instanceLabel}
+          </Badge>
+          {ddd33 != null && (
+            <Badge variant="secondary" className="text-[10px] gap-0.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
+              <MapPin className="h-2.5 w-2.5" />DDD 33: {ddd33}{ddd33Pct != null && ` (${ddd33Pct}%)`}
+            </Badge>
+          )}
+          {!canSend && (
+            <Badge variant="outline" className="text-[10px] gap-0.5 border-amber-500/40 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="h-2.5 w-2.5" />Não envia por esta instância
+            </Badge>
+          )}
           {group.is_admin && <Badge variant="secondary" className="text-[10px]">Admin</Badge>}
           {group.is_full && <Badge variant="destructive" className="text-[10px]">Cheio</Badge>}
           {group.invite_link && <LinkIcon className="h-3 w-3 text-muted-foreground" />}
         </div>
       </div>
+
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); onToggleFull(); }}
           title={group.is_full ? "Marcar disponível" : "Marcar cheio"}>
