@@ -15319,6 +15319,9 @@ export type Database = {
       whatsapp_groups: {
         Row: {
           created_at: string
+          ddd33_count: number | null
+          ddd33_synced_at: string | null
+          ddd33_total_resolved: number | null
           description: string | null
           group_id: string
           id: string
@@ -15341,6 +15344,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          ddd33_count?: number | null
+          ddd33_synced_at?: string | null
+          ddd33_total_resolved?: number | null
           description?: string | null
           group_id: string
           id?: string
@@ -15363,6 +15369,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          ddd33_count?: number | null
+          ddd33_synced_at?: string | null
+          ddd33_total_resolved?: number | null
           description?: string | null
           group_id?: string
           id?: string
