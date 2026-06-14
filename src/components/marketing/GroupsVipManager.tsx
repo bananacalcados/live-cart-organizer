@@ -93,6 +93,25 @@ export function GroupsVipManager() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [settingsGroup, setSettingsGroup] = useState<WhatsAppGroup | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [instances, setInstances] = useState<InstanceInfo[]>([]);
+  const [instanceFilter, setInstanceFilter] = useState("all");
+  const [sortByDdd33, setSortByDdd33] = useState(false);
+  const [isAnalyzingDdd, setIsAnalyzingDdd] = useState(false);
+
+  const selectedNumberId = useWhatsAppNumberStore(s => s.selectedNumberId);
+
+  const fetchInstances = useCallback(async () => {
+    const { data } = await supabase
+      .from('whatsapp_numbers_safe')
+      .select('id, label, provider, is_active, is_online, zapi_instance_id');
+    setInstances((data || []) as InstanceInfo[]);
+  }, []);
+
+  // Resolve o instance_id de um grupo (uuid moderno OU zapi_instance_id legado).
+  const resolveInstance = useCallback((instanceId: string | null): InstanceInfo | null => {
+    if (!instanceId) return null;
+    return instances.find(i => i.id === instanceId || i.zapi_instance_id === instanceId) || null;
+  }, [instances]);
 
   const fetchGroups = useCallback(async () => {
     setIsLoading(true);
