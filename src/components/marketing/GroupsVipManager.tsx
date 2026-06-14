@@ -237,10 +237,31 @@ export function GroupsVipManager() {
     finally { setIsCreatingCampaign(false); }
   };
 
+  // Grupos por instância (chave = instance_id bruto do grupo) para o filtro.
+  const instanceGroupCounts = groups.reduce<Record<string, number>>((acc, g) => {
+    const key = g.instance_id || '__none__';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const instanceOptions = Object.keys(instanceGroupCounts).map(key => {
+    if (key === '__none__') return { key, label: 'Sem instância', count: instanceGroupCounts[key] };
+    const info = resolveInstance(key);
+    return { key, label: info ? info.label : `Desconhecida (${key.slice(0, 8)}…)`, count: instanceGroupCounts[key] };
+  });
+
+  const sortGroups = (arr: WhatsAppGroup[]) =>
+    sortByDdd33
+      ? [...arr].sort((a, b) => (b.ddd33_count ?? -1) - (a.ddd33_count ?? -1))
+      : arr;
+
   const filteredGroups = groups.filter(g => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       if (!g.name.toLowerCase().includes(q) && !g.group_id.includes(q)) return false;
+    }
+    if (instanceFilter !== 'all') {
+      const key = g.instance_id || '__none__';
+      if (key !== instanceFilter) return false;
     }
     if (groupFilter === 'vip') return g.is_vip;
     if (groupFilter === 'full') return g.is_full;
@@ -248,8 +269,9 @@ export function GroupsVipManager() {
     return true;
   });
 
-  const vipGroups = filteredGroups.filter(g => g.is_vip);
-  const otherGroups = filteredGroups.filter(g => !g.is_vip);
+  const vipGroups = sortGroups(filteredGroups.filter(g => g.is_vip));
+  const otherGroups = sortGroups(filteredGroups.filter(g => !g.is_vip));
+
 
   // If a campaign is selected, show detail view
   if (selectedCampaignId) {
