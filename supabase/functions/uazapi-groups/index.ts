@@ -141,6 +141,102 @@ serve(async (req) => {
         r = await uazapiInstance("/send/text", token, { method: "POST", body: payload });
         break;
       }
+      case "dddStats": {
+        // Analisa quantos participantes de cada grupo têm DDD 33 (Gov. Valadares/MG).
+        // Lê os grupos da instância no banco, busca participantes via /group/info e
+        // grava ddd33_count / ddd33_total_resolved / ddd33_synced_at em whatsapp_groups.
+        const instanceId = String(body.whatsapp_number_id || "");
+        if (!instanceId) return json({ error: "whatsapp_number_id obrigatório" }, 400);
+
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+
+        let query = supabase
+          .from("whatsapp_groups")
+          .select("id, group_id, name")
+          .eq("instance_id", instanceId);
+        if (Array.isArray(body.groupIds) && body.groupIds.length > 0) {
+          query = query.in("id", body.groupIds);
+        }
+        const { data: dbGroups, error: dbErr } = await query;
+        if (dbErr) return json({ error: dbErr.message }, 500);
+
+        const startedAt = Date.now();
+        const TIME_BUDGET_MS = 110_000;
+        const results: any[] = [];
+        let processed = 0;
+
+        const phoneFromParticipant = (p: any): string | null => {
+          const candidates = [p?.phone, p?.PhoneNumber, p?.phoneNumber, p?.number];
+          for (const c of candidates) {
+            const d = String(c || "").replace(/\D/g, "");
+            if (d.length >= 12 && d.length <= 13 && d.startsWith("55")) return d;
+          }
+          const jidRaw = String(p?.JID || p?.jid || p?.id || p?.remoteJid || "");
+          if (jidRaw.includes("@s.whatsapp.net") || jidRaw.includes("@c.us")) {
+            const d = jidRaw.replace(/\D/g, "");
+            if (d.startsWith("55") && (d.length === 12 || d.length === 13)) return d;
+            if ((d.length === 10 || d.length === 11)) return "55" + d;
+          }
+          return null;
+        };
+
+        for (const g of dbGroups || []) {
+          if (Date.now() - startedAt > TIME_BUDGET_MS) break;
+          const gjid = groupJid(String(g.group_id));
+          const info = await uazapiInstance("/group/info", token, {
+            method: "POST",
+            body: { groupjid: gjid },
+          });
+          if (!info.ok) {
+            results.push({ id: g.id, name: g.name, error: true });
+            continue;
+          }
+          const raw = info.data;
+          const participants: any[] = Array.isArray(raw?.Participants)
+            ? raw.Participants
+            : Array.isArray(raw?.participants)
+              ? raw.participants
+              : Array.isArray(raw?.group?.participants)
+                ? raw.group.participants
+                : Array.isArray(raw?.data?.participants)
+                  ? raw.data.participants
+                  : [];
+
+          let ddd33 = 0;
+          let resolved = 0;
+          for (const p of participants) {
+            const phone = phoneFromParticipant(p);
+            if (!phone) continue;
+            resolved++;
+            if (phone.substring(2, 4) === "33") ddd33++;
+          }
+
+          await supabase
+            .from("whatsapp_groups")
+            .update({
+              ddd33_count: ddd33,
+              ddd33_total_resolved: resolved,
+              ddd33_synced_at: new Date().toISOString(),
+              participant_count: participants.length || undefined,
+            })
+            .eq("id", g.id);
+
+          results.push({ id: g.id, name: g.name, ddd33_count: ddd33, total_resolved: resolved, participants: participants.length });
+          processed++;
+          await new Promise((res) => setTimeout(res, 250));
+        }
+
+        return json({
+          success: true,
+          processed,
+          total: (dbGroups || []).length,
+          remaining: Math.max(0, (dbGroups || []).length - processed),
+          results,
+        });
+      }
       default:
         return json({ error: `Ação desconhecida: ${action}` }, 400);
     }
