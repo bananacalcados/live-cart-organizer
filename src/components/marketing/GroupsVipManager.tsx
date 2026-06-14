@@ -39,7 +39,20 @@ interface WhatsAppGroup {
   invite_link: string | null;
   only_admins_send: boolean;
   only_admins_add: boolean;
+  ddd33_count: number | null;
+  ddd33_total_resolved: number | null;
+  ddd33_synced_at: string | null;
 }
+
+interface InstanceInfo {
+  id: string;
+  label: string;
+  provider: string | null;
+  is_active: boolean;
+  is_online: boolean | null;
+  zapi_instance_id: string | null;
+}
+
 
 interface GroupCampaign {
   id: string;
