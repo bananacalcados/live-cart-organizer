@@ -206,8 +206,17 @@ function patchChunkOffsets(buf: Uint8Array, start: number, end: number, delta: n
   }
 }
 
-function buildFtyp(): Uint8Array {
-  const brands = ['isom', 'iso2', 'avc1', 'mp41', 'hvc1', 'mp42'];
+function bytesContainAscii(bytes: Uint8Array, text: string): boolean {
+  const needle = [...text].map((c) => c.charCodeAt(0));
+  outer: for (let i = 0; i <= bytes.length - needle.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (bytes[i + j] !== needle[j]) continue outer;
+    return true;
+  }
+  return false;
+}
+
+function buildFtyp(includeHevc: boolean): Uint8Array {
+  const brands = includeHevc ? ['isom', 'iso2', 'avc1', 'mp41', 'hvc1', 'mp42'] : ['isom', 'iso2', 'avc1', 'mp41', 'mp42'];
   const size = 8 + 4 + 4 + brands.length * 4;
   const b = new Uint8Array(size);
   writeU32(b, 0, size);
@@ -230,10 +239,10 @@ function remuxMovToMp4(input: Uint8Array): Uint8Array {
     throw new Error('estrutura de vídeo inesperada (sem moov/mdat)');
   }
 
-  const newFtyp = buildFtyp();
   // Cópia mutável do moov: removemos trilhas metadata do iPhone e corrigimos offsets.
   const originalMoov = input.slice(moovBox.start, moovBox.start + moovBox.size);
   const moov = sanitizeMoov(originalMoov);
+  const newFtyp = buildFtyp(bytesContainAscii(moov, 'hvc1') || bytesContainAscii(moov, 'hev1'));
   const mdat = input.subarray(mdatBox.start, mdatBox.start + mdatBox.size);
 
   const newMdatStart = newFtyp.length + moov.length;
