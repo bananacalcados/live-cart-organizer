@@ -226,6 +226,71 @@ async function fetchInviteLink(supabase: any, group: any): Promise<string | null
   }
 }
 
+async function resolveGroupInstance(supabase: any, instanceId: string | null) {
+  if (!instanceId) return null;
+  const { data } = await supabase
+    .from('whatsapp_numbers')
+    .select('id, provider, zapi_instance_id, zapi_token, zapi_client_token, wasender_api_key, uazapi_token')
+    .or(`id.eq.${instanceId},zapi_instance_id.eq.${instanceId}`)
+    .eq('is_active', true)
+    .maybeSingle();
+  return data || null;
+}
+
+function normalizeGroupJid(raw: string): string {
+  if (!raw) return raw;
+  if (raw.includes('@')) return raw;
+  return `${raw.replace(/\D/g, '')}@g.us`;
+}
+
+function extractInviteUrl(data: any): string | null {
+  const candidates = [
+    data?.invite_link,
+    data?.inviteLink,
+    data?.invitationLink,
+    data?.link,
+    data?.url,
+    data?.data?.invite_link,
+    data?.data?.inviteLink,
+    data?.data?.invitationLink,
+    data?.data?.link,
+    data?.data?.url,
+  ];
+  return candidates.find((v) => typeof v === 'string' && v.includes('chat.whatsapp.com')) || null;
+}
+
+async function fetchUazapiInviteLink(groupId: string, token: string): Promise<string | null> {
+  try {
+    const payloads = [
+      { groupjid: normalizeGroupJid(groupId), revoke: false },
+      { groupjid: normalizeGroupJid(groupId) },
+      { groupJid: normalizeGroupJid(groupId) },
+    ];
+    for (const body of payloads) {
+      const res = await uazapiInstance('/group/invitelink', token, { method: 'POST', body });
+      const link = extractInviteUrl(res.data);
+      if (res.ok && link) return link;
+    }
+  } catch (e) {
+    console.error('[group-redirect] uazapi invite error:', (e as Error).message);
+  }
+  return null;
+}
+
+async function fetchWasenderInviteLink(groupId: string, apiKey: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://wasenderapi.com/api/groups/${encodeURIComponent(normalizeGroupJid(groupId))}/invite-link`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    });
+    const data = await res.json().catch(() => null);
+    return res.ok ? extractInviteUrl(data) : null;
+  } catch (e) {
+    console.error('[group-redirect] wasender invite error:', (e as Error).message);
+    return null;
+  }
+}
+
 async function tryAutoCreate(supabaseUrl: string, supabaseKey: string, campaignId: string): Promise<string | null> {
   try {
     const res = await fetch(`${supabaseUrl}/functions/v1/auto-create-vip-group`, {
