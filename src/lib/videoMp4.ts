@@ -54,6 +54,10 @@ function writeU32(b: Uint8Array, o: number, v: number): void {
   b[o + 2] = (v >>> 8) & 255;
   b[o + 3] = v & 255;
 }
+function writeU64(b: Uint8Array, o: number, v: number): void {
+  writeU32(b, o, Math.floor(v / 0x100000000));
+  writeU32(b, o + 4, v >>> 0);
+}
 function boxType(b: Uint8Array, o: number): string {
   return String.fromCharCode(b[o + 4], b[o + 5], b[o + 6], b[o + 7]);
 }
@@ -88,10 +92,11 @@ function topBoxes(buf: Uint8Array): TopBox[] {
   return boxes;
 }
 
-// Boxes "container" cujos filhos precisamos percorrer para achar stco/co64.
+// Boxes "container" cujos filhos precisamos percorrer/reconstruir.
 const CONTAINERS = new Set([
   'moov', 'trak', 'mdia', 'minf', 'stbl', 'edts', 'udta', 'dinf', 'mvex', 'moof', 'traf',
 ]);
+const STRIP_BOXES = new Set(['meta', 'udta', 'tapt', 'free', 'skip', 'sdtp']);
 
 function childBoxes(buf: Uint8Array, start: number, end: number): TopBox[] {
   const boxes: TopBox[] = [];
