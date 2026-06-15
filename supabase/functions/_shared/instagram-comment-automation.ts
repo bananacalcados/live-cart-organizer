@@ -6,6 +6,7 @@ interface CommentData {
   username: string | null;
   text: string;
   mediaType: string; // post, REELS, etc
+  mediaId?: string | null; // the post/reel id the comment belongs to
 }
 
 interface PostThumb {
