@@ -492,6 +492,7 @@ serve(async (req) => {
                 username: senderName,
                 text,
                 mediaType,
+                mediaId: comment.media?.id || null,
               });
               if (automationResult.actions.length > 0) {
                 console.log(`Comment automations triggered: ${automationResult.actions.join(', ')}`);
