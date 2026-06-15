@@ -540,7 +540,13 @@ export function ChatView({
             });
             toast.success('Vídeo pronto para enviar', { id: toastId });
           } catch (convErr) {
-            toast.error('Não foi possível converter o vídeo do iPhone. Tente novamente.', { id: toastId });
+            const reason = convErr instanceof Error ? convErr.message : '';
+            toast.error(
+              reason
+                ? `Não foi possível converter o vídeo do iPhone: ${reason}`
+                : 'Não foi possível converter o vídeo do iPhone. Tente novamente.',
+              { id: toastId },
+            );
             console.error('[ChatView] iphone video transcode failed:', convErr);
             return;
           }
