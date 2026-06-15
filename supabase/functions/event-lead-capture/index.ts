@@ -149,6 +149,7 @@ serve(async (req) => {
     if (vip_group_link) {
       const vipMatch = vip_group_link.match(/\/vip\/([^/?#]+)/i);
       if (vipMatch) {
+        let resolvedInvite: string | null = null;
         try {
           const resp = await fetch(
             `${Deno.env.get('SUPABASE_URL')}/functions/v1/group-redirect-link?slug=${encodeURIComponent(vipMatch[1])}&mode=api`,
@@ -156,11 +157,12 @@ serve(async (req) => {
           );
           if (resp.ok) {
             const j = await resp.json();
-            if (j?.invite_url) vip_group_link = j.invite_url;
+            if (j?.invite_url) resolvedInvite = j.invite_url;
           }
         } catch (e) {
           console.error('vip resolve error:', e);
         }
+        vip_group_link = resolvedInvite;
       }
     }
 
