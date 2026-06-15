@@ -24,39 +24,11 @@ function mapType(mediaType: string): string {
   }
 }
 
-const BASE64_INLINE_MAX_BYTES = 24 * 1024 * 1024;
-
-function toBase64(bytes: Uint8Array): string {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-}
-
-async function buildUazapiFilePayload(mediaUrl: string, type: string): Promise<string> {
-  // Para vídeo, não dependemos do servidor da uazapi baixar a URL pública.
-  // O arquivo já foi validado/salvo no nosso storage; enviamos os bytes em base64
-  // direto no campo `file`, formato aceito pela uazapi, evitando mídia "delivered"
-  // mas sem dados reproduzíveis no app oficial do WhatsApp.
-  if (type !== "video") return mediaUrl;
-
-  const res = await fetch(mediaUrl, {
-    headers: {
-      Accept: "video/mp4,video/*;q=0.9,*/*;q=0.1",
-      "User-Agent": "Banana-WhatsApp-Media-Relay/1.0",
-    },
-  });
-  if (!res.ok) throw new Error(`Falha ao baixar vídeo para envio (${res.status})`);
-
-  const contentType = (res.headers.get("content-type") || "video/mp4").split(";")[0].trim() || "video/mp4";
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  if (bytes.byteLength === 0) throw new Error("Vídeo vazio ao preparar envio");
-  if (bytes.byteLength > BASE64_INLINE_MAX_BYTES) {
-    throw new Error("Vídeo grande demais para envio direto pelo WhatsApp; envie um vídeo menor.");
-  }
-  return `data:${contentType};base64,${toBase64(bytes)}`;
+// Envia SEMPRE a URL pública do Storage para a uazapi, para todos os tipos
+// (inclusive vídeo), idêntico ao que a foto já faz. A uazapi baixa o arquivo
+// direto do bucket whatsapp-media/chat/. Sem conversão para base64 / data URI.
+function buildUazapiFilePayload(mediaUrl: string, _type: string): string {
+  return mediaUrl;
 }
 
 serve(async (req) => {
