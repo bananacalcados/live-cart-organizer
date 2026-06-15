@@ -261,10 +261,15 @@ function extractInviteUrl(data: any): string | null {
 
 async function fetchUazapiInviteLink(groupId: string, token: string): Promise<string | null> {
   try {
+    const jid = normalizeGroupJid(groupId);
+    const pathRes = await uazapiInstance(`/group/invitelink/${encodeURIComponent(jid)}`, token, { method: 'GET' });
+    const pathLink = extractInviteUrl(pathRes.data);
+    if (pathRes.ok && pathLink) return pathLink;
+
     const payloads = [
-      { groupjid: normalizeGroupJid(groupId), revoke: false },
-      { groupjid: normalizeGroupJid(groupId) },
-      { groupJid: normalizeGroupJid(groupId) },
+      { groupjid: jid, revoke: false },
+      { groupjid: jid },
+      { groupJid: jid },
     ];
     for (const body of payloads) {
       const res = await uazapiInstance('/group/invitelink', token, { method: 'POST', body });
