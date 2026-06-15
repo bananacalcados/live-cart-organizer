@@ -61,10 +61,9 @@ serve(async (req) => {
     const { token } = await resolveUazapiCredentials(whatsapp_number_id);
     const number = formatUazapiNumber(phone);
     const type = mapType(mediaType);
-    const filePayload = await buildUazapiFilePayload(mediaUrl, type);
+    const filePayload = buildUazapiFilePayload(mediaUrl, type);
 
     const payload: Record<string, unknown> = { number, type, file: filePayload };
-    if (type === "video") payload.path = filePayload;
     if (caption) payload.text = caption;
     if (type === "document" && fileName) payload.docName = fileName;
     if (quotedMessageId) payload.replyid = quotedMessageId;
