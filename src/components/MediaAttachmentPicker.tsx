@@ -100,14 +100,12 @@ export function MediaAttachmentPicker({
     let file = rawFile;
 
     try {
-      if (rawFile.type === 'image/webp') {
-        toast.info('Convertendo imagem WEBP para PNG...');
-        file = await convertWebpToPng(rawFile);
+      if (rawFile.type.startsWith('image/') && !WHATSAPP_OK_IMAGE_TYPES.includes(rawFile.type)) {
+        toast.info('Convertendo imagem para um formato compatível...');
+        file = await normalizeImageForWhatsApp(rawFile);
       }
     } catch (error) {
-      console.error('WEBP conversion error:', error);
-      toast.error('Não foi possível converter a imagem WEBP');
-      return;
+      console.error('Image conversion error:', error);
     }
 
     const type = getMediaType(file);
