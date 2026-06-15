@@ -277,6 +277,20 @@ export function LinkPageManager() {
     e.target.value = "";
   };
 
+  // Garante que exista um botão "Catálogo" na página, senão os produtos
+  // sincronizados não aparecem no link público (LinkPageView só renderiza
+  // o catálogo quando há um item do tipo "catalog").
+  const ensureCatalogItem = async () => {
+    if (!selectedPage) return;
+    if (items.some((i) => i.item_type === "catalog")) return;
+    const maxOrder = items.length ? Math.max(...items.map((i) => i.sort_order)) + 1 : 0;
+    const { data, error } = await supabase.from("link_page_items").insert({
+      page_id: selectedPage.id, item_type: "catalog", label: "Nossos Produtos",
+      url: null, sort_order: maxOrder, style_config: {}, card_style: "card",
+    }).select().single();
+    if (!error && data) setItems((prev) => [...prev, data as any]);
+  };
+
   const syncCatalog = async () => {
     if (!selectedPage) return;
     setSyncingCatalog(true);
@@ -285,6 +299,7 @@ export function LinkPageManager() {
       if (error) throw error;
       toast.success(`Catálogo sincronizado (${data?.activated || 0} ativos)`);
       await fetchCatalog(selectedPage.id);
+      await ensureCatalogItem();
     } catch { toast.error("Erro ao sincronizar catálogo"); }
     setSyncingCatalog(false);
   };
@@ -323,6 +338,7 @@ export function LinkPageManager() {
     if (removeIds.length) await supabase.from("link_page_catalog_products").delete().in("id", removeIds);
     setCatalogPickerOpen(false);
     await fetchCatalog(selectedPage.id);
+    await ensureCatalogItem();
     toast.success("Catálogo atualizado");
   };
 
