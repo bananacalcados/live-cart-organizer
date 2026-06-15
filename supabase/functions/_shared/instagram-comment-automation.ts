@@ -61,6 +61,7 @@ interface Rule {
   cooldown_minutes: number;
   ai_generate_reply: boolean;
   ai_prompt: string | null;
+  target_media_id: string | null;
 }
 
 /**
