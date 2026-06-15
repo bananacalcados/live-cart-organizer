@@ -128,6 +128,8 @@ export function ChatView({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraPhotoInputRef = useRef<HTMLInputElement>(null);
+  const cameraVideoInputRef = useRef<HTMLInputElement>(null);
   const [newTag, setNewTag] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
