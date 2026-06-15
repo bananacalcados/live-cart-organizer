@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { getChatContactMaps } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
@@ -56,18 +57,9 @@ export function DashboardChatPanel() {
 
   useEffect(() => {
     const loadChatContacts = async () => {
-      const { data } = await supabase.from("chat_contacts").select("phone, custom_name, display_name, profile_pic_url");
-      if (data) {
-        const nameMap: Record<string, string> = {};
-        const picMap: Record<string, string> = {};
-        for (const c of data) {
-          if (c.custom_name) nameMap[c.phone] = c.custom_name;
-          else if (c.display_name) nameMap[c.phone] = c.display_name;
-          if (c.profile_pic_url) picMap[c.phone] = c.profile_pic_url;
-        }
-        setChatContacts(nameMap);
-        setProfilePics(prev => ({ ...prev, ...picMap }));
-      }
+      const { names, pics } = await getChatContactMaps();
+      setChatContacts(names);
+      setProfilePics(prev => ({ ...prev, ...pics }));
     };
     loadChatContacts();
   }, []);

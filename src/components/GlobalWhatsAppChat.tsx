@@ -3,6 +3,7 @@ import { MessageCircle, X, ChevronLeft, Phone, Users, Pencil, Check } from "luci
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { getChatContactMaps } from "@/lib/chatContactsCache";
 import { useWaMessageBroadcast } from "@/hooks/useWaMessageBroadcast";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { useCustomerStore } from "@/stores/customerStore";
@@ -51,15 +52,8 @@ export function GlobalWhatsAppChat() {
   useEffect(() => {
     if (!isOpen) return;
     const loadChatContacts = async () => {
-      const { data } = await supabase.from('chat_contacts').select('phone, custom_name, display_name');
-      if (data) {
-        const map: Record<string, string> = {};
-        for (const c of data) {
-          if (c.custom_name) map[c.phone] = c.custom_name;
-          else if (c.display_name) map[c.phone] = c.display_name;
-        }
-        setChatContacts(map);
-      }
+      const { names } = await getChatContactMaps();
+      setChatContacts(names);
     };
     loadChatContacts();
   }, [isOpen]);
