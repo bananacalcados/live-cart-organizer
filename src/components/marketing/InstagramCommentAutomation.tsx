@@ -560,12 +560,12 @@ export default function InstagramCommentAutomation() {
                         />
                       </SelectTrigger>
                       <SelectContent className="max-h-72">
-                        {mediaList.length === 0 && !mediaLoading && (
+                        {filteredMedia.length === 0 && !mediaLoading && (
                           <div className="px-3 py-2 text-xs text-muted-foreground">
                             Nenhuma publicação encontrada
                           </div>
                         )}
-                        {mediaList.map((m) => (
+                        {filteredMedia.map((m) => (
                           <SelectItem key={m.id} value={m.id}>
                             <span className="flex items-center gap-2">
                               {m.thumbnail ? (
