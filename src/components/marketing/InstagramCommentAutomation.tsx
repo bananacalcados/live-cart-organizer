@@ -63,6 +63,11 @@ export default function InstagramCommentAutomation() {
   const [showDialog, setShowDialog] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Media picker state (for per-post targeting)
+  const [mediaList, setMediaList] = useState<MediaItem[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaLoaded, setMediaLoaded] = useState(false);
+
   // Form state
   const [form, setForm] = useState({
     name: "",
@@ -76,6 +81,8 @@ export default function InstagramCommentAutomation() {
     action_trigger_automation: false,
     automation_flow_id: "",
     cooldown_minutes: 60,
+    target_media_id: "",
+    target_media_caption: "",
   });
 
   useEffect(() => {
