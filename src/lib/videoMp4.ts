@@ -132,38 +132,44 @@ function handlerType(buf: Uint8Array, trak: TopBox): string | null {
   return String.fromCharCode(buf[o], buf[o + 1], buf[o + 2], buf[o + 3]);
 }
 
-function sanitizeMoov(moov: Uint8Array): Uint8Array {
-  const childStart = readU32(moov, 0) === 1 ? 16 : 8;
-  const children = childBoxes(moov, childStart, moov.length);
-  const kept: Uint8Array[] = [];
-  let changed = false;
-
-  for (const child of children) {
-    if (child.type === 'trak') {
-      const h = handlerType(moov, child);
-      if (h && h !== 'vide' && h !== 'soun') {
-        changed = true;
-        continue;
-      }
-    }
-    if (child.type === 'meta' || child.type === 'udta') {
-      changed = true;
-      continue;
-    }
-    kept.push(moov.slice(child.start, child.start + child.size));
+function sanitizeBoxTree(buf: Uint8Array, box: TopBox): Uint8Array | null {
+  if (box.type === 'trak') {
+    const h = handlerType(buf, box);
+    if (h && h !== 'vide' && h !== 'soun') return null;
+  } else if (STRIP_BOXES.has(box.type)) {
+    return null;
   }
 
-  if (!changed && childStart === 8) return moov;
-  const size = 8 + kept.reduce((sum, part) => sum + part.length, 0);
-  const out = new Uint8Array(size);
-  writeU32(out, 0, size);
-  writeType(out, 4, 'moov');
-  let o = 8;
-  for (const part of kept) {
-    out.set(part, o);
-    o += part.length;
+  const headerSize = box.hdr;
+  const payloadStart = box.start + headerSize;
+  const payloadEnd = box.start + box.size;
+  const isContainer = CONTAINERS.has(box.type);
+
+  let payload: Uint8Array;
+  if (isContainer) {
+    const children = childBoxes(buf, payloadStart, payloadEnd);
+    const rebuilt: Uint8Array[] = [];
+    for (const child of children) {
+      const cleaned = sanitizeBoxTree(buf, child);
+      if (cleaned) rebuilt.push(cleaned);
+    }
+    payload = concatBytes(rebuilt);
+  } else {
+    payload = buf.slice(payloadStart, payloadEnd);
   }
+
+  const out = new Uint8Array(8 + payload.length);
+  writeU32(out, 0, out.length);
+  writeType(out, 4, box.type);
+  out.set(payload, 8);
   return out;
+}
+
+function sanitizeMoov(moov: Uint8Array): Uint8Array {
+  const root: TopBox = { type: 'moov', start: 0, size: moov.length, hdr: readU32(moov, 0) === 1 ? 16 : 8 };
+  const cleaned = sanitizeBoxTree(moov, root);
+  if (!cleaned) throw new Error('moov inválido após limpeza');
+  return cleaned;
 }
 
 /**
