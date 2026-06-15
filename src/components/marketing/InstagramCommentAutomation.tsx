@@ -222,6 +222,34 @@ export default function InstagramCommentAutomation() {
     }));
   }
 
+  async function loadMedia(force = false) {
+    if (mediaLoaded && !force) return;
+    setMediaLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-list-media");
+      if (error) throw error;
+      setMediaList((data?.media as MediaItem[]) || []);
+      setMediaLoaded(true);
+    } catch (e) {
+      console.error(e);
+      toast.error("Não consegui carregar suas publicações do Instagram");
+    } finally {
+      setMediaLoading(false);
+    }
+  }
+
+  function mediaLabel(m: MediaItem) {
+    const kind =
+      m.media_product_type === "STORY"
+        ? "Story"
+        : m.media_product_type === "REELS"
+          ? "Reel"
+          : "Post";
+    const cap = (m.caption || "").replace(/\s+/g, " ").trim();
+    return `${kind} · ${cap ? cap.slice(0, 40) : "sem legenda"}`;
+  }
+
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
