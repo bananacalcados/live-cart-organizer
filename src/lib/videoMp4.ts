@@ -128,7 +128,8 @@ function handlerType(buf: Uint8Array, trak: TopBox): string | null {
 }
 
 function sanitizeMoov(moov: Uint8Array): Uint8Array {
-  const children = childBoxes(moov, 8, moov.length);
+  const childStart = readU32(moov, 0) === 1 ? 16 : 8;
+  const children = childBoxes(moov, childStart, moov.length);
   const kept: Uint8Array[] = [];
   let changed = false;
 
@@ -147,7 +148,7 @@ function sanitizeMoov(moov: Uint8Array): Uint8Array {
     kept.push(moov.slice(child.start, child.start + child.size));
   }
 
-  if (!changed) return moov;
+  if (!changed && childStart === 8) return moov;
   const size = 8 + kept.reduce((sum, part) => sum + part.length, 0);
   const out = new Uint8Array(size);
   writeU32(out, 0, size);
