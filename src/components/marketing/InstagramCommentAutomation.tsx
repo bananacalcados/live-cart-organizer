@@ -169,6 +169,8 @@ export default function InstagramCommentAutomation() {
       action_trigger_automation: form.action_trigger_automation,
       automation_flow_id: form.automation_flow_id || null,
       cooldown_minutes: form.cooldown_minutes,
+      target_media_id: form.target_media_id || null,
+      target_media_caption: form.target_media_id ? (form.target_media_caption || null) : null,
     };
 
     if (editingRule) {
