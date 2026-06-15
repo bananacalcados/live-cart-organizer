@@ -65,6 +65,16 @@ function writeType(b: Uint8Array, o: number, t: string): void {
   for (let i = 0; i < 4; i++) b[o + i] = t.charCodeAt(i);
 }
 
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
+}
+
 interface TopBox {
   type: string;
   start: number;
