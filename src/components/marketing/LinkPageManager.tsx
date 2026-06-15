@@ -338,6 +338,7 @@ export function LinkPageManager() {
     if (removeIds.length) await supabase.from("link_page_catalog_products").delete().in("id", removeIds);
     setCatalogPickerOpen(false);
     await fetchCatalog(selectedPage.id);
+    await ensureCatalogItem();
     toast.success("Catálogo atualizado");
   };
 
