@@ -13,12 +13,14 @@
  *    File Format / "átomos"). A câmera grava H.264 ou HEVC dentro de um container
  *    QuickTime, com a tabela `moov` no FIM do arquivo e brand `qt  `.
  *  - O uazapi recusa `.mov` ("Only MP4 files are accepted") e o player do WhatsApp
- *    não abre quando o arquivo não é um MP4 válido com "faststart" (moov no início).
+ *    não abre quando o arquivo não é um MP4 limpo com "faststart" (moov no início).
  *  - Este remux:
  *      1) reescreve o `ftyp` para um brand de MP4 padrão (`isom`/`mp42`/`avc1`/`hvc1`);
- *      2) move o `moov` para ANTES do `mdat` (faststart), corrigindo todos os
+ *      2) remove trilhas de metadata do iPhone (`mebx`/Core Media Metadata), que
+ *         fazem o app oficial do WhatsApp exibir "há algo errado com o arquivo";
+ *      3) move o `moov` para ANTES do `mdat` (faststart), corrigindo todos os
  *         offsets de chunk (`stco`/`co64`) pela diferença de posição;
- *      3) mantém os streams (H.264/HEVC + AAC) intactos — nada é re-encodado.
+ *      4) mantém só vídeo/áudio (H.264/HEVC + AAC) intactos — nada é re-encodado.
  *  - Resultado: um MP4 válido, faststart, que o uazapi aceita e o WhatsApp abre.
  *    Tudo em JS puro → funciona em qualquer dispositivo, sem rede/WASM.
  *
@@ -29,7 +31,9 @@
 export function isIphoneMovVideo(file: File): boolean {
   const mime = (file.type || '').toLowerCase();
   const ext = (file.name.split('.').pop() || '').toLowerCase();
-  return mime === 'video/quicktime' || mime === 'video/x-quicktime' || ext === 'mov' || ext === 'qt';
+  const isQuickTime = mime === 'video/quicktime' || mime === 'video/x-quicktime' || ext === 'mov' || ext === 'qt';
+  const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+  return isQuickTime || (isIOS && mime.startsWith('video/'));
 }
 
 interface NormalizeOptions {
@@ -52,6 +56,9 @@ function writeU32(b: Uint8Array, o: number, v: number): void {
 }
 function boxType(b: Uint8Array, o: number): string {
   return String.fromCharCode(b[o + 4], b[o + 5], b[o + 6], b[o + 7]);
+}
+function writeType(b: Uint8Array, o: number, t: string): void {
+  for (let i = 0; i < 4; i++) b[o + i] = t.charCodeAt(i);
 }
 
 interface TopBox {
