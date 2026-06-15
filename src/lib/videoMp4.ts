@@ -24,8 +24,8 @@
  *  - Resultado: um MP4 válido, faststart, que o uazapi aceita e o WhatsApp abre.
  *    Tudo em JS puro → funciona em qualquer dispositivo, sem rede/WASM.
  *
- * Só toca em vídeos QuickTime/.mov (iPhone). Vídeos MP4 do Android, imagens,
- * áudios e documentos NÃO passam por aqui.
+ * Só toca em vídeos QuickTime/.mov e MP4 escolhidos no iPhone. Vídeos MP4 do
+ * Android, imagens, áudios e documentos NÃO passam por aqui.
  */
 
 export function isIphoneMovVideo(file: File): boolean {
@@ -33,7 +33,7 @@ export function isIphoneMovVideo(file: File): boolean {
   const ext = (file.name.split('.').pop() || '').toLowerCase();
   const isQuickTime = mime === 'video/quicktime' || mime === 'video/x-quicktime' || ext === 'mov' || ext === 'qt';
   const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
-  return isQuickTime || (isIOS && mime.startsWith('video/'));
+  return isQuickTime || (isIOS && (mime === 'video/mp4' || mime === 'video/m4v' || ext === 'mp4' || ext === 'm4v'));
 }
 
 interface NormalizeOptions {
