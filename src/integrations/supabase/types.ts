@@ -6339,6 +6339,8 @@ export type Database = {
           media_types: string[] | null
           name: string
           reply_comment_text: string | null
+          target_media_caption: string | null
+          target_media_id: string | null
           trigger_keywords: string[] | null
           trigger_type: string
           updated_at: string
@@ -6358,6 +6360,8 @@ export type Database = {
           media_types?: string[] | null
           name: string
           reply_comment_text?: string | null
+          target_media_caption?: string | null
+          target_media_id?: string | null
           trigger_keywords?: string[] | null
           trigger_type?: string
           updated_at?: string
@@ -6377,6 +6381,8 @@ export type Database = {
           media_types?: string[] | null
           name?: string
           reply_comment_text?: string | null
+          target_media_caption?: string | null
+          target_media_id?: string | null
           trigger_keywords?: string[] | null
           trigger_type?: string
           updated_at?: string
