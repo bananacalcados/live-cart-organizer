@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Instagram, Plus, Trash2, MessageSquare, Send, Zap, Save,
-  ToggleLeft, ToggleRight, Edit, ChevronDown, ChevronUp
+  Edit, ChevronDown, ChevronUp, Image as ImageIcon, Loader2, Target, RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,12 +35,24 @@ interface Rule {
   cooldown_minutes: number;
   ai_generate_reply: boolean;
   ai_prompt: string | null;
+  target_media_id: string | null;
+  target_media_caption: string | null;
   created_at: string;
 }
 
 interface Flow {
   id: string;
   name: string;
+}
+
+interface MediaItem {
+  id: string;
+  caption: string | null;
+  media_type: string | null;
+  media_product_type: string | null;
+  thumbnail: string | null;
+  permalink: string | null;
+  timestamp: string | null;
 }
 
 export default function InstagramCommentAutomation() {
@@ -50,6 +62,11 @@ export default function InstagramCommentAutomation() {
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Media picker state (for per-post targeting)
+  const [mediaList, setMediaList] = useState<MediaItem[]>([]);
+  const [mediaLoading, setMediaLoading] = useState(false);
+  const [mediaLoaded, setMediaLoaded] = useState(false);
 
   // Form state
   const [form, setForm] = useState({
@@ -64,6 +81,8 @@ export default function InstagramCommentAutomation() {
     action_trigger_automation: false,
     automation_flow_id: "",
     cooldown_minutes: 60,
+    target_media_id: "",
+    target_media_caption: "",
   });
 
   useEffect(() => {
@@ -103,6 +122,8 @@ export default function InstagramCommentAutomation() {
       action_trigger_automation: false,
       automation_flow_id: "",
       cooldown_minutes: 60,
+      target_media_id: "",
+      target_media_caption: "",
     });
     setShowDialog(true);
   }
@@ -121,6 +142,8 @@ export default function InstagramCommentAutomation() {
       action_trigger_automation: rule.action_trigger_automation,
       automation_flow_id: rule.automation_flow_id || "",
       cooldown_minutes: rule.cooldown_minutes,
+      target_media_id: rule.target_media_id || "",
+      target_media_caption: rule.target_media_caption || "",
     });
     setShowDialog(true);
   }
@@ -146,6 +169,8 @@ export default function InstagramCommentAutomation() {
       action_trigger_automation: form.action_trigger_automation,
       automation_flow_id: form.automation_flow_id || null,
       cooldown_minutes: form.cooldown_minutes,
+      target_media_id: form.target_media_id || null,
+      target_media_caption: form.target_media_id ? (form.target_media_caption || null) : null,
     };
 
     if (editingRule) {
@@ -196,6 +221,34 @@ export default function InstagramCommentAutomation() {
         : [...prev.media_types, type],
     }));
   }
+
+  async function loadMedia(force = false) {
+    if (mediaLoaded && !force) return;
+    setMediaLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-list-media");
+      if (error) throw error;
+      setMediaList((data?.media as MediaItem[]) || []);
+      setMediaLoaded(true);
+    } catch (e) {
+      console.error(e);
+      toast.error("Não consegui carregar suas publicações do Instagram");
+    } finally {
+      setMediaLoading(false);
+    }
+  }
+
+  function mediaLabel(m: MediaItem) {
+    const kind =
+      m.media_product_type === "STORY"
+        ? "Story"
+        : m.media_product_type === "REELS"
+          ? "Reel"
+          : "Post";
+    const cap = (m.caption || "").replace(/\s+/g, " ").trim();
+    return `${kind} · ${cap ? cap.slice(0, 40) : "sem legenda"}`;
+  }
+
 
   return (
     <div className="space-y-4">
@@ -296,14 +349,21 @@ export default function InstagramCommentAutomation() {
 
                 {expandedId === rule.id && (
                   <div className="mt-3 pt-3 border-t space-y-2 text-xs text-muted-foreground">
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1.5 flex-wrap">
                       <span className="font-medium">Mídias:</span>
                       {rule.media_types.map((mt) => (
                         <Badge key={mt} variant="secondary" className="text-[10px]">
-                          {mt === "REELS" ? "Reels" : mt}
+                          {mt === "REELS" ? "Reels" : mt === "story" ? "Stories" : mt}
                         </Badge>
                       ))}
                     </div>
+                    {rule.target_media_id && (
+                      <div className="flex items-center gap-1.5">
+                        <Target className="h-3 w-3 text-purple-500" />
+                        <span className="font-medium">Publicação alvo:</span>{" "}
+                        {rule.target_media_caption || rule.target_media_id}
+                      </div>
+                    )}
                     {rule.action_reply_comment && rule.reply_comment_text && (
                       <div>
                         <span className="font-medium">Resposta pública:</span>{" "}
@@ -385,11 +445,12 @@ export default function InstagramCommentAutomation() {
 
             <div>
               <Label className="mb-2 block">Tipos de Mídia</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {[
                   { value: "post", label: "Posts" },
                   { value: "REELS", label: "Reels" },
                   { value: "IGTV", label: "IGTV" },
+                  { value: "story", label: "Stories" },
                 ].map(({ value, label }) => (
                   <Badge
                     key={value}
@@ -401,7 +462,101 @@ export default function InstagramCommentAutomation() {
                   </Badge>
                 ))}
               </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Stories não têm comentário público — a regra responde por DM/fluxo quando alguém
+                responde ao seu story.
+              </p>
             </div>
+
+            {/* Per-post / per-story targeting */}
+            <div className="rounded-lg border p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="flex items-center gap-1.5">
+                  <Target className="h-4 w-4 text-purple-500" />
+                  Aplicar a uma publicação específica
+                </Label>
+                <Switch
+                  checked={!!form.target_media_id || form.target_media_caption === "__pick__"}
+                  onCheckedChange={(v) => {
+                    if (v) {
+                      setForm({ ...form, target_media_caption: "__pick__" });
+                      loadMedia();
+                    } else {
+                      setForm({ ...form, target_media_id: "", target_media_caption: "" });
+                    }
+                  }}
+                />
+              </div>
+
+              {(!!form.target_media_id || form.target_media_caption === "__pick__") && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={form.target_media_id || undefined}
+                      onValueChange={(v) => {
+                        const m = mediaList.find((x) => x.id === v);
+                        setForm({
+                          ...form,
+                          target_media_id: v,
+                          target_media_caption: m ? mediaLabel(m) : v,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue
+                          placeholder={
+                            mediaLoading ? "Carregando publicações..." : "Selecione a publicação..."
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {mediaList.length === 0 && !mediaLoading && (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">
+                            Nenhuma publicação encontrada
+                          </div>
+                        )}
+                        {mediaList.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            <span className="flex items-center gap-2">
+                              {m.thumbnail ? (
+                                <img
+                                  src={m.thumbnail}
+                                  alt=""
+                                  className="h-6 w-6 rounded object-cover"
+                                />
+                              ) : (
+                                <ImageIcon className="h-4 w-4 opacity-50" />
+                              )}
+                              <span className="truncate max-w-[260px]">{mediaLabel(m)}</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="h-9 w-9 shrink-0"
+                      onClick={() => loadMedia(true)}
+                      disabled={mediaLoading}
+                      title="Recarregar publicações"
+                    >
+                      {mediaLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Deixe desligado para aplicar a regra a todas as publicações dos tipos
+                    selecionados.
+                  </p>
+                </div>
+              )}
+            </div>
+
 
             <div>
               <Label>Cooldown (minutos por usuário)</Label>

@@ -6,6 +6,7 @@ interface CommentData {
   username: string | null;
   text: string;
   mediaType: string; // post, REELS, etc
+  mediaId?: string | null; // the post/reel id the comment belongs to
 }
 
 interface PostThumb {
@@ -60,6 +61,7 @@ interface Rule {
   cooldown_minutes: number;
   ai_generate_reply: boolean;
   ai_prompt: string | null;
+  target_media_id: string | null;
 }
 
 /**
@@ -101,6 +103,15 @@ export async function processCommentAutomation(
     if (!rule.media_types.some(mt => mt.toLowerCase() === comment.mediaType.toLowerCase())) {
       continue;
     }
+
+    // Check per-post targeting: if the rule targets a specific media, the
+    // comment must belong to that exact post/reel.
+    if (rule.target_media_id) {
+      if (!comment.mediaId || String(comment.mediaId) !== String(rule.target_media_id)) {
+        continue;
+      }
+    }
+
 
     // Check trigger match
     let triggered = false;
@@ -335,3 +346,184 @@ export async function processCommentAutomation(
 
   return { actions };
 }
+
+interface StoryReplyData {
+  fromId: string;          // sender id (used to DM back + cooldown)
+  username: string | null;
+  text: string;            // the reply text
+  storyId?: string | null; // the story media id the user replied to
+  messageId?: string | null;
+}
+
+/**
+ * Process a Story reply against active automation rules whose media_types
+ * include "story". Stories have no public comment, so only DM and flow
+ * actions apply. Per-story targeting is honored via target_media_id.
+ */
+export async function processStoryReplyAutomation(
+  supabase: ReturnType<typeof createClient>,
+  reply: StoryReplyData,
+): Promise<{ actions: string[] }> {
+  const actions: string[] = [];
+
+  const { data: rules, error } = await supabase
+    .from("instagram_comment_rules")
+    .select("*")
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+
+  if (error || !rules || rules.length === 0) return { actions };
+
+  const pageAccessToken = Deno.env.get("META_PAGE_ACCESS_TOKEN");
+  if (!pageAccessToken) {
+    console.error("META_PAGE_ACCESS_TOKEN not set, skipping story automations");
+    return { actions };
+  }
+
+  const textLower = (reply.text || "").toLowerCase().trim();
+  const dedupId = reply.messageId || `${reply.fromId}:${reply.storyId || "story"}`;
+
+  for (const rule of rules as Rule[]) {
+    // Only rules opted into stories
+    if (!rule.media_types.some(mt => mt.toLowerCase() === "story")) continue;
+
+    // Per-story targeting
+    if (rule.target_media_id) {
+      if (!reply.storyId || String(reply.storyId) !== String(rule.target_media_id)) {
+        continue;
+      }
+    }
+
+    // Trigger match
+    let triggered = false;
+    if (rule.trigger_type === "all") {
+      triggered = true;
+    } else if (rule.trigger_type === "keyword") {
+      triggered = rule.trigger_keywords.some(kw =>
+        textLower.includes(kw.toLowerCase().trim())
+      );
+    }
+    if (!triggered) continue;
+
+    // Cooldown per user
+    const cooldownTime = new Date(Date.now() - rule.cooldown_minutes * 60 * 1000).toISOString();
+    const { data: recentAction } = await supabase
+      .from("instagram_comment_actions")
+      .select("id")
+      .eq("rule_id", rule.id)
+      .eq("comment_id", reply.fromId)
+      .gte("created_at", cooldownTime)
+      .limit(1);
+    if (recentAction && recentAction.length > 0) {
+      console.log(`Cooldown active for story rule ${rule.name}, user ${reply.fromId}`);
+      continue;
+    }
+
+    // Dedup per story reply
+    const { data: existingAction } = await supabase
+      .from("instagram_comment_actions")
+      .select("id")
+      .eq("comment_id", dedupId)
+      .eq("rule_id", rule.id)
+      .limit(1);
+    if (existingAction && existingAction.length > 0) continue;
+
+    const usernameClean = reply.username?.replace("@", "") || "";
+
+    // ── Action: Send DM (direct, since story replies arrive in the inbox) ──
+    if (rule.action_send_dm && rule.dm_message_text) {
+      try {
+        const dmText = rule.dm_message_text
+          .replace("{username}", usernameClean)
+          .replace("{comment}", reply.text);
+
+        const res = await fetch(
+          `https://graph.instagram.com/v25.0/me/messages`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${pageAccessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              recipient: { id: reply.fromId },
+              message: { text: dmText },
+              messaging_type: "RESPONSE",
+            }),
+          }
+        );
+        const data = await res.json();
+        const status = res.ok ? "sent" : "error";
+
+        await supabase.from("instagram_comment_actions").insert({
+          comment_id: dedupId,
+          rule_id: rule.id,
+          action_type: "dm",
+          status,
+          error_message: res.ok ? null : JSON.stringify(data),
+        });
+
+        if (res.ok) {
+          actions.push(`dm:${rule.name}`);
+          // Save outgoing DM for chat visibility
+          await supabase.from("whatsapp_messages").insert({
+            phone: reply.fromId,
+            message: dmText,
+            direction: "outgoing",
+            message_id: data.message_id || null,
+            status: "sent",
+            media_type: "text",
+            is_group: false,
+            channel: "instagram",
+            sender_name: reply.username,
+          });
+          console.log(`✅ Story DM sent to ${reply.fromId} via rule "${rule.name}"`);
+        } else {
+          console.error(`❌ Failed story DM for rule "${rule.name}":`, data);
+        }
+      } catch (e) {
+        console.error(`Error sending story DM:`, e);
+      }
+    }
+
+    // ── Action: Trigger automation flow ──
+    if (rule.action_trigger_automation && rule.automation_flow_id) {
+      try {
+        await supabase.from("instagram_comment_actions").insert({
+          comment_id: dedupId,
+          rule_id: rule.id,
+          action_type: "automation",
+          status: "triggered",
+        });
+
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        await fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${supabaseKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            phone: reply.fromId,
+            message: reply.text,
+            flow_id: rule.automation_flow_id,
+            source: "instagram_story_reply",
+            metadata: {
+              story_id: reply.storyId,
+              username: reply.username,
+              media_type: "story",
+            },
+          }),
+        });
+        actions.push(`automation:${rule.name}`);
+        console.log(`✅ Story automation triggered via rule "${rule.name}"`);
+      } catch (e) {
+        console.error(`Error triggering story automation:`, e);
+      }
+    }
+  }
+
+  return { actions };
+}
+

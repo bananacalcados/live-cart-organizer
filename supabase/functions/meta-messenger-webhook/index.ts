@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchInstagramSenderUsername } from "../_shared/meta-instagram-profile.ts";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
-import { processCommentAutomation } from "../_shared/instagram-comment-automation.ts";
+import { processCommentAutomation, processStoryReplyAutomation } from "../_shared/instagram-comment-automation.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -338,7 +338,37 @@ serve(async (req) => {
             );
         }
 
+        // ===== STORY REPLY AUTOMATION (keyword rules with media_types=story) =====
+        if (channel === 'instagram') {
+          const srcType = (referralData as any)?.source_type;
+          const isStoryReply =
+            mediaType === 'story' ||
+            srcType === 'story_reply' ||
+            srcType === 'story_mention';
+          if (isStoryReply) {
+            try {
+              const storyId =
+                event.message?.reply_to?.story?.id ||
+                (referralData as any)?.source_id ||
+                null;
+              const storyAuto = await processStoryReplyAutomation(supabase, {
+                fromId: senderId,
+                username: senderName,
+                text: messageText,
+                storyId,
+                messageId: event.message?.mid || null,
+              });
+              if (storyAuto.actions.length > 0) {
+                console.log(`Story automations triggered: ${storyAuto.actions.join(', ')}`);
+              }
+            } catch (storyErr) {
+              console.error('Error processing story reply automation:', storyErr);
+            }
+          }
+        }
+
         // ===== CENTRAL ROUTER — AI for Instagram DMs =====
+
         if (channel === 'instagram' && messageText) {
           try {
             const route = await routeMessage(supabase, {
@@ -492,6 +522,7 @@ serve(async (req) => {
                 username: senderName,
                 text,
                 mediaType,
+                mediaId: comment.media?.id || null,
               });
               if (automationResult.actions.length > 0) {
                 console.log(`Comment automations triggered: ${automationResult.actions.join(', ')}`);
