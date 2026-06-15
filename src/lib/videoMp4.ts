@@ -228,6 +228,85 @@ function patchChunkOffsets(buf: Uint8Array, start: number, end: number, delta: n
   }
 }
 
+interface ChunkRef {
+  originalOffset: number;
+  size: number;
+  tableEntryOffset: number;
+  is64: boolean;
+}
+
+function collectTrackChunks(moov: Uint8Array, trak: TopBox): ChunkRef[] {
+  const mdia = findChild(moov, trak, 'mdia');
+  const minf = mdia ? findChild(moov, mdia, 'minf') : undefined;
+  const stbl = minf ? findChild(moov, minf, 'stbl') : undefined;
+  if (!stbl) return [];
+  const stsc = findChild(moov, stbl, 'stsc');
+  const stsz = findChild(moov, stbl, 'stsz');
+  const offsetsBox = findChild(moov, stbl, 'stco') || findChild(moov, stbl, 'co64');
+  if (!stsc || !stsz || !offsetsBox) return [];
+
+  const is64 = offsetsBox.type === 'co64';
+  const offsetsBase = offsetsBox.start + offsetsBox.hdr;
+  const chunkCount = readU32(moov, offsetsBase + 4);
+  const offsetsStart = offsetsBase + 8;
+  const stscBase = stsc.start + stsc.hdr;
+  const stscCount = readU32(moov, stscBase + 4);
+  const stszBase = stsz.start + stsz.hdr;
+  const defaultSampleSize = readU32(moov, stszBase + 4);
+  const sampleCount = readU32(moov, stszBase + 8);
+  const sampleSizesStart = stszBase + 12;
+  const stscEntries = Array.from({ length: stscCount }, (_, i) => ({
+    firstChunk: readU32(moov, stscBase + 8 + i * 12),
+    samplesPerChunk: readU32(moov, stscBase + 12 + i * 12),
+  }));
+
+  const refs: ChunkRef[] = [];
+  let sampleIndex = 0;
+  let stscIndex = 0;
+  for (let chunkIndex = 1; chunkIndex <= chunkCount; chunkIndex++) {
+    while (stscIndex + 1 < stscEntries.length && stscEntries[stscIndex + 1].firstChunk <= chunkIndex) {
+      stscIndex++;
+    }
+    const samplesPerChunk = stscEntries[stscIndex]?.samplesPerChunk || 0;
+    let chunkSize = 0;
+    for (let s = 0; s < samplesPerChunk && sampleIndex < sampleCount; s++, sampleIndex++) {
+      chunkSize += defaultSampleSize || readU32(moov, sampleSizesStart + sampleIndex * 4);
+    }
+    const tableEntryOffset = offsetsStart + (chunkIndex - 1) * (is64 ? 8 : 4);
+    refs.push({
+      originalOffset: is64 ? readU64(moov, tableEntryOffset) : readU32(moov, tableEntryOffset),
+      size: chunkSize,
+      tableEntryOffset,
+      is64,
+    });
+  }
+  return refs;
+}
+
+function collectReferencedChunks(moov: Uint8Array, input: Uint8Array): ChunkRef[] {
+  const root: TopBox = { type: 'moov', start: 0, size: moov.length, hdr: 8 };
+  const chunks = childBoxes(moov, root.start + root.hdr, root.start + root.size)
+    .filter((box) => box.type === 'trak')
+    .flatMap((trak) => collectTrackChunks(moov, trak))
+    .filter((chunk) => chunk.size > 0)
+    .sort((a, b) => a.originalOffset - b.originalOffset);
+  if (!chunks.length) throw new Error('vídeo sem chunks de mídia válidos');
+  for (const chunk of chunks) {
+    if (chunk.originalOffset < 0 || chunk.originalOffset + chunk.size > input.length) {
+      throw new Error('chunks de mídia fora do arquivo original');
+    }
+  }
+  return chunks;
+}
+
+function buildMdatHeader(payloadSize: number): Uint8Array {
+  if (payloadSize + 8 > 0xffffffff) throw new Error('vídeo grande demais para normalização no aparelho');
+  const header = new Uint8Array(8);
+  writeU32(header, 0, payloadSize + 8);
+  writeType(header, 4, 'mdat');
+  return header;
+}
+
 function bytesContainAscii(bytes: Uint8Array, text: string): boolean {
   const needle = [...text].map((c) => c.charCodeAt(0));
   outer: for (let i = 0; i <= bytes.length - needle.length; i++) {
