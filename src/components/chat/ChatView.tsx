@@ -509,9 +509,24 @@ export function ChatView({
   const [sendingMedia, setSendingMedia] = useState(false);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !onSendMedia) return;
+    const rawFile = event.target.files?.[0];
+    if (!rawFile || !onSendMedia) return;
     event.target.value = '';
+
+    let file = rawFile;
+    // Imagens (foto tirada na hora pela câmera inclusive): redimensiona/re-encoda para
+    // JPEG ≤1920px ANTES de checar tamanho e gerar preview. Sem isso, fotos enormes
+    // travavam o upload e o envio falhava só pra imagem (vídeo seguia normal).
+    const looksLikeImage = rawFile.type.startsWith('image/')
+      || /\.(jpe?g|png|heic|heif|webp)$/i.test(rawFile.name);
+    if (looksLikeImage) {
+      try {
+        const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+        file = await normalizeImageOrientation(rawFile);
+      } catch (e) {
+        console.error('[ChatView] image normalize failed:', e);
+      }
+    }
 
     const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
     if (file.size > getMaxSizeForType(file.type)) {
