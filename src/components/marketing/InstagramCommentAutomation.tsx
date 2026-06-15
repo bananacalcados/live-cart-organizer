@@ -67,6 +67,9 @@ export default function InstagramCommentAutomation() {
   const [mediaList, setMediaList] = useState<MediaItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaLoaded, setMediaLoaded] = useState(false);
+  const [mediaFilter, setMediaFilter] = useState<
+    "all" | "post" | "reels" | "story" | "carousel"
+  >("all");
 
   // Form state
   const [form, setForm] = useState({
@@ -238,16 +241,41 @@ export default function InstagramCommentAutomation() {
     }
   }
 
+  function mediaKind(m: MediaItem): "post" | "reels" | "story" | "carousel" {
+    if (m.media_product_type === "STORY") return "story";
+    if (m.media_product_type === "REELS") return "reels";
+    if (m.media_type === "CAROUSEL_ALBUM") return "carousel";
+    return "post";
+  }
+
   function mediaLabel(m: MediaItem) {
-    const kind =
-      m.media_product_type === "STORY"
-        ? "Story"
-        : m.media_product_type === "REELS"
-          ? "Reel"
-          : "Post";
+    const kind = {
+      story: "Story",
+      reels: "Reel",
+      carousel: "Carrossel",
+      post: "Post",
+    }[mediaKind(m)];
     const cap = (m.caption || "").replace(/\s+/g, " ").trim();
     return `${kind} · ${cap ? cap.slice(0, 40) : "sem legenda"}`;
   }
+
+  const mediaTs = (m: MediaItem) => {
+    const t = m.timestamp ? Date.parse(m.timestamp) : NaN;
+    return Number.isNaN(t) ? 0 : t;
+  };
+
+  const filteredMedia = mediaList
+    .filter((m) => mediaFilter === "all" || mediaKind(m) === mediaFilter)
+    .sort((a, b) => mediaTs(b) - mediaTs(a));
+
+  const MEDIA_FILTERS: { key: typeof mediaFilter; label: string }[] = [
+    { key: "all", label: "Todos" },
+    { key: "post", label: "Posts" },
+    { key: "reels", label: "Reels" },
+    { key: "carousel", label: "Carrossel" },
+    { key: "story", label: "Stories" },
+  ];
+
 
 
   return (
@@ -490,6 +518,28 @@ export default function InstagramCommentAutomation() {
 
               {(!!form.target_media_id || form.target_media_caption === "__pick__") && (
                 <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {MEDIA_FILTERS.map((f) => {
+                      const count =
+                        f.key === "all"
+                          ? mediaList.length
+                          : mediaList.filter((m) => mediaKind(m) === f.key).length;
+                      return (
+                        <button
+                          key={f.key}
+                          type="button"
+                          onClick={() => setMediaFilter(f.key)}
+                          className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                            mediaFilter === f.key
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                          }`}
+                        >
+                          {f.label} {count > 0 && `(${count})`}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="flex items-center gap-2">
                     <Select
                       value={form.target_media_id || undefined}
@@ -510,12 +560,12 @@ export default function InstagramCommentAutomation() {
                         />
                       </SelectTrigger>
                       <SelectContent className="max-h-72">
-                        {mediaList.length === 0 && !mediaLoading && (
+                        {filteredMedia.length === 0 && !mediaLoading && (
                           <div className="px-3 py-2 text-xs text-muted-foreground">
                             Nenhuma publicação encontrada
                           </div>
                         )}
-                        {mediaList.map((m) => (
+                        {filteredMedia.map((m) => (
                           <SelectItem key={m.id} value={m.id}>
                             <span className="flex items-center gap-2">
                               {m.thumbnail ? (
