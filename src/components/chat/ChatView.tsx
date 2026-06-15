@@ -527,12 +527,23 @@ export function ChatView({
         console.error('[ChatView] image normalize failed:', e);
       }
     } else {
-      // Vídeo do iPhone (.mov/QuickTime): a uazapi só aceita MP4. Reescreve o container
-      // para MP4 ANTES de checar tamanho/preview. Não toca em vídeos MP4 do Android.
+      // Vídeo do iPhone (.mov/QuickTime, geralmente HEVC): re-encoda para MP4 H.264
+      // real (compatível com o WhatsApp) ANTES de checar tamanho/preview.
+      // Vídeos MP4 do Android NÃO passam por aqui.
       try {
         const { normalizeIphoneVideo, isIphoneMovVideo } = await import('@/lib/videoMp4');
         if (isIphoneMovVideo(rawFile)) {
-          file = await normalizeIphoneVideo(rawFile);
+          const toastId = toast.loading('Convertendo vídeo do iPhone... 0%');
+          try {
+            file = await normalizeIphoneVideo(rawFile, {
+              onProgress: (pct) => toast.loading(`Convertendo vídeo do iPhone... ${pct}%`, { id: toastId }),
+            });
+            toast.success('Vídeo pronto para enviar', { id: toastId });
+          } catch (convErr) {
+            toast.error('Não foi possível converter o vídeo do iPhone. Tente novamente.', { id: toastId });
+            console.error('[ChatView] iphone video transcode failed:', convErr);
+            return;
+          }
         }
       } catch (e) {
         console.error('[ChatView] iphone video normalize failed:', e);
