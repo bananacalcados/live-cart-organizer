@@ -335,25 +335,37 @@ function buildFtyp(includeHevc: boolean): Uint8Array {
 function remuxMovToMp4(input: Uint8Array): Uint8Array {
   const boxes = topBoxes(input);
   const moovBox = boxes.find((b) => b.type === 'moov');
-  const mdatBox = boxes.find((b) => b.type === 'mdat');
-  if (!moovBox || !mdatBox) {
+  if (!moovBox || !boxes.some((b) => b.type === 'mdat')) {
     throw new Error('estrutura de vídeo inesperada (sem moov/mdat)');
   }
 
-  // Cópia mutável do moov: removemos trilhas metadata do iPhone e corrigimos offsets.
+  // Cópia mutável do moov: removemos trilhas/boxes QuickTime e reconstruímos o mdat
+  // só com os chunks referenciados. Isso evita enviar bytes órfãos/metadados que a
+  // uazapi aceita, mas o app oficial do WhatsApp rejeita ao abrir.
   const originalMoov = input.slice(moovBox.start, moovBox.start + moovBox.size);
   const moov = sanitizeMoov(originalMoov);
   const newFtyp = buildFtyp(bytesContainAscii(moov, 'hvc1') || bytesContainAscii(moov, 'hev1'));
-  const mdat = input.subarray(mdatBox.start, mdatBox.start + mdatBox.size);
+  const chunks = collectReferencedChunks(moov, input);
+  const payloadSize = chunks.reduce((sum, chunk) => sum + chunk.size, 0);
+  const mdatHeader = buildMdatHeader(payloadSize);
+  const newMdatPayloadStart = newFtyp.length + moov.length + mdatHeader.length;
+  let payloadCursor = 0;
+  for (const chunk of chunks) {
+    const newOffset = newMdatPayloadStart + payloadCursor;
+    if (chunk.is64) writeU64(moov, chunk.tableEntryOffset, newOffset);
+    else writeU32(moov, chunk.tableEntryOffset, newOffset);
+    payloadCursor += chunk.size;
+  }
 
-  const newMdatStart = newFtyp.length + moov.length;
-  const delta = newMdatStart - mdatBox.start;
-  patchChunkOffsets(moov, 0, moov.length, delta);
-
-  const out = new Uint8Array(newFtyp.length + moov.length + mdat.length);
+  const out = new Uint8Array(newFtyp.length + moov.length + mdatHeader.length + payloadSize);
   out.set(newFtyp, 0);
   out.set(moov, newFtyp.length);
-  out.set(mdat, newFtyp.length + moov.length);
+  out.set(mdatHeader, newFtyp.length + moov.length);
+  payloadCursor = newFtyp.length + moov.length + mdatHeader.length;
+  for (const chunk of chunks) {
+    out.set(input.subarray(chunk.originalOffset, chunk.originalOffset + chunk.size), payloadCursor);
+    payloadCursor += chunk.size;
+  }
   return out;
 }
 
