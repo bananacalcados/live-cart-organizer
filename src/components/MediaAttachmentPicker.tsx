@@ -3,6 +3,7 @@ import { Image, Mic, Video, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { normalizeImageOrientation } from "@/lib/imageOrientation";
 
 type MediaType = 'image' | 'audio' | 'video' | 'document';
 
