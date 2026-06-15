@@ -67,6 +67,9 @@ export default function InstagramCommentAutomation() {
   const [mediaList, setMediaList] = useState<MediaItem[]>([]);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [mediaLoaded, setMediaLoaded] = useState(false);
+  const [mediaFilter, setMediaFilter] = useState<
+    "all" | "post" | "reels" | "story" | "carousel"
+  >("all");
 
   // Form state
   const [form, setForm] = useState({
