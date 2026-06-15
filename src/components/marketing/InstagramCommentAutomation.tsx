@@ -349,14 +349,21 @@ export default function InstagramCommentAutomation() {
 
                 {expandedId === rule.id && (
                   <div className="mt-3 pt-3 border-t space-y-2 text-xs text-muted-foreground">
-                    <div className="flex gap-1.5">
+                    <div className="flex gap-1.5 flex-wrap">
                       <span className="font-medium">Mídias:</span>
                       {rule.media_types.map((mt) => (
                         <Badge key={mt} variant="secondary" className="text-[10px]">
-                          {mt === "REELS" ? "Reels" : mt}
+                          {mt === "REELS" ? "Reels" : mt === "story" ? "Stories" : mt}
                         </Badge>
                       ))}
                     </div>
+                    {rule.target_media_id && (
+                      <div className="flex items-center gap-1.5">
+                        <Target className="h-3 w-3 text-purple-500" />
+                        <span className="font-medium">Publicação alvo:</span>{" "}
+                        {rule.target_media_caption || rule.target_media_id}
+                      </div>
+                    )}
                     {rule.action_reply_comment && rule.reply_comment_text && (
                       <div>
                         <span className="font-medium">Resposta pública:</span>{" "}
