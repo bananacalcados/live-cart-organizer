@@ -27,53 +27,23 @@ function getMediaType(file: File): MediaType {
   return 'document';
 }
 
-// Formatos de imagem que o WhatsApp/uazapi aceitam diretamente.
-const WHATSAPP_OK_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
-
 /**
- * Normaliza imagens para um formato que o WhatsApp/uazapi consegue processar.
+ * Normaliza imagens para um formato/tamanho que o WhatsApp/uazapi processa sempre.
  *
- * Motivo do bug "Erro ao enviar mídia" em celulares:
- *  - iPhone tira fotos em HEIC/HEIF e grava vídeos em .mov; quando o navegador
- *    entrega esse arquivo cru, a uazapi tenta baixar a URL e falha com
- *    "failed to process file" → o app mostra "Erro ao enviar mídia".
- *  - Alguns Androids entregam imagens em webp.
+ * Motivo do bug "Erro ao enviar imagem" em celulares (Android/iOS):
+ *  - A versão antiga PULAVA arquivos JPEG. Fotos tiradas na hora pela câmera do
+ *    celular vêm em JPEG, mas com resolução enorme (12–200MP). O arquivo cru era
+ *    enviado direto pro storage e o upload falhava (memória/tamanho) ANTES de
+ *    chegar na uazapi → o usuário só via "Erro ao enviar". Vídeos funcionavam
+ *    porque não passavam por essa etapa.
+ *  - iPhone entrega HEIC/HEIF; alguns Androids entregam webp.
  *
- * Aqui re-encodamos qualquer imagem que NÃO seja jpeg/png/gif para JPEG via
- * canvas (quando o navegador consegue decodificar). Se a decodificação falhar,
- * devolvemos o arquivo original (melhor tentar do que travar).
+ * Solução: delegar para `normalizeImageOrientation`, que SEMPRE re-encoda QUALQUER
+ * imagem raster (inclusive JPEG) para JPEG ≤1920px, corrige rotação EXIF, remove
+ * metadados e detecta o tipo por extensão quando o navegador deixa file.type vazio.
  */
 async function normalizeImageForWhatsApp(file: File): Promise<File> {
-  if (!file.type.startsWith('image/')) return file;
-  if (WHATSAPP_OK_IMAGE_TYPES.includes(file.type)) return file;
-
-  try {
-    const bitmap = await createImageBitmap(file);
-    const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-
-    const context = canvas.getContext('2d');
-    if (!context) {
-      bitmap.close();
-      return file;
-    }
-
-    context.drawImage(bitmap, 0, 0);
-    bitmap.close();
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', 0.92);
-    });
-
-    if (!blob) return file;
-
-    const baseName = (file.name || `foto-${Date.now()}`).replace(/\.[^.]+$/, '');
-    return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
-  } catch (e) {
-    console.warn('[normalizeImageForWhatsApp] não foi possível converter, enviando original:', e);
-    return file;
-  }
+  return normalizeImageOrientation(file);
 }
 
 export function MediaAttachmentPicker({
