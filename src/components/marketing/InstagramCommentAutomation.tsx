@@ -35,12 +35,24 @@ interface Rule {
   cooldown_minutes: number;
   ai_generate_reply: boolean;
   ai_prompt: string | null;
+  target_media_id: string | null;
+  target_media_caption: string | null;
   created_at: string;
 }
 
 interface Flow {
   id: string;
   name: string;
+}
+
+interface MediaItem {
+  id: string;
+  caption: string | null;
+  media_type: string | null;
+  media_product_type: string | null;
+  thumbnail: string | null;
+  permalink: string | null;
+  timestamp: string | null;
 }
 
 export default function InstagramCommentAutomation() {
