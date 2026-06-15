@@ -104,6 +104,15 @@ export async function processCommentAutomation(
       continue;
     }
 
+    // Check per-post targeting: if the rule targets a specific media, the
+    // comment must belong to that exact post/reel.
+    if (rule.target_media_id) {
+      if (!comment.mediaId || String(comment.mediaId) !== String(rule.target_media_id)) {
+        continue;
+      }
+    }
+
+
     // Check trigger match
     let triggered = false;
     if (rule.trigger_type === "all") {
