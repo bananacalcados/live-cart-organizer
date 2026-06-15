@@ -1,77 +1,30 @@
 /**
  * Converte vídeos do iPhone (QuickTime/.mov) para um MP4 de verdade — compatível
- * com o WhatsApp — direto no navegador.
+ * com o WhatsApp/uazapi — direto no navegador, SEM ffmpeg/WASM.
  *
- * Por que precisa mexer (e não só renomear/trocar o "brand")?
- *  - A câmera do iPhone grava em container QuickTime (.mov), com a tabela `moov`
- *    no FIM do arquivo e átomos específicos da Apple. O uazapi recusa `.mov`
- *    ("Only MP4 files are accepted") e o player oficial da Meta recusa o arquivo
- *    quando ele não é um MP4 válido com faststart.
- *  - A tentativa antiga só reescrevia os bytes do box `ftyp` (brand qt → mp42).
- *    Isso enganava a validação do uazapi, mas gerava um arquivo que o WhatsApp
- *    não conseguia abrir de fato. Por isso o vídeo "ia", mas não abria.
- *  - A tentativa seguinte RE-ENCODAVA tudo (libx264) no celular. Isso estourava a
- *    memória do ffmpeg.wasm em vídeos grandes → "Não foi possível converter".
+ * Por que NÃO usamos mais ffmpeg.wasm?
+ *  - ffmpeg.wasm é instável em celular (principalmente iOS Safari/Chrome). O core
+ *    falhava ao carregar ("failed to import ffmpeg-core.js") e, em vídeos maiores,
+ *    estourava a memória. Ou seja: dependia de CDN + Worker + WASM, tudo frágil no
+ *    aparelho do usuário.
  *
- * Estratégia atual (robusta e leve):
- *  1) REMUX (cópia de stream): `-c copy -movflags +faststart`. Reembala o vídeo
- *     no container MP4 com o moov no início, SEM re-encodar. É rápido, usa pouca
- *     memória e funciona para a grande maioria (vídeos H.264 do iPhone). Mantém
- *     também HEVC dentro de um MP4 válido (versões atuais do WhatsApp reproduzem).
- *  2) FALLBACK: se o remux falhar, tenta re-encodar para H.264 baseline + AAC
- *     reduzindo a resolução (máx. 1280px) para caber na memória do celular.
+ * Como funciona agora (remux puro em JS — leve e confiável):
+ *  - O .mov do iPhone e o .mp4 são, na prática, o MESMO formato (ISO Base Media
+ *    File Format / "átomos"). A câmera grava H.264 ou HEVC dentro de um container
+ *    QuickTime, com a tabela `moov` no FIM do arquivo e brand `qt  `.
+ *  - O uazapi recusa `.mov` ("Only MP4 files are accepted") e o player do WhatsApp
+ *    não abre quando o arquivo não é um MP4 válido com "faststart" (moov no início).
+ *  - Este remux:
+ *      1) reescreve o `ftyp` para um brand de MP4 padrão (`isom`/`mp42`/`avc1`/`hvc1`);
+ *      2) move o `moov` para ANTES do `mdat` (faststart), corrigindo todos os
+ *         offsets de chunk (`stco`/`co64`) pela diferença de posição;
+ *      3) mantém os streams (H.264/HEVC + AAC) intactos — nada é re-encodado.
+ *  - Resultado: um MP4 válido, faststart, que o uazapi aceita e o WhatsApp abre.
+ *    Tudo em JS puro → funciona em qualquer dispositivo, sem rede/WASM.
  *
  * Só toca em vídeos QuickTime/.mov (iPhone). Vídeos MP4 do Android, imagens,
  * áudios e documentos NÃO passam por aqui.
  */
-
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
-
-// Core single-thread (não exige cross-origin isolation → funciona no iOS Safari).
-const CORE_VERSION = '0.12.6';
-const CORE_BASES = [
-  `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
-  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
-];
-
-let ffmpegSingleton: FFmpeg | null = null;
-let loadPromise: Promise<FFmpeg> | null = null;
-let lastLog = '';
-
-async function loadFromBase(ffmpeg: FFmpeg, base: string): Promise<void> {
-  const [coreURL, wasmURL] = await Promise.all([
-    toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
-    toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
-  ]);
-  await ffmpeg.load({ coreURL, wasmURL });
-}
-
-async function getFFmpeg(): Promise<FFmpeg> {
-  if (ffmpegSingleton) return ffmpegSingleton;
-  if (loadPromise) return loadPromise;
-
-  loadPromise = (async () => {
-    const ffmpeg = new FFmpeg();
-    ffmpeg.on('log', ({ message }) => {
-      lastLog = message;
-    });
-    let lastErr: unknown = null;
-    for (const base of CORE_BASES) {
-      try {
-        await loadFromBase(ffmpeg, base);
-        ffmpegSingleton = ffmpeg;
-        return ffmpeg;
-      } catch (e) {
-        lastErr = e;
-      }
-    }
-    loadPromise = null;
-    throw new Error(`Falha ao carregar conversor de vídeo: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`);
-  })();
-
-  return loadPromise;
-}
 
 export function isIphoneMovVideo(file: File): boolean {
   const mime = (file.type || '').toLowerCase();
@@ -80,15 +33,150 @@ export function isIphoneMovVideo(file: File): boolean {
 }
 
 interface NormalizeOptions {
-  /** Recebe progresso de 0 a 100 durante a conversão. */
+  /** Recebe progresso de 0 a 100 (aqui é praticamente instantâneo). */
   onProgress?: (percent: number) => void;
 }
 
+// ─── Leitura/escrita de inteiros big-endian ─────────────────────────────
+function readU32(b: Uint8Array, o: number): number {
+  return b[o] * 0x1000000 + (b[o + 1] << 16) + (b[o + 2] << 8) + b[o + 3];
+}
+function readU64(b: Uint8Array, o: number): number {
+  return readU32(b, o) * 0x100000000 + readU32(b, o + 4);
+}
+function writeU32(b: Uint8Array, o: number, v: number): void {
+  b[o] = (v >>> 24) & 255;
+  b[o + 1] = (v >>> 16) & 255;
+  b[o + 2] = (v >>> 8) & 255;
+  b[o + 3] = v & 255;
+}
+function boxType(b: Uint8Array, o: number): string {
+  return String.fromCharCode(b[o + 4], b[o + 5], b[o + 6], b[o + 7]);
+}
+
+interface TopBox {
+  type: string;
+  start: number;
+  size: number;
+  hdr: number;
+}
+
+function topBoxes(buf: Uint8Array): TopBox[] {
+  const boxes: TopBox[] = [];
+  let pos = 0;
+  while (pos + 8 <= buf.length) {
+    let size = readU32(buf, pos);
+    const t = boxType(buf, pos);
+    let hdr = 8;
+    if (size === 1) {
+      size = readU64(buf, pos + 8);
+      hdr = 16;
+    } else if (size === 0) {
+      size = buf.length - pos;
+    }
+    if (size < hdr || pos + size > buf.length) break;
+    boxes.push({ type: t, start: pos, size, hdr });
+    pos += size;
+  }
+  return boxes;
+}
+
+// Boxes "container" cujos filhos precisamos percorrer para achar stco/co64.
+const CONTAINERS = new Set([
+  'moov', 'trak', 'mdia', 'minf', 'stbl', 'edts', 'udta', 'dinf', 'mvex', 'moof', 'traf',
+]);
+
+/**
+ * Soma `delta` a todos os offsets de chunk (stco 32-bit e co64 64-bit) dentro do
+ * intervalo [start, end) do buffer (que aqui é o próprio `moov`).
+ */
+function patchChunkOffsets(buf: Uint8Array, start: number, end: number, delta: number): void {
+  let pos = start;
+  while (pos + 8 <= end) {
+    let size = readU32(buf, pos);
+    const t = boxType(buf, pos);
+    let hdr = 8;
+    if (size === 1) {
+      size = readU64(buf, pos + 8);
+      hdr = 16;
+    } else if (size === 0) {
+      size = end - pos;
+    }
+    if (size < hdr || pos + size > end) break;
+
+    if (t === 'stco') {
+      const base = pos + hdr; // version(1)+flags(3)
+      const count = readU32(buf, base + 4);
+      let o = base + 8;
+      for (let i = 0; i < count; i++) {
+        writeU32(buf, o, (readU32(buf, o) + delta) >>> 0);
+        o += 4;
+      }
+    } else if (t === 'co64') {
+      const base = pos + hdr;
+      const count = readU32(buf, base + 4);
+      let o = base + 8;
+      for (let i = 0; i < count; i++) {
+        const val = readU64(buf, o) + delta;
+        const hi = Math.floor(val / 0x100000000);
+        const lo = val >>> 0;
+        writeU32(buf, o, hi);
+        writeU32(buf, o + 4, lo);
+        o += 8;
+      }
+    } else if (CONTAINERS.has(t)) {
+      patchChunkOffsets(buf, pos + hdr, pos + size, delta);
+    }
+
+    pos += size;
+  }
+}
+
+function buildFtyp(): Uint8Array {
+  const brands = ['isom', 'iso2', 'avc1', 'mp41', 'hvc1', 'mp42'];
+  const size = 8 + 4 + 4 + brands.length * 4;
+  const b = new Uint8Array(size);
+  writeU32(b, 0, size);
+  b.set([0x66, 0x74, 0x79, 0x70], 4); // "ftyp"
+  b.set([0x69, 0x73, 0x6f, 0x6d], 8); // major brand "isom"
+  writeU32(b, 12, 0x200); // minor version
+  let o = 16;
+  for (const br of brands) {
+    for (let i = 0; i < 4; i++) b[o + i] = br.charCodeAt(i);
+    o += 4;
+  }
+  return b;
+}
+
+function remuxMovToMp4(input: Uint8Array): Uint8Array {
+  const boxes = topBoxes(input);
+  const moovBox = boxes.find((b) => b.type === 'moov');
+  const mdatBox = boxes.find((b) => b.type === 'mdat');
+  if (!moovBox || !mdatBox) {
+    throw new Error('estrutura de vídeo inesperada (sem moov/mdat)');
+  }
+
+  const newFtyp = buildFtyp();
+  // Cópia mutável do moov (vamos corrigir os offsets dentro dele).
+  const moov = input.slice(moovBox.start, moovBox.start + moovBox.size);
+  const mdat = input.subarray(mdatBox.start, mdatBox.start + mdatBox.size);
+
+  const newMdatStart = newFtyp.length + moov.length;
+  const delta = newMdatStart - mdatBox.start;
+  patchChunkOffsets(moov, 0, moov.length, delta);
+
+  const out = new Uint8Array(newFtyp.length + moov.length + mdat.length);
+  out.set(newFtyp, 0);
+  out.set(moov, newFtyp.length);
+  out.set(mdat, newFtyp.length + moov.length);
+  return out;
+}
+
 function toMp4File(bytes: Uint8Array, originalName: string): File {
-  // Copia para um ArrayBuffer "puro" (evita SharedArrayBuffer no tipo do Blob).
-  const buf = new Uint8Array(bytes.byteLength);
-  buf.set(bytes);
-  const blob = new Blob([buf], { type: 'video/mp4' });
+  // Garante um ArrayBuffer "puro" (evita SharedArrayBuffer no tipo do Blob).
+  const ab = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(ab).set(bytes);
+  const blob = new Blob([ab], { type: 'video/mp4' });
   const base = originalName.replace(/\.[^/.]+$/, '');
   return new File([blob], `${base || 'video'}.mp4`, {
     type: 'video/mp4',
@@ -102,67 +190,10 @@ export async function normalizeIphoneVideo(
 ): Promise<File> {
   if (!isIphoneMovVideo(file)) return file;
 
-  const ffmpeg = await getFFmpeg();
-
-  const progressHandler = ({ progress }: { progress: number }) => {
-    const pct = Math.max(0, Math.min(100, Math.round(progress * 100)));
-    options.onProgress?.(pct);
-  };
-  ffmpeg.on('progress', progressHandler);
-
-  const inputName = 'input.mov';
-  const outputName = 'output.mp4';
-
-  const runAndRead = async (args: string[]): Promise<Uint8Array> => {
-    try { await ffmpeg.deleteFile(outputName); } catch { /* noop */ }
-    await ffmpeg.exec(args);
-    const data = await ffmpeg.readFile(outputName);
-    const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(data as string);
-    if (!bytes || bytes.byteLength === 0) throw new Error('saída de conversão vazia');
-    return bytes;
-  };
-
-  try {
-    await ffmpeg.writeFile(inputName, await fetchFile(file));
-
-    // 1) REMUX (rápido e leve): só reembala no container MP4 com faststart.
-    try {
-      const bytes = await runAndRead([
-        '-i', inputName,
-        '-c', 'copy',
-        '-movflags', '+faststart',
-        outputName,
-      ]);
-      return toMp4File(bytes, file.name);
-    } catch (remuxErr) {
-      console.warn('[videoMp4] remux falhou, tentando re-encode reduzido:', remuxErr, lastLog);
-    }
-
-    // 2) FALLBACK: re-encode H.264 baseline reduzindo resolução p/ caber na memória.
-    try {
-      const bytes = await runAndRead([
-        '-i', inputName,
-        '-vf', "scale='min(1280,iw)':-2",
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-crf', '26',
-        '-profile:v', 'baseline',
-        '-level', '3.1',
-        '-pix_fmt', 'yuv420p',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        '-movflags', '+faststart',
-        outputName,
-      ]);
-      return toMp4File(bytes, file.name);
-    } catch (encErr) {
-      const detail = (lastLog || (encErr instanceof Error ? encErr.message : String(encErr))).slice(0, 200);
-      throw new Error(detail || 'falha na conversão');
-    }
-  } finally {
-    ffmpeg.off('progress', progressHandler);
-    // Limpa arquivos do FS virtual para não acumular memória entre envios.
-    try { await ffmpeg.deleteFile(inputName); } catch { /* noop */ }
-    try { await ffmpeg.deleteFile(outputName); } catch { /* noop */ }
-  }
+  options.onProgress?.(10);
+  const input = new Uint8Array(await file.arrayBuffer());
+  options.onProgress?.(60);
+  const out = remuxMovToMp4(input);
+  options.onProgress?.(100);
+  return toMp4File(out, file.name);
 }
