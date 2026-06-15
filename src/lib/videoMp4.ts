@@ -95,7 +95,11 @@ export async function normalizeIphoneVideo(
     ]);
 
     const data = await ffmpeg.readFile(outputName);
-    const blob = new Blob([data as Uint8Array], { type: 'video/mp4' });
+    const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(data as string);
+    // Copia para um ArrayBuffer "puro" (evita SharedArrayBuffer no tipo do Blob).
+    const buf = new Uint8Array(bytes.byteLength);
+    buf.set(bytes);
+    const blob = new Blob([buf], { type: 'video/mp4' });
     if (blob.size === 0) throw new Error('saída de conversão vazia');
 
     const base = file.name.replace(/\.[^/.]+$/, '');
