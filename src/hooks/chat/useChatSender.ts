@@ -228,9 +228,13 @@ export function useChatSender() {
         return { success: true, messageId: providerMessageId };
       } catch (err) {
         console.error(`[useChatSender] ${kind} send failed:`, err);
-        const msg = err instanceof Error ? err.message : String(err);
-        toast.error(`Erro ao enviar ${kind === 'media' ? 'mídia' : 'mensagem'}`);
-        return { success: false, error: msg };
+        const { extractEdgeError } = await import('@/lib/edgeFunctionError');
+        const detail = await extractEdgeError(err, '');
+        const base = `Erro ao enviar ${kind === 'media' ? 'mídia' : 'mensagem'}`;
+        // Mostra o motivo REAL devolvido pela edge function (ex.: "failed to process file",
+        // "arquivo muito grande") — sem isso o usuário só via a mensagem genérica.
+        toast.error(detail ? `${base}: ${detail}` : base);
+        return { success: false, error: detail || (err instanceof Error ? err.message : String(err)) };
       } finally {
         setIsSending(false);
       }
