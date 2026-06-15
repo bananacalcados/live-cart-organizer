@@ -122,6 +122,8 @@ export default function InstagramCommentAutomation() {
       action_trigger_automation: false,
       automation_flow_id: "",
       cooldown_minutes: 60,
+      target_media_id: "",
+      target_media_caption: "",
     });
     setShowDialog(true);
   }
@@ -140,6 +142,8 @@ export default function InstagramCommentAutomation() {
       action_trigger_automation: rule.action_trigger_automation,
       automation_flow_id: rule.automation_flow_id || "",
       cooldown_minutes: rule.cooldown_minutes,
+      target_media_id: rule.target_media_id || "",
+      target_media_caption: rule.target_media_caption || "",
     });
     setShowDialog(true);
   }
