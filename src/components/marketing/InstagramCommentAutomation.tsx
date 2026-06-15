@@ -438,11 +438,12 @@ export default function InstagramCommentAutomation() {
 
             <div>
               <Label className="mb-2 block">Tipos de Mídia</Label>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {[
                   { value: "post", label: "Posts" },
                   { value: "REELS", label: "Reels" },
                   { value: "IGTV", label: "IGTV" },
+                  { value: "story", label: "Stories" },
                 ].map(({ value, label }) => (
                   <Badge
                     key={value}
@@ -454,7 +455,101 @@ export default function InstagramCommentAutomation() {
                   </Badge>
                 ))}
               </div>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Stories não têm comentário público — a regra responde por DM/fluxo quando alguém
+                responde ao seu story.
+              </p>
             </div>
+
+            {/* Per-post / per-story targeting */}
+            <div className="rounded-lg border p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="flex items-center gap-1.5">
+                  <Target className="h-4 w-4 text-purple-500" />
+                  Aplicar a uma publicação específica
+                </Label>
+                <Switch
+                  checked={!!form.target_media_id || form.target_media_caption === "__pick__"}
+                  onCheckedChange={(v) => {
+                    if (v) {
+                      setForm({ ...form, target_media_caption: "__pick__" });
+                      loadMedia();
+                    } else {
+                      setForm({ ...form, target_media_id: "", target_media_caption: "" });
+                    }
+                  }}
+                />
+              </div>
+
+              {(!!form.target_media_id || form.target_media_caption === "__pick__") && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={form.target_media_id || undefined}
+                      onValueChange={(v) => {
+                        const m = mediaList.find((x) => x.id === v);
+                        setForm({
+                          ...form,
+                          target_media_id: v,
+                          target_media_caption: m ? mediaLabel(m) : v,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="flex-1">
+                        <SelectValue
+                          placeholder={
+                            mediaLoading ? "Carregando publicações..." : "Selecione a publicação..."
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-72">
+                        {mediaList.length === 0 && !mediaLoading && (
+                          <div className="px-3 py-2 text-xs text-muted-foreground">
+                            Nenhuma publicação encontrada
+                          </div>
+                        )}
+                        {mediaList.map((m) => (
+                          <SelectItem key={m.id} value={m.id}>
+                            <span className="flex items-center gap-2">
+                              {m.thumbnail ? (
+                                <img
+                                  src={m.thumbnail}
+                                  alt=""
+                                  className="h-6 w-6 rounded object-cover"
+                                />
+                              ) : (
+                                <ImageIcon className="h-4 w-4 opacity-50" />
+                              )}
+                              <span className="truncate max-w-[260px]">{mediaLabel(m)}</span>
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="h-9 w-9 shrink-0"
+                      onClick={() => loadMedia(true)}
+                      disabled={mediaLoading}
+                      title="Recarregar publicações"
+                    >
+                      {mediaLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Deixe desligado para aplicar a regra a todas as publicações dos tipos
+                    selecionados.
+                  </p>
+                </div>
+              )}
+            </div>
+
 
             <div>
               <Label>Cooldown (minutos por usuário)</Label>
