@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply, Play, Pause, Ban, ShieldCheck } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply, Play, Pause, Ban, ShieldCheck, Camera, Video } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
