@@ -54,11 +54,25 @@ function writeU32(b: Uint8Array, o: number, v: number): void {
   b[o + 2] = (v >>> 8) & 255;
   b[o + 3] = v & 255;
 }
+function writeU64(b: Uint8Array, o: number, v: number): void {
+  writeU32(b, o, Math.floor(v / 0x100000000));
+  writeU32(b, o + 4, v >>> 0);
+}
 function boxType(b: Uint8Array, o: number): string {
   return String.fromCharCode(b[o + 4], b[o + 5], b[o + 6], b[o + 7]);
 }
 function writeType(b: Uint8Array, o: number, t: string): void {
   for (let i = 0; i < 4; i++) b[o + i] = t.charCodeAt(i);
+}
+
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.length;
+  }
+  return out;
 }
 
 interface TopBox {
@@ -88,10 +102,11 @@ function topBoxes(buf: Uint8Array): TopBox[] {
   return boxes;
 }
 
-// Boxes "container" cujos filhos precisamos percorrer para achar stco/co64.
+// Boxes "container" cujos filhos precisamos percorrer/reconstruir.
 const CONTAINERS = new Set([
   'moov', 'trak', 'mdia', 'minf', 'stbl', 'edts', 'udta', 'dinf', 'mvex', 'moof', 'traf',
 ]);
+const STRIP_BOXES = new Set(['meta', 'udta', 'tapt', 'free', 'skip', 'sdtp']);
 
 function childBoxes(buf: Uint8Array, start: number, end: number): TopBox[] {
   const boxes: TopBox[] = [];
@@ -127,38 +142,44 @@ function handlerType(buf: Uint8Array, trak: TopBox): string | null {
   return String.fromCharCode(buf[o], buf[o + 1], buf[o + 2], buf[o + 3]);
 }
 
-function sanitizeMoov(moov: Uint8Array): Uint8Array {
-  const childStart = readU32(moov, 0) === 1 ? 16 : 8;
-  const children = childBoxes(moov, childStart, moov.length);
-  const kept: Uint8Array[] = [];
-  let changed = false;
-
-  for (const child of children) {
-    if (child.type === 'trak') {
-      const h = handlerType(moov, child);
-      if (h && h !== 'vide' && h !== 'soun') {
-        changed = true;
-        continue;
-      }
-    }
-    if (child.type === 'meta' || child.type === 'udta') {
-      changed = true;
-      continue;
-    }
-    kept.push(moov.slice(child.start, child.start + child.size));
+function sanitizeBoxTree(buf: Uint8Array, box: TopBox): Uint8Array | null {
+  if (box.type === 'trak') {
+    const h = handlerType(buf, box);
+    if (h && h !== 'vide' && h !== 'soun') return null;
+  } else if (STRIP_BOXES.has(box.type)) {
+    return null;
   }
 
-  if (!changed && childStart === 8) return moov;
-  const size = 8 + kept.reduce((sum, part) => sum + part.length, 0);
-  const out = new Uint8Array(size);
-  writeU32(out, 0, size);
-  writeType(out, 4, 'moov');
-  let o = 8;
-  for (const part of kept) {
-    out.set(part, o);
-    o += part.length;
+  const headerSize = box.hdr;
+  const payloadStart = box.start + headerSize;
+  const payloadEnd = box.start + box.size;
+  const isContainer = CONTAINERS.has(box.type);
+
+  let payload: Uint8Array;
+  if (isContainer) {
+    const children = childBoxes(buf, payloadStart, payloadEnd);
+    const rebuilt: Uint8Array[] = [];
+    for (const child of children) {
+      const cleaned = sanitizeBoxTree(buf, child);
+      if (cleaned) rebuilt.push(cleaned);
+    }
+    payload = concatBytes(rebuilt);
+  } else {
+    payload = buf.slice(payloadStart, payloadEnd);
   }
+
+  const out = new Uint8Array(8 + payload.length);
+  writeU32(out, 0, out.length);
+  writeType(out, 4, box.type);
+  out.set(payload, 8);
   return out;
+}
+
+function sanitizeMoov(moov: Uint8Array): Uint8Array {
+  const root: TopBox = { type: 'moov', start: 0, size: moov.length, hdr: readU32(moov, 0) === 1 ? 16 : 8 };
+  const cleaned = sanitizeBoxTree(moov, root);
+  if (!cleaned) throw new Error('moov inválido após limpeza');
+  return cleaned;
 }
 
 /**
@@ -207,6 +228,85 @@ function patchChunkOffsets(buf: Uint8Array, start: number, end: number, delta: n
   }
 }
 
+interface ChunkRef {
+  originalOffset: number;
+  size: number;
+  tableEntryOffset: number;
+  is64: boolean;
+}
+
+function collectTrackChunks(moov: Uint8Array, trak: TopBox): ChunkRef[] {
+  const mdia = findChild(moov, trak, 'mdia');
+  const minf = mdia ? findChild(moov, mdia, 'minf') : undefined;
+  const stbl = minf ? findChild(moov, minf, 'stbl') : undefined;
+  if (!stbl) return [];
+  const stsc = findChild(moov, stbl, 'stsc');
+  const stsz = findChild(moov, stbl, 'stsz');
+  const offsetsBox = findChild(moov, stbl, 'stco') || findChild(moov, stbl, 'co64');
+  if (!stsc || !stsz || !offsetsBox) return [];
+
+  const is64 = offsetsBox.type === 'co64';
+  const offsetsBase = offsetsBox.start + offsetsBox.hdr;
+  const chunkCount = readU32(moov, offsetsBase + 4);
+  const offsetsStart = offsetsBase + 8;
+  const stscBase = stsc.start + stsc.hdr;
+  const stscCount = readU32(moov, stscBase + 4);
+  const stszBase = stsz.start + stsz.hdr;
+  const defaultSampleSize = readU32(moov, stszBase + 4);
+  const sampleCount = readU32(moov, stszBase + 8);
+  const sampleSizesStart = stszBase + 12;
+  const stscEntries = Array.from({ length: stscCount }, (_, i) => ({
+    firstChunk: readU32(moov, stscBase + 8 + i * 12),
+    samplesPerChunk: readU32(moov, stscBase + 12 + i * 12),
+  }));
+
+  const refs: ChunkRef[] = [];
+  let sampleIndex = 0;
+  let stscIndex = 0;
+  for (let chunkIndex = 1; chunkIndex <= chunkCount; chunkIndex++) {
+    while (stscIndex + 1 < stscEntries.length && stscEntries[stscIndex + 1].firstChunk <= chunkIndex) {
+      stscIndex++;
+    }
+    const samplesPerChunk = stscEntries[stscIndex]?.samplesPerChunk || 0;
+    let chunkSize = 0;
+    for (let s = 0; s < samplesPerChunk && sampleIndex < sampleCount; s++, sampleIndex++) {
+      chunkSize += defaultSampleSize || readU32(moov, sampleSizesStart + sampleIndex * 4);
+    }
+    const tableEntryOffset = offsetsStart + (chunkIndex - 1) * (is64 ? 8 : 4);
+    refs.push({
+      originalOffset: is64 ? readU64(moov, tableEntryOffset) : readU32(moov, tableEntryOffset),
+      size: chunkSize,
+      tableEntryOffset,
+      is64,
+    });
+  }
+  return refs;
+}
+
+function collectReferencedChunks(moov: Uint8Array, input: Uint8Array): ChunkRef[] {
+  const root: TopBox = { type: 'moov', start: 0, size: moov.length, hdr: 8 };
+  const chunks = childBoxes(moov, root.start + root.hdr, root.start + root.size)
+    .filter((box) => box.type === 'trak')
+    .flatMap((trak) => collectTrackChunks(moov, trak))
+    .filter((chunk) => chunk.size > 0)
+    .sort((a, b) => a.originalOffset - b.originalOffset);
+  if (!chunks.length) throw new Error('vídeo sem chunks de mídia válidos');
+  for (const chunk of chunks) {
+    if (chunk.originalOffset < 0 || chunk.originalOffset + chunk.size > input.length) {
+      throw new Error('chunks de mídia fora do arquivo original');
+    }
+  }
+  return chunks;
+}
+
+function buildMdatHeader(payloadSize: number): Uint8Array {
+  if (payloadSize + 8 > 0xffffffff) throw new Error('vídeo grande demais para normalização no aparelho');
+  const header = new Uint8Array(8);
+  writeU32(header, 0, payloadSize + 8);
+  writeType(header, 4, 'mdat');
+  return header;
+}
+
 function bytesContainAscii(bytes: Uint8Array, text: string): boolean {
   const needle = [...text].map((c) => c.charCodeAt(0));
   outer: for (let i = 0; i <= bytes.length - needle.length; i++) {
@@ -235,25 +335,37 @@ function buildFtyp(includeHevc: boolean): Uint8Array {
 function remuxMovToMp4(input: Uint8Array): Uint8Array {
   const boxes = topBoxes(input);
   const moovBox = boxes.find((b) => b.type === 'moov');
-  const mdatBox = boxes.find((b) => b.type === 'mdat');
-  if (!moovBox || !mdatBox) {
+  if (!moovBox || !boxes.some((b) => b.type === 'mdat')) {
     throw new Error('estrutura de vídeo inesperada (sem moov/mdat)');
   }
 
-  // Cópia mutável do moov: removemos trilhas metadata do iPhone e corrigimos offsets.
+  // Cópia mutável do moov: removemos trilhas/boxes QuickTime e reconstruímos o mdat
+  // só com os chunks referenciados. Isso evita enviar bytes órfãos/metadados que a
+  // uazapi aceita, mas o app oficial do WhatsApp rejeita ao abrir.
   const originalMoov = input.slice(moovBox.start, moovBox.start + moovBox.size);
   const moov = sanitizeMoov(originalMoov);
   const newFtyp = buildFtyp(bytesContainAscii(moov, 'hvc1') || bytesContainAscii(moov, 'hev1'));
-  const mdat = input.subarray(mdatBox.start, mdatBox.start + mdatBox.size);
+  const chunks = collectReferencedChunks(moov, input);
+  const payloadSize = chunks.reduce((sum, chunk) => sum + chunk.size, 0);
+  const mdatHeader = buildMdatHeader(payloadSize);
+  const newMdatPayloadStart = newFtyp.length + moov.length + mdatHeader.length;
+  let payloadCursor = 0;
+  for (const chunk of chunks) {
+    const newOffset = newMdatPayloadStart + payloadCursor;
+    if (chunk.is64) writeU64(moov, chunk.tableEntryOffset, newOffset);
+    else writeU32(moov, chunk.tableEntryOffset, newOffset);
+    payloadCursor += chunk.size;
+  }
 
-  const newMdatStart = newFtyp.length + moov.length;
-  const delta = newMdatStart - mdatBox.start;
-  patchChunkOffsets(moov, 0, moov.length, delta);
-
-  const out = new Uint8Array(newFtyp.length + moov.length + mdat.length);
+  const out = new Uint8Array(newFtyp.length + moov.length + mdatHeader.length + payloadSize);
   out.set(newFtyp, 0);
   out.set(moov, newFtyp.length);
-  out.set(mdat, newFtyp.length + moov.length);
+  out.set(mdatHeader, newFtyp.length + moov.length);
+  payloadCursor = newFtyp.length + moov.length + mdatHeader.length;
+  for (const chunk of chunks) {
+    out.set(input.subarray(chunk.originalOffset, chunk.originalOffset + chunk.size), payloadCursor);
+    payloadCursor += chunk.size;
+  }
   return out;
 }
 
