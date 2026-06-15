@@ -93,6 +93,73 @@ const CONTAINERS = new Set([
   'moov', 'trak', 'mdia', 'minf', 'stbl', 'edts', 'udta', 'dinf', 'mvex', 'moof', 'traf',
 ]);
 
+function childBoxes(buf: Uint8Array, start: number, end: number): TopBox[] {
+  const boxes: TopBox[] = [];
+  let pos = start;
+  while (pos + 8 <= end) {
+    let size = readU32(buf, pos);
+    const type = boxType(buf, pos);
+    let hdr = 8;
+    if (size === 1) {
+      size = readU64(buf, pos + 8);
+      hdr = 16;
+    } else if (size === 0) {
+      size = end - pos;
+    }
+    if (size < hdr || pos + size > end) break;
+    boxes.push({ type, start: pos, size, hdr });
+    pos += size;
+  }
+  return boxes;
+}
+
+function findChild(buf: Uint8Array, parent: TopBox, type: string): TopBox | undefined {
+  return childBoxes(buf, parent.start + parent.hdr, parent.start + parent.size).find((b) => b.type === type);
+}
+
+function handlerType(buf: Uint8Array, trak: TopBox): string | null {
+  const mdia = findChild(buf, trak, 'mdia');
+  if (!mdia) return null;
+  const hdlr = findChild(buf, mdia, 'hdlr');
+  if (!hdlr) return null;
+  const o = hdlr.start + hdlr.hdr + 8; // version/flags + pre_defined
+  if (o + 4 > hdlr.start + hdlr.size) return null;
+  return String.fromCharCode(buf[o], buf[o + 1], buf[o + 2], buf[o + 3]);
+}
+
+function sanitizeMoov(moov: Uint8Array): Uint8Array {
+  const children = childBoxes(moov, 8, moov.length);
+  const kept: Uint8Array[] = [];
+  let changed = false;
+
+  for (const child of children) {
+    if (child.type === 'trak') {
+      const h = handlerType(moov, child);
+      if (h && h !== 'vide' && h !== 'soun') {
+        changed = true;
+        continue;
+      }
+    }
+    if (child.type === 'meta' || child.type === 'udta') {
+      changed = true;
+      continue;
+    }
+    kept.push(moov.slice(child.start, child.start + child.size));
+  }
+
+  if (!changed) return moov;
+  const size = 8 + kept.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(size);
+  writeU32(out, 0, size);
+  writeType(out, 4, 'moov');
+  let o = 8;
+  for (const part of kept) {
+    out.set(part, o);
+    o += part.length;
+  }
+  return out;
+}
+
 /**
  * Soma `delta` a todos os offsets de chunk (stco 32-bit e co64 64-bit) dentro do
  * intervalo [start, end) do buffer (que aqui é o próprio `moov`).
