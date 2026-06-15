@@ -1064,21 +1064,36 @@ export function ChatView({
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-2" align="start" side="top">
-                  <div className="flex gap-1">
+                  <div className="flex flex-col gap-1">
+                    {/* Galeria / arquivos */}
                     <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
                     <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileSelect} />
                     <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
-                    <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => imageInputRef.current?.click()}>
-                      <Image className="h-4 w-4" /> Foto
-                    </Button>
-                    <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => videoInputRef.current?.click()}>
-                      <Image className="h-4 w-4" /> Vídeo
-                    </Button>
-                    <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => fileInputRef.current?.click()}>
-                      <Paperclip className="h-4 w-4" /> Arquivo
-                    </Button>
+                    {/* Câmera ao vivo (tirar foto / gravar vídeo na hora) — capture abre a câmera direto no mobile */}
+                    <input ref={cameraPhotoInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileSelect} />
+                    <input ref={cameraVideoInputRef} type="file" accept="video/*" capture="environment" className="hidden" onChange={handleFileSelect} />
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => cameraPhotoInputRef.current?.click()}>
+                        <Camera className="h-4 w-4" /> Tirar foto
+                      </Button>
+                      <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => cameraVideoInputRef.current?.click()}>
+                        <Video className="h-4 w-4" /> Gravar vídeo
+                      </Button>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => imageInputRef.current?.click()}>
+                        <Image className="h-4 w-4" /> Foto
+                      </Button>
+                      <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => videoInputRef.current?.click()}>
+                        <Video className="h-4 w-4" /> Vídeo
+                      </Button>
+                      <Button variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => fileInputRef.current?.click()}>
+                        <Paperclip className="h-4 w-4" /> Arquivo
+                      </Button>
+                    </div>
                   </div>
                 </PopoverContent>
+
               </Popover>
             )}
             {conversation && (
