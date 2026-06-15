@@ -113,14 +113,31 @@ export function useConversationEnrichment() {
     loadAwaitingPayment();
     loadAiTransferred();
 
+    // Debounce realtime reloads. Each of these handlers re-fetches an entire
+    // table; without debouncing, a burst of changes (e.g. many conversations
+    // finishing during a busy period or a mass dispatch) triggers dozens of
+    // full-table reloads per client, which is a major source of Cloud egress
+    // and compute cost. Collapsing bursts into a single reload keeps the UI
+    // correct while drastically cutting redundant queries.
+    const timers: Record<string, ReturnType<typeof setTimeout> | null> = {
+      finished: null, archived: null, awaiting: null, transferred: null,
+    };
+    const debounce = (key: keyof typeof timers, fn: () => void, ms = 3000) => {
+      if (timers[key]) clearTimeout(timers[key]!);
+      timers[key] = setTimeout(fn, ms);
+    };
+
     const channel = supabase
       .channel('chat-enrichment-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_finished_conversations' }, () => loadFinished())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_archived_conversations' }, () => loadArchived())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_awaiting_payment' }, () => loadAwaitingPayment())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_assignments' }, () => loadAiTransferred())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_finished_conversations' }, () => debounce('finished', loadFinished))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_archived_conversations' }, () => debounce('archived', loadArchived))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_awaiting_payment' }, () => debounce('awaiting', loadAwaitingPayment))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_assignments' }, () => debounce('transferred', loadAiTransferred))
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      Object.values(timers).forEach((t) => t && clearTimeout(t));
+      supabase.removeChannel(channel);
+    };
   }, [loadFinished, loadArchived, loadAwaitingPayment, loadAiTransferred]);
 
   const finishConversation = useCallback(async (
