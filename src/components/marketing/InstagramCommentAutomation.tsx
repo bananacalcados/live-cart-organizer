@@ -518,6 +518,28 @@ export default function InstagramCommentAutomation() {
 
               {(!!form.target_media_id || form.target_media_caption === "__pick__") && (
                 <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {MEDIA_FILTERS.map((f) => {
+                      const count =
+                        f.key === "all"
+                          ? mediaList.length
+                          : mediaList.filter((m) => mediaKind(m) === f.key).length;
+                      return (
+                        <button
+                          key={f.key}
+                          type="button"
+                          onClick={() => setMediaFilter(f.key)}
+                          className={`text-[11px] px-2.5 py-1 rounded-full border transition-colors ${
+                            mediaFilter === f.key
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-muted/40 text-muted-foreground border-border hover:bg-muted"
+                          }`}
+                        >
+                          {f.label} {count > 0 && `(${count})`}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div className="flex items-center gap-2">
                     <Select
                       value={form.target_media_id || undefined}
