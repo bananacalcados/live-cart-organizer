@@ -5,7 +5,6 @@ export default function VipGroupRedirectPage() {
   const { slug } = useParams<{ slug: string }>();
   const [status, setStatus] = useState<'loading' | 'redirecting' | 'inapp' | 'nogroup' | 'error'>('loading');
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(5);
   const [errorDetail, setErrorDetail] = useState<string>('');
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -62,14 +61,6 @@ export default function VipGroupRedirectPage() {
         setStatus('error');
       });
   }, [slug]);
-
-  // Auto-retry countdown for nogroup
-  useEffect(() => {
-    if (status !== 'nogroup') return;
-    if (countdown <= 0) { window.location.reload(); return; }
-    const t = setTimeout(() => setCountdown(c => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [status, countdown]);
 
   const copyLink = () => {
     if (inviteUrl && navigator.clipboard) {
@@ -137,7 +128,7 @@ export default function VipGroupRedirectPage() {
             <div style={{ marginBottom: '1rem', fontSize: '2rem' }}>⏳</div>
             <h2>Preparando seu grupo VIP</h2>
             <p style={{ opacity: .85, margin: '.5rem 0 1rem', fontSize: '.9rem' }}>
-              Redirecionando em <strong>{countdown}s</strong>...
+              Não consegui abrir o convite automaticamente agora.
             </p>
             <button onClick={() => window.location.reload()} style={{
               background: '#25D366', color: 'white', border: 'none',

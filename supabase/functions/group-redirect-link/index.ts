@@ -1,6 +1,7 @@
-// VIP Group redirect — optimized v3 (cache-first, 302 redirects, non-blocking analytics)
+// VIP Group redirect — optimized v4 (provider-aware, cache-first, non-blocking analytics)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { uazapiInstance } from "../_shared/uazapi-credentials.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -87,12 +88,11 @@ serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      // Return minimal auto-retry HTML
+      // Return minimal manual-retry HTML. Do not auto-reload: reload loops inflate redirect stats.
       return new Response(
         `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preparando...</title>
-        <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#075e54;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{text-align:center;padding:2rem}.s{border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;width:40px;height:40px;animation:r .8s linear infinite;margin:0 auto 1rem}@keyframes r{to{transform:rotate(360deg)}}.b{background:#25D366;color:#fff;border:none;padding:.75rem 1.5rem;border-radius:50px;font-weight:600;cursor:pointer;font-size:.95rem}</style>
-        </head><body><div class="c"><div class="s"></div><h2>⏳ Preparando grupo VIP</h2><p style="opacity:.85;margin:.5rem 0 1rem;font-size:.9rem">Redirecionando em <span id="t">5</span>s...</p><button class="b" onclick="location.reload()">Tentar agora</button></div>
-        <script>let n=5;const e=document.getElementById('t');setInterval(()=>{if(--n<=0)location.reload();e.textContent=n},1000)</script></body></html>`,
+        <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#075e54;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center}.c{text-align:center;padding:2rem}.b{background:#25D366;color:#fff;border:none;padding:.75rem 1.5rem;border-radius:50px;font-weight:600;cursor:pointer;font-size:.95rem;margin-top:1rem}</style>
+        </head><body><div class="c"><h2>⏳ Preparando grupo VIP</h2><p style="opacity:.85;margin:.5rem 0 0;font-size:.9rem">Não consegui abrir o convite automaticamente agora.</p><button class="b" onclick="location.reload()">Tentar novamente</button></div></body></html>`,
         { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
       );
     }
@@ -164,7 +164,7 @@ async function resolveGroupUrl(
 
   const { data: groupsRaw } = await supabase
     .from('whatsapp_groups')
-    .select('id, group_id, name, invite_link, is_full, participant_count, max_participants')
+    .select('id, group_id, name, invite_link, is_full, participant_count, max_participants, instance_id')
     .in('id', targetGroupIds)
     .eq('is_full', false)
     .order('participant_count', { ascending: false });
@@ -184,35 +184,114 @@ async function resolveGroupUrl(
     if (group.invite_link) return group.invite_link;
   }
 
-  // Generate invite link for first available group
-  const group = groups[0];
-  const inviteLink = await fetchInviteLink(group.group_id);
-  if (inviteLink) {
-    // Save for future use (non-blocking)
-    supabase.from('whatsapp_groups')
-      .update({ invite_link: inviteLink })
-      .eq('id', group.id)
-      .then(() => {});
-    return inviteLink;
+  // Generate invite link for first available groups, respecting the real provider.
+  for (const group of groups) {
+    const inviteLink = await fetchInviteLink(supabase, group);
+    if (inviteLink) {
+      // Save for future use (non-blocking)
+      supabase.from('whatsapp_groups')
+        .update({ invite_link: inviteLink })
+        .eq('id', group.id)
+        .then(() => {});
+      return inviteLink;
+    }
   }
 
   return await tryAutoCreate(supabaseUrl, supabaseKey, link.campaign_id);
 }
 
-async function fetchInviteLink(groupId: string): Promise<string | null> {
-  const instanceId = Deno.env.get('ZAPI_INSTANCE_ID');
-  const token = Deno.env.get('ZAPI_TOKEN');
-  const clientToken = Deno.env.get('ZAPI_CLIENT_TOKEN');
+async function fetchInviteLink(supabase: any, group: any): Promise<string | null> {
+  const instance = await resolveGroupInstance(supabase, group.instance_id);
+  if (instance?.provider === 'uazapi' && instance.uazapi_token) {
+    return await fetchUazapiInviteLink(group.group_id, instance.uazapi_token);
+  }
+  if (instance?.provider === 'wasender' && instance.wasender_api_key) {
+    return await fetchWasenderInviteLink(group.group_id, instance.wasender_api_key);
+  }
+
+  const instanceId = instance?.zapi_instance_id || Deno.env.get('ZAPI_INSTANCE_ID');
+  const token = instance?.zapi_token || Deno.env.get('ZAPI_TOKEN');
+  const clientToken = instance?.zapi_client_token || Deno.env.get('ZAPI_CLIENT_TOKEN');
   if (!instanceId || !token || !clientToken) return null;
 
   try {
     const res = await fetch(
-      `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invitation-link/${groupId}`,
+      `https://api.z-api.io/instances/${instanceId}/token/${token}/group-invitation-link/${group.group_id}`,
       { method: 'GET', headers: { 'Client-Token': clientToken } }
     );
     const data = await res.json();
     return data.invitationLink || data.link || null;
   } catch {
+    return null;
+  }
+}
+
+async function resolveGroupInstance(supabase: any, instanceId: string | null) {
+  if (!instanceId) return null;
+  const { data } = await supabase
+    .from('whatsapp_numbers')
+    .select('id, provider, zapi_instance_id, zapi_token, zapi_client_token, wasender_api_key, uazapi_token')
+    .or(`id.eq.${instanceId},zapi_instance_id.eq.${instanceId}`)
+    .eq('is_active', true)
+    .maybeSingle();
+  return data || null;
+}
+
+function normalizeGroupJid(raw: string): string {
+  if (!raw) return raw;
+  if (raw.includes('@')) return raw;
+  return `${raw.replace(/\D/g, '')}@g.us`;
+}
+
+function extractInviteUrl(data: any): string | null {
+  const candidates = [
+    data?.invite_link,
+    data?.inviteLink,
+    data?.invitationLink,
+    data?.link,
+    data?.url,
+    data?.data?.invite_link,
+    data?.data?.inviteLink,
+    data?.data?.invitationLink,
+    data?.data?.link,
+    data?.data?.url,
+  ];
+  return candidates.find((v) => typeof v === 'string' && v.includes('chat.whatsapp.com')) || null;
+}
+
+async function fetchUazapiInviteLink(groupId: string, token: string): Promise<string | null> {
+  try {
+    const jid = normalizeGroupJid(groupId);
+    const pathRes = await uazapiInstance(`/group/invitelink/${encodeURIComponent(jid)}`, token, { method: 'GET' });
+    const pathLink = extractInviteUrl(pathRes.data);
+    if (pathRes.ok && pathLink) return pathLink;
+
+    const payloads = [
+      { groupjid: jid, revoke: false },
+      { groupjid: jid },
+      { groupJid: jid },
+    ];
+    for (const body of payloads) {
+      const res = await uazapiInstance('/group/invitelink', token, { method: 'POST', body });
+      const link = extractInviteUrl(res.data);
+      if (res.ok && link) return link;
+    }
+  } catch (e) {
+    console.error('[group-redirect] uazapi invite error:', (e as Error).message);
+  }
+  return null;
+}
+
+async function fetchWasenderInviteLink(groupId: string, apiKey: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://wasenderapi.com/api/groups/${encodeURIComponent(normalizeGroupJid(groupId))}/invite-link`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    });
+    const data = await res.json().catch(() => null);
+    return res.ok ? extractInviteUrl(data) : null;
+  } catch (e) {
+    console.error('[group-redirect] wasender invite error:', (e as Error).message);
     return null;
   }
 }
