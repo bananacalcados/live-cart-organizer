@@ -338,7 +338,37 @@ serve(async (req) => {
             );
         }
 
+        // ===== STORY REPLY AUTOMATION (keyword rules with media_types=story) =====
+        if (channel === 'instagram') {
+          const srcType = (referralData as any)?.source_type;
+          const isStoryReply =
+            mediaType === 'story' ||
+            srcType === 'story_reply' ||
+            srcType === 'story_mention';
+          if (isStoryReply) {
+            try {
+              const storyId =
+                event.message?.reply_to?.story?.id ||
+                (referralData as any)?.source_id ||
+                null;
+              const storyAuto = await processStoryReplyAutomation(supabase, {
+                fromId: senderId,
+                username: senderName,
+                text: messageText,
+                storyId,
+                messageId: event.message?.mid || null,
+              });
+              if (storyAuto.actions.length > 0) {
+                console.log(`Story automations triggered: ${storyAuto.actions.join(', ')}`);
+              }
+            } catch (storyErr) {
+              console.error('Error processing story reply automation:', storyErr);
+            }
+          }
+        }
+
         // ===== CENTRAL ROUTER — AI for Instagram DMs =====
+
         if (channel === 'instagram' && messageText) {
           try {
             const route = await routeMessage(supabase, {
