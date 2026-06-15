@@ -61,22 +61,25 @@ export function MediaAttachmentPicker({
     event.target.value = '';
     if (!rawFile) return;
 
-    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
-    const maxSize = getMaxSizeForType(rawFile.type);
-    if (rawFile.size > maxSize) {
-      toast.error(`${getMediaTypeLabel(rawFile.type)} muito grande. O limite é ${getMaxSizeLabel(rawFile.type)}.`);
-      return;
-    }
-
     let file = rawFile;
 
-    try {
-      if (rawFile.type.startsWith('image/') && !WHATSAPP_OK_IMAGE_TYPES.includes(rawFile.type)) {
-        toast.info('Convertendo imagem para um formato compatível...');
+    // Imagens: SEMPRE normaliza/redimensiona ANTES de checar tamanho — uma foto
+    // tirada na hora pela câmera vem enorme e travava o upload.
+    const looksLikeImage = rawFile.type.startsWith('image/')
+      || /\.(jpe?g|png|heic|heif|webp)$/i.test(rawFile.name);
+    if (looksLikeImage) {
+      try {
         file = await normalizeImageForWhatsApp(rawFile);
+      } catch (error) {
+        console.error('Image conversion error:', error);
       }
-    } catch (error) {
-      console.error('Image conversion error:', error);
+    }
+
+    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+    const maxSize = getMaxSizeForType(file.type);
+    if (file.size > maxSize) {
+      toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`);
+      return;
     }
 
     const type = getMediaType(file);
