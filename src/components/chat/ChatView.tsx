@@ -526,6 +526,17 @@ export function ChatView({
       } catch (e) {
         console.error('[ChatView] image normalize failed:', e);
       }
+    } else {
+      // Vídeo do iPhone (.mov/QuickTime): a uazapi só aceita MP4. Reescreve o container
+      // para MP4 ANTES de checar tamanho/preview. Não toca em vídeos MP4 do Android.
+      try {
+        const { normalizeIphoneVideo, isIphoneMovVideo } = await import('@/lib/videoMp4');
+        if (isIphoneMovVideo(rawFile)) {
+          file = await normalizeIphoneVideo(rawFile);
+        }
+      } catch (e) {
+        console.error('[ChatView] iphone video normalize failed:', e);
+      }
     }
 
     const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
