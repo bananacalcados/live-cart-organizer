@@ -3,6 +3,7 @@ import { Image, Mic, Video, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { normalizeImageOrientation } from "@/lib/imageOrientation";
 
 type MediaType = 'image' | 'audio' | 'video' | 'document';
 
@@ -26,53 +27,23 @@ function getMediaType(file: File): MediaType {
   return 'document';
 }
 
-// Formatos de imagem que o WhatsApp/uazapi aceitam diretamente.
-const WHATSAPP_OK_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
-
 /**
- * Normaliza imagens para um formato que o WhatsApp/uazapi consegue processar.
+ * Normaliza imagens para um formato/tamanho que o WhatsApp/uazapi processa sempre.
  *
- * Motivo do bug "Erro ao enviar mídia" em celulares:
- *  - iPhone tira fotos em HEIC/HEIF e grava vídeos em .mov; quando o navegador
- *    entrega esse arquivo cru, a uazapi tenta baixar a URL e falha com
- *    "failed to process file" → o app mostra "Erro ao enviar mídia".
- *  - Alguns Androids entregam imagens em webp.
+ * Motivo do bug "Erro ao enviar imagem" em celulares (Android/iOS):
+ *  - A versão antiga PULAVA arquivos JPEG. Fotos tiradas na hora pela câmera do
+ *    celular vêm em JPEG, mas com resolução enorme (12–200MP). O arquivo cru era
+ *    enviado direto pro storage e o upload falhava (memória/tamanho) ANTES de
+ *    chegar na uazapi → o usuário só via "Erro ao enviar". Vídeos funcionavam
+ *    porque não passavam por essa etapa.
+ *  - iPhone entrega HEIC/HEIF; alguns Androids entregam webp.
  *
- * Aqui re-encodamos qualquer imagem que NÃO seja jpeg/png/gif para JPEG via
- * canvas (quando o navegador consegue decodificar). Se a decodificação falhar,
- * devolvemos o arquivo original (melhor tentar do que travar).
+ * Solução: delegar para `normalizeImageOrientation`, que SEMPRE re-encoda QUALQUER
+ * imagem raster (inclusive JPEG) para JPEG ≤1920px, corrige rotação EXIF, remove
+ * metadados e detecta o tipo por extensão quando o navegador deixa file.type vazio.
  */
 async function normalizeImageForWhatsApp(file: File): Promise<File> {
-  if (!file.type.startsWith('image/')) return file;
-  if (WHATSAPP_OK_IMAGE_TYPES.includes(file.type)) return file;
-
-  try {
-    const bitmap = await createImageBitmap(file);
-    const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-
-    const context = canvas.getContext('2d');
-    if (!context) {
-      bitmap.close();
-      return file;
-    }
-
-    context.drawImage(bitmap, 0, 0);
-    bitmap.close();
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, 'image/jpeg', 0.92);
-    });
-
-    if (!blob) return file;
-
-    const baseName = (file.name || `foto-${Date.now()}`).replace(/\.[^.]+$/, '');
-    return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
-  } catch (e) {
-    console.warn('[normalizeImageForWhatsApp] não foi possível converter, enviando original:', e);
-    return file;
-  }
+  return normalizeImageOrientation(file);
 }
 
 export function MediaAttachmentPicker({
@@ -90,22 +61,25 @@ export function MediaAttachmentPicker({
     event.target.value = '';
     if (!rawFile) return;
 
-    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
-    const maxSize = getMaxSizeForType(rawFile.type);
-    if (rawFile.size > maxSize) {
-      toast.error(`${getMediaTypeLabel(rawFile.type)} muito grande. O limite é ${getMaxSizeLabel(rawFile.type)}.`);
-      return;
-    }
-
     let file = rawFile;
 
-    try {
-      if (rawFile.type.startsWith('image/') && !WHATSAPP_OK_IMAGE_TYPES.includes(rawFile.type)) {
-        toast.info('Convertendo imagem para um formato compatível...');
+    // Imagens: SEMPRE normaliza/redimensiona ANTES de checar tamanho — uma foto
+    // tirada na hora pela câmera vem enorme e travava o upload.
+    const looksLikeImage = rawFile.type.startsWith('image/')
+      || /\.(jpe?g|png|heic|heif|webp)$/i.test(rawFile.name);
+    if (looksLikeImage) {
+      try {
         file = await normalizeImageForWhatsApp(rawFile);
+      } catch (error) {
+        console.error('Image conversion error:', error);
       }
-    } catch (error) {
-      console.error('Image conversion error:', error);
+    }
+
+    const { getMaxSizeForType, getMaxSizeLabel, getMediaTypeLabel } = await import('@/constants/mediaLimits');
+    const maxSize = getMaxSizeForType(file.type);
+    if (file.size > maxSize) {
+      toast.error(`${getMediaTypeLabel(file.type)} muito grande. O limite é ${getMaxSizeLabel(file.type)}.`);
+      return;
     }
 
     const type = getMediaType(file);
@@ -233,13 +207,15 @@ export async function uploadMediaToStorage(file: File): Promise<string | null> {
     const { error: uploadError } = await supabase.storage
       .from('whatsapp-media')
       .upload(filePath, normalizedFile, {
-        contentType: normalizedFile.type,
+        // contentType sempre definido — câmeras mobile às vezes entregam type vazio,
+        // o que fazia o storage rejeitar/registrar errado o arquivo.
+        contentType: normalizedFile.type || 'application/octet-stream',
         upsert: false,
       });
 
     if (uploadError) {
-      console.error('Upload error:', uploadError);
-      toast.error('Erro ao fazer upload do arquivo');
+      console.error('Upload error:', uploadError, { name: normalizedFile.name, type: normalizedFile.type, size: normalizedFile.size });
+      toast.error(`Erro ao enviar arquivo: ${uploadError.message || 'falha no upload'}`);
       return null;
     }
 
@@ -250,7 +226,7 @@ export async function uploadMediaToStorage(file: File): Promise<string | null> {
     return data.publicUrl;
   } catch (error) {
     console.error('Upload error:', error);
-    toast.error('Erro ao fazer upload do arquivo');
+    toast.error(`Erro ao enviar arquivo: ${error instanceof Error ? error.message : 'falha inesperada'}`);
     return null;
   }
 }
