@@ -70,7 +70,7 @@ export default function NewCampaign() {
   // Load customer stats
   useEffect(() => {
     const loadStats = async () => {
-      const { data } = await supabase.from('zoppy_customers').select('*').limit(1000);
+      const { data } = await supabase.from('zoppy_customers').select('region_type, total_spent, rfm_segment').limit(1000);
       if (data && data.length > 0) {
         setCustomerStats({
           total: data.length,
