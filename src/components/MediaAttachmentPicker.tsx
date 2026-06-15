@@ -221,8 +221,12 @@ export function MediaAttachmentPicker({
 
 export async function uploadMediaToStorage(file: File): Promise<string | null> {
   try {
-    const normalizedFile = file.type === 'image/webp' ? await convertWebpToPng(file) : file;
-    const fileExt = normalizedFile.name.split('.').pop();
+    const normalizedFile = await normalizeImageForWhatsApp(file);
+    const rawExt = normalizedFile.name.split('.').pop();
+    // Garante uma extensão válida mesmo quando a câmera entrega arquivo sem nome/extensão.
+    const fileExt = rawExt && rawExt.length <= 5 && /^[a-z0-9]+$/i.test(rawExt)
+      ? rawExt
+      : (normalizedFile.type.split('/')[1] || 'bin');
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `chat/${fileName}`;
 
