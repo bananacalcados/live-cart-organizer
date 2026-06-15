@@ -241,16 +241,41 @@ export default function InstagramCommentAutomation() {
     }
   }
 
+  function mediaKind(m: MediaItem): "post" | "reels" | "story" | "carousel" {
+    if (m.media_product_type === "STORY") return "story";
+    if (m.media_product_type === "REELS") return "reels";
+    if (m.media_type === "CAROUSEL_ALBUM") return "carousel";
+    return "post";
+  }
+
   function mediaLabel(m: MediaItem) {
-    const kind =
-      m.media_product_type === "STORY"
-        ? "Story"
-        : m.media_product_type === "REELS"
-          ? "Reel"
-          : "Post";
+    const kind = {
+      story: "Story",
+      reels: "Reel",
+      carousel: "Carrossel",
+      post: "Post",
+    }[mediaKind(m)];
     const cap = (m.caption || "").replace(/\s+/g, " ").trim();
     return `${kind} · ${cap ? cap.slice(0, 40) : "sem legenda"}`;
   }
+
+  const mediaTs = (m: MediaItem) => {
+    const t = m.timestamp ? Date.parse(m.timestamp) : NaN;
+    return Number.isNaN(t) ? 0 : t;
+  };
+
+  const filteredMedia = mediaList
+    .filter((m) => mediaFilter === "all" || mediaKind(m) === mediaFilter)
+    .sort((a, b) => mediaTs(b) - mediaTs(a));
+
+  const MEDIA_FILTERS: { key: typeof mediaFilter; label: string }[] = [
+    { key: "all", label: "Todos" },
+    { key: "post", label: "Posts" },
+    { key: "reels", label: "Reels" },
+    { key: "carousel", label: "Carrossel" },
+    { key: "story", label: "Stories" },
+  ];
+
 
 
   return (
