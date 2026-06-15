@@ -173,7 +173,10 @@ function remuxMovToMp4(input: Uint8Array): Uint8Array {
 }
 
 function toMp4File(bytes: Uint8Array, originalName: string): File {
-  const blob = new Blob([bytes], { type: 'video/mp4' });
+  // Garante um ArrayBuffer "puro" (evita SharedArrayBuffer no tipo do Blob).
+  const ab = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(ab).set(bytes);
+  const blob = new Blob([ab], { type: 'video/mp4' });
   const base = originalName.replace(/\.[^/.]+$/, '');
   return new File([blob], `${base || 'video'}.mp4`, {
     type: 'video/mp4',
