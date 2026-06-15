@@ -59,12 +59,15 @@ Deno.serve(async (req) => {
       fetchEdge("stories", token),
     ]);
 
-    // Merge, de-dup by id, newest first.
+    // Merge, de-dup by id, newest first (parse timestamps into epoch ms for a
+    // robust numeric sort — string compare breaks when timestamps are missing).
     const byId = new Map<string, MediaItem>();
     for (const m of [...media, ...stories]) byId.set(m.id, m);
-    const all = Array.from(byId.values()).sort((a, b) =>
-      (b.timestamp || "").localeCompare(a.timestamp || ""),
-    );
+    const ts = (m: MediaItem) => {
+      const t = m.timestamp ? Date.parse(m.timestamp) : NaN;
+      return Number.isNaN(t) ? 0 : t;
+    };
+    const all = Array.from(byId.values()).sort((a, b) => ts(b) - ts(a));
 
     return new Response(JSON.stringify({ media: all }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
