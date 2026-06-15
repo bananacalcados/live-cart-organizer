@@ -26,33 +26,53 @@ function getMediaType(file: File): MediaType {
   return 'document';
 }
 
-async function convertWebpToPng(file: File): Promise<File> {
-  if (file.type !== 'image/webp') return file;
+// Formatos de imagem que o WhatsApp/uazapi aceitam diretamente.
+const WHATSAPP_OK_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
 
-  const bitmap = await createImageBitmap(file);
-  const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
+/**
+ * Normaliza imagens para um formato que o WhatsApp/uazapi consegue processar.
+ *
+ * Motivo do bug "Erro ao enviar mídia" em celulares:
+ *  - iPhone tira fotos em HEIC/HEIF e grava vídeos em .mov; quando o navegador
+ *    entrega esse arquivo cru, a uazapi tenta baixar a URL e falha com
+ *    "failed to process file" → o app mostra "Erro ao enviar mídia".
+ *  - Alguns Androids entregam imagens em webp.
+ *
+ * Aqui re-encodamos qualquer imagem que NÃO seja jpeg/png/gif para JPEG via
+ * canvas (quando o navegador consegue decodificar). Se a decodificação falhar,
+ * devolvemos o arquivo original (melhor tentar do que travar).
+ */
+async function normalizeImageForWhatsApp(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  if (WHATSAPP_OK_IMAGE_TYPES.includes(file.type)) return file;
 
-  const context = canvas.getContext('2d');
-  if (!context) {
-    throw new Error('Não foi possível converter a imagem WEBP');
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      bitmap.close();
+      return file;
+    }
+
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', 0.92);
+    });
+
+    if (!blob) return file;
+
+    const baseName = (file.name || `foto-${Date.now()}`).replace(/\.[^.]+$/, '');
+    return new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+  } catch (e) {
+    console.warn('[normalizeImageForWhatsApp] não foi possível converter, enviando original:', e);
+    return file;
   }
-
-  context.drawImage(bitmap, 0, 0);
-
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, 'image/png');
-  });
-
-  bitmap.close();
-
-  if (!blob) {
-    throw new Error('Falha ao converter WEBP para PNG');
-  }
-
-  const originalName = file.name.replace(/\.webp$/i, '');
-  return new File([blob], `${originalName}.png`, { type: 'image/png' });
 }
 
 export function MediaAttachmentPicker({
@@ -80,14 +100,12 @@ export function MediaAttachmentPicker({
     let file = rawFile;
 
     try {
-      if (rawFile.type === 'image/webp') {
-        toast.info('Convertendo imagem WEBP para PNG...');
-        file = await convertWebpToPng(rawFile);
+      if (rawFile.type.startsWith('image/') && !WHATSAPP_OK_IMAGE_TYPES.includes(rawFile.type)) {
+        toast.info('Convertendo imagem para um formato compatível...');
+        file = await normalizeImageForWhatsApp(rawFile);
       }
     } catch (error) {
-      console.error('WEBP conversion error:', error);
-      toast.error('Não foi possível converter a imagem WEBP');
-      return;
+      console.error('Image conversion error:', error);
     }
 
     const type = getMediaType(file);
@@ -203,8 +221,12 @@ export function MediaAttachmentPicker({
 
 export async function uploadMediaToStorage(file: File): Promise<string | null> {
   try {
-    const normalizedFile = file.type === 'image/webp' ? await convertWebpToPng(file) : file;
-    const fileExt = normalizedFile.name.split('.').pop();
+    const normalizedFile = await normalizeImageForWhatsApp(file);
+    const rawExt = normalizedFile.name.split('.').pop();
+    // Garante uma extensão válida mesmo quando a câmera entrega arquivo sem nome/extensão.
+    const fileExt = rawExt && rawExt.length <= 5 && /^[a-z0-9]+$/i.test(rawExt)
+      ? rawExt
+      : (normalizedFile.type.split('/')[1] || 'bin');
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `chat/${fileName}`;
 
