@@ -231,8 +231,9 @@ function remuxMovToMp4(input: Uint8Array): Uint8Array {
   }
 
   const newFtyp = buildFtyp();
-  // Cópia mutável do moov (vamos corrigir os offsets dentro dele).
-  const moov = input.slice(moovBox.start, moovBox.start + moovBox.size);
+  // Cópia mutável do moov: removemos trilhas metadata do iPhone e corrigimos offsets.
+  const originalMoov = input.slice(moovBox.start, moovBox.start + moovBox.size);
+  const moov = sanitizeMoov(originalMoov);
   const mdat = input.subarray(mdatBox.start, mdatBox.start + mdatBox.size);
 
   const newMdatStart = newFtyp.length + moov.length;
