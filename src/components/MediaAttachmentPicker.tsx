@@ -207,13 +207,15 @@ export async function uploadMediaToStorage(file: File): Promise<string | null> {
     const { error: uploadError } = await supabase.storage
       .from('whatsapp-media')
       .upload(filePath, normalizedFile, {
-        contentType: normalizedFile.type,
+        // contentType sempre definido — câmeras mobile às vezes entregam type vazio,
+        // o que fazia o storage rejeitar/registrar errado o arquivo.
+        contentType: normalizedFile.type || 'application/octet-stream',
         upsert: false,
       });
 
     if (uploadError) {
-      console.error('Upload error:', uploadError);
-      toast.error('Erro ao fazer upload do arquivo');
+      console.error('Upload error:', uploadError, { name: normalizedFile.name, type: normalizedFile.type, size: normalizedFile.size });
+      toast.error(`Erro ao enviar arquivo: ${uploadError.message || 'falha no upload'}`);
       return null;
     }
 
@@ -224,7 +226,7 @@ export async function uploadMediaToStorage(file: File): Promise<string | null> {
     return data.publicUrl;
   } catch (error) {
     console.error('Upload error:', error);
-    toast.error('Erro ao fazer upload do arquivo');
+    toast.error(`Erro ao enviar arquivo: ${error instanceof Error ? error.message : 'falha inesperada'}`);
     return null;
   }
 }
