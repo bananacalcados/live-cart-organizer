@@ -13,23 +13,27 @@
  *    File Format / "átomos"). A câmera grava H.264 ou HEVC dentro de um container
  *    QuickTime, com a tabela `moov` no FIM do arquivo e brand `qt  `.
  *  - O uazapi recusa `.mov` ("Only MP4 files are accepted") e o player do WhatsApp
- *    não abre quando o arquivo não é um MP4 válido com "faststart" (moov no início).
+ *    não abre quando o arquivo não é um MP4 limpo com "faststart" (moov no início).
  *  - Este remux:
  *      1) reescreve o `ftyp` para um brand de MP4 padrão (`isom`/`mp42`/`avc1`/`hvc1`);
- *      2) move o `moov` para ANTES do `mdat` (faststart), corrigindo todos os
+ *      2) remove trilhas de metadata do iPhone (`mebx`/Core Media Metadata), que
+ *         fazem o app oficial do WhatsApp exibir "há algo errado com o arquivo";
+ *      3) move o `moov` para ANTES do `mdat` (faststart), corrigindo todos os
  *         offsets de chunk (`stco`/`co64`) pela diferença de posição;
- *      3) mantém os streams (H.264/HEVC + AAC) intactos — nada é re-encodado.
+ *      4) mantém só vídeo/áudio (H.264/HEVC + AAC) intactos — nada é re-encodado.
  *  - Resultado: um MP4 válido, faststart, que o uazapi aceita e o WhatsApp abre.
  *    Tudo em JS puro → funciona em qualquer dispositivo, sem rede/WASM.
  *
- * Só toca em vídeos QuickTime/.mov (iPhone). Vídeos MP4 do Android, imagens,
- * áudios e documentos NÃO passam por aqui.
+ * Só toca em vídeos QuickTime/.mov e MP4 escolhidos no iPhone. Vídeos MP4 do
+ * Android, imagens, áudios e documentos NÃO passam por aqui.
  */
 
 export function isIphoneMovVideo(file: File): boolean {
   const mime = (file.type || '').toLowerCase();
   const ext = (file.name.split('.').pop() || '').toLowerCase();
-  return mime === 'video/quicktime' || mime === 'video/x-quicktime' || ext === 'mov' || ext === 'qt';
+  const isQuickTime = mime === 'video/quicktime' || mime === 'video/x-quicktime' || ext === 'mov' || ext === 'qt';
+  const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+  return isQuickTime || (isIOS && (mime === 'video/mp4' || mime === 'video/m4v' || ext === 'mp4' || ext === 'm4v'));
 }
 
 interface NormalizeOptions {
@@ -52,6 +56,9 @@ function writeU32(b: Uint8Array, o: number, v: number): void {
 }
 function boxType(b: Uint8Array, o: number): string {
   return String.fromCharCode(b[o + 4], b[o + 5], b[o + 6], b[o + 7]);
+}
+function writeType(b: Uint8Array, o: number, t: string): void {
+  for (let i = 0; i < 4; i++) b[o + i] = t.charCodeAt(i);
 }
 
 interface TopBox {
@@ -85,6 +92,74 @@ function topBoxes(buf: Uint8Array): TopBox[] {
 const CONTAINERS = new Set([
   'moov', 'trak', 'mdia', 'minf', 'stbl', 'edts', 'udta', 'dinf', 'mvex', 'moof', 'traf',
 ]);
+
+function childBoxes(buf: Uint8Array, start: number, end: number): TopBox[] {
+  const boxes: TopBox[] = [];
+  let pos = start;
+  while (pos + 8 <= end) {
+    let size = readU32(buf, pos);
+    const type = boxType(buf, pos);
+    let hdr = 8;
+    if (size === 1) {
+      size = readU64(buf, pos + 8);
+      hdr = 16;
+    } else if (size === 0) {
+      size = end - pos;
+    }
+    if (size < hdr || pos + size > end) break;
+    boxes.push({ type, start: pos, size, hdr });
+    pos += size;
+  }
+  return boxes;
+}
+
+function findChild(buf: Uint8Array, parent: TopBox, type: string): TopBox | undefined {
+  return childBoxes(buf, parent.start + parent.hdr, parent.start + parent.size).find((b) => b.type === type);
+}
+
+function handlerType(buf: Uint8Array, trak: TopBox): string | null {
+  const mdia = findChild(buf, trak, 'mdia');
+  if (!mdia) return null;
+  const hdlr = findChild(buf, mdia, 'hdlr');
+  if (!hdlr) return null;
+  const o = hdlr.start + hdlr.hdr + 8; // version/flags + pre_defined
+  if (o + 4 > hdlr.start + hdlr.size) return null;
+  return String.fromCharCode(buf[o], buf[o + 1], buf[o + 2], buf[o + 3]);
+}
+
+function sanitizeMoov(moov: Uint8Array): Uint8Array {
+  const childStart = readU32(moov, 0) === 1 ? 16 : 8;
+  const children = childBoxes(moov, childStart, moov.length);
+  const kept: Uint8Array[] = [];
+  let changed = false;
+
+  for (const child of children) {
+    if (child.type === 'trak') {
+      const h = handlerType(moov, child);
+      if (h && h !== 'vide' && h !== 'soun') {
+        changed = true;
+        continue;
+      }
+    }
+    if (child.type === 'meta' || child.type === 'udta') {
+      changed = true;
+      continue;
+    }
+    kept.push(moov.slice(child.start, child.start + child.size));
+  }
+
+  if (!changed && childStart === 8) return moov;
+  const size = 8 + kept.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(size);
+  writeU32(out, 0, size);
+  writeType(out, 4, 'moov');
+  let o = 8;
+  for (const part of kept) {
+    out.set(part, o);
+    o += part.length;
+  }
+  return out;
+}
 
 /**
  * Soma `delta` a todos os offsets de chunk (stco 32-bit e co64 64-bit) dentro do
@@ -132,8 +207,17 @@ function patchChunkOffsets(buf: Uint8Array, start: number, end: number, delta: n
   }
 }
 
-function buildFtyp(): Uint8Array {
-  const brands = ['isom', 'iso2', 'avc1', 'mp41', 'hvc1', 'mp42'];
+function bytesContainAscii(bytes: Uint8Array, text: string): boolean {
+  const needle = [...text].map((c) => c.charCodeAt(0));
+  outer: for (let i = 0; i <= bytes.length - needle.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (bytes[i + j] !== needle[j]) continue outer;
+    return true;
+  }
+  return false;
+}
+
+function buildFtyp(includeHevc: boolean): Uint8Array {
+  const brands = includeHevc ? ['isom', 'iso2', 'avc1', 'mp41', 'hvc1', 'mp42'] : ['isom', 'iso2', 'avc1', 'mp41', 'mp42'];
   const size = 8 + 4 + 4 + brands.length * 4;
   const b = new Uint8Array(size);
   writeU32(b, 0, size);
@@ -156,9 +240,10 @@ function remuxMovToMp4(input: Uint8Array): Uint8Array {
     throw new Error('estrutura de vídeo inesperada (sem moov/mdat)');
   }
 
-  const newFtyp = buildFtyp();
-  // Cópia mutável do moov (vamos corrigir os offsets dentro dele).
-  const moov = input.slice(moovBox.start, moovBox.start + moovBox.size);
+  // Cópia mutável do moov: removemos trilhas metadata do iPhone e corrigimos offsets.
+  const originalMoov = input.slice(moovBox.start, moovBox.start + moovBox.size);
+  const moov = sanitizeMoov(originalMoov);
+  const newFtyp = buildFtyp(bytesContainAscii(moov, 'hvc1') || bytesContainAscii(moov, 'hev1'));
   const mdat = input.subarray(mdatBox.start, mdatBox.start + mdatBox.size);
 
   const newMdatStart = newFtyp.length + moov.length;
