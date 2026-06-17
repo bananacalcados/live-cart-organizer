@@ -132,6 +132,7 @@ export function useChatSender() {
               whatsapp_number_id: route.numberId,
               ...(isMedia ? { media_url: mediaUrl, media_type: mediaType } : {}),
             },
+            headers: invokeHeaders,
           });
           if (error) throw error;
           providerMessageId = data?.messageId || null;
