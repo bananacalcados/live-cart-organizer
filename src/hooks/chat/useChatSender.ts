@@ -76,7 +76,8 @@ export function useChatSender() {
       kind: 'text' | 'media',
       params: SendTextParams | SendMediaParams,
     ): Promise<SendResult> => {
-      const { phone, route, quotedMessageId, senderUserId, senderName, pauseAi = true, hooks } = params;
+      const { phone, route, quotedMessageId, senderUserId, senderName, pauseAi = true, forceInstance = false, hooks } = params;
+      const invokeHeaders = forceInstance ? { 'x-force-instance': 'true' } : undefined;
       const isMessenger = route.channel === 'instagram' || route.channel === 'messenger';
 
       if (!isMessenger && !route.numberId) {
