@@ -175,7 +175,7 @@ serve(async (req) => {
         let contacts: { phone: string; name: string; meta?: any }[] = [];
         if (isContactAuto) {
           const cap = dynamic ? 500 : baseTarget;
-          contacts = await buildContacts(supabase, def, storeId, cap, dateStr);
+          contacts = await buildContacts(supabase, def, storeId, cap, dateStr, seller);
         }
 
         let target: number;
