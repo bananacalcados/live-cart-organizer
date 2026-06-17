@@ -592,8 +592,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       const cleanPhone = selectedPhone.replace(/\D/g, '');
       const suffix = cleanPhone.slice(-8);
       
-      // Search customers, pos_customers, zoppy_customers, and campaign_leads
-      const [customerRes, expRes, posRes, zoppyRes, leadRes] = await Promise.all([
+      // Search customers, pos_customers, zoppy_customers, campaign_leads and PDV/live sales
+      const [customerRes, expRes, posRes, zoppyRes, leadRes, posSalesRes] = await Promise.all([
         supabase
           .from("customers")
           .select("id, instagram_handle, tags, whatsapp")
@@ -624,6 +624,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           .or(`phone.ilike.%${suffix}%`)
           .limit(1)
           .maybeSingle(),
+        // Vendas do PDV / Live / Online registradas em pos_sales (independe do Tiny)
+        supabase
+          .from("pos_sales")
+          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at")
+          .ilike("customer_phone", `%${suffix}%`)
+          .order("created_at", { ascending: false })
+          .limit(20),
       ]);
 
       const customer = customerRes.data;
@@ -631,8 +638,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       const posCustomer = posRes.data as any;
       const zoppyCustomer = zoppyRes.data as any;
       const lead = leadRes.data;
+      const posSales = (posSalesRes.data || []) as any[];
 
-      if (!customer && (!expOrders || expOrders.length === 0) && !posCustomer && !zoppyCustomer && !lead) {
+      if (!customer && (!expOrders || expOrders.length === 0) && !posCustomer && !zoppyCustomer && !lead && posSales.length === 0) {
         setCrmData(null);
         return;
       }
@@ -644,8 +652,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         || lead?.name
         || customer?.instagram_handle;
 
-      // CPF: prioriza cadastro do PDV, depois pedidos de expedição
+      // CPF: prioriza cadastro do PDV, depois vendas do PDV/live, depois pedidos de expedição
       const resolvedCpf = posCustomer?.cpf
+        || posSales.find((s) => s.customer_cpf)?.customer_cpf
         || (expOrders || []).find((o: any) => o.customer_cpf)?.customer_cpf
         || undefined;
 
@@ -678,6 +687,38 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
       const resolvedEmail = posCustomer?.email || zoppyCustomer?.email || lead?.email || undefined;
 
+      // Pedidos de expedição (site/envios)
+      const expeditionOrders = (expOrders || []).map((o: any) => ({
+        id: o.id,
+        orderName: o.shopify_order_name || undefined,
+        status: o.expedition_status,
+        trackingCode: o.freight_tracking_code || undefined,
+        totalPrice: o.total_price || undefined,
+        createdAt: o.shopify_created_at || undefined,
+      }));
+
+      // Vendas registradas no PDV (PDV / Live / Online)
+      const saleTypeLabels: Record<string, string> = { live: "Live", pos: "PDV", online: "Online" };
+      const posOrders = posSales.map((s) => {
+        const ref = s.tiny_order_number || s.nfce_number || s.invoice_number;
+        const typeLabel = saleTypeLabels[s.sale_type] || (s.sale_type ? String(s.sale_type) : "Venda");
+        return {
+          id: s.id,
+          orderName: ref ? `${typeLabel} #${ref}` : typeLabel,
+          status: s.status,
+          trackingCode: s.tracking_code || undefined,
+          totalPrice: s.total != null ? Number(s.total) : undefined,
+          createdAt: s.created_at || undefined,
+        };
+      });
+
+      // Junta tudo e ordena por data (mais recente primeiro)
+      const allOrders = [...posOrders, ...expeditionOrders].sort((a, b) => {
+        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return db - da;
+      });
+
       setCrmData({
         name: resolvedName || undefined,
         instagram: customer?.instagram_handle,
@@ -686,14 +727,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         cpf: resolvedCpf,
         address: resolvedAddress,
         email: resolvedEmail,
-        orders: (expOrders || []).map(o => ({
-          id: o.id,
-          orderName: o.shopify_order_name || undefined,
-          status: o.expedition_status,
-          trackingCode: o.freight_tracking_code || undefined,
-          totalPrice: o.total_price || undefined,
-          createdAt: o.shopify_created_at || undefined,
-        })),
+        orders: allOrders,
       });
       setShowCrmPanel(true);
     };
@@ -1192,6 +1226,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     shipped: "Enviado",
     delivered: "Entregue",
     cancelled: "Cancelado",
+    // Status de vendas do PDV (pos_sales)
+    paid: "Pago",
+    completed: "Concluído",
+    refunded: "Estornado",
+    canceled: "Cancelado",
   };
 
   const getInitials = (name?: string) => {
