@@ -78,16 +78,18 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
     }
   }, [open, numbers.length, fetchNumbers]);
 
-  // Define a instância: trava na vinculada (se houver histórico), senão deixa escolher.
+  // Define a instância PADRÃO: usa a vinculada (se houver histórico), senão a
+  // default/primeira. A vendedora pode trocar livremente — o envio força a
+  // instância escolhida (header x-force-instance) para prospecção ativa.
   useEffect(() => {
-    if (!open) return;
-    if (isLocked && boundNumberId) {
+    if (!open || instanceId) return;
+    if (boundNumberId) {
       setInstanceId(boundNumberId);
-    } else if (!instanceId) {
+    } else {
       const def = numbers.find((n) => n.is_default) || numbers[0];
       if (def) setInstanceId(def.id);
     }
-  }, [open, isLocked, boundNumberId, numbers, instanceId]);
+  }, [open, boundNumberId, numbers, instanceId]);
 
   const selectedNumber = numbers.find((n) => n.id === instanceId) || null;
 
