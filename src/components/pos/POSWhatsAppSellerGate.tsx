@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { Users } from 'lucide-react';
+import { isVirtualSeller } from '@/lib/pos/virtualSellers';
 
 interface Seller {
   id: string;
@@ -23,7 +24,7 @@ export function POSWhatsAppSellerGate({ storeId, open, onSellerSelected, onSkip 
   useEffect(() => {
     if (!open || !storeId) return;
     supabase.from('pos_sellers').select('id, name, linked_user_id').eq('store_id', storeId).eq('is_active', true)
-      .then(({ data }) => { if (data) setSellers(data as Seller[]); });
+      .then(({ data }) => { if (data) setSellers((data as Seller[]).filter((s) => !isVirtualSeller(s.name))); });
   }, [open, storeId]);
 
   return (

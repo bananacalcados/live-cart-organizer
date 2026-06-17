@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Lock, Plus, Trash2, ClipboardList, Users, Send, ShieldCheck, Hand } from "lucide-react";
+import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 
 const TASK_PASSWORD = "3021";
 
@@ -377,7 +378,9 @@ function SellersTab({ storeId }: { storeId: string | null }) {
   const load = useCallback(async () => {
     if (!storeId) return;
     const { data } = await supabase.from("pos_sellers").select("id, name, is_manager, whatsapp_phone").eq("store_id", storeId).eq("is_active", true).order("name");
-    setSellers((data as any[]) || []);
+    // Remove vendedores virtuais (Live Shopping / Loja) — são canais de
+    // atribuição, não pessoas reais; não recebem lembretes nem precisam de WhatsApp.
+    setSellers(((data as any[]) || []).filter((s) => !isVirtualSeller(s.name)));
   }, [storeId]);
   useEffect(() => { load(); }, [load]);
 

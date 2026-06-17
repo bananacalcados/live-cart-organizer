@@ -95,7 +95,13 @@ serve(async (req) => {
         .eq("is_active", true)
         .not("whatsapp_phone", "is", null);
       if (sch.target === "managers") sellersQ = sellersQ.eq("is_manager", true);
-      const { data: sellers } = await sellersQ;
+      const { data: sellersRaw } = await sellersQ;
+
+      // Ignora vendedores virtuais (canais de atribuição: "Live Shopping", "Loja")
+      const virtualRe = [/^live\s*shopping$/i, /^loja$/i, /^loja\s*f[ií]sica$/i];
+      const sellers = (sellersRaw || []).filter(
+        (s: any) => !virtualRe.some((re) => re.test(String(s.name || "").trim())),
+      );
 
       if (!sellers || sellers.length === 0) {
         errors.push("Nenhuma vendedora com WhatsApp cadastrado para este público.");
