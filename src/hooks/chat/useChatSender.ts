@@ -36,6 +36,13 @@ export interface SendBaseParams {
   senderName?: string | null;
   /** Pausa a IA automaticamente após envio bem-sucedido. Default: true. */
   pauseAi?: boolean;
+  /**
+   * Força o envio pela instância escolhida mesmo que ela seja diferente da
+   * instância vinculada ao histórico (envia header x-force-instance: true).
+   * Usado em fluxos de prospecção ativa (ex.: tarefas das vendedoras), onde a
+   * vendedora precisa escolher a instância de envio livremente.
+   */
+  forceInstance?: boolean;
   hooks?: {
     /** Executado antes do envio (ex: reabrir conversa finalizada). */
     onBeforeSend?: (phone: string) => Promise<void> | void;
