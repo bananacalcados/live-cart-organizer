@@ -115,7 +115,7 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
     if (!message.trim()) { toast.error("Escreva uma mensagem."); return; }
     const res = await sendText({
       phone: normalizedPhone, message: message.trim(), route,
-      senderUserId: currentUserId, senderName,
+      senderUserId: currentUserId, senderName, forceInstance: true,
     });
     if (res.success) { toast.success("Mensagem enviada!"); handleSentSuccess(); }
   };
