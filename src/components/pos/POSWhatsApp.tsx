@@ -687,6 +687,38 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
       const resolvedEmail = posCustomer?.email || zoppyCustomer?.email || lead?.email || undefined;
 
+      // Pedidos de expedição (site/envios)
+      const expeditionOrders = (expOrders || []).map((o: any) => ({
+        id: o.id,
+        orderName: o.shopify_order_name || undefined,
+        status: o.expedition_status,
+        trackingCode: o.freight_tracking_code || undefined,
+        totalPrice: o.total_price || undefined,
+        createdAt: o.shopify_created_at || undefined,
+      }));
+
+      // Vendas registradas no PDV (PDV / Live / Online)
+      const saleTypeLabels: Record<string, string> = { live: "Live", pos: "PDV", online: "Online" };
+      const posOrders = posSales.map((s) => {
+        const ref = s.tiny_order_number || s.nfce_number || s.invoice_number;
+        const typeLabel = saleTypeLabels[s.sale_type] || (s.sale_type ? String(s.sale_type) : "Venda");
+        return {
+          id: s.id,
+          orderName: ref ? `${typeLabel} #${ref}` : typeLabel,
+          status: s.status,
+          trackingCode: s.tracking_code || undefined,
+          totalPrice: s.total != null ? Number(s.total) : undefined,
+          createdAt: s.created_at || undefined,
+        };
+      });
+
+      // Junta tudo e ordena por data (mais recente primeiro)
+      const allOrders = [...posOrders, ...expeditionOrders].sort((a, b) => {
+        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return db - da;
+      });
+
       setCrmData({
         name: resolvedName || undefined,
         instagram: customer?.instagram_handle,
@@ -695,14 +727,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         cpf: resolvedCpf,
         address: resolvedAddress,
         email: resolvedEmail,
-        orders: (expOrders || []).map(o => ({
-          id: o.id,
-          orderName: o.shopify_order_name || undefined,
-          status: o.expedition_status,
-          trackingCode: o.freight_tracking_code || undefined,
-          totalPrice: o.total_price || undefined,
-          createdAt: o.shopify_created_at || undefined,
-        })),
+        orders: allOrders,
       });
       setShowCrmPanel(true);
     };
