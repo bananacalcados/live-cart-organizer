@@ -175,7 +175,7 @@ serve(async (req) => {
         let contacts: { phone: string; name: string; meta?: any }[] = [];
         if (isContactAuto) {
           const cap = dynamic ? 500 : baseTarget;
-          contacts = await buildContacts(supabase, def, storeId, cap, dateStr);
+          contacts = await buildContacts(supabase, def, storeId, cap, dateStr, seller);
         }
 
         let target: number;
@@ -232,28 +232,56 @@ serve(async (req) => {
   }
 });
 
-async function buildContacts(supabase: any, def: any, storeId: string, target: number, dateStr: string) {
+async function buildContacts(supabase: any, def: any, storeId: string, target: number, dateStr: string, seller?: any) {
   const cfg = def.auto_config || {};
   const out: { phone: string; name: string; meta?: any }[] = [];
 
   if (def.category === "contact_old_customers") {
-    // Clientes antigos: sem compra recente, prioriza RFM "perdidos/em risco"
+    // Clientes antigos: 5 (ou N) clientes DIFERENTES para cada vendedora,
+    // independente de quem atendeu no passado. Para não repetir os mesmos
+    // clientes entre vendedoras, excluímos quem já foi atribuído nas tarefas
+    // desta mesma definição e data (de qualquer vendedora).
+    const used = new Set<string>();
+    {
+      const { data: insts } = await supabase
+        .from("pos_seller_task_instances")
+        .select("id")
+        .eq("definition_id", def.id)
+        .eq("due_date", dateStr);
+      const ids = (insts || []).map((i: any) => i.id);
+      if (ids.length) {
+        const { data: usedRows } = await supabase
+          .from("pos_task_contacts")
+          .select("customer_phone")
+          .in("instance_id", ids);
+        for (const r of usedRows || []) {
+          const ph = (r.customer_phone || "").replace(/\D/g, "");
+          if (ph) used.add(ph);
+        }
+      }
+    }
+
+    // Busca um pool maior para sobrar candidatos depois de remover os já usados.
     let q = supabase
       .from("customers_unified")
       .select("name, phone_e164, rfm_segment, last_purchase_at, total_orders")
       .not("phone_e164", "is", null)
       .gt("total_orders", 0)
       .order("last_purchase_at", { ascending: true, nullsFirst: false })
-      .limit(target * 3);
+      .limit(Math.max(target * 20, 200));
     if (cfg.rfm_segment) q = q.eq("rfm_segment", cfg.rfm_segment);
     const { data } = await q;
     for (const c of data || []) {
       if (!c.phone_e164) continue;
+      const ph = c.phone_e164.replace(/\D/g, "");
+      if (!ph || used.has(ph)) continue;
+      used.add(ph);
       out.push({ phone: c.phone_e164, name: c.name || "Cliente", meta: { rfm: c.rfm_segment, last_purchase_at: c.last_purchase_at } });
       if (out.length >= target) break;
     }
   } else if (def.category === "post_sale") {
-    // Pós-venda: clientes que compraram no(s) dia(s) anterior(es) nesta loja.
+    // Pós-venda: clientes que compraram no(s) dia(s) anterior(es) nesta loja
+    // ATENDIDOS PELA PRÓPRIA VENDEDORA da tarefa (não mistura vendas de outras).
     // Em recorrência "dias úteis", a segunda-feira puxa sexta + sábado + domingo.
     const wd = weekdaySaoPaulo(dateStr);
     let startDate: string;
@@ -266,9 +294,9 @@ async function buildContacts(supabase: any, def: any, storeId: string, target: n
     }
     const startIso = `${startDate}T00:00:00-03:00`;
     const endIso = `${endDate}T23:59:59-03:00`;
-    const { data } = await supabase
+    let salesQ = supabase
       .from("pos_sales")
-      .select("customer_name, customer_phone, created_at")
+      .select("customer_name, customer_phone, created_at, seller_id")
       .eq("store_id", storeId)
       .neq("status", "cancelled")
       .gte("created_at", startIso)
@@ -276,6 +304,9 @@ async function buildContacts(supabase: any, def: any, storeId: string, target: n
       .not("customer_phone", "is", null)
       .order("created_at", { ascending: false })
       .limit(Math.max(target * 2, 50));
+    // Só clientes da vendedora desta tarefa.
+    if (seller?.id) salesQ = salesQ.eq("seller_id", seller.id);
+    const { data } = await salesQ;
     const seen = new Set<string>();
     for (const s of data || []) {
       const ph = (s.customer_phone || "").replace(/\D/g, "");
