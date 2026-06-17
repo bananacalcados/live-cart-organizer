@@ -80,8 +80,6 @@ interface Props {
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-const todayKey = () =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 
 
 
@@ -316,14 +314,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     loadSellers();
   }, [storeId, hasOpenRegister, preloadedSellers, sellersPreloaded]);
 
-  // Abre o popup de tarefas sempre que uma vendedora estiver ativa (1x por dia),
-  // cobrindo também a troca pelo seletor — não só a seleção inicial no gate.
+  // Lembra a vendedora SEMPRE que ela ficar ativa (selecionar-se no gate ou no
+  // seletor). O popup só aparece de fato se houver tarefas pendentes; quando tudo
+  // estiver concluído ele fecha sozinho. Sem limite diário — lembrete constante.
   useEffect(() => {
-    if (!storeId || !selectedSeller) return;
-    if (sessionStorage.getItem(`pos_task_popup_${storeId}_${selectedSeller}`) !== todayKey()) {
-      setShowTaskPopup(true);
-    }
-  }, [storeId, selectedSeller]);
+    if (!selectedSeller) return;
+    setShowTaskPopup(true);
+  }, [selectedSeller]);
+
 
   const loadPaymentMethods = useCallback(async () => {
     if (paymentMethods.length > 0) return;
@@ -1565,9 +1563,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         onSellerSelected={(id) => {
           setSelectedSeller(id);
           setShowSaleTypeModal(true);
-          if (sessionStorage.getItem(`pos_task_popup_${storeId}_${id}`) !== todayKey()) {
-            setShowTaskPopup(true);
-          }
+          setShowTaskPopup(true);
         }}
         onClose={onCloseSalesView}
       />
@@ -1615,7 +1611,6 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           open={showTaskPopup}
           onClose={() => {
             setShowTaskPopup(false);
-            sessionStorage.setItem(`pos_task_popup_${storeId}_${selectedSeller}`, todayKey());
           }}
           storeId={storeId}
           sellerId={selectedSeller}

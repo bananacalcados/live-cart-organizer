@@ -69,7 +69,13 @@ serve(async (req) => {
     for (const sch of schedules || []) {
       if (!opts.force) {
         // Algum horário cai na janela atual?
-        const times: string[] = sch.send_times || [];
+        // Defensivo: aceita entradas que vieram como "09:00; 12:00" (string única)
+        // ou com vírgula/espaços, normalizando para itens "HH:MM" individuais.
+        const rawTimes: string[] = sch.send_times || [];
+        const times: string[] = rawTimes
+          .flatMap((t) => String(t).split(/[,;\s]+/))
+          .map((t) => t.trim())
+          .filter(Boolean);
         const due = times.some((t) => {
           const m = parseHHMM(t);
           return m !== null && minutes >= m && minutes < m + WINDOW;

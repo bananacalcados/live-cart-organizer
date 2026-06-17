@@ -36,8 +36,7 @@ import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
 import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 
-const taskTodayKey = () =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+
 
 import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
 import { POSWhatsAppDashboard } from "./POSWhatsAppDashboard";
@@ -409,14 +408,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     setShowDashboard(!!savedId);
   }, [storeId]);
 
-  // Garante o popup de tarefas mesmo quando a vendedora já está selecionada
-  // (persistida na sessão) — abre 1x por dia por vendedora.
+  // Lembra a vendedora sempre que estiver ativa (inclusive já persistida na
+  // sessão). O popup só aparece se houver tarefas pendentes. Sem limite diário.
   useEffect(() => {
-    if (!storeId || !selectedSellerId) return;
-    if (sessionStorage.getItem(`pos_task_popup_${storeId}_${selectedSellerId}`) !== taskTodayKey()) {
-      setShowTaskPopup(true);
-    }
-  }, [storeId, selectedSellerId]);
+    if (!selectedSellerId) return;
+    setShowTaskPopup(true);
+  }, [selectedSellerId]);
+
 
   // Numbers assigned to this store
   const storeNumbers = useMemo(() => {
@@ -1983,9 +1981,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           setShowSellerGate(false);
           setShowDashboard(true);
           toast.success(`Vendedora: ${name}`);
-          if (sessionStorage.getItem(`pos_task_popup_${storeId}_${id}`) !== taskTodayKey()) {
-            setShowTaskPopup(true);
-          }
+          setShowTaskPopup(true);
         }}
         onSkip={() => setShowSellerGate(false)}
       />
@@ -1995,7 +1991,6 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           open={showTaskPopup}
           onClose={() => {
             setShowTaskPopup(false);
-            sessionStorage.setItem(`pos_task_popup_${storeId}_${selectedSellerId}`, taskTodayKey());
           }}
           storeId={storeId}
           sellerId={selectedSellerId}

@@ -488,7 +488,17 @@ function DispatchTab({ storeId }: { storeId: string | null }) {
 
   const save = async () => {
     if (!storeId || !form.instanceId || !form.templateName) { toast.error("Selecione instância e template"); return; }
-    const times = form.send_times.split(",").map((t) => t.trim()).filter(Boolean);
+    // Aceita separadores por vírgula, ponto-e-vírgula ou espaço e normaliza para "HH:MM".
+    const times = form.send_times
+      .split(/[,;\s]+/)
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => {
+        const m = /^(\d{1,2}):(\d{2})/.exec(t);
+        return m ? `${m[1].padStart(2, "0")}:${m[2]}` : null;
+      })
+      .filter((t): t is string => !!t);
+    if (times.length === 0) { toast.error("Informe ao menos um horário válido (ex.: 09:00)"); return; }
     setSaving(true);
     const { error } = await supabase.from("pos_task_dispatch_schedules" as any).insert({
       store_id: storeId,

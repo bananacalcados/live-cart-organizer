@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,6 +31,12 @@ export function SellerTaskReminderPopup({
 
   const [compose, setCompose] = useState<{ phone: string; name?: string; contactId: string } | null>(null);
 
+  // Só faz sentido lembrar quando há tarefas pendentes. Quando não houver
+  // (tudo concluído ou nada gerado), fecha sozinho para não atrapalhar a venda.
+  useEffect(() => {
+    if (open && !loading && pendingCount === 0) onClose();
+  }, [open, loading, pendingCount, onClose]);
+
   if (!open) return null;
 
   const total = instances.length;
@@ -38,7 +44,8 @@ export function SellerTaskReminderPopup({
 
   return (
     <>
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog open={open && pendingCount > 0} onOpenChange={(v) => { if (!v) onClose(); }}>
+
       <DialogContent
         className="max-w-2xl w-[95vw] max-h-[88vh] bg-pos-black border-2 border-pos-orange/60 text-pos-white p-0 overflow-hidden shadow-[0_0_60px_rgba(255,140,0,0.35)]"
         onPointerDownOutside={(e) => e.preventDefault()}
