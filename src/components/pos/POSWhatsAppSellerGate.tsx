@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { Users } from 'lucide-react';
+import { isVirtualSeller } from '@/lib/pos/virtualSellers';
 
 interface Seller {
   id: string;
