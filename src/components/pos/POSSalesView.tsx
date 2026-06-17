@@ -20,6 +20,7 @@ import { POSCustomerForm } from "./POSCustomerForm";
 import { POSBarcodeScanner } from "./POSBarcodeScanner";
 import { POSSellerGate } from "./POSSellerGate";
 import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
+import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 
 import { POSPrizeWheel } from "./POSPrizeWheel";
 import { POSLoyaltyScreen } from "./POSLoyaltyScreen";
