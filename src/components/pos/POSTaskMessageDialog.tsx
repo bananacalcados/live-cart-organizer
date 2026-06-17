@@ -78,16 +78,18 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
     }
   }, [open, numbers.length, fetchNumbers]);
 
-  // Define a instância: trava na vinculada (se houver histórico), senão deixa escolher.
+  // Define a instância PADRÃO: usa a vinculada (se houver histórico), senão a
+  // default/primeira. A vendedora pode trocar livremente — o envio força a
+  // instância escolhida (header x-force-instance) para prospecção ativa.
   useEffect(() => {
-    if (!open) return;
-    if (isLocked && boundNumberId) {
+    if (!open || instanceId) return;
+    if (boundNumberId) {
       setInstanceId(boundNumberId);
-    } else if (!instanceId) {
+    } else {
       const def = numbers.find((n) => n.is_default) || numbers[0];
       if (def) setInstanceId(def.id);
     }
-  }, [open, isLocked, boundNumberId, numbers, instanceId]);
+  }, [open, boundNumberId, numbers, instanceId]);
 
   const selectedNumber = numbers.find((n) => n.id === instanceId) || null;
 
@@ -113,7 +115,7 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
     if (!message.trim()) { toast.error("Escreva uma mensagem."); return; }
     const res = await sendText({
       phone: normalizedPhone, message: message.trim(), route,
-      senderUserId: currentUserId, senderName,
+      senderUserId: currentUserId, senderName, forceInstance: true,
     });
     if (res.success) { toast.success("Mensagem enviada!"); handleSentSuccess(); }
   };
@@ -145,7 +147,7 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
       const res = await sendMedia({
         phone: normalizedPhone, mediaUrl: url, mediaType,
         caption: message.trim() || undefined, route,
-        senderUserId: currentUserId, senderName,
+        senderUserId: currentUserId, senderName, forceInstance: true,
       });
       if (res.success) { toast.success("Imagem enviada!"); clearMedia(); handleSentSuccess(); }
     } finally {
@@ -233,7 +235,7 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
       if (!url) { toast.error("Erro ao enviar áudio"); return; }
       const res = await sendAudio({
         phone: normalizedPhone, mediaUrl: url, route,
-        senderUserId: currentUserId, senderName,
+        senderUserId: currentUserId, senderName, forceInstance: true,
       });
       if (res.success) { toast.success("Áudio enviado!"); discardAudio(); handleSentSuccess(); }
     } finally {
@@ -262,9 +264,8 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
           <div>
             <label className="text-xs text-pos-white/60 mb-1 flex items-center gap-1">
               Instância de envio
-              {isLocked && <Lock className="h-3 w-3 text-amber-400" />}
             </label>
-            <Select value={instanceId || ""} onValueChange={setInstanceId} disabled={isLocked}>
+            <Select value={instanceId || ""} onValueChange={setInstanceId}>
               <SelectTrigger className="bg-pos-white/5 border-pos-white/15 text-pos-white h-9">
                 <SelectValue placeholder="Escolher instância" />
               </SelectTrigger>
@@ -277,9 +278,14 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
                 ))}
               </SelectContent>
             </Select>
-            {isLocked && (
-              <p className="text-[10px] text-amber-400/80 mt-1">
-                Conversa já vinculada a esta instância — envio fixo para evitar mistura.
+            {isLocked && instanceId === boundNumberId && (
+              <p className="text-[10px] text-pos-white/40 mt-1">
+                Sugerida pelo histórico desta conversa. Você pode trocar se quiser.
+              </p>
+            )}
+            {isLocked && instanceId !== boundNumberId && (
+              <p className="text-[10px] text-amber-400/80 mt-1 flex items-center gap-1">
+                <Lock className="h-3 w-3" /> Instância diferente do histórico — enviando mesmo assim.
               </p>
             )}
           </div>

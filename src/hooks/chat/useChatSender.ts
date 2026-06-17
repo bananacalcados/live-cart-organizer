@@ -36,6 +36,13 @@ export interface SendBaseParams {
   senderName?: string | null;
   /** Pausa a IA automaticamente após envio bem-sucedido. Default: true. */
   pauseAi?: boolean;
+  /**
+   * Força o envio pela instância escolhida mesmo que ela seja diferente da
+   * instância vinculada ao histórico (envia header x-force-instance: true).
+   * Usado em fluxos de prospecção ativa (ex.: tarefas das vendedoras), onde a
+   * vendedora precisa escolher a instância de envio livremente.
+   */
+  forceInstance?: boolean;
   hooks?: {
     /** Executado antes do envio (ex: reabrir conversa finalizada). */
     onBeforeSend?: (phone: string) => Promise<void> | void;
@@ -69,7 +76,8 @@ export function useChatSender() {
       kind: 'text' | 'media',
       params: SendTextParams | SendMediaParams,
     ): Promise<SendResult> => {
-      const { phone, route, quotedMessageId, senderUserId, senderName, pauseAi = true, hooks } = params;
+      const { phone, route, quotedMessageId, senderUserId, senderName, pauseAi = true, forceInstance = false, hooks } = params;
+      const invokeHeaders = forceInstance ? { 'x-force-instance': 'true' } : undefined;
       const isMessenger = route.channel === 'instagram' || route.channel === 'messenger';
 
       if (!isMessenger && !route.numberId) {
@@ -110,6 +118,7 @@ export function useChatSender() {
               mediaUrl,
               whatsapp_number_id: route.numberId,
             },
+            headers: invokeHeaders,
           });
           if (error) throw error;
           if (data?.success === false) throw new Error(data?.error || 'Erro Messenger/Instagram');
@@ -123,6 +132,7 @@ export function useChatSender() {
               whatsapp_number_id: route.numberId,
               ...(isMedia ? { media_url: mediaUrl, media_type: mediaType } : {}),
             },
+            headers: invokeHeaders,
           });
           if (error) throw error;
           providerMessageId = data?.messageId || null;
@@ -143,7 +153,7 @@ export function useChatSender() {
                 whatsapp_number_id: route.numberId,
                 quotedMessageId: quotedMessageId || undefined,
               };
-          const { data, error } = await supabase.functions.invoke(fnName, { body });
+          const { data, error } = await supabase.functions.invoke(fnName, { body, headers: invokeHeaders });
           if (error) throw error;
           providerMessageId = data?.messageId || null;
         } else if (route.provider === 'uazapi') {
@@ -164,7 +174,7 @@ export function useChatSender() {
                 whatsapp_number_id: route.numberId,
                 quotedMessageId: quotedMessageId || undefined,
               };
-          const { data, error } = await supabase.functions.invoke(fnName, { body });
+          const { data, error } = await supabase.functions.invoke(fnName, { body, headers: invokeHeaders });
           if (error) throw error;
           providerMessageId = data?.messageId || null;
         } else {
@@ -185,7 +195,7 @@ export function useChatSender() {
                 whatsapp_number_id: route.numberId,
                 quotedMessageId: quotedMessageId || undefined,
               };
-          const { data, error } = await supabase.functions.invoke(fnName, { body });
+          const { data, error } = await supabase.functions.invoke(fnName, { body, headers: invokeHeaders });
           if (error) throw error;
           providerMessageId =
             data?.messageId ||
