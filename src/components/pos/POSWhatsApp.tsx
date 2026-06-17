@@ -652,8 +652,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         || lead?.name
         || customer?.instagram_handle;
 
-      // CPF: prioriza cadastro do PDV, depois pedidos de expedição
+      // CPF: prioriza cadastro do PDV, depois vendas do PDV/live, depois pedidos de expedição
       const resolvedCpf = posCustomer?.cpf
+        || posSales.find((s) => s.customer_cpf)?.customer_cpf
         || (expOrders || []).find((o: any) => o.customer_cpf)?.customer_cpf
         || undefined;
 
