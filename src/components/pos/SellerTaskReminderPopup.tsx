@@ -228,6 +228,22 @@ function TaskCard({
 
         {done && <Clock className="h-4 w-4 text-green-400/60 mt-1" />}
       </div>
+
+      {/* Botão explícito para concluir (funciona inclusive em tarefas verificadas) */}
+      <Button
+        size="sm"
+        variant={done ? "outline" : "default"}
+        onClick={done ? onUncomplete : onCompleteManual}
+        className={cn(
+          "w-full mt-3 h-9 text-sm gap-1.5 font-semibold",
+          done
+            ? "border-green-500/40 text-green-400 hover:bg-green-500/10"
+            : "bg-green-600 hover:bg-green-700 text-white",
+        )}
+      >
+        <CheckCircle2 className="h-4 w-4" />
+        {done ? "Concluída — desmarcar" : "Marcar como concluída"}
+      </Button>
     </div>
   );
 }
