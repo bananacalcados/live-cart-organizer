@@ -264,9 +264,8 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
           <div>
             <label className="text-xs text-pos-white/60 mb-1 flex items-center gap-1">
               Instância de envio
-              {isLocked && <Lock className="h-3 w-3 text-amber-400" />}
             </label>
-            <Select value={instanceId || ""} onValueChange={setInstanceId} disabled={isLocked}>
+            <Select value={instanceId || ""} onValueChange={setInstanceId}>
               <SelectTrigger className="bg-pos-white/5 border-pos-white/15 text-pos-white h-9">
                 <SelectValue placeholder="Escolher instância" />
               </SelectTrigger>
@@ -279,9 +278,14 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
                 ))}
               </SelectContent>
             </Select>
-            {isLocked && (
-              <p className="text-[10px] text-amber-400/80 mt-1">
-                Conversa já vinculada a esta instância — envio fixo para evitar mistura.
+            {isLocked && instanceId === boundNumberId && (
+              <p className="text-[10px] text-pos-white/40 mt-1">
+                Sugerida pelo histórico desta conversa. Você pode trocar se quiser.
+              </p>
+            )}
+            {isLocked && instanceId !== boundNumberId && (
+              <p className="text-[10px] text-amber-400/80 mt-1 flex items-center gap-1">
+                <Lock className="h-3 w-3" /> Instância diferente do histórico — enviando mesmo assim.
               </p>
             )}
           </div>
