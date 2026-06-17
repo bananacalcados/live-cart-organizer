@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Lock, Plus, Trash2, ClipboardList, Users, Send, ShieldCheck, Hand } from "lucide-react";
+import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 
 const TASK_PASSWORD = "3021";
 
