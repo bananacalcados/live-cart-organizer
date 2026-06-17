@@ -284,8 +284,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
 
   // Use preloaded sellers if available, otherwise load from edge function
   useEffect(() => {
+    // Remove vendedores virtuais (Live Shopping / Loja) — são canais de
+    // atribuição, não pessoas reais que atendem no PDV.
+    const onlyReal = (list: Seller[]) => list.filter((s) => !isVirtualSeller(s.name));
     if (preloadedSellers && preloadedSellers.length > 0) {
-      setSellers(preloadedSellers);
+      setSellers(onlyReal(preloadedSellers));
       setLoadingSellers(false);
       return;
     }
@@ -305,7 +308,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           .eq('store_id', storeId)
           .eq('is_active', true)
           .order('name');
-        setSellers(data || []);
+        setSellers(onlyReal((data as Seller[]) || []));
       } catch (e) {
         console.error('Error loading sellers:', e);
       } finally {
