@@ -316,6 +316,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     loadSellers();
   }, [storeId, hasOpenRegister, preloadedSellers, sellersPreloaded]);
 
+  // Abre o popup de tarefas sempre que uma vendedora estiver ativa (1x por dia),
+  // cobrindo também a troca pelo seletor — não só a seleção inicial no gate.
+  useEffect(() => {
+    if (!storeId || !selectedSeller) return;
+    if (sessionStorage.getItem(`pos_task_popup_${storeId}_${selectedSeller}`) !== todayKey()) {
+      setShowTaskPopup(true);
+    }
+  }, [storeId, selectedSeller]);
+
   const loadPaymentMethods = useCallback(async () => {
     if (paymentMethods.length > 0) return;
     setLoadingPayments(true);
