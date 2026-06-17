@@ -592,8 +592,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       const cleanPhone = selectedPhone.replace(/\D/g, '');
       const suffix = cleanPhone.slice(-8);
       
-      // Search customers, pos_customers, zoppy_customers, and campaign_leads
-      const [customerRes, expRes, posRes, zoppyRes, leadRes] = await Promise.all([
+      // Search customers, pos_customers, zoppy_customers, campaign_leads and PDV/live sales
+      const [customerRes, expRes, posRes, zoppyRes, leadRes, posSalesRes] = await Promise.all([
         supabase
           .from("customers")
           .select("id, instagram_handle, tags, whatsapp")
@@ -624,6 +624,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           .or(`phone.ilike.%${suffix}%`)
           .limit(1)
           .maybeSingle(),
+        // Vendas do PDV / Live / Online registradas em pos_sales (independe do Tiny)
+        supabase
+          .from("pos_sales")
+          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at")
+          .ilike("customer_phone", `%${suffix}%`)
+          .order("created_at", { ascending: false })
+          .limit(20),
       ]);
 
       const customer = customerRes.data;
@@ -631,8 +638,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       const posCustomer = posRes.data as any;
       const zoppyCustomer = zoppyRes.data as any;
       const lead = leadRes.data;
+      const posSales = (posSalesRes.data || []) as any[];
 
-      if (!customer && (!expOrders || expOrders.length === 0) && !posCustomer && !zoppyCustomer && !lead) {
+      if (!customer && (!expOrders || expOrders.length === 0) && !posCustomer && !zoppyCustomer && !lead && posSales.length === 0) {
         setCrmData(null);
         return;
       }
