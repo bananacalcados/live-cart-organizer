@@ -118,6 +118,7 @@ export function useChatSender() {
               mediaUrl,
               whatsapp_number_id: route.numberId,
             },
+            headers: invokeHeaders,
           });
           if (error) throw error;
           if (data?.success === false) throw new Error(data?.error || 'Erro Messenger/Instagram');
