@@ -409,6 +409,15 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     setShowDashboard(!!savedId);
   }, [storeId]);
 
+  // Garante o popup de tarefas mesmo quando a vendedora já está selecionada
+  // (persistida na sessão) — abre 1x por dia por vendedora.
+  useEffect(() => {
+    if (!storeId || !selectedSellerId) return;
+    if (sessionStorage.getItem(`pos_task_popup_${storeId}_${selectedSellerId}`) !== taskTodayKey()) {
+      setShowTaskPopup(true);
+    }
+  }, [storeId, selectedSellerId]);
+
   // Numbers assigned to this store
   const storeNumbers = useMemo(() => {
     if (storeNumberIds.length === 0) return metaNumbers;
