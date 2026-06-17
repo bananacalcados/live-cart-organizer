@@ -174,7 +174,7 @@ export function useChatSender() {
                 whatsapp_number_id: route.numberId,
                 quotedMessageId: quotedMessageId || undefined,
               };
-          const { data, error } = await supabase.functions.invoke(fnName, { body });
+          const { data, error } = await supabase.functions.invoke(fnName, { body, headers: invokeHeaders });
           if (error) throw error;
           providerMessageId = data?.messageId || null;
         } else {
