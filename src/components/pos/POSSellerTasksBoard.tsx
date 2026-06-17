@@ -322,6 +322,22 @@ function RealTaskCard({
           )}
         </div>
       </div>
+
+      {/* Botão explícito para marcar como concluída (vale também para tarefas automáticas) */}
+      <Button
+        size="sm"
+        variant={done ? "outline" : "default"}
+        onClick={done ? onUncomplete : onComplete}
+        className={cn(
+          "w-full mt-2 h-8 text-xs gap-1.5",
+          done
+            ? "border-green-500/40 text-green-600 hover:bg-green-500/10"
+            : "bg-green-600 hover:bg-green-700 text-white",
+        )}
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        {done ? "Concluída — desmarcar" : "Marcar como concluída"}
+      </Button>
     </div>
   );
 }
