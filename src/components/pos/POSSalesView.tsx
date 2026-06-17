@@ -1613,7 +1613,6 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           open={showTaskPopup}
           onClose={() => {
             setShowTaskPopup(false);
-            sessionStorage.setItem(`pos_task_popup_${storeId}_${selectedSeller}`, todayKey());
           }}
           storeId={storeId}
           sellerId={selectedSeller}
