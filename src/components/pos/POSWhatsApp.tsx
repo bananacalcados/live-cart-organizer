@@ -1982,9 +1982,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           setShowSellerGate(false);
           setShowDashboard(true);
           toast.success(`Vendedora: ${name}`);
-          if (sessionStorage.getItem(`pos_task_popup_${storeId}_${id}`) !== taskTodayKey()) {
-            setShowTaskPopup(true);
-          }
+          setShowTaskPopup(true);
         }}
         onSkip={() => setShowSellerGate(false)}
       />
