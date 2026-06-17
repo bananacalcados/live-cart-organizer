@@ -24,7 +24,7 @@ export function POSWhatsAppSellerGate({ storeId, open, onSellerSelected, onSkip 
   useEffect(() => {
     if (!open || !storeId) return;
     supabase.from('pos_sellers').select('id, name, linked_user_id').eq('store_id', storeId).eq('is_active', true)
-      .then(({ data }) => { if (data) setSellers(data as Seller[]); });
+      .then(({ data }) => { if (data) setSellers((data as Seller[]).filter((s) => !isVirtualSeller(s.name))); });
   }, [open, storeId]);
 
   return (
