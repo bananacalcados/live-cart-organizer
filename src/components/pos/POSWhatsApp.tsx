@@ -409,14 +409,13 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     setShowDashboard(!!savedId);
   }, [storeId]);
 
-  // Garante o popup de tarefas mesmo quando a vendedora já está selecionada
-  // (persistida na sessão) — abre 1x por dia por vendedora.
+  // Lembra a vendedora sempre que estiver ativa (inclusive já persistida na
+  // sessão). O popup só aparece se houver tarefas pendentes. Sem limite diário.
   useEffect(() => {
-    if (!storeId || !selectedSellerId) return;
-    if (sessionStorage.getItem(`pos_task_popup_${storeId}_${selectedSellerId}`) !== taskTodayKey()) {
-      setShowTaskPopup(true);
-    }
-  }, [storeId, selectedSellerId]);
+    if (!selectedSellerId) return;
+    setShowTaskPopup(true);
+  }, [selectedSellerId]);
+
 
   // Numbers assigned to this store
   const storeNumbers = useMemo(() => {
