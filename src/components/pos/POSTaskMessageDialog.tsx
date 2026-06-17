@@ -147,7 +147,7 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
       const res = await sendMedia({
         phone: normalizedPhone, mediaUrl: url, mediaType,
         caption: message.trim() || undefined, route,
-        senderUserId: currentUserId, senderName,
+        senderUserId: currentUserId, senderName, forceInstance: true,
       });
       if (res.success) { toast.success("Imagem enviada!"); clearMedia(); handleSentSuccess(); }
     } finally {
