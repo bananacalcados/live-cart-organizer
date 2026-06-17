@@ -1565,9 +1565,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
         onSellerSelected={(id) => {
           setSelectedSeller(id);
           setShowSaleTypeModal(true);
-          if (sessionStorage.getItem(`pos_task_popup_${storeId}_${id}`) !== todayKey()) {
-            setShowTaskPopup(true);
-          }
+          setShowTaskPopup(true);
         }}
         onClose={onCloseSalesView}
       />
