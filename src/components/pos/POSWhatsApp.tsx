@@ -1992,7 +1992,6 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           open={showTaskPopup}
           onClose={() => {
             setShowTaskPopup(false);
-            sessionStorage.setItem(`pos_task_popup_${storeId}_${selectedSellerId}`, taskTodayKey());
           }}
           storeId={storeId}
           sellerId={selectedSellerId}
