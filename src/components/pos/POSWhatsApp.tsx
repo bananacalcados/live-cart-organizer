@@ -1226,6 +1226,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     shipped: "Enviado",
     delivered: "Entregue",
     cancelled: "Cancelado",
+    // Status de vendas do PDV (pos_sales)
+    paid: "Pago",
+    completed: "Concluído",
+    refunded: "Estornado",
+    canceled: "Cancelado",
   };
 
   const getInitials = (name?: string) => {
