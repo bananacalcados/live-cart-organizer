@@ -316,14 +316,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     loadSellers();
   }, [storeId, hasOpenRegister, preloadedSellers, sellersPreloaded]);
 
-  // Abre o popup de tarefas sempre que uma vendedora estiver ativa (1x por dia),
-  // cobrindo também a troca pelo seletor — não só a seleção inicial no gate.
+  // Lembra a vendedora SEMPRE que ela ficar ativa (selecionar-se no gate ou no
+  // seletor). O popup só aparece de fato se houver tarefas pendentes; quando tudo
+  // estiver concluído ele fecha sozinho. Sem limite diário — lembrete constante.
   useEffect(() => {
-    if (!storeId || !selectedSeller) return;
-    if (sessionStorage.getItem(`pos_task_popup_${storeId}_${selectedSeller}`) !== todayKey()) {
-      setShowTaskPopup(true);
-    }
-  }, [storeId, selectedSeller]);
+    if (!selectedSeller) return;
+    setShowTaskPopup(true);
+  }, [selectedSeller]);
+
 
   const loadPaymentMethods = useCallback(async () => {
     if (paymentMethods.length > 0) return;
