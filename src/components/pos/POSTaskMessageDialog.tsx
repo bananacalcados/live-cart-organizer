@@ -235,7 +235,7 @@ export function POSTaskMessageDialog({ open, onClose, phone, name, sellerName, o
       if (!url) { toast.error("Erro ao enviar áudio"); return; }
       const res = await sendAudio({
         phone: normalizedPhone, mediaUrl: url, route,
-        senderUserId: currentUserId, senderName,
+        senderUserId: currentUserId, senderName, forceInstance: true,
       });
       if (res.success) { toast.success("Áudio enviado!"); discardAudio(); handleSentSuccess(); }
     } finally {
