@@ -184,8 +184,24 @@ export default function InstagramCommentAutomation() {
       media_types: form.media_types,
       action_reply_comment: form.action_reply_comment,
       reply_comment_text: form.reply_comment_text || null,
+      reply_comment_variations: (form.reply_comment_variations || [])
+        .map((v) => v.trim())
+        .filter(Boolean),
       action_send_dm: form.action_send_dm,
       dm_message_text: form.dm_message_text || null,
+      dm_buttons: (form.dm_buttons || [])
+        .filter((b) => b.label && b.label.trim())
+        .slice(0, 3)
+        .map((b) => ({
+          label: b.label.trim(),
+          type: b.type,
+          url: b.type === "link" ? (b.url || "").trim() || null : null,
+          tags: b.type === "reply"
+            ? (b.tags || []).map((t) => t.trim()).filter(Boolean)
+            : [],
+          reply_message: b.type === "reply" ? (b.reply_message || "").trim() || null : null,
+          flow_id: b.type === "reply" ? (b.flow_id || null) : null,
+        })) as any,
       action_trigger_automation: form.action_trigger_automation,
       automation_flow_id: form.automation_flow_id || null,
       cooldown_minutes: form.cooldown_minutes,
