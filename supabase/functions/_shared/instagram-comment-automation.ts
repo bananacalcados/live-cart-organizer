@@ -65,6 +65,23 @@ interface Rule {
 }
 
 /**
+ * Normaliza o tipo de mídia para um conjunto canônico usado nas regras.
+ * O Instagram envia media_product_type como FEED/AD/IMAGE/CAROUSEL_ALBUM/VIDEO
+ * para posts comuns, mas a UI salva "post". Sem normalizar, a comparação por
+ * igualdade estrita falha e a regra nunca dispara.
+ */
+function normMediaType(mt: string | null | undefined): string {
+  const m = (mt || "").toLowerCase().trim();
+  if (m === "reels" || m === "reel") return "reels";
+  if (m === "igtv") return "igtv";
+  if (m === "story" || m === "stories") return "story";
+  if (m === "live") return "live";
+  // feed, post, image, carousel_album, video, ad, etc. → post
+  return "post";
+}
+
+
+/**
  * Process a comment against all active automation rules.
  * Returns the list of actions taken.
  */
