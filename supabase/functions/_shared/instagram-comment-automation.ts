@@ -46,6 +46,15 @@ async function fetchCommentMediaThumb(
   }
 }
 
+export interface DmButton {
+  label: string;
+  type: "link" | "reply";
+  url?: string | null;
+  tags?: string[];
+  reply_message?: string | null;
+  flow_id?: string | null;
+}
+
 interface Rule {
   id: string;
   name: string;
@@ -54,14 +63,37 @@ interface Rule {
   media_types: string[];
   action_reply_comment: boolean;
   reply_comment_text: string | null;
+  reply_comment_variations: string[] | null;
   action_send_dm: boolean;
   dm_message_text: string | null;
+  dm_buttons: DmButton[] | null;
   action_trigger_automation: boolean;
   automation_flow_id: string | null;
   cooldown_minutes: number;
   ai_generate_reply: boolean;
   ai_prompt: string | null;
   target_media_id: string | null;
+}
+
+function buildButtonPayload(ruleId: string, buttons: DmButton[]): any[] {
+  const out: any[] = [];
+  buttons.slice(0, 3).forEach((b, idx) => {
+    if (!b?.label) return;
+    if (b.type === "link" && b.url) {
+      out.push({ type: "web_url", url: b.url, title: b.label.slice(0, 20) });
+    } else if (b.type === "reply") {
+      out.push({ type: "postback", title: b.label.slice(0, 20), payload: `igbtn:${ruleId}:${idx}` });
+    }
+  });
+  return out;
+}
+
+function pickReplyText(rule: Rule): string | null {
+  const variations = (rule.reply_comment_variations || []).filter((v) => v && v.trim());
+  if (variations.length > 0) {
+    return variations[Math.floor(Math.random() * variations.length)];
+  }
+  return rule.reply_comment_text;
 }
 
 /**
