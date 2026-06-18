@@ -331,12 +331,12 @@ export function ZApiInstanceManager() {
               <Input value={formInstanceId} onChange={e => setFormInstanceId(e.target.value)} placeholder="Cole o Instance ID do Z-API" />
             </div>
             <div className="space-y-1.5">
-              <Label>Token *</Label>
-              <Input value={formToken} onChange={e => setFormToken(e.target.value)} placeholder="Cole o Token do Z-API" type="password" />
+              <Label>Token {editingId ? "" : "*"}</Label>
+              <Input value={formToken} onChange={e => setFormToken(e.target.value)} placeholder={editingId ? "Deixe em branco para manter o atual" : "Cole o Token do Z-API"} type="password" />
             </div>
             <div className="space-y-1.5">
-              <Label>Client Token *</Label>
-              <Input value={formClientToken} onChange={e => setFormClientToken(e.target.value)} placeholder="Cole o Client Token do Z-API" type="password" />
+              <Label>Client Token {editingId ? "" : "*"}</Label>
+              <Input value={formClientToken} onChange={e => setFormClientToken(e.target.value)} placeholder={editingId ? "Deixe em branco para manter o atual" : "Cole o Client Token do Z-API"} type="password" />
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={formIsActive} onCheckedChange={setFormIsActive} />
