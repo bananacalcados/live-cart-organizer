@@ -24,7 +24,7 @@ interface MetaInstance {
   is_default: boolean;
   phone_number_id: string | null;
   business_account_id: string | null;
-  access_token: string | null;
+  has_meta_token: boolean | null;
   created_at: string;
 }
 
@@ -50,7 +50,7 @@ export function MetaInstanceManager() {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers")
-      .select("id, label, phone_display, provider, is_active, is_default, phone_number_id, business_account_id, access_token, created_at")
+      .select("id, label, phone_display, provider, is_active, is_default, phone_number_id, business_account_id, has_meta_token, created_at")
       .eq("provider", "meta")
       .order("created_at", { ascending: true });
 
@@ -88,7 +88,7 @@ export function MetaInstanceManager() {
     setFormPhone(inst.phone_display);
     setFormPhoneNumberId(inst.phone_number_id || "");
     setFormWabaId(inst.business_account_id || "");
-    setFormAccessToken(inst.access_token || "");
+    setFormAccessToken("");
     setShowFormToken(false);
     setFormIsActive(inst.is_active);
     setDialogOpen(true);

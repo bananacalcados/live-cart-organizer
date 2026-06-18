@@ -23,8 +23,8 @@ interface ZApiInstance {
   is_active: boolean;
   is_default: boolean;
   zapi_instance_id: string | null;
-  zapi_token: string | null;
-  zapi_client_token: string | null;
+  has_zapi_token: boolean | null;
+  has_zapi_client_token: boolean | null;
   created_at: string;
   is_online: boolean | null;
   last_health_check: string | null;
@@ -55,7 +55,7 @@ export function ZApiInstanceManager() {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers")
-      .select("id, label, phone_display, provider, is_active, is_default, zapi_instance_id, zapi_token, zapi_client_token, created_at, is_online, last_health_check")
+      .select("id, label, phone_display, provider, is_active, is_default, zapi_instance_id, has_zapi_token, has_zapi_client_token, created_at, is_online, last_health_check")
       .eq("provider", "zapi")
       .order("created_at", { ascending: true });
 
@@ -91,34 +91,36 @@ export function ZApiInstanceManager() {
     setFormLabel(inst.label);
     setFormPhone(inst.phone_display);
     setFormInstanceId(inst.zapi_instance_id || "");
-    setFormToken(inst.zapi_token || "");
-    setFormClientToken(inst.zapi_client_token || "");
+    setFormToken("");
+    setFormClientToken("");
     setFormIsActive(inst.is_active);
     setDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!formLabel.trim() || !formInstanceId.trim() || !formToken.trim() || !formClientToken.trim()) {
+    const tokensRequired = !editingId;
+    if (!formLabel.trim() || !formInstanceId.trim() || (tokensRequired && (!formToken.trim() || !formClientToken.trim()))) {
       toast({ title: "Preencha todos os campos obrigatórios", variant: "destructive" });
       return;
     }
     setSaving(true);
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       label: formLabel.trim(),
       phone_display: formPhone.trim(),
       provider: "zapi" as const,
       is_active: formIsActive,
       zapi_instance_id: formInstanceId.trim(),
-      zapi_token: formToken.trim(),
-      zapi_client_token: formClientToken.trim(),
     };
+    // Só grava os tokens se o admin digitou algo (em branco no editar = mantém o atual)
+    if (formToken.trim()) payload.zapi_token = formToken.trim();
+    if (formClientToken.trim()) payload.zapi_client_token = formClientToken.trim();
 
     let error;
     if (editingId) {
-      ({ error } = await supabase.from("whatsapp_numbers").update(payload).eq("id", editingId));
+      ({ error } = await supabase.from("whatsapp_numbers").update(payload as never).eq("id", editingId));
     } else {
-      ({ error } = await supabase.from("whatsapp_numbers").insert({ ...payload, is_default: false }));
+      ({ error } = await supabase.from("whatsapp_numbers").insert({ ...payload, is_default: false } as never));
     }
 
     if (error) {
@@ -144,18 +146,15 @@ export function ZApiInstanceManager() {
   };
 
   const testConnection = async (inst: ZApiInstance) => {
-    if (!inst.zapi_instance_id || !inst.zapi_token || !inst.zapi_client_token) {
+    if (!inst.zapi_instance_id || !inst.has_zapi_token || !inst.has_zapi_client_token) {
       toast({ title: "Credenciais incompletas", variant: "destructive" });
       return;
     }
     setTestingId(inst.id);
     try {
+      // Tokens nunca trafegam pelo navegador: a função lê as credenciais server-side pelo number_id
       const { data, error } = await supabase.functions.invoke('zapi-test-connection', {
-        body: {
-          instance_id: inst.zapi_instance_id,
-          token: inst.zapi_token,
-          client_token: inst.zapi_client_token,
-        },
+        body: { number_id: inst.id },
       });
       if (error) throw error;
       const connected = data?.connected === true;
@@ -332,12 +331,12 @@ export function ZApiInstanceManager() {
               <Input value={formInstanceId} onChange={e => setFormInstanceId(e.target.value)} placeholder="Cole o Instance ID do Z-API" />
             </div>
             <div className="space-y-1.5">
-              <Label>Token *</Label>
-              <Input value={formToken} onChange={e => setFormToken(e.target.value)} placeholder="Cole o Token do Z-API" type="password" />
+              <Label>Token {editingId ? "" : "*"}</Label>
+              <Input value={formToken} onChange={e => setFormToken(e.target.value)} placeholder={editingId ? "Deixe em branco para manter o atual" : "Cole o Token do Z-API"} type="password" />
             </div>
             <div className="space-y-1.5">
-              <Label>Client Token *</Label>
-              <Input value={formClientToken} onChange={e => setFormClientToken(e.target.value)} placeholder="Cole o Client Token do Z-API" type="password" />
+              <Label>Client Token {editingId ? "" : "*"}</Label>
+              <Input value={formClientToken} onChange={e => setFormClientToken(e.target.value)} placeholder={editingId ? "Deixe em branco para manter o atual" : "Cole o Client Token do Z-API"} type="password" />
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={formIsActive} onCheckedChange={setFormIsActive} />
