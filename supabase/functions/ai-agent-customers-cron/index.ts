@@ -180,7 +180,7 @@ serve(async (req) => {
     const daysAgo180 = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
 
     const { data: customers, error: custErr } = await supabase
-      .from('zoppy_customers')
+      .from('crm_customers_v')
       .select('first_name, last_name, phone, rfm_segment, rfm_total_score, last_purchase_at, total_spent, avg_ticket, total_orders, preferred_style, shoe_size, cashback_balance, tags')
       .not('phone', 'is', null)
       .gt('total_orders', 0)
@@ -194,7 +194,7 @@ serve(async (req) => {
 
     // Segment summary
     const { data: segCounts } = await supabase
-      .from('zoppy_customers')
+      .from('crm_customers_v')
       .select('rfm_segment')
       .not('rfm_segment', 'is', null)
       .gt('total_orders', 0);
