@@ -433,21 +433,22 @@ export default function Marketing() {
   }, [fetchLeads, startLeadBackfillPolling]);
 
   const deleteCustomer = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
-    const { error } = await supabase.from('zoppy_customers').delete().eq('id', id);
-    if (error) { toast.error('Erro ao excluir: ' + error.message); return; }
+    if (!confirm('Tem certeza que deseja remover este cliente da matriz?')) return;
+    // Soft delete: arquiva na base unificada (reversível, preserva histórico/vendas).
+    const { error } = await supabase.from('customers_unified').update({ is_archived: true } as any).eq('id', id);
+    if (error) { toast.error('Erro ao remover: ' + error.message); return; }
     setCustomers(prev => prev.filter(c => c.id !== id));
     setSelectedCustomer(null);
-    toast.success('Cliente excluído!');
+    toast.success('Cliente removido da matriz!');
   };
 
   const saveCustomerEdit = async () => {
     if (!editingCustomer) return;
     const { id, ...rest } = editingCustomer;
-    const { error } = await supabase.from('zoppy_customers').update({
-      first_name: rest.first_name,
-      last_name: rest.last_name,
-      phone: rest.phone,
+    const fullName = [rest.first_name, rest.last_name].filter(Boolean).join(' ').trim();
+    const { error } = await supabase.from('customers_unified').update({
+      name: fullName || null,
+      phone_e164: rest.phone,
       email: rest.email,
       city: rest.city,
       state: rest.state,
