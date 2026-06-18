@@ -16308,6 +16308,7 @@ export type Database = {
         }[]
       }
       calculate_rfm_scores: { Args: never; Returns: Json }
+      calculate_rfm_scores_unified: { Args: never; Returns: Json }
       check_chargeback_risk: {
         Args: {
           p_address_cep?: string

@@ -17,18 +17,27 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    console.log('Recalculating RFM scores via calculate_rfm_scores()...');
+    console.log('Recalculating RFM scores (legacy zoppy_customers)...');
     const { data, error } = await supabase.rpc('calculate_rfm_scores');
     if (error) {
-      console.error('RFM calculation error:', error);
+      console.error('RFM (zoppy) calculation error:', error);
       throw error;
+    }
+
+    // New source of truth: customers_unified
+    console.log('Recalculating RFM scores (customers_unified)...');
+    const { data: unified, error: unifiedError } = await supabase.rpc('calculate_rfm_scores_unified');
+    if (unifiedError) {
+      console.error('RFM (unified) calculation error:', unifiedError);
+      throw unifiedError;
     }
 
     return new Response(JSON.stringify({
       success: true,
-      count: data?.updated || 0,
-      segments: data?.segments || {},
-      message: `RFM recalculado para ${data?.updated || 0} clientes`,
+      count: unified?.updated || 0,
+      segments: unified?.segments || {},
+      legacy: { count: data?.updated || 0, segments: data?.segments || {} },
+      message: `RFM recalculado: ${unified?.updated || 0} clientes (matriz unificada), ${data?.updated || 0} (legado)`,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('Error:', error);
