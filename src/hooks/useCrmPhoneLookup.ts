@@ -72,11 +72,11 @@ export function useCrmPhoneLookup(phones: string[]) {
           .from('pos_customers')
           .update({ whatsapp: null } as any)
           .ilike('whatsapp' as any, `%${suffix}`),
-        // zoppy_customers: phone column
+        // customers_unified: phone_e164 column (base unificada)
         supabase
-          .from('zoppy_customers')
-          .update({ phone: null } as any)
-          .ilike('phone' as any, `%${suffix}`),
+          .from('customers_unified')
+          .update({ phone_e164: null } as any)
+          .ilike('phone_e164' as any, `%${suffix}`),
       ]);
 
       const errors = [r1.error, r2.error, r3.error].filter(Boolean);
