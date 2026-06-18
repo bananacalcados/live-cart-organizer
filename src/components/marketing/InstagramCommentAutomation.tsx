@@ -109,7 +109,7 @@ export default function InstagramCommentAutomation() {
       .from("instagram_comment_rules")
       .select("*")
       .order("created_at", { ascending: false });
-    setRules((data as Rule[]) || []);
+    setRules((data as unknown as Rule[]) || []);
     setLoading(false);
   }
 
