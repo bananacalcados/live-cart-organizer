@@ -203,10 +203,11 @@ export async function processCommentAutomation(
 
     const usernameClean = comment.username?.replace("@", "") || "";
 
-    // ── Action 1: Reply to comment publicly ──
-    if (rule.action_reply_comment && rule.reply_comment_text) {
+    // ── Action 1: Reply to comment publicly (com variações anti-spam) ──
+    const replyTemplate = pickReplyText(rule);
+    if (rule.action_reply_comment && replyTemplate) {
       try {
-        const replyText = rule.reply_comment_text
+        const replyText = replyTemplate
           .replace("{username}", usernameClean)
           .replace("{comment}", comment.text);
 
