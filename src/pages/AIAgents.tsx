@@ -167,7 +167,7 @@ const AIAgents = () => {
     });
 
     setRfmHealth({
-      lastUpdate: latest?.rfm_updated_at || null,
+      lastUpdate: latest?.updated_at || null,
       segments,
     });
   };
