@@ -793,7 +793,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       // Check all sources in parallel
       const [zoppyRes, internalRes, prizesRes] = await Promise.all([
         supabase
-          .from('crm_customers_v')
+          .from('zoppy_customers')
           .select('coupon_code, coupon_amount, coupon_type, coupon_used, coupon_min_purchase, coupon_expiry_date')
           .ilike('phone', `%${phone.slice(-8)}%`)
           .eq('coupon_used', false)
