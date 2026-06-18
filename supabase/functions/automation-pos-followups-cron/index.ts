@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
 
 
@@ -12,6 +13,7 @@ const corsHeaders = {
 // que cancela tudo que estiver pendente para o mesmo CPF (ou sufixo de telefone) antes de criar nova régua.
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (!(await isAuthorizedCron(req))) return unauthorizedResponse(corsHeaders);
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,

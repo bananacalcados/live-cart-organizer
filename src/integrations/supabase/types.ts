@@ -6502,6 +6502,27 @@ export type Database = {
         }
         Relationships: []
       }
+      internal_function_secrets: {
+        Row: {
+          created_at: string
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       inventory_audit_runs: {
         Row: {
           created_at: string
