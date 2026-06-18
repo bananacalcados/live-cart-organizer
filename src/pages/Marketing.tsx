@@ -69,7 +69,7 @@ interface ZoppyCustomer {
   state: string | null;
   region_type: string;
   ddd: string | null;
-  zoppy_position: string | null;
+  zoppy_position?: string | null;
   rfm_recency_score: number | null;
   rfm_frequency_score: number | null;
   rfm_monetary_score: number | null;
