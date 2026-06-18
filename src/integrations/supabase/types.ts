@@ -16093,6 +16093,7 @@ export type Database = {
           email: string | null
           first_name: string | null
           first_purchase_at: string | null
+          gender: string | null
           id: string | null
           is_archived: boolean | null
           last_name: string | null
@@ -16124,6 +16125,7 @@ export type Database = {
           email?: string | null
           first_name?: never
           first_purchase_at?: string | null
+          gender?: string | null
           id?: string | null
           is_archived?: boolean | null
           last_name?: never
@@ -16155,6 +16157,7 @@ export type Database = {
           email?: string | null
           first_name?: never
           first_purchase_at?: string | null
+          gender?: string | null
           id?: string | null
           is_archived?: boolean | null
           last_name?: never
