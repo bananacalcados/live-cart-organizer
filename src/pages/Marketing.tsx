@@ -7,7 +7,7 @@ import {
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2, Tag,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles, Pencil,
-  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon, Radio
+  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon, Radio, Footprints
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1249,6 +1249,33 @@ export default function Marketing() {
                     <SelectContent>
                       <SelectItem value="all">Todas Tags</SelectItem>
                       {uniqueTags.map(tag => (<SelectItem key={tag} value={tag}>🏷️ {tag}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {uniqueBrands.length > 0 && (
+                  <Select value={brandFilter} onValueChange={setBrandFilter}>
+                    <SelectTrigger className="h-9"><ShoppingBag className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Marcas</SelectItem>
+                      {uniqueBrands.map(b => (<SelectItem key={b} value={b}>👟 {b}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {uniqueCategories.length > 0 && (
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="h-9"><ListChecks className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Categorias</SelectItem>
+                      {uniqueCategories.map(cat => (<SelectItem key={cat} value={cat}>{cat}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {uniqueSizes.length > 0 && (
+                  <Select value={sizeFilter} onValueChange={setSizeFilter}>
+                    <SelectTrigger className="h-9"><Footprints className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos Tamanhos</SelectItem>
+                      {uniqueSizes.map(sz => (<SelectItem key={sz} value={sz}>Nº {sz}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 )}
