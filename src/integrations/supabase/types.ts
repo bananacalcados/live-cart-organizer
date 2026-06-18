@@ -3293,12 +3293,18 @@ export type Database = {
           id: string
           instagram_handle: string | null
           instagram_user_id: string | null
+          is_archived: boolean
           is_banned: boolean
           last_purchase_at: string | null
           last_seen_at: string | null
+          legacy_first_purchase_at: string | null
+          legacy_last_purchase_at: string | null
+          legacy_orders: number
+          legacy_spent: number
           live_cancellation_count: number
           loyalty_lifetime_points: number
           loyalty_points: number
+          merged_into_id: string | null
           metadata: Json | null
           name: string | null
           neighborhood: string | null
@@ -3346,12 +3352,18 @@ export type Database = {
           id?: string
           instagram_handle?: string | null
           instagram_user_id?: string | null
+          is_archived?: boolean
           is_banned?: boolean
           last_purchase_at?: string | null
           last_seen_at?: string | null
+          legacy_first_purchase_at?: string | null
+          legacy_last_purchase_at?: string | null
+          legacy_orders?: number
+          legacy_spent?: number
           live_cancellation_count?: number
           loyalty_lifetime_points?: number
           loyalty_points?: number
+          merged_into_id?: string | null
           metadata?: Json | null
           name?: string | null
           neighborhood?: string | null
@@ -3399,12 +3411,18 @@ export type Database = {
           id?: string
           instagram_handle?: string | null
           instagram_user_id?: string | null
+          is_archived?: boolean
           is_banned?: boolean
           last_purchase_at?: string | null
           last_seen_at?: string | null
+          legacy_first_purchase_at?: string | null
+          legacy_last_purchase_at?: string | null
+          legacy_orders?: number
+          legacy_spent?: number
           live_cancellation_count?: number
           loyalty_lifetime_points?: number
           loyalty_points?: number
+          merged_into_id?: string | null
           metadata?: Json | null
           name?: string | null
           neighborhood?: string | null
@@ -3428,7 +3446,15 @@ export type Database = {
           total_spent?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customers_unified_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "customers_unified"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       delivery_costs: {
         Row: {
@@ -16788,6 +16814,7 @@ export type Database = {
           records_merged: number
         }[]
       }
+      merge_unified_zoppy_duplicates: { Args: never; Returns: Json }
       next_product_sku_root: { Args: never; Returns: string }
       norm_cpf: { Args: { raw: string }; Returns: string }
       norm_email: { Args: { raw: string }; Returns: string }

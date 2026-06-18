@@ -1,56 +1,51 @@
 ## Objetivo
 
-Melhorar a automação de comentários do Instagram com:
-1. **Variações de resposta no comentário** (reduz risco de spam pela Meta).
-2. **Botões na mensagem do Direct (DM)** com 3 capacidades: link (ex.: grupo VIP), botão de resposta que dispara um fluxo de automação, e botão que aplica uma TAG automática na pessoa.
+Tornar `customers_unified` a **fonte única e confiável** da matriz RFM: sem duplicatas, com histórico antigo (Zoppy/Excel) preservado **e** vendas novas do PDV somadas sem dobrar, e a aba Marketing → Clientes RFM passa a ler dela (só compradores).
 
-## Limitações da Meta (importante alinhar)
+## Diagnóstico que motiva o plano (já confirmado no banco)
 
-- Botões no Direct usam o **"button template"** do Instagram: **máximo 3 botões** por mensagem.
-- Cada botão pode ser de 2 tipos:
-  - **Link** (`web_url`): abre uma URL (grupo VIP, checkout, etc.).
-  - **Resposta** (`postback`): quando a pessoa clica, o Instagram nos avisa e podemos: aplicar TAG(s), enviar uma mensagem de retorno e/ou disparar um fluxo de automação.
-- Um mesmo botão de resposta pode **ao mesmo tempo** aplicar tag + disparar fluxo. Ex.: botão "Sim" → tag `quer_live` + dispara fluxo X (que pode ter atraso de N dias dentro do próprio fluxo).
-- A janela de mensagens do IG é de 24h para resposta padrão; o disparo inicial via comentário usa a Private Reply (válida logo após o comentário), então funciona normalmente.
+- `customers_unified` tem ~40 mil **cópias duplicadas** de clientes da Zoppy que perderam contato no import (escapam da dedup por não terem CPF/telefone).
+- O import para a unificada **perdeu ~6 mil telefones** que existem na `zoppy_customers` (tabela curada: 26 mil compradores, 24 mil com telefone, sem duplicata por CPF/telefone).
+- `recalc_customer_metrics` conta **só `pos_sales`** e **sobrescreve** os totais históricos importados sempre que entra uma venda nova — misturando dois modelos incompatíveis.
 
-## O que será construído
+## Plano (executado em ondas, validando os números a cada onda)
 
-### 1. Banco de dados (migration)
-Adicionar 2 colunas em `instagram_comment_rules`:
-- `reply_comment_variations text[]` — lista de variações de texto pra resposta pública no comentário. Se vazio, usa o `reply_comment_text` atual (compatibilidade).
-- `dm_buttons jsonb` (default `[]`) — array de até 3 botões. Cada botão:
-  ```text
-  {
-    "label": "Entrar no grupo VIP",
-    "type": "link" | "reply",
-    "url": "https://...",            // só p/ type=link
-    "tags": ["quer_live"],           // só p/ type=reply (aplica na pessoa)
-    "reply_message": "Show! ...",    // opcional, mensagem enviada ao clicar
-    "flow_id": "uuid-do-fluxo"       // opcional, dispara automação ao clicar
-  }
-  ```
+### Onda 1 — Preparar a base (migração, aditiva e reversível)
+Adicionar à `customers_unified`:
+- `legacy_orders`, `legacy_spent`, `legacy_first_purchase_at`, `legacy_last_purchase_at` — histórico **congelado** (Zoppy/Excel).
+- `merged_into_id` — aponta para o cadastro sobrevivente quando a linha for duplicata.
+- `is_archived` — exclui da matriz (sem apagar nada).
 
-### 2. Webhook (`meta-messenger-webhook` + `_shared/instagram-comment-automation.ts`)
-- **Variações:** ao responder o comentário, sortear aleatoriamente uma das `reply_comment_variations` (fallback para `reply_comment_text`).
-- **DM com botões:** se `dm_buttons` tiver itens, enviar como button template (texto + botões). Para cada botão de resposta, o `payload` carrega um identificador `igbtn:<rule_id>:<índice>`.
-- **Clique no botão (postback):** estender o tratamento de `event.postback` para detectar o payload `igbtn:...`, localizar a regra+botão e então:
-  - aplicar as `tags` no `chat_contacts` da pessoa (merge sem duplicar);
-  - se houver `reply_message`, enviar como DM;
-  - se houver `flow_id`, disparar `automation-trigger-incoming` com aquele fluxo.
+### Onda 2 — Congelar o histórico
+- Preencher `legacy_*` a partir da `zoppy_customers` (mapeando pela origem `zoppy:<id>` → `zoppy_customers.id`) e, para imports sem origem Zoppy, a partir dos totais importados atuais de linhas que não têm `pos_sales`.
+- Isso recupera o histórico antes que qualquer recálculo o sobrescreva.
 
-### 3. UI (`InstagramCommentAutomation.tsx`)
-- **Bloco de variações de resposta:** permitir adicionar várias linhas de resposta (lista com adicionar/remover). Mantém o campo único como primeira variação.
-- **Construtor de botões do DM:** lista de até 3 botões. Para cada um: rótulo, tipo (Link / Resposta). Se Link → campo URL. Se Resposta → campos de TAGs (separadas por vírgula), mensagem de retorno opcional e seletor de fluxo de automação opcional.
-- Persistir os novos campos no `saveRule`/`openEdit`.
+### Onda 3 — Enriquecer contato
+- Copiar telefone/CPF/e-mail da `zoppy_customers` para a unificada onde estiver faltando (recupera os ~6 mil telefones perdidos), respeitando a regra de identidade por CPF (não injeta CPF de terceiro).
 
-## Detalhes técnicos
+### Onda 4 — Mesclar duplicatas
+- Agrupar linhas da mesma pessoa por: mesma origem `zoppy:<id>`, mesmo CPF, ou mesmo telefone (DDD + 8 dígitos).
+- Eleger 1 **sobrevivente** por grupo (o mais completo: com telefone > com CPF > maior histórico).
+- **Repontar** todas as referências (`orders`, `pos_sales`, `customer_list_memberships`) para o sobrevivente.
+- Consolidar `legacy_*` no sobrevivente (cópias idênticas ⇒ usa o maior, não soma) e marcar as demais com `merged_into_id` + `is_archived = true`.
+- Registrar tudo em `master_merge_log` (reversível).
 
-- Tags reutilizam `chat_contacts.tags` (mesmo sistema do chat), então as automações por tag "x dias depois" já existentes podem consumir essas tags.
-- O disparo "x dias depois" fica a cargo do **fluxo de automação** selecionado no botão (o motor de fluxos já suporta atrasos), evitando criar um novo agendador.
-- Compatibilidade: regras antigas sem `dm_buttons`/`reply_comment_variations` continuam funcionando com o comportamento atual.
+### Onda 5 — Novo modelo de métricas (migração)
+Reescrever `recalc_customer_metrics` para:
+- `total_orders = legacy_orders + (vendas do PDV mais novas que `legacy_last_purchase_at`)`
+- `total_spent  = legacy_spent  + (valor dessas vendas novas)`
+- Sem `legacy` (cliente 100% novo) ⇒ conta todas as `pos_sales`.
+- Regra do recorte evita **dobrar** pedidos antigos da Shopify/Tiny que já estão no histórico importado.
+- Recalcular RFM consolidado na unificada.
 
-## Arquivos afetados
-- Migration nova (colunas em `instagram_comment_rules`).
-- `supabase/functions/_shared/instagram-comment-automation.ts`
-- `supabase/functions/meta-messenger-webhook/index.ts`
-- `src/components/marketing/InstagramCommentAutomation.tsx`
+### Onda 6 — Trocar a tela
+- Aba Marketing → Clientes RFM passa a ler `customers_unified` com `is_archived = false` e `total_orders >= 1` (só compradores), mapeando os nomes de coluna (`rfm_r/f/m/total/segment`).
+- Validar contagem final por segmento contra a expectativa (~26 mil compradores reais).
+
+## Detalhes técnicos / pontos de atenção
+
+- **Sobrescrita evitada:** hoje o trigger `trg_pos_sales_recalc_after` já chama `recalc_customer_metrics`; após a Onda 5 ele passa a somar `legacy + novo` em vez de zerar o histórico.
+- **Triggers de venda intactos:** estoque/CAPI/automação/caixa continuam guardados por status; nenhuma das ondas altera valor, estoque ou caixa.
+- **Dedup intra-`pos_sales` (Live × Shopify devolvida):** a venda de Live (linha PDV) e o pedido que volta da Shopify podem gerar 2 linhas em `pos_sales`. O recorte por data não resolve isso sozinho; trato como item separado após a Onda 6 (medir sobreposição real por cliente+valor+janela antes de definir regra), para não atrasar a correção principal.
+- **Reversibilidade:** nada é apagado — duplicatas ficam com `merged_into_id`/`is_archived`; `master_merge_log` guarda o de-para.
+- **Validação:** ao fim de cada onda eu rodo contagens (compradores, com contato, duplicados restantes, soma de faturamento) e te apresento antes de seguir.
