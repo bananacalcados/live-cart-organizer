@@ -105,10 +105,10 @@ serve(async (req) => {
         }
 
         if (timeoutAction === 'add_tag' && timeoutTag) {
-          // Add tag to zoppy_customers
+          // Add tag: read id+tags from crm_customers_v, then write to customers_unified
           const last8 = phone.slice(-8);
           const { data: customers } = await supabase
-            .from('zoppy_customers')
+            .from('crm_customers_v')
             .select('id, phone, tags')
             .limit(500);
 
@@ -117,7 +117,7 @@ serve(async (req) => {
             if (match) {
               const currentTags = (match.tags as string[]) || [];
               if (!currentTags.includes(timeoutTag)) {
-                await supabase.from('zoppy_customers')
+                await (supabase.from('customers_unified') as any)
                   .update({ tags: [...currentTags, timeoutTag] })
                   .eq('id', match.id);
                 console.log(`[timeout] Tagged ${phone} with "${timeoutTag}"`);
