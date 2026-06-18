@@ -3003,6 +3003,13 @@ export type Database = {
             foreignKeyName: "customer_list_memberships_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
+            referencedRelation: "crm_customers_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_list_memberships_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
             referencedRelation: "customers_unified"
             referencedColumns: ["id"]
           },
@@ -3308,6 +3315,7 @@ export type Database = {
           metadata: Json | null
           name: string | null
           neighborhood: string | null
+          opt_out_mass_dispatch: boolean
           phone_e164: string | null
           phone_suffix8: string | null
           preferred_style: string | null
@@ -3367,6 +3375,7 @@ export type Database = {
           metadata?: Json | null
           name?: string | null
           neighborhood?: string | null
+          opt_out_mass_dispatch?: boolean
           phone_e164?: string | null
           phone_suffix8?: string | null
           preferred_style?: string | null
@@ -3426,6 +3435,7 @@ export type Database = {
           metadata?: Json | null
           name?: string | null
           neighborhood?: string | null
+          opt_out_mass_dispatch?: boolean
           phone_e164?: string | null
           phone_suffix8?: string | null
           preferred_style?: string | null
@@ -3447,6 +3457,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "customers_unified_merged_into_id_fkey"
+            columns: ["merged_into_id"]
+            isOneToOne: false
+            referencedRelation: "crm_customers_v"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "customers_unified_merged_into_id_fkey"
             columns: ["merged_into_id"]
@@ -9333,6 +9350,13 @@ export type Database = {
             foreignKeyName: "orders_customer_unified_id_fkey"
             columns: ["customer_unified_id"]
             isOneToOne: false
+            referencedRelation: "crm_customers_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_customer_unified_id_fkey"
+            columns: ["customer_unified_id"]
+            isOneToOne: false
             referencedRelation: "customers_unified"
             referencedColumns: ["id"]
           },
@@ -11194,6 +11218,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "pos_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_sales_customer_unified_id_fkey"
+            columns: ["customer_unified_id"]
+            isOneToOne: false
+            referencedRelation: "crm_customers_v"
             referencedColumns: ["id"]
           },
           {
@@ -16052,6 +16083,102 @@ export type Database = {
       }
     }
     Views: {
+      crm_customers_v: {
+        Row: {
+          avg_ticket: number | null
+          city: string | null
+          cpf: string | null
+          created_at: string | null
+          ddd: string | null
+          email: string | null
+          first_name: string | null
+          first_purchase_at: string | null
+          id: string | null
+          is_archived: boolean | null
+          last_name: string | null
+          last_purchase_at: string | null
+          name: string | null
+          opt_out_mass_dispatch: boolean | null
+          phone: string | null
+          phone_e164: string | null
+          phone_suffix8: string | null
+          region_type: string | null
+          rfm_frequency_score: number | null
+          rfm_monetary_score: number | null
+          rfm_recency_score: number | null
+          rfm_segment: string | null
+          rfm_total_score: number | null
+          state: string | null
+          tags: string[] | null
+          total_orders: number | null
+          total_spent: number | null
+          updated_at: string | null
+          zoppy_id: string | null
+        }
+        Insert: {
+          avg_ticket?: number | null
+          city?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          ddd?: string | null
+          email?: string | null
+          first_name?: never
+          first_purchase_at?: string | null
+          id?: string | null
+          is_archived?: boolean | null
+          last_name?: never
+          last_purchase_at?: string | null
+          name?: string | null
+          opt_out_mass_dispatch?: boolean | null
+          phone?: string | null
+          phone_e164?: string | null
+          phone_suffix8?: string | null
+          region_type?: never
+          rfm_frequency_score?: number | null
+          rfm_monetary_score?: number | null
+          rfm_recency_score?: number | null
+          rfm_segment?: string | null
+          rfm_total_score?: number | null
+          state?: string | null
+          tags?: string[] | null
+          total_orders?: number | null
+          total_spent?: number | null
+          updated_at?: string | null
+          zoppy_id?: string | null
+        }
+        Update: {
+          avg_ticket?: number | null
+          city?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          ddd?: string | null
+          email?: string | null
+          first_name?: never
+          first_purchase_at?: string | null
+          id?: string | null
+          is_archived?: boolean | null
+          last_name?: never
+          last_purchase_at?: string | null
+          name?: string | null
+          opt_out_mass_dispatch?: boolean | null
+          phone?: string | null
+          phone_e164?: string | null
+          phone_suffix8?: string | null
+          region_type?: never
+          rfm_frequency_score?: number | null
+          rfm_monetary_score?: number | null
+          rfm_recency_score?: number | null
+          rfm_segment?: string | null
+          rfm_total_score?: number | null
+          state?: string | null
+          tags?: string[] | null
+          total_orders?: number | null
+          total_spent?: number | null
+          updated_at?: string | null
+          zoppy_id?: string | null
+        }
+        Relationships: []
+      }
       product_master_stock: {
         Row: {
           master_id: string | null
