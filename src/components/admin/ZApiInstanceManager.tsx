@@ -146,18 +146,15 @@ export function ZApiInstanceManager() {
   };
 
   const testConnection = async (inst: ZApiInstance) => {
-    if (!inst.zapi_instance_id || !inst.zapi_token || !inst.zapi_client_token) {
+    if (!inst.zapi_instance_id || !inst.has_zapi_token || !inst.has_zapi_client_token) {
       toast({ title: "Credenciais incompletas", variant: "destructive" });
       return;
     }
     setTestingId(inst.id);
     try {
+      // Tokens nunca trafegam pelo navegador: a função lê as credenciais server-side pelo number_id
       const { data, error } = await supabase.functions.invoke('zapi-test-connection', {
-        body: {
-          instance_id: inst.zapi_instance_id,
-          token: inst.zapi_token,
-          client_token: inst.zapi_client_token,
-        },
+        body: { number_id: inst.id },
       });
       if (error) throw error;
       const connected = data?.connected === true;
