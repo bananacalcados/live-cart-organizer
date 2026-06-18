@@ -3320,6 +3320,9 @@ export type Database = {
           phone_suffix8: string | null
           preferred_style: string | null
           previous_phones: string[] | null
+          purchased_brands: string[] | null
+          purchased_categories: string[] | null
+          purchased_sizes: string[] | null
           region_type: string | null
           rfm_f: number | null
           rfm_m: number | null
@@ -3380,6 +3383,9 @@ export type Database = {
           phone_suffix8?: string | null
           preferred_style?: string | null
           previous_phones?: string[] | null
+          purchased_brands?: string[] | null
+          purchased_categories?: string[] | null
+          purchased_sizes?: string[] | null
           region_type?: string | null
           rfm_f?: number | null
           rfm_m?: number | null
@@ -3440,6 +3446,9 @@ export type Database = {
           phone_suffix8?: string | null
           preferred_style?: string | null
           previous_phones?: string[] | null
+          purchased_brands?: string[] | null
+          purchased_categories?: string[] | null
+          purchased_sizes?: string[] | null
           region_type?: string | null
           rfm_f?: number | null
           rfm_m?: number | null
@@ -10682,6 +10691,7 @@ export type Database = {
           age_group: string | null
           auto_classified: boolean
           barcode: string
+          brand: string | null
           category: string | null
           category_id: string | null
           classification_confidence: number | null
@@ -10709,6 +10719,7 @@ export type Database = {
           age_group?: string | null
           auto_classified?: boolean
           barcode?: string
+          brand?: string | null
           category?: string | null
           category_id?: string | null
           classification_confidence?: number | null
@@ -10736,6 +10747,7 @@ export type Database = {
           age_group?: string | null
           auto_classified?: boolean
           barcode?: string
+          brand?: string | null
           category?: string | null
           category_id?: string | null
           classification_confidence?: number | null
@@ -16103,6 +16115,9 @@ export type Database = {
           phone: string | null
           phone_e164: string | null
           phone_suffix8: string | null
+          purchased_brands: string[] | null
+          purchased_categories: string[] | null
+          purchased_sizes: string[] | null
           region_type: string | null
           rfm_frequency_score: number | null
           rfm_monetary_score: number | null
@@ -16135,6 +16150,9 @@ export type Database = {
           phone?: string | null
           phone_e164?: string | null
           phone_suffix8?: string | null
+          purchased_brands?: string[] | null
+          purchased_categories?: string[] | null
+          purchased_sizes?: string[] | null
           region_type?: never
           rfm_frequency_score?: number | null
           rfm_monetary_score?: number | null
@@ -16167,6 +16185,9 @@ export type Database = {
           phone?: string | null
           phone_e164?: string | null
           phone_suffix8?: string | null
+          purchased_brands?: string[] | null
+          purchased_categories?: string[] | null
+          purchased_sizes?: string[] | null
           region_type?: never
           rfm_frequency_score?: number | null
           rfm_monetary_score?: number | null
@@ -16463,6 +16484,7 @@ export type Database = {
           variants_updated: number
         }[]
       }
+      bc_norm_txt: { Args: { t: string }; Returns: string }
       calculate_rfm_scores: { Args: never; Returns: Json }
       calculate_rfm_scores_unified: { Args: never; Returns: Json }
       check_chargeback_risk: {
@@ -16962,6 +16984,9 @@ export type Database = {
         }[]
       }
       normalize_wa_status: { Args: { raw: string }; Returns: string }
+      parse_brand_from_name: { Args: { p_name: string }; Returns: string }
+      parse_category_from_name: { Args: { p_name: string }; Returns: string }
+      parse_size_from_name: { Args: { p_name: string }; Returns: string }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
       pos_sale_to_faturamento: {
@@ -16971,6 +16996,10 @@ export type Database = {
       product_name_key: { Args: { p_name: string }; Returns: string }
       recalc_customer_metrics: {
         Args: { p_customer_id: string }
+        Returns: undefined
+      }
+      recalc_customer_product_attributes: {
+        Args: { p_customer?: string }
         Returns: undefined
       }
       recompute_needs_review: { Args: never; Returns: number }
@@ -17087,6 +17116,7 @@ export type Database = {
           age_group: string | null
           auto_classified: boolean
           barcode: string
+          brand: string | null
           category: string | null
           category_id: string | null
           classification_confidence: number | null
