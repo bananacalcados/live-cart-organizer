@@ -588,3 +588,123 @@ export async function processStoryReplyAutomation(
   return { actions };
 }
 
+/**
+ * Trata o clique em um botão de "resposta" (postback) enviado por uma DM de
+ * automação de comentário. Payload esperado: `igbtn:<ruleId>:<buttonIdx>`.
+ * Aplica as tags configuradas no contato, envia mensagem de retorno opcional e
+ * dispara o fluxo de automação opcional.
+ */
+export async function handleCommentButtonPostback(
+  supabase: ReturnType<typeof createClient>,
+  payload: string,
+  fromId: string,
+  username: string | null,
+): Promise<{ handled: boolean; actions: string[] }> {
+  const actions: string[] = [];
+  if (!payload || !payload.startsWith("igbtn:")) return { handled: false, actions };
+
+  const parts = payload.split(":");
+  const ruleId = parts[1];
+  const buttonIdx = Number(parts[2]);
+  if (!ruleId || Number.isNaN(buttonIdx)) return { handled: false, actions };
+
+  const { data: rule } = await supabase
+    .from("instagram_comment_rules")
+    .select("id, name, dm_buttons")
+    .eq("id", ruleId)
+    .maybeSingle();
+  if (!rule) return { handled: true, actions };
+
+  const buttons = (rule as any).dm_buttons as DmButton[] | null;
+  const button = buttons?.[buttonIdx];
+  if (!button) return { handled: true, actions };
+
+  // ── Aplicar TAGs no contato (merge sem duplicar) ──
+  if (button.tags && button.tags.length > 0) {
+    try {
+      const { data: existing } = await supabase
+        .from("chat_contacts")
+        .select("tags")
+        .eq("phone", fromId)
+        .maybeSingle();
+      const current: string[] = ((existing as any)?.tags as string[]) || [];
+      const merged = Array.from(new Set([...current, ...button.tags.map((t) => t.trim()).filter(Boolean)]));
+      await supabase.from("chat_contacts").upsert(
+        { phone: fromId, tags: merged, updated_at: new Date().toISOString() },
+        { onConflict: "phone" },
+      );
+      actions.push(`tags:${button.tags.join(",")}`);
+    } catch (e) {
+      console.error("[igbtn] erro ao aplicar tags:", e);
+    }
+  }
+
+  const pageAccessToken = Deno.env.get("META_PAGE_ACCESS_TOKEN");
+
+  // ── Mensagem de retorno opcional ──
+  if (button.reply_message && pageAccessToken) {
+    try {
+      const res = await fetch(`https://graph.instagram.com/v25.0/me/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${pageAccessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipient: { id: fromId },
+          message: { text: button.reply_message },
+          messaging_type: "RESPONSE",
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        actions.push("reply_message");
+        await supabase.from("whatsapp_messages").insert({
+          phone: fromId,
+          message: button.reply_message,
+          direction: "outgoing",
+          message_id: data.message_id || null,
+          status: "sent",
+          media_type: "text",
+          is_group: false,
+          channel: "instagram",
+          sender_name: username,
+        });
+      } else {
+        console.error("[igbtn] falha ao enviar reply_message:", data);
+      }
+    } catch (e) {
+      console.error("[igbtn] erro reply_message:", e);
+    }
+  }
+
+  // ── Disparar fluxo de automação opcional ──
+  if (button.flow_id) {
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      await fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: fromId,
+          message: button.label,
+          flow_id: button.flow_id,
+          source: "instagram_comment_button",
+          metadata: { rule_id: ruleId, button_index: buttonIdx, username },
+        }),
+      });
+      actions.push(`flow:${button.flow_id}`);
+    } catch (e) {
+      console.error("[igbtn] erro ao disparar fluxo:", e);
+    }
+  }
+
+  console.log(`[igbtn] postback tratado (regra ${(rule as any).name}, botão ${buttonIdx}): ${actions.join(", ")}`);
+  return { handled: true, actions };
+}
+
+
