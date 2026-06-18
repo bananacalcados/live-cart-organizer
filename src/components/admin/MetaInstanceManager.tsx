@@ -50,7 +50,7 @@ export function MetaInstanceManager() {
     setLoading(true);
     const { data, error } = await supabase
       .from("whatsapp_numbers")
-      .select("id, label, phone_display, provider, is_active, is_default, phone_number_id, business_account_id, access_token, created_at")
+      .select("id, label, phone_display, provider, is_active, is_default, phone_number_id, business_account_id, has_meta_token, created_at")
       .eq("provider", "meta")
       .order("created_at", { ascending: true });
 
