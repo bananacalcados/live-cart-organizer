@@ -152,7 +152,7 @@ export function CrmDuplicates() {
         if (entry.source === "pos_customers") {
           await supabase.from("pos_customers").update({ whatsapp: null } as any).eq("id", realId);
         } else if (entry.source === "zoppy_customers") {
-          await supabase.from("zoppy_customers").update({ phone: null } as any).eq("id", realId);
+          await supabase.from("customers_unified").update({ phone_e164: null } as any).eq("id", realId);
         } else if (entry.source === "customers") {
           await supabase.from("customers").update({ whatsapp: null }).eq("id", realId);
         }
