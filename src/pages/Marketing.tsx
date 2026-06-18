@@ -1105,7 +1105,7 @@ export default function Marketing() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           {/* Mobile: Select dropdown */}
           <div className="md:hidden">
-            <Select value={activeTab} onValueChange={setActiveTab}>
+            <Select value={activeTab} onValueChange={(v) => v === "email_marketing" ? navigate('/marketing/email-marketing') : setActiveTab(v)}>
               <SelectTrigger className="w-full bg-white/10 border-white/10 text-white">
                 <SelectValue />
               </SelectTrigger>
@@ -1125,6 +1125,11 @@ export default function Marketing() {
                 <SelectItem value="live_commerce">🌐 Live Commerce</SelectItem>
                 <SelectItem value="link_pages">🔗 Link Pages</SelectItem>
                 <SelectItem value="push_notifications">🔔 Push Notifications</SelectItem>
+                <SelectItem value="ai_ads">🧠 IA Ads</SelectItem>
+                <SelectItem value="ig_automation">📷 IG Automação</SelectItem>
+                <SelectItem value="live_campaigns">📻 Campanhas Live</SelectItem>
+                <SelectItem value="triggers">⚡ Triggers</SelectItem>
+                <SelectItem value="email_marketing">✉️ Email Marketing</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="outline" size="sm" className="w-full mt-2 gap-2" onClick={() => navigate('/marketing/email-marketing')}>
