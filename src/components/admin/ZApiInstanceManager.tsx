@@ -118,9 +118,9 @@ export function ZApiInstanceManager() {
 
     let error;
     if (editingId) {
-      ({ error } = await supabase.from("whatsapp_numbers").update(payload).eq("id", editingId));
+      ({ error } = await supabase.from("whatsapp_numbers").update(payload as never).eq("id", editingId));
     } else {
-      ({ error } = await supabase.from("whatsapp_numbers").insert({ ...payload, is_default: false }));
+      ({ error } = await supabase.from("whatsapp_numbers").insert({ ...payload, is_default: false } as never));
     }
 
     if (error) {
