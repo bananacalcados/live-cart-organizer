@@ -1105,7 +1105,7 @@ export default function Marketing() {
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           {/* Mobile: Select dropdown */}
           <div className="md:hidden">
-            <Select value={activeTab} onValueChange={setActiveTab}>
+            <Select value={activeTab} onValueChange={(v) => v === "email_marketing" ? navigate('/marketing/email-marketing') : setActiveTab(v)}>
               <SelectTrigger className="w-full bg-white/10 border-white/10 text-white">
                 <SelectValue />
               </SelectTrigger>
