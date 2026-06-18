@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchInstagramSenderUsername } from "../_shared/meta-instagram-profile.ts";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
-import { processCommentAutomation, processStoryReplyAutomation } from "../_shared/instagram-comment-automation.ts";
+import { processCommentAutomation, processStoryReplyAutomation, handleCommentButtonPostback } from "../_shared/instagram-comment-automation.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -259,6 +259,18 @@ serve(async (req) => {
           }
         } else if (event.postback) {
           messageText = event.postback.payload || event.postback.title || '[postback]';
+          // Botão de resposta de automação de comentário do IG → aplica tag / fluxo / mensagem
+          if (channel === 'instagram' && typeof event.postback.payload === 'string' && event.postback.payload.startsWith('igbtn:')) {
+            try {
+              const igUsername = senderId ? await fetchInstagramSenderUsername(pageAccessToken, senderId).catch(() => null) : null;
+              const btnResult = await handleCommentButtonPostback(supabase, event.postback.payload, senderId, igUsername ? `@${igUsername}` : null);
+              if (btnResult.handled) {
+                console.log(`[ig-button] postback tratado: ${btnResult.actions.join(', ')}`);
+              }
+            } catch (btnErr) {
+              console.error('[ig-button] erro ao tratar postback:', btnErr);
+            }
+          }
         } else if (event.referral) {
           messageText = event.referral.ref ? `[referral: ${event.referral.ref}]` : '[via anúncio]';
           referralData = {

@@ -19,6 +19,15 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
+interface DmButton {
+  label: string;
+  type: "link" | "reply";
+  url?: string;
+  tags?: string[];
+  reply_message?: string;
+  flow_id?: string;
+}
+
 interface Rule {
   id: string;
   name: string;
@@ -28,8 +37,10 @@ interface Rule {
   media_types: string[];
   action_reply_comment: boolean;
   reply_comment_text: string | null;
+  reply_comment_variations: string[] | null;
   action_send_dm: boolean;
   dm_message_text: string | null;
+  dm_buttons: DmButton[] | null;
   action_trigger_automation: boolean;
   automation_flow_id: string | null;
   cooldown_minutes: number;
@@ -79,8 +90,10 @@ export default function InstagramCommentAutomation() {
     media_types: ["post", "REELS"],
     action_reply_comment: false,
     reply_comment_text: "",
+    reply_comment_variations: [] as string[],
     action_send_dm: false,
     dm_message_text: "",
+    dm_buttons: [] as DmButton[],
     action_trigger_automation: false,
     automation_flow_id: "",
     cooldown_minutes: 60,
@@ -98,7 +111,7 @@ export default function InstagramCommentAutomation() {
       .from("instagram_comment_rules")
       .select("*")
       .order("created_at", { ascending: false });
-    setRules((data as Rule[]) || []);
+    setRules((data as unknown as Rule[]) || []);
     setLoading(false);
   }
 
@@ -120,8 +133,10 @@ export default function InstagramCommentAutomation() {
       media_types: ["post", "REELS"],
       action_reply_comment: false,
       reply_comment_text: "",
+      reply_comment_variations: [],
       action_send_dm: false,
       dm_message_text: "",
+      dm_buttons: [],
       action_trigger_automation: false,
       automation_flow_id: "",
       cooldown_minutes: 60,
@@ -140,8 +155,10 @@ export default function InstagramCommentAutomation() {
       media_types: rule.media_types,
       action_reply_comment: rule.action_reply_comment,
       reply_comment_text: rule.reply_comment_text || "",
+      reply_comment_variations: rule.reply_comment_variations || [],
       action_send_dm: rule.action_send_dm,
       dm_message_text: rule.dm_message_text || "",
+      dm_buttons: rule.dm_buttons || [],
       action_trigger_automation: rule.action_trigger_automation,
       automation_flow_id: rule.automation_flow_id || "",
       cooldown_minutes: rule.cooldown_minutes,
@@ -167,8 +184,24 @@ export default function InstagramCommentAutomation() {
       media_types: form.media_types,
       action_reply_comment: form.action_reply_comment,
       reply_comment_text: form.reply_comment_text || null,
+      reply_comment_variations: (form.reply_comment_variations || [])
+        .map((v) => v.trim())
+        .filter(Boolean),
       action_send_dm: form.action_send_dm,
       dm_message_text: form.dm_message_text || null,
+      dm_buttons: (form.dm_buttons || [])
+        .filter((b) => b.label && b.label.trim())
+        .slice(0, 3)
+        .map((b) => ({
+          label: b.label.trim(),
+          type: b.type,
+          url: b.type === "link" ? (b.url || "").trim() || null : null,
+          tags: b.type === "reply"
+            ? (b.tags || []).map((t) => t.trim()).filter(Boolean)
+            : [],
+          reply_message: b.type === "reply" ? (b.reply_message || "").trim() || null : null,
+          flow_id: b.type === "reply" ? (b.flow_id || null) : null,
+        })) as any,
       action_trigger_automation: form.action_trigger_automation,
       automation_flow_id: form.automation_flow_id || null,
       cooldown_minutes: form.cooldown_minutes,
@@ -632,13 +665,68 @@ export default function InstagramCommentAutomation() {
                 </Label>
               </div>
               {form.action_reply_comment && (
-                <Textarea
-                  value={form.reply_comment_text}
-                  onChange={(e) => setForm({ ...form, reply_comment_text: e.target.value })}
-                  placeholder="Oi {username}! Que bom que gostou! 💕 Vou te chamar no direct!"
-                  className="text-sm"
-                  rows={2}
-                />
+                <div className="space-y-2">
+                  <Textarea
+                    value={form.reply_comment_text}
+                    onChange={(e) => setForm({ ...form, reply_comment_text: e.target.value })}
+                    placeholder="Oi {username}! Que bom que gostou! 💕 Vou te chamar no direct!"
+                    className="text-sm"
+                    rows={2}
+                  />
+                  <div className="rounded-md border border-dashed p-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <RefreshCw className="h-3 w-3" />
+                        Variações (anti-spam) — sorteadas aleatoriamente
+                      </Label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[11px]"
+                        onClick={() =>
+                          setForm({ ...form, reply_comment_variations: [...form.reply_comment_variations, ""] })
+                        }
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Variação
+                      </Button>
+                    </div>
+                    {form.reply_comment_variations.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Sem variações: usa apenas o texto acima. Adicione 2-3 versões diferentes para reduzir risco de spam.
+                      </p>
+                    )}
+                    {form.reply_comment_variations.map((v, i) => (
+                      <div key={i} className="flex items-start gap-1">
+                        <Textarea
+                          value={v}
+                          onChange={(e) => {
+                            const next = [...form.reply_comment_variations];
+                            next[i] = e.target.value;
+                            setForm({ ...form, reply_comment_variations: next });
+                          }}
+                          placeholder={`Variação ${i + 1}`}
+                          className="text-sm"
+                          rows={2}
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 shrink-0 text-destructive"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              reply_comment_variations: form.reply_comment_variations.filter((_, idx) => idx !== i),
+                            })
+                          }
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -655,15 +743,122 @@ export default function InstagramCommentAutomation() {
                 </Label>
               </div>
               {form.action_send_dm && (
-                <Textarea
-                  value={form.dm_message_text}
-                  onChange={(e) => setForm({ ...form, dm_message_text: e.target.value })}
-                  placeholder="Oi {username}! Vi que você comentou no nosso post 💕 Posso te ajudar com alguma coisa?"
-                  className="text-sm"
-                  rows={3}
-                />
+                <div className="space-y-2">
+                  <Textarea
+                    value={form.dm_message_text}
+                    onChange={(e) => setForm({ ...form, dm_message_text: e.target.value })}
+                    placeholder="Oi {username}! Vi que você comentou no nosso post 💕 Posso te ajudar com alguma coisa?"
+                    className="text-sm"
+                    rows={3}
+                  />
+                  <div className="rounded-md border border-dashed p-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <Target className="h-3 w-3" />
+                        Botões da DM (máx. 3)
+                      </Label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-2 text-[11px]"
+                        disabled={form.dm_buttons.length >= 3}
+                        onClick={() =>
+                          setForm({
+                            ...form,
+                            dm_buttons: [...form.dm_buttons, { label: "", type: "link", url: "", tags: [], reply_message: "", flow_id: "" }],
+                          })
+                        }
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Botão
+                      </Button>
+                    </div>
+                    {form.dm_buttons.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Sem botões: envia só o texto. Botões podem abrir um link (grupo VIP) ou ser uma resposta que aplica tag e dispara um fluxo.
+                      </p>
+                    )}
+                    {form.dm_buttons.map((b, i) => {
+                      const update = (patch: Partial<DmButton>) => {
+                        const next = [...form.dm_buttons];
+                        next[i] = { ...next[i], ...patch };
+                        setForm({ ...form, dm_buttons: next });
+                      };
+                      return (
+                        <div key={i} className="rounded border p-2 space-y-2 bg-muted/30">
+                          <div className="flex items-center gap-1">
+                            <Input
+                              value={b.label}
+                              onChange={(e) => update({ label: e.target.value })}
+                              placeholder="Texto do botão (máx 20)"
+                              maxLength={20}
+                              className="h-8 text-sm"
+                            />
+                            <Select value={b.type} onValueChange={(v) => update({ type: v as "link" | "reply" })}>
+                              <SelectTrigger className="h-8 w-[110px] text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="link">🔗 Link</SelectItem>
+                                <SelectItem value="reply">💬 Resposta</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 shrink-0 text-destructive"
+                              onClick={() => setForm({ ...form, dm_buttons: form.dm_buttons.filter((_, idx) => idx !== i) })}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          {b.type === "link" ? (
+                            <Input
+                              value={b.url || ""}
+                              onChange={(e) => update({ url: e.target.value })}
+                              placeholder="https://link-do-grupo-vip..."
+                              className="h-8 text-sm"
+                            />
+                          ) : (
+                            <div className="space-y-2">
+                              <Input
+                                value={(b.tags || []).join(", ")}
+                                onChange={(e) => update({ tags: e.target.value.split(",").map((t) => t.trim()).filter(Boolean) })}
+                                placeholder="Tags ao clicar (ex: quer_live, vip)"
+                                className="h-8 text-sm"
+                              />
+                              <Textarea
+                                value={b.reply_message || ""}
+                                onChange={(e) => update({ reply_message: e.target.value })}
+                                placeholder="Mensagem de retorno ao clicar (opcional)"
+                                className="text-sm"
+                                rows={2}
+                              />
+                              <Select
+                                value={b.flow_id || "none"}
+                                onValueChange={(v) => update({ flow_id: v === "none" ? "" : v })}
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder="Disparar fluxo (opcional)..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">Nenhum fluxo</SelectItem>
+                                  {flows.map((flow) => (
+                                    <SelectItem key={flow.id} value={flow.id}>{flow.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </div>
+
 
             {/* Action: Trigger Automation */}
             <div className="space-y-2">

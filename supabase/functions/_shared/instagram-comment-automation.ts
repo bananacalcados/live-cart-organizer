@@ -46,6 +46,15 @@ async function fetchCommentMediaThumb(
   }
 }
 
+export interface DmButton {
+  label: string;
+  type: "link" | "reply";
+  url?: string | null;
+  tags?: string[];
+  reply_message?: string | null;
+  flow_id?: string | null;
+}
+
 interface Rule {
   id: string;
   name: string;
@@ -54,14 +63,37 @@ interface Rule {
   media_types: string[];
   action_reply_comment: boolean;
   reply_comment_text: string | null;
+  reply_comment_variations: string[] | null;
   action_send_dm: boolean;
   dm_message_text: string | null;
+  dm_buttons: DmButton[] | null;
   action_trigger_automation: boolean;
   automation_flow_id: string | null;
   cooldown_minutes: number;
   ai_generate_reply: boolean;
   ai_prompt: string | null;
   target_media_id: string | null;
+}
+
+function buildButtonPayload(ruleId: string, buttons: DmButton[]): any[] {
+  const out: any[] = [];
+  buttons.slice(0, 3).forEach((b, idx) => {
+    if (!b?.label) return;
+    if (b.type === "link" && b.url) {
+      out.push({ type: "web_url", url: b.url, title: b.label.slice(0, 20) });
+    } else if (b.type === "reply") {
+      out.push({ type: "postback", title: b.label.slice(0, 20), payload: `igbtn:${ruleId}:${idx}` });
+    }
+  });
+  return out;
+}
+
+function pickReplyText(rule: Rule): string | null {
+  const variations = (rule.reply_comment_variations || []).filter((v) => v && v.trim());
+  if (variations.length > 0) {
+    return variations[Math.floor(Math.random() * variations.length)];
+  }
+  return rule.reply_comment_text;
 }
 
 /**
@@ -171,10 +203,11 @@ export async function processCommentAutomation(
 
     const usernameClean = comment.username?.replace("@", "") || "";
 
-    // ── Action 1: Reply to comment publicly ──
-    if (rule.action_reply_comment && rule.reply_comment_text) {
+    // ── Action 1: Reply to comment publicly (com variações anti-spam) ──
+    const replyTemplate = pickReplyText(rule);
+    if (rule.action_reply_comment && replyTemplate) {
       try {
-        const replyText = rule.reply_comment_text
+        const replyText = replyTemplate
           .replace("{username}", usernameClean)
           .replace("{comment}", comment.text);
 
@@ -219,6 +252,17 @@ export async function processCommentAutomation(
           .replace("{username}", usernameClean)
           .replace("{comment}", comment.text);
 
+        // Botões opcionais (button template). Máx 3 botões pela Meta.
+        const dmButtons = buildButtonPayload(rule.id, rule.dm_buttons || []);
+        const messagePayload = dmButtons.length > 0
+          ? {
+              attachment: {
+                type: "template",
+                payload: { template_type: "button", text: dmText.slice(0, 640), buttons: dmButtons },
+              },
+            }
+          : { text: dmText };
+
         // Use Private Reply API (comment_id based) — works within 7 days
         const res = await fetch(
           `https://graph.instagram.com/v25.0/me/messages`,
@@ -230,7 +274,7 @@ export async function processCommentAutomation(
             },
             body: JSON.stringify({
               recipient: { comment_id: comment.commentId },
-              message: { text: dmText },
+              message: messagePayload,
             }),
           }
         );
@@ -543,4 +587,124 @@ export async function processStoryReplyAutomation(
 
   return { actions };
 }
+
+/**
+ * Trata o clique em um botão de "resposta" (postback) enviado por uma DM de
+ * automação de comentário. Payload esperado: `igbtn:<ruleId>:<buttonIdx>`.
+ * Aplica as tags configuradas no contato, envia mensagem de retorno opcional e
+ * dispara o fluxo de automação opcional.
+ */
+export async function handleCommentButtonPostback(
+  supabase: ReturnType<typeof createClient>,
+  payload: string,
+  fromId: string,
+  username: string | null,
+): Promise<{ handled: boolean; actions: string[] }> {
+  const actions: string[] = [];
+  if (!payload || !payload.startsWith("igbtn:")) return { handled: false, actions };
+
+  const parts = payload.split(":");
+  const ruleId = parts[1];
+  const buttonIdx = Number(parts[2]);
+  if (!ruleId || Number.isNaN(buttonIdx)) return { handled: false, actions };
+
+  const { data: rule } = await supabase
+    .from("instagram_comment_rules")
+    .select("id, name, dm_buttons")
+    .eq("id", ruleId)
+    .maybeSingle();
+  if (!rule) return { handled: true, actions };
+
+  const buttons = (rule as any).dm_buttons as DmButton[] | null;
+  const button = buttons?.[buttonIdx];
+  if (!button) return { handled: true, actions };
+
+  // ── Aplicar TAGs no contato (merge sem duplicar) ──
+  if (button.tags && button.tags.length > 0) {
+    try {
+      const { data: existing } = await supabase
+        .from("chat_contacts")
+        .select("tags")
+        .eq("phone", fromId)
+        .maybeSingle();
+      const current: string[] = ((existing as any)?.tags as string[]) || [];
+      const merged = Array.from(new Set([...current, ...button.tags.map((t) => t.trim()).filter(Boolean)]));
+      await supabase.from("chat_contacts").upsert(
+        { phone: fromId, tags: merged, updated_at: new Date().toISOString() },
+        { onConflict: "phone" },
+      );
+      actions.push(`tags:${button.tags.join(",")}`);
+    } catch (e) {
+      console.error("[igbtn] erro ao aplicar tags:", e);
+    }
+  }
+
+  const pageAccessToken = Deno.env.get("META_PAGE_ACCESS_TOKEN");
+
+  // ── Mensagem de retorno opcional ──
+  if (button.reply_message && pageAccessToken) {
+    try {
+      const res = await fetch(`https://graph.instagram.com/v25.0/me/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${pageAccessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipient: { id: fromId },
+          message: { text: button.reply_message },
+          messaging_type: "RESPONSE",
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        actions.push("reply_message");
+        await supabase.from("whatsapp_messages").insert({
+          phone: fromId,
+          message: button.reply_message,
+          direction: "outgoing",
+          message_id: data.message_id || null,
+          status: "sent",
+          media_type: "text",
+          is_group: false,
+          channel: "instagram",
+          sender_name: username,
+        });
+      } else {
+        console.error("[igbtn] falha ao enviar reply_message:", data);
+      }
+    } catch (e) {
+      console.error("[igbtn] erro reply_message:", e);
+    }
+  }
+
+  // ── Disparar fluxo de automação opcional ──
+  if (button.flow_id) {
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      await fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${supabaseKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: fromId,
+          message: button.label,
+          flow_id: button.flow_id,
+          source: "instagram_comment_button",
+          metadata: { rule_id: ruleId, button_index: buttonIdx, username },
+        }),
+      });
+      actions.push(`flow:${button.flow_id}`);
+    } catch (e) {
+      console.error("[igbtn] erro ao disparar fluxo:", e);
+    }
+  }
+
+  console.log(`[igbtn] postback tratado (regra ${(rule as any).name}, botão ${buttonIdx}): ${actions.join(", ")}`);
+  return { handled: true, actions };
+}
+
 
