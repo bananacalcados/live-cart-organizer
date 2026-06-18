@@ -16308,6 +16308,7 @@ export type Database = {
         }[]
       }
       calculate_rfm_scores: { Args: never; Returns: Json }
+      calculate_rfm_scores_unified: { Args: never; Returns: Json }
       check_chargeback_risk: {
         Args: {
           p_address_cep?: string
@@ -16405,6 +16406,22 @@ export type Database = {
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       extract_phone_suffix8: { Args: { phone_input: string }; Returns: string }
       finalize_completed_dispatches: { Args: never; Returns: number }
+      find_or_create_customer_unified: {
+        Args: {
+          p_address?: string
+          p_address_number?: string
+          p_cep?: string
+          p_city?: string
+          p_complement?: string
+          p_cpf: string
+          p_email: string
+          p_name: string
+          p_neighborhood?: string
+          p_phone: string
+          p_state?: string
+        }
+        Returns: string
+      }
       find_or_create_unified_customer: {
         Args: {
           p_cpf?: string
