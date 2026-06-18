@@ -259,6 +259,18 @@ serve(async (req) => {
           }
         } else if (event.postback) {
           messageText = event.postback.payload || event.postback.title || '[postback]';
+          // Botão de resposta de automação de comentário do IG → aplica tag / fluxo / mensagem
+          if (channel === 'instagram' && typeof event.postback.payload === 'string' && event.postback.payload.startsWith('igbtn:')) {
+            try {
+              const igUsername = senderId ? await fetchInstagramSenderUsername(pageAccessToken, senderId).catch(() => null) : null;
+              const btnResult = await handleCommentButtonPostback(supabase, event.postback.payload, senderId, igUsername ? `@${igUsername}` : null);
+              if (btnResult.handled) {
+                console.log(`[ig-button] postback tratado: ${btnResult.actions.join(', ')}`);
+              }
+            } catch (btnErr) {
+              console.error('[ig-button] erro ao tratar postback:', btnErr);
+            }
+          }
         } else if (event.referral) {
           messageText = event.referral.ref ? `[referral: ${event.referral.ref}]` : '[via anúncio]';
           referralData = {
