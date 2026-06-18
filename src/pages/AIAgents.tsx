@@ -148,9 +148,9 @@ const AIAgents = () => {
     // Get last update timestamp
     const { data: latest } = await supabase
       .from('crm_customers_v')
-      .select('rfm_updated_at')
-      .not('rfm_updated_at', 'is', null)
-      .order('rfm_updated_at', { ascending: false })
+      .select('updated_at')
+      .not('updated_at', 'is', null)
+      .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
