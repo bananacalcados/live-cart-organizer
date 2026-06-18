@@ -3,6 +3,7 @@
 // worker spawning, and completion). Kept so legacy pg_cron entries don't 404.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
