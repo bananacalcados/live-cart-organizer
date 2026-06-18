@@ -7,7 +7,7 @@ import {
   Heart, Star, Zap, ChevronDown, Plus, ArrowUpDown, Megaphone,
   FileSpreadsheet, X, TrendingUp, Send, Brain, Trash2, Tag,
   Eye, CheckCircle2, MessageSquare, Instagram, Store, Globe, Sparkles, Pencil,
-  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon, Radio
+  Target, Calendar, ListChecks, Loader2, CheckCircle, XCircle, Link, Copy, ExternalLink, Gift, Bell, Save, Bookmark, Minus, Plus as PlusIcon, Radio, Footprints
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,6 +82,9 @@ interface ZoppyCustomer {
   first_purchase_at: string | null;
   tags: string[] | null;
   opt_out_mass_dispatch?: boolean;
+  purchased_brands?: string[] | null;
+  purchased_categories?: string[] | null;
+  purchased_sizes?: string[] | null;
 }
 
 interface Campaign {
@@ -244,6 +247,9 @@ export default function Marketing() {
    const [includedPresetIds, setIncludedPresetIds] = useState<string[]>([]);
    const [presetOpsOpen, setPresetOpsOpen] = useState(false);
    const [tagFilter, setTagFilter] = useState<string>("all");
+   const [brandFilter, setBrandFilter] = useState<string>("all");
+   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+   const [sizeFilter, setSizeFilter] = useState<string>("all");
   const loadedTabsRef = useRef<Set<string>>(new Set());
 
   // ─── Fetch data ──────────────────────────────
@@ -268,7 +274,7 @@ export default function Marketing() {
           // Fonte única: base unificada de clientes (deduplicada), via view compatível.
           .from('crm_customers_v')
           // Apenas compradores (matriz RFM real de vendas).
-          .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch')
+          .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch, purchased_brands, purchased_categories, purchased_sizes')
           .gte('total_orders', 1)
           .order('total_spent', { ascending: false, nullsFirst: false })
           .order('id', { ascending: true }) // tie-breaker para paginação estável
@@ -1020,6 +1026,9 @@ export default function Marketing() {
     if (rfmFilter !== "all" && c.rfm_segment !== rfmFilter) return false;
     if (dddFilter !== "all" && c.ddd !== dddFilter) return false;
     if (tagFilter !== "all" && !(c.tags || []).includes(tagFilter)) return false;
+    if (brandFilter !== "all" && !(c.purchased_brands || []).includes(brandFilter)) return false;
+    if (categoryFilter !== "all" && !(c.purchased_categories || []).includes(categoryFilter)) return false;
+    if (sizeFilter !== "all" && !(c.purchased_sizes || []).includes(sizeFilter)) return false;
     if (recencyFilter !== "all" && (c.rfm_recency_score || 0) !== parseInt(recencyFilter)) return false;
     if (dateFrom && c.last_purchase_at && c.last_purchase_at < dateFrom) return false;
     if (dateTo && c.last_purchase_at && c.last_purchase_at > dateTo + 'T23:59:59') return false;
@@ -1077,6 +1086,9 @@ export default function Marketing() {
   const regionCounts = customers.reduce((acc, c) => { acc[c.region_type] = (acc[c.region_type] || 0) + 1; return acc; }, {} as Record<string, number>);
   const uniqueDdds = [...new Set(customers.map(c => c.ddd).filter(Boolean))].sort();
   const uniqueTags = [...new Set(customers.flatMap(c => c.tags || []).filter(Boolean))].sort();
+  const uniqueBrands = [...new Set(customers.flatMap(c => c.purchased_brands || []).filter(Boolean))].sort();
+  const uniqueCategories = [...new Set(customers.flatMap(c => c.purchased_categories || []).filter(Boolean))].sort();
+  const uniqueSizes = [...new Set(customers.flatMap(c => c.purchased_sizes || []).filter(Boolean))].sort((a, b) => parseInt(a) - parseInt(b));
   const totalRevenue = customers.reduce((s, c) => s + c.total_spent, 0);
   const toggleSort = (field: string) => { if (sortField === field) setSortDir(d => d === "desc" ? "asc" : "desc"); else { setSortField(field); setSortDir("desc"); } };
   const formatCurrency = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -1237,6 +1249,33 @@ export default function Marketing() {
                     <SelectContent>
                       <SelectItem value="all">Todas Tags</SelectItem>
                       {uniqueTags.map(tag => (<SelectItem key={tag} value={tag}>🏷️ {tag}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {uniqueBrands.length > 0 && (
+                  <Select value={brandFilter} onValueChange={setBrandFilter}>
+                    <SelectTrigger className="h-9"><ShoppingBag className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Marcas</SelectItem>
+                      {uniqueBrands.map(b => (<SelectItem key={b} value={b}>👟 {b}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {uniqueCategories.length > 0 && (
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="h-9"><ListChecks className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas Categorias</SelectItem>
+                      {uniqueCategories.map(cat => (<SelectItem key={cat} value={cat}>{cat}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {uniqueSizes.length > 0 && (
+                  <Select value={sizeFilter} onValueChange={setSizeFilter}>
+                    <SelectTrigger className="h-9"><Footprints className="h-3.5 w-3.5 mr-1" /><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos Tamanhos</SelectItem>
+                      {uniqueSizes.map(sz => (<SelectItem key={sz} value={sz}>Nº {sz}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 )}
