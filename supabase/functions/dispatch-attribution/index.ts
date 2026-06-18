@@ -451,7 +451,7 @@ Deno.serve(async (req) => {
       // 5c. Check zoppy_customers for ERP consolidated history
       if (!hasAnyPrior) {
         const { data: zCust } = await supabase
-          .from("zoppy_customers")
+          .from("crm_customers_v")
           .select("total_orders, first_purchase_at, total_spent")
           .ilike("phone", `%${suffix.slice(-8)}`)
           .gt("total_orders", 0)
