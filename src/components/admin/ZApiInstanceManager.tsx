@@ -98,21 +98,23 @@ export function ZApiInstanceManager() {
   };
 
   const handleSave = async () => {
-    if (!formLabel.trim() || !formInstanceId.trim() || !formToken.trim() || !formClientToken.trim()) {
+    const tokensRequired = !editingId;
+    if (!formLabel.trim() || !formInstanceId.trim() || (tokensRequired && (!formToken.trim() || !formClientToken.trim()))) {
       toast({ title: "Preencha todos os campos obrigatórios", variant: "destructive" });
       return;
     }
     setSaving(true);
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       label: formLabel.trim(),
       phone_display: formPhone.trim(),
       provider: "zapi" as const,
       is_active: formIsActive,
       zapi_instance_id: formInstanceId.trim(),
-      zapi_token: formToken.trim(),
-      zapi_client_token: formClientToken.trim(),
     };
+    // Só grava os tokens se o admin digitou algo (em branco no editar = mantém o atual)
+    if (formToken.trim()) payload.zapi_token = formToken.trim();
+    if (formClientToken.trim()) payload.zapi_client_token = formClientToken.trim();
 
     let error;
     if (editingId) {
