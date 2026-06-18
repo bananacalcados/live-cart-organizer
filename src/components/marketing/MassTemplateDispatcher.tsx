@@ -423,7 +423,7 @@ export function MassTemplateDispatcher() {
       let keepFetching = true;
       while (keepFetching) {
         const { data, error } = await supabase
-          .from('zoppy_customers')
+          .from('crm_customers_v')
           .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type, total_orders, total_spent, avg_ticket, last_purchase_at, tags')
           .not('phone', 'is', null)
           .order('total_spent', { ascending: false })

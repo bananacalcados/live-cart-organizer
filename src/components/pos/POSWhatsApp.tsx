@@ -620,7 +620,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           .limit(1)
           .maybeSingle(),
         supabase
-          .from("zoppy_customers")
+          .from("crm_customers_v")
           .select("id, first_name, last_name, phone, email")
           .or(`phone.ilike.%${suffix}%`)
           .limit(1)

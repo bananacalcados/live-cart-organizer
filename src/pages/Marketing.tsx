@@ -69,7 +69,7 @@ interface ZoppyCustomer {
   state: string | null;
   region_type: string;
   ddd: string | null;
-  zoppy_position: string | null;
+  zoppy_position?: string | null;
   rfm_recency_score: number | null;
   rfm_frequency_score: number | null;
   rfm_monetary_score: number | null;
@@ -265,10 +265,11 @@ export default function Marketing() {
       let keepFetching = true;
       while (keepFetching) {
         const { data, error } = await supabase
-          .from('zoppy_customers')
-          // Seleciona apenas as colunas usadas na tela (interface ZoppyCustomer),
-          // em vez de '*' (56 colunas) — reduz drasticamente o egress.
-          .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, zoppy_position, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch')
+          // Fonte única: base unificada de clientes (deduplicada), via view compatível.
+          .from('crm_customers_v')
+          // Apenas compradores (matriz RFM real de vendas).
+          .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch')
+          .gte('total_orders', 1)
           .order('total_spent', { ascending: false, nullsFirst: false })
           .order('id', { ascending: true }) // tie-breaker para paginação estável
           .range(from, from + batchSize - 1);
@@ -432,21 +433,22 @@ export default function Marketing() {
   }, [fetchLeads, startLeadBackfillPolling]);
 
   const deleteCustomer = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este cliente?')) return;
-    const { error } = await supabase.from('zoppy_customers').delete().eq('id', id);
-    if (error) { toast.error('Erro ao excluir: ' + error.message); return; }
+    if (!confirm('Tem certeza que deseja remover este cliente da matriz?')) return;
+    // Soft delete: arquiva na base unificada (reversível, preserva histórico/vendas).
+    const { error } = await supabase.from('customers_unified').update({ is_archived: true } as any).eq('id', id);
+    if (error) { toast.error('Erro ao remover: ' + error.message); return; }
     setCustomers(prev => prev.filter(c => c.id !== id));
     setSelectedCustomer(null);
-    toast.success('Cliente excluído!');
+    toast.success('Cliente removido da matriz!');
   };
 
   const saveCustomerEdit = async () => {
     if (!editingCustomer) return;
     const { id, ...rest } = editingCustomer;
-    const { error } = await supabase.from('zoppy_customers').update({
-      first_name: rest.first_name,
-      last_name: rest.last_name,
-      phone: rest.phone,
+    const fullName = [rest.first_name, rest.last_name].filter(Boolean).join(' ').trim();
+    const { error } = await supabase.from('customers_unified').update({
+      name: fullName || null,
+      phone_e164: rest.phone,
       email: rest.email,
       city: rest.city,
       state: rest.state,
@@ -2056,7 +2058,7 @@ export default function Marketing() {
                     id="opt-out-toggle"
                     checked={!!selectedCustomer.opt_out_mass_dispatch}
                     onCheckedChange={async (checked) => {
-                      const { error } = await supabase.from('zoppy_customers').update({ opt_out_mass_dispatch: checked }).eq('id', selectedCustomer.id);
+                      const { error } = await supabase.from('customers_unified').update({ opt_out_mass_dispatch: checked } as any).eq('id', selectedCustomer.id);
                       if (error) { toast.error('Erro ao atualizar'); return; }
                       setSelectedCustomer(prev => prev ? { ...prev, opt_out_mass_dispatch: checked } as any : prev);
                       setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, opt_out_mass_dispatch: checked } : c));

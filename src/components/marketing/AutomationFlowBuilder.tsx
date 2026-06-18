@@ -1733,11 +1733,11 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
     setLoading(true);
     const [campaignsData, rfmData, statesData, citiesData, regionsData, gendersData, presetsRes] = await Promise.all([
       fetchAllRows("lp_leads", "campaign_tag"),
-      fetchAllRows("zoppy_customers", "rfm_segment"),
-      fetchAllRows("zoppy_customers", "state"),
-      fetchAllRows("zoppy_customers", "city"),
-      fetchAllRows("zoppy_customers", "region_type"),
-      fetchAllRows("zoppy_customers", "gender"),
+      fetchAllRows("crm_customers_v", "rfm_segment"),
+      fetchAllRows("crm_customers_v", "state"),
+      fetchAllRows("crm_customers_v", "city"),
+      fetchAllRows("crm_customers_v", "region_type"),
+      fetchAllRows("crm_customers_v", "gender"),
       supabase.from("app_settings").select("id,key,value").like("key", "rfm_filter_preset_%").order("created_at", { ascending: true }),
     ]);
 
@@ -2145,7 +2145,7 @@ function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onC
         setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
         setLoadingCampaigns(false);
       }),
-      fetchAllPaginated("zoppy_customers", "rfm_segment").then((data) => {
+      fetchAllPaginated("crm_customers_v", "rfm_segment").then((data) => {
         const counts: Record<string, number> = {};
         data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
         setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));

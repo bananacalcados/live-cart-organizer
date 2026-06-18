@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
     off = 0;
     while (true) {
       const { data } = await supabase
-        .from("zoppy_customers")
+        .from("crm_customers_v")
         .select("phone, cpf")
         .range(off, off + 999);
       if (!data || data.length === 0) break;

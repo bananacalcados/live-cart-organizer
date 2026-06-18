@@ -248,7 +248,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
       // Legacy aggregate from CRM (zoppy_customers) for accurate historical purchase count
       const legacyAggPromise = last8
         ? supabase
-            .from("zoppy_customers")
+            .from("crm_customers_v")
             .select("total_orders, total_spent, last_purchase_at, first_purchase_at, phone")
             .ilike("phone", `%${last8}`)
             .order("total_orders", { ascending: false })

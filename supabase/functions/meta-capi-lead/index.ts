@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
       try {
         const phoneSuffix = phoneDigits.slice(-8);
         const { data: zc } = await supabase
-          .from("zoppy_customers")
+          .from("crm_customers_v")
           .select("first_name, last_name")
           .or(`phone.ilike.%${phoneSuffix}`)
           .limit(1)

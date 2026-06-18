@@ -694,7 +694,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       orParts.push(`last_name.ilike.%${term}%`);
       orParts.push(`email.ilike.%${term}%`);
       const { data: rfmData } = await supabase
-        .from('zoppy_customers')
+        .from('crm_customers_v')
         .select('id, first_name, last_name, phone, cpf, email, city, state')
         .or(orParts.join(','))
         .limit(10);

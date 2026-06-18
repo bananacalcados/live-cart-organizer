@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
     if (phoneSuffix && (!_email || !_fullName || !_city || !_state)) {
       try {
         const { data: zc } = await supabase
-          .from("zoppy_customers")
+          .from("crm_customers_v")
           .select("first_name, last_name, email, city, state")
           .or(`phone.ilike.%${phoneSuffix}`)
           .limit(1)

@@ -1322,9 +1322,9 @@ export async function executeAdsToolCall(
           : null;
         const last8 = normalizedPhone.slice(-8);
 
-        // Search zoppy_customers with flexible phone matching
+        // Search crm_customers_v with flexible phone matching
         const { data: customers } = await supabase
-          .from('zoppy_customers')
+          .from('crm_customers_v')
           .select('id, first_name, last_name, phone, tags')
           .not('phone', 'is', null);
 
@@ -1352,7 +1352,7 @@ export async function executeAdsToolCall(
           const currentTags = matchedCustomer.tags || [];
           if (!currentTags.includes(tag)) {
             await supabase
-              .from('zoppy_customers')
+              .from('customers_unified')
               .update({ tags: [...currentTags, tag] })
               .eq('id', matchedCustomer.id);
           }

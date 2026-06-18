@@ -23,8 +23,8 @@ Deno.serve(async (req) => {
     let off = 0;
     while (true) {
       const { data } = await supabase
-        .from("zoppy_customers")
-        .select("id, total_orders, total_spent, first_purchase_at, last_purchase_at, avg_ticket, source, region_type, email, phone")
+        .from("crm_customers_v")
+        .select("id, total_orders, total_spent, first_purchase_at, last_purchase_at, avg_ticket, region_type, email, phone")
         .gt("total_orders", 0)
         .range(off, off + 999);
       if (!data || data.length === 0) break;

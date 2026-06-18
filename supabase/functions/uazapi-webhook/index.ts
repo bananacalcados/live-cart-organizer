@@ -608,7 +608,7 @@ serve(async (req) => {
       try {
         const suffix8 = phone.slice(-8);
         const [{ data: zoppyMatch }, { data: posMatch }] = await Promise.all([
-          supabase.from("zoppy_customers").select("id").or(`phone.ilike.%${suffix8}`).limit(1).maybeSingle(),
+          supabase.from("crm_customers_v").select("id").or(`phone.ilike.%${suffix8}`).limit(1).maybeSingle(),
           supabase.from("pos_customers").select("id").or(`whatsapp.ilike.%${suffix8}`).limit(1).maybeSingle(),
         ]);
         if (!zoppyMatch && !posMatch) {
