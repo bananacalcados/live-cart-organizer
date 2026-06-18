@@ -23,8 +23,8 @@ interface ZApiInstance {
   is_active: boolean;
   is_default: boolean;
   zapi_instance_id: string | null;
-  zapi_token: string | null;
-  zapi_client_token: string | null;
+  has_zapi_token: boolean | null;
+  has_zapi_client_token: boolean | null;
   created_at: string;
   is_online: boolean | null;
   last_health_check: string | null;
