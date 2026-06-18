@@ -19,6 +19,15 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 
+interface DmButton {
+  label: string;
+  type: "link" | "reply";
+  url?: string;
+  tags?: string[];
+  reply_message?: string;
+  flow_id?: string;
+}
+
 interface Rule {
   id: string;
   name: string;
@@ -28,8 +37,10 @@ interface Rule {
   media_types: string[];
   action_reply_comment: boolean;
   reply_comment_text: string | null;
+  reply_comment_variations: string[] | null;
   action_send_dm: boolean;
   dm_message_text: string | null;
+  dm_buttons: DmButton[] | null;
   action_trigger_automation: boolean;
   automation_flow_id: string | null;
   cooldown_minutes: number;
