@@ -91,8 +91,8 @@ export function ZApiInstanceManager() {
     setFormLabel(inst.label);
     setFormPhone(inst.phone_display);
     setFormInstanceId(inst.zapi_instance_id || "");
-    setFormToken(inst.zapi_token || "");
-    setFormClientToken(inst.zapi_client_token || "");
+    setFormToken("");
+    setFormClientToken("");
     setFormIsActive(inst.is_active);
     setDialogOpen(true);
   };
