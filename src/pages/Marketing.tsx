@@ -2058,7 +2058,7 @@ export default function Marketing() {
                     id="opt-out-toggle"
                     checked={!!selectedCustomer.opt_out_mass_dispatch}
                     onCheckedChange={async (checked) => {
-                      const { error } = await supabase.from('zoppy_customers').update({ opt_out_mass_dispatch: checked }).eq('id', selectedCustomer.id);
+                      const { error } = await supabase.from('customers_unified').update({ opt_out_mass_dispatch: checked } as any).eq('id', selectedCustomer.id);
                       if (error) { toast.error('Erro ao atualizar'); return; }
                       setSelectedCustomer(prev => prev ? { ...prev, opt_out_mass_dispatch: checked } as any : prev);
                       setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? { ...c, opt_out_mass_dispatch: checked } : c));
