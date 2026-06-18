@@ -695,7 +695,7 @@ export function POSConfig({ storeId }: Props) {
     try {
       // Fetch ALL segments for comprehensive contact strategies
       const { data: rfmCustomers } = await supabase
-        .from('zoppy_customers')
+        .from('crm_customers_v')
         .select('first_name, last_name, phone, rfm_segment, total_spent, last_purchase_at, total_orders')
         .not('phone', 'is', null)
         .not('rfm_segment', 'is', null)

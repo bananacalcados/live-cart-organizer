@@ -577,7 +577,7 @@ serve(async (req) => {
 
             // Check if already a known customer (zoppy_customers or pos_customers)
             const [{ data: zoppyMatch }, { data: posMatch }] = await Promise.all([
-              supabase.from('zoppy_customers').select('id').or(`phone.ilike.%${phoneSuffix8}`).limit(1).maybeSingle(),
+              supabase.from('crm_customers_v').select('id').or(`phone.ilike.%${phoneSuffix8}`).limit(1).maybeSingle(),
               supabase.from('pos_customers').select('id').or(`whatsapp.ilike.%${phoneSuffix8}`).limit(1).maybeSingle(),
             ]);
 

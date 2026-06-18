@@ -694,7 +694,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       orParts.push(`last_name.ilike.%${term}%`);
       orParts.push(`email.ilike.%${term}%`);
       const { data: rfmData } = await supabase
-        .from('zoppy_customers')
+        .from('crm_customers_v')
         .select('id, first_name, last_name, phone, cpf, email, city, state')
         .or(orParts.join(','))
         .limit(10);
@@ -793,7 +793,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       // Check all sources in parallel
       const [zoppyRes, internalRes, prizesRes] = await Promise.all([
         supabase
-          .from('zoppy_customers')
+          .from('crm_customers_v')
           .select('coupon_code, coupon_amount, coupon_type, coupon_used, coupon_min_purchase, coupon_expiry_date')
           .ilike('phone', `%${phone.slice(-8)}%`)
           .eq('coupon_used', false)

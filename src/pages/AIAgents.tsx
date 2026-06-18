@@ -147,7 +147,7 @@ const AIAgents = () => {
   const loadRfmHealth = async () => {
     // Get last update timestamp
     const { data: latest } = await supabase
-      .from('zoppy_customers')
+      .from('crm_customers_v')
       .select('rfm_updated_at')
       .not('rfm_updated_at', 'is', null)
       .order('rfm_updated_at', { ascending: false })
@@ -156,7 +156,7 @@ const AIAgents = () => {
 
     // Get segment counts  
     const { data: allCustomers } = await supabase
-      .from('zoppy_customers')
+      .from('crm_customers_v')
       .select('rfm_segment')
       .not('rfm_segment', 'is', null);
 
