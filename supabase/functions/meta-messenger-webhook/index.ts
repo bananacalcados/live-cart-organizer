@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchInstagramSenderUsername } from "../_shared/meta-instagram-profile.ts";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
-import { processCommentAutomation, processStoryReplyAutomation } from "../_shared/instagram-comment-automation.ts";
+import { processCommentAutomation, processStoryReplyAutomation, handleCommentButtonPostback } from "../_shared/instagram-comment-automation.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
