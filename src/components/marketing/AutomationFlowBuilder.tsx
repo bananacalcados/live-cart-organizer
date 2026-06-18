@@ -2145,7 +2145,7 @@ function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onC
         setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
         setLoadingCampaigns(false);
       }),
-      fetchAllPaginated("zoppy_customers", "rfm_segment").then((data) => {
+      fetchAllPaginated("crm_customers_v", "rfm_segment").then((data) => {
         const counts: Record<string, number> = {};
         data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
         setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
