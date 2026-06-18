@@ -116,8 +116,8 @@ export async function processCommentAutomation(
 
 
   for (const rule of rules as Rule[]) {
-    // Check media type match
-    if (!rule.media_types.some(mt => mt.toLowerCase() === comment.mediaType.toLowerCase())) {
+    // Check media type match (normalizado: FEED/AD/IMAGE/etc. = post)
+    if (!rule.media_types.some(mt => normMediaType(mt) === normMediaType(comment.mediaType))) {
       continue;
     }
 
