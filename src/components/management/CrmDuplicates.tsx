@@ -40,7 +40,7 @@ export function CrmDuplicates() {
       // Fetch from all 3 CRM tables in parallel
       const [posRes, zoppyRes, customersRes] = await Promise.all([
         supabase.from("pos_customers").select("id, name, whatsapp, email, cpf").not("whatsapp", "is", null),
-        supabase.from("zoppy_customers").select("id, first_name, last_name, phone, email" as any).not("phone", "is", null),
+        supabase.from("crm_customers_v").select("id, first_name, last_name, phone, email" as any).not("phone", "is", null),
         supabase.from("customers").select("id, instagram_handle, whatsapp").not("whatsapp", "is", null),
       ]);
 
