@@ -88,7 +88,7 @@ export function MetaInstanceManager() {
     setFormPhone(inst.phone_display);
     setFormPhoneNumberId(inst.phone_number_id || "");
     setFormWabaId(inst.business_account_id || "");
-    setFormAccessToken(inst.access_token || "");
+    setFormAccessToken("");
     setShowFormToken(false);
     setFormIsActive(inst.is_active);
     setDialogOpen(true);
