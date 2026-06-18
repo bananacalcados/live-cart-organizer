@@ -24,7 +24,7 @@ interface MetaInstance {
   is_default: boolean;
   phone_number_id: string | null;
   business_account_id: string | null;
-  access_token: string | null;
+  has_meta_token: boolean | null;
   created_at: string;
 }
 
