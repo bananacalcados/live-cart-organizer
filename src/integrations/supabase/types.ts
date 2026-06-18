@@ -15592,6 +15592,9 @@ export type Database = {
           ai_paused: boolean
           business_account_id: string | null
           created_at: string
+          has_meta_token: boolean | null
+          has_zapi_client_token: boolean | null
+          has_zapi_token: boolean | null
           health_check_error: string | null
           id: string
           is_active: boolean
@@ -15627,6 +15630,9 @@ export type Database = {
           ai_paused?: boolean
           business_account_id?: string | null
           created_at?: string
+          has_meta_token?: boolean | null
+          has_zapi_client_token?: boolean | null
+          has_zapi_token?: boolean | null
           health_check_error?: string | null
           id?: string
           is_active?: boolean
@@ -15662,6 +15668,9 @@ export type Database = {
           ai_paused?: boolean
           business_account_id?: string | null
           created_at?: string
+          has_meta_token?: boolean | null
+          has_zapi_client_token?: boolean | null
+          has_zapi_token?: boolean | null
           health_check_error?: string | null
           id?: string
           is_active?: boolean
