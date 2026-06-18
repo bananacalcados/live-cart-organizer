@@ -252,6 +252,17 @@ export async function processCommentAutomation(
           .replace("{username}", usernameClean)
           .replace("{comment}", comment.text);
 
+        // Botões opcionais (button template). Máx 3 botões pela Meta.
+        const dmButtons = buildButtonPayload(rule.id, rule.dm_buttons || []);
+        const messagePayload = dmButtons.length > 0
+          ? {
+              attachment: {
+                type: "template",
+                payload: { template_type: "button", text: dmText.slice(0, 640), buttons: dmButtons },
+              },
+            }
+          : { text: dmText };
+
         // Use Private Reply API (comment_id based) — works within 7 days
         const res = await fetch(
           `https://graph.instagram.com/v25.0/me/messages`,
@@ -263,7 +274,7 @@ export async function processCommentAutomation(
             },
             body: JSON.stringify({
               recipient: { comment_id: comment.commentId },
-              message: { text: dmText },
+              message: messagePayload,
             }),
           }
         );
