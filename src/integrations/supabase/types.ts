@@ -6333,12 +6333,14 @@ export type Database = {
           automation_flow_id: string | null
           cooldown_minutes: number | null
           created_at: string
+          dm_buttons: Json
           dm_message_text: string | null
           id: string
           is_active: boolean
           media_types: string[] | null
           name: string
           reply_comment_text: string | null
+          reply_comment_variations: string[]
           target_media_caption: string | null
           target_media_id: string | null
           trigger_keywords: string[] | null
@@ -6354,12 +6356,14 @@ export type Database = {
           automation_flow_id?: string | null
           cooldown_minutes?: number | null
           created_at?: string
+          dm_buttons?: Json
           dm_message_text?: string | null
           id?: string
           is_active?: boolean
           media_types?: string[] | null
           name: string
           reply_comment_text?: string | null
+          reply_comment_variations?: string[]
           target_media_caption?: string | null
           target_media_id?: string | null
           trigger_keywords?: string[] | null
@@ -6375,12 +6379,14 @@ export type Database = {
           automation_flow_id?: string | null
           cooldown_minutes?: number | null
           created_at?: string
+          dm_buttons?: Json
           dm_message_text?: string | null
           id?: string
           is_active?: boolean
           media_types?: string[] | null
           name?: string
           reply_comment_text?: string | null
+          reply_comment_variations?: string[]
           target_media_caption?: string | null
           target_media_id?: string | null
           trigger_keywords?: string[] | null
