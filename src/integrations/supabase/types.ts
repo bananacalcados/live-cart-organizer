@@ -11630,7 +11630,7 @@ export type Database = {
           seller_name: string | null
           sku: string | null
           store_id: string
-          tiny_id: number
+          tiny_id: number | null
           tiny_mirror_status: string | null
           tiny_mirrored_at: string | null
         }
@@ -11651,7 +11651,7 @@ export type Database = {
           seller_name?: string | null
           sku?: string | null
           store_id: string
-          tiny_id: number
+          tiny_id?: number | null
           tiny_mirror_status?: string | null
           tiny_mirrored_at?: string | null
         }
@@ -11672,7 +11672,7 @@ export type Database = {
           seller_name?: string | null
           sku?: string | null
           store_id?: string
-          tiny_id?: number
+          tiny_id?: number | null
           tiny_mirror_status?: string | null
           tiny_mirrored_at?: string | null
         }
