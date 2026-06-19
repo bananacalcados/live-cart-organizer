@@ -350,7 +350,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
               <img src={bulkPhotoUrl} alt="Preview" className="h-16 w-16 rounded-lg object-cover" />
             )}
             <Button size="sm" disabled={!bulkPhotoUrl.trim() || isApplying === 'photo'} className="gap-1"
-              onClick={() => applyToAllGroups('photo', { action: 'update-photo', value: bulkPhotoUrl })}>
+              onClick={() => applyToAllGroups('photo')}>
               {isApplying === 'photo' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Image className="h-3.5 w-3.5" />}
               Aplicar Foto
             </Button>
@@ -365,7 +365,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           <CardContent className="p-3 pt-0 space-y-2">
             <Textarea placeholder="Nova descrição..." value={bulkDescription} onChange={e => setBulkDescription(e.target.value)} rows={2} />
             <Button size="sm" disabled={!bulkDescription.trim() || isApplying === 'description'} className="gap-1"
-              onClick={() => applyToAllGroups('description', { action: 'update-description', value: bulkDescription })}>
+              onClick={() => applyToAllGroups('description')}>
               {isApplying === 'description' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
               Aplicar Descrição
             </Button>
@@ -414,7 +414,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
               <Switch checked={onlyAdminsAdd} onCheckedChange={setOnlyAdminsAdd} />
             </div>
             <Button size="sm" disabled={isApplying === 'permissions'} className="gap-1"
-              onClick={() => applyToAllGroups('permissions', { action: 'permissions', onlyAdminsSend, onlyAdminsAdd })}>
+              onClick={() => applyToAllGroups('permissions')}>
               {isApplying === 'permissions' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}
               Aplicar Permissões
             </Button>
