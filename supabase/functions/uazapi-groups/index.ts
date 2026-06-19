@@ -141,6 +141,76 @@ serve(async (req) => {
         r = await uazapiInstance("/send/text", token, { method: "POST", body: payload });
         break;
       }
+      case "updateName": {
+        if (!jid) return json({ error: "groupJid obrigatório" }, 400);
+        if (!body.name) return json({ error: "name obrigatório" }, 400);
+        r = await uazapiInstance("/group/updateName", token, {
+          method: "POST",
+          body: { groupjid: jid, name: String(body.name) },
+        });
+        break;
+      }
+      case "updateDescription": {
+        if (!jid) return json({ error: "groupJid obrigatório" }, 400);
+        r = await uazapiInstance("/group/updateDescription", token, {
+          method: "POST",
+          body: { groupjid: jid, description: String(body.description ?? "") },
+        });
+        break;
+      }
+      case "updateImage": {
+        if (!jid) return json({ error: "groupJid obrigatório" }, 400);
+        if (!body.image) return json({ error: "image obrigatório" }, 400);
+        r = await uazapiInstance("/group/updateImage", token, {
+          method: "POST",
+          body: { groupjid: jid, image: String(body.image) },
+        });
+        break;
+      }
+      case "updateAnnounce": {
+        // announce=true → apenas admins enviam mensagens
+        if (!jid) return json({ error: "groupJid obrigatório" }, 400);
+        r = await uazapiInstance("/group/updateAnnounce", token, {
+          method: "POST",
+          body: { groupjid: jid, announce: Boolean(body.announce) },
+        });
+        break;
+      }
+      case "updateMemberAddMode": {
+        // adminsOnly=true → apenas admins adicionam membros
+        if (!jid) return json({ error: "groupJid obrigatório" }, 400);
+        r = await uazapiInstance("/group/updateMemberAddMode", token, {
+          method: "POST",
+          body: { groupjid: jid, MemberAddMode: body.adminsOnly ? "admin_add" : "all_member_add" },
+        });
+        break;
+      }
+      case "pinMessage": {
+        // Envia o texto no grupo e fixa a mensagem enviada.
+        if (!jid) return json({ error: "groupJid obrigatório" }, 400);
+        if (!body.message) return json({ error: "message obrigatório" }, 400);
+        const sent = await uazapiInstance("/send/text", token, {
+          method: "POST",
+          body: { number: jid, text: String(body.message) },
+        });
+        if (!sent.ok) {
+          return json({ error: "Falha ao enviar mensagem para fixar", details: sent.data }, sent.status);
+        }
+        const messageId =
+          sent.data?.messageid || sent.data?.id ||
+          sent.data?.message?.messageid || sent.data?.message?.id || null;
+        if (!messageId) {
+          return json({ error: "Mensagem enviada mas sem ID para fixar", details: sent.data }, 502);
+        }
+        const durationMap: Record<string, number> = { "24_hours": 1, "7_days": 7, "30_days": 30 };
+        const duration = durationMap[String(body.pinDuration || "7_days")] ?? 7;
+        await new Promise((res) => setTimeout(res, 1500));
+        r = await uazapiInstance("/message/pin", token, {
+          method: "POST",
+          body: { id: messageId, pin: true, duration },
+        });
+        break;
+      }
       case "dddStats": {
         // Analisa quantos participantes de cada grupo têm DDD 33 (Gov. Valadares/MG).
         // Lê os grupos da instância no banco, busca participantes via /group/info e
