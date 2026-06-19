@@ -1310,6 +1310,14 @@ export default function Inventory() {
               >
                 <ShoppingBag className="h-3 w-3" /> Vincular Shopify
               </Button>
+              <Button
+                variant={inventoryMode === "depara" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("depara")}
+                className="text-xs h-7 gap-1"
+              >
+                <Link2 className="h-3 w-3" /> De-para Vendas
+              </Button>
               {selectedStoreId && (
                 <>
                   <Button
