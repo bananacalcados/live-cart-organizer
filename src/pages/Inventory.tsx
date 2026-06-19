@@ -12,6 +12,7 @@ import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
 import { ShopifyLinkManager } from "@/components/inventory/ShopifyLinkManager";
+import { SaleUnmatchedItems } from "@/components/inventory/SaleUnmatchedItems";
 import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
 import { InventoryHealthDashboard } from "@/components/inventory/InventoryHealthDashboard";
 import { InventoryAnalytics } from "@/components/inventory/InventoryAnalytics";
