@@ -16993,6 +16993,10 @@ export type Database = {
         Args: { p_sale_id: string }
         Returns: undefined
       }
+      process_pos_sale_sale_event: {
+        Args: { p_sale_id: string }
+        Returns: undefined
+      }
       product_name_key: { Args: { p_name: string }; Returns: string }
       recalc_customer_metrics: {
         Args: { p_customer_id: string }
