@@ -338,8 +338,8 @@ export function ProductsList() {
                       size="sm"
                       variant="outline"
                       className="flex-1 text-xs h-8"
-                      onClick={() => setStockManagerId(p.id)}
-                      title="Gerenciar estoque por variação (entrada / saída / balanço)"
+                      onClick={() => window.open(`/inventory/produto/${p.id}/estoque`, "_blank")}
+                      title="Gerenciar estoque por variação (entrada / saída / balanço) em nova aba"
                     >
                       <Boxes className="h-3 w-3 mr-1" />
                       Estoque
