@@ -11,7 +11,7 @@ import {
 import { Plus, Search, Package, ShoppingBag, Store as StoreIcon, Loader2, Pencil, ChevronDown, RefreshCw, Boxes, Sparkles, Tag, Unlink } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
-import { ProductStockManagerDialog } from "./ProductStockManagerDialog";
+
 import { ProductLabelPrintDialog } from "./ProductLabelPrintDialog";
 import { UnifiedProductsList } from "./UnifiedProductsList";
 import { toast } from "sonner";
@@ -47,7 +47,7 @@ export function ProductsList() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [stockManagerId, setStockManagerId] = useState<string | null>(null);
+  
   const [labelPrintId, setLabelPrintId] = useState<string | null>(null);
   const [sendingTo, setSendingTo] = useState<string | null>(null);
   const [backfilling, setBackfilling] = useState(false);
@@ -338,8 +338,8 @@ export function ProductsList() {
                       size="sm"
                       variant="outline"
                       className="flex-1 text-xs h-8"
-                      onClick={() => setStockManagerId(p.id)}
-                      title="Gerenciar estoque por variação (entrada / saída / balanço)"
+                      onClick={() => window.open(`/inventory/produto/${p.id}/estoque`, "_blank")}
+                      title="Gerenciar estoque por variação (entrada / saída / balanço) em nova aba"
                     >
                       <Boxes className="h-3 w-3 mr-1" />
                       Estoque
@@ -453,11 +453,6 @@ export function ProductsList() {
         onSaved={() => load()}
       />
 
-      <ProductStockManagerDialog
-        masterId={stockManagerId}
-        open={!!stockManagerId}
-        onOpenChange={(v) => !v && setStockManagerId(null)}
-      />
 
       <ProductLabelPrintDialog
         masterId={labelPrintId}

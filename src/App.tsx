@@ -27,6 +27,7 @@ const ExpeditionBeta = lazy(() => import("./pages/ExpeditionBeta"));
 const POS = lazy(() => import("./pages/POS"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const InventoryCategories = lazy(() => import("./pages/InventoryCategories"));
+const ProductStockManager = lazy(() => import("./pages/ProductStockManager"));
 const Management = lazy(() => import("./pages/Management"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AIAgents = lazy(() => import("./pages/AIAgents"));
@@ -114,6 +115,7 @@ const App = () => (
               <Route path="/pos" element={<ProtectedRoute requiredModule="pos"><POS /></ProtectedRoute>} />
               <Route path="/inventory" element={<ProtectedRoute requiredModule="inventory"><Inventory /></ProtectedRoute>} />
               <Route path="/inventory/categorias" element={<ProtectedRoute requiredModule="inventory"><InventoryCategories /></ProtectedRoute>} />
+              <Route path="/inventory/produto/:masterId/estoque" element={<ProtectedRoute requiredModule="inventory"><ProductStockManager /></ProtectedRoute>} />
               <Route path="/management" element={<ProtectedRoute requiredModule="management"><Management /></ProtectedRoute>} />
               <Route path="/admin" element={<ProtectedRoute requiredModule="admin"><Admin /></ProtectedRoute>} />
               <Route path="/ai-agents" element={<ProtectedRoute requiredModule="admin"><AIAgents /></ProtectedRoute>} />
