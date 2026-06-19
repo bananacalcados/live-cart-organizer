@@ -302,7 +302,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
             <p className="text-[10px] text-muted-foreground">Cada grupo receberá "#1", "#2"... após o nome</p>
             <div className="flex gap-2">
               <Button size="sm" disabled={!bulkName.trim() || isApplying === 'name'} className="gap-1"
-                onClick={() => applyToAllGroups('name', { action: 'update-name' })}>
+                onClick={() => applyToAllGroups('name')}>
                 {isApplying === 'name' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
                 Aplicar Nome
               </Button>
