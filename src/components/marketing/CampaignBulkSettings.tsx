@@ -84,58 +84,150 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     finally { setIsSaving(false); }
   };
 
-  const applyToAllGroups = async (action: string, payload: Record<string, unknown>) => {
+  // ---- Roteamento de grupos por provider (uazapi / Z-API / WaSender) ----
+  type GroupRow = { id: string; group_id: string; name: string; instance_id: string | null; provider: string };
+
+  const fetchGroupsWithProvider = async (): Promise<GroupRow[]> => {
+    const { data: groups } = await supabase
+      .from('whatsapp_groups')
+      .select('id, group_id, name, instance_id')
+      .in('id', targetGroups);
+    if (!groups || groups.length === 0) return [];
+    const instanceIds = [...new Set(groups.map((g: any) => g.instance_id).filter(Boolean))] as string[];
+    const providerById = new Map<string, string>();
+    if (instanceIds.length > 0) {
+      const { data: nums } = await supabase
+        .from('whatsapp_numbers')
+        .select('id, provider')
+        .in('id', instanceIds);
+      (nums || []).forEach((n: any) => providerById.set(n.id, n.provider));
+    }
+    return groups.map((g: any) => ({
+      id: g.id,
+      group_id: g.group_id,
+      name: g.name,
+      instance_id: g.instance_id,
+      provider: g.instance_id ? (providerById.get(g.instance_id) || 'zapi') : 'zapi',
+    }));
+  };
+
+  const invokeFn = async (fn: string, body: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> => {
+    const { data, error } = await supabase.functions.invoke(fn, { body });
+    if (error) return { ok: false, error: error.message };
+    if (data && (data as any).success === true) return { ok: true };
+    const err = (data as any)?.error;
+    return { ok: false, error: err ? (typeof err === 'string' ? err : JSON.stringify(err)) : 'Falha desconhecida' };
+  };
+
+  // Aplica uma ação lógica a UM grupo, roteando pelo provider real da instância.
+  const applyActionToGroup = async (
+    g: GroupRow,
+    action: 'name' | 'photo' | 'description' | 'permissions' | 'pin' | 'promote',
+    idx: number,
+    extra?: { phone?: string },
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const wid = g.instance_id || undefined;
+
+    if (g.provider === 'uazapi') {
+      switch (action) {
+        case 'name':
+          return invokeFn('uazapi-groups', { action: 'updateName', groupJid: g.group_id, name: `${bulkName} #${idx + 1}`, whatsapp_number_id: wid });
+        case 'photo':
+          return invokeFn('uazapi-groups', { action: 'updateImage', groupJid: g.group_id, image: bulkPhotoUrl, whatsapp_number_id: wid });
+        case 'description':
+          return invokeFn('uazapi-groups', { action: 'updateDescription', groupJid: g.group_id, description: bulkDescription, whatsapp_number_id: wid });
+        case 'permissions': {
+          const r1 = await invokeFn('uazapi-groups', { action: 'updateAnnounce', groupJid: g.group_id, announce: onlyAdminsSend, whatsapp_number_id: wid });
+          const r2 = await invokeFn('uazapi-groups', { action: 'updateMemberAddMode', groupJid: g.group_id, adminsOnly: onlyAdminsAdd, whatsapp_number_id: wid });
+          return r1.ok && r2.ok ? { ok: true } : { ok: false, error: r1.error || r2.error };
+        }
+        case 'pin':
+          return invokeFn('uazapi-groups', { action: 'pinMessage', groupJid: g.group_id, message: pinMessageText, pinDuration, whatsapp_number_id: wid });
+        case 'promote':
+          return invokeFn('uazapi-groups', { action: 'updateParticipants', groupJid: g.group_id, participantAction: 'promote', participants: [extra?.phone], whatsapp_number_id: wid });
+      }
+    }
+
+    if (g.provider === 'wasender') {
+      switch (action) {
+        case 'permissions':
+          return invokeFn('wasender-groups', { action: 'settings', groupJid: g.group_id, settings: { announce: onlyAdminsSend, restrict: onlyAdminsAdd }, whatsapp_number_id: wid });
+        case 'promote':
+          return invokeFn('wasender-groups', { action: 'updateParticipants', groupJid: g.group_id, participantAction: 'promote', participants: [extra?.phone], whatsapp_number_id: wid });
+        case 'pin':
+          return invokeFn('wasender-groups', { action: 'sendMessage', groupJid: g.group_id, message: pinMessageText, whatsapp_number_id: wid });
+        default:
+          return { ok: false, error: `Ação "${action}" não suportada pelo provedor WaSender` };
+      }
+    }
+
+    // Padrão: Z-API
+    switch (action) {
+      case 'name':
+        return invokeFn('zapi-group-settings', { groupId: g.group_id, action: 'update-name', value: `${bulkName} #${idx + 1}`, whatsapp_number_id: wid });
+      case 'photo':
+        return invokeFn('zapi-group-settings', { groupId: g.group_id, action: 'update-photo', value: bulkPhotoUrl, whatsapp_number_id: wid });
+      case 'description':
+        return invokeFn('zapi-group-settings', { groupId: g.group_id, action: 'update-description', value: bulkDescription, whatsapp_number_id: wid });
+      case 'permissions': {
+        const r1 = await invokeFn('zapi-group-settings', { groupId: g.group_id, action: 'set-messages-admins-only', value: String(onlyAdminsSend), whatsapp_number_id: wid });
+        const r2 = await invokeFn('zapi-group-settings', { groupId: g.group_id, action: 'set-add-admins-only', value: String(onlyAdminsAdd), whatsapp_number_id: wid });
+        return r1.ok && r2.ok ? { ok: true } : { ok: false, error: r1.error || r2.error };
+      }
+      case 'promote':
+        return invokeFn('zapi-group-settings', { action: 'promote-admin', groupId: g.group_id, phone: extra?.phone, whatsapp_number_id: wid });
+      case 'pin': {
+        const send = await supabase.functions.invoke('zapi-send-group-message', {
+          body: { groupId: g.group_id, message: pinMessageText, type: 'text', whatsapp_number_id: wid },
+        });
+        if (send.error) return { ok: false, error: send.error.message };
+        const sd: any = send.data;
+        const messageId = sd?.messageId || sd?.data?.messageId || sd?.data?.zapiMessageId || sd?.data?.zaapId || sd?.data?.id || null;
+        if (!messageId) return { ok: false, error: 'Mensagem enviada sem ID para fixar' };
+        await new Promise(r => setTimeout(r, 2000));
+        return invokeFn('zapi-group-settings', { action: 'pin-message', groupId: g.group_id, messageId, pinDuration, whatsapp_number_id: wid });
+      }
+    }
+    return { ok: false, error: 'Ação não suportada' };
+  };
+
+  const runOnAllGroups = async (
+    action: 'name' | 'photo' | 'description' | 'permissions' | 'pin' | 'promote',
+    delayMs: number,
+    extra?: { phone?: string },
+  ): Promise<{ success: number; total: number; errors: string[] } | null> => {
+    const groups = await fetchGroupsWithProvider();
+    if (groups.length === 0) { toast.error('Nenhum grupo encontrado'); return null; }
+    let success = 0;
+    const errors: string[] = [];
+    for (let i = 0; i < groups.length; i++) {
+      const res = await applyActionToGroup(groups[i], action, i, extra);
+      if (res.ok) success++;
+      else errors.push(`${groups[i].name}: ${res.error || 'falha'}`);
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+    return { success, total: groups.length, errors };
+  };
+
+  const reportResult = (label: string, r: { success: number; total: number; errors: string[] }) => {
+    if (r.errors.length === 0) {
+      toast.success(`${label}: ${r.success}/${r.total} grupos`);
+    } else {
+      console.error('[CampaignBulkSettings] falhas:', r.errors);
+      toast.error(`${label}: ${r.success}/${r.total}. Falhas: ${r.errors.slice(0, 2).join(' | ')}${r.errors.length > 2 ? '…' : ''}`);
+    }
+  };
+
+  const applyToAllGroups = async (action: 'name' | 'photo' | 'description' | 'permissions') => {
     setIsApplying(action);
     try {
-      const { data: groups } = await supabase
-        .from('whatsapp_groups')
-        .select('id, group_id, name')
-        .in('id', targetGroups);
-
-      if (!groups || groups.length === 0) { toast.error("Nenhum grupo encontrado"); return; }
-
-      let success = 0;
-      let failed = 0;
-
-      for (let i = 0; i < groups.length; i++) {
-        const group = groups[i];
-        try {
-          if (action === 'permissions') {
-            await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
-              method: 'POST',
-              headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ groupId: group.group_id, action: 'set-messages-admins-only', value: String(onlyAdminsSend) }),
-            });
-            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
-              method: 'POST',
-              headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ groupId: group.group_id, action: 'set-add-admins-only', value: String(onlyAdminsAdd) }),
-            });
-            const data = await res.json();
-            if (res.ok && data.success) success++;
-            else failed++;
-          } else {
-            const body: Record<string, unknown> = { groupId: group.group_id, ...payload };
-            if (action === 'name' && bulkName) {
-              body.action = 'update-name';
-              body.value = `${bulkName} #${i + 1}`;
-            }
-            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
-              method: 'POST',
-              headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
-            });
-            const data = await res.json();
-            if (res.ok && data.success) success++;
-            else failed++;
-          }
-        } catch { failed++; }
-        await new Promise(r => setTimeout(r, 1000));
-      }
-
-      toast.success(`Aplicado: ${success}/${groups.length} grupos${failed > 0 ? ` (${failed} falharam)` : ''}`);
-    } catch { toast.error("Erro ao aplicar configurações"); }
-    finally { setIsApplying(null); }
+      const r = await runOnAllGroups(action, 1000);
+      if (r) reportResult('Aplicado', r);
+    } catch (e) {
+      toast.error(`Erro ao aplicar configurações: ${(e as Error).message}`);
+    } finally {
+      setIsApplying(null);
+    }
   };
 
   const handlePromoteInAllGroups = async () => {
@@ -143,43 +235,22 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     const cleanPhone = promotePhone.replace(/\D/g, '');
     setIsApplying('promote');
     try {
-      const { data: groups } = await supabase
-        .from('whatsapp_groups')
-        .select('id, group_id, name')
-        .in('id', targetGroups);
+      const r = await runOnAllGroups('promote', 1000, { phone: cleanPhone });
+      if (!r) return;
 
-      if (!groups || groups.length === 0) { toast.error("Nenhum grupo encontrado"); return; }
-
-      let success = 0;
-      let failed = 0;
-
-      for (const group of groups) {
-        try {
-          const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
-            method: 'POST',
-            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'promote-admin', groupId: group.group_id, phone: cleanPhone }),
-          });
-          const data = await res.json();
-          if (res.ok && data.success) success++;
-          else failed++;
-        } catch { failed++; }
-        await new Promise(r => setTimeout(r, 1000));
-      }
-
-      // Save this phone to admin list if not already there
       if (!adminPhones.includes(cleanPhone)) {
         const newAdmins = [...adminPhones, cleanPhone];
         setAdminPhones(newAdmins);
-        await supabase.from('group_campaigns').update({
-          group_admin_phones: newAdmins,
-        } as any).eq('id', campaignId);
+        await supabase.from('group_campaigns').update({ group_admin_phones: newAdmins } as any).eq('id', campaignId);
       }
 
-      toast.success(`Admin promovido: ${success}/${groups.length} grupos${failed > 0 ? ` (${failed} falharam)` : ''}`);
-      setPromotePhone("");
-    } catch { toast.error("Erro ao promover admin"); }
-    finally { setIsApplying(null); }
+      reportResult('Admin promovido', r);
+      setPromotePhone('');
+    } catch (e) {
+      toast.error(`Erro ao promover admin: ${(e as Error).message}`);
+    } finally {
+      setIsApplying(null);
+    }
   };
 
   const handleRemoveAdmin = (phone: string) => {
@@ -192,56 +263,15 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
 
   const handlePinInAllGroups = async () => {
     if (!pinMessageText.trim()) return;
-    const resolvedWhatsappNumberId = campaignWhatsappNumberId || selectedNumberId || null;
-    if (!resolvedWhatsappNumberId) {
-      toast.error("Selecione a instância WhatsApp da campanha antes de fixar.");
-      return;
-    }
-
     setIsApplying('pin');
     try {
-      const { data: groups } = await supabase
-        .from('whatsapp_groups')
-        .select('id, group_id, name')
-        .in('id', targetGroups);
-
-      if (!groups || groups.length === 0) { toast.error("Nenhum grupo encontrado"); return; }
-
-      let success = 0;
-      let failed = 0;
-
-      for (const group of groups) {
-        try {
-          // Step 1: Send the message to the group
-          const sendRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-send-group-message`, {
-            method: 'POST',
-            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ groupId: group.group_id, message: pinMessageText, type: 'text', whatsapp_number_id: resolvedWhatsappNumberId }),
-          });
-          const sendData = await sendRes.json();
-          const messageId = sendData?.messageId || sendData?.data?.messageId || sendData?.data?.zapiMessageId || sendData?.data?.zaapId || sendData?.data?.id || null;
-
-          if (!sendRes.ok || !messageId) { failed++; continue; }
-
-          // Wait a moment for message to be delivered
-          await new Promise(r => setTimeout(r, 2000));
-
-          // Step 2: Pin the sent message
-          const pinRes = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zapi-group-settings`, {
-            method: 'POST',
-            headers: { 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'pin-message', groupId: group.group_id, messageId, pinDuration, whatsapp_number_id: resolvedWhatsappNumberId }),
-          });
-          const pinData = await pinRes.json();
-          if (pinRes.ok && pinData.success) success++;
-          else failed++;
-        } catch { failed++; }
-        await new Promise(r => setTimeout(r, 1500));
-      }
-
-      toast.success(`Mensagem fixada: ${success}/${groups.length} grupos${failed > 0 ? ` (${failed} falharam)` : ''}`);
-    } catch { toast.error("Erro ao fixar mensagem"); }
-    finally { setIsApplying(null); }
+      const r = await runOnAllGroups('pin', 1500);
+      if (r) reportResult('Mensagem fixada', r);
+    } catch (e) {
+      toast.error(`Erro ao fixar mensagem: ${(e as Error).message}`);
+    } finally {
+      setIsApplying(null);
+    }
   };
 
   if (!isLoaded) return null;
@@ -272,7 +302,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
             <p className="text-[10px] text-muted-foreground">Cada grupo receberá "#1", "#2"... após o nome</p>
             <div className="flex gap-2">
               <Button size="sm" disabled={!bulkName.trim() || isApplying === 'name'} className="gap-1"
-                onClick={() => applyToAllGroups('name', { action: 'update-name' })}>
+                onClick={() => applyToAllGroups('name')}>
                 {isApplying === 'name' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
                 Aplicar Nome
               </Button>
@@ -320,7 +350,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
               <img src={bulkPhotoUrl} alt="Preview" className="h-16 w-16 rounded-lg object-cover" />
             )}
             <Button size="sm" disabled={!bulkPhotoUrl.trim() || isApplying === 'photo'} className="gap-1"
-              onClick={() => applyToAllGroups('photo', { action: 'update-photo', value: bulkPhotoUrl })}>
+              onClick={() => applyToAllGroups('photo')}>
               {isApplying === 'photo' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Image className="h-3.5 w-3.5" />}
               Aplicar Foto
             </Button>
@@ -335,7 +365,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           <CardContent className="p-3 pt-0 space-y-2">
             <Textarea placeholder="Nova descrição..." value={bulkDescription} onChange={e => setBulkDescription(e.target.value)} rows={2} />
             <Button size="sm" disabled={!bulkDescription.trim() || isApplying === 'description'} className="gap-1"
-              onClick={() => applyToAllGroups('description', { action: 'update-description', value: bulkDescription })}>
+              onClick={() => applyToAllGroups('description')}>
               {isApplying === 'description' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
               Aplicar Descrição
             </Button>
@@ -384,7 +414,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
               <Switch checked={onlyAdminsAdd} onCheckedChange={setOnlyAdminsAdd} />
             </div>
             <Button size="sm" disabled={isApplying === 'permissions'} className="gap-1"
-              onClick={() => applyToAllGroups('permissions', { action: 'permissions', onlyAdminsSend, onlyAdminsAdd })}>
+              onClick={() => applyToAllGroups('permissions')}>
               {isApplying === 'permissions' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}
               Aplicar Permissões
             </Button>
