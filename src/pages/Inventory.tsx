@@ -12,6 +12,7 @@ import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
 import { ShopifyLinkManager } from "@/components/inventory/ShopifyLinkManager";
+import { SaleUnmatchedItems } from "@/components/inventory/SaleUnmatchedItems";
 import { InventoryDashboard } from "@/components/inventory/InventoryDashboard";
 import { InventoryHealthDashboard } from "@/components/inventory/InventoryHealthDashboard";
 import { InventoryAnalytics } from "@/components/inventory/InventoryAnalytics";
@@ -192,7 +193,7 @@ export default function Inventory() {
   const [cloneScanQty, setCloneScanQty] = useState(1);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "shopify">("dashboard");
+  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "shopify" | "depara">("dashboard");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
@@ -1310,6 +1311,14 @@ export default function Inventory() {
               >
                 <ShoppingBag className="h-3 w-3" /> Vincular Shopify
               </Button>
+              <Button
+                variant={inventoryMode === "depara" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("depara")}
+                className="text-xs h-7 gap-1"
+              >
+                <Link2 className="h-3 w-3" /> De-para Vendas
+              </Button>
               {selectedStoreId && (
                 <>
                   <Button
@@ -1386,6 +1395,8 @@ export default function Inventory() {
           <InventoryBulkActions />
         ) : inventoryMode === "shopify" ? (
           <ShopifyLinkManager />
+        ) : inventoryMode === "depara" ? (
+          <SaleUnmatchedItems />
         ) : !selectedStoreId ? (
           <div className="text-center py-20">
             <Store className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />

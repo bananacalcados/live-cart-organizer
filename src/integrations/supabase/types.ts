@@ -6888,6 +6888,54 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_sale_unmatched_items: {
+        Row: {
+          created_at: string
+          external_source: string | null
+          id: string
+          item_code: string
+          product_name: string
+          quantity: number
+          resolved_at: string | null
+          resolved_product_id: string | null
+          sale_id: string
+          status: string
+          store_id: string | null
+          updated_at: string
+          variant_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          external_source?: string | null
+          id?: string
+          item_code?: string
+          product_name?: string
+          quantity?: number
+          resolved_at?: string | null
+          resolved_product_id?: string | null
+          sale_id: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          variant_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          external_source?: string | null
+          id?: string
+          item_code?: string
+          product_name?: string
+          quantity?: number
+          resolved_at?: string | null
+          resolved_product_id?: string | null
+          sale_id?: string
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+          variant_name?: string | null
+        }
+        Relationships: []
+      }
       inventory_unresolved_barcodes: {
         Row: {
           barcode: string
