@@ -38,6 +38,7 @@ interface VariantSummary {
 }
 
 export function ProductsList() {
+  const navigate = useNavigate();
   const [view, setView] = useState<"unified" | "legacy">(() => {
     if (typeof window === "undefined") return "unified";
     return (localStorage.getItem("products_view") as any) || "unified";
