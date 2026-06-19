@@ -1394,6 +1394,8 @@ export default function Inventory() {
           <InventoryBulkActions />
         ) : inventoryMode === "shopify" ? (
           <ShopifyLinkManager />
+        ) : inventoryMode === "depara" ? (
+          <SaleUnmatchedItems />
         ) : !selectedStoreId ? (
           <div className="text-center py-20">
             <Store className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
