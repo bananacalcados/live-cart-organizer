@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ interface VariantSummary {
 }
 
 export function ProductsList() {
+  const navigate = useNavigate();
   const [view, setView] = useState<"unified" | "legacy">(() => {
     if (typeof window === "undefined") return "unified";
     return (localStorage.getItem("products_view") as any) || "unified";
@@ -338,8 +340,8 @@ export function ProductsList() {
                       size="sm"
                       variant="outline"
                       className="flex-1 text-xs h-8"
-                      onClick={() => window.open(`/inventory/produto/${p.id}/estoque`, "_blank")}
-                      title="Gerenciar estoque por variação (entrada / saída / balanço) em nova aba"
+                      onClick={() => navigate(`/inventory/produto/${p.id}/estoque`)}
+                      title="Gerenciar estoque por variação (entrada / saída / balanço)"
                     >
                       <Boxes className="h-3 w-3 mr-1" />
                       Estoque
