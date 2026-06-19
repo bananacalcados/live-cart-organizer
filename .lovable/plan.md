@@ -1,51 +1,55 @@
 ## Objetivo
+Fazer a tela **Marketing > Grupos VIP > Configurar Grupos em Massa** funcionar para campanhas em qualquer provedor (uazapi, Z-API, WaSender), respeitando a regra de ouro do projeto: **a conversa/operação roteia pelo provider REAL da instância**, nunca assume Z-API.
 
-Tornar `customers_unified` a **fonte única e confiável** da matriz RFM: sem duplicatas, com histórico antigo (Zoppy/Excel) preservado **e** vendas novas do PDV somadas sem dobrar, e a aba Marketing → Clientes RFM passa a ler dela (só compradores).
+## Causa raiz (confirmada no banco)
+- Campanha LIVE usa instância `provider = uazapi`; os 3 grupos são uazapi.
+- `CampaignBulkSettings.tsx` chama sempre `zapi-group-settings` (Z-API).
+- Nas ações Nome/Foto/Descrição/Permissões o componente nem envia `whatsapp_number_id` → resolve para Z-API errado/ausente.
+- Na ação Fixar, envia o id uazapi, mas `resolveZApiCredentials` filtra `provider='zapi'` → erro.
+- Resultado: 0/3 em tudo.
 
-## Diagnóstico que motiva o plano (já confirmado no banco)
+## Estratégia (sem quebrar Z-API existente)
+Rotear por provider, igual ao padrão já usado no PDV (`posWhatsappSend` / `uazapi-send-buttons`). O front descobre o provider de cada grupo (via `instance_id` do grupo, não só o da campanha) e chama a edge function certa.
 
-- `customers_unified` tem ~40 mil **cópias duplicadas** de clientes da Zoppy que perderam contato no import (escapam da dedup por não terem CPF/telefone).
-- O import para a unificada **perdeu ~6 mil telefones** que existem na `zoppy_customers` (tabela curada: 26 mil compradores, 24 mil com telefone, sem duplicata por CPF/telefone).
-- `recalc_customer_metrics` conta **só `pos_sales`** e **sobrescreve** os totais históricos importados sempre que entra uma venda nova — misturando dois modelos incompatíveis.
+### 1. Backend — completar `uazapi-groups`
+Adicionar as ações que faltam, espelhando o contrato do `zapi-group-settings` mas usando os endpoints uazapi (Instance Token):
+- `updateName` → `/group/updateName` (ou equivalente uazapi: `{ groupjid, name }`)
+- `updateDescription` → `/group/updateDescription` `{ groupjid, description }`
+- `updatePhoto` → `/group/updateImage` `{ groupjid, image }`
+- `updateSettings` (permissões) → `/group/updateSettings` para `messagesAdminsOnly` e `editAdminsOnly`
+- `pinMessage` → enviar texto (já existe sendMessage) + ação de pin do uazapi
 
-## Plano (executado em ondas, validando os números a cada onda)
+Observação: validar os nomes exatos dos endpoints uazapi na doc antes de implementar (alguns variam por versão). Onde a uazapi não suportar uma ação, retornar erro claro em vez de falhar silencioso.
 
-### Onda 1 — Preparar a base (migração, aditiva e reversível)
-Adicionar à `customers_unified`:
-- `legacy_orders`, `legacy_spent`, `legacy_first_purchase_at`, `legacy_last_purchase_at` — histórico **congelado** (Zoppy/Excel).
-- `merged_into_id` — aponta para o cadastro sobrevivente quando a linha for duplicata.
-- `is_archived` — exclui da matriz (sem apagar nada).
+### 2. Backend — `wasender-groups` (paridade)
+Verificar se `wasender-groups` cobre as mesmas ações; se a campanha um dia for WaSender, adicionar o que faltar. (Hoje a campanha LIVE é uazapi, então prioridade é uazapi.)
 
-### Onda 2 — Congelar o histórico
-- Preencher `legacy_*` a partir da `zoppy_customers` (mapeando pela origem `zoppy:<id>` → `zoppy_customers.id`) e, para imports sem origem Zoppy, a partir dos totais importados atuais de linhas que não têm `pos_sales`.
-- Isso recupera o histórico antes que qualquer recálculo o sobrescreva.
+### 3. Frontend — `CampaignBulkSettings.tsx` (roteamento por provider)
+- Ao carregar, buscar os grupos **com `instance_id`** e o `provider` de cada instância (join em `whatsapp_numbers`).
+- Criar um helper `applyGroupSetting(group, action, payload)` que:
+  - lê o provider do `instance_id` do grupo;
+  - chama `uazapi-groups` / `zapi-group-settings` / `wasender-groups` conforme o provider;
+  - **sempre** passa `whatsapp_number_id = group.instance_id` (corrige o bug de não enviar o id nas ações de nome/foto/descrição/permissão).
+- Mapear os nomes de ação atuais para os de cada provider (ex.: `update-name`→uazapi `updateName`).
+- Manter o caminho Z-API atual intacto (grupos cujo provider for `zapi`).
+- Para Fixar: usar `uazapi-send-message`/`uazapi-groups sendMessage` quando uazapi, e a sequência atual quando zapi.
 
-### Onda 3 — Enriquecer contato
-- Copiar telefone/CPF/e-mail da `zoppy_customers` para a unificada onde estiver faltando (recupera os ~6 mil telefones perdidos), respeitando a regra de identidade por CPF (não injeta CPF de terceiro).
+### 4. Tratamento de erro / UX
+- Trocar os `catch {}` silenciosos por captura da mensagem real e mostrar no toast (ex.: "2/3 — falha no grupo #10: <motivo>").
+- Logar resposta da edge function para diagnóstico futuro.
 
-### Onda 4 — Mesclar duplicatas
-- Agrupar linhas da mesma pessoa por: mesma origem `zoppy:<id>`, mesmo CPF, ou mesmo telefone (DDD + 8 dígitos).
-- Eleger 1 **sobrevivente** por grupo (o mais completo: com telefone > com CPF > maior histórico).
-- **Repontar** todas as referências (`orders`, `pos_sales`, `customer_list_memberships`) para o sobrevivente.
-- Consolidar `legacy_*` no sobrevivente (cópias idênticas ⇒ usa o maior, não soma) e marcar as demais com `merged_into_id` + `is_archived = true`.
-- Registrar tudo em `master_merge_log` (reversível).
+### 5. Validação
+- Rodar Nome/Descrição/Foto/Permissão/Fixar na campanha LIVE (uazapi) e confirmar 3/3.
+- Confirmar que uma campanha Z-API (se existir) continua funcionando.
+- Conferir logs das edge functions `uazapi-groups`.
 
-### Onda 5 — Novo modelo de métricas (migração)
-Reescrever `recalc_customer_metrics` para:
-- `total_orders = legacy_orders + (vendas do PDV mais novas que `legacy_last_purchase_at`)`
-- `total_spent  = legacy_spent  + (valor dessas vendas novas)`
-- Sem `legacy` (cliente 100% novo) ⇒ conta todas as `pos_sales`.
-- Regra do recorte evita **dobrar** pedidos antigos da Shopify/Tiny que já estão no histórico importado.
-- Recalcular RFM consolidado na unificada.
+## Arquivos afetados
+- `supabase/functions/uazapi-groups/index.ts` (novas ações)
+- `supabase/functions/wasender-groups/index.ts` (paridade, se necessário)
+- `src/components/marketing/CampaignBulkSettings.tsx` (roteamento por provider + envio do instance_id + erros)
+- Possível helper compartilhado de roteamento de grupo (opcional, espelhando `posWhatsappSend`).
 
-### Onda 6 — Trocar a tela
-- Aba Marketing → Clientes RFM passa a ler `customers_unified` com `is_archived = false` e `total_orders >= 1` (só compradores), mapeando os nomes de coluna (`rfm_r/f/m/total/segment`).
-- Validar contagem final por segmento contra a expectativa (~26 mil compradores reais).
-
-## Detalhes técnicos / pontos de atenção
-
-- **Sobrescrita evitada:** hoje o trigger `trg_pos_sales_recalc_after` já chama `recalc_customer_metrics`; após a Onda 5 ele passa a somar `legacy + novo` em vez de zerar o histórico.
-- **Triggers de venda intactos:** estoque/CAPI/automação/caixa continuam guardados por status; nenhuma das ondas altera valor, estoque ou caixa.
-- **Dedup intra-`pos_sales` (Live × Shopify devolvida):** a venda de Live (linha PDV) e o pedido que volta da Shopify podem gerar 2 linhas em `pos_sales`. O recorte por data não resolve isso sozinho; trato como item separado após a Onda 6 (medir sobreposição real por cliente+valor+janela antes de definir regra), para não atrasar a correção principal.
-- **Reversibilidade:** nada é apagado — duplicatas ficam com `merged_into_id`/`is_archived`; `master_merge_log` guarda o de-para.
-- **Validação:** ao fim de cada onda eu rodo contagens (compradores, com contato, duplicados restantes, soma de faturamento) e te apresento antes de seguir.
+## Riscos e mitigação
+- **Risco:** nomes de endpoints uazapi incorretos. **Mitigação:** validar na doc uazapi e testar grupo a grupo antes de aplicar em massa.
+- **Risco:** quebrar fluxo Z-API atual. **Mitigação:** roteamento aditivo — Z-API só é chamado quando o grupo é `provider='zapi'`; nenhum código Z-API existente é removido.
+- **Nada no banco/schema muda** — somente edge functions e frontend.
