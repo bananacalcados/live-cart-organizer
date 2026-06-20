@@ -95,6 +95,8 @@ export function GroupsVipManager() {
   const [newCampaignSpeed, setNewCampaignSpeed] = useState("slow");
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [campaignToDelete, setCampaignToDelete] = useState<GroupCampaign | null>(null);
+  const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
   const [settingsGroup, setSettingsGroup] = useState<WhatsAppGroup | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
