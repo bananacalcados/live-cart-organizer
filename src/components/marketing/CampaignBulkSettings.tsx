@@ -339,13 +339,36 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     }
   };
 
-  const applyToAllGroups = async (action: 'name' | 'photo' | 'description' | 'permissions') => {
+  // Monta a pré-visualização (grupos físicos deduplicados + avisos de campanhas cruzadas) e abre confirmação.
+  const prepareAction = async (
+    action: 'name' | 'photo' | 'description' | 'permissions' | 'pin',
+    label: string,
+    delayMs: number,
+  ) => {
+    setIsPreparing(action);
+    try {
+      const groups = await fetchGroupsWithProvider();
+      if (groups.length === 0) { toast.error('Nenhum grupo encontrado'); return; }
+      const crossWarnings = await findCrossCampaignGroups(groups);
+      setPendingAction({ action, label, delayMs, groups, crossWarnings });
+    } catch (e) {
+      toast.error(`Erro ao preparar: ${(e as Error).message}`);
+    } finally {
+      setIsPreparing(null);
+    }
+  };
+
+  // Executa a ação confirmada usando exatamente os grupos pré-visualizados.
+  const executeConfirmed = async () => {
+    if (!pendingAction) return;
+    const { action, label, delayMs, groups } = pendingAction;
+    setPendingAction(null);
     setIsApplying(action);
     try {
-      const r = await runOnAllGroups(action, 1000);
-      if (r) reportResult('Aplicado', r);
+      const r = await runOnAllGroups(action, delayMs, undefined, groups);
+      if (r) reportResult(label, r);
     } catch (e) {
-      toast.error(`Erro ao aplicar configurações: ${(e as Error).message}`);
+      toast.error(`Erro ao aplicar: ${(e as Error).message}`);
     } finally {
       setIsApplying(null);
     }
@@ -382,18 +405,6 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     } as any).eq('id', campaignId);
   };
 
-  const handlePinInAllGroups = async () => {
-    if (!pinMessageText.trim()) return;
-    setIsApplying('pin');
-    try {
-      const r = await runOnAllGroups('pin', 1500);
-      if (r) reportResult('Mensagem fixada', r);
-    } catch (e) {
-      toast.error(`Erro ao fixar mensagem: ${(e as Error).message}`);
-    } finally {
-      setIsApplying(null);
-    }
-  };
 
   if (!isLoaded) return null;
 
