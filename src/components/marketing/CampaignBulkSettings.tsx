@@ -152,7 +152,8 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     idx: number,
     extra?: { phone?: string },
   ): Promise<{ ok: boolean; error?: string }> => {
-    const wid = g.instance_id || undefined;
+    const wid = g.effectiveInstanceId || undefined;
+    if (!wid) return { ok: false, error: 'Sem número de WhatsApp ativo. Atribua um número à campanha ou selecione um número ativo no topo.' };
 
     if (g.provider === 'uazapi') {
       switch (action) {
