@@ -39,6 +39,19 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const [adminPhones, setAdminPhones] = useState<string[]>([]);
   const [campaignWhatsappNumberId, setCampaignWhatsappNumberId] = useState<string | null>(null);
 
+  // Confirmação/pré-visualização antes de aplicar ações que alteram os grupos reais
+  type PendingAction = {
+    action: 'name' | 'photo' | 'description' | 'permissions' | 'pin';
+    label: string;
+    delayMs: number;
+    groups: GroupRow[];
+    crossWarnings: { campaignName: string; groupName: string }[];
+  };
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [isPreparing, setIsPreparing] = useState<string | null>(null);
+
+
+
   // Load saved settings from campaign
   const loadSettings = useCallback(async () => {
     const { data } = await supabase
