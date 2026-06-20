@@ -97,6 +97,9 @@ export function GroupsVipManager() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [campaignToDelete, setCampaignToDelete] = useState<GroupCampaign | null>(null);
   const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
+  const [campaignToRename, setCampaignToRename] = useState<GroupCampaign | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [isRenamingCampaign, setIsRenamingCampaign] = useState(false);
   const [settingsGroup, setSettingsGroup] = useState<WhatsAppGroup | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
