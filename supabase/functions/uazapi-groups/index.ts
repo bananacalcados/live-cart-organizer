@@ -22,6 +22,11 @@ function groupJid(raw: string): string {
   return `${digits}@g.us`;
 }
 
+/** Extrai apenas os dígitos do JID do grupo (chave estável independente do sufixo). */
+function groupDigits(raw: string): string {
+  return String(raw || "").replace(/\D/g, "");
+}
+
 /**
  * uazapi-groups — gestão de grupos WhatsApp via uazapi (usa o Instance Token).
  *
