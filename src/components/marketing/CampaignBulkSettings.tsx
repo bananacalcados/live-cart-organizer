@@ -92,6 +92,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const isUuid = (v: string | null | undefined): boolean =>
     !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
+  // Apenas os dígitos do JID identificam o grupo FÍSICO (ignora "@g.us" vs "-group" e instância).
+  const groupDigits = (raw: string | null | undefined): string => (raw || '').replace(/\D/g, '');
+
   const fetchGroupsWithProvider = async (): Promise<GroupRow[]> => {
     const { data: groups } = await supabase
       .from('whatsapp_groups')
