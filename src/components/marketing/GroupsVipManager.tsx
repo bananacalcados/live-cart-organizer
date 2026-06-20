@@ -271,6 +271,28 @@ export function GroupsVipManager() {
     }
   };
 
+  // Renomeia a campanha (apenas o campo name). Não toca em grupos nem em disparos.
+  const renameCampaign = async () => {
+    if (!campaignToRename) return;
+    const newName = renameValue.trim();
+    if (!newName) { toast.error("Nome obrigatório"); return; }
+    setIsRenamingCampaign(true);
+    try {
+      const { error } = await supabase
+        .from('group_campaigns')
+        .update({ name: newName })
+        .eq('id', campaignToRename.id);
+      if (error) throw error;
+      toast.success("Nome atualizado!");
+      setCampaigns(prev => prev.map(c => c.id === campaignToRename.id ? { ...c, name: newName } : c));
+      setCampaignToRename(null);
+    } catch (e) {
+      toast.error(`Erro ao renomear: ${(e as Error).message}`);
+    } finally {
+      setIsRenamingCampaign(false);
+    }
+  };
+
   // Grupos por instância (chave = instance_id bruto do grupo) para o filtro.
   const instanceGroupCounts = groups.reduce<Record<string, number>>((acc, g) => {
     const key = g.instance_id || '__none__';
