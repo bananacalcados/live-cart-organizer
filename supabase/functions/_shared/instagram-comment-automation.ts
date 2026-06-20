@@ -498,6 +498,19 @@ export async function processStoryReplyAutomation(
           .replace("{username}", usernameClean)
           .replace("{comment}", reply.text);
 
+        // Botões opcionais (button template). Máx 3 botões pela Meta.
+        // Mesmo comportamento da automação de comentários: se houver botões
+        // configurados na regra, envia como template "button" (web_url/postback).
+        const dmButtons = buildButtonPayload(rule.id, rule.dm_buttons || []);
+        const messagePayload = dmButtons.length > 0
+          ? {
+              attachment: {
+                type: "template",
+                payload: { template_type: "button", text: dmText.slice(0, 640), buttons: dmButtons },
+              },
+            }
+          : { text: dmText };
+
         const res = await fetch(
           `https://graph.instagram.com/v25.0/me/messages`,
           {
@@ -508,7 +521,7 @@ export async function processStoryReplyAutomation(
             },
             body: JSON.stringify({
               recipient: { id: reply.fromId },
-              message: { text: dmText },
+              message: messagePayload,
               messaging_type: "RESPONSE",
             }),
           }
