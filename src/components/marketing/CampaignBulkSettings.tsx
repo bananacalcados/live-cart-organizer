@@ -226,13 +226,28 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     const groups = await fetchGroupsWithProvider();
     if (groups.length === 0) { toast.error('Nenhum grupo encontrado'); return null; }
     let success = 0;
+    let repointed = 0;
     const errors: string[] = [];
     for (let i = 0; i < groups.length; i++) {
-      const res = await applyActionToGroup(groups[i], action, i, extra);
-      if (res.ok) success++;
-      else errors.push(`${groups[i].name}: ${res.error || 'falha'}`);
+      const g = groups[i];
+      const res = await applyActionToGroup(g, action, i, extra);
+      if (res.ok) {
+        success++;
+        // Auto-cura: se o grupo apontava para uma instância morta/diferente, grava a que FUNCIONOU.
+        // Nunca adivinha — só persiste a instância que acabou de aplicar com sucesso.
+        if (g.effectiveInstanceId && g.effectiveInstanceId !== g.storedInstanceId) {
+          const { error: upErr } = await supabase
+            .from('whatsapp_groups')
+            .update({ instance_id: g.effectiveInstanceId })
+            .eq('id', g.id);
+          if (!upErr) repointed++;
+        }
+      } else {
+        errors.push(`${g.name}: ${res.error || 'falha'}`);
+      }
       await new Promise(r => setTimeout(r, delayMs));
     }
+    if (repointed > 0) console.info(`[CampaignBulkSettings] ${repointed} grupo(s) repontados para a instância ativa.`);
     return { success, total: groups.length, errors };
   };
 
