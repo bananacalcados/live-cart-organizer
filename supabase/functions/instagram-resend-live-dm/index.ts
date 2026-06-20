@@ -119,7 +119,18 @@ Deno.serve(async (req) => {
         existing.username = r.sender_name;
       }
     }
-    const recipients = Array.from(map.values());
+    let recipients = Array.from(map.values());
+
+    // Pular quem JÁ recebeu a correção com sucesso (evita duplicar)
+    const { data: alreadySent } = await supabase
+      .from("instagram_comment_actions")
+      .select("comment_id")
+      .eq("rule_id", rule.id)
+      .eq("action_type", "dm_resend")
+      .eq("status", "sent");
+    const sentSet = new Set((alreadySent || []).map((a: any) => String(a.comment_id)));
+    const skipped = recipients.filter((r) => sentSet.has(r.phone)).map((r) => r.username);
+    recipients = recipients.filter((r) => !sentSet.has(r.phone));
 
     if (dryRun) {
       return new Response(JSON.stringify({
