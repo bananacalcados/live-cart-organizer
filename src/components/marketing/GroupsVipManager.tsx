@@ -243,6 +243,31 @@ export function GroupsVipManager() {
     finally { setIsCreatingCampaign(false); }
   };
 
+  // Exclui a campanha e todos os registros vinculados (mensagens, blocos, links, variáveis).
+  // Escopo sempre por campaign_id desta campanha → não toca em dados de outras campanhas.
+  const deleteCampaign = async () => {
+    if (!campaignToDelete) return;
+    const id = campaignToDelete.id;
+    setIsDeletingCampaign(true);
+    try {
+      await supabase.from('group_campaign_scheduled_messages').delete().eq('campaign_id', id);
+      await supabase.from('group_campaign_messages').delete().eq('campaign_id', id);
+      await supabase.from('group_campaign_block_dispatches').delete().eq('campaign_id', id);
+      await supabase.from('group_redirect_links').delete().eq('campaign_id', id);
+      await supabase.from('campaign_variables').delete().eq('campaign_id', id);
+      const { error } = await supabase.from('group_campaigns').delete().eq('id', id);
+      if (error) throw error;
+      toast.success("Campanha excluída!");
+      if (selectedCampaignId === id) setSelectedCampaignId(null);
+      setCampaignToDelete(null);
+      fetchCampaigns();
+    } catch (e) {
+      toast.error(`Erro ao excluir: ${(e as Error).message}`);
+    } finally {
+      setIsDeletingCampaign(false);
+    }
+  };
+
   // Grupos por instância (chave = instance_id bruto do grupo) para o filtro.
   const instanceGroupCounts = groups.reduce<Record<string, number>>((acc, g) => {
     const key = g.instance_id || '__none__';
