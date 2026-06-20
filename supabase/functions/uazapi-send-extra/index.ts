@@ -68,11 +68,14 @@ serve(async (req) => {
       if (!question || !Array.isArray(poll?.options) || poll.options.length < 2) {
         return json({ error: "poll.question e ao menos 2 poll.options são obrigatórios" }, 400);
       }
-      path = "/send/poll";
+      // uazapi envia enquete pelo endpoint unificado /send/menu (type: "poll").
+      // NÃO existe /send/poll (retorna 405 Method Not Allowed).
+      path = "/send/menu";
       payload = {
         number,
-        question,
-        options: poll.options,
+        type: "poll",
+        text: question,
+        choices: poll.options,
         selectableCount: poll.selectableCount ?? 1,
       };
     } else {
