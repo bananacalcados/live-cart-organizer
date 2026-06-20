@@ -572,8 +572,8 @@ export function MassTemplateDispatcher() {
     return parts.join('\n\n');
   }, [selectedTemplate, variables, templateButtons]);
 
-  // Filtered recipients
-  const filteredRecipients = useMemo((): Recipient[] => {
+  // Base recipients (all filters EXCEPT cooldown)
+  const baseRecipients = useMemo((): Recipient[] => {
     const list: Recipient[] = [];
     const addedPhones = new Set<string>();
 
@@ -689,18 +689,24 @@ export function MassTemplateDispatcher() {
     }
 
     // Apply topN limit
-    let finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
+    const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
 
-    // Apply cooldown exclusion (suffix-based to catch same person with different DDDs)
+    return finalList;
+  }, [crmCustomers, leads, ravenaCustomers, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter]);
+
+  // Recipients after applying cooldown exclusion (suffix-based to catch same person with different DDDs)
+  const filteredRecipients = useMemo((): Recipient[] => {
     if (cooldownApplied && cooldownExcludedPhones.size > 0) {
-      finalList = finalList.filter(r => {
+      return baseRecipients.filter(r => {
         const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
         return !cooldownExcludedPhones.has(suffix);
       });
     }
+    return baseRecipients;
+  }, [baseRecipients, cooldownApplied, cooldownExcludedPhones]);
 
-    return finalList;
-  }, [crmCustomers, leads, ravenaCustomers, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, cooldownApplied, cooldownExcludedPhones]);
+  // How many of the CURRENT audience were actually removed by the cooldown
+  const cooldownRemovedFromAudience = baseRecipients.length - filteredRecipients.length;
 
   // Unique filter options
   const uniqueSegments = useMemo(() => [...new Set(crmCustomers.map(c => c.rfm_segment).filter(Boolean))].sort(), [crmCustomers]);
@@ -1656,13 +1662,16 @@ export function MassTemplateDispatcher() {
               </div>
               {cooldownApplied && (
                 <div className="space-y-1">
-                  <div className="flex items-center gap-3 text-xs">
+                  <div className="flex items-center gap-3 text-xs flex-wrap">
                     <Badge variant="destructive" className="text-[10px]">
-                      {cooldownExcludedPhones.size} excluídos
+                      {cooldownRemovedFromAudience} removidos desta audiência
                     </Badge>
                     <Badge variant="outline" className="text-[10px]">
                       {filteredRecipients.length} restantes
                     </Badge>
+                    <span className="text-[10px] text-muted-foreground">
+                      ({cooldownExcludedPhones.size} já receberam disparos no geral)
+                    </span>
                   </div>
                   {cooldownRecentRecipients.length > 0 && (
                     <Accordion type="single" collapsible className="w-full">
