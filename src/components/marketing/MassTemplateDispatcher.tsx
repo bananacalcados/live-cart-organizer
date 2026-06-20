@@ -1662,13 +1662,16 @@ export function MassTemplateDispatcher() {
               </div>
               {cooldownApplied && (
                 <div className="space-y-1">
-                  <div className="flex items-center gap-3 text-xs">
+                  <div className="flex items-center gap-3 text-xs flex-wrap">
                     <Badge variant="destructive" className="text-[10px]">
-                      {cooldownExcludedPhones.size} excluídos
+                      {cooldownRemovedFromAudience} removidos desta audiência
                     </Badge>
                     <Badge variant="outline" className="text-[10px]">
                       {filteredRecipients.length} restantes
                     </Badge>
+                    <span className="text-[10px] text-muted-foreground">
+                      ({cooldownExcludedPhones.size} já receberam disparos no geral)
+                    </span>
                   </div>
                   {cooldownRecentRecipients.length > 0 && (
                     <Accordion type="single" collapsible className="w-full">
