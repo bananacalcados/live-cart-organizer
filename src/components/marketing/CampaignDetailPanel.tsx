@@ -804,7 +804,25 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setCampaign((prev: any) => prev ? { ...prev, target_groups: updated, total_groups: updated.length } : prev);
   };
 
-  const filteredAllGroups = allGroups.filter(g => {
+  // Deduplica grupos pelo NÚMERO do JID (dígitos), pois o mesmo grupo pode ter
+  // sido salvo em formatos diferentes (-group / @g.us) ou instâncias diferentes.
+  // Prioriza a linha já usada pela campanha (preserva o id dos disparos).
+  const dedupedAllGroups = (() => {
+    const byDigits = new Map<string, any>();
+    for (const g of allGroups) {
+      const digits = String(g.group_id || g.id || "").replace(/\D/g, "") || g.id;
+      const existing = byDigits.get(digits);
+      if (!existing) { byDigits.set(digits, g); continue; }
+      const gInCampaign = targetGroups.includes(g.id);
+      const exInCampaign = targetGroups.includes(existing.id);
+      // mantém o referenciado pela campanha; senão o de maior contagem (mais recente)
+      if (gInCampaign && !exInCampaign) byDigits.set(digits, g);
+      else if (gInCampaign === exInCampaign && (g.participant_count || 0) > (existing.participant_count || 0)) byDigits.set(digits, g);
+    }
+    return Array.from(byDigits.values());
+  })();
+
+  const filteredAllGroups = dedupedAllGroups.filter(g => {
     if (!groupSearch) return true;
     return g.name?.toLowerCase().includes(groupSearch.toLowerCase());
   });
