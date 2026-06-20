@@ -140,6 +140,7 @@ Deno.serve(async (req) => {
         wrongPrefix,
         correctTextPreview: correctText.slice(0, 120),
         totalRecipients: recipients.length,
+        alreadySentSkipped: skipped,
         recipients: recipients.map((r) => ({ username: r.username, igsid: r.phone, last: r.last })),
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
