@@ -1,61 +1,58 @@
-# Por que os nomes não atualizam ao "Sincronizar do WhatsApp"
+# Bug: renomear grupos da LIVE-20 alterou um grupo da LIVE-27
 
-Investiguei o banco e o código. O sync **funciona**, mas grava os nomes novos em **registros diferentes** dos que a campanha realmente usa. Há dois descasamentos:
+## O que está acontecendo (causa raiz confirmada no banco)
 
-## 1. Descasamento de `instance_id`
-A tabela `whatsapp_groups` tem uma constraint única em `(group_id, instance_id)`. Os grupos da campanha **GRUPO LIVE** foram salvos antigamente com:
+Cada grupo físico do WhatsApp está salvo **4 vezes** na tabela de grupos:
+- 3 cópias no formato moderno `...@g.us` — uma para **cada instância uazapi** ativa (3 números conectados);
+- 1 cópia **legada** no formato antigo `...-group`, presa a uma instância **morta** do Z-API (token cru `3ED1FFCA...`, que nem existe mais na lista de números).
 
+Isso acontece porque a sincronização grava uma linha por instância (a regra de unicidade é por `grupo + instância`). Resultado: 5 grupos físicos viraram 20 registros.
+
+A campanha **LIVE - 20 de Junho** tem 6 alvos selecionados, mas eles caíram em registros **duplicados/legados**:
+
+```text
+LIVE-20 (6 alvos) → na verdade 5 grupos físicos:
+  • 4 registros legados "...-group" (instância morta 3ED1FFCA...)
+  • 1 registro duplicado: o grupo 1203...415356 aparece 2x (legado + @g.us)
 ```
-instance_id = 3ED1FFCA10B9621BDE0A3A43AB49A453   (token antigo da uazapi)
-```
 
-Mas o sync de hoje roda com:
+### Por que UM grupo da LIVE-27 foi renomeado
+Um dos registros legados da LIVE-20 é o grupo físico `120363427586598950-group`.
+Ao aplicar o nome, o sistema **normaliza** `-group` → `@g.us` e renomeia o **grupo físico** `120363427586598950`.
+Esse mesmo grupo físico é justamente o que a **LIVE-27** usa (`120363427586598950@g.us`). Por isso, na tela, o grupo "renomeado" apareceu na LIVE-27.
 
-```
-instance_id = fb7dd381-6460-4f28-8d01-f15943edb879   (id do número de WhatsApp)
-```
+### Por que só um funcionou e os outros deram erro/timeout
+- Os demais registros legados apontam grupos onde a instância ativa (que assume o lugar da instância morta) **não é admin** → falham.
+- Há um grupo duplicado dentro da própria LIVE-20 → tenta renomear 2x.
+- São 6 grupos × várias subchamadas em sequência → o tempo estoura e aparece o erro.
 
-## 2. Descasamento de formato do `group_id`
-- Registros antigos (os que a campanha usa): `120363427586598950-group`
-- Registros do sync novo: `120363427586598950@g.us`
+## Plano de correção (sem quebrar nada)
 
-Como **as duas chaves** (`group_id` e `instance_id`) são diferentes, o `upsert onConflict (group_id, instance_id)` **nunca encontra** a linha antiga. Resultado: ele **insere linhas novas** com os nomes atualizados, e as linhas antigas (referenciadas em `group_campaigns.target_groups`) continuam com os nomes velhos. Por isso a tela mostra duplicatas e os nomes antigos.
+### Parte 1 — Blindagem no código (seguro, sem perda de dados)
+Em `CampaignBulkSettings.tsx`, no `fetchGroupsWithProvider`:
+1. **Deduplicar por grupo físico** (apenas os dígitos do `group_id`): manter 1 registro por grupo, preferindo o formato `@g.us` ligado a uma instância **UUID ativa**, descartando os registros legados `-group`/token morto.
+2. **Tela de confirmação antes de aplicar nome/foto/etc.**: listar os grupos físicos que serão afetados, a instância usada e um **aviso em vermelho** se o mesmo grupo físico também pertencer a outra campanha (evita renomear grupo de outra live por engano).
 
-Confirmei: os 11 grupos da campanha GRUPO LIVE estão todos com `instance_id = 3ED1...` e `group_id` no formato `...-group`, com `last_synced_at` parado em 8-10/jun.
+Isso já impede: renomear o mesmo grupo 2x, usar instância morta, e renomear grupo de outra campanha sem o usuário perceber.
 
-## Por que isso NÃO afeta os disparos
-O worker de disparo (`group-dispatch-worker` → `uazapi-groups`) normaliza o JID com `groupJid()`, que **remove tudo que não é dígito** e adiciona `@g.us`. Ou seja, `120363427586598950-group` e `120363427586598950@g.us` viram o **mesmo** JID na hora de enviar. Então atualizar só o nome dos registros antigos é seguro: o número do grupo é idêntico.
+### Parte 2 — Limpeza dos dados das campanhas (precisa da sua decisão)
+Reescrever `target_groups` das duas campanhas para apontar os **registros canônicos** (`@g.us` na instância da campanha `fb7dd381`), deduplicados.
 
----
+**Decisão necessária:** o grupo físico `120363427586598950` ("Live - Lançamentos Junho #3") está hoje nas DUAS campanhas. Você disse que ele é da LIVE-27. Opções:
+- (A) **Remover** da LIVE-20, manter só na LIVE-27 (recomendado pelo que você descreveu); ou
+- (B) Manter nas duas (aí qualquer renomeação em massa afetará as duas — não recomendado).
 
-# Plano de correção (sem quebrar nada nem os disparos)
+Nenhuma linha de grupo será **apagada** (apagar dispararia exclusão em cascata de mensagens históricas). Os registros legados serão apenas marcados como inativos e retirados das campanhas.
 
-A ideia central: **atualizar o nome (e foto/contagem) nas linhas que já existem**, casando pelo **número do grupo** (dígitos), em vez de criar linhas paralelas. Sem mexer em `id`, sem apagar nada, sem trocar `instance_id`/`group_id` das linhas referenciadas pela campanha.
-
-## Etapa 1 — Melhorar o sync (`supabase/functions/uazapi-groups`, ação `list`)
-Antes de inserir os grupos novos, fazer um passo de **atualização por número**:
-1. Para cada grupo retornado da uazapi, extrair só os dígitos do JID (ex.: `120363427586598950`).
-2. Buscar em `whatsapp_groups` todas as linhas cujo `group_id` contenha esses mesmos dígitos (independente de sufixo `-group`/`@g.us` e de `instance_id`).
-3. `UPDATE` apenas dos campos de exibição nessas linhas: `name`, `photo_url`, `participant_count`, `previous_participant_count`, `last_synced_at`. **Não** alterar `id`, `group_id` nem `instance_id`.
-4. Manter o `upsert` atual depois disso, para que grupos realmente novos continuem sendo cadastrados.
-
-Assim os 11 grupos da campanha (linhas antigas) passam a receber o nome novo a cada sync, e os disparos continuam idênticos.
-
-## Etapa 2 — Paridade (opcional, mesma lógica)
-Aplicar o mesmo passo de "atualizar por dígitos" em `wasender-groups` e `zapi-list-groups` para evitar o mesmo problema em campanhas dessas instâncias no futuro.
-
-## Etapa 3 — Limpeza visual das duplicatas (opcional, separada e segura)
-A lista hoje mostra o grupo duplicado (linha antiga + linha nova do sync). Para limpar **sem risco**:
-- Na consulta da lista do front (`fetchAllGroups`), agrupar/deduplicar por dígitos do `group_id`, **priorizando** a linha que estiver referenciada em alguma campanha (preserva o `id` usado nos disparos).
-- Nenhuma linha é apagada do banco — apenas a exibição é deduplicada. Pode ficar para um segundo momento.
-
-## Validação
-1. Rodar o sync na campanha GRUPO LIVE (uazapi) e confirmar que os 11 grupos passam a exibir os nomes novos.
-2. Conferir no banco que os `id` dos `target_groups` continuam os mesmos (campanha intacta).
-3. Disparo de teste em 1 grupo para confirmar entrega (JID normalizado idêntico).
+### Parte 3 — Causa sistêmica (opcional, maior)
+Ajustar a sincronização de grupos para **atualizar** o registro existente (casando pelos dígitos do `group_id`) em vez de criar uma nova linha por instância — eliminando a fonte das duplicatas. Já há rascunho disso em `.lovable/plan.md`.
 
 ## Arquivos afetados
-- `supabase/functions/uazapi-groups/index.ts` (núcleo da correção)
-- `supabase/functions/wasender-groups/index.ts`, `supabase/functions/zapi-list-groups/index.ts` (paridade, opcional)
-- `src/components/marketing/CampaignDetailPanel.tsx` (dedup visual, opcional)
-- **Sem migração de banco e sem alteração de dados destrutiva.**
+- `src/components/marketing/CampaignBulkSettings.tsx` (dedup + confirmação)
+- Migração de dados para `group_campaigns.target_groups` (após sua decisão A/B)
+- (Parte 3, se aprovar) funções de sync `uazapi-groups` / `wasender-groups` / `zapi-list-groups`
+
+## Validação
+- Pré-visualizar a renomeação da LIVE-20 e conferir que só 5 grupos distintos aparecem, todos da LIVE-20, com instância ativa.
+- Confirmar que a LIVE-27 não é mais tocada.
+- Testar 1 renomeação real após a limpeza.

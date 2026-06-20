@@ -14,6 +14,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CampaignBulkSettingsProps {
   campaignId: string;
@@ -38,6 +42,19 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const [promotePhone, setPromotePhone] = useState("");
   const [adminPhones, setAdminPhones] = useState<string[]>([]);
   const [campaignWhatsappNumberId, setCampaignWhatsappNumberId] = useState<string | null>(null);
+
+  // Confirmação/pré-visualização antes de aplicar ações que alteram os grupos reais
+  type PendingAction = {
+    action: 'name' | 'photo' | 'description' | 'permissions' | 'pin';
+    label: string;
+    delayMs: number;
+    groups: GroupRow[];
+    crossWarnings: { campaignName: string; groupName: string }[];
+  };
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [isPreparing, setIsPreparing] = useState<string | null>(null);
+
+
 
   // Load saved settings from campaign
   const loadSettings = useCallback(async () => {
@@ -92,6 +109,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   const isUuid = (v: string | null | undefined): boolean =>
     !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
+  // Apenas os dígitos do JID identificam o grupo FÍSICO (ignora "@g.us" vs "-group" e instância).
+  const groupDigits = (raw: string | null | undefined): string => (raw || '').replace(/\D/g, '');
+
   const fetchGroupsWithProvider = async (): Promise<GroupRow[]> => {
     const { data: groups } = await supabase
       .from('whatsapp_groups')
@@ -121,7 +141,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       (campaignWhatsappNumberId && numbersMap.get(campaignWhatsappNumberId)?.active ? campaignWhatsappNumberId : null) ||
       (selectedNumberId && numbersMap.get(selectedNumberId)?.active ? selectedNumberId : null);
 
-    return groups.map((g: any) => {
+    const mapped: GroupRow[] = groups.map((g: any) => {
       // Só confia no instance_id do grupo se for um UUID de instância ATIVA. Caso contrário usa a operante.
       const storedActive = isUuid(g.instance_id) && numbersMap.get(g.instance_id)?.active;
       const effectiveInstanceId = storedActive ? g.instance_id : operating;
@@ -135,7 +155,69 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
         provider,
       };
     });
+
+    // Deduplica por grupo FÍSICO (dígitos do JID). O mesmo grupo aparece várias vezes
+    // (1 linha por instância + registro legado "-group" de instância morta). Mantemos
+    // apenas o melhor registro: prioriza JID moderno "@g.us" com instância UUID ativa
+    // sobre registros legados/token cru — evita renomear o mesmo grupo 2x ou via instância errada.
+    const score = (g: GroupRow): number => {
+      let s = 0;
+      if (isUuid(g.storedInstanceId) && numbersMap.get(g.storedInstanceId!)?.active) s += 4; // instância própria ativa
+      if (/@g\.us$/i.test(g.group_id)) s += 2; // formato moderno
+      if (!/-group$/i.test(g.group_id)) s += 1; // não é legado
+      return s;
+    };
+    const bestByDigits = new Map<string, GroupRow>();
+    for (const g of mapped) {
+      const key = groupDigits(g.group_id);
+      if (!key) continue;
+      const cur = bestByDigits.get(key);
+      if (!cur || score(g) > score(cur)) bestByDigits.set(key, g);
+    }
+    return Array.from(bestByDigits.values());
   };
+
+  // Verifica se algum dos grupos físicos também pertence a OUTRA campanha,
+  // para avisar antes de renomear/alterar e evitar tocar grupo de outra live.
+  const findCrossCampaignGroups = async (
+    rows: GroupRow[],
+  ): Promise<{ campaignName: string; groupName: string }[]> => {
+    const digits = [...new Set(rows.map(r => groupDigits(r.group_id)).filter(Boolean))];
+    if (digits.length === 0) return [];
+
+    // Todos os registros (qualquer instância/formato) desses grupos físicos.
+    const candidates = digits.flatMap(d => [`${d}@g.us`, `${d}-group`]);
+    const { data: allRows } = await supabase
+      .from('whatsapp_groups')
+      .select('id, group_id, name')
+      .in('group_id', candidates);
+    const idToDigits = new Map<string, string>();
+    const idToName = new Map<string, string>();
+    (allRows || []).forEach((r: any) => {
+      idToDigits.set(r.id, groupDigits(r.group_id));
+      idToName.set(r.id, r.name);
+    });
+    const allIds = new Set(idToDigits.keys());
+
+    const { data: others } = await supabase
+      .from('group_campaigns')
+      .select('id, name, target_groups')
+      .neq('id', campaignId);
+
+    const warnings: { campaignName: string; groupName: string }[] = [];
+    const seen = new Set<string>();
+    (others || []).forEach((c: any) => {
+      (c.target_groups || []).forEach((gid: string) => {
+        if (!allIds.has(gid)) return;
+        const dkey = `${c.id}:${idToDigits.get(gid)}`;
+        if (seen.has(dkey)) return;
+        seen.add(dkey);
+        warnings.push({ campaignName: c.name, groupName: idToName.get(gid) || idToDigits.get(gid) || '' });
+      });
+    });
+    return warnings;
+  };
+
 
   const invokeFn = async (fn: string, body: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> => {
     const { data, error } = await supabase.functions.invoke(fn, { body });
@@ -222,8 +304,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     action: 'name' | 'photo' | 'description' | 'permissions' | 'pin' | 'promote',
     delayMs: number,
     extra?: { phone?: string },
+    preGroups?: GroupRow[],
   ): Promise<{ success: number; total: number; errors: string[] } | null> => {
-    const groups = await fetchGroupsWithProvider();
+    const groups = preGroups ?? await fetchGroupsWithProvider();
     if (groups.length === 0) { toast.error('Nenhum grupo encontrado'); return null; }
     let success = 0;
     let repointed = 0;
@@ -260,13 +343,36 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     }
   };
 
-  const applyToAllGroups = async (action: 'name' | 'photo' | 'description' | 'permissions') => {
+  // Monta a pré-visualização (grupos físicos deduplicados + avisos de campanhas cruzadas) e abre confirmação.
+  const prepareAction = async (
+    action: 'name' | 'photo' | 'description' | 'permissions' | 'pin',
+    label: string,
+    delayMs: number,
+  ) => {
+    setIsPreparing(action);
+    try {
+      const groups = await fetchGroupsWithProvider();
+      if (groups.length === 0) { toast.error('Nenhum grupo encontrado'); return; }
+      const crossWarnings = await findCrossCampaignGroups(groups);
+      setPendingAction({ action, label, delayMs, groups, crossWarnings });
+    } catch (e) {
+      toast.error(`Erro ao preparar: ${(e as Error).message}`);
+    } finally {
+      setIsPreparing(null);
+    }
+  };
+
+  // Executa a ação confirmada usando exatamente os grupos pré-visualizados.
+  const executeConfirmed = async () => {
+    if (!pendingAction) return;
+    const { action, label, delayMs, groups } = pendingAction;
+    setPendingAction(null);
     setIsApplying(action);
     try {
-      const r = await runOnAllGroups(action, 1000);
-      if (r) reportResult('Aplicado', r);
+      const r = await runOnAllGroups(action, delayMs, undefined, groups);
+      if (r) reportResult(label, r);
     } catch (e) {
-      toast.error(`Erro ao aplicar configurações: ${(e as Error).message}`);
+      toast.error(`Erro ao aplicar: ${(e as Error).message}`);
     } finally {
       setIsApplying(null);
     }
@@ -303,18 +409,6 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     } as any).eq('id', campaignId);
   };
 
-  const handlePinInAllGroups = async () => {
-    if (!pinMessageText.trim()) return;
-    setIsApplying('pin');
-    try {
-      const r = await runOnAllGroups('pin', 1500);
-      if (r) reportResult('Mensagem fixada', r);
-    } catch (e) {
-      toast.error(`Erro ao fixar mensagem: ${(e as Error).message}`);
-    } finally {
-      setIsApplying(null);
-    }
-  };
 
   if (!isLoaded) return null;
 
@@ -343,9 +437,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
             <Input placeholder="Nome base (ex: VIP Banana)" value={bulkName} onChange={e => setBulkName(e.target.value)} />
             <p className="text-[10px] text-muted-foreground">Cada grupo receberá "#1", "#2"... após o nome</p>
             <div className="flex gap-2">
-              <Button size="sm" disabled={!bulkName.trim() || isApplying === 'name'} className="gap-1"
-                onClick={() => applyToAllGroups('name')}>
-                {isApplying === 'name' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
+              <Button size="sm" disabled={!bulkName.trim() || isApplying === 'name' || isPreparing === 'name'} className="gap-1"
+                onClick={() => prepareAction('name', 'Nome aplicado', 1000)}>
+                {isApplying === 'name' || isPreparing === 'name' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
                 Aplicar Nome
               </Button>
             </div>
@@ -391,9 +485,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
             {bulkPhotoUrl && (
               <img src={bulkPhotoUrl} alt="Preview" className="h-16 w-16 rounded-lg object-cover" />
             )}
-            <Button size="sm" disabled={!bulkPhotoUrl.trim() || isApplying === 'photo'} className="gap-1"
-              onClick={() => applyToAllGroups('photo')}>
-              {isApplying === 'photo' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Image className="h-3.5 w-3.5" />}
+            <Button size="sm" disabled={!bulkPhotoUrl.trim() || isApplying === 'photo' || isPreparing === 'photo'} className="gap-1"
+              onClick={() => prepareAction('photo', 'Foto aplicada', 1000)}>
+              {isApplying === 'photo' || isPreparing === 'photo' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Image className="h-3.5 w-3.5" />}
               Aplicar Foto
             </Button>
           </CardContent>
@@ -406,9 +500,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           </CardHeader>
           <CardContent className="p-3 pt-0 space-y-2">
             <Textarea placeholder="Nova descrição..." value={bulkDescription} onChange={e => setBulkDescription(e.target.value)} rows={2} />
-            <Button size="sm" disabled={!bulkDescription.trim() || isApplying === 'description'} className="gap-1"
-              onClick={() => applyToAllGroups('description')}>
-              {isApplying === 'description' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+            <Button size="sm" disabled={!bulkDescription.trim() || isApplying === 'description' || isPreparing === 'description'} className="gap-1"
+              onClick={() => prepareAction('description', 'Descrição aplicada', 1000)}>
+              {isApplying === 'description' || isPreparing === 'description' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
               Aplicar Descrição
             </Button>
           </CardContent>
@@ -433,9 +527,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
                 </SelectContent>
               </Select>
             </div>
-            <Button size="sm" disabled={!pinMessageText.trim() || isApplying === 'pin'} className="gap-1"
-              onClick={handlePinInAllGroups}>
-              {isApplying === 'pin' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pin className="h-3.5 w-3.5" />}
+            <Button size="sm" disabled={!pinMessageText.trim() || isApplying === 'pin' || isPreparing === 'pin'} className="gap-1"
+              onClick={() => prepareAction('pin', 'Mensagem fixada', 1500)}>
+              {isApplying === 'pin' || isPreparing === 'pin' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pin className="h-3.5 w-3.5" />}
               Fixar em Todos os Grupos
             </Button>
           </CardContent>
@@ -455,9 +549,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
               <Label className="text-xs">Apenas admins adicionam membros</Label>
               <Switch checked={onlyAdminsAdd} onCheckedChange={setOnlyAdminsAdd} />
             </div>
-            <Button size="sm" disabled={isApplying === 'permissions'} className="gap-1"
-              onClick={() => applyToAllGroups('permissions')}>
-              {isApplying === 'permissions' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}
+            <Button size="sm" disabled={isApplying === 'permissions' || isPreparing === 'permissions'} className="gap-1"
+              onClick={() => prepareAction('permissions', 'Permissões aplicadas', 1000)}>
+              {isApplying === 'permissions' || isPreparing === 'permissions' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}
               Aplicar Permissões
             </Button>
           </CardContent>
@@ -500,6 +594,47 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           Salvar Configurações da Campanha
         </Button>
       </div>
+
+      <AlertDialog open={!!pendingAction} onOpenChange={(o) => { if (!o) setPendingAction(null); }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar: {pendingAction?.label}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-xs">
+                <p>
+                  Esta ação será aplicada em <strong>{pendingAction?.groups.length || 0} grupo(s) físico(s)</strong> desta campanha.
+                  Registros duplicados/legados foram automaticamente unificados.
+                </p>
+                <div className="max-h-40 overflow-y-auto rounded-md border p-2 space-y-1">
+                  {pendingAction?.groups.map((g, i) => (
+                    <div key={g.id} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{i + 1}. {g.name}</span>
+                      <Badge variant="outline" className="text-[9px] shrink-0">{g.provider}</Badge>
+                    </div>
+                  ))}
+                </div>
+                {pendingAction && pendingAction.crossWarnings.length > 0 && (
+                  <Alert variant="destructive" className="p-2">
+                    <AlertDescription className="text-[11px]">
+                      <strong>Atenção:</strong> alguns destes grupos também estão em outra(s) campanha(s).
+                      Alterá-los aqui mudará o grupo real (compartilhado):
+                      <ul className="mt-1 list-disc pl-4">
+                        {pendingAction.crossWarnings.slice(0, 6).map((w, idx) => (
+                          <li key={idx}>{w.groupName} → <strong>{w.campaignName}</strong></li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executeConfirmed}>Confirmar e aplicar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
