@@ -689,18 +689,24 @@ export function MassTemplateDispatcher() {
     }
 
     // Apply topN limit
-    let finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
+    const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
 
-    // Apply cooldown exclusion (suffix-based to catch same person with different DDDs)
+    return finalList;
+  }, [crmCustomers, leads, ravenaCustomers, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter]);
+
+  // Recipients after applying cooldown exclusion (suffix-based to catch same person with different DDDs)
+  const filteredRecipients = useMemo((): Recipient[] => {
     if (cooldownApplied && cooldownExcludedPhones.size > 0) {
-      finalList = finalList.filter(r => {
+      return baseRecipients.filter(r => {
         const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
         return !cooldownExcludedPhones.has(suffix);
       });
     }
+    return baseRecipients;
+  }, [baseRecipients, cooldownApplied, cooldownExcludedPhones]);
 
-    return finalList;
-  }, [crmCustomers, leads, ravenaCustomers, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, cooldownApplied, cooldownExcludedPhones]);
+  // How many of the CURRENT audience were actually removed by the cooldown
+  const cooldownRemovedFromAudience = baseRecipients.length - filteredRecipients.length;
 
   // Unique filter options
   const uniqueSegments = useMemo(() => [...new Set(crmCustomers.map(c => c.rfm_segment).filter(Boolean))].sort(), [crmCustomers]);
