@@ -485,6 +485,14 @@ export function GroupsVipManager() {
                         )}
                         <Button
                           variant="ghost" size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          title="Editar nome"
+                          onClick={(e) => { e.stopPropagation(); setCampaignToRename(c); setRenameValue(c.name); }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
                           className="h-7 w-7 text-destructive hover:bg-destructive/10"
                           title="Excluir campanha"
                           onClick={(e) => { e.stopPropagation(); setCampaignToDelete(c); }}
