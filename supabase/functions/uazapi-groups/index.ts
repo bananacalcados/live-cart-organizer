@@ -358,7 +358,25 @@ serve(async (req) => {
         return json({ error: `Ação desconhecida: ${action}` }, 400);
     }
 
-    if (!r.ok) return json({ error: "Falha na operação de grupo", details: r.data }, r.status);
+    if (!r.ok) {
+      // Traduz o 403/forbidden da uazapi para algo acionável: o número conectado
+      // NÃO é admin do grupo (ou o bot não está mais no grupo), então o WhatsApp
+      // recusa qualquer alteração. Nunca é falha de código — é permissão no grupo.
+      const detailStr = JSON.stringify(r.data ?? "").toLowerCase();
+      const isForbidden = r.status === 403 || detailStr.includes("403") || detailStr.includes("forbidden");
+      if (isForbidden) {
+        return json(
+          {
+            error:
+              "Sem permissão neste grupo: o número conectado não é administrador (ou não está mais no grupo). Promova o número a admin no WhatsApp e tente novamente.",
+            code: "GROUP_FORBIDDEN",
+            details: r.data,
+          },
+          200,
+        );
+      }
+      return json({ error: "Falha na operação de grupo", details: r.data }, r.status);
+    }
     return json({ success: true, data: r.data });
   } catch (e) {
     console.error("[uazapi-groups] error:", e);
