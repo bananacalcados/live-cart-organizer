@@ -7,6 +7,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/** Extrai apenas os dígitos do JID do grupo (chave estável independente do sufixo). */
+function groupDigits(raw: string): string {
+  return String(raw || "").replace(/\D/g, "");
+}
+
+
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -155,6 +162,39 @@ serve(async (req) => {
               await supabase.from('whatsapp_groups').update({ instance_id: instanceId }).eq('id', orphan.id);
             }
           }
+        }
+
+        // Atualiza nomes nas linhas já existentes casando pelo NÚMERO do grupo
+        // (dígitos), independente do sufixo/instance_id — sem trocar id/group_id.
+        try {
+          const { data: allExisting } = await supabase
+            .from('whatsapp_groups')
+            .select('id, group_id');
+          if (allExisting && allExisting.length > 0) {
+            const byDigits = new Map<string, string[]>();
+            for (const ex of allExisting as any[]) {
+              const d = groupDigits(ex.group_id);
+              if (!d) continue;
+              const arr = byDigits.get(d) || [];
+              arr.push(ex.id);
+              byDigits.set(d, arr);
+            }
+            for (const row of rows) {
+              const ids = byDigits.get(groupDigits(row.group_id));
+              if (!ids || ids.length === 0) continue;
+              await supabase
+                .from('whatsapp_groups')
+                .update({
+                  name: row.name,
+                  photo_url: row.photo_url,
+                  participant_count: row.participant_count,
+                  last_synced_at: row.last_synced_at,
+                })
+                .in('id', ids);
+            }
+          }
+        } catch (e) {
+          console.error('[zapi-list-groups] name refresh falhou:', (e as Error).message);
         }
 
         // Upsert with previous_participant_count

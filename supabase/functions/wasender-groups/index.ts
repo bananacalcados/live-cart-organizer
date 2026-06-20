@@ -14,6 +14,13 @@ function json(body: unknown, status = 200) {
   });
 }
 
+/** Extrai apenas os dígitos do JID do grupo (chave estável independente do sufixo). */
+function groupDigits(raw: string): string {
+  return String(raw || "").replace(/\D/g, "");
+}
+
+
+
 /**
  * wasender-groups — gestão de grupos WhatsApp via WaSender (usa a api_key da sessão).
  *
@@ -90,6 +97,40 @@ serve(async (req) => {
                 Deno.env.get("SUPABASE_URL")!,
                 Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
               );
+
+              // Atualiza nomes nas linhas já existentes casando pelo NÚMERO do grupo
+              // (dígitos), independente do sufixo/instance_id — sem trocar id/group_id.
+              try {
+                const { data: existing } = await supabase
+                  .from("whatsapp_groups")
+                  .select("id, group_id");
+                if (existing && existing.length > 0) {
+                  const byDigits = new Map<string, string[]>();
+                  for (const ex of existing as any[]) {
+                    const d = groupDigits(ex.group_id);
+                    if (!d) continue;
+                    const arr = byDigits.get(d) || [];
+                    arr.push(ex.id);
+                    byDigits.set(d, arr);
+                  }
+                  for (const row of rows) {
+                    const ids = byDigits.get(groupDigits(row.group_id));
+                    if (!ids || ids.length === 0) continue;
+                    await supabase
+                      .from("whatsapp_groups")
+                      .update({
+                        name: row.name,
+                        photo_url: row.photo_url,
+                        participant_count: row.participant_count,
+                        last_synced_at: row.last_synced_at,
+                      })
+                      .in("id", ids);
+                  }
+                }
+              } catch (e) {
+                console.error("[wasender-groups] name refresh falhou:", (e as Error).message);
+              }
+
               const { error } = await supabase
                 .from("whatsapp_groups")
                 .upsert(rows, { onConflict: "group_id,instance_id", ignoreDuplicates: false });

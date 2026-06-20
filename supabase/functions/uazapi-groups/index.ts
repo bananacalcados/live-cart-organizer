@@ -22,6 +22,11 @@ function groupJid(raw: string): string {
   return `${digits}@g.us`;
 }
 
+/** Extrai apenas os dígitos do JID do grupo (chave estável independente do sufixo). */
+function groupDigits(raw: string): string {
+  return String(raw || "").replace(/\D/g, "");
+}
+
 /**
  * uazapi-groups — gestão de grupos WhatsApp via uazapi (usa o Instance Token).
  *
@@ -86,6 +91,48 @@ serve(async (req) => {
                 Deno.env.get("SUPABASE_URL")!,
                 Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
               );
+
+              // ── Passo 1: atualizar nomes nas linhas JÁ existentes, casando pelo
+              // NÚMERO do grupo (dígitos), independente do sufixo (-group / @g.us)
+              // e do instance_id. Isso garante que os grupos referenciados por
+              // campanhas antigas recebam o nome novo SEM trocar id/group_id/
+              // instance_id (os disparos normalizam o JID, então continuam idênticos).
+              try {
+                const { data: existing } = await supabase
+                  .from("whatsapp_groups")
+                  .select("id, group_id");
+                if (existing && existing.length > 0) {
+                  const byDigits = new Map<string, string[]>();
+                  for (const ex of existing as any[]) {
+                    const d = groupDigits(ex.group_id);
+                    if (!d) continue;
+                    const arr = byDigits.get(d) || [];
+                    arr.push(ex.id);
+                    byDigits.set(d, arr);
+                  }
+                  let updated = 0;
+                  for (const row of rows) {
+                    const d = groupDigits(row.group_id);
+                    const ids = byDigits.get(d);
+                    if (!ids || ids.length === 0) continue;
+                    const { error: upErr } = await supabase
+                      .from("whatsapp_groups")
+                      .update({
+                        name: row.name,
+                        photo_url: row.photo_url,
+                        participant_count: row.participant_count,
+                        last_synced_at: row.last_synced_at,
+                      })
+                      .in("id", ids);
+                    if (!upErr) updated += ids.length;
+                  }
+                  if (updated > 0) console.log(`[uazapi-groups] refreshed names on ${updated} existing rows`);
+                }
+              } catch (e) {
+                console.error("[uazapi-groups] name refresh falhou:", (e as Error).message);
+              }
+
+              // ── Passo 2: upsert para cadastrar grupos realmente novos.
               const { error } = await supabase
                 .from("whatsapp_groups")
                 .upsert(rows, { onConflict: "group_id,instance_id", ignoreDuplicates: false });
