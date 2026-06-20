@@ -433,9 +433,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
             <Input placeholder="Nome base (ex: VIP Banana)" value={bulkName} onChange={e => setBulkName(e.target.value)} />
             <p className="text-[10px] text-muted-foreground">Cada grupo receberá "#1", "#2"... após o nome</p>
             <div className="flex gap-2">
-              <Button size="sm" disabled={!bulkName.trim() || isApplying === 'name'} className="gap-1"
-                onClick={() => applyToAllGroups('name')}>
-                {isApplying === 'name' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
+              <Button size="sm" disabled={!bulkName.trim() || isApplying === 'name' || isPreparing === 'name'} className="gap-1"
+                onClick={() => prepareAction('name', 'Nome aplicado', 1000)}>
+                {isApplying === 'name' || isPreparing === 'name' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Type className="h-3.5 w-3.5" />}
                 Aplicar Nome
               </Button>
             </div>
