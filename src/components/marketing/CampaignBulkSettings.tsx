@@ -287,8 +287,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     action: 'name' | 'photo' | 'description' | 'permissions' | 'pin' | 'promote',
     delayMs: number,
     extra?: { phone?: string },
+    preGroups?: GroupRow[],
   ): Promise<{ success: number; total: number; errors: string[] } | null> => {
-    const groups = await fetchGroupsWithProvider();
+    const groups = preGroups ?? await fetchGroupsWithProvider();
     if (groups.length === 0) { toast.error('Nenhum grupo encontrado'); return null; }
     let success = 0;
     let repointed = 0;
