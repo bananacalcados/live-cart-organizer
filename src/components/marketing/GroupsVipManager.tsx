@@ -476,6 +476,32 @@ export function GroupsVipManager() {
         </TabsContent>
       </Tabs>
 
+      {/* DELETE CAMPAIGN CONFIRMATION */}
+      <AlertDialog open={!!campaignToDelete} onOpenChange={(o) => { if (!o) setCampaignToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir campanha?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A campanha <strong>{campaignToDelete?.name}</strong> será excluída permanentemente,
+              junto com suas mensagens agendadas, blocos de disparo, links e variáveis.
+              Os grupos de WhatsApp <strong>não</strong> serão afetados. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingCampaign}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); deleteCampaign(); }}
+              disabled={isDeletingCampaign}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingCampaign ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+
       {/* CREATE CAMPAIGN DIALOG */}
       <Dialog open={showCreateCampaign} onOpenChange={setShowCreateCampaign}>
         <DialogContent className="max-w-md">
