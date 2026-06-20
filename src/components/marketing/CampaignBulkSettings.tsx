@@ -124,7 +124,7 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       (campaignWhatsappNumberId && numbersMap.get(campaignWhatsappNumberId)?.active ? campaignWhatsappNumberId : null) ||
       (selectedNumberId && numbersMap.get(selectedNumberId)?.active ? selectedNumberId : null);
 
-    return groups.map((g: any) => {
+    const mapped: GroupRow[] = groups.map((g: any) => {
       // Só confia no instance_id do grupo se for um UUID de instância ATIVA. Caso contrário usa a operante.
       const storedActive = isUuid(g.instance_id) && numbersMap.get(g.instance_id)?.active;
       const effectiveInstanceId = storedActive ? g.instance_id : operating;
@@ -138,7 +138,69 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
         provider,
       };
     });
+
+    // Deduplica por grupo FÍSICO (dígitos do JID). O mesmo grupo aparece várias vezes
+    // (1 linha por instância + registro legado "-group" de instância morta). Mantemos
+    // apenas o melhor registro: prioriza JID moderno "@g.us" com instância UUID ativa
+    // sobre registros legados/token cru — evita renomear o mesmo grupo 2x ou via instância errada.
+    const score = (g: GroupRow): number => {
+      let s = 0;
+      if (isUuid(g.storedInstanceId) && numbersMap.get(g.storedInstanceId!)?.active) s += 4; // instância própria ativa
+      if (/@g\.us$/i.test(g.group_id)) s += 2; // formato moderno
+      if (!/-group$/i.test(g.group_id)) s += 1; // não é legado
+      return s;
+    };
+    const bestByDigits = new Map<string, GroupRow>();
+    for (const g of mapped) {
+      const key = groupDigits(g.group_id);
+      if (!key) continue;
+      const cur = bestByDigits.get(key);
+      if (!cur || score(g) > score(cur)) bestByDigits.set(key, g);
+    }
+    return Array.from(bestByDigits.values());
   };
+
+  // Verifica se algum dos grupos físicos também pertence a OUTRA campanha,
+  // para avisar antes de renomear/alterar e evitar tocar grupo de outra live.
+  const findCrossCampaignGroups = async (
+    rows: GroupRow[],
+  ): Promise<{ campaignName: string; groupName: string }[]> => {
+    const digits = [...new Set(rows.map(r => groupDigits(r.group_id)).filter(Boolean))];
+    if (digits.length === 0) return [];
+
+    // Todos os registros (qualquer instância/formato) desses grupos físicos.
+    const candidates = digits.flatMap(d => [`${d}@g.us`, `${d}-group`]);
+    const { data: allRows } = await supabase
+      .from('whatsapp_groups')
+      .select('id, group_id, name')
+      .in('group_id', candidates);
+    const idToDigits = new Map<string, string>();
+    const idToName = new Map<string, string>();
+    (allRows || []).forEach((r: any) => {
+      idToDigits.set(r.id, groupDigits(r.group_id));
+      idToName.set(r.id, r.name);
+    });
+    const allIds = new Set(idToDigits.keys());
+
+    const { data: others } = await supabase
+      .from('group_campaigns')
+      .select('id, name, target_groups')
+      .neq('id', campaignId);
+
+    const warnings: { campaignName: string; groupName: string }[] = [];
+    const seen = new Set<string>();
+    (others || []).forEach((c: any) => {
+      (c.target_groups || []).forEach((gid: string) => {
+        if (!allIds.has(gid)) return;
+        const dkey = `${c.id}:${idToDigits.get(gid)}`;
+        if (seen.has(dkey)) return;
+        seen.add(dkey);
+        warnings.push({ campaignName: c.name, groupName: idToName.get(gid) || idToDigits.get(gid) || '' });
+      });
+    });
+    return warnings;
+  };
+
 
   const invokeFn = async (fn: string, body: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> => {
     const { data, error } = await supabase.functions.invoke(fn, { body });
