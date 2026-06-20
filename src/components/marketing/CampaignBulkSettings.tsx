@@ -481,9 +481,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
             {bulkPhotoUrl && (
               <img src={bulkPhotoUrl} alt="Preview" className="h-16 w-16 rounded-lg object-cover" />
             )}
-            <Button size="sm" disabled={!bulkPhotoUrl.trim() || isApplying === 'photo'} className="gap-1"
-              onClick={() => applyToAllGroups('photo')}>
-              {isApplying === 'photo' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Image className="h-3.5 w-3.5" />}
+            <Button size="sm" disabled={!bulkPhotoUrl.trim() || isApplying === 'photo' || isPreparing === 'photo'} className="gap-1"
+              onClick={() => prepareAction('photo', 'Foto aplicada', 1000)}>
+              {isApplying === 'photo' || isPreparing === 'photo' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Image className="h-3.5 w-3.5" />}
               Aplicar Foto
             </Button>
           </CardContent>
