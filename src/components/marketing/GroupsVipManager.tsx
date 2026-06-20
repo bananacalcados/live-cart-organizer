@@ -534,6 +534,29 @@ export function GroupsVipManager() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* RENAME CAMPAIGN DIALOG */}
+      <Dialog open={!!campaignToRename} onOpenChange={(o) => { if (!o) setCampaignToRename(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Editar nome da campanha</DialogTitle></DialogHeader>
+          <Input
+            placeholder="Nome da campanha"
+            value={renameValue}
+            onChange={e => setRenameValue(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !isRenamingCampaign) renameCampaign(); }}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCampaignToRename(null)} disabled={isRenamingCampaign}>Cancelar</Button>
+            <Button onClick={renameCampaign} disabled={isRenamingCampaign || !renameValue.trim()} className="gap-1">
+              {isRenamingCampaign ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+
 
       {/* CREATE CAMPAIGN DIALOG */}
       <Dialog open={showCreateCampaign} onOpenChange={setShowCreateCampaign}>
