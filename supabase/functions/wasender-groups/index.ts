@@ -14,6 +14,13 @@ function json(body: unknown, status = 200) {
   });
 }
 
+/** Extrai apenas os dígitos do JID do grupo (chave estável independente do sufixo). */
+function groupDigits(raw: string): string {
+  return String(raw || "").replace(/\D/g, "");
+}
+
+
+
 /**
  * wasender-groups — gestão de grupos WhatsApp via WaSender (usa a api_key da sessão).
  *
