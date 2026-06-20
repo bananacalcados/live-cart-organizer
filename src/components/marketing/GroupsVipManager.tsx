@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Users, RefreshCw, Send, Plus, Search, Star, Loader2,
   Settings, CheckCircle, XCircle, Crown, Link as LinkIcon,
-  MapPin, AlertTriangle, Smartphone, Trash2
+  MapPin, AlertTriangle, Smartphone, Trash2, Pencil
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -97,6 +97,9 @@ export function GroupsVipManager() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
   const [campaignToDelete, setCampaignToDelete] = useState<GroupCampaign | null>(null);
   const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
+  const [campaignToRename, setCampaignToRename] = useState<GroupCampaign | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [isRenamingCampaign, setIsRenamingCampaign] = useState(false);
   const [settingsGroup, setSettingsGroup] = useState<WhatsAppGroup | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
@@ -265,6 +268,28 @@ export function GroupsVipManager() {
       toast.error(`Erro ao excluir: ${(e as Error).message}`);
     } finally {
       setIsDeletingCampaign(false);
+    }
+  };
+
+  // Renomeia a campanha (apenas o campo name). Não toca em grupos nem em disparos.
+  const renameCampaign = async () => {
+    if (!campaignToRename) return;
+    const newName = renameValue.trim();
+    if (!newName) { toast.error("Nome obrigatório"); return; }
+    setIsRenamingCampaign(true);
+    try {
+      const { error } = await supabase
+        .from('group_campaigns')
+        .update({ name: newName })
+        .eq('id', campaignToRename.id);
+      if (error) throw error;
+      toast.success("Nome atualizado!");
+      setCampaigns(prev => prev.map(c => c.id === campaignToRename.id ? { ...c, name: newName } : c));
+      setCampaignToRename(null);
+    } catch (e) {
+      toast.error(`Erro ao renomear: ${(e as Error).message}`);
+    } finally {
+      setIsRenamingCampaign(false);
     }
   };
 
@@ -460,6 +485,14 @@ export function GroupsVipManager() {
                         )}
                         <Button
                           variant="ghost" size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          title="Editar nome"
+                          onClick={(e) => { e.stopPropagation(); setCampaignToRename(c); setRenameValue(c.name); }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost" size="icon"
                           className="h-7 w-7 text-destructive hover:bg-destructive/10"
                           title="Excluir campanha"
                           onClick={(e) => { e.stopPropagation(); setCampaignToDelete(c); }}
@@ -500,6 +533,29 @@ export function GroupsVipManager() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* RENAME CAMPAIGN DIALOG */}
+      <Dialog open={!!campaignToRename} onOpenChange={(o) => { if (!o) setCampaignToRename(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Editar nome da campanha</DialogTitle></DialogHeader>
+          <Input
+            placeholder="Nome da campanha"
+            value={renameValue}
+            onChange={e => setRenameValue(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !isRenamingCampaign) renameCampaign(); }}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCampaignToRename(null)} disabled={isRenamingCampaign}>Cancelar</Button>
+            <Button onClick={renameCampaign} disabled={isRenamingCampaign || !renameValue.trim()} className="gap-1">
+              {isRenamingCampaign ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
 
 
       {/* CREATE CAMPAIGN DIALOG */}
