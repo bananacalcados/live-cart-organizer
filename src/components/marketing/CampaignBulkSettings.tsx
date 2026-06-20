@@ -590,6 +590,47 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           Salvar Configurações da Campanha
         </Button>
       </div>
+
+      <AlertDialog open={!!pendingAction} onOpenChange={(o) => { if (!o) setPendingAction(null); }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar: {pendingAction?.label}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-xs">
+                <p>
+                  Esta ação será aplicada em <strong>{pendingAction?.groups.length || 0} grupo(s) físico(s)</strong> desta campanha.
+                  Registros duplicados/legados foram automaticamente unificados.
+                </p>
+                <div className="max-h-40 overflow-y-auto rounded-md border p-2 space-y-1">
+                  {pendingAction?.groups.map((g, i) => (
+                    <div key={g.id} className="flex items-center justify-between gap-2">
+                      <span className="truncate">{i + 1}. {g.name}</span>
+                      <Badge variant="outline" className="text-[9px] shrink-0">{g.provider}</Badge>
+                    </div>
+                  ))}
+                </div>
+                {pendingAction && pendingAction.crossWarnings.length > 0 && (
+                  <Alert variant="destructive" className="p-2">
+                    <AlertDescription className="text-[11px]">
+                      <strong>Atenção:</strong> alguns destes grupos também estão em outra(s) campanha(s).
+                      Alterá-los aqui mudará o grupo real (compartilhado):
+                      <ul className="mt-1 list-disc pl-4">
+                        {pendingAction.crossWarnings.slice(0, 6).map((w, idx) => (
+                          <li key={idx}>{w.groupName} → <strong>{w.campaignName}</strong></li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executeConfirmed}>Confirmar e aplicar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
