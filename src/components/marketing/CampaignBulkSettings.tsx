@@ -545,9 +545,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
               <Label className="text-xs">Apenas admins adicionam membros</Label>
               <Switch checked={onlyAdminsAdd} onCheckedChange={setOnlyAdminsAdd} />
             </div>
-            <Button size="sm" disabled={isApplying === 'permissions'} className="gap-1"
-              onClick={() => applyToAllGroups('permissions')}>
-              {isApplying === 'permissions' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}
+            <Button size="sm" disabled={isApplying === 'permissions' || isPreparing === 'permissions'} className="gap-1"
+              onClick={() => prepareAction('permissions', 'Permissões aplicadas', 1000)}>
+              {isApplying === 'permissions' || isPreparing === 'permissions' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Shield className="h-3.5 w-3.5" />}
               Aplicar Permissões
             </Button>
           </CardContent>
