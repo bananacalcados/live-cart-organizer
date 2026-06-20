@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Users, RefreshCw, Send, Plus, Search, Star, Loader2,
   Settings, CheckCircle, XCircle, Crown, Link as LinkIcon,
-  MapPin, AlertTriangle, Smartphone, Trash2
+  MapPin, AlertTriangle, Smartphone, Trash2, Pencil
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
