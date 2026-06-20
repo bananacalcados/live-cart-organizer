@@ -7,6 +7,13 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/** Extrai apenas os dígitos do JID do grupo (chave estável independente do sufixo). */
+function groupDigits(raw: string): string {
+  return String(raw || "").replace(/\D/g, "");
+}
+
+
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
