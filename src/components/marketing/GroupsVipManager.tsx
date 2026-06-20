@@ -458,6 +458,14 @@ export function GroupsVipManager() {
                             {c.failed_count > 0 && <> · <XCircle className="h-3 w-3 inline text-red-500" /> {c.failed_count}</>}
                           </span>
                         )}
+                        <Button
+                          variant="ghost" size="icon"
+                          className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                          title="Excluir campanha"
+                          onClick={(e) => { e.stopPropagation(); setCampaignToDelete(c); }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </div>
                   </CardContent>
