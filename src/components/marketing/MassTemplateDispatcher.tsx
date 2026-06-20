@@ -572,8 +572,8 @@ export function MassTemplateDispatcher() {
     return parts.join('\n\n');
   }, [selectedTemplate, variables, templateButtons]);
 
-  // Filtered recipients
-  const filteredRecipients = useMemo((): Recipient[] => {
+  // Base recipients (all filters EXCEPT cooldown)
+  const baseRecipients = useMemo((): Recipient[] => {
     const list: Recipient[] = [];
     const addedPhones = new Set<string>();
 
