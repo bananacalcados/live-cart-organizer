@@ -523,9 +523,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
                 </SelectContent>
               </Select>
             </div>
-            <Button size="sm" disabled={!pinMessageText.trim() || isApplying === 'pin'} className="gap-1"
-              onClick={handlePinInAllGroups}>
-              {isApplying === 'pin' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pin className="h-3.5 w-3.5" />}
+            <Button size="sm" disabled={!pinMessageText.trim() || isApplying === 'pin' || isPreparing === 'pin'} className="gap-1"
+              onClick={() => prepareAction('pin', 'Mensagem fixada', 1500)}>
+              {isApplying === 'pin' || isPreparing === 'pin' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pin className="h-3.5 w-3.5" />}
               Fixar em Todos os Grupos
             </Button>
           </CardContent>
