@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Users, RefreshCw, Send, Plus, Search, Star, Loader2,
   Settings, CheckCircle, XCircle, Crown, Link as LinkIcon,
-  MapPin, AlertTriangle, Smartphone
+  MapPin, AlertTriangle, Smartphone, Trash2
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { GroupSettingsPanel } from "./GroupSettingsPanel";
 import { CampaignDetailPanel } from "./CampaignDetailPanel";
 import { VipStrategyPanel } from "./VipStrategyPanel";
@@ -91,6 +95,8 @@ export function GroupsVipManager() {
   const [newCampaignSpeed, setNewCampaignSpeed] = useState("slow");
   const [isCreatingCampaign, setIsCreatingCampaign] = useState(false);
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
+  const [campaignToDelete, setCampaignToDelete] = useState<GroupCampaign | null>(null);
+  const [isDeletingCampaign, setIsDeletingCampaign] = useState(false);
   const [settingsGroup, setSettingsGroup] = useState<WhatsAppGroup | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
@@ -235,6 +241,31 @@ export function GroupsVipManager() {
       setSelectedCampaignId(data.id);
     } catch { toast.error("Erro ao criar"); }
     finally { setIsCreatingCampaign(false); }
+  };
+
+  // Exclui a campanha e todos os registros vinculados (mensagens, blocos, links, variáveis).
+  // Escopo sempre por campaign_id desta campanha → não toca em dados de outras campanhas.
+  const deleteCampaign = async () => {
+    if (!campaignToDelete) return;
+    const id = campaignToDelete.id;
+    setIsDeletingCampaign(true);
+    try {
+      await supabase.from('group_campaign_scheduled_messages').delete().eq('campaign_id', id);
+      await supabase.from('group_campaign_messages').delete().eq('campaign_id', id);
+      await supabase.from('group_campaign_block_dispatches').delete().eq('campaign_id', id);
+      await supabase.from('group_redirect_links').delete().eq('campaign_id', id);
+      await supabase.from('campaign_variables').delete().eq('campaign_id', id);
+      const { error } = await supabase.from('group_campaigns').delete().eq('id', id);
+      if (error) throw error;
+      toast.success("Campanha excluída!");
+      if (selectedCampaignId === id) setSelectedCampaignId(null);
+      setCampaignToDelete(null);
+      fetchCampaigns();
+    } catch (e) {
+      toast.error(`Erro ao excluir: ${(e as Error).message}`);
+    } finally {
+      setIsDeletingCampaign(false);
+    }
   };
 
   // Grupos por instância (chave = instance_id bruto do grupo) para o filtro.
@@ -427,6 +458,14 @@ export function GroupsVipManager() {
                             {c.failed_count > 0 && <> · <XCircle className="h-3 w-3 inline text-red-500" /> {c.failed_count}</>}
                           </span>
                         )}
+                        <Button
+                          variant="ghost" size="icon"
+                          className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                          title="Excluir campanha"
+                          onClick={(e) => { e.stopPropagation(); setCampaignToDelete(c); }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     </div>
                   </CardContent>
@@ -436,6 +475,32 @@ export function GroupsVipManager() {
           </ScrollArea>
         </TabsContent>
       </Tabs>
+
+      {/* DELETE CAMPAIGN CONFIRMATION */}
+      <AlertDialog open={!!campaignToDelete} onOpenChange={(o) => { if (!o) setCampaignToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir campanha?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A campanha <strong>{campaignToDelete?.name}</strong> será excluída permanentemente,
+              junto com suas mensagens agendadas, blocos de disparo, links e variáveis.
+              Os grupos de WhatsApp <strong>não</strong> serão afetados. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingCampaign}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); deleteCampaign(); }}
+              disabled={isDeletingCampaign}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingCampaign ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       {/* CREATE CAMPAIGN DIALOG */}
       <Dialog open={showCreateCampaign} onOpenChange={setShowCreateCampaign}>
