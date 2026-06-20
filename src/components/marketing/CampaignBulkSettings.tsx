@@ -85,7 +85,12 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
   };
 
   // ---- Roteamento de grupos por provider (uazapi / Z-API / WaSender) ----
-  type GroupRow = { id: string; group_id: string; name: string; instance_id: string | null; provider: string };
+  // storedInstanceId = valor gravado no grupo (pode ser um token antigo/morto)
+  // effectiveInstanceId = instância ATIVA real usada para rotear (nº da campanha ou o selecionado no topo)
+  type GroupRow = { id: string; group_id: string; name: string; storedInstanceId: string | null; effectiveInstanceId: string | null; provider: string };
+
+  const isUuid = (v: string | null | undefined): boolean =>
+    !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
   const fetchGroupsWithProvider = async (): Promise<GroupRow[]> => {
     const { data: groups } = await supabase
@@ -93,22 +98,43 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
       .select('id, group_id, name, instance_id')
       .in('id', targetGroups);
     if (!groups || groups.length === 0) return [];
-    const instanceIds = [...new Set(groups.map((g: any) => g.instance_id).filter(Boolean))] as string[];
-    const providerById = new Map<string, string>();
-    if (instanceIds.length > 0) {
+
+    // Candidatos a instância: UUIDs válidos gravados nos grupos + nº da campanha + nº selecionado no topo.
+    // (instance_id pode ser um token cru antigo, ex.: instância Z-API desativada — esses são ignorados no roteamento)
+    const candidateIds = [...new Set([
+      ...groups.map((g: any) => g.instance_id).filter(isUuid),
+      campaignWhatsappNumberId,
+      selectedNumberId,
+    ].filter(Boolean))] as string[];
+
+    const numbersMap = new Map<string, { provider: string; active: boolean }>();
+    if (candidateIds.length > 0) {
       const { data: nums } = await supabase
         .from('whatsapp_numbers')
-        .select('id, provider')
-        .in('id', instanceIds);
-      (nums || []).forEach((n: any) => providerById.set(n.id, n.provider));
+        .select('id, provider, is_active')
+        .in('id', candidateIds);
+      (nums || []).forEach((n: any) => numbersMap.set(n.id, { provider: n.provider, active: !!n.is_active }));
     }
-    return groups.map((g: any) => ({
-      id: g.id,
-      group_id: g.group_id,
-      name: g.name,
-      instance_id: g.instance_id,
-      provider: g.instance_id ? (providerById.get(g.instance_id) || 'zapi') : 'zapi',
-    }));
+
+    // Instância "operante": prioriza o número ATIVO da campanha; senão, o número ATIVO selecionado no topo.
+    const operating =
+      (campaignWhatsappNumberId && numbersMap.get(campaignWhatsappNumberId)?.active ? campaignWhatsappNumberId : null) ||
+      (selectedNumberId && numbersMap.get(selectedNumberId)?.active ? selectedNumberId : null);
+
+    return groups.map((g: any) => {
+      // Só confia no instance_id do grupo se for um UUID de instância ATIVA. Caso contrário usa a operante.
+      const storedActive = isUuid(g.instance_id) && numbersMap.get(g.instance_id)?.active;
+      const effectiveInstanceId = storedActive ? g.instance_id : operating;
+      const provider = effectiveInstanceId ? (numbersMap.get(effectiveInstanceId)?.provider || 'zapi') : 'zapi';
+      return {
+        id: g.id,
+        group_id: g.group_id,
+        name: g.name,
+        storedInstanceId: g.instance_id ?? null,
+        effectiveInstanceId: effectiveInstanceId ?? null,
+        provider,
+      };
+    });
   };
 
   const invokeFn = async (fn: string, body: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> => {
@@ -126,7 +152,8 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     idx: number,
     extra?: { phone?: string },
   ): Promise<{ ok: boolean; error?: string }> => {
-    const wid = g.instance_id || undefined;
+    const wid = g.effectiveInstanceId || undefined;
+    if (!wid) return { ok: false, error: 'Sem número de WhatsApp ativo. Atribua um número à campanha ou selecione um número ativo no topo.' };
 
     if (g.provider === 'uazapi') {
       switch (action) {
@@ -199,13 +226,28 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
     const groups = await fetchGroupsWithProvider();
     if (groups.length === 0) { toast.error('Nenhum grupo encontrado'); return null; }
     let success = 0;
+    let repointed = 0;
     const errors: string[] = [];
     for (let i = 0; i < groups.length; i++) {
-      const res = await applyActionToGroup(groups[i], action, i, extra);
-      if (res.ok) success++;
-      else errors.push(`${groups[i].name}: ${res.error || 'falha'}`);
+      const g = groups[i];
+      const res = await applyActionToGroup(g, action, i, extra);
+      if (res.ok) {
+        success++;
+        // Auto-cura: se o grupo apontava para uma instância morta/diferente, grava a que FUNCIONOU.
+        // Nunca adivinha — só persiste a instância que acabou de aplicar com sucesso.
+        if (g.effectiveInstanceId && g.effectiveInstanceId !== g.storedInstanceId) {
+          const { error: upErr } = await supabase
+            .from('whatsapp_groups')
+            .update({ instance_id: g.effectiveInstanceId })
+            .eq('id', g.id);
+          if (!upErr) repointed++;
+        }
+      } else {
+        errors.push(`${g.name}: ${res.error || 'falha'}`);
+      }
       await new Promise(r => setTimeout(r, delayMs));
     }
+    if (repointed > 0) console.info(`[CampaignBulkSettings] ${repointed} grupo(s) repontados para a instância ativa.`);
     return { success, total: groups.length, errors };
   };
 
