@@ -1,55 +1,61 @@
-## Objetivo
-Fazer a tela **Marketing > Grupos VIP > Configurar Grupos em Massa** funcionar para campanhas em qualquer provedor (uazapi, Z-API, WaSender), respeitando a regra de ouro do projeto: **a conversa/operação roteia pelo provider REAL da instância**, nunca assume Z-API.
+# Por que os nomes não atualizam ao "Sincronizar do WhatsApp"
 
-## Causa raiz (confirmada no banco)
-- Campanha LIVE usa instância `provider = uazapi`; os 3 grupos são uazapi.
-- `CampaignBulkSettings.tsx` chama sempre `zapi-group-settings` (Z-API).
-- Nas ações Nome/Foto/Descrição/Permissões o componente nem envia `whatsapp_number_id` → resolve para Z-API errado/ausente.
-- Na ação Fixar, envia o id uazapi, mas `resolveZApiCredentials` filtra `provider='zapi'` → erro.
-- Resultado: 0/3 em tudo.
+Investiguei o banco e o código. O sync **funciona**, mas grava os nomes novos em **registros diferentes** dos que a campanha realmente usa. Há dois descasamentos:
 
-## Estratégia (sem quebrar Z-API existente)
-Rotear por provider, igual ao padrão já usado no PDV (`posWhatsappSend` / `uazapi-send-buttons`). O front descobre o provider de cada grupo (via `instance_id` do grupo, não só o da campanha) e chama a edge function certa.
+## 1. Descasamento de `instance_id`
+A tabela `whatsapp_groups` tem uma constraint única em `(group_id, instance_id)`. Os grupos da campanha **GRUPO LIVE** foram salvos antigamente com:
 
-### 1. Backend — completar `uazapi-groups`
-Adicionar as ações que faltam, espelhando o contrato do `zapi-group-settings` mas usando os endpoints uazapi (Instance Token):
-- `updateName` → `/group/updateName` (ou equivalente uazapi: `{ groupjid, name }`)
-- `updateDescription` → `/group/updateDescription` `{ groupjid, description }`
-- `updatePhoto` → `/group/updateImage` `{ groupjid, image }`
-- `updateSettings` (permissões) → `/group/updateSettings` para `messagesAdminsOnly` e `editAdminsOnly`
-- `pinMessage` → enviar texto (já existe sendMessage) + ação de pin do uazapi
+```
+instance_id = 3ED1FFCA10B9621BDE0A3A43AB49A453   (token antigo da uazapi)
+```
 
-Observação: validar os nomes exatos dos endpoints uazapi na doc antes de implementar (alguns variam por versão). Onde a uazapi não suportar uma ação, retornar erro claro em vez de falhar silencioso.
+Mas o sync de hoje roda com:
 
-### 2. Backend — `wasender-groups` (paridade)
-Verificar se `wasender-groups` cobre as mesmas ações; se a campanha um dia for WaSender, adicionar o que faltar. (Hoje a campanha LIVE é uazapi, então prioridade é uazapi.)
+```
+instance_id = fb7dd381-6460-4f28-8d01-f15943edb879   (id do número de WhatsApp)
+```
 
-### 3. Frontend — `CampaignBulkSettings.tsx` (roteamento por provider)
-- Ao carregar, buscar os grupos **com `instance_id`** e o `provider` de cada instância (join em `whatsapp_numbers`).
-- Criar um helper `applyGroupSetting(group, action, payload)` que:
-  - lê o provider do `instance_id` do grupo;
-  - chama `uazapi-groups` / `zapi-group-settings` / `wasender-groups` conforme o provider;
-  - **sempre** passa `whatsapp_number_id = group.instance_id` (corrige o bug de não enviar o id nas ações de nome/foto/descrição/permissão).
-- Mapear os nomes de ação atuais para os de cada provider (ex.: `update-name`→uazapi `updateName`).
-- Manter o caminho Z-API atual intacto (grupos cujo provider for `zapi`).
-- Para Fixar: usar `uazapi-send-message`/`uazapi-groups sendMessage` quando uazapi, e a sequência atual quando zapi.
+## 2. Descasamento de formato do `group_id`
+- Registros antigos (os que a campanha usa): `120363427586598950-group`
+- Registros do sync novo: `120363427586598950@g.us`
 
-### 4. Tratamento de erro / UX
-- Trocar os `catch {}` silenciosos por captura da mensagem real e mostrar no toast (ex.: "2/3 — falha no grupo #10: <motivo>").
-- Logar resposta da edge function para diagnóstico futuro.
+Como **as duas chaves** (`group_id` e `instance_id`) são diferentes, o `upsert onConflict (group_id, instance_id)` **nunca encontra** a linha antiga. Resultado: ele **insere linhas novas** com os nomes atualizados, e as linhas antigas (referenciadas em `group_campaigns.target_groups`) continuam com os nomes velhos. Por isso a tela mostra duplicatas e os nomes antigos.
 
-### 5. Validação
-- Rodar Nome/Descrição/Foto/Permissão/Fixar na campanha LIVE (uazapi) e confirmar 3/3.
-- Confirmar que uma campanha Z-API (se existir) continua funcionando.
-- Conferir logs das edge functions `uazapi-groups`.
+Confirmei: os 11 grupos da campanha GRUPO LIVE estão todos com `instance_id = 3ED1...` e `group_id` no formato `...-group`, com `last_synced_at` parado em 8-10/jun.
+
+## Por que isso NÃO afeta os disparos
+O worker de disparo (`group-dispatch-worker` → `uazapi-groups`) normaliza o JID com `groupJid()`, que **remove tudo que não é dígito** e adiciona `@g.us`. Ou seja, `120363427586598950-group` e `120363427586598950@g.us` viram o **mesmo** JID na hora de enviar. Então atualizar só o nome dos registros antigos é seguro: o número do grupo é idêntico.
+
+---
+
+# Plano de correção (sem quebrar nada nem os disparos)
+
+A ideia central: **atualizar o nome (e foto/contagem) nas linhas que já existem**, casando pelo **número do grupo** (dígitos), em vez de criar linhas paralelas. Sem mexer em `id`, sem apagar nada, sem trocar `instance_id`/`group_id` das linhas referenciadas pela campanha.
+
+## Etapa 1 — Melhorar o sync (`supabase/functions/uazapi-groups`, ação `list`)
+Antes de inserir os grupos novos, fazer um passo de **atualização por número**:
+1. Para cada grupo retornado da uazapi, extrair só os dígitos do JID (ex.: `120363427586598950`).
+2. Buscar em `whatsapp_groups` todas as linhas cujo `group_id` contenha esses mesmos dígitos (independente de sufixo `-group`/`@g.us` e de `instance_id`).
+3. `UPDATE` apenas dos campos de exibição nessas linhas: `name`, `photo_url`, `participant_count`, `previous_participant_count`, `last_synced_at`. **Não** alterar `id`, `group_id` nem `instance_id`.
+4. Manter o `upsert` atual depois disso, para que grupos realmente novos continuem sendo cadastrados.
+
+Assim os 11 grupos da campanha (linhas antigas) passam a receber o nome novo a cada sync, e os disparos continuam idênticos.
+
+## Etapa 2 — Paridade (opcional, mesma lógica)
+Aplicar o mesmo passo de "atualizar por dígitos" em `wasender-groups` e `zapi-list-groups` para evitar o mesmo problema em campanhas dessas instâncias no futuro.
+
+## Etapa 3 — Limpeza visual das duplicatas (opcional, separada e segura)
+A lista hoje mostra o grupo duplicado (linha antiga + linha nova do sync). Para limpar **sem risco**:
+- Na consulta da lista do front (`fetchAllGroups`), agrupar/deduplicar por dígitos do `group_id`, **priorizando** a linha que estiver referenciada em alguma campanha (preserva o `id` usado nos disparos).
+- Nenhuma linha é apagada do banco — apenas a exibição é deduplicada. Pode ficar para um segundo momento.
+
+## Validação
+1. Rodar o sync na campanha GRUPO LIVE (uazapi) e confirmar que os 11 grupos passam a exibir os nomes novos.
+2. Conferir no banco que os `id` dos `target_groups` continuam os mesmos (campanha intacta).
+3. Disparo de teste em 1 grupo para confirmar entrega (JID normalizado idêntico).
 
 ## Arquivos afetados
-- `supabase/functions/uazapi-groups/index.ts` (novas ações)
-- `supabase/functions/wasender-groups/index.ts` (paridade, se necessário)
-- `src/components/marketing/CampaignBulkSettings.tsx` (roteamento por provider + envio do instance_id + erros)
-- Possível helper compartilhado de roteamento de grupo (opcional, espelhando `posWhatsappSend`).
-
-## Riscos e mitigação
-- **Risco:** nomes de endpoints uazapi incorretos. **Mitigação:** validar na doc uazapi e testar grupo a grupo antes de aplicar em massa.
-- **Risco:** quebrar fluxo Z-API atual. **Mitigação:** roteamento aditivo — Z-API só é chamado quando o grupo é `provider='zapi'`; nenhum código Z-API existente é removido.
-- **Nada no banco/schema muda** — somente edge functions e frontend.
+- `supabase/functions/uazapi-groups/index.ts` (núcleo da correção)
+- `supabase/functions/wasender-groups/index.ts`, `supabase/functions/zapi-list-groups/index.ts` (paridade, opcional)
+- `src/components/marketing/CampaignDetailPanel.tsx` (dedup visual, opcional)
+- **Sem migração de banco e sem alteração de dados destrutiva.**
