@@ -496,9 +496,9 @@ export function CampaignBulkSettings({ campaignId, targetGroups, onBack }: Campa
           </CardHeader>
           <CardContent className="p-3 pt-0 space-y-2">
             <Textarea placeholder="Nova descrição..." value={bulkDescription} onChange={e => setBulkDescription(e.target.value)} rows={2} />
-            <Button size="sm" disabled={!bulkDescription.trim() || isApplying === 'description'} className="gap-1"
-              onClick={() => applyToAllGroups('description')}>
-              {isApplying === 'description' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+            <Button size="sm" disabled={!bulkDescription.trim() || isApplying === 'description' || isPreparing === 'description'} className="gap-1"
+              onClick={() => prepareAction('description', 'Descrição aplicada', 1000)}>
+              {isApplying === 'description' || isPreparing === 'description' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
               Aplicar Descrição
             </Button>
           </CardContent>
