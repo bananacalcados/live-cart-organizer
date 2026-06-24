@@ -8,10 +8,22 @@ import { Card } from "@/components/ui/card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Loader2, RefreshCw, Upload, Images, CheckCircle2, Clock, XCircle, Layers } from "lucide-react";
+import {
+  Loader2, RefreshCw, Upload, Images, CheckCircle2, Clock, XCircle, Layers, Plus, Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
+import { VariableTextField } from "@/components/admin/VariableTextField";
+import {
+  STANDARD_VARS,
+  buildComponentText,
+  BUTTON_TYPE_LABEL,
+  type VarDef,
+  type ButtonType,
+  type BuiltButton,
+} from "@/lib/pos/carouselTemplate";
 
 const LADDER = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+const MAX_CARDS = 10;
 
 interface MetaNumber {
   id: string;
@@ -31,6 +43,9 @@ interface LadderRow {
   updated_at: string;
 }
 
+interface BtnSlot { type: ButtonType; }
+interface BtnValue { text: string; url?: string; phone?: string; }
+
 function statusBadge(row?: LadderRow) {
   if (!row) return <Badge variant="outline" className="gap-1"><Layers className="h-3 w-3" /> Não criado</Badge>;
   if (row.aprovado || row.meta_status === "APPROVED")
@@ -38,6 +53,10 @@ function statusBadge(row?: LadderRow) {
   if (row.meta_status === "REJECTED")
     return <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" /> Rejeitado</Badge>;
   return <Badge variant="secondary" className="gap-1"><Clock className="h-3 w-3" /> {row.meta_status || "Pendente"}</Badge>;
+}
+
+function emptyCardValues(): BtnValue[] {
+  return Array.from({ length: MAX_CARDS }, () => ({ text: "" }));
 }
 
 export function CarouselTemplatesLadder() {
@@ -51,10 +70,44 @@ export function CarouselTemplatesLadder() {
   const [sampleB64, setSampleB64] = useState<string>("");
   const [sampleType, setSampleType] = useState<string>("");
   const [sampleName, setSampleName] = useState<string>("");
-  const [bodyExample, setBodyExample] = useState("Confira nossas novidades 👟");
-  const [cardBodyExample, setCardBodyExample] = useState("Produto incrível por um super preço");
-  const [buttonText, setButtonText] = useState("Quero esse");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Editable variables registry (standard + free).
+  const [variables, setVariables] = useState<VarDef[]>([...STANDARD_VARS]);
+  const addVariable = (v: VarDef) =>
+    setVariables((prev) => (prev.some((x) => x.token === v.token) ? prev : [...prev, v]));
+
+  const [topBody, setTopBody] = useState("Oiee {{nome}}! Confira nossas novidades 👟");
+  const [cardBody, setCardBody] = useState("Produto incrível por um super preço");
+
+  // Buttons.
+  const [buttonMode, setButtonMode] = useState<"shared" | "perCard">("shared");
+  const [buttonSlots, setButtonSlots] = useState<BtnSlot[]>([{ type: "QUICK_REPLY" }]);
+  const [sharedValues, setSharedValues] = useState<BtnValue[]>([{ text: "Quero esse" }]);
+  const [perCardValues, setPerCardValues] = useState<BtnValue[][]>([emptyCardValues()]);
+
+  const addSlot = () => {
+    if (buttonSlots.length >= 2) return;
+    setButtonSlots((p) => [...p, { type: "QUICK_REPLY" }]);
+    setSharedValues((p) => [...p, { text: "" }]);
+    setPerCardValues((p) => [...p, emptyCardValues()]);
+  };
+  const removeSlot = (i: number) => {
+    if (buttonSlots.length <= 1) return;
+    setButtonSlots((p) => p.filter((_, idx) => idx !== i));
+    setSharedValues((p) => p.filter((_, idx) => idx !== i));
+    setPerCardValues((p) => p.filter((_, idx) => idx !== i));
+  };
+  const setSlotType = (i: number, type: ButtonType) =>
+    setButtonSlots((p) => p.map((s, idx) => (idx === i ? { type } : s)));
+  const setShared = (i: number, patch: Partial<BtnValue>) =>
+    setSharedValues((p) => p.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
+  const setPerCard = (slot: number, card: number, patch: Partial<BtnValue>) =>
+    setPerCardValues((p) =>
+      p.map((arr, si) =>
+        si === slot ? arr.map((v, ci) => (ci === card ? { ...v, ...patch } : v)) : arr,
+      ),
+    );
 
   const loadNumbers = async () => {
     const { data } = await supabase
@@ -92,20 +145,58 @@ export function CarouselTemplatesLadder() {
     reader.readAsDataURL(file);
   };
 
+  // Build the per-card buttons array for a step of N cards.
+  const buildCards = (n: number): { buttons: BuiltButton[] }[] => {
+    return Array.from({ length: n }, (_, ci) => ({
+      buttons: buttonSlots.map((slot, si) => {
+        const val = buttonMode === "shared"
+          ? sharedValues[si]
+          : (perCardValues[si]?.[ci] || { text: "" });
+        const b: BuiltButton = { type: slot.type, text: (val.text || "").trim() };
+        if (slot.type === "URL") {
+          const built = buildComponentText(val.url || "", variables);
+          b.url = built.text;
+          if (built.examples.length) b.urlExample = built.examples[0];
+        }
+        if (slot.type === "PHONE_NUMBER") b.phone = (val.phone || "").trim();
+        return b;
+      }),
+    }));
+  };
+
+  const validate = (n: number): string | null => {
+    if (!numberId) return "Selecione um número Meta/WABA";
+    if (!sampleB64) return "Suba uma imagem-exemplo primeiro";
+    if (!topBody.trim()) return "O texto do corpo é obrigatório";
+    if (!cardBody.trim()) return "A legenda do card é obrigatória";
+    for (let si = 0; si < buttonSlots.length; si++) {
+      const slot = buttonSlots[si];
+      const vals = buttonMode === "shared" ? [sharedValues[si]] : perCardValues[si].slice(0, n);
+      for (const v of vals) {
+        if (!v.text?.trim()) return `Preencha o texto de todos os botões (Botão ${si + 1})`;
+        if (slot.type === "URL" && !v.url?.trim()) return `Preencha a URL do Botão ${si + 1}`;
+        if (slot.type === "PHONE_NUMBER" && !v.phone?.trim()) return `Preencha o telefone do Botão ${si + 1}`;
+      }
+    }
+    return null;
+  };
+
   const createRow = async (qtd: number) => {
-    if (!numberId) { toast.error("Selecione um número Meta/WABA"); return; }
-    if (!sampleB64) { toast.error("Suba uma imagem-exemplo primeiro"); return; }
+    const err = validate(qtd);
+    if (err) { toast.error(err); return; }
     setCreating(qtd);
     try {
+      const top = buildComponentText(topBody, variables);
+      const legend = buildComponentText(cardBody, variables);
       const { data, error } = await supabase.functions.invoke("carousel-ladder-create", {
         body: {
           whatsappNumberId: numberId,
           qtdCards: qtd,
           sampleImageBase64: sampleB64,
           sampleImageType: sampleType,
-          bodyExample,
-          cardBodyExample,
-          buttonText,
+          topBody: top,
+          cardBody: legend,
+          cards: buildCards(qtd),
         },
       });
       if (error) throw error;
@@ -152,6 +243,32 @@ export function CarouselTemplatesLadder() {
 
   const approvedCount = LADDER.filter((q) => rows[q]?.aprovado).length;
 
+  const renderButtonExtra = (
+    slot: BtnSlot,
+    val: BtnValue,
+    onPatch: (patch: Partial<BtnValue>) => void,
+  ) => {
+    if (slot.type === "URL")
+      return (
+        <Input
+          value={val.url || ""}
+          onChange={(e) => onPatch({ url: e.target.value })}
+          placeholder="https://... (pode usar {{tamanho}})"
+          className="h-8"
+        />
+      );
+    if (slot.type === "PHONE_NUMBER")
+      return (
+        <Input
+          value={val.phone || ""}
+          onChange={(e) => onPatch({ phone: e.target.value })}
+          placeholder="+5511999999999"
+          className="h-8"
+        />
+      );
+    return null;
+  };
+
   return (
     <div className="space-y-6">
       <Card className="p-4 space-y-4">
@@ -194,18 +311,113 @@ export function CarouselTemplatesLadder() {
               <Upload className="h-4 w-4" /> {sampleName ? sampleName : "Subir imagem-exemplo"}
             </Button>
           </div>
-          <div className="space-y-1.5">
-            <Label>Texto-exemplo do corpo</Label>
-            <Input value={bodyExample} onChange={(e) => setBodyExample(e.target.value)} />
+        </div>
+
+        <VariableTextField
+          label="Texto do corpo (mensagem acima dos cards)"
+          value={topBody}
+          onChange={setTopBody}
+          variables={variables}
+          onAddVariable={addVariable}
+          multiline
+          hint="Use os botões para inserir variáveis ou emojis. As variáveis são preenchidas no envio."
+        />
+
+        <VariableTextField
+          label="Legenda do card (texto abaixo da foto)"
+          value={cardBody}
+          onChange={setCardBody}
+          variables={variables}
+          onAddVariable={addVariable}
+          multiline
+          hint="Mesma legenda para todos os cards. Pode conter variáveis e emojis."
+        />
+
+        {/* Buttons */}
+        <div className="space-y-3 rounded-lg border p-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <Label className="text-sm font-semibold">Botões do card</Label>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant={buttonMode === "shared" ? "default" : "outline"}
+                className="h-7 text-xs"
+                onClick={() => setButtonMode("shared")}
+              >
+                Iguais em todos os cards
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={buttonMode === "perCard" ? "default" : "outline"}
+                className="h-7 text-xs"
+                onClick={() => setButtonMode("perCard")}
+              >
+                Exclusivos por card
+              </Button>
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>Texto-exemplo da legenda do card</Label>
-            <Input value={cardBodyExample} onChange={(e) => setCardBodyExample(e.target.value)} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Texto do botão (todos os cards)</Label>
-            <Input value={buttonText} onChange={(e) => setButtonText(e.target.value)} />
-          </div>
+
+          {buttonSlots.map((slot, si) => (
+            <div key={si} className="rounded-md border bg-muted/30 p-2.5 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium">Botão {si + 1}</span>
+                <Select value={slot.type} onValueChange={(v) => setSlotType(si, v as ButtonType)}>
+                  <SelectTrigger className="h-8 w-44"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(BUTTON_TYPE_LABEL) as ButtonType[]).map((t) => (
+                      <SelectItem key={t} value={t}>{BUTTON_TYPE_LABEL[t]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {buttonSlots.length > 1 && (
+                  <Button type="button" variant="ghost" size="icon" className="h-8 w-8 ml-auto" onClick={() => removeSlot(si)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
+
+              {buttonMode === "shared" ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Input
+                    value={sharedValues[si]?.text || ""}
+                    onChange={(e) => setShared(si, { text: e.target.value })}
+                    placeholder="Texto do botão"
+                    className="h-8"
+                  />
+                  {renderButtonExtra(slot, sharedValues[si] || { text: "" }, (p) => setShared(si, p))}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] text-muted-foreground">
+                    Preencha por card. Cada degrau usa as primeiras N linhas.
+                  </p>
+                  {Array.from({ length: MAX_CARDS }, (_, ci) => (
+                    <div key={ci} className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground w-12 shrink-0">Card {ci + 1}</span>
+                      <Input
+                        value={perCardValues[si]?.[ci]?.text || ""}
+                        onChange={(e) => setPerCard(si, ci, { text: e.target.value })}
+                        placeholder="Texto do botão"
+                        className="h-8"
+                      />
+                      {renderButtonExtra(slot, perCardValues[si]?.[ci] || { text: "" }, (p) => setPerCard(si, ci, p))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {buttonSlots.length < 2 && (
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8" onClick={addSlot}>
+              <Plus className="h-3.5 w-3.5" /> Adicionar botão
+            </Button>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            A Meta permite até 2 botões por card, e todos os cards de um carrossel precisam ter os mesmos tipos de botão na mesma ordem.
+          </p>
         </div>
       </Card>
 
