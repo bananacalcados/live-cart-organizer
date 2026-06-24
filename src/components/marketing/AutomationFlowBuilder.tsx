@@ -969,9 +969,9 @@ function StepEditorDialog({
                                   <div className="p-3 space-y-3">
                                     {/* Card Header (image/video URL) */}
                                     {cardHeader && (cardHeader.format === "IMAGE" || cardHeader.format === "VIDEO") && (
-                                      <div className="space-y-1">
+                                      <div className="space-y-1.5">
                                         <Label className="text-[11px]">
-                                          {cardHeader.format === "IMAGE" ? "🖼️ URL da Imagem" : "🎬 URL do Vídeo"}
+                                          {cardHeader.format === "IMAGE" ? "🖼️ Imagem do card" : "🎬 Vídeo do card"}
                                         </Label>
                                         <Input
                                           value={cardConf.headerUrl || ""}
@@ -979,11 +979,36 @@ function StepEditorDialog({
                                             ...config,
                                             carouselCards: { ...carouselConfig, [cardIdx]: { ...cardConf, headerUrl: e.target.value } }
                                           })}
-                                          placeholder={`URL da ${cardHeader.format === "IMAGE" ? "imagem" : "vídeo"} do card...`}
+                                          placeholder={`URL da ${cardHeader.format === "IMAGE" ? "imagem" : "vídeo"} ou suba abaixo...`}
                                           className="h-8 text-xs"
                                         />
+                                        <div className="flex gap-1.5">
+                                          <Button
+                                            type="button" variant="outline" size="sm"
+                                            className="h-8 px-2 text-[10px] gap-1 flex-1"
+                                            onClick={() => triggerCardPcUpload(cardIdx)}
+                                            disabled={uploadingCard === cardIdx}
+                                          >
+                                            {uploadingCard === cardIdx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Monitor className="h-3 w-3" />}
+                                            Subir do PC
+                                          </Button>
+                                          {cardHeader.format === "IMAGE" && (
+                                            <Button
+                                              type="button" variant="outline" size="sm"
+                                              className="h-8 px-2 text-[10px] gap-1 flex-1"
+                                              onClick={() => openShopifyForCard(cardIdx)}
+                                            >
+                                              <ShoppingBag className="h-3 w-3" />
+                                              Subir do site
+                                            </Button>
+                                          )}
+                                        </div>
+                                        {cardConf.headerUrl && cardHeader.format === "IMAGE" && (
+                                          <img src={cardConf.headerUrl} alt="Card preview" className="max-h-24 rounded object-cover border border-border" />
+                                        )}
                                       </div>
                                     )}
+
 
                                     {/* Card Body Preview */}
                                     {cardBody?.text && (
