@@ -79,6 +79,9 @@ export function CarouselTemplatesLadder() {
   const addVariable = (v: VarDef) =>
     setVariables((prev) => (prev.some((x) => x.token === v.token) ? prev : [...prev, v]));
 
+  // Active real sellers (used for the {{vendedora}} rotation + approval example).
+  const [sellers, setSellers] = useState<string[]>([]);
+
   const [topBody, setTopBody] = useState("Oiee {{nome}}! Confira nossas novidades 👟");
   const [cardBody, setCardBody] = useState("Produto incrível por um super preço");
 
