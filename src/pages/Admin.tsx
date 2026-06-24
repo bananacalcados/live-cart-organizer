@@ -22,10 +22,11 @@ import { AiTestPanel } from "@/components/admin/AiTestPanel";
 import { SecretaryChat } from "@/components/admin/SecretaryChat";
 import { AiErrorLogs } from "@/components/admin/AiErrorLogs";
 import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccountsManager";
+import { CarouselTemplatesLadder } from "@/components/admin/CarouselTemplatesLadder";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
-  FileText, Building2, Hash, Settings, Download, ChevronRight, AlertCircle,
+  FileText, Building2, Hash, Settings, Download, ChevronRight, AlertCircle, Images,
 } from "lucide-react";
 
 const ALL_MODULES = [
@@ -227,6 +228,7 @@ export default function Admin() {
             <TabsTrigger value="errors" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Erros IA</TabsTrigger>
             <TabsTrigger value="mercadopago" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Mercado Pago</TabsTrigger>
             <TabsTrigger value="fiscal" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Fiscal</TabsTrigger>
+            <TabsTrigger value="carrossel" className="gap-1.5"><Images className="h-3.5 w-3.5" /> Carrossel</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-6 mt-4">
@@ -473,6 +475,10 @@ export default function Admin() {
                 </button>
               ))}
             </div>
+          </TabsContent>
+
+          <TabsContent value="carrossel" className="mt-4">
+            <CarouselTemplatesLadder />
           </TabsContent>
         </Tabs>
       </main>

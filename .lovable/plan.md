@@ -1,39 +1,85 @@
-# Carrossel Meta: chat completo, identificação de card e ajuste de imagem
+# Automação de Carrossel WhatsApp recorrente (operada pelo PDV)
 
-Três problemas para resolver, com base na análise do que foi enviado e do que a Meta documenta.
+Vendedoras criam, de dentro do PDV, campanhas recorrentes de carrossel. Elas definem **conteúdo + público + ritmo**; o sistema impõe dedup, cooldown, teto global, opt-out e tratamento de falha de forma invisível. Reaproveita o máximo da infraestrutura existente.
 
-## Diagnóstico
+## Decisões adotadas (recomendadas — me corrija se quiser mudar)
+- **Fonte de cliente:** `customers_unified` via view `crm_customers_v` (regra do projeto). O `cliente_id` do brief = `customers_unified.id`.
+- **Opt-out:** usar o campo já existente `customers_unified.opt_out_mass_dispatch` (não criar tabela nova).
+- **Teto global de marketing:** consolidar via VIEW sobre os logs existentes (`dispatch_recipients` + `automation_dispatch_sent` + os envios da nova campanha). Sem tabela duplicada.
+- **Provedor:** carrossel só dispara por número **Meta/WABA oficial** (`whatsapp_numbers` tipo meta). Campanha bloqueia seleção de número não-oficial (guard-rail Seção 0/10).
+- **Parâmetros default:** cooldown 30 dias · teto global 1 msg / 7 dias · janela de atribuição 7 dias (last-touch) · retry 48h × 3 tentativas.
 
-1. **Chat não mostra o template completo.** Ao enviar, a função `meta-whatsapp-send-template` grava só o texto do balão ("Olá Matthews teste de carrossel"). O `renderTemplateMessage` ignora o componente `CAROUSEL`, então fotos/cards/botões não são salvos nem renderizados. No banco a mensagem ficou como `media_type: text` sem nenhuma estrutura de cards.
+## O que já existe e será reaproveitado
+- **Motor de filtros (público):** `automation-dispatch-audience` + `dispatch-orchestrator` (pg_cron/min) + `dispatch-worker` (claim SKIP LOCKED). Filtros JSONB em `automation_flows.trigger_config` / `dispatch_history.audience_filters` — é o análogo do `filtro_json`.
+- **Picker de foto Shopify + cropper 1:1:** `AutomationFlowBuilder.tsx` (`openShopifyForCard` → `selectShopifyImage` → `ImageCropDialog`) usando `fetchProducts` de `@/lib/shopify`.
+- **Atribuição de venda (ROI):** `dispatch-attribution` já faz last-touch + janela `window_days` cruzando `pos_sales`/`zoppy_sales`/`orders` por sufixo de telefone.
+- **Tarefas + popup do PDV:** `pos_task_definitions`, `pos_seller_task_instances`, `pos_task_contacts`, gerador `pos-tasks-generate`, board `POSSellerTasksBoard`, popup `SellerTaskReminderPopup`.
+- **Carrossel ponta a ponta:** `meta-whatsapp-create-template` (cria a escada), `meta-whatsapp-send-template`, `meta-whatsapp-webhook` (status), coluna `whatsapp_messages.template_payload`, render `CarouselMessageBubble`.
+- **Cron seguro:** `_shared/cron-guard.ts` (`x-cron-secret`).
 
-2. **Não identificou o card clicado.** A resposta recebida gravou `button_payload = "Quero esse"` (o texto do botão), e não `bcq:<dispatch>:<card>`. Ou seja, o payload customizado não chegou de volta. O webhook já sabe ler `bcq:` — o problema é garantir que TODO caminho de envio injete o payload e confirmar que a Meta o devolve (precisa de 1 reteste).
+## O que é novo (criar do zero)
+4 tabelas da campanha, a query de lote (Seção 3), o resolvedor de template por contagem (Seção 4), o check de estoque consultivo e o wizard de 5 modais no PDV.
 
-3. **Imagem desproporcional na miniatura.** A Meta renderiza o card do carrossel em **1:1 (quadrado, recomendado 1024×1024)** ou 1.91:1 — nunca retrato. A foto subida era retrato/vertical, então o app oficial faz *center-crop* e corta o produto. Solução: um recorte feito por humano que gere a imagem **1:1 centralizada** antes de subir.
+---
 
-## Proporção correta (resposta à sua pergunta)
+## Etapas (uma por vez — eu paro ao fim de cada uma para você testar)
 
-A miniatura do card no WhatsApp é **quadrada 1:1** (formato nativo/recomendado, 1024×1024). O que a pessoa enxerga na miniatura É a própria imagem que subimos; ao clicar, abre a mesma imagem maior. Então não existe "miniatura vs original" separados — a correção é compor uma imagem 1:1 bem centralizada. O cropper vai mirar 1:1.
+### Pré-requisito (você, fora do código)
+Validar que o número está na Cloud API oficial e consegue criar + enviar 1 carrossel de teste de 2 cards ponta a ponta. Sem isso o resto não roda.
 
-## Plano
+### Etapa 1 — Escada de templates
+- Tabela `templates_carrossel` (`qtd_cards` PK 2..10, `template_id`, `aprovado`) + GRANT/RLS.
+- Tela admin para criar os 9 templates (2→10 cards) via `meta-whatsapp-create-template` e acompanhar aprovação (`meta-template-status-log`).
 
-### Parte 1 — Mostrar o carrossel inteiro no chat
-- Migration: adicionar coluna `template_payload jsonb` em `whatsapp_messages` (guarda `{type:'carousel', body, cards:[{image_url, body, buttons:[{type,text,url}]}]}`).
-- `meta-whatsapp-send-template` e `dispatch-worker`: ao enviar carrossel, montar a estrutura resolvida (imagens + textos + botões já com variáveis preenchidas) e gravar em `template_payload`. Manter o texto atual como fallback.
-- Novo componente `CarouselMessageBubble` no `ChatView`: quando `template_payload.type === 'carousel'`, renderiza os cards (foto 1:1, texto e botões como badges) num mini-carrossel horizontal.
-- `Message` (ChatTypes) + `useChatMessages` passam a trazer `template_payload`.
+### Etapa 2 — Modelo de dados da campanha
+- `campanhas_auto` (nome, criada_por, filtro_json jsonb, qtd_por_dia, dias_semana int[], cooldown_dias, ativa, tipo `lancamento|numeracao`).
+- `campanha_cards` (campanha_id, ordem, shopify_product_id, shopify_variant_id, imagem_url, legenda, botao_tipo, botao_payload, status `ok|esgotado|inativo`, ultima_verificacao).
+- `campanha_envios` (LOG/dedup: campanha_id, cliente_id, enviado_em, status `pendente|enviado|entregue|lido|falhou|capped`, erro, tentativas).
+- VIEW `marketing_envios_globais` consolidando os logs para o teto global.
+- Todas com GRANT + RLS.
 
-### Parte 2 — Identificar qual card foi clicado
-- Garantir injeção do payload `bcq:<id>:<cardIndex>` em todos os caminhos (dispatcher de teste já faz; conferir dispatch-worker e automação).
-- Webhook (`meta-whatsapp-webhook`): já resolve `bcq:` → nome do produto. Reforçar para gravar índice/produto e exibir "🛒 Quero Esse → Card N: Produto" + miniatura do card referido, quando possível.
-- Fallback: se vier resposta de botão sem `bcq` mas existir um carrossel recente enviado àquele número, prefixar a mensagem com o contexto do carrossel para o vendedor não ficar cego.
-- Reteste obrigatório após o ajuste para confirmar que a Meta devolve o payload customizado em botões de carrossel.
+### Etapa 3 — Seleção do lote + template + agendador
+- RPC com a query da Seção 3 (filtro dinâmico via `crm_customers_v`, opt-out, cooldown da própria campanha, teto global, `ORDER BY ... NULLS FIRST`).
+- Resolvedor de template pela contagem de cards `ok` (Seção 4); < 2 válidos → não dispara + gera tarefa.
+- Edge function agendadora diária respeitando `dias_semana` (padrão cron-guard + pg_cron).
 
-### Parte 3 — Ajuste humano da imagem (1:1)
-- Adicionar lib `react-easy-crop`.
-- Novo `ImageCropDialog` reutilizável: pan + zoom + arraste, recorte fixo **1:1**, exporta JPEG 1024×1024 e sobe pro storage `chat-media`.
-- Plugar nos dois fluxos de upload do card (Subir do PC e Subir do site/Shopify) no `AutomationFlowBuilder` e no `MassTemplateDispatcher`: depois de escolher a imagem (PC ou Shopify), abre o cropper antes de definir a `headerUrl`.
+### Etapa 4 — Envio + webhook + tratamento de falha
+- Worker: resolve template → grava `pendente` → envia carrossel via Cloud API (cards `ok`) → atualiza status pelo `meta-whatsapp-webhook`.
+- Falhou/capped = **não alcançado** → re-enfileira após 48h, até 3 tentativas, depois encerra.
+- Espelhar sucesso no log global.
+
+### Etapa 5 — Teto global entre campanhas
+- Aplicar a VIEW global na seleção do lote (anti-spam entre todas as automações de marketing).
+
+### Etapa 6 — Atribuição de venda (ROI)
+- Adaptar `dispatch-attribution` para a janela por envio (last-touch, 7 dias) por `campanha_envios`.
+- Métricas por campanha: enviados, entregues, lidos, vendas, faturamento, ROI.
+
+### Etapa 7 — UX no PDV (wizard de 5 modais)
+1. Nome + tipo (lançamento/numeração).
+2. Montar carrossel (2–10 cards) reusando picker Shopify + cropper; contador "X de 10".
+3. Público: filtro pré-configurado + contagem estimada agora.
+4. Ritmo: qtd/dia + dias da semana.
+5. Revisão + ativar.
+- Botão "Atualizar carrossel" reabre o Modal 2 da campanha existente (mantém ID e histórico).
+
+### Etapa 8 — Check de estoque consultivo
+- 1x/dia, antes dos lotes: `numeracao` → checa variante (≤0 = `esgotado`); `lancamento` → checa produto ativo (inativo = `inativo`). Grava `ultima_verificacao`.
+- Card fora de `ok`: **não remove**, cria tarefa de troca e **pausa o disparo** da campanha; volta sozinho quando tudo voltar a `ok` (mín. 2).
+
+### Etapa 9 — Integração com Tarefas + popup
+- Campanha gera tarefas (revisão recorrente + exceção por card esgotado) em `pos_seller_task_instances`.
+- Clique na tarefa → navega ao Modal 2 daquela campanha (passando `campanha_id` e `card_id` problemático para destacar). Popup já existente inclui essas tarefas.
+
+---
 
 ## Detalhes técnicos
-- Arquivos: `supabase/migrations/*` (nova coluna), `supabase/functions/meta-whatsapp-send-template/index.ts`, `supabase/functions/dispatch-worker/index.ts`, `supabase/functions/meta-whatsapp-webhook/index.ts`, `src/components/chat/ChatView.tsx` (+ novo `CarouselMessageBubble.tsx`), `src/components/chat/ChatTypes.ts`, `src/hooks/chat/useChatMessages.ts`, `src/components/ImageCropDialog.tsx` (novo), `src/components/marketing/AutomationFlowBuilder.tsx`, `src/components/marketing/MassTemplateDispatcher.tsx`.
-- `template_payload` é nullable; mensagens antigas seguem funcionando.
-- Cropper só altera o que é enviado (frontend/apresentação) — não muda regra de negócio.
+- Migrations seguem a ordem CREATE → GRANT → ENABLE RLS → POLICY; regras com `now()` via trigger, não CHECK.
+- Dedup considera apenas `status IN ('enviado','entregue','lido')`; `falhou/capped` re-enfileira (não simplificar).
+- Telefones casados por DDD + 8 dígitos (padrão do projeto / `phone_suffix8`).
+- Nada destrutivo em tabela existente sem eu parar e perguntar antes.
+
+## Riscos / dependências
+- Bloqueante: Cloud API oficial + aprovação dos 9 templates (~24–48h, até 7 dias).
+- Tier de envio Meta (Tier 0 ~250 conversas/24h) — 200/dia fica colado no piso; monitorar quality rating.
+- Estoque Shopify pode divergir do físico — por isso o check é só consultivo.

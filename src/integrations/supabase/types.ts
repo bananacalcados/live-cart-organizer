@@ -14439,6 +14439,57 @@ export type Database = {
         }
         Relationships: []
       }
+      templates_carrossel: {
+        Row: {
+          aprovado: boolean
+          created_at: string
+          meta_status: string
+          observacao: string | null
+          qtd_cards: number
+          template_id: string
+          template_language: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          aprovado?: boolean
+          created_at?: string
+          meta_status?: string
+          observacao?: string | null
+          qtd_cards: number
+          template_id: string
+          template_language?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          aprovado?: boolean
+          created_at?: string
+          meta_status?: string
+          observacao?: string | null
+          qtd_cards?: number
+          template_id?: string
+          template_language?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "templates_carrossel_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "templates_carrossel_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tiny_accounts_payable: {
         Row: {
           categoria: string | null
