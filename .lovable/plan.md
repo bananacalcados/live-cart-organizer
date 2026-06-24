@@ -44,10 +44,13 @@ Validar que o número está na Cloud API oficial e consegue criar + enviar 1 car
 - RPC `resolve_campaign_template` pela contagem de cards `ok`; < 2 → retorna vazio (agendador pula; tarefa fica para a Etapa 9).
 - Edge function `carousel-campaign-scheduler` (cron-guard) diária: respeita `dias_semana` (fuso SP), enfileira `pendente` em `campanha_envios` e aplica o **rodízio de vendedoras** (só nomes humanos; "Loja física"/"Vendedor Live"/"Live Shopping" são excluídos). Falta criar o job pg_cron + worker de envio (Etapa 4).
 
-### Etapa 4 — Envio + webhook + tratamento de falha
-- Worker: resolve template → grava `pendente` → envia carrossel via Cloud API (cards `ok`) → atualiza status pelo `meta-whatsapp-webhook`.
-- Falhou/capped = **não alcançado** → re-enfileira após 48h, até 3 tentativas, depois encerra.
-- Espelhar sucesso no log global.
+### Etapa 4 — Envio + webhook + tratamento de falha ✅ (concluída)
+- Worker `carousel-campaign-sender` (cron a cada 5min, cron-guard): pega `pendente` vencidos, resolve template pela contagem de cards `ok`, monta os componentes do carrossel (header imagem + body com variáveis resolvidas por destinatário: `nome/primeiro_nome/tamanho/vendedora/livre`), envia via `meta-whatsapp-send-template` (que grava no chat) e marca `enviado` + `message_wamid`.
+- `meta-whatsapp-webhook` atualizado: `delivered→entregue`, `read→lido` (rank-protegido, sem downgrade); falha pós-envio re-enfileira após 48h até 3 tentativas, depois `falhou`.
+- Tratamento de falha no envio (API) idem: `tentativas++`, reagenda 48h, na 3ª vira `falhou`.
+- Agendador diário (`carousel-campaign-scheduler`) e o disparador agendados via pg_cron (09h SP / a cada 5min) com `x-cron-secret`.
+- Espelhamento no log global: `campanha_envios` já entra na VIEW `marketing_envios_globais` (sucesso conta no teto global).
+
 
 ### Etapa 5 — Teto global entre campanhas
 - Aplicar a VIEW global na seleção do lote (anti-spam entre todas as automações de marketing).
