@@ -827,6 +827,11 @@ export function MassTemplateDispatcher() {
         cardUrlButtons(i).forEach(({ idx }) => {
           cardComps.push({ type: 'button', sub_type: 'url', index: idx.toString(), parameters: [{ type: 'text', text: variables[`card_${i}_button_url_${idx}`]?.staticValue || '' }] });
         });
+        // Quick-reply buttons carry a per-card payload so we can identify which card was tapped.
+        // In this client/test path we don't have the dispatch id yet → use a "test" marker.
+        cardQuickReplyButtons(i).forEach(({ idx }) => {
+          cardComps.push({ type: 'button', sub_type: 'quick_reply', index: idx.toString(), parameters: [{ type: 'payload', payload: `bcq:test:${i}` }] });
+        });
         return { card_index: i, components: cardComps };
       });
       components.push({ type: 'carousel', cards });
