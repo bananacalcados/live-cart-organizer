@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Loader2, Send, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Loader2, Send, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw, Variable, Trash2, Upload, Image as ImageIcon, Video, FileText, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -38,6 +39,13 @@ interface MetaTemplate {
   }>;
 }
 
+type TemplateButton = {
+  type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER";
+  text: string;
+  url?: string;
+  phone_number?: string;
+};
+
 // Extracts distinct {{n}} variable numbers from a text, sorted ascending.
 function extractVarNumbers(text?: string): number[] {
   if (!text) return [];
@@ -45,6 +53,13 @@ function extractVarNumbers(text?: string): number[] {
   const nums = matches.map((m) => parseInt(m.replace(/[^\d]/g, ""), 10));
   return Array.from(new Set(nums)).sort((a, b) => a - b);
 }
+
+// Media header config: accept types and Meta format strings.
+const MEDIA_HEADER = {
+  image: { format: "IMAGE", accept: "image/jpeg,image/png", label: "Imagem", icon: ImageIcon },
+  video: { format: "VIDEO", accept: "video/mp4", label: "Vídeo", icon: Video },
+  document: { format: "DOCUMENT", accept: "application/pdf", label: "Documento (PDF)", icon: FileText },
+} as const;
 
 export function MetaTemplateCreator() {
   const { numbers, selectedNumberId, fetchNumbers } = useWhatsAppNumberStore();
@@ -65,9 +80,19 @@ export function MetaTemplateCreator() {
   // Example values keyed by variable number, separate for body and header
   const [bodyExamples, setBodyExamples] = useState<Record<number, string>>({});
   const [headerExamples, setHeaderExamples] = useState<Record<number, string>>({});
+  // Media header
+  const [headerMediaHandle, setHeaderMediaHandle] = useState<string>("");
+  const [headerMediaName, setHeaderMediaName] = useState<string>("");
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  // Buttons
+  const [buttons, setButtons] = useState<TemplateButton[]>([]);
+
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const bodyVars = extractVarNumbers(bodyText);
   const headerVars = headerType === "text" ? extractVarNumbers(headerText) : [];
+  const isMediaHeader = headerType in MEDIA_HEADER;
 
   useEffect(() => {
     if (numbers.length === 0) fetchNumbers();
@@ -87,13 +112,6 @@ export function MetaTemplateCreator() {
     if (!selectedNumber) return;
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
-        body: null,
-        method: "GET",
-        headers: {},
-      });
-
-      // Use fetch directly since invoke doesn't support query params well
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-get-templates?whatsappNumberId=${selectedNumber}`,
         {
@@ -115,6 +133,113 @@ export function MetaTemplateCreator() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Insert text at the body textarea cursor position.
+  const insertIntoBody = (snippet: string) => {
+    const el = bodyRef.current;
+    if (!el) {
+      setBodyText((prev) => prev + snippet);
+      return;
+    }
+    const start = el.selectionStart ?? bodyText.length;
+    const end = el.selectionEnd ?? bodyText.length;
+    const next = bodyText.slice(0, start) + snippet + bodyText.slice(end);
+    setBodyText(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + snippet.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
+  // Adds the next sequential variable {{N+1}} (variables must be contiguous).
+  const handleAddVariable = () => {
+    const next = bodyVars.length + 1;
+    insertIntoBody(`{{${next}}}`);
+  };
+
+  const handleHeaderTypeChange = (value: string) => {
+    setHeaderType(value);
+    // Clear media when switching away
+    if (!(value in MEDIA_HEADER)) {
+      setHeaderMediaHandle("");
+      setHeaderMediaName("");
+    }
+    if (value !== "text") {
+      setHeaderText("");
+      setHeaderExamples({});
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so the same file can be re-selected later
+    e.target.value = "";
+
+    setIsUploadingMedia(true);
+    setHeaderMediaHandle("");
+    setHeaderMediaName(file.name);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-upload-header`,
+        {
+          method: "POST",
+          headers: {
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            whatsappNumberId: selectedNumber,
+            fileName: file.name,
+            fileType: file.type,
+            fileBase64: base64,
+          }),
+        }
+      );
+      const result = await res.json();
+      if (result.success && result.handle) {
+        setHeaderMediaHandle(result.handle);
+        toast.success("Arquivo enviado com sucesso");
+      } else {
+        setHeaderMediaName("");
+        const msg = result.details?.error?.message || result.error || "Erro ao enviar arquivo";
+        toast.error(msg);
+      }
+    } catch (err) {
+      console.error("Error uploading media:", err);
+      setHeaderMediaName("");
+      toast.error("Erro ao enviar arquivo");
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
+  const addButton = (type: TemplateButton["type"]) => {
+    if (buttons.length >= 10) {
+      toast.error("Máximo de 10 botões por template");
+      return;
+    }
+    const base: TemplateButton = { type, text: "" };
+    if (type === "URL") base.url = "";
+    if (type === "PHONE_NUMBER") base.phone_number = "";
+    setButtons((prev) => [...prev, base]);
+  };
+
+  const updateButton = (index: number, patch: Partial<TemplateButton>) => {
+    setButtons((prev) => prev.map((b, i) => (i === index ? { ...b, ...patch } : b)));
+  };
+
+  const removeButton = (index: number) => {
+    setButtons((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleCreate = async () => {
@@ -147,7 +272,7 @@ export function MetaTemplateCreator() {
       }
     }
 
-    // Validate: header accepts at most 1 variable
+    // Validate: header text accepts at most 1 variable
     if (headerVars.length > 1) {
       toast.error("O cabeçalho de texto aceita no máximo 1 variável.");
       return;
@@ -161,32 +286,73 @@ export function MetaTemplateCreator() {
       return;
     }
 
+    // Validate media header
+    if (isMediaHeader && !headerMediaHandle) {
+      toast.error("Envie o arquivo do cabeçalho antes de continuar.");
+      return;
+    }
+
+    // Validate buttons
+    for (const b of buttons) {
+      if (!b.text.trim()) {
+        toast.error("Preencha o texto de todos os botões.");
+        return;
+      }
+      if (b.type === "URL" && !(b.url || "").trim()) {
+        toast.error("Preencha a URL dos botões de link.");
+        return;
+      }
+      if (b.type === "PHONE_NUMBER" && !(b.phone_number || "").trim()) {
+        toast.error("Preencha o telefone dos botões de ligação.");
+        return;
+      }
+    }
+
     setIsCreating(true);
     try {
       const components: Array<Record<string, unknown>> = [];
 
+      // HEADER
       if (headerType === "text" && headerText.trim()) {
         const headerComponent: Record<string, unknown> = { type: "HEADER", format: "TEXT", text: headerText };
         if (headerVars.length > 0) {
-          // header_text is a FLAT array of strings, in variable order
           headerComponent.example = {
             header_text: headerVars.map((n) => (headerExamples[n] || "").trim()),
           };
         }
         components.push(headerComponent);
+      } else if (isMediaHeader && headerMediaHandle) {
+        components.push({
+          type: "HEADER",
+          format: MEDIA_HEADER[headerType as keyof typeof MEDIA_HEADER].format,
+          example: { header_handle: [headerMediaHandle] },
+        });
       }
 
+      // BODY
       const bodyComponent: Record<string, unknown> = { type: "BODY", text: bodyText };
       if (bodyVars.length > 0) {
-        // body_text is an array CONTAINING ONE array of strings, in variable order
         bodyComponent.example = {
           body_text: [bodyVars.map((n) => (bodyExamples[n] || "").trim())],
         };
       }
       components.push(bodyComponent);
 
+      // FOOTER
       if (footerText.trim()) {
         components.push({ type: "FOOTER", text: footerText });
+      }
+
+      // BUTTONS
+      if (buttons.length > 0) {
+        components.push({
+          type: "BUTTONS",
+          buttons: buttons.map((b) => {
+            if (b.type === "URL") return { type: "URL", text: b.text, url: b.url };
+            if (b.type === "PHONE_NUMBER") return { type: "PHONE_NUMBER", text: b.text, phone_number: b.phone_number };
+            return { type: "QUICK_REPLY", text: b.text };
+          }),
+        });
       }
 
       const res = await fetch(
@@ -236,6 +402,9 @@ export function MetaTemplateCreator() {
     setFooterText("");
     setBodyExamples({});
     setHeaderExamples({});
+    setHeaderMediaHandle("");
+    setHeaderMediaName("");
+    setButtons([]);
   };
 
   const getStatusBadge = (status: string) => {
@@ -340,7 +509,7 @@ export function MetaTemplateCreator() {
 
       {/* Create Template Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-5 w-5" />
@@ -391,13 +560,16 @@ export function MetaTemplateCreator() {
               </div>
               <div className="space-y-2">
                 <Label>Cabeçalho</Label>
-                <Select value={headerType} onValueChange={setHeaderType}>
+                <Select value={headerType} onValueChange={handleHeaderTypeChange}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Sem cabeçalho</SelectItem>
                     <SelectItem value="text">Texto</SelectItem>
+                    <SelectItem value="image">Imagem</SelectItem>
+                    <SelectItem value="video">Vídeo</SelectItem>
+                    <SelectItem value="document">Documento (PDF)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -412,7 +584,7 @@ export function MetaTemplateCreator() {
                   onChange={(e) => setHeaderText(e.target.value)}
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Use {"{{1}}"}, {"{{2}}"} etc. para variáveis (máximo 1 no cabeçalho)
+                  Use {"{{1}}"} para variável (máximo 1 no cabeçalho)
                 </p>
                 {headerVars.length > 0 && (
                   <div className="space-y-2 rounded-md border border-dashed p-2 mt-1">
@@ -437,16 +609,87 @@ export function MetaTemplateCreator() {
               </div>
             )}
 
+            {isMediaHeader && (
+              <div className="space-y-2">
+                <Label>{MEDIA_HEADER[headerType as keyof typeof MEDIA_HEADER].label} do Cabeçalho</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept={MEDIA_HEADER[headerType as keyof typeof MEDIA_HEADER].accept}
+                  onChange={handleFileSelect}
+                />
+                {!headerMediaHandle ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingMedia}
+                  >
+                    {isUploadingMedia ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {isUploadingMedia ? "Enviando..." : "Selecionar arquivo"}
+                  </Button>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 rounded-md border p-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <CheckCircle className="h-4 w-4 text-stage-paid shrink-0" />
+                      <span className="text-xs truncate">{headerMediaName}</span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => {
+                        setHeaderMediaHandle("");
+                        setHeaderMediaName("");
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  Este arquivo é o exemplo enviado para aprovação. No envio real você define a mídia por destinatário.
+                </p>
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label>Corpo da Mensagem *</Label>
+              <div className="flex items-center justify-between">
+                <Label>Corpo da Mensagem *</Label>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={handleAddVariable}
+                  >
+                    <Variable className="h-3.5 w-3.5" />
+                    Variável
+                  </Button>
+                  <EmojiPickerButton
+                    className="h-7 w-7"
+                    onEmojiSelect={(emoji) => insertIntoBody(emoji)}
+                  />
+                </div>
+              </div>
               <Textarea
+                ref={bodyRef}
                 placeholder="Ex: Olá {{1}}, seu pedido {{2}} está confirmado!"
                 value={bodyText}
                 onChange={(e) => setBodyText(e.target.value)}
                 rows={5}
+                maxLength={1024}
               />
               <p className="text-[10px] text-muted-foreground">
-                Use {"{{1}}"}, {"{{2}}"}, {"{{3}}"} para variáveis dinâmicas. Máximo 1024 caracteres.
+                Clique em "Variável" para inserir {"{{1}}"}, {"{{2}}"}… no cursor. Máximo 1024 caracteres.
               </p>
               <p className="text-[10px] text-muted-foreground text-right">{bodyText.length}/1024</p>
               {bodyVars.length > 0 && (
@@ -471,7 +714,6 @@ export function MetaTemplateCreator() {
               )}
             </div>
 
-
             <div className="space-y-2">
               <Label>Rodapé (opcional)</Label>
               <Input
@@ -481,6 +723,73 @@ export function MetaTemplateCreator() {
               />
             </div>
 
+            {/* Buttons */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Botões (opcional)</Label>
+                <div className="flex items-center gap-1">
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => addButton("QUICK_REPLY")}>
+                    + Resposta rápida
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => addButton("URL")}>
+                    + Link
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => addButton("PHONE_NUMBER")}>
+                    + Ligar
+                  </Button>
+                </div>
+              </div>
+              {buttons.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground">
+                  Adicione botões de resposta rápida, link ou ligação (máximo 10, padrões da Meta).
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {buttons.map((b, i) => (
+                    <div key={i} className="flex items-start gap-2 rounded-md border p-2">
+                      <Badge variant="secondary" className="text-[10px] shrink-0 mt-1">
+                        {b.type === "QUICK_REPLY" ? "Resposta" : b.type === "URL" ? "Link" : "Ligar"}
+                      </Badge>
+                      <div className="flex-1 space-y-1">
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="Texto do botão (máx 25)"
+                          maxLength={25}
+                          value={b.text}
+                          onChange={(e) => updateButton(i, { text: e.target.value })}
+                        />
+                        {b.type === "URL" && (
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="https://exemplo.com"
+                            value={b.url || ""}
+                            onChange={(e) => updateButton(i, { url: e.target.value })}
+                          />
+                        )}
+                        {b.type === "PHONE_NUMBER" && (
+                          <Input
+                            className="h-8 text-xs"
+                            placeholder="+5533999999999"
+                            value={b.phone_number || ""}
+                            onChange={(e) => updateButton(i, { phone_number: e.target.value })}
+                          />
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0"
+                        onClick={() => removeButton(i)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Preview */}
             {bodyText && (
               <div className="border rounded-lg p-3 bg-muted/30">
@@ -488,9 +797,27 @@ export function MetaTemplateCreator() {
                 {headerType === "text" && headerText && (
                   <p className="font-bold text-sm mb-1">{headerText}</p>
                 )}
+                {isMediaHeader && headerMediaName && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
+                    {(() => {
+                      const Icon = MEDIA_HEADER[headerType as keyof typeof MEDIA_HEADER].icon;
+                      return <Icon className="h-4 w-4" />;
+                    })()}
+                    <span className="truncate">{headerMediaName}</span>
+                  </div>
+                )}
                 <p className="text-sm whitespace-pre-wrap">{bodyText}</p>
                 {footerText && (
                   <p className="text-xs text-muted-foreground mt-2">{footerText}</p>
+                )}
+                {buttons.length > 0 && (
+                  <div className="mt-2 space-y-1 border-t pt-2">
+                    {buttons.map((b, i) => (
+                      <p key={i} className="text-xs text-center text-primary font-medium">
+                        {b.text || "(botão)"}
+                      </p>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -509,7 +836,7 @@ export function MetaTemplateCreator() {
               <Button
                 className="flex-1 gap-2"
                 onClick={handleCreate}
-                disabled={isCreating || !name.trim() || !bodyText.trim()}
+                disabled={isCreating || isUploadingMedia || !name.trim() || !bodyText.trim()}
               >
                 {isCreating ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
