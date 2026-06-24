@@ -94,6 +94,7 @@ function buildComponentsForRecipient(
   headerMediaUrl: string | null,
   recipient: any | null,
   hasDynamicVars: boolean,
+  dispatchId?: string,
 ) {
   const components: any[] = [];
 
