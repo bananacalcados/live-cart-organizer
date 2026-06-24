@@ -1446,7 +1446,7 @@ export default function StoreCheckout() {
           </p>
         </div>
 
-        <StepIndicator currentStep={currentStep} />
+        <StepIndicator currentStep={currentStep} isCustom={saleData.is_custom_amount} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
@@ -1454,7 +1454,7 @@ export default function StoreCheckout() {
               <CardContent className="p-6">
                 {currentStep === 1 && (
                   <StepIdentification form={customerForm} setForm={setCustomerForm} onNext={() => {
-                    // Save customer data progressively to pos_sales when advancing to Step 2
+                    // Save customer data progressively to pos_sales when advancing
                     if (saleData) {
                       cpUpdateSale(saleData.id, {
                         customer_name: customerForm.fullName,
@@ -1465,10 +1465,13 @@ export default function StoreCheckout() {
                           customer_phone: customerForm.whatsapp.replace(/\D/g, ""),
                           customer_email: customerForm.email,
                           customer_cpf: customerForm.cpf.replace(/\D/g, ""),
+                          // Preserva marcador do link avulso entre etapas/reloads
+                          ...(saleData.is_custom_amount ? { is_custom_amount: true, free_shipping: true, shipping_amount: 0 } : {}),
                         },
                       });
                     }
-                    setCurrentStep(2);
+                    // Link avulso: pula a etapa de entrega/frete
+                    setCurrentStep(saleData?.is_custom_amount ? 3 : 2);
                   }} prefilled={!!saleData.customer_name} />
                 )}
                 {currentStep === 2 && (
