@@ -227,6 +227,7 @@ export default function Admin() {
             <TabsTrigger value="errors" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Erros IA</TabsTrigger>
             <TabsTrigger value="mercadopago" className="gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Mercado Pago</TabsTrigger>
             <TabsTrigger value="fiscal" className="gap-1.5"><FileText className="h-3.5 w-3.5" /> Fiscal</TabsTrigger>
+            <TabsTrigger value="carrossel" className="gap-1.5"><Images className="h-3.5 w-3.5" /> Carrossel</TabsTrigger>
           </TabsList>
 
           <TabsContent value="users" className="space-y-6 mt-4">
