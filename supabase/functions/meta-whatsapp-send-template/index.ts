@@ -476,17 +476,24 @@ serve(async (req) => {
       let finalText = renderedMessage || '';
       let finalMediaUrl: string | null = null;
       let finalMediaType = 'text';
-      if (!finalText) {
-        try {
-          const def = await fetchTemplateDef(accessToken, businessAccountId, templateName, language);
-          if (def) {
+      let carouselPayload: any | null = null;
+      try {
+        const def = await fetchTemplateDef(accessToken, businessAccountId, templateName, language);
+        if (def) {
+          // Build the full carousel structure (cards) so the chat renders it whole.
+          carouselPayload = buildCarouselPayload(def, components);
+          if (!finalText) {
             const r = renderTemplateMessage(def, components);
             if (r.text) finalText = r.text;
             finalMediaUrl = r.mediaUrl;
             finalMediaType = r.mediaType;
           }
-        } catch (_e) { /* keep fallback */ }
-      }
+          // For carousel, prefer the bubble body as the text fallback.
+          if (carouselPayload?.body && (!finalText || finalText.startsWith('[Template:'))) {
+            finalText = carouselPayload.body;
+          }
+        }
+      } catch (_e) { /* keep fallback */ }
       if (!finalText) finalText = `[Template: ${templateName}]`;
 
       await supabase.from('whatsapp_messages').insert({
@@ -497,6 +504,7 @@ serve(async (req) => {
         status: 'sent',
         media_type: finalMediaType,
         media_url: finalMediaUrl,
+        template_payload: carouselPayload,
         whatsapp_number_id: whatsappNumberDbId,
       });
 
