@@ -38,6 +38,15 @@ interface MetaTemplate {
     text?: string;
     format?: string;
     buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+    // Carousel support
+    cards?: Array<{
+      components: Array<{
+        type: string;
+        text?: string;
+        format?: string;
+        buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+      }>;
+    }>;
   }>;
 }
 
