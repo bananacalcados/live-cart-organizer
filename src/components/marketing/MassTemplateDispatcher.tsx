@@ -601,8 +601,8 @@ export function MassTemplateDispatcher() {
     return btns.map((b: any, idx: number) => ({ b, idx })).filter(x => (x.b.type || '').toUpperCase() === 'QUICK_REPLY');
   };
 
-  // Whether the selected carousel has any quick-reply buttons (so we ask for a product identifier per card).
-  const carouselHasQuickReply = isCarousel && carouselCards.some((_, i) => cardQuickReplyButtons(i).length > 0);
+
+
 
 
   // Build rendered message text (for preview, uses placeholder labels for dynamic vars)
