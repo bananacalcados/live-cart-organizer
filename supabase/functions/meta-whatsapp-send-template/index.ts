@@ -534,12 +534,12 @@ serve(async (req) => {
       let finalMediaType = 'text';
       let carouselPayload: any | null = null;
       try {
-        const def = await fetchTemplateDef(accessToken, businessAccountId, templateName, language);
+        const def = templateDef || await fetchTemplateDef(accessToken, businessAccountId, templateName, language);
         if (def) {
           // Build the full carousel structure (cards) so the chat renders it whole.
-          carouselPayload = buildCarouselPayload(def, components);
+          carouselPayload = buildCarouselPayload(def, sendComponents);
           if (!finalText) {
-            const r = renderTemplateMessage(def, components);
+            const r = renderTemplateMessage(def, sendComponents);
             if (r.text) finalText = r.text;
             finalMediaUrl = r.mediaUrl;
             finalMediaType = r.mediaType;
