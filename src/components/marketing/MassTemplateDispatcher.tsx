@@ -2220,6 +2220,16 @@ export function MassTemplateDispatcher() {
         </DialogContent>
       </Dialog>
 
+      {/* Human image cropper for the 1:1 WhatsApp carousel thumbnail */}
+      <ImageCropDialog
+        open={cropOpen}
+        imageSrc={cropSrc}
+        aspect={1}
+        loading={cropUploading}
+        onCancel={() => { setCropOpen(false); setCropSrc(null); setCropTargetCard(null); }}
+        onConfirm={applyCroppedCardImage}
+      />
+
       {/* Dispatch History */}
       <DispatchHistoryList key={historyKey} onDuplicate={handleDuplicate} />
     </div>
