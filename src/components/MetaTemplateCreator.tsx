@@ -412,8 +412,28 @@ export function MetaTemplateCreator() {
                   onChange={(e) => setHeaderText(e.target.value)}
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Use {"{{1}}"}, {"{{2}}"} etc. para variáveis
+                  Use {"{{1}}"}, {"{{2}}"} etc. para variáveis (máximo 1 no cabeçalho)
                 </p>
+                {headerVars.length > 0 && (
+                  <div className="space-y-2 rounded-md border border-dashed p-2 mt-1">
+                    <p className="text-[10px] font-medium text-muted-foreground">
+                      Exemplos para o cabeçalho (a Meta exige):
+                    </p>
+                    {headerVars.map((n) => (
+                      <div key={`h-${n}`} className="flex items-center gap-2">
+                        <span className="text-xs font-mono w-12 shrink-0">{`{{${n}}}`}</span>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder={`Exemplo para {{${n}}}`}
+                          value={headerExamples[n] || ""}
+                          onChange={(e) =>
+                            setHeaderExamples((prev) => ({ ...prev, [n]: e.target.value }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -429,7 +449,28 @@ export function MetaTemplateCreator() {
                 Use {"{{1}}"}, {"{{2}}"}, {"{{3}}"} para variáveis dinâmicas. Máximo 1024 caracteres.
               </p>
               <p className="text-[10px] text-muted-foreground text-right">{bodyText.length}/1024</p>
+              {bodyVars.length > 0 && (
+                <div className="space-y-2 rounded-md border border-dashed p-2 mt-1">
+                  <p className="text-[10px] font-medium text-muted-foreground">
+                    Exemplos para o corpo (a Meta exige um valor por variável):
+                  </p>
+                  {bodyVars.map((n) => (
+                    <div key={`b-${n}`} className="flex items-center gap-2">
+                      <span className="text-xs font-mono w-12 shrink-0">{`{{${n}}}`}</span>
+                      <Input
+                        className="h-8 text-xs"
+                        placeholder={`Exemplo para {{${n}}}`}
+                        value={bodyExamples[n] || ""}
+                        onChange={(e) =>
+                          setBodyExamples((prev) => ({ ...prev, [n]: e.target.value }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
 
             <div className="space-y-2">
               <Label>Rodapé (opcional)</Label>
