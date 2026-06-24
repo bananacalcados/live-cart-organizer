@@ -310,18 +310,37 @@ serve(async (req) => {
               case 'text':
                 messageText = msg.text?.body || '';
                 break;
-              case 'button':
+              case 'button': {
                 // Quick reply button response from template (incl. carousel cards)
                 messageText = msg.button?.text || '';
                 buttonPayload = msg.button?.payload || null;
                 mediaType = 'text';
-                // Carousel quick-reply identification: payload format bcq:<dispatchId>:<cardIndex>
+                const btnText = msg.button?.text || 'Quero Esse';
+                const parentId: string | null = msg.context?.id || null;
+
+                // Load the original carousel message (if this is a reply to one) so we
+                // can name the exact card regardless of which send path was used.
+                let parentCards: any[] | null = null;
+                if (parentId) {
+                  const { data: parentMsg } = await supabase
+                    .from('whatsapp_messages')
+                    .select('template_payload')
+                    .eq('message_id', parentId)
+                    .maybeSingle();
+                  const tp = parentMsg?.template_payload as any;
+                  if (tp?.type === 'carousel' && Array.isArray(tp.cards)) parentCards = tp.cards;
+                }
+
+                let resolvedCardIdx: number | null = null;
+                let productLabel = '';
+
+                // 1) Preferred: explicit card index from the bcq payload.
                 if (buttonPayload && buttonPayload.startsWith('bcq:')) {
                   try {
                     const [, dispatchId, cardIdxStr] = buttonPayload.split(':');
                     const cardIdx = parseInt(cardIdxStr, 10);
-                    let productLabel = '';
-                    if (dispatchId && dispatchId !== 'test' && dispatchId !== 'na') {
+                    if (Number.isFinite(cardIdx)) resolvedCardIdx = cardIdx;
+                    if (dispatchId && dispatchId !== 'test' && dispatchId !== 'na' && dispatchId !== 'auto') {
                       const { data: disp } = await supabase
                         .from('dispatch_history')
                         .select('variables_config')
@@ -330,16 +349,43 @@ serve(async (req) => {
                       const vc = (disp?.variables_config || {}) as Record<string, { staticValue?: string }>;
                       productLabel = vc[`card_${cardIdx}_product_name`]?.staticValue || '';
                     }
-                    const cardLabel = `Card ${Number.isFinite(cardIdx) ? cardIdx + 1 : '?'}`;
-                    const btnText = msg.button?.text || 'Quero Esse';
-                    messageText = productLabel
-                      ? `🛒 ${btnText} → ${cardLabel}: ${productLabel}`
-                      : `🛒 ${btnText} → ${cardLabel}`;
                   } catch (e) {
-                    console.error('[meta-wa] Failed to resolve carousel payload:', e);
+                    console.error('[meta-wa] Failed to parse bcq payload:', e);
                   }
                 }
+
+                // 2) Fallback: no usable payload, but the button text uniquely matches
+                //    one card's button in the original carousel.
+                if (resolvedCardIdx === null && parentCards) {
+                  const matches = parentCards
+                    .map((c: any, i: number) => ({ i, c }))
+                    .filter(({ c }) =>
+                      (c.buttons || []).some(
+                        (b: any) => (b.text || '').trim().toLowerCase() === btnText.trim().toLowerCase(),
+                      ),
+                    );
+                  if (matches.length === 1) resolvedCardIdx = matches[0].i;
+                }
+
+                // Enrich the product label from the stored carousel card body when
+                // dispatch_history didn't provide one.
+                if (!productLabel && parentCards && resolvedCardIdx !== null) {
+                  const card = parentCards[resolvedCardIdx];
+                  const firstLine = (card?.body || '').split('\n')[0].trim();
+                  if (firstLine) productLabel = firstLine;
+                }
+
+                if (resolvedCardIdx !== null) {
+                  const cardLabel = `Card ${resolvedCardIdx + 1}`;
+                  messageText = productLabel
+                    ? `🛒 ${btnText} → ${cardLabel}: ${productLabel}`
+                    : `🛒 ${btnText} → ${cardLabel}`;
+                } else if (parentCards) {
+                  // Tapped a carousel button but we couldn't pin the exact card.
+                  messageText = `🛒 ${btnText} (carrossel — card não identificado)`;
+                }
                 break;
+              }
               case 'interactive':
                 // Interactive button/list response
                 if (msg.interactive?.type === 'button_reply') {
