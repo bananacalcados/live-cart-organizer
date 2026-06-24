@@ -476,6 +476,10 @@ export default function Admin() {
               ))}
             </div>
           </TabsContent>
+
+          <TabsContent value="carrossel" className="mt-4">
+            <CarouselTemplatesLadder />
+          </TabsContent>
         </Tabs>
       </main>
     </div>
