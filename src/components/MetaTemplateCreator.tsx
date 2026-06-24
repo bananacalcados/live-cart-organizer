@@ -58,12 +58,17 @@ type TemplateButton = {
   urlExample?: string;
 };
 
+// Per-card button content (label/url/phone). Index-aligned with the button STRUCTURE.
+type CardButtonContent = { text?: string; url?: string; phone_number?: string; urlExample?: string };
+
 type CarouselCard = {
   bodyText: string;
   examples: Record<number, string>;
   mediaHandle: string;
   mediaName: string;
   isUploading: boolean;
+  // Per-card button content (used only when cardButtonMode === "per_card")
+  buttons?: CardButtonContent[];
 };
 
 const MIN_CARDS = 2;
