@@ -5,8 +5,11 @@
 // recebem cobranças de tarefa).
 const VIRTUAL_SELLER_PATTERNS = [
   /^live\s*shopping$/i,
+  /^vendedor[a]?\s*live$/i,
+  /^live$/i,
   /^loja$/i,
   /^loja\s*f[ií]sica$/i,
+  /^loja\s*online$/i,
 ];
 
 export function isVirtualSeller(name?: string | null): boolean {
