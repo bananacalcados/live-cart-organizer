@@ -560,6 +560,11 @@ export function MassTemplateDispatcher() {
 
   const [uploadingCardIdx, setUploadingCardIdx] = useState<number | null>(null);
   const cardUploadRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  // Image cropper (1:1 thumbnail) state
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropTargetCard, setCropTargetCard] = useState<number | null>(null);
+  const [cropUploading, setCropUploading] = useState(false);
 
   const handleCardFileUpload = async (cardIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.files?.[0];
