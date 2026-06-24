@@ -17363,6 +17363,26 @@ export type Database = {
         Args: { p_phone: string }
         Returns: number
       }
+      resolve_campaign_template: {
+        Args: { p_campanha_id: string }
+        Returns: {
+          aprovado: boolean
+          created_at: string
+          meta_status: string
+          observacao: string | null
+          qtd_cards: number
+          template_id: string
+          template_language: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "templates_carrossel"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       resolve_customer_unified: {
         Args: { p_cpf?: string; p_phone: string }
         Returns: string
@@ -17498,6 +17518,21 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      select_campaign_batch: {
+        Args: {
+          p_campanha_id: string
+          p_global_cap_days?: number
+          p_limit?: number
+        }
+        Returns: {
+          cliente_id: string
+          nome: string
+          phone: string
+          phone_suffix8: string
+          primeiro_nome: string
+          tamanhos: string[]
+        }[]
       }
       set_active_mp_account: {
         Args: { p_account_id: string }
