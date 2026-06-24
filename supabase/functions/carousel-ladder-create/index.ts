@@ -31,9 +31,9 @@ serve(async (req) => {
       sampleImageType,
       templateName,
       language,
-      bodyExample,
-      cardBodyExample,
-      buttonText,
+      topBody,
+      cardBody,
+      cards: cardsInput,
     } = body as Record<string, unknown>;
 
     const cards = Number(qtdCards);
@@ -42,6 +42,20 @@ serve(async (req) => {
     }
     if (!sampleImageBase64 || !sampleImageType) {
       return json({ error: 'sampleImageBase64 e sampleImageType são obrigatórios' }, 400);
+    }
+
+    // topBody / cardBody come pre-converted to Meta positional vars from the client:
+    //   { text: "Oiee {{1}}", examples: ["Maria"] }
+    type TextComp = { text: string; examples?: string[] };
+    type Btn = { type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER'; text: string; url?: string; urlExample?: string; phone?: string };
+    const top = (topBody as TextComp) || { text: '{{1}}', examples: ['Confira nossas novidades 👟'] };
+    const legend = (cardBody as TextComp) || { text: '{{1}}', examples: ['Produto incrível por um super preço'] };
+    const cardDefs = Array.isArray(cardsInput) ? (cardsInput as Array<{ buttons: Btn[] }>) : [];
+
+    if (!top.text?.trim()) return json({ error: 'topBody.text é obrigatório' }, 400);
+    if (!legend.text?.trim()) return json({ error: 'cardBody.text é obrigatório' }, 400);
+    if (cardDefs.length !== cards) {
+      return json({ error: `cards deve ter exatamente ${cards} itens` }, 400);
     }
 
     // 1) Credenciais Meta — número específico (precisa ser WABA oficial), fallback default.
@@ -76,22 +90,40 @@ serve(async (req) => {
     // 3) Monta os componentes do carrossel.
     const lang = (language as string) || 'pt_BR';
     const name = (templateName as string) || `carrossel_escada_${cards}cards`;
-    const topBodyExample = (bodyExample as string) || 'Confira nossas novidades 👟';
-    const cardEx = (cardBodyExample as string) || 'Produto incrível por um super preço';
-    const btn = (buttonText as string) || 'Quero esse';
 
-    const card = {
-      components: [
-        { type: 'HEADER', format: 'IMAGE', example: { header_handle: [handle.handle] } },
-        { type: 'BODY', text: '{{1}}', example: { body_text: [[cardEx]] } },
-        { type: 'BUTTONS', buttons: [{ type: 'QUICK_REPLY', text: btn }] },
-      ],
+    const textComponent = (comp: TextComp) => {
+      const c: Record<string, unknown> = { type: 'BODY', text: comp.text };
+      if (comp.examples && comp.examples.length) c.example = { body_text: [comp.examples] };
+      return c;
     };
 
+    const toMetaButton = (b: Btn) => {
+      if (b.type === 'URL') {
+        const out: Record<string, unknown> = { type: 'URL', text: b.text, url: b.url };
+        if (b.urlExample) out.example = [b.urlExample];
+        return out;
+      }
+      if (b.type === 'PHONE_NUMBER') {
+        return { type: 'PHONE_NUMBER', text: b.text, phone_number: b.phone };
+      }
+      return { type: 'QUICK_REPLY', text: b.text };
+    };
+
+    const carouselCards = cardDefs.map((cd) => {
+      const comps: Record<string, unknown>[] = [
+        { type: 'HEADER', format: 'IMAGE', example: { header_handle: [handle.handle] } },
+        textComponent(legend),
+      ];
+      const btns = (cd.buttons || []).filter((b) => b.text?.trim());
+      if (btns.length) comps.push({ type: 'BUTTONS', buttons: btns.map(toMetaButton) });
+      return { components: comps };
+    });
+
     const components = [
-      { type: 'BODY', text: '{{1}}', example: { body_text: [[topBodyExample]] } },
-      { type: 'CAROUSEL', cards: Array.from({ length: cards }, () => structuredClone(card)) },
+      textComponent(top),
+      { type: 'CAROUSEL', cards: carouselCards },
     ];
+
 
     // 4) Submete à Meta.
     const graphUrl = `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates`;
