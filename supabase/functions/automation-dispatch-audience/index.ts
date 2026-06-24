@@ -583,6 +583,18 @@ serve(async (req) => {
             let formattedPhone = recipient.phone.replace(/\D/g, '');
             if (!formattedPhone.startsWith('55')) formattedPhone = '55' + formattedPhone;
 
+            // Carousel: fetch def to inject per-card quick-reply payloads (card
+            // identification) and build the full chat carousel structure.
+            let carouselChatPayload: any | null = null;
+            const hasCarousel = components.some((c: any) => (c.type || '').toUpperCase() === 'CAROUSEL');
+            if (hasCarousel && creds.businessAccountId) {
+              const def = await getTemplateDef(creds.accessToken, creds.businessAccountId, templateName, (config.language as string) || 'pt_BR');
+              if (def) {
+                injectCarouselQuickReplies(def, components);
+                carouselChatPayload = buildCarouselChatPayload(def, components);
+              }
+            }
+
             const templateBody: Record<string, unknown> = {
               messaging_product: 'whatsapp',
               to: formattedPhone,
