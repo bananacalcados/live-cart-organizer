@@ -1286,7 +1286,13 @@ export function MetaTemplateCreator() {
             {/* Buttons */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>{isCarousel ? "Botões dos cards (aplicados a todos) *" : "Botões (opcional)"}</Label>
+                <Label>
+                  {isCarousel
+                    ? cardButtonMode === "shared"
+                      ? "Botões dos cards (iguais em todos) *"
+                      : "Estrutura dos botões (conteúdo por card) *"
+                    : "Botões (opcional)"}
+                </Label>
                 <div className="flex items-center gap-1">
                   <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => addButton("QUICK_REPLY")}>
                     + Resposta rápida
@@ -1299,65 +1305,94 @@ export function MetaTemplateCreator() {
                   </Button>
                 </div>
               </div>
+
+              {isCarousel && (
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-medium">Botões exclusivos por card</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {cardButtonMode === "per_card"
+                        ? "Cada card tem seu próprio link/texto. A estrutura (tipos e ordem) é a mesma."
+                        : "Todos os cards usam exatamente os mesmos botões."}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={cardButtonMode === "per_card"}
+                    onCheckedChange={(v) => setCardButtonMode(v ? "per_card" : "shared")}
+                  />
+                </div>
+              )}
+
               {buttons.length === 0 ? (
                 <p className="text-[10px] text-muted-foreground">
                   {isCarousel
-                    ? "Carrossel exige de 1 a 2 botões — eles são aplicados igualmente a todos os cards."
+                    ? "Carrossel exige de 1 a 2 botões — mesma estrutura em todos os cards."
                     : "Adicione botões de resposta rápida, link ou ligação (máximo 10, padrões da Meta)."}
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {buttons.map((b, i) => (
-                    <div key={i} className="flex items-start gap-2 rounded-md border p-2">
-                      <Badge variant="secondary" className="text-[10px] shrink-0 mt-1">
-                        {b.type === "QUICK_REPLY" ? "Resposta" : b.type === "URL" ? "Link" : "Ligar"}
-                      </Badge>
-                      <div className="flex-1 space-y-1">
-                        <Input
-                          className="h-8 text-xs"
-                          placeholder="Texto do botão (máx 25)"
-                          maxLength={25}
-                          value={b.text}
-                          onChange={(e) => updateButton(i, { text: e.target.value })}
-                        />
-                        {b.type === "URL" && (
-                          <>
-                            <Input
-                              className="h-8 text-xs"
-                              placeholder={isCarousel ? "https://exemplo.com/p/{{1}}" : "https://exemplo.com"}
-                              value={b.url || ""}
-                              onChange={(e) => updateButton(i, { url: e.target.value })}
-                            />
-                            {isCarousel && (b.url || "").includes("{{") && (
+                  {buttons.map((b, i) => {
+                    const perCard = isCarousel && cardButtonMode === "per_card";
+                    return (
+                      <div key={i} className="flex items-start gap-2 rounded-md border p-2">
+                        <Badge variant="secondary" className="text-[10px] shrink-0 mt-1">
+                          {b.type === "QUICK_REPLY" ? "Resposta" : b.type === "URL" ? "Link" : "Ligar"}
+                        </Badge>
+                        <div className="flex-1 space-y-1">
+                          {perCard ? (
+                            <p className="text-[10px] text-muted-foreground py-1.5">
+                              Configure o texto{b.type === "URL" ? "/link" : b.type === "PHONE_NUMBER" ? "/telefone" : ""} deste botão dentro de cada card acima.
+                            </p>
+                          ) : (
+                            <>
                               <Input
                                 className="h-8 text-xs"
-                                placeholder="Exemplo do sufixo da URL (ex: tenis-x)"
-                                value={b.urlExample || ""}
-                                onChange={(e) => updateButton(i, { urlExample: e.target.value })}
+                                placeholder="Texto do botão (máx 25)"
+                                maxLength={25}
+                                value={b.text}
+                                onChange={(e) => updateButton(i, { text: e.target.value })}
                               />
-                            )}
-                          </>
-                        )}
-                        {b.type === "PHONE_NUMBER" && (
-                          <Input
-                            className="h-8 text-xs"
-                            placeholder="+5533999999999"
-                            value={b.phone_number || ""}
-                            onChange={(e) => updateButton(i, { phone_number: e.target.value })}
-                          />
-                        )}
+                              {b.type === "URL" && (
+                                <>
+                                  <Input
+                                    className="h-8 text-xs"
+                                    placeholder={isCarousel ? "https://exemplo.com/p/{{1}}" : "https://exemplo.com"}
+                                    value={b.url || ""}
+                                    onChange={(e) => updateButton(i, { url: e.target.value })}
+                                  />
+                                  {isCarousel && (b.url || "").includes("{{") && (
+                                    <Input
+                                      className="h-8 text-xs"
+                                      placeholder="Exemplo do sufixo da URL (ex: tenis-x)"
+                                      value={b.urlExample || ""}
+                                      onChange={(e) => updateButton(i, { urlExample: e.target.value })}
+                                    />
+                                  )}
+                                </>
+                              )}
+                              {b.type === "PHONE_NUMBER" && (
+                                <Input
+                                  className="h-8 text-xs"
+                                  placeholder="+5533999999999"
+                                  value={b.phone_number || ""}
+                                  onChange={(e) => updateButton(i, { phone_number: e.target.value })}
+                                />
+                              )}
+                            </>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          onClick={() => removeButton(i)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0"
-                        onClick={() => removeButton(i)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
