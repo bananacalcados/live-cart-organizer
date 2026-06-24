@@ -406,6 +406,7 @@ serve(async (req) => {
 
         const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId);
         const rendered = buildRenderedMessage(templateComponents, variablesConfig, hasDynamicVars ? rcp : null, hasDynamicVars);
+        const carouselPayload = buildCarouselPayloadForChat(templateComponents, components);
         const body: any = {
           messaging_product: 'whatsapp',
           to: formatted,
@@ -422,13 +423,14 @@ serve(async (req) => {
           });
           const data = await res.json();
           if (res.ok) {
-            return { ok: true, id: rcp.id, wamid: data.messages?.[0]?.id || null, phone: formatted, rendered };
+            return { ok: true, id: rcp.id, wamid: data.messages?.[0]?.id || null, phone: formatted, rendered, carouselPayload };
           }
           return { ok: false, id: rcp.id, error: data.error?.message || JSON.stringify(data).slice(0, 200) };
         } catch (e) {
           return { ok: false, id: rcp.id, error: String(e).slice(0, 200) };
         }
       }
+
 
       // Send in parallel chunks
       const sentRows: any[] = [];
