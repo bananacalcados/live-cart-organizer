@@ -547,6 +547,55 @@ export function MassTemplateDispatcher() {
     return btnComp?.buttons || [];
   }, [selectedTemplate]);
 
+  // ── Carousel support ──
+  // The CAROUSEL component (fixed, already approved). Weekly content (images +
+  // text variables) is stored in `variables` under namespaced keys:
+  //   card_{i}_image, card_{i}_body_{n}, card_{i}_button_url_{j}
+  const carouselComponent = useMemo(() => {
+    if (!selectedTemplate) return null;
+    return selectedTemplate.components.find(c => (c.type || '').toUpperCase() === 'CAROUSEL') || null;
+  }, [selectedTemplate]);
+  const isCarousel = !!carouselComponent;
+  const carouselCards = (carouselComponent?.cards || []) as NonNullable<MetaTemplate['components'][number]['cards']>;
+
+  const [uploadingCardIdx, setUploadingCardIdx] = useState<number | null>(null);
+  const cardUploadRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+  const handleCardFileUpload = async (cardIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.files?.[0];
+    if (!raw) return;
+    e.target.value = "";
+    setUploadingCardIdx(cardIdx);
+    try {
+      const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+      const file = await normalizeImageOrientation(raw);
+      const ext = file.name.split('.').pop();
+      const fileName = `carousel-${Date.now()}-c${cardIdx}.${ext}`;
+      const { error } = await supabase.storage.from("chat-media").upload(fileName, file, { contentType: file.type });
+      if (error) { toast.error("Erro ao enviar imagem"); return; }
+      const { data } = supabase.storage.from("chat-media").getPublicUrl(fileName);
+      setVariables(prev => ({ ...prev, [`card_${cardIdx}_image`]: { mode: '__static__', staticValue: data.publicUrl } }));
+      toast.success(`Imagem do card ${cardIdx + 1} enviada!`);
+    } finally {
+      setUploadingCardIdx(null);
+    }
+  };
+
+  // Variable numbers used in a given card body text.
+  const cardBodyVarNumbers = (cardIdx: number): number[] => {
+    const body = carouselCards[cardIdx]?.components.find(c => (c.type || '').toUpperCase() === 'BODY');
+    const matches = (body?.text || '').match(/\{\{\s*(\d+)\s*\}\}/g) || [];
+    const nums = matches.map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
+    return Array.from(new Set(nums)).sort((a, b) => a - b);
+  };
+
+  // URL buttons (with {{n}}) for a given card.
+  const cardUrlButtons = (cardIdx: number) => {
+    const btns = carouselCards[cardIdx]?.components.find(c => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+    return btns.map((b: any, idx: number) => ({ b, idx })).filter(x => x.b.type === 'URL' && (x.b.url || '').includes('{{'));
+  };
+
+
   // Build rendered message text (for preview, uses placeholder labels for dynamic vars)
   const renderedMessage = useMemo(() => {
     if (!selectedTemplate) return "";
