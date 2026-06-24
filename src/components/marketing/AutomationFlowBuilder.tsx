@@ -1736,7 +1736,93 @@ function StepEditorDialog({
         </DialogContent>
       </Dialog>
       <AiTestDialog open={aiTestOpen} onOpenChange={setAiTestOpen} prompt={config.prompt || ""} />
+
+      {/* Hidden file input for carousel card image upload from PC */}
+      <input
+        ref={cardFileRef}
+        type="file"
+        accept="image/*,video/*"
+        className="hidden"
+        onChange={handleCardImageUpload}
+      />
+
+      {/* Shopify product picker for carousel card image */}
+      <Dialog open={showShopifyPicker} onOpenChange={setShowShopifyPicker}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingBag className="h-5 w-5" /> Escolher foto de produto da Shopify
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar produto..."
+                  value={shopifySearch}
+                  onChange={e => setShopifySearch(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') loadShopifyProducts(shopifySearch); }}
+                  className="pl-9"
+                />
+              </div>
+              <Button variant="outline" size="sm" onClick={() => loadShopifyProducts(shopifySearch)} disabled={loadingShopify}>
+                {loadingShopify ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null} Buscar
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Clique em uma foto do produto para usá-la na imagem do card.</p>
+            <ScrollArea className="h-[400px]">
+              {loadingShopify ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : shopifyProducts.length === 0 ? (
+                <p className="text-sm text-center text-muted-foreground py-8">Nenhum produto encontrado</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {shopifyProducts.map(p => {
+                    const images = p.node.images.edges;
+                    const mainImage = images[0]?.node.url;
+                    return (
+                      <Card key={p.node.id} className="overflow-hidden">
+                        <div className="space-y-2">
+                          {mainImage && (
+                            <img
+                              src={mainImage}
+                              alt={p.node.title}
+                              className="w-full h-32 object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => selectShopifyImage(mainImage)}
+                            />
+                          )}
+                          <div className="p-2">
+                            <p className="text-xs font-medium truncate">{p.node.title}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              R$ {parseFloat(p.node.priceRange.minVariantPrice.amount).toFixed(2)}
+                            </p>
+                            {images.length > 1 && (
+                              <div className="flex gap-1 mt-1 overflow-x-auto">
+                                {images.map((img, idx) => (
+                                  <img
+                                    key={idx}
+                                    src={img.node.url}
+                                    alt=""
+                                    className="h-10 w-10 rounded object-cover cursor-pointer border-2 border-transparent hover:border-primary transition-colors shrink-0"
+                                    onClick={() => selectShopifyImage(img.node.url)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
+
   );
 }
 
