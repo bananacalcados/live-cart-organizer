@@ -135,7 +135,31 @@ export function CarouselTemplatesLadder() {
     setLoading(false);
   };
 
-  useEffect(() => { loadNumbers(); loadRows(); }, []);
+  const loadSellers = async () => {
+    const { data } = await supabase
+      .from("pos_sellers")
+      .select("name")
+      .eq("is_active", true);
+    const names = Array.from(
+      new Set(
+        (data || [])
+          .map((s: { name: string | null }) => (s.name || "").trim())
+          .filter((n) => n && !isVirtualSeller(n)),
+      ),
+    );
+    setSellers(names);
+    // Use a real seller name as the Meta-approval example for {{vendedora}}.
+    if (names.length) {
+      setVariables((prev) =>
+        prev.map((v) =>
+          v.token === SELLER_VAR_TOKEN ? { ...v, example: names[0] } : v,
+        ),
+      );
+    }
+  };
+
+  useEffect(() => { loadNumbers(); loadRows(); loadSellers(); }, []);
+
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
