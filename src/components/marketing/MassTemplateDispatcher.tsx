@@ -800,6 +800,31 @@ export function MassTemplateDispatcher() {
     const bodyVars = templateVariables.filter(v => v.component === 'BODY');
     const headerVars = templateVariables.filter(v => v.component === 'HEADER');
 
+    // ── Carousel: bubble body vars + carousel cards (image + text + url suffix) ──
+    if (isCarousel) {
+      if (bodyVars.length > 0) {
+        components.push({
+          type: 'body',
+          parameters: bodyVars.map(v => ({ type: 'text', text: variables[v.key]?.staticValue || 'Cliente' })),
+        });
+      }
+      const cards = carouselCards.map((_, i) => {
+        const cardComps: any[] = [];
+        cardComps.push({ type: 'header', parameters: [{ type: 'image', image: { link: variables[`card_${i}_image`]?.staticValue || '' } }] });
+        const cbVars = cardBodyVarNumbers(i);
+        if (cbVars.length > 0) {
+          cardComps.push({ type: 'body', parameters: cbVars.map(n => ({ type: 'text', text: variables[`card_${i}_body_${n}`]?.staticValue || '' })) });
+        }
+        cardUrlButtons(i).forEach(({ idx }) => {
+          cardComps.push({ type: 'button', sub_type: 'url', index: idx.toString(), parameters: [{ type: 'text', text: variables[`card_${i}_button_url_${idx}`]?.staticValue || '' }] });
+        });
+        return { card_index: i, components: cardComps };
+      });
+      components.push({ type: 'carousel', cards });
+      return components;
+    }
+
+
     const resolve = (key: string) => {
       const vc = variables[key];
       if (!vc) return '';
