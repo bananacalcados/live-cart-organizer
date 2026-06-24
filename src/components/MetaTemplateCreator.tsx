@@ -62,6 +62,12 @@ export function MetaTemplateCreator() {
   const [headerText, setHeaderText] = useState("");
   const [bodyText, setBodyText] = useState("");
   const [footerText, setFooterText] = useState("");
+  // Example values keyed by variable number, separate for body and header
+  const [bodyExamples, setBodyExamples] = useState<Record<number, string>>({});
+  const [headerExamples, setHeaderExamples] = useState<Record<number, string>>({});
+
+  const bodyVars = extractVarNumbers(bodyText);
+  const headerVars = headerType === "text" ? extractVarNumbers(headerText) : [];
 
   useEffect(() => {
     if (numbers.length === 0) fetchNumbers();
