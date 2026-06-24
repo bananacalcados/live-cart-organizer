@@ -1556,8 +1556,37 @@ export function MassTemplateDispatcher() {
                 <div className="bg-[#dcf8c6] dark:bg-[#005c4b] rounded-lg p-3 text-sm whitespace-pre-wrap">
                   {renderedMessage || "Selecione um template"}
                 </div>
+                {isCarousel && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {carouselCards.map((card, i) => {
+                      const cardBody = card.components.find(c => (c.type || '').toUpperCase() === 'BODY');
+                      const cardBtns = card.components.find(c => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+                      const imgUrl = variables[`card_${i}_image`]?.staticValue || '';
+                      return (
+                        <div key={i} className="w-40 shrink-0 rounded-md border bg-background overflow-hidden">
+                          {imgUrl ? (
+                            <img src={imgUrl} alt={`Card ${i + 1}`} className="h-20 w-full object-cover" />
+                          ) : (
+                            <div className="h-20 bg-muted flex items-center justify-center text-muted-foreground text-[10px]">Sem imagem</div>
+                          )}
+                          <div className="p-2">
+                            <p className="text-[11px] whitespace-pre-wrap line-clamp-3">{cardBody?.text || ''}</p>
+                            {cardBtns.length > 0 && (
+                              <div className="mt-1 space-y-0.5 border-t pt-1">
+                                {cardBtns.map((b: any, bi: number) => (
+                                  <p key={bi} className="text-[10px] text-center text-primary font-medium truncate">{b.text}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
+
 
             <Separator />
 
