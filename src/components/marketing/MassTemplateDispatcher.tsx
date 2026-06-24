@@ -997,6 +997,11 @@ export function MassTemplateDispatcher() {
       return;
     }
 
+    if (isCarousel && carouselCards.some((_, i) => !(variables[`card_${i}_image`]?.staticValue || '').trim())) {
+      toast.error("Envie a imagem de todos os cards do carrossel antes de disparar.");
+      return;
+    }
+
     setIsSending(true);
 
     // Resume: skip phones that already received this template today (unless force resend)
