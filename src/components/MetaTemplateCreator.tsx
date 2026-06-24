@@ -137,15 +137,53 @@ export function MetaTemplateCreator() {
       return;
     }
 
+    // Validate: body variables must form a contiguous sequence starting at 1 (1,2,...,N)
+    if (bodyVars.length > 0) {
+      const expected = Array.from({ length: bodyVars.length }, (_, i) => i + 1);
+      const isContiguous = bodyVars.every((n, i) => n === expected[i]);
+      if (!isContiguous) {
+        toast.error(`As variáveis do corpo devem ser sequenciais a partir de {{1}} (sem pular números). Detectado: ${bodyVars.map((n) => `{{${n}}}`).join(", ")}`);
+        return;
+      }
+    }
+
+    // Validate: header accepts at most 1 variable
+    if (headerVars.length > 1) {
+      toast.error("O cabeçalho de texto aceita no máximo 1 variável.");
+      return;
+    }
+
+    // Validate: every detected variable must have a non-empty example (Meta requires it)
+    const missingBody = bodyVars.some((n) => !(bodyExamples[n] || "").trim());
+    const missingHeader = headerVars.some((n) => !(headerExamples[n] || "").trim());
+    if (missingBody || missingHeader) {
+      toast.error("Preencha o valor de exemplo de cada variável — a Meta exige isso");
+      return;
+    }
+
     setIsCreating(true);
     try {
       const components: Array<Record<string, unknown>> = [];
 
       if (headerType === "text" && headerText.trim()) {
-        components.push({ type: "HEADER", format: "TEXT", text: headerText });
+        const headerComponent: Record<string, unknown> = { type: "HEADER", format: "TEXT", text: headerText };
+        if (headerVars.length > 0) {
+          // header_text is a FLAT array of strings, in variable order
+          headerComponent.example = {
+            header_text: headerVars.map((n) => (headerExamples[n] || "").trim()),
+          };
+        }
+        components.push(headerComponent);
       }
 
-      components.push({ type: "BODY", text: bodyText });
+      const bodyComponent: Record<string, unknown> = { type: "BODY", text: bodyText };
+      if (bodyVars.length > 0) {
+        // body_text is an array CONTAINING ONE array of strings, in variable order
+        bodyComponent.example = {
+          body_text: [bodyVars.map((n) => (bodyExamples[n] || "").trim())],
+        };
+      }
+      components.push(bodyComponent);
 
       if (footerText.trim()) {
         components.push({ type: "FOOTER", text: footerText });
