@@ -518,7 +518,6 @@ export function MetaTemplateCreator() {
 
     setIsCreating(true);
     try {
-      const cardButtons = buildCardButtons();
       const components: Array<Record<string, unknown>> = [];
 
       // Bubble text (BODY above the cards)
@@ -541,7 +540,7 @@ export function MetaTemplateCreator() {
             cardBody.example = { body_text: [cardVars.map((n) => (card.examples[n] || "").trim())] };
           }
           cardComps.push(cardBody);
-          cardComps.push({ type: "BUTTONS", buttons: cardButtons });
+          cardComps.push({ type: "BUTTONS", buttons: buildCardButtonsFor(card) });
           return { components: cardComps };
         }),
       });
