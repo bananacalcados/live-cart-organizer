@@ -88,6 +88,50 @@ function buildCarouselComponent(
   return { type: 'carousel', cards };
 }
 
+// Builds the resolved carousel structure (image + body + buttons per card) for
+// storage in whatsapp_messages so the chat renders the full carousel.
+function paramText(p: any): string {
+  return typeof p?.text === 'string' ? p.text : '';
+}
+function buildCarouselPayloadForChat(
+  templateComponents: any[],
+  sentComponents: any[],
+): any | null {
+  const carouselDef = templateComponents.find((c: any) => (c.type || '').toUpperCase() === 'CAROUSEL');
+  if (!carouselDef || !Array.isArray(carouselDef.cards)) return null;
+  const sentCarousel = sentComponents.find((c: any) => (c.type || '').toLowerCase() === 'carousel');
+  const sentCards: any[] = sentCarousel?.cards || [];
+
+  const bodyDef = templateComponents.find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+  const sentBody = sentComponents.find((c: any) => (c.type || '').toLowerCase() === 'body');
+  const subst = (text: string, params: any[]) =>
+    (text || '').replace(/\{\{(\d+)\}\}/g, (_m: string, n: string) => paramText(params?.[parseInt(n, 10) - 1]) || `{{${n}}}`);
+  const bubbleBody = bodyDef?.text ? subst(bodyDef.text, sentBody?.parameters || []) : '';
+
+  const cards = carouselDef.cards.map((cardDef: any, i: number) => {
+    const sentCard = sentCards.find((c: any) => c.card_index === i) || sentCards[i] || {};
+    const comps: any[] = sentCard.components || [];
+    const headerParams = comps.find((c: any) => (c.type || '').toLowerCase() === 'header')?.parameters || [];
+    const hp = headerParams[0] || {};
+    const cardBodyDef = (cardDef.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+    const cardBodyParams = comps.find((c: any) => (c.type || '').toLowerCase() === 'body')?.parameters || [];
+    const body = cardBodyDef?.text ? subst(cardBodyDef.text, cardBodyParams) : '';
+    const btnsDef = (cardDef.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+    const buttons = btnsDef.map((b: any, idx: number) => {
+      const type = (b.type || '').toUpperCase();
+      let url = b.url || undefined;
+      if (type === 'URL' && url && url.includes('{{')) {
+        const sentBtn = comps.find((c: any) => (c.type || '').toLowerCase() === 'button' && (c.sub_type || '').toLowerCase() === 'url' && String(c.index) === String(idx));
+        url = url.replace(/\{\{\d+\}\}/, paramText(sentBtn?.parameters?.[0]) || '');
+      }
+      return { type, text: b.text || '', url, phone_number: b.phone_number };
+    });
+    return { image_url: hp.image?.link || null, video_url: hp.video?.link || null, body, buttons };
+  });
+
+  return { type: 'carousel', body: bubbleBody, cards };
+}
+
 function buildComponentsForRecipient(
   templateComponents: any[],
   variablesConfig: Record<string, VariableConfig>,
