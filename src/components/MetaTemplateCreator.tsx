@@ -29,12 +29,21 @@ interface MetaTemplate {
   status: string;
   category: string;
   language: string;
+  rejected_reason?: string;
   components: Array<{
     type: string;
     text?: string;
     format?: string;
     buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
   }>;
+}
+
+// Extracts distinct {{n}} variable numbers from a text, sorted ascending.
+function extractVarNumbers(text?: string): number[] {
+  if (!text) return [];
+  const matches = text.match(/\{\{\s*(\d+)\s*\}\}/g) || [];
+  const nums = matches.map((m) => parseInt(m.replace(/[^\d]/g, ""), 10));
+  return Array.from(new Set(nums)).sort((a, b) => a - b);
 }
 
 export function MetaTemplateCreator() {
