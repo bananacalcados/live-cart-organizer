@@ -360,7 +360,7 @@ serve(async (req) => {
         let formatted = rcp.phone.replace(/\D/g, '');
         if (!formatted.startsWith('55')) formatted = '55' + formatted;
 
-        const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars);
+        const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId);
         const rendered = buildRenderedMessage(templateComponents, variablesConfig, hasDynamicVars ? rcp : null, hasDynamicVars);
         const body: any = {
           messaging_product: 'whatsapp',
