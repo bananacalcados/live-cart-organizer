@@ -606,7 +606,52 @@ function StepEditorDialog({
     toast.success("Arquivo anexado!");
   };
 
-  const addTag = () => {
+  // ── Carousel card image: upload from PC ──
+  const handleCardImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const cardIdx = pcUploadTargetCard;
+    e.target.value = "";
+    if (!file || cardIdx === null) return;
+    setUploadingCard(cardIdx);
+    const ext = file.name.split('.').pop();
+    const fileName = `template-card-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("chat-media").upload(fileName, file);
+    if (error) { toast.error("Erro ao enviar arquivo"); setUploadingCard(null); return; }
+    const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(fileName);
+    const cc = config.carouselCards || {};
+    const cardConf = cc[cardIdx] || {};
+    setConfig({ ...config, carouselCards: { ...cc, [cardIdx]: { ...cardConf, headerUrl: urlData.publicUrl } } });
+    toast.success("Imagem enviada!");
+    setUploadingCard(null);
+  };
+
+  const triggerCardPcUpload = (cardIdx: number) => {
+    setPcUploadTargetCard(cardIdx);
+    setTimeout(() => cardFileRef.current?.click(), 0);
+  };
+
+  // ── Carousel card image: pick from Shopify ──
+  const loadShopifyProducts = async (query?: string) => {
+    setLoadingShopify(true);
+    try { setShopifyProducts(await fetchProducts(50, query || undefined)); }
+    catch { toast.error("Erro ao carregar produtos da Shopify"); }
+    setLoadingShopify(false);
+  };
+
+  const openShopifyForCard = (cardIdx: number) => {
+    setShopifyTargetCard(cardIdx);
+    setShowShopifyPicker(true);
+    if (shopifyProducts.length === 0) loadShopifyProducts();
+  };
+
+  const selectShopifyImage = (imageUrl: string) => {
+    if (shopifyTargetCard === null) return;
+    const cc = config.carouselCards || {};
+    const cardConf = cc[shopifyTargetCard] || {};
+    setConfig({ ...config, carouselCards: { ...cc, [shopifyTargetCard]: { ...cardConf, headerUrl: imageUrl } } });
+    setShowShopifyPicker(false);
+    toast.success("Imagem do produto adicionada!");
+  };
     if (!tagInput.trim()) return;
     const tags = config.tags || [];
     if (!tags.includes(tagInput.trim())) {
