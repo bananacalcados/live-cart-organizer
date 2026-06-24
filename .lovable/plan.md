@@ -31,12 +31,13 @@ Validar que o número está na Cloud API oficial e consegue criar + enviar 1 car
 - Tabela `templates_carrossel` (`qtd_cards` PK 2..10, `template_id`, `aprovado`) + GRANT/RLS.
 - Tela admin para criar os 9 templates (2→10 cards) via `meta-whatsapp-create-template` e acompanhar aprovação (`meta-template-status-log`).
 
-### Etapa 2 — Modelo de dados da campanha
-- `campanhas_auto` (nome, criada_por, filtro_json jsonb, qtd_por_dia, dias_semana int[], cooldown_dias, ativa, tipo `lancamento|numeracao`).
+### Etapa 2 — Modelo de dados da campanha ✅ (concluída)
+- `campanhas_auto` (nome, criada_por, filtro_json jsonb, qtd_por_dia, dias_semana int[], cooldown_dias, ativa, tipo `lancamento|numeracao`, top_body, card_body, variaveis jsonb, botoes jsonb, whatsapp_number_id, **rodizio_vendedora bool + vendedoras_rodizio uuid[]**).
 - `campanha_cards` (campanha_id, ordem, shopify_product_id, shopify_variant_id, imagem_url, legenda, botao_tipo, botao_payload, status `ok|esgotado|inativo`, ultima_verificacao).
-- `campanha_envios` (LOG/dedup: campanha_id, cliente_id, enviado_em, status `pendente|enviado|entregue|lido|falhou|capped`, erro, tentativas).
-- VIEW `marketing_envios_globais` consolidando os logs para o teto global.
-- Todas com GRANT + RLS.
+- `campanha_envios` (LOG/dedup: campanha_id, cliente_id, phone, phone_suffix8, vendedora_id/nome do rodízio, message_wamid, enviado_em, status `pendente|enviado|entregue|lido|falhou|capped`, erro, tentativas, proxima_tentativa).
+- VIEW `marketing_envios_globais` (security_invoker) consolidando `campanha_envios` + `dispatch_recipients` + `automation_dispatch_sent` para o teto global.
+- Todas com GRANT + RLS (authenticated full access + service_role).
+- **Variável `{{vendedora}}`** (rodízio): builder puxa as vendedoras ativas do PDV (exclui virtuais) e usa nome real como exemplo de aprovação; rodízio aplicado no envio (Etapa 4).
 
 ### Etapa 3 — Seleção do lote + template + agendador
 - RPC com a query da Seção 3 (filtro dinâmico via `crm_customers_v`, opt-out, cooldown da própria campanha, teto global, `ORDER BY ... NULLS FIRST`).
