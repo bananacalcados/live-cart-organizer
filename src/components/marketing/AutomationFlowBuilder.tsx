@@ -41,9 +41,10 @@ import {
   TestTube2, StopCircle, Volume2, GitBranch, AlertTriangle,
   ShoppingCart, Sparkles, Package, ExternalLink, LayoutGrid,
   ChevronDown, ChevronUp, Filter, MapPin,
-  Bookmark, Gift, Copy,
+  Bookmark, Gift, Copy, Search, Monitor,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
+import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 
 // ─── Types ──────────────────────────────────────
 
@@ -529,6 +530,14 @@ function StepEditorDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const headerFileRef = useRef<HTMLInputElement>(null);
   const [uploadingHeader, setUploadingHeader] = useState(false);
+  const cardFileRef = useRef<HTMLInputElement>(null);
+  const [uploadingCard, setUploadingCard] = useState<number | null>(null);
+  const [pcUploadTargetCard, setPcUploadTargetCard] = useState<number | null>(null);
+  const [showShopifyPicker, setShowShopifyPicker] = useState(false);
+  const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
+  const [shopifySearch, setShopifySearch] = useState("");
+  const [loadingShopify, setLoadingShopify] = useState(false);
+  const [shopifyTargetCard, setShopifyTargetCard] = useState<number | null>(null);
   const [whatsappNumbers, setWhatsappNumbers] = useState<any[]>([]);
   const [loadingNumbers, setLoadingNumbers] = useState(false);
 
@@ -595,6 +604,53 @@ function StepEditorDialog({
     const mediaType = file.type.startsWith("image") ? "image" : file.type.startsWith("video") ? "video" : file.type.startsWith("audio") ? "audio" : "document";
     setConfig({ ...config, mediaUrl: data.publicUrl, mediaType });
     toast.success("Arquivo anexado!");
+  };
+
+  // ── Carousel card image: upload from PC ──
+  const handleCardImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const cardIdx = pcUploadTargetCard;
+    e.target.value = "";
+    if (!file || cardIdx === null) return;
+    setUploadingCard(cardIdx);
+    const ext = file.name.split('.').pop();
+    const fileName = `template-card-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("chat-media").upload(fileName, file);
+    if (error) { toast.error("Erro ao enviar arquivo"); setUploadingCard(null); return; }
+    const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(fileName);
+    const cc = config.carouselCards || {};
+    const cardConf = cc[cardIdx] || {};
+    setConfig({ ...config, carouselCards: { ...cc, [cardIdx]: { ...cardConf, headerUrl: urlData.publicUrl } } });
+    toast.success("Imagem enviada!");
+    setUploadingCard(null);
+  };
+
+  const triggerCardPcUpload = (cardIdx: number) => {
+    setPcUploadTargetCard(cardIdx);
+    setTimeout(() => cardFileRef.current?.click(), 0);
+  };
+
+  // ── Carousel card image: pick from Shopify ──
+  const loadShopifyProducts = async (query?: string) => {
+    setLoadingShopify(true);
+    try { setShopifyProducts(await fetchProducts(50, query || undefined)); }
+    catch { toast.error("Erro ao carregar produtos da Shopify"); }
+    setLoadingShopify(false);
+  };
+
+  const openShopifyForCard = (cardIdx: number) => {
+    setShopifyTargetCard(cardIdx);
+    setShowShopifyPicker(true);
+    if (shopifyProducts.length === 0) loadShopifyProducts();
+  };
+
+  const selectShopifyImage = (imageUrl: string) => {
+    if (shopifyTargetCard === null) return;
+    const cc = config.carouselCards || {};
+    const cardConf = cc[shopifyTargetCard] || {};
+    setConfig({ ...config, carouselCards: { ...cc, [shopifyTargetCard]: { ...cardConf, headerUrl: imageUrl } } });
+    setShowShopifyPicker(false);
+    toast.success("Imagem do produto adicionada!");
   };
 
   const addTag = () => {
@@ -734,6 +790,24 @@ function StepEditorDialog({
                                 ))}
                               </div>
                             )}
+                            {/* Carousel card buttons (buttons live inside each card) */}
+                            {carousel && (() => {
+                              const cardBtns = carousel.cards?.[0]?.components?.find((c: any) => c.type === "BUTTONS");
+                              if (!cardBtns?.buttons?.length) return null;
+                              return (
+                                <div className="mt-1 space-y-0.5">
+                                  <p className="text-[9px] text-muted-foreground">Botões dos cards:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {cardBtns.buttons.map((b: any, i: number) => (
+                                      <Badge key={i} variant="outline" className="text-[9px]">
+                                        {b.type === "URL" ? "🔗" : b.type === "QUICK_REPLY" ? "↩️" : "📞"} {b.text}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
                           </div>
                         );
                       })()}
@@ -913,9 +987,9 @@ function StepEditorDialog({
                                   <div className="p-3 space-y-3">
                                     {/* Card Header (image/video URL) */}
                                     {cardHeader && (cardHeader.format === "IMAGE" || cardHeader.format === "VIDEO") && (
-                                      <div className="space-y-1">
+                                      <div className="space-y-1.5">
                                         <Label className="text-[11px]">
-                                          {cardHeader.format === "IMAGE" ? "🖼️ URL da Imagem" : "🎬 URL do Vídeo"}
+                                          {cardHeader.format === "IMAGE" ? "🖼️ Imagem do card" : "🎬 Vídeo do card"}
                                         </Label>
                                         <Input
                                           value={cardConf.headerUrl || ""}
@@ -923,11 +997,36 @@ function StepEditorDialog({
                                             ...config,
                                             carouselCards: { ...carouselConfig, [cardIdx]: { ...cardConf, headerUrl: e.target.value } }
                                           })}
-                                          placeholder={`URL da ${cardHeader.format === "IMAGE" ? "imagem" : "vídeo"} do card...`}
+                                          placeholder={`URL da ${cardHeader.format === "IMAGE" ? "imagem" : "vídeo"} ou suba abaixo...`}
                                           className="h-8 text-xs"
                                         />
+                                        <div className="flex gap-1.5">
+                                          <Button
+                                            type="button" variant="outline" size="sm"
+                                            className="h-8 px-2 text-[10px] gap-1 flex-1"
+                                            onClick={() => triggerCardPcUpload(cardIdx)}
+                                            disabled={uploadingCard === cardIdx}
+                                          >
+                                            {uploadingCard === cardIdx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Monitor className="h-3 w-3" />}
+                                            Subir do PC
+                                          </Button>
+                                          {cardHeader.format === "IMAGE" && (
+                                            <Button
+                                              type="button" variant="outline" size="sm"
+                                              className="h-8 px-2 text-[10px] gap-1 flex-1"
+                                              onClick={() => openShopifyForCard(cardIdx)}
+                                            >
+                                              <ShoppingBag className="h-3 w-3" />
+                                              Subir do site
+                                            </Button>
+                                          )}
+                                        </div>
+                                        {cardConf.headerUrl && cardHeader.format === "IMAGE" && (
+                                          <img src={cardConf.headerUrl} alt="Card preview" className="max-h-24 rounded object-cover border border-border" />
+                                        )}
                                       </div>
                                     )}
+
 
                                     {/* Card Body Preview */}
                                     {cardBody?.text && (
@@ -1637,7 +1736,93 @@ function StepEditorDialog({
         </DialogContent>
       </Dialog>
       <AiTestDialog open={aiTestOpen} onOpenChange={setAiTestOpen} prompt={config.prompt || ""} />
+
+      {/* Hidden file input for carousel card image upload from PC */}
+      <input
+        ref={cardFileRef}
+        type="file"
+        accept="image/*,video/*"
+        className="hidden"
+        onChange={handleCardImageUpload}
+      />
+
+      {/* Shopify product picker for carousel card image */}
+      <Dialog open={showShopifyPicker} onOpenChange={setShowShopifyPicker}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingBag className="h-5 w-5" /> Escolher foto de produto da Shopify
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar produto..."
+                  value={shopifySearch}
+                  onChange={e => setShopifySearch(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') loadShopifyProducts(shopifySearch); }}
+                  className="pl-9"
+                />
+              </div>
+              <Button variant="outline" size="sm" onClick={() => loadShopifyProducts(shopifySearch)} disabled={loadingShopify}>
+                {loadingShopify ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null} Buscar
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Clique em uma foto do produto para usá-la na imagem do card.</p>
+            <ScrollArea className="h-[400px]">
+              {loadingShopify ? (
+                <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : shopifyProducts.length === 0 ? (
+                <p className="text-sm text-center text-muted-foreground py-8">Nenhum produto encontrado</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {shopifyProducts.map(p => {
+                    const images = p.node.images.edges;
+                    const mainImage = images[0]?.node.url;
+                    return (
+                      <Card key={p.node.id} className="overflow-hidden">
+                        <div className="space-y-2">
+                          {mainImage && (
+                            <img
+                              src={mainImage}
+                              alt={p.node.title}
+                              className="w-full h-32 object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => selectShopifyImage(mainImage)}
+                            />
+                          )}
+                          <div className="p-2">
+                            <p className="text-xs font-medium truncate">{p.node.title}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              R$ {parseFloat(p.node.priceRange.minVariantPrice.amount).toFixed(2)}
+                            </p>
+                            {images.length > 1 && (
+                              <div className="flex gap-1 mt-1 overflow-x-auto">
+                                {images.map((img, idx) => (
+                                  <img
+                                    key={idx}
+                                    src={img.node.url}
+                                    alt=""
+                                    className="h-10 w-10 rounded object-cover cursor-pointer border-2 border-transparent hover:border-primary transition-colors shrink-0"
+                                    onClick={() => selectShopifyImage(img.node.url)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
+
   );
 }
 
