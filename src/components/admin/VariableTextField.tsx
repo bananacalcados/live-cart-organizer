@@ -34,7 +34,8 @@ export function VariableTextField({
   placeholder,
   hint,
 }: Props) {
-  const inputRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const inputRef = useRef<any>(null);
   const [freeOpen, setFreeOpen] = useState(false);
   const [freeLabel, setFreeLabel] = useState("");
   const [freeExample, setFreeExample] = useState("");
