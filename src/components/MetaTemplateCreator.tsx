@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Loader2, Send, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw, Variable, Trash2, Upload, Image as ImageIcon, Video, FileText, X } from "lucide-react";
+import { Plus, Loader2, Send, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw, Variable, Trash2, Upload, Image as ImageIcon, Video, FileText, X, LayoutGrid } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,16 @@ interface MetaTemplate {
     text?: string;
     format?: string;
     buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+    // Carousel support
+    cards?: Array<{
+      components: Array<{
+        type: string;
+        text?: string;
+        format?: string;
+        example?: { header_handle?: string[]; body_text?: string[][] };
+        buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+      }>;
+    }>;
   }>;
 }
 
@@ -44,7 +54,20 @@ type TemplateButton = {
   text: string;
   url?: string;
   phone_number?: string;
+  urlExample?: string;
 };
+
+type CarouselCard = {
+  bodyText: string;
+  examples: Record<number, string>;
+  mediaHandle: string;
+  mediaName: string;
+  isUploading: boolean;
+};
+
+const MIN_CARDS = 2;
+const MAX_CARDS = 6;
+const CARD_BODY_MAX = 160;
 
 // Extracts distinct {{n}} variable numbers from a text, sorted ascending.
 function extractVarNumbers(text?: string): number[] {
@@ -52,6 +75,14 @@ function extractVarNumbers(text?: string): number[] {
   const matches = text.match(/\{\{\s*(\d+)\s*\}\}/g) || [];
   const nums = matches.map((m) => parseInt(m.replace(/[^\d]/g, ""), 10));
   return Array.from(new Set(nums)).sort((a, b) => a - b);
+}
+
+function isContiguousFromOne(nums: number[]): boolean {
+  return nums.every((n, i) => n === i + 1);
+}
+
+function emptyCard(): CarouselCard {
+  return { bodyText: "", examples: {}, mediaHandle: "", mediaName: "", isUploading: false };
 }
 
 // Media header config: accept types and Meta format strings.
@@ -70,6 +101,7 @@ export function MetaTemplateCreator() {
   const [selectedNumber, setSelectedNumber] = useState<string>("");
 
   // Form state
+  const [templateType, setTemplateType] = useState<"standard" | "carousel">("standard");
   const [name, setName] = useState("");
   const [category, setCategory] = useState<string>("MARKETING");
   const [language, setLanguage] = useState("pt_BR");
@@ -84,12 +116,17 @@ export function MetaTemplateCreator() {
   const [headerMediaHandle, setHeaderMediaHandle] = useState<string>("");
   const [headerMediaName, setHeaderMediaName] = useState<string>("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
-  // Buttons
+  // Buttons (also used as the SHARED buttons for every carousel card)
   const [buttons, setButtons] = useState<TemplateButton[]>([]);
+  // Carousel cards
+  const [cards, setCards] = useState<CarouselCard[]>([emptyCard(), emptyCard()]);
 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cardBodyRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const cardFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
+  const isCarousel = templateType === "carousel";
   const bodyVars = extractVarNumbers(bodyText);
   const headerVars = headerType === "text" ? extractVarNumbers(headerText) : [];
   const isMediaHeader = headerType in MEDIA_HEADER;
@@ -159,6 +196,101 @@ export function MetaTemplateCreator() {
     insertIntoBody(`{{${next}}}`);
   };
 
+  // ── Carousel card helpers ──
+  const updateCard = (index: number, patch: Partial<CarouselCard>) => {
+    setCards((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  };
+
+  const addCard = () => {
+    if (cards.length >= MAX_CARDS) {
+      toast.error(`Máximo de ${MAX_CARDS} cards por carrossel`);
+      return;
+    }
+    setCards((prev) => [...prev, emptyCard()]);
+  };
+
+  const removeCard = (index: number) => {
+    if (cards.length <= MIN_CARDS) {
+      toast.error(`Mínimo de ${MIN_CARDS} cards por carrossel`);
+      return;
+    }
+    setCards((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const insertIntoCardBody = (index: number, snippet: string) => {
+    const el = cardBodyRefs.current[index];
+    const current = cards[index]?.bodyText || "";
+    if (!el) {
+      updateCard(index, { bodyText: current + snippet });
+      return;
+    }
+    const start = el.selectionStart ?? current.length;
+    const end = el.selectionEnd ?? current.length;
+    const next = current.slice(0, start) + snippet + current.slice(end);
+    updateCard(index, { bodyText: next });
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + snippet.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
+  const handleAddCardVariable = (index: number) => {
+    const count = extractVarNumbers(cards[index]?.bodyText).length;
+    insertIntoCardBody(index, `{{${count + 1}}}`);
+  };
+
+  // Generic media upload → returns Meta header handle.
+  const uploadHeaderMedia = async (file: File): Promise<string | null> => {
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-upload-header`,
+      {
+        method: "POST",
+        headers: {
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          whatsappNumberId: selectedNumber,
+          fileName: file.name,
+          fileType: file.type,
+          fileBase64: base64,
+        }),
+      }
+    );
+    const result = await res.json();
+    if (result.success && result.handle) return result.handle as string;
+    const msg = result.details?.error?.message || result.error || "Erro ao enviar arquivo";
+    toast.error(msg);
+    return null;
+  };
+
+  const handleCardFileSelect = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    updateCard(index, { isUploading: true, mediaHandle: "", mediaName: file.name });
+    try {
+      const handle = await uploadHeaderMedia(file);
+      if (handle) {
+        updateCard(index, { mediaHandle: handle, mediaName: file.name, isUploading: false });
+        toast.success(`Imagem do card ${index + 1} enviada`);
+      } else {
+        updateCard(index, { isUploading: false, mediaName: "" });
+      }
+    } catch (err) {
+      console.error("Error uploading card media:", err);
+      updateCard(index, { isUploading: false, mediaName: "" });
+      toast.error("Erro ao enviar arquivo");
+    }
+  };
+
   const handleHeaderTypeChange = (value: string) => {
     setHeaderType(value);
     // Clear media when switching away
@@ -172,6 +304,21 @@ export function MetaTemplateCreator() {
     }
   };
 
+  const handleTemplateTypeChange = (value: "standard" | "carousel") => {
+    setTemplateType(value);
+    if (value === "carousel") {
+      // Carousel must be MARKETING; clear header/footer (not allowed in carousel).
+      setCategory("MARKETING");
+      setHeaderType("none");
+      setHeaderText("");
+      setHeaderExamples({});
+      setHeaderMediaHandle("");
+      setHeaderMediaName("");
+      setFooterText("");
+      if (cards.length < MIN_CARDS) setCards([emptyCard(), emptyCard()]);
+    }
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -182,37 +329,12 @@ export function MetaTemplateCreator() {
     setHeaderMediaHandle("");
     setHeaderMediaName(file.name);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
-      const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-upload-header`,
-        {
-          method: "POST",
-          headers: {
-            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            whatsappNumberId: selectedNumber,
-            fileName: file.name,
-            fileType: file.type,
-            fileBase64: base64,
-          }),
-        }
-      );
-      const result = await res.json();
-      if (result.success && result.handle) {
-        setHeaderMediaHandle(result.handle);
+      const handle = await uploadHeaderMedia(file);
+      if (handle) {
+        setHeaderMediaHandle(handle);
         toast.success("Arquivo enviado com sucesso");
       } else {
         setHeaderMediaName("");
-        const msg = result.details?.error?.message || result.error || "Erro ao enviar arquivo";
-        toast.error(msg);
       }
     } catch (err) {
       console.error("Error uploading media:", err);
@@ -224,8 +346,9 @@ export function MetaTemplateCreator() {
   };
 
   const addButton = (type: TemplateButton["type"]) => {
-    if (buttons.length >= 10) {
-      toast.error("Máximo de 10 botões por template");
+    const limit = isCarousel ? 2 : 10;
+    if (buttons.length >= limit) {
+      toast.error(isCarousel ? "Máximo de 2 botões por card de carrossel" : "Máximo de 10 botões por template");
       return;
     }
     const base: TemplateButton = { type, text: "" };
@@ -242,34 +365,179 @@ export function MetaTemplateCreator() {
     setButtons((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleCreate = async () => {
-    if (!name.trim() || !bodyText.trim()) {
-      toast.error("Preencha o nome e o corpo da mensagem");
+  // Builds the shared buttons array for a carousel card (with URL example when needed).
+  const buildCardButtons = () =>
+    buttons.map((b) => {
+      if (b.type === "URL") {
+        const btn: Record<string, unknown> = { type: "URL", text: b.text, url: b.url };
+        if ((b.url || "").includes("{{")) btn.example = [(b.urlExample || "").trim()];
+        return btn;
+      }
+      if (b.type === "PHONE_NUMBER") return { type: "PHONE_NUMBER", text: b.text, phone_number: b.phone_number };
+      return { type: "QUICK_REPLY", text: b.text };
+    });
+
+  const validateSharedButtons = (): boolean => {
+    for (const b of buttons) {
+      if (!b.text.trim()) {
+        toast.error("Preencha o texto de todos os botões.");
+        return false;
+      }
+      if (b.type === "URL") {
+        if (!(b.url || "").trim()) {
+          toast.error("Preencha a URL dos botões de link.");
+          return false;
+        }
+        if ((b.url || "").includes("{{") && !(b.urlExample || "").trim()) {
+          toast.error("Preencha o exemplo do sufixo da URL (a Meta exige).");
+          return false;
+        }
+      }
+      if (b.type === "PHONE_NUMBER" && !(b.phone_number || "").trim()) {
+        toast.error("Preencha o telefone dos botões de ligação.");
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleCreateCarousel = async () => {
+    if (cards.length < MIN_CARDS || cards.length > MAX_CARDS) {
+      toast.error(`O carrossel precisa de ${MIN_CARDS} a ${MAX_CARDS} cards`);
       return;
     }
+    if (buttons.length === 0) {
+      toast.error("Carrossel exige pelo menos 1 botão (aplicado a todos os cards).");
+      return;
+    }
+    if (buttons.length > 2) {
+      toast.error("Cards de carrossel aceitam no máximo 2 botões.");
+      return;
+    }
+    if (!validateSharedButtons()) return;
 
+    // Validate each card
+    for (let i = 0; i < cards.length; i++) {
+      const card = cards[i];
+      if (!card.mediaHandle) {
+        toast.error(`Envie a imagem de exemplo do card ${i + 1}.`);
+        return;
+      }
+      if (!card.bodyText.trim()) {
+        toast.error(`Preencha o texto do card ${i + 1}.`);
+        return;
+      }
+      if (card.bodyText.length > CARD_BODY_MAX) {
+        toast.error(`O texto do card ${i + 1} excede ${CARD_BODY_MAX} caracteres.`);
+        return;
+      }
+      const cardVars = extractVarNumbers(card.bodyText);
+      if (cardVars.length > 0) {
+        if (!isContiguousFromOne(cardVars)) {
+          toast.error(`As variáveis do card ${i + 1} devem ser sequenciais a partir de {{1}}.`);
+          return;
+        }
+        if (cardVars.some((n) => !(card.examples[n] || "").trim())) {
+          toast.error(`Preencha o exemplo de cada variável do card ${i + 1}.`);
+          return;
+        }
+      }
+    }
+
+    setIsCreating(true);
+    try {
+      const cardButtons = buildCardButtons();
+      const components: Array<Record<string, unknown>> = [];
+
+      // Bubble text (BODY above the cards)
+      const bubble: Record<string, unknown> = { type: "BODY", text: bodyText };
+      if (bodyVars.length > 0) {
+        bubble.example = { body_text: [bodyVars.map((n) => (bodyExamples[n] || "").trim())] };
+      }
+      components.push(bubble);
+
+      // CAROUSEL component
+      components.push({
+        type: "CAROUSEL",
+        cards: cards.map((card) => {
+          const cardVars = extractVarNumbers(card.bodyText);
+          const cardComps: Array<Record<string, unknown>> = [
+            { type: "HEADER", format: "IMAGE", example: { header_handle: [card.mediaHandle] } },
+          ];
+          const cardBody: Record<string, unknown> = { type: "BODY", text: card.bodyText };
+          if (cardVars.length > 0) {
+            cardBody.example = { body_text: [cardVars.map((n) => (card.examples[n] || "").trim())] };
+          }
+          cardComps.push(cardBody);
+          cardComps.push({ type: "BUTTONS", buttons: cardButtons });
+          return { components: cardComps };
+        }),
+      });
+
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-create-template`,
+        {
+          method: "POST",
+          headers: {
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ whatsappNumberId: selectedNumber, name, category: "MARKETING", language, components }),
+        }
+      );
+      const result = await res.json();
+      if (result.success) {
+        toast.success("Carrossel enviado para aprovação da Meta!");
+        resetForm();
+        setDialogOpen(false);
+        fetchTemplates();
+      } else {
+        const errorMsg = result.details?.error?.message || "Erro ao criar carrossel";
+        toast.error(errorMsg);
+      }
+    } catch (err) {
+      console.error("Error creating carousel:", err);
+      toast.error("Erro ao criar carrossel");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!name.trim()) {
+      toast.error("Preencha o nome do template");
+      return;
+    }
     // Validate name format
     const nameRegex = /^[a-z][a-z0-9_]*$/;
     if (!nameRegex.test(name)) {
       toast.error("O nome deve conter apenas letras minúsculas, números e underscore, começando com letra");
       return;
     }
+    if (!bodyText.trim()) {
+      toast.error(isCarousel ? "Preencha o texto de bolha (acima dos cards)" : "Preencha o corpo da mensagem");
+      return;
+    }
 
-    // Validate: Meta doesn't allow variables at start or end of body
+    // Bubble/body: Meta doesn't allow variables at start or end of body
     const trimmedBody = bodyText.trim();
     if (/^\{\{\d+\}\}/.test(trimmedBody) || /\{\{\d+\}\}$/.test(trimmedBody)) {
       toast.error("A Meta não permite variáveis no início ou no final do corpo da mensagem. Adicione texto antes/depois da variável.");
       return;
     }
+    if (bodyVars.length > 0 && !isContiguousFromOne(bodyVars)) {
+      toast.error(`As variáveis do corpo devem ser sequenciais a partir de {{1}} (sem pular números). Detectado: ${bodyVars.map((n) => `{{${n}}}`).join(", ")}`);
+      return;
+    }
+    const missingBody = bodyVars.some((n) => !(bodyExamples[n] || "").trim());
+    if (missingBody) {
+      toast.error("Preencha o valor de exemplo de cada variável — a Meta exige isso");
+      return;
+    }
 
-    // Validate: body variables must form a contiguous sequence starting at 1 (1,2,...,N)
-    if (bodyVars.length > 0) {
-      const expected = Array.from({ length: bodyVars.length }, (_, i) => i + 1);
-      const isContiguous = bodyVars.every((n, i) => n === expected[i]);
-      if (!isContiguous) {
-        toast.error(`As variáveis do corpo devem ser sequenciais a partir de {{1}} (sem pular números). Detectado: ${bodyVars.map((n) => `{{${n}}}`).join(", ")}`);
-        return;
-      }
+    if (isCarousel) {
+      await handleCreateCarousel();
+      return;
     }
 
     // Validate: header text accepts at most 1 variable
@@ -277,21 +545,16 @@ export function MetaTemplateCreator() {
       toast.error("O cabeçalho de texto aceita no máximo 1 variável.");
       return;
     }
-
-    // Validate: every detected variable must have a non-empty example (Meta requires it)
-    const missingBody = bodyVars.some((n) => !(bodyExamples[n] || "").trim());
     const missingHeader = headerVars.some((n) => !(headerExamples[n] || "").trim());
-    if (missingBody || missingHeader) {
+    if (missingHeader) {
       toast.error("Preencha o valor de exemplo de cada variável — a Meta exige isso");
       return;
     }
-
     // Validate media header
     if (isMediaHeader && !headerMediaHandle) {
       toast.error("Envie o arquivo do cabeçalho antes de continuar.");
       return;
     }
-
     // Validate buttons
     for (const b of buttons) {
       if (!b.text.trim()) {
@@ -393,6 +656,7 @@ export function MetaTemplateCreator() {
   };
 
   const resetForm = () => {
+    setTemplateType("standard");
     setName("");
     setCategory("MARKETING");
     setLanguage("pt_BR");
@@ -405,6 +669,7 @@ export function MetaTemplateCreator() {
     setHeaderMediaHandle("");
     setHeaderMediaName("");
     setButtons([]);
+    setCards([emptyCard(), emptyCard()]);
   };
 
   const getStatusBadge = (status: string) => {
@@ -433,6 +698,36 @@ export function MetaTemplateCreator() {
     const body = components.find(c => c.type === "BODY");
     return body?.text || "";
   };
+
+  const getCarouselComponent = (components: MetaTemplate["components"]) =>
+    components.find(c => (c.type || "").toUpperCase() === "CAROUSEL");
+
+  // Renders the carousel cards preview for an existing approved/pending template.
+  const renderCarouselPreview = (carousel: NonNullable<MetaTemplate["components"][number]["cards"]>) => (
+    <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+      {carousel.map((card, idx) => {
+        const cardBody = card.components.find(c => (c.type || "").toUpperCase() === "BODY");
+        const cardBtns = card.components.find(c => (c.type || "").toUpperCase() === "BUTTONS")?.buttons || [];
+        return (
+          <div key={idx} className="w-40 shrink-0 rounded-md border bg-background overflow-hidden">
+            <div className="h-20 bg-muted flex items-center justify-center text-muted-foreground">
+              <ImageIcon className="h-6 w-6" />
+            </div>
+            <div className="p-2">
+              <p className="text-[11px] whitespace-pre-wrap line-clamp-3">{cardBody?.text || ""}</p>
+              {cardBtns.length > 0 && (
+                <div className="mt-1 space-y-0.5 border-t pt-1">
+                  {cardBtns.map((b: any, bi: number) => (
+                    <p key={bi} className="text-[10px] text-center text-primary font-medium truncate">{b.text}</p>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -476,33 +771,42 @@ export function MetaTemplateCreator() {
       ) : (
         <ScrollArea className="h-[400px]">
           <div className="space-y-2 pr-4">
-            {templates.map((template) => (
-              <div
-                key={template.id}
-                className="p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow"
-              >
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm font-mono">{template.name}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      {getStatusBadge(template.status)}
-                      <Badge variant="outline" className="text-[10px]">
-                        {getCategoryLabel(template.category)}
-                      </Badge>
-                      <span className="text-[10px] text-muted-foreground">{template.language}</span>
-                      {template.status === "REJECTED" && template.rejected_reason && (
-                        <span className="text-[10px] text-destructive font-medium">
-                          — {template.rejected_reason}
-                        </span>
-                      )}
+            {templates.map((template) => {
+              const carousel = getCarouselComponent(template.components);
+              return (
+                <div
+                  key={template.id}
+                  className="p-3 rounded-lg border bg-card hover:shadow-sm transition-shadow"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm font-mono">{template.name}</p>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        {getStatusBadge(template.status)}
+                        <Badge variant="outline" className="text-[10px]">
+                          {getCategoryLabel(template.category)}
+                        </Badge>
+                        {carousel && (
+                          <Badge variant="outline" className="text-[10px] gap-1">
+                            <LayoutGrid className="h-3 w-3" />Carrossel
+                          </Badge>
+                        )}
+                        <span className="text-[10px] text-muted-foreground">{template.language}</span>
+                        {template.status === "REJECTED" && template.rejected_reason && (
+                          <span className="text-[10px] text-destructive font-medium">
+                            — {template.rejected_reason}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-2 line-clamp-2 whitespace-pre-wrap">
+                    {getBodyFromComponents(template.components)}
+                  </p>
+                  {carousel?.cards && renderCarouselPreview(carousel.cards)}
                 </div>
-                <p className="text-xs text-muted-foreground mt-2 line-clamp-2 whitespace-pre-wrap">
-                  {getBodyFromComponents(template.components)}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </ScrollArea>
       )}
@@ -518,11 +822,30 @@ export function MetaTemplateCreator() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
+            {/* Template type */}
+            <div className="space-y-2">
+              <Label>Tipo de Template</Label>
+              <Select value={templateType} onValueChange={(v) => handleTemplateTypeChange(v as "standard" | "carousel")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="standard">Padrão (texto/mídia)</SelectItem>
+                  <SelectItem value="carousel">Carrossel (cards com imagem)</SelectItem>
+                </SelectContent>
+              </Select>
+              {isCarousel && (
+                <p className="text-[10px] text-muted-foreground">
+                  Carrossel é sempre categoria Marketing. As imagens enviadas aqui servem só para aprovação — no disparo você troca por imagens da semana.
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Nome do Template</Label>
                 <Input
-                  placeholder="ex: boas_vindas_cliente"
+                  placeholder="ex: promo_semanal"
                   value={name}
                   onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'))}
                   className="font-mono text-sm"
@@ -531,7 +854,7 @@ export function MetaTemplateCreator() {
               </div>
               <div className="space-y-2">
                 <Label>Categoria</Label>
-                <Select value={category} onValueChange={setCategory}>
+                <Select value={category} onValueChange={setCategory} disabled={isCarousel}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -558,24 +881,26 @@ export function MetaTemplateCreator() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Cabeçalho</Label>
-                <Select value={headerType} onValueChange={handleHeaderTypeChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem cabeçalho</SelectItem>
-                    <SelectItem value="text">Texto</SelectItem>
-                    <SelectItem value="image">Imagem</SelectItem>
-                    <SelectItem value="video">Vídeo</SelectItem>
-                    <SelectItem value="document">Documento (PDF)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {!isCarousel && (
+                <div className="space-y-2">
+                  <Label>Cabeçalho</Label>
+                  <Select value={headerType} onValueChange={handleHeaderTypeChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem cabeçalho</SelectItem>
+                      <SelectItem value="text">Texto</SelectItem>
+                      <SelectItem value="image">Imagem</SelectItem>
+                      <SelectItem value="video">Vídeo</SelectItem>
+                      <SelectItem value="document">Documento (PDF)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
-            {headerType === "text" && (
+            {!isCarousel && headerType === "text" && (
               <div className="space-y-2">
                 <Label>Texto do Cabeçalho</Label>
                 <Input
@@ -609,7 +934,7 @@ export function MetaTemplateCreator() {
               </div>
             )}
 
-            {isMediaHeader && (
+            {!isCarousel && isMediaHeader && (
               <div className="space-y-2">
                 <Label>{MEDIA_HEADER[headerType as keyof typeof MEDIA_HEADER].label} do Cabeçalho</Label>
                 <input
@@ -660,9 +985,10 @@ export function MetaTemplateCreator() {
               </div>
             )}
 
+            {/* Body / bubble text */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Corpo da Mensagem *</Label>
+                <Label>{isCarousel ? "Texto de bolha (acima dos cards) *" : "Corpo da Mensagem *"}</Label>
                 <div className="flex items-center gap-1">
                   <Button
                     type="button"
@@ -682,15 +1008,12 @@ export function MetaTemplateCreator() {
               </div>
               <Textarea
                 ref={bodyRef}
-                placeholder="Ex: Olá {{1}}, seu pedido {{2}} está confirmado!"
+                placeholder={isCarousel ? "Ex: Confira as novidades da semana! 🛍️" : "Ex: Olá {{1}}, seu pedido {{2}} está confirmado!"}
                 value={bodyText}
                 onChange={(e) => setBodyText(e.target.value)}
-                rows={5}
+                rows={isCarousel ? 3 : 5}
                 maxLength={1024}
               />
-              <p className="text-[10px] text-muted-foreground">
-                Clique em "Variável" para inserir {"{{1}}"}, {"{{2}}"}… no cursor. Máximo 1024 caracteres.
-              </p>
               <p className="text-[10px] text-muted-foreground text-right">{bodyText.length}/1024</p>
               {bodyVars.length > 0 && (
                 <div className="space-y-2 rounded-md border border-dashed p-2 mt-1">
@@ -714,19 +1037,132 @@ export function MetaTemplateCreator() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label>Rodapé (opcional)</Label>
-              <Input
-                placeholder="Ex: Obrigado pela preferência!"
-                value={footerText}
-                onChange={(e) => setFooterText(e.target.value)}
-              />
-            </div>
+            {/* Carousel cards */}
+            {isCarousel && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Cards do Carrossel ({cards.length}/{MAX_CARDS})</Label>
+                  <Button type="button" variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={addCard} disabled={cards.length >= MAX_CARDS}>
+                    <Plus className="h-3.5 w-3.5" />Card
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Todos os cards usam os MESMOS botões (configurados abaixo). Mínimo {MIN_CARDS}, máximo {MAX_CARDS} cards.
+                </p>
+                {cards.map((card, idx) => {
+                  const cardVars = extractVarNumbers(card.bodyText);
+                  return (
+                    <div key={idx} className="space-y-2 rounded-md border p-3">
+                      <div className="flex items-center justify-between">
+                        <Badge variant="secondary" className="text-[10px]">Card {idx + 1}</Badge>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => removeCard(idx)}
+                          disabled={cards.length <= MIN_CARDS}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+
+                      {/* Card image (sample for approval) */}
+                      <input
+                        ref={(el) => { cardFileRefs.current[idx] = el; }}
+                        type="file"
+                        className="hidden"
+                        accept="image/jpeg,image/png"
+                        onChange={(e) => handleCardFileSelect(idx, e)}
+                      />
+                      {!card.mediaHandle ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full gap-2 h-9"
+                          onClick={() => cardFileRefs.current[idx]?.click()}
+                          disabled={card.isUploading}
+                        >
+                          {card.isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                          {card.isUploading ? "Enviando..." : "Imagem de exemplo"}
+                        </Button>
+                      ) : (
+                        <div className="flex items-center justify-between gap-2 rounded-md border p-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CheckCircle className="h-4 w-4 text-stage-paid shrink-0" />
+                            <span className="text-xs truncate">{card.mediaName}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={() => updateCard(idx, { mediaHandle: "", mediaName: "" })}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Card body */}
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs">Texto do card</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-6 gap-1 text-[10px]"
+                          onClick={() => handleAddCardVariable(idx)}
+                        >
+                          <Variable className="h-3 w-3" />Variável
+                        </Button>
+                      </div>
+                      <Textarea
+                        ref={(el) => { cardBodyRefs.current[idx] = el; }}
+                        placeholder="Ex: Tênis a partir de {{1}}"
+                        value={card.bodyText}
+                        onChange={(e) => updateCard(idx, { bodyText: e.target.value })}
+                        rows={2}
+                        maxLength={CARD_BODY_MAX}
+                      />
+                      <p className="text-[10px] text-muted-foreground text-right">{card.bodyText.length}/{CARD_BODY_MAX}</p>
+                      {cardVars.length > 0 && (
+                        <div className="space-y-1 rounded-md border border-dashed p-2">
+                          <p className="text-[10px] font-medium text-muted-foreground">Exemplos das variáveis:</p>
+                          {cardVars.map((n) => (
+                            <div key={`c-${idx}-${n}`} className="flex items-center gap-2">
+                              <span className="text-xs font-mono w-12 shrink-0">{`{{${n}}}`}</span>
+                              <Input
+                                className="h-8 text-xs"
+                                placeholder={`Exemplo para {{${n}}}`}
+                                value={card.examples[n] || ""}
+                                onChange={(e) => updateCard(idx, { examples: { ...card.examples, [n]: e.target.value } })}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {!isCarousel && (
+              <div className="space-y-2">
+                <Label>Rodapé (opcional)</Label>
+                <Input
+                  placeholder="Ex: Obrigado pela preferência!"
+                  value={footerText}
+                  onChange={(e) => setFooterText(e.target.value)}
+                />
+              </div>
+            )}
 
             {/* Buttons */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>Botões (opcional)</Label>
+                <Label>{isCarousel ? "Botões dos cards (aplicados a todos) *" : "Botões (opcional)"}</Label>
                 <div className="flex items-center gap-1">
                   <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => addButton("QUICK_REPLY")}>
                     + Resposta rápida
@@ -741,7 +1177,9 @@ export function MetaTemplateCreator() {
               </div>
               {buttons.length === 0 ? (
                 <p className="text-[10px] text-muted-foreground">
-                  Adicione botões de resposta rápida, link ou ligação (máximo 10, padrões da Meta).
+                  {isCarousel
+                    ? "Carrossel exige de 1 a 2 botões — eles são aplicados igualmente a todos os cards."
+                    : "Adicione botões de resposta rápida, link ou ligação (máximo 10, padrões da Meta)."}
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -759,12 +1197,22 @@ export function MetaTemplateCreator() {
                           onChange={(e) => updateButton(i, { text: e.target.value })}
                         />
                         {b.type === "URL" && (
-                          <Input
-                            className="h-8 text-xs"
-                            placeholder="https://exemplo.com"
-                            value={b.url || ""}
-                            onChange={(e) => updateButton(i, { url: e.target.value })}
-                          />
+                          <>
+                            <Input
+                              className="h-8 text-xs"
+                              placeholder={isCarousel ? "https://exemplo.com/p/{{1}}" : "https://exemplo.com"}
+                              value={b.url || ""}
+                              onChange={(e) => updateButton(i, { url: e.target.value })}
+                            />
+                            {isCarousel && (b.url || "").includes("{{") && (
+                              <Input
+                                className="h-8 text-xs"
+                                placeholder="Exemplo do sufixo da URL (ex: tenis-x)"
+                                value={b.urlExample || ""}
+                                onChange={(e) => updateButton(i, { urlExample: e.target.value })}
+                              />
+                            )}
+                          </>
                         )}
                         {b.type === "PHONE_NUMBER" && (
                           <Input
@@ -794,10 +1242,10 @@ export function MetaTemplateCreator() {
             {bodyText && (
               <div className="border rounded-lg p-3 bg-muted/30">
                 <p className="text-[10px] font-medium text-muted-foreground mb-2">Preview:</p>
-                {headerType === "text" && headerText && (
+                {!isCarousel && headerType === "text" && headerText && (
                   <p className="font-bold text-sm mb-1">{headerText}</p>
                 )}
-                {isMediaHeader && headerMediaName && (
+                {!isCarousel && isMediaHeader && headerMediaName && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
                     {(() => {
                       const Icon = MEDIA_HEADER[headerType as keyof typeof MEDIA_HEADER].icon;
@@ -807,17 +1255,39 @@ export function MetaTemplateCreator() {
                   </div>
                 )}
                 <p className="text-sm whitespace-pre-wrap">{bodyText}</p>
-                {footerText && (
+                {!isCarousel && footerText && (
                   <p className="text-xs text-muted-foreground mt-2">{footerText}</p>
                 )}
-                {buttons.length > 0 && (
-                  <div className="mt-2 space-y-1 border-t pt-2">
-                    {buttons.map((b, i) => (
-                      <p key={i} className="text-xs text-center text-primary font-medium">
-                        {b.text || "(botão)"}
-                      </p>
+                {isCarousel ? (
+                  <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                    {cards.map((card, idx) => (
+                      <div key={idx} className="w-36 shrink-0 rounded-md border bg-background overflow-hidden">
+                        <div className="h-16 bg-muted flex items-center justify-center text-muted-foreground">
+                          <ImageIcon className="h-5 w-5" />
+                        </div>
+                        <div className="p-1.5">
+                          <p className="text-[10px] whitespace-pre-wrap line-clamp-3">{card.bodyText || "(texto do card)"}</p>
+                          {buttons.length > 0 && (
+                            <div className="mt-1 border-t pt-1 space-y-0.5">
+                              {buttons.map((b, bi) => (
+                                <p key={bi} className="text-[9px] text-center text-primary font-medium truncate">{b.text || "(botão)"}</p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     ))}
                   </div>
+                ) : (
+                  buttons.length > 0 && (
+                    <div className="mt-2 space-y-1 border-t pt-2">
+                      {buttons.map((b, i) => (
+                        <p key={i} className="text-xs text-center text-primary font-medium">
+                          {b.text || "(botão)"}
+                        </p>
+                      ))}
+                    </div>
+                  )
                 )}
               </div>
             )}

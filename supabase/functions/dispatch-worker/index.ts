@@ -36,6 +36,51 @@ function resolveVariable(vc: VariableConfig, recipient: any): string {
   }
 }
 
+// Distinct {{n}} numbers in a text, sorted ascending.
+function extractVarNumbers(text?: string): number[] {
+  if (!text) return [];
+  const matches = text.match(/\{\{\s*(\d+)\s*\}\}/g) || [];
+  const nums = matches.map((m) => parseInt(m.replace(/[^\d]/g, ''), 10));
+  return Array.from(new Set(nums)).sort((a, b) => a - b);
+}
+
+// Builds the Meta "carousel" send component from the approved template's CAROUSEL
+// definition + the per-card weekly content stored in variablesConfig:
+//   card_{i}_image       → image link for that week
+//   card_{i}_body_{n}    → text variable value for the card body
+//   card_{i}_button_url_{j} → URL suffix for a card's URL button with {{n}}
+function buildCarouselComponent(
+  carouselComp: any,
+  variablesConfig: Record<string, VariableConfig>,
+): any {
+  const tplCards = carouselComp?.cards || [];
+  const cards = tplCards.map((tplCard: any, i: number) => {
+    const cardComps: any[] = [];
+    const imageUrl = variablesConfig[`card_${i}_image`]?.staticValue || '';
+    cardComps.push({ type: 'header', parameters: [{ type: 'image', image: { link: imageUrl } }] });
+
+    const cardBody = (tplCard.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+    const bodyVars = extractVarNumbers(cardBody?.text);
+    if (bodyVars.length > 0) {
+      cardComps.push({
+        type: 'body',
+        parameters: bodyVars.map((n) => ({ type: 'text', text: variablesConfig[`card_${i}_body_${n}`]?.staticValue || '' })),
+      });
+    }
+
+    const cardBtns = (tplCard.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS');
+    (cardBtns?.buttons || []).forEach((b: any, idx: number) => {
+      if (b.type === 'URL' && (b.url || '').includes('{{')) {
+        const suffix = variablesConfig[`card_${i}_button_url_${idx}`]?.staticValue || '';
+        cardComps.push({ type: 'button', sub_type: 'url', index: idx.toString(), parameters: [{ type: 'text', text: suffix }] });
+      }
+    });
+
+    return { card_index: i, components: cardComps };
+  });
+  return { type: 'carousel', cards };
+}
+
 function buildComponentsForRecipient(
   templateComponents: any[],
   variablesConfig: Record<string, VariableConfig>,
@@ -44,7 +89,28 @@ function buildComponentsForRecipient(
   hasDynamicVars: boolean,
 ) {
   const components: any[] = [];
+
+  // ── Carousel templates take a dedicated path ──
+  const carouselComp = templateComponents.find((c: any) => (c.type || '').toUpperCase() === 'CAROUSEL');
+  if (carouselComp) {
+    // Bubble body (above the cards) variables, if any.
+    const bubble = templateComponents.find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+    const bubbleVars = extractVarNumbers(bubble?.text);
+    if (bubbleVars.length > 0) {
+      const resolveBubble = (n: number) => {
+        const vc = variablesConfig[`body_${n}`];
+        if (!vc) return '';
+        if (vc.mode === '__static__' || !hasDynamicVars || !recipient) return vc.staticValue || 'Cliente';
+        return resolveVariable(vc, recipient) || 'Cliente';
+      };
+      components.push({ type: 'body', parameters: bubbleVars.map((n) => ({ type: 'text', text: resolveBubble(n) })) });
+    }
+    components.push(buildCarouselComponent(carouselComp, variablesConfig));
+    return components;
+  }
+
   const bodyVars: { index: number; key: string }[] = [];
+
   const headerVars: { index: number; key: string }[] = [];
   const headerComp = templateComponents.find((c: any) => c.type === 'HEADER');
   const buttonsComp = templateComponents.find((c: any) => c.type === 'BUTTONS');

@@ -38,6 +38,15 @@ interface MetaTemplate {
     text?: string;
     format?: string;
     buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+    // Carousel support
+    cards?: Array<{
+      components: Array<{
+        type: string;
+        text?: string;
+        format?: string;
+        buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
+      }>;
+    }>;
   }>;
 }
 
@@ -538,6 +547,55 @@ export function MassTemplateDispatcher() {
     return btnComp?.buttons || [];
   }, [selectedTemplate]);
 
+  // ── Carousel support ──
+  // The CAROUSEL component (fixed, already approved). Weekly content (images +
+  // text variables) is stored in `variables` under namespaced keys:
+  //   card_{i}_image, card_{i}_body_{n}, card_{i}_button_url_{j}
+  const carouselComponent = useMemo(() => {
+    if (!selectedTemplate) return null;
+    return selectedTemplate.components.find(c => (c.type || '').toUpperCase() === 'CAROUSEL') || null;
+  }, [selectedTemplate]);
+  const isCarousel = !!carouselComponent;
+  const carouselCards = (carouselComponent?.cards || []) as NonNullable<MetaTemplate['components'][number]['cards']>;
+
+  const [uploadingCardIdx, setUploadingCardIdx] = useState<number | null>(null);
+  const cardUploadRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+  const handleCardFileUpload = async (cardIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.files?.[0];
+    if (!raw) return;
+    e.target.value = "";
+    setUploadingCardIdx(cardIdx);
+    try {
+      const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+      const file = await normalizeImageOrientation(raw);
+      const ext = file.name.split('.').pop();
+      const fileName = `carousel-${Date.now()}-c${cardIdx}.${ext}`;
+      const { error } = await supabase.storage.from("chat-media").upload(fileName, file, { contentType: file.type });
+      if (error) { toast.error("Erro ao enviar imagem"); return; }
+      const { data } = supabase.storage.from("chat-media").getPublicUrl(fileName);
+      setVariables(prev => ({ ...prev, [`card_${cardIdx}_image`]: { mode: '__static__', staticValue: data.publicUrl } }));
+      toast.success(`Imagem do card ${cardIdx + 1} enviada!`);
+    } finally {
+      setUploadingCardIdx(null);
+    }
+  };
+
+  // Variable numbers used in a given card body text.
+  const cardBodyVarNumbers = (cardIdx: number): number[] => {
+    const body = carouselCards[cardIdx]?.components.find(c => (c.type || '').toUpperCase() === 'BODY');
+    const matches = (body?.text || '').match(/\{\{\s*(\d+)\s*\}\}/g) || [];
+    const nums = matches.map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
+    return Array.from(new Set(nums)).sort((a, b) => a - b);
+  };
+
+  // URL buttons (with {{n}}) for a given card.
+  const cardUrlButtons = (cardIdx: number) => {
+    const btns = carouselCards[cardIdx]?.components.find(c => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+    return btns.map((b: any, idx: number) => ({ b, idx })).filter(x => x.b.type === 'URL' && (x.b.url || '').includes('{{'));
+  };
+
+
   // Build rendered message text (for preview, uses placeholder labels for dynamic vars)
   const renderedMessage = useMemo(() => {
     if (!selectedTemplate) return "";
@@ -742,6 +800,31 @@ export function MassTemplateDispatcher() {
     const bodyVars = templateVariables.filter(v => v.component === 'BODY');
     const headerVars = templateVariables.filter(v => v.component === 'HEADER');
 
+    // ── Carousel: bubble body vars + carousel cards (image + text + url suffix) ──
+    if (isCarousel) {
+      if (bodyVars.length > 0) {
+        components.push({
+          type: 'body',
+          parameters: bodyVars.map(v => ({ type: 'text', text: variables[v.key]?.staticValue || 'Cliente' })),
+        });
+      }
+      const cards = carouselCards.map((_, i) => {
+        const cardComps: any[] = [];
+        cardComps.push({ type: 'header', parameters: [{ type: 'image', image: { link: variables[`card_${i}_image`]?.staticValue || '' } }] });
+        const cbVars = cardBodyVarNumbers(i);
+        if (cbVars.length > 0) {
+          cardComps.push({ type: 'body', parameters: cbVars.map(n => ({ type: 'text', text: variables[`card_${i}_body_${n}`]?.staticValue || '' })) });
+        }
+        cardUrlButtons(i).forEach(({ idx }) => {
+          cardComps.push({ type: 'button', sub_type: 'url', index: idx.toString(), parameters: [{ type: 'text', text: variables[`card_${i}_button_url_${idx}`]?.staticValue || '' }] });
+        });
+        return { card_index: i, components: cardComps };
+      });
+      components.push({ type: 'carousel', cards });
+      return components;
+    }
+
+
     const resolve = (key: string) => {
       const vc = variables[key];
       if (!vc) return '';
@@ -834,6 +917,10 @@ export function MassTemplateDispatcher() {
       toast.error("Selecione um template e insira um número para teste");
       return;
     }
+    if (isCarousel && carouselCards.some((_, i) => !(variables[`card_${i}_image`]?.staticValue || '').trim())) {
+      toast.error("Envie a imagem de todos os cards do carrossel antes de enviar.");
+      return;
+    }
     setIsTesting(true);
     try {
       const components = buildComponentsForRecipient(); // static only for test
@@ -907,6 +994,11 @@ export function MassTemplateDispatcher() {
     const allPhones = [...selectedPhones];
     if (allPhones.length === 0) {
       toast.error("Selecione pelo menos um destinatário");
+      return;
+    }
+
+    if (isCarousel && carouselCards.some((_, i) => !(variables[`card_${i}_image`]?.staticValue || '').trim())) {
+      toast.error("Envie a imagem de todos os cards do carrossel antes de disparar.");
       return;
     }
 
@@ -1362,7 +1454,60 @@ export function MassTemplateDispatcher() {
               </div>
             )}
 
-            {/* URL Button variables */}
+            {/* Carousel cards — weekly images + text variables */}
+            {isCarousel && (
+              <div className="space-y-2 p-2 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20">
+                <Label className="text-xs font-medium flex items-center gap-1">
+                  🖼️ Cards do carrossel ({carouselCards.length}) — conteúdo desta semana
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Envie a imagem da semana de cada card (diferente da imagem de aprovação) e preencha as variáveis.
+                </p>
+                {carouselCards.map((_, i) => {
+                  const imgUrl = variables[`card_${i}_image`]?.staticValue || '';
+                  const cbVars = cardBodyVarNumbers(i);
+                  return (
+                    <div key={i} className="space-y-1.5 p-2 rounded-md border bg-background">
+                      <Label className="text-[10px] font-medium">Card {i + 1}</Label>
+                      <div className="flex gap-1.5">
+                        <Input
+                          className="h-7 text-xs flex-1"
+                          placeholder="URL da imagem da semana..."
+                          value={imgUrl}
+                          onChange={e => setVariables(prev => ({ ...prev, [`card_${i}_image`]: { mode: '__static__', staticValue: e.target.value } }))}
+                        />
+                        <input ref={el => { cardUploadRefs.current[i] = el; }} type="file" className="hidden" accept="image/*" onChange={e => handleCardFileUpload(i, e)} />
+                        <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] gap-1 shrink-0" onClick={() => cardUploadRefs.current[i]?.click()} disabled={uploadingCardIdx === i}>
+                          {uploadingCardIdx === i ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />}
+                          Upload
+                        </Button>
+                      </div>
+                      {imgUrl && <img src={imgUrl} alt={`Card ${i + 1}`} className="max-h-24 rounded object-cover" />}
+                      {cbVars.map(n => (
+                        <Input
+                          key={`cb-${i}-${n}`}
+                          className="h-7 text-xs"
+                          placeholder={`Texto da variável {{${n}}} do card ${i + 1}`}
+                          value={variables[`card_${i}_body_${n}`]?.staticValue || ''}
+                          onChange={e => setVariables(prev => ({ ...prev, [`card_${i}_body_${n}`]: { mode: '__static__', staticValue: e.target.value } }))}
+                        />
+                      ))}
+                      {cardUrlButtons(i).map(({ b, idx }) => (
+                        <Input
+                          key={`cbtn-${i}-${idx}`}
+                          className="h-7 text-xs"
+                          placeholder={`Sufixo do botão "${b.text}" (URL)`}
+                          value={variables[`card_${i}_button_url_${idx}`]?.staticValue || ''}
+                          onChange={e => setVariables(prev => ({ ...prev, [`card_${i}_button_url_${idx}`]: { mode: '__static__', staticValue: e.target.value } }))}
+                        />
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+
             {templateButtons.filter((b: any) => b.type === 'URL' && b.url?.includes('{{')).length > 0 && (
               <div className="space-y-2 p-2 rounded-md border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
                 <Label className="text-xs font-medium flex items-center gap-1">
@@ -1411,8 +1556,37 @@ export function MassTemplateDispatcher() {
                 <div className="bg-[#dcf8c6] dark:bg-[#005c4b] rounded-lg p-3 text-sm whitespace-pre-wrap">
                   {renderedMessage || "Selecione um template"}
                 </div>
+                {isCarousel && (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {carouselCards.map((card, i) => {
+                      const cardBody = card.components.find(c => (c.type || '').toUpperCase() === 'BODY');
+                      const cardBtns = card.components.find(c => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+                      const imgUrl = variables[`card_${i}_image`]?.staticValue || '';
+                      return (
+                        <div key={i} className="w-40 shrink-0 rounded-md border bg-background overflow-hidden">
+                          {imgUrl ? (
+                            <img src={imgUrl} alt={`Card ${i + 1}`} className="h-20 w-full object-cover" />
+                          ) : (
+                            <div className="h-20 bg-muted flex items-center justify-center text-muted-foreground text-[10px]">Sem imagem</div>
+                          )}
+                          <div className="p-2">
+                            <p className="text-[11px] whitespace-pre-wrap line-clamp-3">{cardBody?.text || ''}</p>
+                            {cardBtns.length > 0 && (
+                              <div className="mt-1 space-y-0.5 border-t pt-1">
+                                {cardBtns.map((b: any, bi: number) => (
+                                  <p key={bi} className="text-[10px] text-center text-primary font-medium truncate">{b.text}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
+
 
             <Separator />
 
