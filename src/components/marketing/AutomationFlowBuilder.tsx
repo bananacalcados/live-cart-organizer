@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { ImageCropDialog } from "@/components/ImageCropDialog";
 
 // ─── Types ──────────────────────────────────────
 
