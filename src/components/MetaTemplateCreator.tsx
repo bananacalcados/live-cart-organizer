@@ -740,6 +740,7 @@ export function MetaTemplateCreator() {
     setHeaderMediaHandle("");
     setHeaderMediaName("");
     setButtons([]);
+    setCardButtonMode("shared");
     setCards([emptyCard(), emptyCard()]);
   };
 
