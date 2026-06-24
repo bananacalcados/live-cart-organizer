@@ -88,7 +88,7 @@ function isContiguousFromOne(nums: number[]): boolean {
 }
 
 function emptyCard(): CarouselCard {
-  return { bodyText: "", examples: {}, mediaHandle: "", mediaName: "", isUploading: false };
+  return { bodyText: "", examples: {}, mediaHandle: "", mediaName: "", isUploading: false, buttons: [] };
 }
 
 // Media header config: accept types and Meta format strings.
