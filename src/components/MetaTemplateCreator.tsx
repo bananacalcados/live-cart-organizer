@@ -209,6 +209,18 @@ export function MetaTemplateCreator() {
     setCards((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
   };
 
+  // Updates the per-card content of a single button (index-aligned with the structure).
+  const updateCardButton = (cardIdx: number, btnIdx: number, patch: Partial<CardButtonContent>) => {
+    setCards((prev) =>
+      prev.map((c, i) => {
+        if (i !== cardIdx) return c;
+        const arr = [...(c.buttons || [])];
+        arr[btnIdx] = { ...(arr[btnIdx] || {}), ...patch };
+        return { ...c, buttons: arr };
+      }),
+    );
+  };
+
   const addCard = () => {
     if (cards.length >= MAX_CARDS) {
       toast.error(`Máximo de ${MAX_CARDS} cards por carrossel`);
