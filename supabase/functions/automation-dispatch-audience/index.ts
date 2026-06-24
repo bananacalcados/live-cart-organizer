@@ -625,12 +625,13 @@ serve(async (req) => {
               supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' }).then(() => {});
               supabase.from('whatsapp_messages').insert({
                 phone: formattedPhone,
-                message: renderedMessage || `[Template: ${templateName}]`,
+                message: carouselChatPayload?.body || renderedMessage || `[Template: ${templateName}]`,
                 direction: 'outgoing',
                 message_id: messageId,
                 status: 'sent',
                 media_type: chatMediaType,
                 media_url: chatMediaUrl,
+                template_payload: carouselChatPayload || null,
                 whatsapp_number_id: sendNumberId || null,
                 is_mass_dispatch: true,
                 source: 'broadcast',
