@@ -387,7 +387,7 @@ export function MetaTemplateCreator() {
 
   // Resolves the effective content of button `i` for a given card, honoring the mode.
   const resolveCardButton = (card: CarouselCard, i: number): CardButtonContent => {
-    const struct = buttons[i] || {};
+    const struct: TemplateButton | undefined = buttons[i];
     if (cardButtonMode === "per_card") {
       const c = card.buttons?.[i] || {};
       return {
@@ -397,7 +397,12 @@ export function MetaTemplateCreator() {
         urlExample: c.urlExample ?? "",
       };
     }
-    return { text: struct.text, url: struct.url, phone_number: struct.phone_number, urlExample: struct.urlExample };
+    return {
+      text: struct?.text ?? "",
+      url: struct?.url ?? "",
+      phone_number: struct?.phone_number ?? "",
+      urlExample: struct?.urlExample ?? "",
+    };
   };
 
   // Builds the buttons array for a SPECIFIC card (Meta create payload).
