@@ -1614,6 +1614,202 @@ export type Database = {
           },
         ]
       }
+      campanha_cards: {
+        Row: {
+          botao_payload: Json | null
+          botao_tipo: string | null
+          campanha_id: string
+          created_at: string
+          id: string
+          imagem_url: string | null
+          legenda: string | null
+          ordem: number
+          shopify_product_id: string | null
+          shopify_variant_id: string | null
+          status: string
+          ultima_verificacao: string | null
+          updated_at: string
+        }
+        Insert: {
+          botao_payload?: Json | null
+          botao_tipo?: string | null
+          campanha_id: string
+          created_at?: string
+          id?: string
+          imagem_url?: string | null
+          legenda?: string | null
+          ordem?: number
+          shopify_product_id?: string | null
+          shopify_variant_id?: string | null
+          status?: string
+          ultima_verificacao?: string | null
+          updated_at?: string
+        }
+        Update: {
+          botao_payload?: Json | null
+          botao_tipo?: string | null
+          campanha_id?: string
+          created_at?: string
+          id?: string
+          imagem_url?: string | null
+          legenda?: string | null
+          ordem?: number
+          shopify_product_id?: string | null
+          shopify_variant_id?: string | null
+          status?: string
+          ultima_verificacao?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanha_cards_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas_auto"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campanha_envios: {
+        Row: {
+          campanha_id: string
+          cliente_id: string | null
+          created_at: string
+          enviado_em: string
+          erro: string | null
+          id: string
+          message_wamid: string | null
+          phone: string | null
+          phone_suffix8: string | null
+          proxima_tentativa: string | null
+          status: string
+          tentativas: number
+          updated_at: string
+          vendedora_id: string | null
+          vendedora_nome: string | null
+        }
+        Insert: {
+          campanha_id: string
+          cliente_id?: string | null
+          created_at?: string
+          enviado_em?: string
+          erro?: string | null
+          id?: string
+          message_wamid?: string | null
+          phone?: string | null
+          phone_suffix8?: string | null
+          proxima_tentativa?: string | null
+          status?: string
+          tentativas?: number
+          updated_at?: string
+          vendedora_id?: string | null
+          vendedora_nome?: string | null
+        }
+        Update: {
+          campanha_id?: string
+          cliente_id?: string | null
+          created_at?: string
+          enviado_em?: string
+          erro?: string | null
+          id?: string
+          message_wamid?: string | null
+          phone?: string | null
+          phone_suffix8?: string | null
+          proxima_tentativa?: string | null
+          status?: string
+          tentativas?: number
+          updated_at?: string
+          vendedora_id?: string | null
+          vendedora_nome?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanha_envios_campanha_id_fkey"
+            columns: ["campanha_id"]
+            isOneToOne: false
+            referencedRelation: "campanhas_auto"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campanhas_auto: {
+        Row: {
+          ativa: boolean
+          botoes: Json
+          card_body: string
+          cooldown_dias: number
+          created_at: string
+          criada_por: string | null
+          dias_semana: number[]
+          filtro_json: Json
+          id: string
+          nome: string
+          qtd_por_dia: number
+          rodizio_vendedora: boolean
+          tipo: string
+          top_body: string
+          updated_at: string
+          variaveis: Json
+          vendedoras_rodizio: string[] | null
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          ativa?: boolean
+          botoes?: Json
+          card_body?: string
+          cooldown_dias?: number
+          created_at?: string
+          criada_por?: string | null
+          dias_semana?: number[]
+          filtro_json?: Json
+          id?: string
+          nome: string
+          qtd_por_dia?: number
+          rodizio_vendedora?: boolean
+          tipo?: string
+          top_body?: string
+          updated_at?: string
+          variaveis?: Json
+          vendedoras_rodizio?: string[] | null
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          ativa?: boolean
+          botoes?: Json
+          card_body?: string
+          cooldown_dias?: number
+          created_at?: string
+          criada_por?: string | null
+          dias_semana?: number[]
+          filtro_json?: Json
+          id?: string
+          nome?: string
+          qtd_por_dia?: number
+          rodizio_vendedora?: boolean
+          tipo?: string
+          top_body?: string
+          updated_at?: string
+          variaveis?: Json
+          vendedoras_rodizio?: string[] | null
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campanhas_auto_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campanhas_auto_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cash_flow_entries: {
         Row: {
           amount: number
@@ -16341,6 +16537,17 @@ export type Database = {
           total_spent?: number | null
           updated_at?: string | null
           zoppy_id?: string | null
+        }
+        Relationships: []
+      }
+      marketing_envios_globais: {
+        Row: {
+          enviado_em: string | null
+          origem: string | null
+          origem_id: string | null
+          phone: string | null
+          phone_suffix8: string | null
+          status: string | null
         }
         Relationships: []
       }
