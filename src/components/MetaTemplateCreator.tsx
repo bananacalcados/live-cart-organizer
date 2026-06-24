@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { supabase } from "@/integrations/supabase/client";
