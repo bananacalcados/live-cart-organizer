@@ -1627,7 +1627,7 @@ export default function StoreCheckout() {
                          </div>
                       );
                     })()}
-                    <Button variant="ghost" onClick={() => setCurrentStep(2)} className="w-full text-sm text-muted-foreground">← Voltar para Entrega</Button>
+                    <Button variant="ghost" onClick={() => setCurrentStep(saleData.is_custom_amount ? 1 : 2)} className="w-full text-sm text-muted-foreground">← Voltar {saleData.is_custom_amount ? "para Identificação" : "para Entrega"}</Button>
                   </div>
                 )}
               </CardContent>
