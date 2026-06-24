@@ -424,6 +424,7 @@ serve(async (req) => {
               sender_name: senderName,
               referral: referralData,
               quoted_message_id: quotedMessageId,
+              button_payload: buttonPayload,
             });
 
             if (error) {
