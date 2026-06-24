@@ -315,12 +315,17 @@ export function MetaTemplateCreator() {
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm font-mono">{template.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       {getStatusBadge(template.status)}
                       <Badge variant="outline" className="text-[10px]">
                         {getCategoryLabel(template.category)}
                       </Badge>
                       <span className="text-[10px] text-muted-foreground">{template.language}</span>
+                      {template.status === "REJECTED" && template.rejected_reason && (
+                        <span className="text-[10px] text-destructive font-medium">
+                          — {template.rejected_reason}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
