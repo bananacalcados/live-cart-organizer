@@ -166,6 +166,50 @@ function renderTemplateMessage(
   return { text: parts.join('\n\n'), mediaUrl, mediaType };
 }
 
+// ── Inject per-card quick-reply payloads (bcq:auto:<cardIndex>) into the carousel
+// send components so the webhook can identify which card the customer tapped. We
+// only add a quick-reply button when the template card actually defines one and the
+// caller hasn't already provided that button component. ──
+function injectCarouselQuickReplyPayloads(def: any, components: any[] | undefined): any[] | undefined {
+  if (!components || components.length === 0) return components;
+  const carouselDef = (def?.components || []).find(
+    (c: any) => (c.type || '').toUpperCase() === 'CAROUSEL',
+  );
+  if (!carouselDef || !Array.isArray(carouselDef.cards)) return components;
+
+  return components.map((comp: any) => {
+    if ((comp.type || '').toLowerCase() !== 'carousel') return comp;
+    const cards = (comp.cards || []).map((card: any) => {
+      const cardIdx = card.card_index ?? 0;
+      const cardDef = carouselDef.cards[cardIdx];
+      const btnsDef =
+        (cardDef?.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS')
+          ?.buttons || [];
+      const comps = [...(card.components || [])];
+      btnsDef.forEach((b: any, idx: number) => {
+        if ((b.type || '').toUpperCase() !== 'QUICK_REPLY') return;
+        const already = comps.some(
+          (c: any) =>
+            (c.type || '').toLowerCase() === 'button' &&
+            (c.sub_type || '').toLowerCase() === 'quick_reply' &&
+            String(c.index) === String(idx),
+        );
+        if (!already) {
+          comps.push({
+            type: 'button',
+            sub_type: 'quick_reply',
+            index: idx.toString(),
+            parameters: [{ type: 'payload', payload: `bcq:auto:${cardIdx}` }],
+          });
+        }
+      });
+      return { ...card, components: comps };
+    });
+    return { ...comp, cards };
+  });
+}
+
+
 // ── Build a resolved carousel structure (cards: image + body + buttons) from the
 // template definition + the components actually sent, so the chat can render the
 // full carousel exactly as the customer received it. Returns null if not a carousel.
