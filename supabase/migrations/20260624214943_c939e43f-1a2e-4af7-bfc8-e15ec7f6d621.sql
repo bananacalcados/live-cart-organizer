@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION public.select_campaign_batch(uuid, integer, integer) TO authenticated, service_role;
