@@ -127,12 +127,14 @@ function calculateInstallmentAmount(total: number, installments: number, config:
 }
 
 // ── StepIndicator ───────────────────────────────────────────────
-function StepIndicator({ currentStep }: { currentStep: number }) {
-  const steps = [
+function StepIndicator({ currentStep, isCustom }: { currentStep: number; isCustom?: boolean }) {
+  const allSteps = [
     { num: 1, label: "Identificação", icon: User },
     { num: 2, label: "Entrega", icon: MapPin },
     { num: 3, label: "Pagamento", icon: Wallet },
   ];
+  // Link avulso: sem etapa de entrega/frete
+  const steps = isCustom ? allSteps.filter(s => s.num !== 2) : allSteps;
   return (
     <div className="flex items-center justify-center gap-1 mb-6">
       {steps.map((step, i) => {
@@ -146,7 +148,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
             }`}>
               {isDone ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
               <span className="hidden sm:inline">{step.label}</span>
-              <span className="sm:hidden">{step.num}</span>
+              <span className="sm:hidden">{i + 1}</span>
             </div>
             {i < steps.length - 1 && <ChevronRight className="h-4 w-4 text-muted-foreground mx-1" />}
           </div>
