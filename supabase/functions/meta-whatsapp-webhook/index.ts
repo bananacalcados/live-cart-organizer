@@ -884,7 +884,45 @@ serve(async (req) => {
                     .from('dispatch_recipients')
                     .update({ status: newStatus })
                     .eq('message_wamid', messageId);
+
+                  // Also update carousel campaign deliveries (campanha_envios).
+                  // delivered -> entregue, read -> lido. failed -> retry up to 3x
+                  // (48h apart), then 'falhou'. Rank-protected so we never downgrade.
+                  const ceRank: Record<string, number> = { enviado: 1, entregue: 2, lido: 3 };
+                  const { data: ce } = await supabase
+                    .from('campanha_envios')
+                    .select('id, status, tentativas')
+                    .eq('message_wamid', messageId)
+                    .maybeSingle();
+                  if (ce) {
+                    if (newStatus === 'failed') {
+                      const attempts = (ce.tentativas || 0) + 1;
+                      const terminal = attempts >= 3;
+                      await supabase
+                        .from('campanha_envios')
+                        .update({
+                          tentativas: attempts,
+                          erro: updateData.error_message as string ?? 'Falha pós-envio (webhook)',
+                          status: terminal ? 'falhou' : 'pendente',
+                          message_wamid: terminal ? messageId : null,
+                          proxima_tentativa: terminal
+                            ? null
+                            : new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
+                        })
+                        .eq('id', ce.id);
+                    } else {
+                      const mapped = newStatus === 'read' ? 'lido' : 'entregue';
+                      const currRank = ceRank[ce.status] ?? 0;
+                      if ((ceRank[mapped] ?? 0) > currRank) {
+                        await supabase
+                          .from('campanha_envios')
+                          .update({ status: mapped })
+                          .eq('id', ce.id);
+                      }
+                    }
+                  }
                 }
+
               }
             } else {
               console.log(`Status update: no message found for wamid ${messageId.substring(0, 30)}...`);
