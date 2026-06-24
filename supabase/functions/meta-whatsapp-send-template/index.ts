@@ -166,6 +166,79 @@ function renderTemplateMessage(
   return { text: parts.join('\n\n'), mediaUrl, mediaType };
 }
 
+// ── Build a resolved carousel structure (cards: image + body + buttons) from the
+// template definition + the components actually sent, so the chat can render the
+// full carousel exactly as the customer received it. Returns null if not a carousel.
+function buildCarouselPayload(def: any, sentComponents: any[] | undefined): any | null {
+  const carouselDef = (def?.components || []).find(
+    (c: any) => (c.type || '').toUpperCase() === 'CAROUSEL',
+  );
+  if (!carouselDef || !Array.isArray(carouselDef.cards)) return null;
+
+  const sent = sentComponents || [];
+  const sentCarousel = sent.find((c: any) => (c.type || '').toLowerCase() === 'carousel');
+  const sentCards: any[] = sentCarousel?.cards || [];
+
+  // Top-level bubble body text (with variables substituted).
+  const bodyDef = (def?.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+  const sentBody = sent.find((c: any) => (c.type || '').toLowerCase() === 'body');
+  const subst = (text: string, params: any[]) =>
+    (text || '').replace(/\{\{(\d+)\}\}/g, (_m: string, n: string) => {
+      const v = paramVal(params?.[parseInt(n, 10) - 1]);
+      return v || `{{${n}}}`;
+    });
+  const bubbleBody = bodyDef?.text ? subst(bodyDef.text, sentBody?.parameters || []) : '';
+
+  const cards = carouselDef.cards.map((cardDef: any, i: number) => {
+    const sentCard = sentCards.find((c: any) => c.card_index === i) || sentCards[i] || {};
+    const sentCardComps: any[] = sentCard.components || [];
+    const findSentComp = (type: string, subType?: string) =>
+      sentCardComps.find(
+        (c: any) =>
+          (c.type || '').toLowerCase() === type &&
+          (subType ? (c.sub_type || '').toLowerCase() === subType : true),
+      );
+
+    // Image / video from the sent header params.
+    const headerParams = findSentComp('header')?.parameters || [];
+    const hp = headerParams[0] || {};
+    const image_url = hp.image?.link || null;
+    const video_url = hp.video?.link || null;
+
+    // Card body (substitute variables).
+    const cardBodyDef = (cardDef.components || []).find(
+      (c: any) => (c.type || '').toUpperCase() === 'BODY',
+    );
+    const cardBodyParams = findSentComp('body')?.parameters || [];
+    const body = cardBodyDef?.text ? subst(cardBodyDef.text, cardBodyParams) : '';
+
+    // Buttons (resolve URL suffixes from sent button params).
+    const btnsDef =
+      (cardDef.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS')
+        ?.buttons || [];
+    const buttons = btnsDef.map((b: any, idx: number) => {
+      const type = (b.type || '').toUpperCase();
+      let url = b.url || undefined;
+      if (type === 'URL' && url && url.includes('{{')) {
+        const sentBtn = sentCardComps.find(
+          (c: any) =>
+            (c.type || '').toLowerCase() === 'button' &&
+            (c.sub_type || '').toLowerCase() === 'url' &&
+            String(c.index) === String(idx),
+        );
+        const suffix = paramVal(sentBtn?.parameters?.[0]) || '';
+        url = url.replace(/\{\{\d+\}\}/, suffix);
+      }
+      return { type, text: b.text || '', url, phone_number: b.phone_number };
+    });
+
+    return { image_url, video_url, body, buttons };
+  });
+
+  return { type: 'carousel', body: bubbleBody, cards };
+}
+
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
