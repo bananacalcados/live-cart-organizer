@@ -1445,7 +1445,60 @@ export function MassTemplateDispatcher() {
               </div>
             )}
 
-            {/* URL Button variables */}
+            {/* Carousel cards — weekly images + text variables */}
+            {isCarousel && (
+              <div className="space-y-2 p-2 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/20">
+                <Label className="text-xs font-medium flex items-center gap-1">
+                  🖼️ Cards do carrossel ({carouselCards.length}) — conteúdo desta semana
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                  Envie a imagem da semana de cada card (diferente da imagem de aprovação) e preencha as variáveis.
+                </p>
+                {carouselCards.map((_, i) => {
+                  const imgUrl = variables[`card_${i}_image`]?.staticValue || '';
+                  const cbVars = cardBodyVarNumbers(i);
+                  return (
+                    <div key={i} className="space-y-1.5 p-2 rounded-md border bg-background">
+                      <Label className="text-[10px] font-medium">Card {i + 1}</Label>
+                      <div className="flex gap-1.5">
+                        <Input
+                          className="h-7 text-xs flex-1"
+                          placeholder="URL da imagem da semana..."
+                          value={imgUrl}
+                          onChange={e => setVariables(prev => ({ ...prev, [`card_${i}_image`]: { mode: '__static__', staticValue: e.target.value } }))}
+                        />
+                        <input ref={el => { cardUploadRefs.current[i] = el; }} type="file" className="hidden" accept="image/*" onChange={e => handleCardFileUpload(i, e)} />
+                        <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] gap-1 shrink-0" onClick={() => cardUploadRefs.current[i]?.click()} disabled={uploadingCardIdx === i}>
+                          {uploadingCardIdx === i ? <Loader2 className="h-3 w-3 animate-spin" /> : <Paperclip className="h-3 w-3" />}
+                          Upload
+                        </Button>
+                      </div>
+                      {imgUrl && <img src={imgUrl} alt={`Card ${i + 1}`} className="max-h-24 rounded object-cover" />}
+                      {cbVars.map(n => (
+                        <Input
+                          key={`cb-${i}-${n}`}
+                          className="h-7 text-xs"
+                          placeholder={`Texto da variável {{${n}}} do card ${i + 1}`}
+                          value={variables[`card_${i}_body_${n}`]?.staticValue || ''}
+                          onChange={e => setVariables(prev => ({ ...prev, [`card_${i}_body_${n}`]: { mode: '__static__', staticValue: e.target.value } }))}
+                        />
+                      ))}
+                      {cardUrlButtons(i).map(({ b, idx }) => (
+                        <Input
+                          key={`cbtn-${i}-${idx}`}
+                          className="h-7 text-xs"
+                          placeholder={`Sufixo do botão "${b.text}" (URL)`}
+                          value={variables[`card_${i}_button_url_${idx}`]?.staticValue || ''}
+                          onChange={e => setVariables(prev => ({ ...prev, [`card_${i}_button_url_${idx}`]: { mode: '__static__', staticValue: e.target.value } }))}
+                        />
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+
             {templateButtons.filter((b: any) => b.type === 'URL' && b.url?.includes('{{')).length > 0 && (
               <div className="space-y-2 p-2 rounded-md border border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20">
                 <Label className="text-xs font-medium flex items-center gap-1">
