@@ -486,7 +486,7 @@ export function MetaTemplateCreator() {
       toast.error("Cards de carrossel aceitam no máximo 2 botões.");
       return;
     }
-    if (!validateSharedButtons()) return;
+    if (!validateCarouselButtons()) return;
 
     // Validate each card
     for (let i = 0; i < cards.length; i++) {
