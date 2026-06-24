@@ -52,8 +52,10 @@ Validar que o número está na Cloud API oficial e consegue criar + enviar 1 car
 - Espelhamento no log global: `campanha_envios` já entra na VIEW `marketing_envios_globais` (sucesso conta no teto global).
 
 
-### Etapa 5 — Teto global entre campanhas
-- Aplicar a VIEW global na seleção do lote (anti-spam entre todas as automações de marketing).
+### Etapa 5 — Teto global entre campanhas ✅ (concluída)
+- `select_campaign_batch` aplica teto global de **7 dias** (`p_global_cap_days DEFAULT 7`) via VIEW `marketing_envios_globais` (consolida `campanha_envios` + `dispatch_recipients` + `automation_dispatch_sent`).
+- Reforço anti-duplicação no mesmo dia: também exclui clientes com envio `pendente` (em voo) de QUALQUER campanha de carrossel na janela de 7 dias — evita que duas campanhas no mesmo dia enfileirem o mesmo cliente.
+- GRANT EXECUTE da função para `authenticated` + `service_role`.
 
 ### Etapa 6 — Atribuição de venda (ROI)
 - Adaptar `dispatch-attribution` para a janela por envio (last-touch, 7 dias) por `campanha_envios`.
