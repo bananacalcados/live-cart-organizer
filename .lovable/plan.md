@@ -39,10 +39,10 @@ Validar que o número está na Cloud API oficial e consegue criar + enviar 1 car
 - Todas com GRANT + RLS (authenticated full access + service_role).
 - **Variável `{{vendedora}}`** (rodízio): builder puxa as vendedoras ativas do PDV (exclui virtuais) e usa nome real como exemplo de aprovação; rodízio aplicado no envio (Etapa 4).
 
-### Etapa 3 — Seleção do lote + template + agendador
-- RPC com a query da Seção 3 (filtro dinâmico via `crm_customers_v`, opt-out, cooldown da própria campanha, teto global, `ORDER BY ... NULLS FIRST`).
-- Resolvedor de template pela contagem de cards `ok` (Seção 4); < 2 válidos → não dispara + gera tarefa.
-- Edge function agendadora diária respeitando `dias_semana` (padrão cron-guard + pg_cron).
+### Etapa 3 — Seleção do lote + template + agendador ✅ (concluída)
+- RPC `select_campaign_batch` (filtro dinâmico via `crm_customers_v`, opt-out, cooldown da própria campanha, teto global via `marketing_envios_globais`, `ORDER BY last_purchase_at NULLS FIRST`).
+- RPC `resolve_campaign_template` pela contagem de cards `ok`; < 2 → retorna vazio (agendador pula; tarefa fica para a Etapa 9).
+- Edge function `carousel-campaign-scheduler` (cron-guard) diária: respeita `dias_semana` (fuso SP), enfileira `pendente` em `campanha_envios` e aplica o **rodízio de vendedoras** (só nomes humanos; "Loja física"/"Vendedor Live"/"Live Shopping" são excluídos). Falta criar o job pg_cron + worker de envio (Etapa 4).
 
 ### Etapa 4 — Envio + webhook + tratamento de falha
 - Worker: resolve template → grava `pendente` → envia carrossel via Cloud API (cards `ok`) → atualiza status pelo `meta-whatsapp-webhook`.
