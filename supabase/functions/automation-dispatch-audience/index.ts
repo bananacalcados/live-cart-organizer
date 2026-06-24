@@ -338,7 +338,7 @@ serve(async (req) => {
     const CHUNK_DELAY_MS = 150;
 
     // Pre-fetch Meta credentials ONCE (avoid per-recipient sub-edge-function calls that hit rate limits)
-    const credCache = new Map<string, { phoneNumberId: string; accessToken: string } | null>();
+    const credCache = new Map<string, { phoneNumberId: string; accessToken: string; businessAccountId: string } | null>();
     async function getCreds(numberId: string | null) {
       const key = numberId || '__default__';
       if (credCache.has(key)) return credCache.get(key)!;
