@@ -234,6 +234,8 @@ export function MetaTemplateCreator() {
     setHeaderText("");
     setBodyText("");
     setFooterText("");
+    setBodyExamples({});
+    setHeaderExamples({});
   };
 
   const getStatusBadge = (status: string) => {
