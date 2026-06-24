@@ -538,6 +538,11 @@ function StepEditorDialog({
   const [shopifySearch, setShopifySearch] = useState("");
   const [loadingShopify, setLoadingShopify] = useState(false);
   const [shopifyTargetCard, setShopifyTargetCard] = useState<number | null>(null);
+  // Image cropper (1:1 thumbnail) state
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropTargetCard, setCropTargetCard] = useState<number | null>(null);
+  const [cropUploading, setCropUploading] = useState(false);
   const [whatsappNumbers, setWhatsappNumbers] = useState<any[]>([]);
   const [loadingNumbers, setLoadingNumbers] = useState(false);
 
