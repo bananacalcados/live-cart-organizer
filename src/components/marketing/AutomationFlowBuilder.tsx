@@ -530,6 +530,14 @@ function StepEditorDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const headerFileRef = useRef<HTMLInputElement>(null);
   const [uploadingHeader, setUploadingHeader] = useState(false);
+  const cardFileRef = useRef<HTMLInputElement>(null);
+  const [uploadingCard, setUploadingCard] = useState<number | null>(null);
+  const [pcUploadTargetCard, setPcUploadTargetCard] = useState<number | null>(null);
+  const [showShopifyPicker, setShowShopifyPicker] = useState(false);
+  const [shopifyProducts, setShopifyProducts] = useState<ShopifyProduct[]>([]);
+  const [shopifySearch, setShopifySearch] = useState("");
+  const [loadingShopify, setLoadingShopify] = useState(false);
+  const [shopifyTargetCard, setShopifyTargetCard] = useState<number | null>(null);
   const [whatsappNumbers, setWhatsappNumbers] = useState<any[]>([]);
   const [loadingNumbers, setLoadingNumbers] = useState(false);
 
