@@ -1770,6 +1770,17 @@ function StepEditorDialog({
         onChange={handleCardImageUpload}
       />
 
+      {/* Human image cropper for the 1:1 WhatsApp carousel thumbnail */}
+      <ImageCropDialog
+        open={cropOpen}
+        imageSrc={cropSrc}
+        aspect={1}
+        loading={cropUploading}
+        onCancel={() => { setCropOpen(false); setCropSrc(null); setCropTargetCard(null); }}
+        onConfirm={applyCroppedImage}
+      />
+
+
       {/* Shopify product picker for carousel card image */}
       <Dialog open={showShopifyPicker} onOpenChange={setShowShopifyPicker}>
         <DialogContent className="max-w-2xl max-h-[80vh]">
