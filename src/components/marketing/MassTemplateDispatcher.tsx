@@ -917,6 +917,10 @@ export function MassTemplateDispatcher() {
       toast.error("Selecione um template e insira um número para teste");
       return;
     }
+    if (isCarousel && carouselCards.some((_, i) => !(variables[`card_${i}_image`]?.staticValue || '').trim())) {
+      toast.error("Envie a imagem de todos os cards do carrossel antes de enviar.");
+      return;
+    }
     setIsTesting(true);
     try {
       const components = buildComponentsForRecipient(); // static only for test
