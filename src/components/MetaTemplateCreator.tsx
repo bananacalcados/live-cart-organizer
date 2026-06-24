@@ -385,37 +385,84 @@ export function MetaTemplateCreator() {
     setButtons((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Builds the shared buttons array for a carousel card (with URL example when needed).
-  const buildCardButtons = () =>
-    buttons.map((b) => {
+  // Resolves the effective content of button `i` for a given card, honoring the mode.
+  const resolveCardButton = (card: CarouselCard, i: number): CardButtonContent => {
+    const struct = buttons[i] || {};
+    if (cardButtonMode === "per_card") {
+      const c = card.buttons?.[i] || {};
+      return {
+        text: c.text ?? "",
+        url: c.url ?? "",
+        phone_number: c.phone_number ?? "",
+        urlExample: c.urlExample ?? "",
+      };
+    }
+    return { text: struct.text, url: struct.url, phone_number: struct.phone_number, urlExample: struct.urlExample };
+  };
+
+  // Builds the buttons array for a SPECIFIC card (Meta create payload).
+  const buildCardButtonsFor = (card: CarouselCard) =>
+    buttons.map((b, i) => {
+      const c = resolveCardButton(card, i);
+      const text = (c.text || "").trim();
       if (b.type === "URL") {
-        const btn: Record<string, unknown> = { type: "URL", text: b.text, url: b.url };
-        if ((b.url || "").includes("{{")) btn.example = [(b.urlExample || "").trim()];
+        const url = (c.url || "").trim();
+        const btn: Record<string, unknown> = { type: "URL", text, url };
+        if (url.includes("{{")) btn.example = [(c.urlExample || "").trim()];
         return btn;
       }
-      if (b.type === "PHONE_NUMBER") return { type: "PHONE_NUMBER", text: b.text, phone_number: b.phone_number };
-      return { type: "QUICK_REPLY", text: b.text };
+      if (b.type === "PHONE_NUMBER") return { type: "PHONE_NUMBER", text, phone_number: (c.phone_number || "").trim() };
+      return { type: "QUICK_REPLY", text };
     });
 
-  const validateSharedButtons = (): boolean => {
-    for (const b of buttons) {
-      if (!b.text.trim()) {
-        toast.error("Preencha o texto de todos os botões.");
-        return false;
-      }
-      if (b.type === "URL") {
-        if (!(b.url || "").trim()) {
-          toast.error("Preencha a URL dos botões de link.");
+  // Validates the button STRUCTURE + content according to the active mode.
+  const validateCarouselButtons = (): boolean => {
+    if (cardButtonMode === "shared") {
+      for (const b of buttons) {
+        if (!b.text.trim()) {
+          toast.error("Preencha o texto de todos os botões.");
           return false;
         }
-        if ((b.url || "").includes("{{") && !(b.urlExample || "").trim()) {
-          toast.error("Preencha o exemplo do sufixo da URL (a Meta exige).");
+        if (b.type === "URL") {
+          if (!(b.url || "").trim()) {
+            toast.error("Preencha a URL dos botões de link.");
+            return false;
+          }
+          if ((b.url || "").includes("{{") && !(b.urlExample || "").trim()) {
+            toast.error("Preencha o exemplo do sufixo da URL (a Meta exige).");
+            return false;
+          }
+        }
+        if (b.type === "PHONE_NUMBER" && !(b.phone_number || "").trim()) {
+          toast.error("Preencha o telefone dos botões de ligação.");
           return false;
         }
       }
-      if (b.type === "PHONE_NUMBER" && !(b.phone_number || "").trim()) {
-        toast.error("Preencha o telefone dos botões de ligação.");
-        return false;
+      return true;
+    }
+    // per_card: every card must fill the content of every structural button.
+    for (let ci = 0; ci < cards.length; ci++) {
+      for (let bi = 0; bi < buttons.length; bi++) {
+        const b = buttons[bi];
+        const c = resolveCardButton(cards[ci], bi);
+        if (!(c.text || "").trim()) {
+          toast.error(`Preencha o texto do botão ${bi + 1} no card ${ci + 1}.`);
+          return false;
+        }
+        if (b.type === "URL") {
+          if (!(c.url || "").trim()) {
+            toast.error(`Preencha a URL do botão ${bi + 1} no card ${ci + 1}.`);
+            return false;
+          }
+          if ((c.url || "").includes("{{") && !(c.urlExample || "").trim()) {
+            toast.error(`Preencha o exemplo do sufixo da URL do botão ${bi + 1} no card ${ci + 1}.`);
+            return false;
+          }
+        }
+        if (b.type === "PHONE_NUMBER" && !(c.phone_number || "").trim()) {
+          toast.error(`Preencha o telefone do botão ${bi + 1} no card ${ci + 1}.`);
+          return false;
+        }
       }
     }
     return true;
