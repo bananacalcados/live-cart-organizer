@@ -420,6 +420,18 @@ serve(async (req) => {
 
     const graphUrl = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
 
+    // Pre-fetch the template definition (cached) so we can (a) inject per-card
+    // quick-reply payloads for carousel identification and (b) render the chat.
+    let templateDef: any | null = null;
+    try {
+      templateDef = await fetchTemplateDef(accessToken, businessAccountId, templateName, language);
+    } catch (_e) { /* non-fatal */ }
+
+    // Inject `bcq:auto:<cardIndex>` payloads on carousel QUICK_REPLY buttons when
+    // the caller didn't already provide them. This lets the webhook identify which
+    // card the customer tapped, regardless of which send path was used.
+    const sendComponents = injectCarouselQuickReplyPayloads(templateDef, components);
+
     const templateBody: Record<string, unknown> = {
       messaging_product: 'whatsapp',
       to: formattedPhone,
@@ -430,8 +442,8 @@ serve(async (req) => {
       },
     };
 
-    if (components && components.length > 0) {
-      (templateBody.template as Record<string, unknown>).components = components;
+    if (sendComponents && sendComponents.length > 0) {
+      (templateBody.template as Record<string, unknown>).components = sendComponents;
     }
 
     const response = await fetch(graphUrl, {
