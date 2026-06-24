@@ -122,8 +122,10 @@ export function MetaTemplateCreator() {
   const [headerMediaHandle, setHeaderMediaHandle] = useState<string>("");
   const [headerMediaName, setHeaderMediaName] = useState<string>("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
-  // Buttons (also used as the SHARED buttons for every carousel card)
+  // Buttons (the STRUCTURE — types/order/count. In "shared" mode also the content for every card)
   const [buttons, setButtons] = useState<TemplateButton[]>([]);
+  // Carousel: whether buttons are shared across all cards or unique per card
+  const [cardButtonMode, setCardButtonMode] = useState<"shared" | "per_card">("shared");
   // Carousel cards
   const [cards, setCards] = useState<CarouselCard[]>([emptyCard(), emptyCard()]);
 
