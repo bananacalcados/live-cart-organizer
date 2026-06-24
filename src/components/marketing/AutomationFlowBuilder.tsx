@@ -790,6 +790,24 @@ function StepEditorDialog({
                                 ))}
                               </div>
                             )}
+                            {/* Carousel card buttons (buttons live inside each card) */}
+                            {carousel && (() => {
+                              const cardBtns = carousel.cards?.[0]?.components?.find((c: any) => c.type === "BUTTONS");
+                              if (!cardBtns?.buttons?.length) return null;
+                              return (
+                                <div className="mt-1 space-y-0.5">
+                                  <p className="text-[9px] text-muted-foreground">Botões dos cards:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {cardBtns.buttons.map((b: any, i: number) => (
+                                      <Badge key={i} variant="outline" className="text-[9px]">
+                                        {b.type === "URL" ? "🔗" : b.type === "QUICK_REPLY" ? "↩️" : "📞"} {b.text}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
                           </div>
                         );
                       })()}
