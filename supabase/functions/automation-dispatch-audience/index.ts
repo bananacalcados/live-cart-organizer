@@ -342,27 +342,101 @@ serve(async (req) => {
     async function getCreds(numberId: string | null) {
       const key = numberId || '__default__';
       if (credCache.has(key)) return credCache.get(key)!;
-      let creds: { phoneNumberId: string; accessToken: string } | null = null;
+      let creds: { phoneNumberId: string; accessToken: string; businessAccountId: string } | null = null;
       if (numberId) {
         const { data } = await supabase
           .from('whatsapp_numbers')
-          .select('phone_number_id, access_token')
+          .select('phone_number_id, access_token, business_account_id')
           .eq('id', numberId)
           .eq('is_active', true)
           .maybeSingle();
-        if (data) creds = { phoneNumberId: (data as any).phone_number_id, accessToken: (data as any).access_token };
+        if (data) creds = { phoneNumberId: (data as any).phone_number_id, accessToken: (data as any).access_token, businessAccountId: (data as any).business_account_id };
       }
       if (!creds) {
         const { data } = await supabase
           .from('whatsapp_numbers')
-          .select('id, phone_number_id, access_token')
+          .select('id, phone_number_id, access_token, business_account_id')
           .eq('is_default', true)
           .eq('is_active', true)
           .maybeSingle();
-        if (data) creds = { phoneNumberId: (data as any).phone_number_id, accessToken: (data as any).access_token };
+        if (data) creds = { phoneNumberId: (data as any).phone_number_id, accessToken: (data as any).access_token, businessAccountId: (data as any).business_account_id };
       }
       credCache.set(key, creds);
       return creds;
+    }
+
+    // Cached template definition fetch (for carousel quick-reply payloads + chat rendering).
+    const tplDefCache = new Map<string, any>();
+    async function getTemplateDef(accessToken: string, businessAccountId: string, name: string, language?: string): Promise<any | null> {
+      if (!accessToken || !businessAccountId) return null;
+      const ck = `${businessAccountId}:${name}`;
+      let list = tplDefCache.get(ck);
+      if (!list) {
+        try {
+          const url = `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?name=${encodeURIComponent(name)}&limit=10`;
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+          const json = await res.json();
+          if (!res.ok) return null;
+          list = json.data || [];
+          tplDefCache.set(ck, list);
+        } catch { return null; }
+      }
+      if (!list || list.length === 0) return null;
+      const byName = list.filter((t: any) => t.name === name);
+      return byName.find((t: any) => t.language === language) || byName[0] || null;
+    }
+
+    // Build the resolved carousel chat payload (image + body + buttons per card)
+    // from the template def + the resolved send components.
+    function buildCarouselChatPayload(def: any, sentComponents: any[]): any | null {
+      const carouselDef = (def?.components || []).find((c: any) => (c.type || '').toUpperCase() === 'CAROUSEL');
+      if (!carouselDef || !Array.isArray(carouselDef.cards)) return null;
+      const sentCarousel = sentComponents.find((c: any) => (c.type || '').toUpperCase() === 'CAROUSEL');
+      const sentCards: any[] = sentCarousel?.cards || [];
+      const ptxt = (p: any) => (typeof p?.text === 'string' ? p.text : '');
+      const subst = (text: string, params: any[]) => (text || '').replace(/\{\{(\d+)\}\}/g, (_m: string, n: string) => ptxt(params?.[parseInt(n, 10) - 1]) || `{{${n}}}`);
+      const bodyDef = (def?.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+      const sentBody = sentComponents.find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+      const bubbleBody = bodyDef?.text ? subst(bodyDef.text, sentBody?.parameters || []) : '';
+      const cards = carouselDef.cards.map((cardDef: any, i: number) => {
+        const sc = sentCards.find((c: any) => c.card_index === i) || sentCards[i] || {};
+        const comps: any[] = sc.components || [];
+        const hp = (comps.find((c: any) => (c.type || '').toUpperCase() === 'HEADER')?.parameters || [])[0] || {};
+        const cardBodyDef = (cardDef.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+        const cardBodyParams = comps.find((c: any) => (c.type || '').toUpperCase() === 'BODY')?.parameters || [];
+        const body = cardBodyDef?.text ? subst(cardBodyDef.text, cardBodyParams) : '';
+        const btnsDef = (cardDef.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+        const buttons = btnsDef.map((b: any, idx: number) => {
+          const type = (b.type || '').toUpperCase();
+          let url = b.url || undefined;
+          if (type === 'URL' && url && url.includes('{{')) {
+            const sb = comps.find((c: any) => (c.type || '').toUpperCase() === 'BUTTON' && (c.sub_type || '').toLowerCase() === 'url' && String(c.index) === String(idx));
+            url = url.replace(/\{\{\d+\}\}/, ptxt(sb?.parameters?.[0]) || '');
+          }
+          return { type, text: b.text || '', url, phone_number: b.phone_number };
+        });
+        return { image_url: hp.image?.link || null, video_url: hp.video?.link || null, body, buttons };
+      });
+      return { type: 'carousel', body: bubbleBody, cards };
+    }
+
+    // Inject bcq quick-reply payloads into carousel send components using the def.
+    function injectCarouselQuickReplies(def: any, components: any[]): void {
+      const carouselDef = (def?.components || []).find((c: any) => (c.type || '').toUpperCase() === 'CAROUSEL');
+      if (!carouselDef || !Array.isArray(carouselDef.cards)) return;
+      const sentCarousel = components.find((c: any) => (c.type || '').toUpperCase() === 'CAROUSEL');
+      if (!sentCarousel) return;
+      for (const card of (sentCarousel.cards || [])) {
+        const cardIdx = card.card_index ?? 0;
+        const btnsDef = (carouselDef.cards[cardIdx]?.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+        btnsDef.forEach((b: any, idx: number) => {
+          if ((b.type || '').toUpperCase() !== 'QUICK_REPLY') return;
+          const already = (card.components || []).some((c: any) => (c.type || '').toUpperCase() === 'BUTTON' && (c.sub_type || '').toLowerCase() === 'quick_reply' && String(c.index) === String(idx));
+          if (!already) {
+            card.components.push({ type: 'BUTTON', sub_type: 'quick_reply', index: idx.toString(), parameters: [{ type: 'payload', payload: `bcq:auto:${cardIdx}` }] });
+          }
+        });
+      }
     }
     // Warm default credentials
     await getCreds(defaultNumberId);
