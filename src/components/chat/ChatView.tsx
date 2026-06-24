@@ -935,6 +935,9 @@ export function ChatView({
                       />
                     )}
                     <InstagramReferralCard referral={msg.referral} />
+                    {isCarousel ? (
+                      <CarouselMessageBubble payload={carouselPayload!} />
+                    ) : (
                     <WhatsAppMediaAttachment
                       mediaUrl={msg.media_url}
                       mediaType={msg.media_type}
@@ -946,6 +949,7 @@ export function ChatView({
                       audioClassName="w-full mb-1"
                       pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
                     />
+                    )}
                     {isEditing ? (
                       <div className="space-y-1">
                         <textarea
