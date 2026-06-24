@@ -8942,6 +8942,42 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_template_status_log: {
+        Row: {
+          created_at: string
+          event: string | null
+          id: string
+          language: string | null
+          raw_payload: Json | null
+          rejected_reason: string | null
+          template_id: string
+          template_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event?: string | null
+          id?: string
+          language?: string | null
+          raw_payload?: Json | null
+          rejected_reason?: string | null
+          template_id: string
+          template_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event?: string | null
+          id?: string
+          language?: string | null
+          raw_payload?: Json | null
+          rejected_reason?: string | null
+          template_id?: string
+          template_name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       nfe_distribuicao_state: {
         Row: {
           company_id: string
