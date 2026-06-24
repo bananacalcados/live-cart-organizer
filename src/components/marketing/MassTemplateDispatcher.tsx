@@ -1515,6 +1515,14 @@ export function MassTemplateDispatcher() {
                           onChange={e => setVariables(prev => ({ ...prev, [`card_${i}_button_url_${idx}`]: { mode: '__static__', staticValue: e.target.value } }))}
                         />
                       ))}
+                      {cardQuickReplyButtons(i).length > 0 && (
+                        <Input
+                          className="h-7 text-xs border-amber-300 dark:border-amber-700"
+                          placeholder={`Produto deste card (ex: Tênis Run X) — aparece pro vendedor`}
+                          value={variables[`card_${i}_product_name`]?.staticValue || ''}
+                          onChange={e => setVariables(prev => ({ ...prev, [`card_${i}_product_name`]: { mode: '__static__', staticValue: e.target.value } }))}
+                        />
+                      )}
                     </div>
                   );
                 })}
