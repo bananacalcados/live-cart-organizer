@@ -52,6 +52,7 @@ function extractVarNumbers(text?: string): number[] {
 function buildCarouselComponent(
   carouselComp: any,
   variablesConfig: Record<string, VariableConfig>,
+  dispatchId?: string,
 ): any {
   const tplCards = carouselComp?.cards || [];
   const cards = tplCards.map((tplCard: any, i: number) => {
@@ -70,9 +71,15 @@ function buildCarouselComponent(
 
     const cardBtns = (tplCard.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS');
     (cardBtns?.buttons || []).forEach((b: any, idx: number) => {
-      if (b.type === 'URL' && (b.url || '').includes('{{')) {
+      const btnType = (b.type || '').toUpperCase();
+      if (btnType === 'URL' && (b.url || '').includes('{{')) {
         const suffix = variablesConfig[`card_${i}_button_url_${idx}`]?.staticValue || '';
         cardComps.push({ type: 'button', sub_type: 'url', index: idx.toString(), parameters: [{ type: 'text', text: suffix }] });
+      } else if (btnType === 'QUICK_REPLY') {
+        // Per-card payload so the webhook can identify exactly which card the customer tapped.
+        // Format: bcq:<dispatchId>:<cardIndex>
+        const payload = `bcq:${dispatchId || 'na'}:${i}`;
+        cardComps.push({ type: 'button', sub_type: 'quick_reply', index: idx.toString(), parameters: [{ type: 'payload', payload }] });
       }
     });
 
