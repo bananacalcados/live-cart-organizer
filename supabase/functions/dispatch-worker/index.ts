@@ -459,12 +459,13 @@ serve(async (req) => {
         // Log to whatsapp_messages in ONE batched insert (awaited, not orphaned).
         const messageRows = sentRows.map((s) => ({
           phone: s.phone,
-          message: s.rendered || `[Template: ${dispatch.template_name}]`,
+          message: s.carouselPayload?.body || s.rendered || `[Template: ${dispatch.template_name}]`,
           direction: 'outgoing',
           message_id: s.wamid,
           status: 'sent',
           media_type: chatMediaType,
           media_url: chatMediaUrl,
+          template_payload: s.carouselPayload || null,
           whatsapp_number_id: dispatch.whatsapp_number_id,
           is_mass_dispatch: true,
           source: 'broadcast',
