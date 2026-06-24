@@ -225,6 +225,34 @@ serve(async (req) => {
 
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
+        // Capture template review results (approved/rejected/flagged/paused) from Meta.
+        if (change.field === 'message_template_status_update') {
+          const v = change.value || {};
+          const templateId = String(v.message_template_id ?? '');
+          if (templateId) {
+            try {
+              await supabase
+                .from('meta_template_status_log')
+                .upsert(
+                  {
+                    template_id: templateId,
+                    template_name: v.message_template_name ?? null,
+                    language: v.message_template_language ?? null,
+                    event: v.event ?? null,
+                    rejected_reason: v.reason ?? v.rejected_reason ?? null,
+                    raw_payload: v,
+                    updated_at: new Date().toISOString(),
+                  },
+                  { onConflict: 'template_id' },
+                );
+            } catch (e) {
+              console.error('[meta-wa] template status upsert falhou:', (e as Error).message);
+            }
+          }
+          await markSkip(`template_status_update:${v.event ?? 'unknown'}`);
+          continue;
+        }
+
         if (change.field !== 'messages') continue;
         const value = change.value;
 
