@@ -166,6 +166,123 @@ function renderTemplateMessage(
   return { text: parts.join('\n\n'), mediaUrl, mediaType };
 }
 
+// ── Inject per-card quick-reply payloads (bcq:auto:<cardIndex>) into the carousel
+// send components so the webhook can identify which card the customer tapped. We
+// only add a quick-reply button when the template card actually defines one and the
+// caller hasn't already provided that button component. ──
+function injectCarouselQuickReplyPayloads(def: any, components: any[] | undefined): any[] | undefined {
+  if (!components || components.length === 0) return components;
+  const carouselDef = (def?.components || []).find(
+    (c: any) => (c.type || '').toUpperCase() === 'CAROUSEL',
+  );
+  if (!carouselDef || !Array.isArray(carouselDef.cards)) return components;
+
+  return components.map((comp: any) => {
+    if ((comp.type || '').toLowerCase() !== 'carousel') return comp;
+    const cards = (comp.cards || []).map((card: any) => {
+      const cardIdx = card.card_index ?? 0;
+      const cardDef = carouselDef.cards[cardIdx];
+      const btnsDef =
+        (cardDef?.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS')
+          ?.buttons || [];
+      const comps = [...(card.components || [])];
+      btnsDef.forEach((b: any, idx: number) => {
+        if ((b.type || '').toUpperCase() !== 'QUICK_REPLY') return;
+        const already = comps.some(
+          (c: any) =>
+            (c.type || '').toLowerCase() === 'button' &&
+            (c.sub_type || '').toLowerCase() === 'quick_reply' &&
+            String(c.index) === String(idx),
+        );
+        if (!already) {
+          comps.push({
+            type: 'button',
+            sub_type: 'quick_reply',
+            index: idx.toString(),
+            parameters: [{ type: 'payload', payload: `bcq:auto:${cardIdx}` }],
+          });
+        }
+      });
+      return { ...card, components: comps };
+    });
+    return { ...comp, cards };
+  });
+}
+
+
+// ── Build a resolved carousel structure (cards: image + body + buttons) from the
+// template definition + the components actually sent, so the chat can render the
+// full carousel exactly as the customer received it. Returns null if not a carousel.
+function buildCarouselPayload(def: any, sentComponents: any[] | undefined): any | null {
+  const carouselDef = (def?.components || []).find(
+    (c: any) => (c.type || '').toUpperCase() === 'CAROUSEL',
+  );
+  if (!carouselDef || !Array.isArray(carouselDef.cards)) return null;
+
+  const sent = sentComponents || [];
+  const sentCarousel = sent.find((c: any) => (c.type || '').toLowerCase() === 'carousel');
+  const sentCards: any[] = sentCarousel?.cards || [];
+
+  // Top-level bubble body text (with variables substituted).
+  const bodyDef = (def?.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+  const sentBody = sent.find((c: any) => (c.type || '').toLowerCase() === 'body');
+  const subst = (text: string, params: any[]) =>
+    (text || '').replace(/\{\{(\d+)\}\}/g, (_m: string, n: string) => {
+      const v = paramVal(params?.[parseInt(n, 10) - 1]);
+      return v || `{{${n}}}`;
+    });
+  const bubbleBody = bodyDef?.text ? subst(bodyDef.text, sentBody?.parameters || []) : '';
+
+  const cards = carouselDef.cards.map((cardDef: any, i: number) => {
+    const sentCard = sentCards.find((c: any) => c.card_index === i) || sentCards[i] || {};
+    const sentCardComps: any[] = sentCard.components || [];
+    const findSentComp = (type: string, subType?: string) =>
+      sentCardComps.find(
+        (c: any) =>
+          (c.type || '').toLowerCase() === type &&
+          (subType ? (c.sub_type || '').toLowerCase() === subType : true),
+      );
+
+    // Image / video from the sent header params.
+    const headerParams = findSentComp('header')?.parameters || [];
+    const hp = headerParams[0] || {};
+    const image_url = hp.image?.link || null;
+    const video_url = hp.video?.link || null;
+
+    // Card body (substitute variables).
+    const cardBodyDef = (cardDef.components || []).find(
+      (c: any) => (c.type || '').toUpperCase() === 'BODY',
+    );
+    const cardBodyParams = findSentComp('body')?.parameters || [];
+    const body = cardBodyDef?.text ? subst(cardBodyDef.text, cardBodyParams) : '';
+
+    // Buttons (resolve URL suffixes from sent button params).
+    const btnsDef =
+      (cardDef.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS')
+        ?.buttons || [];
+    const buttons = btnsDef.map((b: any, idx: number) => {
+      const type = (b.type || '').toUpperCase();
+      let url = b.url || undefined;
+      if (type === 'URL' && url && url.includes('{{')) {
+        const sentBtn = sentCardComps.find(
+          (c: any) =>
+            (c.type || '').toLowerCase() === 'button' &&
+            (c.sub_type || '').toLowerCase() === 'url' &&
+            String(c.index) === String(idx),
+        );
+        const suffix = paramVal(sentBtn?.parameters?.[0]) || '';
+        url = url.replace(/\{\{\d+\}\}/, suffix);
+      }
+      return { type, text: b.text || '', url, phone_number: b.phone_number };
+    });
+
+    return { image_url, video_url, body, buttons };
+  });
+
+  return { type: 'carousel', body: bubbleBody, cards };
+}
+
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -347,6 +464,18 @@ serve(async (req) => {
 
     const graphUrl = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
 
+    // Pre-fetch the template definition (cached) so we can (a) inject per-card
+    // quick-reply payloads for carousel identification and (b) render the chat.
+    let templateDef: any | null = null;
+    try {
+      templateDef = await fetchTemplateDef(accessToken, businessAccountId, templateName, language);
+    } catch (_e) { /* non-fatal */ }
+
+    // Inject `bcq:auto:<cardIndex>` payloads on carousel QUICK_REPLY buttons when
+    // the caller didn't already provide them. This lets the webhook identify which
+    // card the customer tapped, regardless of which send path was used.
+    const sendComponents = injectCarouselQuickReplyPayloads(templateDef, components);
+
     const templateBody: Record<string, unknown> = {
       messaging_product: 'whatsapp',
       to: formattedPhone,
@@ -357,8 +486,8 @@ serve(async (req) => {
       },
     };
 
-    if (components && components.length > 0) {
-      (templateBody.template as Record<string, unknown>).components = components;
+    if (sendComponents && sendComponents.length > 0) {
+      (templateBody.template as Record<string, unknown>).components = sendComponents;
     }
 
     const response = await fetch(graphUrl, {
@@ -403,17 +532,24 @@ serve(async (req) => {
       let finalText = renderedMessage || '';
       let finalMediaUrl: string | null = null;
       let finalMediaType = 'text';
-      if (!finalText) {
-        try {
-          const def = await fetchTemplateDef(accessToken, businessAccountId, templateName, language);
-          if (def) {
-            const r = renderTemplateMessage(def, components);
+      let carouselPayload: any | null = null;
+      try {
+        const def = templateDef || await fetchTemplateDef(accessToken, businessAccountId, templateName, language);
+        if (def) {
+          // Build the full carousel structure (cards) so the chat renders it whole.
+          carouselPayload = buildCarouselPayload(def, sendComponents);
+          if (!finalText) {
+            const r = renderTemplateMessage(def, sendComponents);
             if (r.text) finalText = r.text;
             finalMediaUrl = r.mediaUrl;
             finalMediaType = r.mediaType;
           }
-        } catch (_e) { /* keep fallback */ }
-      }
+          // For carousel, prefer the bubble body as the text fallback.
+          if (carouselPayload?.body && (!finalText || finalText.startsWith('[Template:'))) {
+            finalText = carouselPayload.body;
+          }
+        }
+      } catch (_e) { /* keep fallback */ }
       if (!finalText) finalText = `[Template: ${templateName}]`;
 
       await supabase.from('whatsapp_messages').insert({
@@ -424,6 +560,7 @@ serve(async (req) => {
         status: 'sent',
         media_type: finalMediaType,
         media_url: finalMediaUrl,
+        template_payload: carouselPayload,
         whatsapp_number_id: whatsappNumberDbId,
       });
 

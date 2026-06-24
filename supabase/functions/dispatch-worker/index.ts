@@ -88,6 +88,50 @@ function buildCarouselComponent(
   return { type: 'carousel', cards };
 }
 
+// Builds the resolved carousel structure (image + body + buttons per card) for
+// storage in whatsapp_messages so the chat renders the full carousel.
+function paramText(p: any): string {
+  return typeof p?.text === 'string' ? p.text : '';
+}
+function buildCarouselPayloadForChat(
+  templateComponents: any[],
+  sentComponents: any[],
+): any | null {
+  const carouselDef = templateComponents.find((c: any) => (c.type || '').toUpperCase() === 'CAROUSEL');
+  if (!carouselDef || !Array.isArray(carouselDef.cards)) return null;
+  const sentCarousel = sentComponents.find((c: any) => (c.type || '').toLowerCase() === 'carousel');
+  const sentCards: any[] = sentCarousel?.cards || [];
+
+  const bodyDef = templateComponents.find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+  const sentBody = sentComponents.find((c: any) => (c.type || '').toLowerCase() === 'body');
+  const subst = (text: string, params: any[]) =>
+    (text || '').replace(/\{\{(\d+)\}\}/g, (_m: string, n: string) => paramText(params?.[parseInt(n, 10) - 1]) || `{{${n}}}`);
+  const bubbleBody = bodyDef?.text ? subst(bodyDef.text, sentBody?.parameters || []) : '';
+
+  const cards = carouselDef.cards.map((cardDef: any, i: number) => {
+    const sentCard = sentCards.find((c: any) => c.card_index === i) || sentCards[i] || {};
+    const comps: any[] = sentCard.components || [];
+    const headerParams = comps.find((c: any) => (c.type || '').toLowerCase() === 'header')?.parameters || [];
+    const hp = headerParams[0] || {};
+    const cardBodyDef = (cardDef.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BODY');
+    const cardBodyParams = comps.find((c: any) => (c.type || '').toLowerCase() === 'body')?.parameters || [];
+    const body = cardBodyDef?.text ? subst(cardBodyDef.text, cardBodyParams) : '';
+    const btnsDef = (cardDef.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+    const buttons = btnsDef.map((b: any, idx: number) => {
+      const type = (b.type || '').toUpperCase();
+      let url = b.url || undefined;
+      if (type === 'URL' && url && url.includes('{{')) {
+        const sentBtn = comps.find((c: any) => (c.type || '').toLowerCase() === 'button' && (c.sub_type || '').toLowerCase() === 'url' && String(c.index) === String(idx));
+        url = url.replace(/\{\{\d+\}\}/, paramText(sentBtn?.parameters?.[0]) || '');
+      }
+      return { type, text: b.text || '', url, phone_number: b.phone_number };
+    });
+    return { image_url: hp.image?.link || null, video_url: hp.video?.link || null, body, buttons };
+  });
+
+  return { type: 'carousel', body: bubbleBody, cards };
+}
+
 function buildComponentsForRecipient(
   templateComponents: any[],
   variablesConfig: Record<string, VariableConfig>,
@@ -362,6 +406,7 @@ serve(async (req) => {
 
         const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId);
         const rendered = buildRenderedMessage(templateComponents, variablesConfig, hasDynamicVars ? rcp : null, hasDynamicVars);
+        const carouselPayload = buildCarouselPayloadForChat(templateComponents, components);
         const body: any = {
           messaging_product: 'whatsapp',
           to: formatted,
@@ -378,13 +423,14 @@ serve(async (req) => {
           });
           const data = await res.json();
           if (res.ok) {
-            return { ok: true, id: rcp.id, wamid: data.messages?.[0]?.id || null, phone: formatted, rendered };
+            return { ok: true, id: rcp.id, wamid: data.messages?.[0]?.id || null, phone: formatted, rendered, carouselPayload };
           }
           return { ok: false, id: rcp.id, error: data.error?.message || JSON.stringify(data).slice(0, 200) };
         } catch (e) {
           return { ok: false, id: rcp.id, error: String(e).slice(0, 200) };
         }
       }
+
 
       // Send in parallel chunks
       const sentRows: any[] = [];
@@ -413,12 +459,13 @@ serve(async (req) => {
         // Log to whatsapp_messages in ONE batched insert (awaited, not orphaned).
         const messageRows = sentRows.map((s) => ({
           phone: s.phone,
-          message: s.rendered || `[Template: ${dispatch.template_name}]`,
+          message: s.carouselPayload?.body || s.rendered || `[Template: ${dispatch.template_name}]`,
           direction: 'outgoing',
           message_id: s.wamid,
           status: 'sent',
           media_type: chatMediaType,
           media_url: chatMediaUrl,
+          template_payload: s.carouselPayload || null,
           whatsapp_number_id: dispatch.whatsapp_number_id,
           is_mass_dispatch: true,
           source: 'broadcast',

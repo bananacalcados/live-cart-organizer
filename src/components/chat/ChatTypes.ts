@@ -26,6 +26,9 @@ export interface Message {
   sender_user_id?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   referral?: any;
+  /** Estrutura de template de carrossel (cards) quando a mensagem é um carrossel enviado. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  template_payload?: any;
 }
 
 export interface Conversation {

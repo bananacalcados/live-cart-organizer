@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
 import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
+import { ImageCropDialog } from "@/components/ImageCropDialog";
 
 // ─── Types ──────────────────────────────────────
 
@@ -538,6 +539,11 @@ function StepEditorDialog({
   const [shopifySearch, setShopifySearch] = useState("");
   const [loadingShopify, setLoadingShopify] = useState(false);
   const [shopifyTargetCard, setShopifyTargetCard] = useState<number | null>(null);
+  // Image cropper (1:1 thumbnail) state
+  const [cropOpen, setCropOpen] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropTargetCard, setCropTargetCard] = useState<number | null>(null);
+  const [cropUploading, setCropUploading] = useState(false);
   const [whatsappNumbers, setWhatsappNumbers] = useState<any[]>([]);
   const [loadingNumbers, setLoadingNumbers] = useState(false);
 
@@ -606,23 +612,15 @@ function StepEditorDialog({
     toast.success("Arquivo anexado!");
   };
 
-  // ── Carousel card image: upload from PC ──
+  // ── Carousel card image: upload from PC → open cropper first ──
   const handleCardImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     const cardIdx = pcUploadTargetCard;
     e.target.value = "";
     if (!file || cardIdx === null) return;
-    setUploadingCard(cardIdx);
-    const ext = file.name.split('.').pop();
-    const fileName = `template-card-${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("chat-media").upload(fileName, file);
-    if (error) { toast.error("Erro ao enviar arquivo"); setUploadingCard(null); return; }
-    const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(fileName);
-    const cc = config.carouselCards || {};
-    const cardConf = cc[cardIdx] || {};
-    setConfig({ ...config, carouselCards: { ...cc, [cardIdx]: { ...cardConf, headerUrl: urlData.publicUrl } } });
-    toast.success("Imagem enviada!");
-    setUploadingCard(null);
+    setCropTargetCard(cardIdx);
+    setCropSrc(URL.createObjectURL(file));
+    setCropOpen(true);
   };
 
   const triggerCardPcUpload = (cardIdx: number) => {
@@ -644,14 +642,40 @@ function StepEditorDialog({
     if (shopifyProducts.length === 0) loadShopifyProducts();
   };
 
+  // Shopify image chosen → open cropper (don't set headerUrl directly).
   const selectShopifyImage = (imageUrl: string) => {
     if (shopifyTargetCard === null) return;
-    const cc = config.carouselCards || {};
-    const cardConf = cc[shopifyTargetCard] || {};
-    setConfig({ ...config, carouselCards: { ...cc, [shopifyTargetCard]: { ...cardConf, headerUrl: imageUrl } } });
     setShowShopifyPicker(false);
-    toast.success("Imagem do produto adicionada!");
+    setCropTargetCard(shopifyTargetCard);
+    setCropSrc(imageUrl);
+    setCropOpen(true);
   };
+
+  // Cropper confirmed → upload the 1:1 blob and set the card header.
+  const applyCroppedImage = async (blob: Blob) => {
+    const cardIdx = cropTargetCard;
+    if (cardIdx === null) return;
+    setCropUploading(true);
+    try {
+      const fileName = `template-card-${Date.now()}.jpg`;
+      const { error } = await supabase.storage
+        .from("chat-media")
+        .upload(fileName, blob, { contentType: "image/jpeg" });
+      if (error) { toast.error("Erro ao enviar imagem"); return; }
+      const { data: urlData } = supabase.storage.from("chat-media").getPublicUrl(fileName);
+      const cc = config.carouselCards || {};
+      const cardConf = cc[cardIdx] || {};
+      setConfig({ ...config, carouselCards: { ...cc, [cardIdx]: { ...cardConf, headerUrl: urlData.publicUrl } } });
+      toast.success("Imagem ajustada e enviada!");
+      setCropOpen(false);
+      setCropSrc(null);
+      setCropTargetCard(null);
+    } finally {
+      setCropUploading(false);
+    }
+  };
+
+
 
   const addTag = () => {
     if (!tagInput.trim()) return;
@@ -1745,6 +1769,17 @@ function StepEditorDialog({
         className="hidden"
         onChange={handleCardImageUpload}
       />
+
+      {/* Human image cropper for the 1:1 WhatsApp carousel thumbnail */}
+      <ImageCropDialog
+        open={cropOpen}
+        imageSrc={cropSrc}
+        aspect={1}
+        loading={cropUploading}
+        onCancel={() => { setCropOpen(false); setCropSrc(null); setCropTargetCard(null); }}
+        onConfirm={applyCroppedImage}
+      />
+
 
       {/* Shopify product picker for carousel card image */}
       <Dialog open={showShopifyPicker} onOpenChange={setShowShopifyPicker}>

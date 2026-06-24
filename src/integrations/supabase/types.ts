@@ -15603,6 +15603,7 @@ export type Database = {
           sender_user_id: string | null
           source: string
           status: string | null
+          template_payload: Json | null
           whatsapp_number_id: string | null
         }
         Insert: {
@@ -15627,6 +15628,7 @@ export type Database = {
           sender_user_id?: string | null
           source?: string
           status?: string | null
+          template_payload?: Json | null
           whatsapp_number_id?: string | null
         }
         Update: {
@@ -15651,6 +15653,7 @@ export type Database = {
           sender_user_id?: string | null
           source?: string
           status?: string | null
+          template_payload?: Json | null
           whatsapp_number_id?: string | null
         }
         Relationships: [

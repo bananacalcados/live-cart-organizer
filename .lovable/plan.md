@@ -1,122 +1,39 @@
-# Carrossel Meta — Botões por card + identificação do clique
+# Carrossel Meta: chat completo, identificação de card e ajuste de imagem
 
-## Confirmação de viabilidade (Meta docs)
+Três problemas para resolver, com base na análise do que foi enviado e do que a Meta documenta.
 
-- Cada card pode ter **conteúdo de botão diferente** (label, URL, payload), desde que **a estrutura seja idêntica** em todos os cards (mesmos tipos, mesma quantidade, mesma ordem). Isso é regra da Meta, não nossa.
-- Botão **URL com 1 variável no final** (opção B) é suportado: `loja.com/{{1}}`, preenchido por card no disparo.
-- Botão **QUICK_REPLY** retorna `messages.button.payload` no webhook quando tocado → permite identificar o card exato mesmo com o mesmo texto "Quero Esse" em todos.
+## Diagnóstico
 
-## Parte 1 — Criação do template (`src/components/MetaTemplateCreator.tsx`)
+1. **Chat não mostra o template completo.** Ao enviar, a função `meta-whatsapp-send-template` grava só o texto do balão ("Olá Matthews teste de carrossel"). O `renderTemplateMessage` ignora o componente `CAROUSEL`, então fotos/cards/botões não são salvos nem renderizados. No banco a mensagem ficou como `media_type: text` sem nenhuma estrutura de cards.
 
-Manter os dois modos, selecionáveis no editor de carrossel:
+2. **Não identificou o card clicado.** A resposta recebida gravou `button_payload = "Quero esse"` (o texto do botão), e não `bcq:<dispatch>:<card>`. Ou seja, o payload customizado não chegou de volta. O webhook já sabe ler `bcq:` — o problema é garantir que TODO caminho de envio injete o payload e confirmar que a Meta o devolve (precisa de 1 reteste).
 
-1. **Botão global (modo atual)** — define 1 conjunto de botões aplicado a todos os cards. Bom quando o destino/resposta é o mesmo.
-2. **Botões exclusivos por card (novo)** — define a *estrutura* dos botões no topo (tipos/quantidade/ordem), e cada card edita seu próprio conteúdo:
-   - `QUICK_REPLY`: label por card (ex.: "Quero Esse").
-   - `URL`: URL fixa por card **ou** URL com `{{1}}` no final (opção B, valor preenchido no disparo).
-   - `PHONE_NUMBER`: número por card.
+3. **Imagem desproporcional na miniatura.** A Meta renderiza o card do carrossel em **1:1 (quadrado, recomendado 1024×1024)** ou 1.91:1 — nunca retrato. A foto subida era retrato/vertical, então o app oficial faz *center-crop* e corta o produto. Solução: um recorte feito por humano que gere a imagem **1:1 centralizada** antes de subir.
 
-Validações antes de enviar à Meta:
-- Todos os cards com mesma quantidade/tipo/ordem de botões (bloqueia com toast se divergir).
-- URL com variável: só 1 `{{1}}`, sempre no final.
-- QUICK_REPLY exige label não-vazio em cada card.
+## Proporção correta (resposta à sua pergunta)
 
-### JSON de criação (exemplo: 2 cards, quick reply + URL dinâmica)
+A miniatura do card no WhatsApp é **quadrada 1:1** (formato nativo/recomendado, 1024×1024). O que a pessoa enxerga na miniatura É a própria imagem que subimos; ao clicar, abre a mesma imagem maior. Então não existe "miniatura vs original" separados — a correção é compor uma imagem 1:1 bem centralizada. O cropper vai mirar 1:1.
 
-```json
-{
-  "name": "carrossel_semanal_v1",
-  "category": "MARKETING",
-  "language": "pt_BR",
-  "components": [
-    { "type": "BODY", "text": "Ofertas da semana!" },
-    { "type": "CAROUSEL", "cards": [
-      { "components": [
-        { "type": "HEADER", "format": "IMAGE", "example": { "header_handle": ["4::..."] } },
-        { "type": "BODY", "text": "{{1}}" , "example": { "body_text": [["Tênis Run X"]] } },
-        { "type": "BUTTONS", "buttons": [
-          { "type": "QUICK_REPLY", "text": "Quero Esse" },
-          { "type": "URL", "text": "Comprar", "url": "https://checkout.bananacalcados.com.br/{{1}}", "example": ["p/run-x"] }
-        ]}
-      ]},
-      { "components": [
-        { "type": "HEADER", "format": "IMAGE", "example": { "header_handle": ["4::..."] } },
-        { "type": "BODY", "text": "{{1}}", "example": { "body_text": [["Sandália Y"]] } },
-        { "type": "BUTTONS", "buttons": [
-          { "type": "QUICK_REPLY", "text": "Quero Esse" },
-          { "type": "URL", "text": "Comprar", "url": "https://checkout.bananacalcados.com.br/{{1}}", "example": ["p/sand-y"] }
-        ]}
-      ]}
-    ]}
-  ]
-}
-```
+## Plano
 
-A estrutura dos botões é idêntica (QUICK_REPLY + URL nos dois); só o conteúdo muda.
+### Parte 1 — Mostrar o carrossel inteiro no chat
+- Migration: adicionar coluna `template_payload jsonb` em `whatsapp_messages` (guarda `{type:'carousel', body, cards:[{image_url, body, buttons:[{type,text,url}]}]}`).
+- `meta-whatsapp-send-template` e `dispatch-worker`: ao enviar carrossel, montar a estrutura resolvida (imagens + textos + botões já com variáveis preenchidas) e gravar em `template_payload`. Manter o texto atual como fallback.
+- Novo componente `CarouselMessageBubble` no `ChatView`: quando `template_payload.type === 'carousel'`, renderiza os cards (foto 1:1, texto e botões como badges) num mini-carrossel horizontal.
+- `Message` (ChatTypes) + `useChatMessages` passam a trazer `template_payload`.
 
-## Parte 2 — Disparo semanal (`MassTemplateDispatcher.tsx`)
+### Parte 2 — Identificar qual card foi clicado
+- Garantir injeção do payload `bcq:<id>:<cardIndex>` em todos os caminhos (dispatcher de teste já faz; conferir dispatch-worker e automação).
+- Webhook (`meta-whatsapp-webhook`): já resolve `bcq:` → nome do produto. Reforçar para gravar índice/produto e exibir "🛒 Quero Esse → Card N: Produto" + miniatura do card referido, quando possível.
+- Fallback: se vier resposta de botão sem `bcq` mas existir um carrossel recente enviado àquele número, prefixar a mensagem com o contexto do carrossel para o vendedor não ficar cego.
+- Reteste obrigatório após o ajuste para confirmar que a Meta devolve o payload customizado em botões de carrossel.
 
-Para cada card, além de imagem/textos da semana, o atendente preenche:
-- **URL (opção B):** sufixo da URL por card → chave `card_{i}_button_url_{j}` (já existe no builder).
-- **Identificação do produto:** um campo "Produto/Identificador" por card → novas chaves `card_{i}_product_name` e (opcional) `card_{i}_sku`, salvas em `variables_config`. Servem para o payload e para o atendente ler depois.
+### Parte 3 — Ajuste humano da imagem (1:1)
+- Adicionar lib `react-easy-crop`.
+- Novo `ImageCropDialog` reutilizável: pan + zoom + arraste, recorte fixo **1:1**, exporta JPEG 1024×1024 e sobe pro storage `chat-media`.
+- Plugar nos dois fluxos de upload do card (Subir do PC e Subir do site/Shopify) no `AutomationFlowBuilder` e no `MassTemplateDispatcher`: depois de escolher a imagem (PC ou Shopify), abre o cropper antes de definir a `headerUrl`.
 
-O `payload` do quick reply é montado **compacto e único por card**:
-```
-bcq:<dispatch_history_id>:<card_index>
-```
-(não colocamos nome do produto no payload por causa do limite de tamanho da Meta; resolvemos pelo lookup).
-
-### JSON de envio (por destinatário)
-
-```json
-{
-  "type": "carousel",
-  "cards": [
-    { "card_index": 0, "components": [
-      { "type": "header", "parameters": [{ "type": "image", "image": { "link": "https://.../card0.jpg" } }] },
-      { "type": "body", "parameters": [{ "type": "text", "text": "Tênis Run X" }] },
-      { "type": "button", "sub_type": "quick_reply", "index": 0,
-        "parameters": [{ "type": "payload", "payload": "bcq:7f3a...:0" }] },
-      { "type": "button", "sub_type": "url", "index": 1,
-        "parameters": [{ "type": "text", "text": "p/run-x" }] }
-    ]},
-    { "card_index": 1, "components": [
-      { "type": "header", "parameters": [{ "type": "image", "image": { "link": "https://.../card1.jpg" } }] },
-      { "type": "body", "parameters": [{ "type": "text", "text": "Sandália Y" }] },
-      { "type": "button", "sub_type": "quick_reply", "index": 0,
-        "parameters": [{ "type": "payload", "payload": "bcq:7f3a...:1" }] },
-      { "type": "button", "sub_type": "url", "index": 1,
-        "parameters": [{ "type": "text", "text": "p/sand-y" }] }
-    ]}
-  ]
-}
-```
-
-`dispatch-worker/index.ts` → `buildCarouselComponent` passa a:
-- emitir `sub_type: "quick_reply"` com `payload` para botões QUICK_REPLY (hoje só trata URL);
-- usar o `dispatch_history.id` do disparo no payload.
-
-## Parte 3 — Identificação no chat (webhook + UI)
-
-`meta-whatsapp-webhook/index.ts`, `case 'button'`:
-- ler `msg.button?.payload` (hoje ignorado);
-- se começar com `bcq:`, parsear `dispatch_history_id` + `card_index`, buscar em `dispatch_history.variables_config` o `card_{i}_product_name`/imagem;
-- gravar a mensagem recebida de forma legível, ex.:
-  `🛒 Quero Esse → Card 1: Tênis Run X` (assim o vendedor já vê no chat existente, sem mudança de frontend);
-- persistir o payload bruto numa nova coluna `whatsapp_messages.button_payload` (para rastreio/relatórios).
-
-### Banco
-- Migration: `ALTER TABLE whatsapp_messages ADD COLUMN button_payload text;` (nullable, sem quebrar nada).
-- Sem novas tabelas; o mapeamento card→produto vive no `variables_config` do próprio disparo.
-
-## Arquivos afetados
-- `src/components/MetaTemplateCreator.tsx` — modo global vs. por card + validações.
-- `src/components/marketing/MassTemplateDispatcher.tsx` — campos por card (URL var + produto/identificador).
-- `supabase/functions/dispatch-worker/index.ts` — payload quick reply por card.
-- `supabase/functions/meta-whatsapp-webhook/index.ts` — captura/resolução do payload.
-- nova migration: coluna `button_payload`.
-
-## Limites/observações
-- O texto do botão é igual em todos os cards; a diferenciação vem do `payload` (invisível ao cliente) — exatamente o que você precisa.
-- Quick reply e URL podem coexistir num card (até 2 botões/card), mas a combinação tem que ser igual em todos os cards.
-- Payload da Meta tem limite de tamanho; por isso usamos um código curto + lookup, nunca o nome completo do produto.
+## Detalhes técnicos
+- Arquivos: `supabase/migrations/*` (nova coluna), `supabase/functions/meta-whatsapp-send-template/index.ts`, `supabase/functions/dispatch-worker/index.ts`, `supabase/functions/meta-whatsapp-webhook/index.ts`, `src/components/chat/ChatView.tsx` (+ novo `CarouselMessageBubble.tsx`), `src/components/chat/ChatTypes.ts`, `src/hooks/chat/useChatMessages.ts`, `src/components/ImageCropDialog.tsx` (novo), `src/components/marketing/AutomationFlowBuilder.tsx`, `src/components/marketing/MassTemplateDispatcher.tsx`.
+- `template_payload` é nullable; mensagens antigas seguem funcionando.
+- Cropper só altera o que é enviado (frontend/apresentação) — não muda regra de negócio.

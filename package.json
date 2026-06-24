@@ -79,6 +79,7 @@
     "react-barcode": "^1.6.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
+    "react-easy-crop": "^6.0.2",
     "react-hook-form": "^7.61.1",
     "react-markdown": "^10.1.0",
     "react-qr-code": "^2.0.21",

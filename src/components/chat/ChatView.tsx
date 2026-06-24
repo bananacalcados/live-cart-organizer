@@ -42,6 +42,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CreateSupportTicketDialog } from "../CreateSupportTicketDialog";
 import { MessageStatusIcon } from "./MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./WhatsAppMediaAttachment";
+import { CarouselMessageBubble, type CarouselTemplatePayload } from "./CarouselMessageBubble";
 import { InstagramReferralCard } from "./InstagramReferralCard";
 import { QuickReplyPicker } from "./QuickReplyPicker";
 import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
@@ -884,6 +885,8 @@ export function ChatView({
                   {(() => {
                     const isAuto = msg.message?.startsWith('[AUTO] ');
                     const displayMsg = isAuto ? msg.message.replace(/^\[AUTO\] /, '') : msg.message;
+                    const carouselPayload = (msg as any).template_payload as CarouselTemplatePayload | null | undefined;
+                    const isCarousel = carouselPayload?.type === 'carousel';
                     return (
                   <div
                     className={cn(
@@ -932,6 +935,9 @@ export function ChatView({
                       />
                     )}
                     <InstagramReferralCard referral={msg.referral} />
+                    {isCarousel ? (
+                      <CarouselMessageBubble payload={carouselPayload!} />
+                    ) : (
                     <WhatsAppMediaAttachment
                       mediaUrl={msg.media_url}
                       mediaType={msg.media_type}
@@ -943,6 +949,7 @@ export function ChatView({
                       audioClassName="w-full mb-1"
                       pdfClassName="w-full h-64 rounded-md border border-border bg-background mb-2"
                     />
+                    )}
                     {isEditing ? (
                       <div className="space-y-1">
                         <textarea
@@ -978,7 +985,7 @@ export function ChatView({
                         </div>
                       </div>
                     ) : (
-                      displayMsg && <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{displayMsg}</p>
+                      !isCarousel && displayMsg && <p className="whitespace-pre-wrap break-words overflow-wrap-anywhere" style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{displayMsg}</p>
                     )}
                     {msg.status === 'failed' && (msg as any).error_message && (
                       <div className="mt-1 px-2 py-1 bg-red-100 dark:bg-red-900/30 rounded text-[10px] text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
