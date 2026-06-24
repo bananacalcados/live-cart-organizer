@@ -1,58 +1,74 @@
-# Bug: renomear grupos da LIVE-20 alterou um grupo da LIVE-27
+# Plano: Link de Pagamento Avulso (Checkout Transparente)
 
-## O que está acontecendo (causa raiz confirmada no banco)
+## Objetivo
+No módulo Frente de Caixa → aba Online → "Criar Link de Pagamento", oferecer duas opções:
+1. **Criar link de produtos** → fluxo atual (não muda nada).
+2. **Criar link avulso** → cobrar um valor sem produto/serviço vinculado e **sem etapa de frete/entrega**.
 
-Cada grupo físico do WhatsApp está salvo **4 vezes** na tabela de grupos:
-- 3 cópias no formato moderno `...@g.us` — uma para **cada instância uazapi** ativa (3 números conectados);
-- 1 cópia **legada** no formato antigo `...-group`, presa a uma instância **morta** do Z-API (token cru `3ED1FFCA...`, que nem existe mais na lista de números).
+O link avulso usa o MESMO checkout transparente (`checkout-loja/:storeId/:saleId`) já existente. Nada do fluxo de produtos é alterado.
 
-Isso acontece porque a sincronização grava uma linha por instância (a regra de unicidade é por `grupo + instância`). Resultado: 5 grupos físicos viraram 20 registros.
-
-A campanha **LIVE - 20 de Junho** tem 6 alvos selecionados, mas eles caíram em registros **duplicados/legados**:
+## Como vai funcionar (visão do usuário)
 
 ```text
-LIVE-20 (6 alvos) → na verdade 5 grupos físicos:
-  • 4 registros legados "...-group" (instância morta 3ED1FFCA...)
-  • 1 registro duplicado: o grupo 1203...415356 aparece 2x (legado + @g.us)
+[Criar Link de Pagamento]
+        |
+        v
+  +-----------------------------+
+  | Criar link de produtos      |  -> fluxo de hoje (POSOnlineSales)
+  | Criar link avulso           |  -> novo modal
+  +-----------------------------+
+
+  Link avulso:
+  1) Digita o VALOR em R$
+  2) Aparecem 2 botões:
+       [Preencher dados]      -> form: nome, CPF, e-mail, telefone,
+                                 endereço c/ CEP, forma de pagto (Pix/Cartão)
+                                 -> gera link já com dados + copiar/WhatsApp
+       [Não preencher dados]  -> gera link só com o valor
+                                 -> cliente preenche os próprios dados no checkout
+  * Em ambos os casos: SEM escolha de frete/entrega.
 ```
 
-### Por que UM grupo da LIVE-27 foi renomeado
-Um dos registros legados da LIVE-20 é o grupo físico `120363427586598950-group`.
-Ao aplicar o nome, o sistema **normaliza** `-group` → `@g.us` e renomeia o **grupo físico** `120363427586598950`.
-Esse mesmo grupo físico é justamente o que a **LIVE-27** usa (`120363427586598950@g.us`). Por isso, na tela, o grupo "renomeado" apareceu na LIVE-27.
+## Mudanças no código
 
-### Por que só um funcionou e os outros deram erro/timeout
-- Os demais registros legados apontam grupos onde a instância ativa (que assume o lugar da instância morta) **não é admin** → falham.
-- Há um grupo duplicado dentro da própria LIVE-20 → tenta renomear 2x.
-- São 6 grupos × várias subchamadas em sequência → o tempo estoura e aparece o erro.
+### 1. Submenu no hub (`src/components/pos/POSOnlineHub.tsx`)
+- O botão "Criar Link de Pagamento" passa a abrir um sub-menu com dois cartões: **Criar link de produtos** (abre o atual `POSOnlineSales`) e **Criar link avulso** (abre o novo dialog).
+- Acrescentar um novo `mode` (ex.: `"custom-link"`). O modo `"checkout"` atual continua idêntico.
 
-## Plano de correção (sem quebrar nada)
+### 2. Novo componente `POSCustomLinkDialog.tsx`
+- Campo de **valor (R$)** com máscara de moeda + validação (> 0).
+- Dois botões: **Preencher dados** / **Não preencher dados**.
+  - **Preencher dados:** formulário com nome, CPF, e-mail, telefone, CEP (auto-preenche endereço via ViaCEP, igual ao checkout), endereço/número/complemento/bairro/cidade/UF e forma de pagamento (Pix ou Cartão). Reaproveita os validadores de CPF/telefone/CEP já existentes.
+  - **Não preencher dados:** apenas o valor.
+- Ao confirmar, cria a venda e exibe o **link gerado** com botões **Copiar** e **Enviar no WhatsApp** (mesmo padrão visual do dialog de link atual).
+- Seletor de vendedora reaproveitado (mesma exigência do fluxo atual).
 
-### Parte 1 — Blindagem no código (seguro, sem perda de dados)
-Em `CampaignBulkSettings.tsx`, no `fetchGroupsWithProvider`:
-1. **Deduplicar por grupo físico** (apenas os dígitos do `group_id`): manter 1 registro por grupo, preferindo o formato `@g.us` ligado a uma instância **UUID ativa**, descartando os registros legados `-group`/token morto.
-2. **Tela de confirmação antes de aplicar nome/foto/etc.**: listar os grupos físicos que serão afetados, a instância usada e um **aviso em vermelho** se o mesmo grupo físico também pertencer a outra campanha (evita renomear grupo de outra live por engano).
+### 3. Persistência da venda avulsa
+- Inserir em `pos_sales` + um único item em `pos_sale_items` representando o avulso (nome "Pagamento avulso", `unit_price` = valor, `quantity` = 1). Usar 1 item sintético mantém toda a matemática de totais/resumo do checkout funcionando sem tocar no cálculo.
+- Em `payment_details`, gravar marcador `is_custom_amount: true`, `free_shipping: true`, `shipping_amount: 0`, e os dados do cliente quando preenchidos.
+- `total` = valor; `status: "online_pending"`; `sale_type: "online"`.
+- Link gerado: `https://checkout.bananacalcados.com.br/checkout-loja/{storeId}/{saleId}` (mesma rota/edge function de hoje).
+- **Sem** transferência de estoque (não há SKU) e **sem** push ao Tiny — só ocorrem no fluxo de produtos.
 
-Isso já impede: renomear o mesmo grupo 2x, usar instância morta, e renomear grupo de outra campanha sem o usuário perceber.
+### 4. Checkout transparente (`src/pages/StoreCheckout.tsx`)
+- Detectar `payment_details.is_custom_amount === true` ao carregar a venda.
+- Quando avulso:
+  - **Pular a Etapa 2 (Entrega/Frete)**: do passo 1 (Identificação) vai direto ao passo 3 (Pagamento). `StepIndicator` mostra 2 passos (Identificação → Pagamento).
+  - Forçar `free_shipping` e `shipping_amount = 0` (nenhuma cotação de frete é chamada).
+  - Resumo do pedido mostra "Pagamento avulso" + valor, sem linha de frete obrigatória.
+- Se os dados já vierem preenchidos (opção "Preencher dados"), pré-popular o formulário e, se completos, já abrir direto no passo de Pagamento.
+- O fluxo de produtos (sem o marcador) continua exatamente como hoje (3 passos com frete).
 
-### Parte 2 — Limpeza dos dados das campanhas (precisa da sua decisão)
-Reescrever `target_groups` das duas campanhas para apontar os **registros canônicos** (`@g.us` na instância da campanha `fb7dd381`), deduplicados.
+## Garantias de não-regressão
+- Nenhuma alteração no `POSOnlineSales` (fluxo de produtos), nas edge functions de pagamento (Mercado Pago PIX/cartão) nem no `checkout-public`.
+- O comportamento atual do `StoreCheckout` só muda quando o marcador `is_custom_amount` está presente; vendas existentes não têm esse marcador.
+- Reuso dos componentes/validadores existentes (mesma UX de copiar link, WhatsApp, ViaCEP, parcelas).
 
-**Decisão necessária:** o grupo físico `120363427586598950` ("Live - Lançamentos Junho #3") está hoje nas DUAS campanhas. Você disse que ele é da LIVE-27. Opções:
-- (A) **Remover** da LIVE-20, manter só na LIVE-27 (recomendado pelo que você descreveu); ou
-- (B) Manter nas duas (aí qualquer renomeação em massa afetará as duas — não recomendado).
+## Detalhes técnicos
+- Marcador da venda: `payment_details.is_custom_amount: boolean`.
+- Item sintético em `pos_sale_items`: `product_name: "Pagamento avulso"`, `sku: null`, `unit_price = valor`, `quantity: 1`.
+- `StoreCheckout`: novo estado derivado `isCustom`; condicionais em `StepIndicator`, na navegação de passos e no `OrderSummary`; bypass da função `quoteFreight`.
+- PIX e Cartão usam o `saleId` exatamente como já fazem hoje — sem mudanças nas edge functions.
 
-Nenhuma linha de grupo será **apagada** (apagar dispararia exclusão em cascata de mensagens históricas). Os registros legados serão apenas marcados como inativos e retirados das campanhas.
-
-### Parte 3 — Causa sistêmica (opcional, maior)
-Ajustar a sincronização de grupos para **atualizar** o registro existente (casando pelos dígitos do `group_id`) em vez de criar uma nova linha por instância — eliminando a fonte das duplicatas. Já há rascunho disso em `.lovable/plan.md`.
-
-## Arquivos afetados
-- `src/components/marketing/CampaignBulkSettings.tsx` (dedup + confirmação)
-- Migração de dados para `group_campaigns.target_groups` (após sua decisão A/B)
-- (Parte 3, se aprovar) funções de sync `uazapi-groups` / `wasender-groups` / `zapi-list-groups`
-
-## Validação
-- Pré-visualizar a renomeação da LIVE-20 e conferir que só 5 grupos distintos aparecem, todos da LIVE-20, com instância ativa.
-- Confirmar que a LIVE-27 não é mais tocada.
-- Testar 1 renomeação real após a limpeza.
+## Itens a confirmar
+- Forma de pagamento no "Preencher dados": deixo o cliente ainda escolher Pix/Cartão na tela final, ou já travo na opção escolhida pela vendedora? (Plano assume: a escolha da vendedora é uma sugestão e a tela final continua permitindo Pix/Cartão, para não quebrar o fluxo de pagamento atual.)

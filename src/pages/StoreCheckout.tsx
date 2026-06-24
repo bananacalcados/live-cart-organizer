@@ -33,6 +33,7 @@ interface SaleData {
   customer_phone: string;
   items: SaleItem[];
   status: string;
+  is_custom_amount?: boolean;
 }
 
 interface CustomerFormData {
@@ -126,12 +127,14 @@ function calculateInstallmentAmount(total: number, installments: number, config:
 }
 
 // ── StepIndicator ───────────────────────────────────────────────
-function StepIndicator({ currentStep }: { currentStep: number }) {
-  const steps = [
+function StepIndicator({ currentStep, isCustom }: { currentStep: number; isCustom?: boolean }) {
+  const allSteps = [
     { num: 1, label: "Identificação", icon: User },
     { num: 2, label: "Entrega", icon: MapPin },
     { num: 3, label: "Pagamento", icon: Wallet },
   ];
+  // Link avulso: sem etapa de entrega/frete
+  const steps = isCustom ? allSteps.filter(s => s.num !== 2) : allSteps;
   return (
     <div className="flex items-center justify-center gap-1 mb-6">
       {steps.map((step, i) => {
@@ -145,7 +148,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
             }`}>
               {isDone ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
               <span className="hidden sm:inline">{step.label}</span>
-              <span className="sm:hidden">{step.num}</span>
+              <span className="sm:hidden">{i + 1}</span>
             </div>
             {i < steps.length - 1 && <ChevronRight className="h-4 w-4 text-muted-foreground mx-1" />}
           </div>
@@ -1096,6 +1099,7 @@ export default function StoreCheckout() {
       });
       const customerName = (sale as any).customer_name || paymentDetails.customer_name || "Cliente";
       const customerPhone = (sale as any).customer_phone || paymentDetails.customer_phone || "";
+      const isCustom = Boolean(paymentDetails.is_custom_amount);
 
       setSaleData({
         id: sale.id,
@@ -1103,12 +1107,14 @@ export default function StoreCheckout() {
         store_name: store?.name || "Loja",
         total: Number(sale.total || 0),
         discount_amount: Number((sale as any).discount_amount ?? (sale as any).discount ?? 0),
-         shipping_amount: Number(paymentDetails.shipping_amount ?? 0),
-         free_shipping: Boolean(paymentDetails.free_shipping),
+         // Link avulso nunca tem frete
+         shipping_amount: isCustom ? 0 : Number(paymentDetails.shipping_amount ?? 0),
+         free_shipping: isCustom ? true : Boolean(paymentDetails.free_shipping),
         customer_name: customerName,
         customer_phone: customerPhone,
         items: saleItems,
         status: sale.status || "",
+        is_custom_amount: isCustom,
       });
 
       // Pre-fill customer name/phone
@@ -1118,6 +1124,28 @@ export default function StoreCheckout() {
           fullName: customerName,
           whatsapp: customerPhone ? formatPhone(customerPhone) : "",
         }));
+      }
+
+      // Link avulso com dados preenchidos pela vendedora: pré-popular tudo e
+      // pular direto para o pagamento se os dados essenciais existirem.
+      if (isCustom && paymentDetails.customer_cpf) {
+        const filled = {
+          fullName: customerName !== "Cliente" ? customerName : (paymentDetails.customer_name || ""),
+          email: paymentDetails.customer_email || "",
+          cpf: paymentDetails.customer_cpf ? formatCPF(paymentDetails.customer_cpf) : "",
+          whatsapp: customerPhone ? formatPhone(customerPhone) : "",
+          cep: paymentDetails.customer_cep ? formatCEP(paymentDetails.customer_cep) : "",
+          address: paymentDetails.customer_address || "",
+          addressNumber: paymentDetails.customer_address_number || "",
+          complement: paymentDetails.customer_complement || "",
+          neighborhood: paymentDetails.customer_neighborhood || "",
+          city: paymentDetails.customer_city || "",
+          state: paymentDetails.customer_state || "",
+        };
+        setCustomerForm(filled);
+        if (filled.fullName && filled.email && filled.cpf && filled.whatsapp) {
+          setCurrentStep(3);
+        }
       }
 
       if (sale.status === "completed") setPaymentStatus("success");
@@ -1418,7 +1446,7 @@ export default function StoreCheckout() {
           </p>
         </div>
 
-        <StepIndicator currentStep={currentStep} />
+        <StepIndicator currentStep={currentStep} isCustom={saleData.is_custom_amount} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
@@ -1426,7 +1454,7 @@ export default function StoreCheckout() {
               <CardContent className="p-6">
                 {currentStep === 1 && (
                   <StepIdentification form={customerForm} setForm={setCustomerForm} onNext={() => {
-                    // Save customer data progressively to pos_sales when advancing to Step 2
+                    // Save customer data progressively to pos_sales when advancing
                     if (saleData) {
                       cpUpdateSale(saleData.id, {
                         customer_name: customerForm.fullName,
@@ -1437,10 +1465,13 @@ export default function StoreCheckout() {
                           customer_phone: customerForm.whatsapp.replace(/\D/g, ""),
                           customer_email: customerForm.email,
                           customer_cpf: customerForm.cpf.replace(/\D/g, ""),
+                          // Preserva marcador do link avulso entre etapas/reloads
+                          ...(saleData.is_custom_amount ? { is_custom_amount: true, free_shipping: true, shipping_amount: 0 } : {}),
                         },
                       });
                     }
-                    setCurrentStep(2);
+                    // Link avulso: pula a etapa de entrega/frete
+                    setCurrentStep(saleData?.is_custom_amount ? 3 : 2);
                   }} prefilled={!!saleData.customer_name} />
                 )}
                 {currentStep === 2 && (
@@ -1596,7 +1627,7 @@ export default function StoreCheckout() {
                          </div>
                       );
                     })()}
-                    <Button variant="ghost" onClick={() => setCurrentStep(2)} className="w-full text-sm text-muted-foreground">← Voltar para Entrega</Button>
+                    <Button variant="ghost" onClick={() => setCurrentStep(saleData.is_custom_amount ? 1 : 2)} className="w-full text-sm text-muted-foreground">← Voltar {saleData.is_custom_amount ? "para Identificação" : "para Entrega"}</Button>
                   </div>
                 )}
               </CardContent>
