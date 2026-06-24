@@ -220,6 +220,26 @@ export function POSOnlineHub({ storeId, sellers }: Props) {
               </div>
             </div>
           </button>
+
+          <button
+            onClick={() => setMode("automacao")}
+            className="text-left bg-white border border-blue-200/60 rounded-2xl p-6 shadow-[var(--shadow-pos-card,0_4px_12px_rgba(0,0,0,0.06))] hover:shadow-xl hover:-translate-y-0.5 transition-all group"
+          >
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-md">
+                <Zap className="h-6 w-6" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-bold text-neutral-800">Automação</h3>
+                  <ChevronRight className="h-5 w-5 text-neutral-400 group-hover:text-blue-500 group-hover:translate-x-0.5 transition" />
+                </div>
+                <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
+                  Campanhas automáticas de carrossel no WhatsApp: templates, públicos e disparos
+                </p>
+              </div>
+            </div>
+          </button>
         </div>
       </div>
     </div>
