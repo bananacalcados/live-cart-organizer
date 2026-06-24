@@ -22,6 +22,7 @@ import { AiTestPanel } from "@/components/admin/AiTestPanel";
 import { SecretaryChat } from "@/components/admin/SecretaryChat";
 import { AiErrorLogs } from "@/components/admin/AiErrorLogs";
 import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccountsManager";
+import { CarouselTemplatesLadder } from "@/components/admin/CarouselTemplatesLadder";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
