@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link2, Calendar, ArrowLeft, ChevronRight, Package, Receipt } from "lucide-react";
+import { Link2, Calendar, ArrowLeft, ChevronRight, Package, Receipt, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { POSOnlineSales } from "./POSOnlineSales";
 import { POSCustomLinkDialog } from "./POSCustomLinkDialog";
+import { CarouselTemplatesLadder } from "@/components/admin/CarouselTemplatesLadder";
 import Events from "@/pages/Events";
 
 interface Seller {
@@ -16,7 +17,7 @@ interface Props {
   sellers: Seller[];
 }
 
-type Mode = "menu" | "link-choice" | "checkout" | "custom-link" | "events";
+type Mode = "menu" | "link-choice" | "checkout" | "custom-link" | "events" | "automacao";
 
 export function POSOnlineHub({ storeId, sellers }: Props) {
   const [mode, setMode] = useState<Mode>("menu");
