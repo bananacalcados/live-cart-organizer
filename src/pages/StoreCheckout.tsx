@@ -1099,6 +1099,7 @@ export default function StoreCheckout() {
       });
       const customerName = (sale as any).customer_name || paymentDetails.customer_name || "Cliente";
       const customerPhone = (sale as any).customer_phone || paymentDetails.customer_phone || "";
+      const isCustom = Boolean(paymentDetails.is_custom_amount);
 
       setSaleData({
         id: sale.id,
@@ -1106,12 +1107,14 @@ export default function StoreCheckout() {
         store_name: store?.name || "Loja",
         total: Number(sale.total || 0),
         discount_amount: Number((sale as any).discount_amount ?? (sale as any).discount ?? 0),
-         shipping_amount: Number(paymentDetails.shipping_amount ?? 0),
-         free_shipping: Boolean(paymentDetails.free_shipping),
+         // Link avulso nunca tem frete
+         shipping_amount: isCustom ? 0 : Number(paymentDetails.shipping_amount ?? 0),
+         free_shipping: isCustom ? true : Boolean(paymentDetails.free_shipping),
         customer_name: customerName,
         customer_phone: customerPhone,
         items: saleItems,
         status: sale.status || "",
+        is_custom_amount: isCustom,
       });
 
       // Pre-fill customer name/phone
@@ -1121,6 +1124,28 @@ export default function StoreCheckout() {
           fullName: customerName,
           whatsapp: customerPhone ? formatPhone(customerPhone) : "",
         }));
+      }
+
+      // Link avulso com dados preenchidos pela vendedora: pré-popular tudo e
+      // pular direto para o pagamento se os dados essenciais existirem.
+      if (isCustom && paymentDetails.customer_cpf) {
+        const filled = {
+          fullName: customerName !== "Cliente" ? customerName : (paymentDetails.customer_name || ""),
+          email: paymentDetails.customer_email || "",
+          cpf: paymentDetails.customer_cpf ? formatCPF(paymentDetails.customer_cpf) : "",
+          whatsapp: customerPhone ? formatPhone(customerPhone) : "",
+          cep: paymentDetails.customer_cep ? formatCEP(paymentDetails.customer_cep) : "",
+          address: paymentDetails.customer_address || "",
+          addressNumber: paymentDetails.customer_address_number || "",
+          complement: paymentDetails.customer_complement || "",
+          neighborhood: paymentDetails.customer_neighborhood || "",
+          city: paymentDetails.customer_city || "",
+          state: paymentDetails.customer_state || "",
+        };
+        setCustomerForm(filled);
+        if (filled.fullName && filled.email && filled.cpf && filled.whatsapp) {
+          setCurrentStep(3);
+        }
       }
 
       if (sale.status === "completed") setPaymentStatus("success");
