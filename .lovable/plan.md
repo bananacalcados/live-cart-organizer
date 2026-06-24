@@ -1,166 +1,122 @@
-# Suporte a Templates de CARROSSEL (Meta WhatsApp)
+# Carrossel Meta — Botões por card + identificação do clique
 
-## Princípio de arquitetura (o ponto central do pedido)
+## Confirmação de viabilidade (Meta docs)
 
-Separar **estrutura do template** (criada/aprovada UMA vez) de **conteúdo do disparo** (imagens + variáveis da semana):
+- Cada card pode ter **conteúdo de botão diferente** (label, URL, payload), desde que **a estrutura seja idêntica** em todos os cards (mesmos tipos, mesma quantidade, mesma ordem). Isso é regra da Meta, não nossa.
+- Botão **URL com 1 variável no final** (opção B) é suportado: `loja.com/{{1}}`, preenchido por card no disparo.
+- Botão **QUICK_REPLY** retorna `messages.button.payload` no webhook quando tocado → permite identificar o card exato mesmo com o mesmo texto "Quero Esse" em todos.
 
-- Na **criação**, as imagens são apenas amostras para a Meta aprovar a moldura. Elas viram `header_handle` (handle de upload) e ficam congeladas no template aprovado.
-- No **disparo**, NÃO se recria nem reaprova nada. Só se trocam as imagens reais da semana (e textos variáveis) passando-as como **parâmetros** do envio. A Meta permite imagem de envio por `link` público (mais simples) ou por `id` de mídia — não exige re-upload resumable no envio.
+## Parte 1 — Criação do template (`src/components/MetaTemplateCreator.tsx`)
 
-Conclusão prática: handle de upload = só criação; link público (Supabase Storage) = disparo.
+Manter os dois modos, selecionáveis no editor de carrossel:
 
----
+1. **Botão global (modo atual)** — define 1 conjunto de botões aplicado a todos os cards. Bom quando o destino/resposta é o mesmo.
+2. **Botões exclusivos por card (novo)** — define a *estrutura* dos botões no topo (tipos/quantidade/ordem), e cada card edita seu próprio conteúdo:
+   - `QUICK_REPLY`: label por card (ex.: "Quero Esse").
+   - `URL`: URL fixa por card **ou** URL com `{{1}}` no final (opção B, valor preenchido no disparo).
+   - `PHONE_NUMBER`: número por card.
 
-## PARTE 1 — Criar carrossel
+Validações antes de enviar à Meta:
+- Todos os cards com mesma quantidade/tipo/ordem de botões (bloqueia com toast se divergir).
+- URL com variável: só 1 `{{1}}`, sempre no final.
+- QUICK_REPLY exige label não-vazio em cada card.
 
-**Arquivo:** `src/components/MetaTemplateCreator.tsx` (único arquivo de criação)
-
-Mudanças:
-1. Adicionar opção de "tipo de template": Padrão (atual) vs Carrossel. Carrossel só com categoria MARKETING.
-2. Quando Carrossel:
-   - Campo **Bubble text** (BODY que aparece acima dos cards) — obrigatório. Reaproveita o editor de body atual (emoji + variáveis).
-   - Lista de **cards: mínimo 2, máximo 6**. Botões "Adicionar card" / "Remover card".
-   - Para cada card: upload de **imagem de exemplo** (reaproveita `meta-whatsapp-upload-header` → retorna `handle`) + **body text** (máx 160 chars, com suas próprias variáveis e exemplos).
-   - **Botões configurados UMA vez** (fora dos cards) e aplicados a TODOS os cards — garante mesma quantidade/tipo/ordem (regra dura da Meta). Reaproveita o editor de botões atual.
-3. Validações novas: 2–6 cards; todo card com imagem enviada (handle presente); body ≤160 chars; variáveis contíguas e com exemplo por card; estrutura de botões idêntica (garantida por construção).
-
-**Como a imagem de exemplo chega à Meta:** a função `meta-whatsapp-upload-header` JÁ executa o Resumable Upload (POST `/{app_id}/uploads` → sessão → POST bytes → recebe `{ h }`). Chamamos ela uma vez por card no momento do upload e guardamos o `handle` retornado para montar o `example.header_handle` de cada card.
-
-**Edge function:** `meta-whatsapp-create-template` é passthrough (envia `components` direto). Nenhuma mudança necessária — só passamos o componente `CAROUSEL` montado.
-
-### JSON EXATO da criação
+### JSON de criação (exemplo: 2 cards, quick reply + URL dinâmica)
 
 ```json
 {
-  "name": "promo_semanal",
+  "name": "carrossel_semanal_v1",
   "category": "MARKETING",
   "language": "pt_BR",
   "components": [
-    { "type": "BODY", "text": "Confira as novidades da semana! 🛍️" },
-    {
-      "type": "CAROUSEL",
-      "cards": [
-        {
-          "components": [
-            { "type": "HEADER", "format": "IMAGE",
-              "example": { "header_handle": ["<HANDLE_AMOSTRA_CARD_0>"] } },
-            { "type": "BODY", "text": "Tênis a partir de {{1}}",
-              "example": { "body_text": [["R$ 199"]] } },
-            { "type": "BUTTONS", "buttons": [
-              { "type": "URL", "text": "Comprar",
-                "url": "https://checkout.bananacalcados.com.br/p/{{1}}",
-                "example": ["tenis-x"] } ] }
-          ]
-        },
-        {
-          "components": [
-            { "type": "HEADER", "format": "IMAGE",
-              "example": { "header_handle": ["<HANDLE_AMOSTRA_CARD_1>"] } },
-            { "type": "BODY", "text": "Sandália a partir de {{1}}",
-              "example": { "body_text": [["R$ 149"]] } },
-            { "type": "BUTTONS", "buttons": [
-              { "type": "URL", "text": "Comprar",
-                "url": "https://checkout.bananacalcados.com.br/p/{{1}}",
-                "example": ["sandalia-y"] } ] }
-          ]
-        }
-      ]
-    }
+    { "type": "BODY", "text": "Ofertas da semana!" },
+    { "type": "CAROUSEL", "cards": [
+      { "components": [
+        { "type": "HEADER", "format": "IMAGE", "example": { "header_handle": ["4::..."] } },
+        { "type": "BODY", "text": "{{1}}" , "example": { "body_text": [["Tênis Run X"]] } },
+        { "type": "BUTTONS", "buttons": [
+          { "type": "QUICK_REPLY", "text": "Quero Esse" },
+          { "type": "URL", "text": "Comprar", "url": "https://checkout.bananacalcados.com.br/{{1}}", "example": ["p/run-x"] }
+        ]}
+      ]},
+      { "components": [
+        { "type": "HEADER", "format": "IMAGE", "example": { "header_handle": ["4::..."] } },
+        { "type": "BODY", "text": "{{1}}", "example": { "body_text": [["Sandália Y"]] } },
+        { "type": "BUTTONS", "buttons": [
+          { "type": "QUICK_REPLY", "text": "Quero Esse" },
+          { "type": "URL", "text": "Comprar", "url": "https://checkout.bananacalcados.com.br/{{1}}", "example": ["p/sand-y"] }
+        ]}
+      ]}
+    ]}
   ]
 }
 ```
 
-Regras embutidas: todos os cards com mesmo `format` de header (IMAGE) e mesma lista de botões na mesma ordem; cada `{{n}}` (body do card e suffix de URL) com `example`.
+A estrutura dos botões é idêntica (QUICK_REPLY + URL nos dois); só o conteúdo muda.
 
----
+## Parte 2 — Disparo semanal (`MassTemplateDispatcher.tsx`)
 
-## PARTE 2 — Visualizar o carrossel na listagem
+Para cada card, além de imagem/textos da semana, o atendente preenche:
+- **URL (opção B):** sufixo da URL por card → chave `card_{i}_button_url_{j}` (já existe no builder).
+- **Identificação do produto:** um campo "Produto/Identificador" por card → novas chaves `card_{i}_product_name` e (opcional) `card_{i}_sku`, salvas em `variables_config`. Servem para o payload e para o atendente ler depois.
 
-**Arquivo:** `src/components/MetaTemplateCreator.tsx`
+O `payload` do quick reply é montado **compacto e único por card**:
+```
+bcq:<dispatch_history_id>:<card_index>
+```
+(não colocamos nome do produto no payload por causa do limite de tamanho da Meta; resolvemos pelo lookup).
 
-Hoje a lista renderiza só o BODY (`getBodyFromComponents`). Mudanças:
-- Estender a interface `MetaTemplate.components` para reconhecer `type: "CAROUSEL"` com `cards[]`.
-- Quando o template tiver componente CAROUSEL, renderizar mini-preview: bubble text + carrossel horizontal de cards (placeholder/imagem da `example.header_handle` quando disponível, body text do card e os botões).
-- `meta-whatsapp-get-templates` já devolve o JSON completo — nenhuma mudança de backend.
-
----
-
-## PARTE 3 — Disparo semanal (tela JÁ existente)
-
-**Arquivo:** `src/components/marketing/MassTemplateDispatcher.tsx` (NÃO recriar a tela)
-
-Hoje: `MetaTemplate.components` não modela carrossel; `buildComponentsForRecipient` trata só header simples/body/botões URL. Mudanças:
-
-1. Estender a tipagem local de `components` para incluir `CAROUSEL` + `cards[]`.
-2. Detectar `selectedTemplate` do tipo carrossel (`isCarousel`).
-3. Quando carrossel, renderizar um bloco por card pedindo:
-   - **Upload da imagem DAQUELA SEMANA** (diferente da amostra). Reaproveita o padrão atual `handleHeaderFileUpload` (sobe para Supabase Storage `chat-media`, gera URL pública). Estado por card: `weekCardImages[cardIndex] = publicUrl`.
-   - Variáveis de texto do body do card e suffix de URL, se houver (reaproveita o mecanismo de variáveis estático/dinâmico já existente).
-4. `buildComponentsForRecipient`: quando carrossel, montar o componente `carousel` com `cards` indexados por `card_index`, cada card com header `image` por `link` (URL pública da semana) + body params + button param. Se o BODY-bubble tiver variáveis, incluir também o `{ type: "body", parameters: [...] }` de topo.
-5. Reaproveitar TODA a segmentação de público, cooldown, rate-limit/anti-ban e fila já existentes (sem mudanças). O carrossel só altera o conteúdo de `components`/`template_params`.
-
-**Sobre Resumable Upload no disparo:** a Meta aceita a imagem de envio por `link` público diretamente (nossas imagens já ficam no Storage). Por isso NÃO é necessário re-upload resumable no envio — usamos `link`. (Caso futuramente se queira `id` de mídia, daria para chamar `meta-whatsapp-upload-header`/upload de mídia, mas é desnecessário e mais lento.)
-
-**Edge function `meta-whatsapp-send-template`:** a interface `SendTemplateRequest` JÁ suporta `cards` com `card_index` e `components`. Confere com o que a Meta exige. **Único ajuste a verificar/garantir:** que o array `components` (incluindo o objeto `carousel`) seja repassado intacto para `template.components` — o código atual já faz `template.components = components`, então funciona tanto no envio único quanto no bulk via fila (`template_params`). Sem mudança de código prevista; apenas validar no teste.
-
-### JSON EXATO do envio (imagens da semana)
+### JSON de envio (por destinatário)
 
 ```json
 {
-  "phone": "5533999999999",
-  "templateName": "promo_semanal",
-  "language": "pt_BR",
-  "whatsappNumberId": "<id>",
-  "components": [
-    { "type": "body", "parameters": [ { "type": "text", "text": "Maria" } ] },
-    {
-      "type": "carousel",
-      "cards": [
-        {
-          "card_index": 0,
-          "components": [
-            { "type": "header", "parameters": [
-              { "type": "image", "image": { "link": "https://<storage>/semana1_card0.jpg" } } ] },
-            { "type": "body", "parameters": [ { "type": "text", "text": "R$ 179" } ] },
-            { "type": "button", "sub_type": "url", "index": "0",
-              "parameters": [ { "type": "text", "text": "tenis-x" } ] }
-          ]
-        },
-        {
-          "card_index": 1,
-          "components": [
-            { "type": "header", "parameters": [
-              { "type": "image", "image": { "link": "https://<storage>/semana1_card1.jpg" } } ] },
-            { "type": "body", "parameters": [ { "type": "text", "text": "R$ 129" } ] },
-            { "type": "button", "sub_type": "url", "index": "0",
-              "parameters": [ { "type": "text", "text": "sandalia-y" } ] }
-          ]
-        }
-      ]
-    }
+  "type": "carousel",
+  "cards": [
+    { "card_index": 0, "components": [
+      { "type": "header", "parameters": [{ "type": "image", "image": { "link": "https://.../card0.jpg" } }] },
+      { "type": "body", "parameters": [{ "type": "text", "text": "Tênis Run X" }] },
+      { "type": "button", "sub_type": "quick_reply", "index": 0,
+        "parameters": [{ "type": "payload", "payload": "bcq:7f3a...:0" }] },
+      { "type": "button", "sub_type": "url", "index": 1,
+        "parameters": [{ "type": "text", "text": "p/run-x" }] }
+    ]},
+    { "card_index": 1, "components": [
+      { "type": "header", "parameters": [{ "type": "image", "image": { "link": "https://.../card1.jpg" } }] },
+      { "type": "body", "parameters": [{ "type": "text", "text": "Sandália Y" }] },
+      { "type": "button", "sub_type": "quick_reply", "index": 0,
+        "parameters": [{ "type": "payload", "payload": "bcq:7f3a...:1" }] },
+      { "type": "button", "sub_type": "url", "index": 1,
+        "parameters": [{ "type": "text", "text": "p/sand-y" }] }
+    ]}
   ]
 }
 ```
 
-(O objeto `body` de topo só entra se o bubble text tiver variáveis. `card_index` deve seguir a ordem dos cards aprovados. Cada card repete a mesma estrutura de header/body/button.)
+`dispatch-worker/index.ts` → `buildCarouselComponent` passa a:
+- emitir `sub_type: "quick_reply"` com `payload` para botões QUICK_REPLY (hoje só trata URL);
+- usar o `dispatch_history.id` do disparo no payload.
 
----
+## Parte 3 — Identificação no chat (webhook + UI)
 
-## Tabelas / colunas
+`meta-whatsapp-webhook/index.ts`, `case 'button'`:
+- ler `msg.button?.payload` (hoje ignorado);
+- se começar com `bcq:`, parsear `dispatch_history_id` + `card_index`, buscar em `dispatch_history.variables_config` o `card_{i}_product_name`/imagem;
+- gravar a mensagem recebida de forma legível, ex.:
+  `🛒 Quero Esse → Card 1: Tênis Run X` (assim o vendedor já vê no chat existente, sem mudança de frontend);
+- persistir o payload bruto numa nova coluna `whatsapp_messages.button_payload` (para rastreio/relatórios).
 
-Nenhuma tabela nova é estritamente necessária — o template vive na Meta e é lido por `meta-whatsapp-get-templates`; o disparo reusa `dispatch_history`/`dispatch_recipients`/`meta_message_queue` atuais.
+### Banco
+- Migration: `ALTER TABLE whatsapp_messages ADD COLUMN button_payload text;` (nullable, sem quebrar nada).
+- Sem novas tabelas; o mapeamento card→produto vive no `variables_config` do próprio disparo.
 
-Opcional (se quiser memorizar imagens da semana para reuso/histórico): uma tabela leve `carousel_dispatch_assets` (template_name, card_index, image_url, week). **Recomendo não criar agora** — manter o conteúdo da semana só no Storage + no payload, conforme o fluxo atual de header media. Decido conforme sua preferência.
+## Arquivos afetados
+- `src/components/MetaTemplateCreator.tsx` — modo global vs. por card + validações.
+- `src/components/marketing/MassTemplateDispatcher.tsx` — campos por card (URL var + produto/identificador).
+- `supabase/functions/dispatch-worker/index.ts` — payload quick reply por card.
+- `supabase/functions/meta-whatsapp-webhook/index.ts` — captura/resolução do payload.
+- nova migration: coluna `button_payload`.
 
----
-
-## Resumo de arquivos afetados
-
-- `src/components/MetaTemplateCreator.tsx` — criação do carrossel (Parte 1) + preview na listagem (Parte 2).
-- `src/components/marketing/MassTemplateDispatcher.tsx` — upload da imagem da semana por card + montagem do payload carousel (Parte 3).
-- `supabase/functions/meta-whatsapp-create-template/index.ts` — sem mudança (passthrough).
-- `supabase/functions/meta-whatsapp-upload-header/index.ts` — sem mudança (reuso para handles de amostra).
-- `supabase/functions/meta-whatsapp-send-template/index.ts` — sem mudança prevista; apenas validar que `cards` chega intacto.
-- `supabase/functions/meta-whatsapp-get-templates/index.ts` — sem mudança (já devolve JSON completo).
-
-Nada existente é quebrado: templates padrão seguem o caminho atual; o carrossel é um ramo novo acionado só quando o tipo é carrossel.
+## Limites/observações
+- O texto do botão é igual em todos os cards; a diferenciação vem do `payload` (invisível ao cliente) — exatamente o que você precisa.
+- Quick reply e URL podem coexistir num card (até 2 botões/card), mas a combinação tem que ser igual em todos os cards.
+- Payload da Meta tem limite de tamanho; por isso usamos um código curto + lookup, nunca o nome completo do produto.
