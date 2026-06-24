@@ -29,12 +29,21 @@ interface MetaTemplate {
   status: string;
   category: string;
   language: string;
+  rejected_reason?: string;
   components: Array<{
     type: string;
     text?: string;
     format?: string;
     buttons?: Array<{ type: string; text: string; url?: string; phone_number?: string }>;
   }>;
+}
+
+// Extracts distinct {{n}} variable numbers from a text, sorted ascending.
+function extractVarNumbers(text?: string): number[] {
+  if (!text) return [];
+  const matches = text.match(/\{\{\s*(\d+)\s*\}\}/g) || [];
+  const nums = matches.map((m) => parseInt(m.replace(/[^\d]/g, ""), 10));
+  return Array.from(new Set(nums)).sort((a, b) => a - b);
 }
 
 export function MetaTemplateCreator() {
@@ -53,6 +62,12 @@ export function MetaTemplateCreator() {
   const [headerText, setHeaderText] = useState("");
   const [bodyText, setBodyText] = useState("");
   const [footerText, setFooterText] = useState("");
+  // Example values keyed by variable number, separate for body and header
+  const [bodyExamples, setBodyExamples] = useState<Record<number, string>>({});
+  const [headerExamples, setHeaderExamples] = useState<Record<number, string>>({});
+
+  const bodyVars = extractVarNumbers(bodyText);
+  const headerVars = headerType === "text" ? extractVarNumbers(headerText) : [];
 
   useEffect(() => {
     if (numbers.length === 0) fetchNumbers();
@@ -122,15 +137,53 @@ export function MetaTemplateCreator() {
       return;
     }
 
+    // Validate: body variables must form a contiguous sequence starting at 1 (1,2,...,N)
+    if (bodyVars.length > 0) {
+      const expected = Array.from({ length: bodyVars.length }, (_, i) => i + 1);
+      const isContiguous = bodyVars.every((n, i) => n === expected[i]);
+      if (!isContiguous) {
+        toast.error(`As variáveis do corpo devem ser sequenciais a partir de {{1}} (sem pular números). Detectado: ${bodyVars.map((n) => `{{${n}}}`).join(", ")}`);
+        return;
+      }
+    }
+
+    // Validate: header accepts at most 1 variable
+    if (headerVars.length > 1) {
+      toast.error("O cabeçalho de texto aceita no máximo 1 variável.");
+      return;
+    }
+
+    // Validate: every detected variable must have a non-empty example (Meta requires it)
+    const missingBody = bodyVars.some((n) => !(bodyExamples[n] || "").trim());
+    const missingHeader = headerVars.some((n) => !(headerExamples[n] || "").trim());
+    if (missingBody || missingHeader) {
+      toast.error("Preencha o valor de exemplo de cada variável — a Meta exige isso");
+      return;
+    }
+
     setIsCreating(true);
     try {
       const components: Array<Record<string, unknown>> = [];
 
       if (headerType === "text" && headerText.trim()) {
-        components.push({ type: "HEADER", format: "TEXT", text: headerText });
+        const headerComponent: Record<string, unknown> = { type: "HEADER", format: "TEXT", text: headerText };
+        if (headerVars.length > 0) {
+          // header_text is a FLAT array of strings, in variable order
+          headerComponent.example = {
+            header_text: headerVars.map((n) => (headerExamples[n] || "").trim()),
+          };
+        }
+        components.push(headerComponent);
       }
 
-      components.push({ type: "BODY", text: bodyText });
+      const bodyComponent: Record<string, unknown> = { type: "BODY", text: bodyText };
+      if (bodyVars.length > 0) {
+        // body_text is an array CONTAINING ONE array of strings, in variable order
+        bodyComponent.example = {
+          body_text: [bodyVars.map((n) => (bodyExamples[n] || "").trim())],
+        };
+      }
+      components.push(bodyComponent);
 
       if (footerText.trim()) {
         components.push({ type: "FOOTER", text: footerText });
@@ -181,6 +234,8 @@ export function MetaTemplateCreator() {
     setHeaderText("");
     setBodyText("");
     setFooterText("");
+    setBodyExamples({});
+    setHeaderExamples({});
   };
 
   const getStatusBadge = (status: string) => {
@@ -260,12 +315,17 @@ export function MetaTemplateCreator() {
                 <div className="flex items-start justify-between gap-2 mb-1">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm font-mono">{template.name}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       {getStatusBadge(template.status)}
                       <Badge variant="outline" className="text-[10px]">
                         {getCategoryLabel(template.category)}
                       </Badge>
                       <span className="text-[10px] text-muted-foreground">{template.language}</span>
+                      {template.status === "REJECTED" && template.rejected_reason && (
+                        <span className="text-[10px] text-destructive font-medium">
+                          — {template.rejected_reason}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -352,8 +412,28 @@ export function MetaTemplateCreator() {
                   onChange={(e) => setHeaderText(e.target.value)}
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Use {"{{1}}"}, {"{{2}}"} etc. para variáveis
+                  Use {"{{1}}"}, {"{{2}}"} etc. para variáveis (máximo 1 no cabeçalho)
                 </p>
+                {headerVars.length > 0 && (
+                  <div className="space-y-2 rounded-md border border-dashed p-2 mt-1">
+                    <p className="text-[10px] font-medium text-muted-foreground">
+                      Exemplos para o cabeçalho (a Meta exige):
+                    </p>
+                    {headerVars.map((n) => (
+                      <div key={`h-${n}`} className="flex items-center gap-2">
+                        <span className="text-xs font-mono w-12 shrink-0">{`{{${n}}}`}</span>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder={`Exemplo para {{${n}}}`}
+                          value={headerExamples[n] || ""}
+                          onChange={(e) =>
+                            setHeaderExamples((prev) => ({ ...prev, [n]: e.target.value }))
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -369,7 +449,28 @@ export function MetaTemplateCreator() {
                 Use {"{{1}}"}, {"{{2}}"}, {"{{3}}"} para variáveis dinâmicas. Máximo 1024 caracteres.
               </p>
               <p className="text-[10px] text-muted-foreground text-right">{bodyText.length}/1024</p>
+              {bodyVars.length > 0 && (
+                <div className="space-y-2 rounded-md border border-dashed p-2 mt-1">
+                  <p className="text-[10px] font-medium text-muted-foreground">
+                    Exemplos para o corpo (a Meta exige um valor por variável):
+                  </p>
+                  {bodyVars.map((n) => (
+                    <div key={`b-${n}`} className="flex items-center gap-2">
+                      <span className="text-xs font-mono w-12 shrink-0">{`{{${n}}}`}</span>
+                      <Input
+                        className="h-8 text-xs"
+                        placeholder={`Exemplo para {{${n}}}`}
+                        value={bodyExamples[n] || ""}
+                        onChange={(e) =>
+                          setBodyExamples((prev) => ({ ...prev, [n]: e.target.value }))
+                        }
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
 
             <div className="space-y-2">
               <Label>Rodapé (opcional)</Label>
