@@ -85,8 +85,33 @@ serve(async (req) => {
       );
     }
 
+    const templates = data.data || [];
+
+    // Enrich with rejected_reason: prefer Meta's own field, fallback to the webhook status log.
+    let logMap: Record<string, string> = {};
+    try {
+      const { data: logs } = await supabase
+        .from('meta_template_status_log')
+        .select('template_id, rejected_reason');
+      if (logs) {
+        logMap = Object.fromEntries(
+          logs
+            .filter((l: { rejected_reason?: string }) => l.rejected_reason)
+            .map((l: { template_id: string; rejected_reason: string }) => [l.template_id, l.rejected_reason]),
+        );
+      }
+    } catch (e) {
+      console.error('Error loading template status log:', (e as Error).message);
+    }
+
+    const enriched = templates.map((t: Record<string, unknown>) => ({
+      ...t,
+      rejected_reason:
+        (t.rejected_reason as string | undefined) || logMap[String(t.id)] || null,
+    }));
+
     return new Response(
-      JSON.stringify({ success: true, templates: data.data || [] }),
+      JSON.stringify({ success: true, templates: enriched }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
