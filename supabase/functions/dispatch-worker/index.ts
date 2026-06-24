@@ -52,6 +52,7 @@ function extractVarNumbers(text?: string): number[] {
 function buildCarouselComponent(
   carouselComp: any,
   variablesConfig: Record<string, VariableConfig>,
+  dispatchId?: string,
 ): any {
   const tplCards = carouselComp?.cards || [];
   const cards = tplCards.map((tplCard: any, i: number) => {
@@ -70,9 +71,15 @@ function buildCarouselComponent(
 
     const cardBtns = (tplCard.components || []).find((c: any) => (c.type || '').toUpperCase() === 'BUTTONS');
     (cardBtns?.buttons || []).forEach((b: any, idx: number) => {
-      if (b.type === 'URL' && (b.url || '').includes('{{')) {
+      const btnType = (b.type || '').toUpperCase();
+      if (btnType === 'URL' && (b.url || '').includes('{{')) {
         const suffix = variablesConfig[`card_${i}_button_url_${idx}`]?.staticValue || '';
         cardComps.push({ type: 'button', sub_type: 'url', index: idx.toString(), parameters: [{ type: 'text', text: suffix }] });
+      } else if (btnType === 'QUICK_REPLY') {
+        // Per-card payload so the webhook can identify exactly which card the customer tapped.
+        // Format: bcq:<dispatchId>:<cardIndex>
+        const payload = `bcq:${dispatchId || 'na'}:${i}`;
+        cardComps.push({ type: 'button', sub_type: 'quick_reply', index: idx.toString(), parameters: [{ type: 'payload', payload }] });
       }
     });
 
@@ -87,6 +94,7 @@ function buildComponentsForRecipient(
   headerMediaUrl: string | null,
   recipient: any | null,
   hasDynamicVars: boolean,
+  dispatchId?: string,
 ) {
   const components: any[] = [];
 
@@ -105,7 +113,7 @@ function buildComponentsForRecipient(
       };
       components.push({ type: 'body', parameters: bubbleVars.map((n) => ({ type: 'text', text: resolveBubble(n) })) });
     }
-    components.push(buildCarouselComponent(carouselComp, variablesConfig));
+    components.push(buildCarouselComponent(carouselComp, variablesConfig, dispatchId));
     return components;
   }
 
@@ -352,7 +360,7 @@ serve(async (req) => {
         let formatted = rcp.phone.replace(/\D/g, '');
         if (!formatted.startsWith('55')) formatted = '55' + formatted;
 
-        const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars);
+        const components = buildComponentsForRecipient(templateComponents, variablesConfig, headerMediaUrl, rcp, hasDynamicVars, dispatchId);
         const rendered = buildRenderedMessage(templateComponents, variablesConfig, hasDynamicVars ? rcp : null, hasDynamicVars);
         const body: any = {
           messaging_product: 'whatsapp',

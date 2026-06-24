@@ -15582,6 +15582,7 @@ export type Database = {
       }
       whatsapp_messages: {
         Row: {
+          button_payload: string | null
           channel: string
           created_at: string
           direction: string
@@ -15605,6 +15606,7 @@ export type Database = {
           whatsapp_number_id: string | null
         }
         Insert: {
+          button_payload?: string | null
           channel?: string
           created_at?: string
           direction: string
@@ -15628,6 +15630,7 @@ export type Database = {
           whatsapp_number_id?: string | null
         }
         Update: {
+          button_payload?: string | null
           channel?: string
           created_at?: string
           direction?: string

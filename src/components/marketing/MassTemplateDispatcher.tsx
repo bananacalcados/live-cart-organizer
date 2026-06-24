@@ -595,6 +595,15 @@ export function MassTemplateDispatcher() {
     return btns.map((b: any, idx: number) => ({ b, idx })).filter(x => x.b.type === 'URL' && (x.b.url || '').includes('{{'));
   };
 
+  // QUICK_REPLY buttons for a given card (used to identify which card the customer tapped).
+  const cardQuickReplyButtons = (cardIdx: number) => {
+    const btns = carouselCards[cardIdx]?.components.find(c => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+    return btns.map((b: any, idx: number) => ({ b, idx })).filter(x => (x.b.type || '').toUpperCase() === 'QUICK_REPLY');
+  };
+
+
+
+
 
   // Build rendered message text (for preview, uses placeholder labels for dynamic vars)
   const renderedMessage = useMemo(() => {
@@ -817,6 +826,11 @@ export function MassTemplateDispatcher() {
         }
         cardUrlButtons(i).forEach(({ idx }) => {
           cardComps.push({ type: 'button', sub_type: 'url', index: idx.toString(), parameters: [{ type: 'text', text: variables[`card_${i}_button_url_${idx}`]?.staticValue || '' }] });
+        });
+        // Quick-reply buttons carry a per-card payload so we can identify which card was tapped.
+        // In this client/test path we don't have the dispatch id yet → use a "test" marker.
+        cardQuickReplyButtons(i).forEach(({ idx }) => {
+          cardComps.push({ type: 'button', sub_type: 'quick_reply', index: idx.toString(), parameters: [{ type: 'payload', payload: `bcq:test:${i}` }] });
         });
         return { card_index: i, components: cardComps };
       });
@@ -1501,6 +1515,14 @@ export function MassTemplateDispatcher() {
                           onChange={e => setVariables(prev => ({ ...prev, [`card_${i}_button_url_${idx}`]: { mode: '__static__', staticValue: e.target.value } }))}
                         />
                       ))}
+                      {cardQuickReplyButtons(i).length > 0 && (
+                        <Input
+                          className="h-7 text-xs border-amber-300 dark:border-amber-700"
+                          placeholder={`Produto deste card (ex: Tênis Run X) — aparece pro vendedor`}
+                          value={variables[`card_${i}_product_name`]?.staticValue || ''}
+                          onChange={e => setVariables(prev => ({ ...prev, [`card_${i}_product_name`]: { mode: '__static__', staticValue: e.target.value } }))}
+                        />
+                      )}
                     </div>
                   );
                 })}

@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { EmojiPickerButton } from "@/components/EmojiPickerButton";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { supabase } from "@/integrations/supabase/client";
@@ -57,12 +58,17 @@ type TemplateButton = {
   urlExample?: string;
 };
 
+// Per-card button content (label/url/phone). Index-aligned with the button STRUCTURE.
+type CardButtonContent = { text?: string; url?: string; phone_number?: string; urlExample?: string };
+
 type CarouselCard = {
   bodyText: string;
   examples: Record<number, string>;
   mediaHandle: string;
   mediaName: string;
   isUploading: boolean;
+  // Per-card button content (used only when cardButtonMode === "per_card")
+  buttons?: CardButtonContent[];
 };
 
 const MIN_CARDS = 2;
@@ -82,7 +88,7 @@ function isContiguousFromOne(nums: number[]): boolean {
 }
 
 function emptyCard(): CarouselCard {
-  return { bodyText: "", examples: {}, mediaHandle: "", mediaName: "", isUploading: false };
+  return { bodyText: "", examples: {}, mediaHandle: "", mediaName: "", isUploading: false, buttons: [] };
 }
 
 // Media header config: accept types and Meta format strings.
@@ -116,8 +122,10 @@ export function MetaTemplateCreator() {
   const [headerMediaHandle, setHeaderMediaHandle] = useState<string>("");
   const [headerMediaName, setHeaderMediaName] = useState<string>("");
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
-  // Buttons (also used as the SHARED buttons for every carousel card)
+  // Buttons (the STRUCTURE — types/order/count. In "shared" mode also the content for every card)
   const [buttons, setButtons] = useState<TemplateButton[]>([]);
+  // Carousel: whether buttons are shared across all cards or unique per card
+  const [cardButtonMode, setCardButtonMode] = useState<"shared" | "per_card">("shared");
   // Carousel cards
   const [cards, setCards] = useState<CarouselCard[]>([emptyCard(), emptyCard()]);
 
@@ -199,6 +207,18 @@ export function MetaTemplateCreator() {
   // ── Carousel card helpers ──
   const updateCard = (index: number, patch: Partial<CarouselCard>) => {
     setCards((prev) => prev.map((c, i) => (i === index ? { ...c, ...patch } : c)));
+  };
+
+  // Updates the per-card content of a single button (index-aligned with the structure).
+  const updateCardButton = (cardIdx: number, btnIdx: number, patch: Partial<CardButtonContent>) => {
+    setCards((prev) =>
+      prev.map((c, i) => {
+        if (i !== cardIdx) return c;
+        const arr = [...(c.buttons || [])];
+        arr[btnIdx] = { ...(arr[btnIdx] || {}), ...patch };
+        return { ...c, buttons: arr };
+      }),
+    );
   };
 
   const addCard = () => {
@@ -365,37 +385,89 @@ export function MetaTemplateCreator() {
     setButtons((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Builds the shared buttons array for a carousel card (with URL example when needed).
-  const buildCardButtons = () =>
-    buttons.map((b) => {
+  // Resolves the effective content of button `i` for a given card, honoring the mode.
+  const resolveCardButton = (card: CarouselCard, i: number): CardButtonContent => {
+    const struct: TemplateButton | undefined = buttons[i];
+    if (cardButtonMode === "per_card") {
+      const c = card.buttons?.[i] || {};
+      return {
+        text: c.text ?? "",
+        url: c.url ?? "",
+        phone_number: c.phone_number ?? "",
+        urlExample: c.urlExample ?? "",
+      };
+    }
+    return {
+      text: struct?.text ?? "",
+      url: struct?.url ?? "",
+      phone_number: struct?.phone_number ?? "",
+      urlExample: struct?.urlExample ?? "",
+    };
+  };
+
+  // Builds the buttons array for a SPECIFIC card (Meta create payload).
+  const buildCardButtonsFor = (card: CarouselCard) =>
+    buttons.map((b, i) => {
+      const c = resolveCardButton(card, i);
+      const text = (c.text || "").trim();
       if (b.type === "URL") {
-        const btn: Record<string, unknown> = { type: "URL", text: b.text, url: b.url };
-        if ((b.url || "").includes("{{")) btn.example = [(b.urlExample || "").trim()];
+        const url = (c.url || "").trim();
+        const btn: Record<string, unknown> = { type: "URL", text, url };
+        if (url.includes("{{")) btn.example = [(c.urlExample || "").trim()];
         return btn;
       }
-      if (b.type === "PHONE_NUMBER") return { type: "PHONE_NUMBER", text: b.text, phone_number: b.phone_number };
-      return { type: "QUICK_REPLY", text: b.text };
+      if (b.type === "PHONE_NUMBER") return { type: "PHONE_NUMBER", text, phone_number: (c.phone_number || "").trim() };
+      return { type: "QUICK_REPLY", text };
     });
 
-  const validateSharedButtons = (): boolean => {
-    for (const b of buttons) {
-      if (!b.text.trim()) {
-        toast.error("Preencha o texto de todos os botões.");
-        return false;
-      }
-      if (b.type === "URL") {
-        if (!(b.url || "").trim()) {
-          toast.error("Preencha a URL dos botões de link.");
+  // Validates the button STRUCTURE + content according to the active mode.
+  const validateCarouselButtons = (): boolean => {
+    if (cardButtonMode === "shared") {
+      for (const b of buttons) {
+        if (!b.text.trim()) {
+          toast.error("Preencha o texto de todos os botões.");
           return false;
         }
-        if ((b.url || "").includes("{{") && !(b.urlExample || "").trim()) {
-          toast.error("Preencha o exemplo do sufixo da URL (a Meta exige).");
+        if (b.type === "URL") {
+          if (!(b.url || "").trim()) {
+            toast.error("Preencha a URL dos botões de link.");
+            return false;
+          }
+          if ((b.url || "").includes("{{") && !(b.urlExample || "").trim()) {
+            toast.error("Preencha o exemplo do sufixo da URL (a Meta exige).");
+            return false;
+          }
+        }
+        if (b.type === "PHONE_NUMBER" && !(b.phone_number || "").trim()) {
+          toast.error("Preencha o telefone dos botões de ligação.");
           return false;
         }
       }
-      if (b.type === "PHONE_NUMBER" && !(b.phone_number || "").trim()) {
-        toast.error("Preencha o telefone dos botões de ligação.");
-        return false;
+      return true;
+    }
+    // per_card: every card must fill the content of every structural button.
+    for (let ci = 0; ci < cards.length; ci++) {
+      for (let bi = 0; bi < buttons.length; bi++) {
+        const b = buttons[bi];
+        const c = resolveCardButton(cards[ci], bi);
+        if (!(c.text || "").trim()) {
+          toast.error(`Preencha o texto do botão ${bi + 1} no card ${ci + 1}.`);
+          return false;
+        }
+        if (b.type === "URL") {
+          if (!(c.url || "").trim()) {
+            toast.error(`Preencha a URL do botão ${bi + 1} no card ${ci + 1}.`);
+            return false;
+          }
+          if ((c.url || "").includes("{{") && !(c.urlExample || "").trim()) {
+            toast.error(`Preencha o exemplo do sufixo da URL do botão ${bi + 1} no card ${ci + 1}.`);
+            return false;
+          }
+        }
+        if (b.type === "PHONE_NUMBER" && !(c.phone_number || "").trim()) {
+          toast.error(`Preencha o telefone do botão ${bi + 1} no card ${ci + 1}.`);
+          return false;
+        }
       }
     }
     return true;
@@ -414,7 +486,7 @@ export function MetaTemplateCreator() {
       toast.error("Cards de carrossel aceitam no máximo 2 botões.");
       return;
     }
-    if (!validateSharedButtons()) return;
+    if (!validateCarouselButtons()) return;
 
     // Validate each card
     for (let i = 0; i < cards.length; i++) {
@@ -446,7 +518,6 @@ export function MetaTemplateCreator() {
 
     setIsCreating(true);
     try {
-      const cardButtons = buildCardButtons();
       const components: Array<Record<string, unknown>> = [];
 
       // Bubble text (BODY above the cards)
@@ -469,7 +540,7 @@ export function MetaTemplateCreator() {
             cardBody.example = { body_text: [cardVars.map((n) => (card.examples[n] || "").trim())] };
           }
           cardComps.push(cardBody);
-          cardComps.push({ type: "BUTTONS", buttons: cardButtons });
+          cardComps.push({ type: "BUTTONS", buttons: buildCardButtonsFor(card) });
           return { components: cardComps };
         }),
       });
@@ -669,6 +740,7 @@ export function MetaTemplateCreator() {
     setHeaderMediaHandle("");
     setHeaderMediaName("");
     setButtons([]);
+    setCardButtonMode("shared");
     setCards([emptyCard(), emptyCard()]);
   };
 
@@ -1047,7 +1119,10 @@ export function MetaTemplateCreator() {
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  Todos os cards usam os MESMOS botões (configurados abaixo). Mínimo {MIN_CARDS}, máximo {MAX_CARDS} cards.
+                  {cardButtonMode === "shared"
+                    ? "Todos os cards usam os MESMOS botões (configurados abaixo)."
+                    : "Cada card tem seu próprio conteúdo de botão (a estrutura é definida abaixo)."}{" "}
+                  Mínimo {MIN_CARDS}, máximo {MAX_CARDS} cards.
                 </p>
                 {cards.map((card, idx) => {
                   const cardVars = extractVarNumbers(card.bodyText);
@@ -1142,6 +1217,58 @@ export function MetaTemplateCreator() {
                           ))}
                         </div>
                       )}
+
+                      {/* Per-card button content (only in per_card mode) */}
+                      {cardButtonMode === "per_card" && buttons.length > 0 && (
+                        <div className="space-y-2 rounded-md border border-dashed p-2">
+                          <p className="text-[10px] font-medium text-muted-foreground">
+                            Botões deste card:
+                          </p>
+                          {buttons.map((b, bi) => {
+                            const c = card.buttons?.[bi] || {};
+                            return (
+                              <div key={`cb-${idx}-${bi}`} className="space-y-1 rounded border p-2">
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {b.type === "QUICK_REPLY" ? "Resposta rápida" : b.type === "URL" ? "Link" : "Ligar"}
+                                </Badge>
+                                <Input
+                                  className="h-8 text-xs"
+                                  placeholder="Texto do botão (máx 25)"
+                                  maxLength={25}
+                                  value={c.text || ""}
+                                  onChange={(e) => updateCardButton(idx, bi, { text: e.target.value })}
+                                />
+                                {b.type === "URL" && (
+                                  <>
+                                    <Input
+                                      className="h-8 text-xs"
+                                      placeholder="https://exemplo.com/p/{{1}}"
+                                      value={c.url || ""}
+                                      onChange={(e) => updateCardButton(idx, bi, { url: e.target.value })}
+                                    />
+                                    {(c.url || "").includes("{{") && (
+                                      <Input
+                                        className="h-8 text-xs"
+                                        placeholder="Exemplo do sufixo (ex: tenis-x)"
+                                        value={c.urlExample || ""}
+                                        onChange={(e) => updateCardButton(idx, bi, { urlExample: e.target.value })}
+                                      />
+                                    )}
+                                  </>
+                                )}
+                                {b.type === "PHONE_NUMBER" && (
+                                  <Input
+                                    className="h-8 text-xs"
+                                    placeholder="+5533999999999"
+                                    value={c.phone_number || ""}
+                                    onChange={(e) => updateCardButton(idx, bi, { phone_number: e.target.value })}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1162,7 +1289,13 @@ export function MetaTemplateCreator() {
             {/* Buttons */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label>{isCarousel ? "Botões dos cards (aplicados a todos) *" : "Botões (opcional)"}</Label>
+                <Label>
+                  {isCarousel
+                    ? cardButtonMode === "shared"
+                      ? "Botões dos cards (iguais em todos) *"
+                      : "Estrutura dos botões (conteúdo por card) *"
+                    : "Botões (opcional)"}
+                </Label>
                 <div className="flex items-center gap-1">
                   <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => addButton("QUICK_REPLY")}>
                     + Resposta rápida
@@ -1175,65 +1308,94 @@ export function MetaTemplateCreator() {
                   </Button>
                 </div>
               </div>
+
+              {isCarousel && (
+                <div className="flex items-center justify-between rounded-md border p-2">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-medium">Botões exclusivos por card</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {cardButtonMode === "per_card"
+                        ? "Cada card tem seu próprio link/texto. A estrutura (tipos e ordem) é a mesma."
+                        : "Todos os cards usam exatamente os mesmos botões."}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={cardButtonMode === "per_card"}
+                    onCheckedChange={(v) => setCardButtonMode(v ? "per_card" : "shared")}
+                  />
+                </div>
+              )}
+
               {buttons.length === 0 ? (
                 <p className="text-[10px] text-muted-foreground">
                   {isCarousel
-                    ? "Carrossel exige de 1 a 2 botões — eles são aplicados igualmente a todos os cards."
+                    ? "Carrossel exige de 1 a 2 botões — mesma estrutura em todos os cards."
                     : "Adicione botões de resposta rápida, link ou ligação (máximo 10, padrões da Meta)."}
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {buttons.map((b, i) => (
-                    <div key={i} className="flex items-start gap-2 rounded-md border p-2">
-                      <Badge variant="secondary" className="text-[10px] shrink-0 mt-1">
-                        {b.type === "QUICK_REPLY" ? "Resposta" : b.type === "URL" ? "Link" : "Ligar"}
-                      </Badge>
-                      <div className="flex-1 space-y-1">
-                        <Input
-                          className="h-8 text-xs"
-                          placeholder="Texto do botão (máx 25)"
-                          maxLength={25}
-                          value={b.text}
-                          onChange={(e) => updateButton(i, { text: e.target.value })}
-                        />
-                        {b.type === "URL" && (
-                          <>
-                            <Input
-                              className="h-8 text-xs"
-                              placeholder={isCarousel ? "https://exemplo.com/p/{{1}}" : "https://exemplo.com"}
-                              value={b.url || ""}
-                              onChange={(e) => updateButton(i, { url: e.target.value })}
-                            />
-                            {isCarousel && (b.url || "").includes("{{") && (
+                  {buttons.map((b, i) => {
+                    const perCard = isCarousel && cardButtonMode === "per_card";
+                    return (
+                      <div key={i} className="flex items-start gap-2 rounded-md border p-2">
+                        <Badge variant="secondary" className="text-[10px] shrink-0 mt-1">
+                          {b.type === "QUICK_REPLY" ? "Resposta" : b.type === "URL" ? "Link" : "Ligar"}
+                        </Badge>
+                        <div className="flex-1 space-y-1">
+                          {perCard ? (
+                            <p className="text-[10px] text-muted-foreground py-1.5">
+                              Configure o texto{b.type === "URL" ? "/link" : b.type === "PHONE_NUMBER" ? "/telefone" : ""} deste botão dentro de cada card acima.
+                            </p>
+                          ) : (
+                            <>
                               <Input
                                 className="h-8 text-xs"
-                                placeholder="Exemplo do sufixo da URL (ex: tenis-x)"
-                                value={b.urlExample || ""}
-                                onChange={(e) => updateButton(i, { urlExample: e.target.value })}
+                                placeholder="Texto do botão (máx 25)"
+                                maxLength={25}
+                                value={b.text}
+                                onChange={(e) => updateButton(i, { text: e.target.value })}
                               />
-                            )}
-                          </>
-                        )}
-                        {b.type === "PHONE_NUMBER" && (
-                          <Input
-                            className="h-8 text-xs"
-                            placeholder="+5533999999999"
-                            value={b.phone_number || ""}
-                            onChange={(e) => updateButton(i, { phone_number: e.target.value })}
-                          />
-                        )}
+                              {b.type === "URL" && (
+                                <>
+                                  <Input
+                                    className="h-8 text-xs"
+                                    placeholder={isCarousel ? "https://exemplo.com/p/{{1}}" : "https://exemplo.com"}
+                                    value={b.url || ""}
+                                    onChange={(e) => updateButton(i, { url: e.target.value })}
+                                  />
+                                  {isCarousel && (b.url || "").includes("{{") && (
+                                    <Input
+                                      className="h-8 text-xs"
+                                      placeholder="Exemplo do sufixo da URL (ex: tenis-x)"
+                                      value={b.urlExample || ""}
+                                      onChange={(e) => updateButton(i, { urlExample: e.target.value })}
+                                    />
+                                  )}
+                                </>
+                              )}
+                              {b.type === "PHONE_NUMBER" && (
+                                <Input
+                                  className="h-8 text-xs"
+                                  placeholder="+5533999999999"
+                                  value={b.phone_number || ""}
+                                  onChange={(e) => updateButton(i, { phone_number: e.target.value })}
+                                />
+                              )}
+                            </>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          onClick={() => removeButton(i)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 shrink-0"
-                        onClick={() => removeButton(i)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

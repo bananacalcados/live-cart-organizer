@@ -304,15 +304,41 @@ serve(async (req) => {
             let mediaType = 'text';
             let mediaUrl: string | null = null;
             let rawMediaId: string | null = null;
+            let buttonPayload: string | null = null;
 
             switch (msg.type) {
               case 'text':
                 messageText = msg.text?.body || '';
                 break;
               case 'button':
-                // Quick reply button response from template
+                // Quick reply button response from template (incl. carousel cards)
                 messageText = msg.button?.text || '';
+                buttonPayload = msg.button?.payload || null;
                 mediaType = 'text';
+                // Carousel quick-reply identification: payload format bcq:<dispatchId>:<cardIndex>
+                if (buttonPayload && buttonPayload.startsWith('bcq:')) {
+                  try {
+                    const [, dispatchId, cardIdxStr] = buttonPayload.split(':');
+                    const cardIdx = parseInt(cardIdxStr, 10);
+                    let productLabel = '';
+                    if (dispatchId && dispatchId !== 'test' && dispatchId !== 'na') {
+                      const { data: disp } = await supabase
+                        .from('dispatch_history')
+                        .select('variables_config')
+                        .eq('id', dispatchId)
+                        .maybeSingle();
+                      const vc = (disp?.variables_config || {}) as Record<string, { staticValue?: string }>;
+                      productLabel = vc[`card_${cardIdx}_product_name`]?.staticValue || '';
+                    }
+                    const cardLabel = `Card ${Number.isFinite(cardIdx) ? cardIdx + 1 : '?'}`;
+                    const btnText = msg.button?.text || 'Quero Esse';
+                    messageText = productLabel
+                      ? `🛒 ${btnText} → ${cardLabel}: ${productLabel}`
+                      : `🛒 ${btnText} → ${cardLabel}`;
+                  } catch (e) {
+                    console.error('[meta-wa] Failed to resolve carousel payload:', e);
+                  }
+                }
                 break;
               case 'interactive':
                 // Interactive button/list response
@@ -398,6 +424,7 @@ serve(async (req) => {
               sender_name: senderName,
               referral: referralData,
               quoted_message_id: quotedMessageId,
+              button_payload: buttonPayload,
             });
 
             if (error) {
