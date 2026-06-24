@@ -342,6 +342,16 @@ export function CarouselTemplatesLadder() {
           </div>
         </div>
 
+        <div className="rounded-md border border-dashed bg-muted/30 p-2.5 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Rodízio de vendedoras:</span>{" "}
+          ao usar a variável <code className="rounded bg-muted px-1">{`{{vendedora}}`}</code>, cada
+          envio entra com o nome de uma vendedora diferente, em rodízio.{" "}
+          {sellers.length
+            ? `${sellers.length} vendedora(s) ativa(s): ${sellers.join(", ")}.`
+            : "Nenhuma vendedora ativa encontrada no PDV."}
+        </div>
+
+
         <VariableTextField
           label="Texto do corpo (mensagem acima dos cards)"
           value={topBody}
