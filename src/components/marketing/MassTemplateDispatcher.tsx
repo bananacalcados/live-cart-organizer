@@ -565,19 +565,31 @@ export function MassTemplateDispatcher() {
     const raw = e.target.files?.[0];
     if (!raw) return;
     e.target.value = "";
-    setUploadingCardIdx(cardIdx);
+    // Open the 1:1 cropper before uploading so the thumbnail isn't cropped by WhatsApp.
+    const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
+    const file = await normalizeImageOrientation(raw);
+    setCropTargetCard(cardIdx);
+    setCropSrc(URL.createObjectURL(file));
+    setCropOpen(true);
+  };
+
+  // Cropper confirmed → upload the square blob and set the card image.
+  const applyCroppedCardImage = async (blob: Blob) => {
+    const cardIdx = cropTargetCard;
+    if (cardIdx === null) return;
+    setCropUploading(true);
     try {
-      const { normalizeImageOrientation } = await import('@/lib/imageOrientation');
-      const file = await normalizeImageOrientation(raw);
-      const ext = file.name.split('.').pop();
-      const fileName = `carousel-${Date.now()}-c${cardIdx}.${ext}`;
-      const { error } = await supabase.storage.from("chat-media").upload(fileName, file, { contentType: file.type });
+      const fileName = `carousel-${Date.now()}-c${cardIdx}.jpg`;
+      const { error } = await supabase.storage.from("chat-media").upload(fileName, blob, { contentType: "image/jpeg" });
       if (error) { toast.error("Erro ao enviar imagem"); return; }
       const { data } = supabase.storage.from("chat-media").getPublicUrl(fileName);
       setVariables(prev => ({ ...prev, [`card_${cardIdx}_image`]: { mode: '__static__', staticValue: data.publicUrl } }));
-      toast.success(`Imagem do card ${cardIdx + 1} enviada!`);
+      toast.success(`Imagem do card ${cardIdx + 1} ajustada e enviada!`);
+      setCropOpen(false);
+      setCropSrc(null);
+      setCropTargetCard(null);
     } finally {
-      setUploadingCardIdx(null);
+      setCropUploading(false);
     }
   };
 
