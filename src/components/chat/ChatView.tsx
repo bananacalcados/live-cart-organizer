@@ -885,6 +885,8 @@ export function ChatView({
                   {(() => {
                     const isAuto = msg.message?.startsWith('[AUTO] ');
                     const displayMsg = isAuto ? msg.message.replace(/^\[AUTO\] /, '') : msg.message;
+                    const carouselPayload = (msg as any).template_payload as CarouselTemplatePayload | null | undefined;
+                    const isCarousel = carouselPayload?.type === 'carousel';
                     return (
                   <div
                     className={cn(
