@@ -13,8 +13,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { VariableTextField } from "@/components/admin/VariableTextField";
+import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import {
   STANDARD_VARS,
+  SELLER_VAR_TOKEN,
   buildComponentText,
   BUTTON_TYPE_LABEL,
   type VarDef,
