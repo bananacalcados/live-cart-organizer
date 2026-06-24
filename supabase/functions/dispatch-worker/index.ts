@@ -113,7 +113,7 @@ function buildComponentsForRecipient(
       };
       components.push({ type: 'body', parameters: bubbleVars.map((n) => ({ type: 'text', text: resolveBubble(n) })) });
     }
-    components.push(buildCarouselComponent(carouselComp, variablesConfig));
+    components.push(buildCarouselComponent(carouselComp, variablesConfig, dispatchId));
     return components;
   }
 
