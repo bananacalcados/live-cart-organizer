@@ -1214,6 +1214,58 @@ export function MetaTemplateCreator() {
                           ))}
                         </div>
                       )}
+
+                      {/* Per-card button content (only in per_card mode) */}
+                      {cardButtonMode === "per_card" && buttons.length > 0 && (
+                        <div className="space-y-2 rounded-md border border-dashed p-2">
+                          <p className="text-[10px] font-medium text-muted-foreground">
+                            Botões deste card:
+                          </p>
+                          {buttons.map((b, bi) => {
+                            const c = card.buttons?.[bi] || {};
+                            return (
+                              <div key={`cb-${idx}-${bi}`} className="space-y-1 rounded border p-2">
+                                <Badge variant="secondary" className="text-[10px]">
+                                  {b.type === "QUICK_REPLY" ? "Resposta rápida" : b.type === "URL" ? "Link" : "Ligar"}
+                                </Badge>
+                                <Input
+                                  className="h-8 text-xs"
+                                  placeholder="Texto do botão (máx 25)"
+                                  maxLength={25}
+                                  value={c.text || ""}
+                                  onChange={(e) => updateCardButton(idx, bi, { text: e.target.value })}
+                                />
+                                {b.type === "URL" && (
+                                  <>
+                                    <Input
+                                      className="h-8 text-xs"
+                                      placeholder="https://exemplo.com/p/{{1}}"
+                                      value={c.url || ""}
+                                      onChange={(e) => updateCardButton(idx, bi, { url: e.target.value })}
+                                    />
+                                    {(c.url || "").includes("{{") && (
+                                      <Input
+                                        className="h-8 text-xs"
+                                        placeholder="Exemplo do sufixo (ex: tenis-x)"
+                                        value={c.urlExample || ""}
+                                        onChange={(e) => updateCardButton(idx, bi, { urlExample: e.target.value })}
+                                      />
+                                    )}
+                                  </>
+                                )}
+                                {b.type === "PHONE_NUMBER" && (
+                                  <Input
+                                    className="h-8 text-xs"
+                                    placeholder="+5533999999999"
+                                    value={c.phone_number || ""}
+                                    onChange={(e) => updateCardButton(idx, bi, { phone_number: e.target.value })}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
