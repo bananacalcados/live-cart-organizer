@@ -595,6 +595,15 @@ export function MassTemplateDispatcher() {
     return btns.map((b: any, idx: number) => ({ b, idx })).filter(x => x.b.type === 'URL' && (x.b.url || '').includes('{{'));
   };
 
+  // QUICK_REPLY buttons for a given card (used to identify which card the customer tapped).
+  const cardQuickReplyButtons = (cardIdx: number) => {
+    const btns = carouselCards[cardIdx]?.components.find(c => (c.type || '').toUpperCase() === 'BUTTONS')?.buttons || [];
+    return btns.map((b: any, idx: number) => ({ b, idx })).filter(x => (x.b.type || '').toUpperCase() === 'QUICK_REPLY');
+  };
+
+  // Whether the selected carousel has any quick-reply buttons (so we ask for a product identifier per card).
+  const carouselHasQuickReply = isCarousel && carouselCards.some((_, i) => cardQuickReplyButtons(i).length > 0);
+
 
   // Build rendered message text (for preview, uses placeholder labels for dynamic vars)
   const renderedMessage = useMemo(() => {
