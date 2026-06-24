@@ -652,6 +652,8 @@ function StepEditorDialog({
     setShowShopifyPicker(false);
     toast.success("Imagem do produto adicionada!");
   };
+
+  const addTag = () => {
     if (!tagInput.trim()) return;
     const tags = config.tags || [];
     if (!tags.includes(tagInput.trim())) {
