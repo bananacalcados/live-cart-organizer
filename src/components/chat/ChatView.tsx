@@ -42,6 +42,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CreateSupportTicketDialog } from "../CreateSupportTicketDialog";
 import { MessageStatusIcon } from "./MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./WhatsAppMediaAttachment";
+import { CarouselMessageBubble, type CarouselTemplatePayload } from "./CarouselMessageBubble";
 import { InstagramReferralCard } from "./InstagramReferralCard";
 import { QuickReplyPicker } from "./QuickReplyPicker";
 import { ScheduleMessageDialog } from "./ScheduleMessageDialog";
