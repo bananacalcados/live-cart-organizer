@@ -7,12 +7,23 @@ export interface VarDef {
   token: string; // e.g. "nome", "tamanho", "livre_1"
   label: string; // human label shown in the UI
   example: string; // value used ONLY for Meta approval preview
+  dynamic?: "seller"; // special tokens resolved at send time (e.g. seller rotation)
 }
+
+// Special token whose value is filled at send time by rotating through the
+// active POS sellers (rodízio de vendedoras).
+export const SELLER_VAR_TOKEN = "vendedora";
 
 export const STANDARD_VARS: VarDef[] = [
   { token: "nome", label: "Nome do cliente", example: "Maria" },
-  { token: "tamanho", label: "Tamanho que calça", example: "37" },
   { token: "primeiro_nome", label: "Primeiro nome", example: "Maria" },
+  { token: "tamanho", label: "Tamanho que calça", example: "37" },
+  {
+    token: SELLER_VAR_TOKEN,
+    label: "Nome da vendedora (rodízio)",
+    example: "Jéssica",
+    dynamic: "seller",
+  },
 ];
 
 const TOKEN_RE = /\{\{\s*([\w-]+)\s*\}\}/g;
