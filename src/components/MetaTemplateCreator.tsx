@@ -1119,7 +1119,10 @@ export function MetaTemplateCreator() {
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  Todos os cards usam os MESMOS botões (configurados abaixo). Mínimo {MIN_CARDS}, máximo {MAX_CARDS} cards.
+                  {cardButtonMode === "shared"
+                    ? "Todos os cards usam os MESMOS botões (configurados abaixo)."
+                    : "Cada card tem seu próprio conteúdo de botão (a estrutura é definida abaixo)."}{" "}
+                  Mínimo {MIN_CARDS}, máximo {MAX_CARDS} cards.
                 </p>
                 {cards.map((card, idx) => {
                   const cardVars = extractVarNumbers(card.bodyText);
