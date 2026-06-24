@@ -41,9 +41,10 @@ import {
   TestTube2, StopCircle, Volume2, GitBranch, AlertTriangle,
   ShoppingCart, Sparkles, Package, ExternalLink, LayoutGrid,
   ChevronDown, ChevronUp, Filter, MapPin,
-  Bookmark, Gift, Copy,
+  Bookmark, Gift, Copy, Search, Monitor,
 } from "lucide-react";
 import EmojiPicker from "emoji-picker-react";
+import { fetchProducts, type ShopifyProduct } from "@/lib/shopify";
 
 // ─── Types ──────────────────────────────────────
 
