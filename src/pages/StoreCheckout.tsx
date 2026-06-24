@@ -33,6 +33,7 @@ interface SaleData {
   customer_phone: string;
   items: SaleItem[];
   status: string;
+  is_custom_amount?: boolean;
 }
 
 interface CustomerFormData {
