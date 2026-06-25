@@ -80,6 +80,29 @@ export function CampaignList() {
     load();
   };
 
+  const runNow = async (row: Row) => {
+    if (!row.ativa) { toast.error("Ative a automação antes de iniciar os disparos."); return; }
+    if (!confirm(`Iniciar disparos AGORA para "${row.nome}"?\n\nVamos enviar para até ${row.qtd_por_dia} pessoas do público neste momento. O restante segue automaticamente nos próximos dias de disparo.`)) return;
+    setRunningId(row.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("carousel-campaign-run-now", {
+        body: { campanha_id: row.id },
+      });
+      if (error) throw error;
+      if (data?.error) { toast.error(data.error); return; }
+      const n = data?.enqueued ?? 0;
+      if (n === 0) {
+        toast.info(data?.note || "Nenhum cliente elegível no momento.");
+      } else {
+        toast.success(`Disparo iniciado! ${n} ${n === 1 ? "pessoa entrou" : "pessoas entraram"} na fila e já começam a receber.`);
+      }
+    } catch (e) {
+      toast.error("Erro ao iniciar disparos: " + ((e as Error).message || "tente novamente"));
+    } finally {
+      setRunningId(null);
+    }
+  };
+
   if (view === "builder") {
     return <CampaignBuilder editingId={editingId} onClose={() => { setEditingId(null); setView("list"); }} />;
   }
