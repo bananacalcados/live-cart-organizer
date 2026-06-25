@@ -3512,6 +3512,7 @@ export type Database = {
           name: string | null
           neighborhood: string | null
           opt_out_mass_dispatch: boolean
+          payment_methods: string[] | null
           phone_e164: string | null
           phone_suffix8: string | null
           preferred_style: string | null
@@ -3519,6 +3520,7 @@ export type Database = {
           purchased_brands: string[] | null
           purchased_categories: string[] | null
           purchased_sizes: string[] | null
+          purchased_stores: string[] | null
           region_type: string | null
           rfm_f: number | null
           rfm_m: number | null
@@ -3575,6 +3577,7 @@ export type Database = {
           name?: string | null
           neighborhood?: string | null
           opt_out_mass_dispatch?: boolean
+          payment_methods?: string[] | null
           phone_e164?: string | null
           phone_suffix8?: string | null
           preferred_style?: string | null
@@ -3582,6 +3585,7 @@ export type Database = {
           purchased_brands?: string[] | null
           purchased_categories?: string[] | null
           purchased_sizes?: string[] | null
+          purchased_stores?: string[] | null
           region_type?: string | null
           rfm_f?: number | null
           rfm_m?: number | null
@@ -3638,6 +3642,7 @@ export type Database = {
           name?: string | null
           neighborhood?: string | null
           opt_out_mass_dispatch?: boolean
+          payment_methods?: string[] | null
           phone_e164?: string | null
           phone_suffix8?: string | null
           preferred_style?: string | null
@@ -3645,6 +3650,7 @@ export type Database = {
           purchased_brands?: string[] | null
           purchased_categories?: string[] | null
           purchased_sizes?: string[] | null
+          purchased_stores?: string[] | null
           region_type?: string | null
           rfm_f?: number | null
           rfm_m?: number | null
@@ -16449,12 +16455,14 @@ export type Database = {
           last_purchase_at: string | null
           name: string | null
           opt_out_mass_dispatch: boolean | null
+          payment_methods: string[] | null
           phone: string | null
           phone_e164: string | null
           phone_suffix8: string | null
           purchased_brands: string[] | null
           purchased_categories: string[] | null
           purchased_sizes: string[] | null
+          purchased_stores: string[] | null
           region_type: string | null
           rfm_frequency_score: number | null
           rfm_monetary_score: number | null
@@ -16484,12 +16492,14 @@ export type Database = {
           last_purchase_at?: string | null
           name?: string | null
           opt_out_mass_dispatch?: boolean | null
+          payment_methods?: string[] | null
           phone?: string | null
           phone_e164?: string | null
           phone_suffix8?: string | null
           purchased_brands?: string[] | null
           purchased_categories?: string[] | null
           purchased_sizes?: string[] | null
+          purchased_stores?: string[] | null
           region_type?: never
           rfm_frequency_score?: number | null
           rfm_monetary_score?: number | null
@@ -16519,12 +16529,14 @@ export type Database = {
           last_purchase_at?: string | null
           name?: string | null
           opt_out_mass_dispatch?: boolean | null
+          payment_methods?: string[] | null
           phone?: string | null
           phone_e164?: string | null
           phone_suffix8?: string | null
           purchased_brands?: string[] | null
           purchased_categories?: string[] | null
           purchased_sizes?: string[] | null
+          purchased_stores?: string[] | null
           region_type?: never
           rfm_frequency_score?: number | null
           rfm_monetary_score?: number | null
@@ -17334,6 +17346,7 @@ export type Database = {
       normalize_wa_status: { Args: { raw: string }; Returns: string }
       parse_brand_from_name: { Args: { p_name: string }; Returns: string }
       parse_category_from_name: { Args: { p_name: string }; Returns: string }
+      parse_payment_methods: { Args: { p_text: string }; Returns: string[] }
       parse_size_from_name: { Args: { p_name: string }; Returns: string }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
@@ -17348,6 +17361,10 @@ export type Database = {
       product_name_key: { Args: { p_name: string }; Returns: string }
       recalc_customer_metrics: {
         Args: { p_customer_id: string }
+        Returns: undefined
+      }
+      recalc_customer_payment_store_attrs: {
+        Args: { p_customer?: string }
         Returns: undefined
       }
       recalc_customer_product_attributes: {
