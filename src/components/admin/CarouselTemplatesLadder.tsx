@@ -68,7 +68,7 @@ export function CarouselTemplatesLadder() {
   const [numberId, setNumberId] = useState<string>("");
   const [models, setModels] = useState<string[]>([]);
   const [modelName, setModelName] = useState<string>("Padrão");
-  const [rows, setRows] = useState<Record<number, LadderRow>>({});
+  const [rows, setRows] = useState<Record<number, LadderRow[]>>({});
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -150,9 +150,11 @@ export function CarouselTemplatesLadder() {
       .from("templates_carrossel")
       .select("*")
       .eq("whatsapp_number_id", numberId)
-      .eq("nome", modelName);
-    const map: Record<number, LadderRow> = {};
-    (data || []).forEach((r: LadderRow) => { map[r.qtd_cards] = r; });
+      .order("nome", { ascending: true });
+    const map: Record<number, LadderRow[]> = {};
+    (data || []).forEach((r: LadderRow) => {
+      (map[r.qtd_cards] ||= []).push(r);
+    });
     setRows(map);
     setLoading(false);
   };
@@ -184,9 +186,6 @@ export function CarouselTemplatesLadder() {
 
   // When the instance changes, reload its models + ladder.
   useEffect(() => { loadModels(); loadRows(); }, [numberId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // When the model changes, reload its ladder.
-  useEffect(() => { loadRows(); }, [modelName]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -238,7 +237,8 @@ export function CarouselTemplatesLadder() {
     return null;
   };
 
-  const createRow = async (qtd: number) => {
+  const createRow = async (qtd: number, nameArg?: string) => {
+    const name = (nameArg ?? modelName).trim() || "Padrão";
     const err = validate(qtd);
     if (err) { toast.error(err); return; }
     setCreating(qtd);
@@ -249,7 +249,7 @@ export function CarouselTemplatesLadder() {
         body: {
           whatsappNumberId: numberId,
           qtdCards: qtd,
-          modelo: modelName,
+          modelo: name,
           sampleImageBase64: sampleB64,
           sampleImageType: sampleType,
           topBody: top,
@@ -259,7 +259,7 @@ export function CarouselTemplatesLadder() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
-      toast.success(`Template "${modelName}" de ${qtd} cards enviado à Meta (${data?.meta_status || "PENDING"})`);
+      toast.success(`Template "${name}" de ${qtd} cards enviado à Meta (${data?.meta_status || "PENDING"})`);
       await loadModels();
       await loadRows();
     } catch (e) {
@@ -267,6 +267,15 @@ export function CarouselTemplatesLadder() {
     } finally {
       setCreating(null);
     }
+  };
+
+  const deleteRow = async (row: LadderRow) => {
+    if (!confirm(`Excluir o template "${row.nome}" de ${row.qtd_cards} cards? Isso remove apenas o registro no sistema.`)) return;
+    const { error } = await supabase.from("templates_carrossel").delete().eq("id", row.id);
+    if (error) { toast.error("Erro ao excluir: " + error.message); return; }
+    toast.success("Template removido");
+    await loadModels();
+    await loadRows();
   };
 
   const syncStatus = async () => {
@@ -280,15 +289,15 @@ export function CarouselTemplatesLadder() {
       const byName = new Map(templates.map((t) => [t.name, t.status]));
       let updated = 0;
       for (const qtd of LADDER) {
-        const row = rows[qtd];
-        if (!row) continue;
-        const metaStatus = byName.get(row.template_id);
-        if (metaStatus && metaStatus !== row.meta_status) {
-          await supabase
-            .from("templates_carrossel")
-            .update({ meta_status: metaStatus, aprovado: metaStatus === "APPROVED" })
-            .eq("id", row.id);
-          updated++;
+        for (const row of rows[qtd] || []) {
+          const metaStatus = byName.get(row.template_id);
+          if (metaStatus && metaStatus !== row.meta_status) {
+            await supabase
+              .from("templates_carrossel")
+              .update({ meta_status: metaStatus, aprovado: metaStatus === "APPROVED" })
+              .eq("id", row.id);
+            updated++;
+          }
         }
       }
       toast.success(updated ? `${updated} status atualizados` : "Status já sincronizados");
@@ -300,7 +309,11 @@ export function CarouselTemplatesLadder() {
     }
   };
 
-  const approvedCount = LADDER.filter((q) => rows[q]?.aprovado).length;
+  const totalTemplates = LADDER.reduce((acc, q) => acc + (rows[q]?.length || 0), 0);
+  const approvedCount = LADDER.reduce(
+    (acc, q) => acc + (rows[q] || []).filter((r) => r.aprovado || r.meta_status === "APPROVED").length,
+    0,
+  );
 
   const renderButtonExtra = (
     slot: BtnSlot,
@@ -337,7 +350,7 @@ export function CarouselTemplatesLadder() {
               <Images className="h-4 w-4" /> Escada de templates de carrossel
             </h3>
             <p className="text-sm text-muted-foreground">
-              Crie 1 template aprovado para cada quantidade de cards (2 a 10). A vendedora nunca escolhe template — o sistema escolhe pela quantidade de fotos. {approvedCount}/9 aprovados.
+              Cada quantidade de cards (2 a 10) pode ter <strong>vários templates</strong>. A vendedora nunca escolhe template — o sistema escolhe pela quantidade de fotos e pelo modelo da campanha. {totalTemplates} template(s), {approvedCount} aprovado(s).
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={syncStatus} disabled={syncing} className="gap-1.5">
@@ -372,11 +385,11 @@ export function CarouselTemplatesLadder() {
           </div>
         </div>
 
-        {/* Modelo de template */}
+        {/* Nome do template / modelo */}
         <div className="space-y-2 rounded-lg border p-3">
-          <Label className="text-sm font-semibold">Modelo de template</Label>
+          <Label className="text-sm font-semibold">Nome do template (modelo)</Label>
           <p className="text-[11px] text-muted-foreground">
-            Crie modelos diferentes para situações diferentes (ex.: "Tamanho 34", "Lançamentos"). Cada modelo tem sua própria escada de 2 a 10 cards na instância selecionada.
+            Esse nome identifica o template que será criado. Para ter <strong>vários templates na mesma quantidade de cards</strong>, basta criar com nomes diferentes (ex.: "Tamanho 34", "Lançamentos"). Clique em um nome existente para reaproveitá-lo.
           </p>
           <Input
             value={modelName}
@@ -537,33 +550,70 @@ export function CarouselTemplatesLadder() {
           </div>
         ) : (
           LADDER.map((qtd) => {
-            const row = rows[qtd];
+            const list = rows[qtd] || [];
             return (
-              <Card key={qtd} className="p-3 flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center font-semibold text-sm">
-                    {qtd}
+              <Card key={qtd} className="p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center font-semibold text-sm">
+                      {qtd}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{qtd} cards</p>
+                      <p className="text-xs text-muted-foreground">
+                        {list.length
+                          ? `${list.length} template(s) criado(s)`
+                          : "Nenhum template ainda"}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{qtd} cards</p>
-                    <p className="text-xs text-muted-foreground">
-                      {row?.template_id || `carrossel_escada_${qtd}cards`}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {statusBadge(row)}
                   <Button
                     size="sm"
-                    variant={row ? "outline" : "default"}
+                    variant="default"
                     disabled={creating === qtd}
                     onClick={() => createRow(qtd)}
                     className="gap-1.5"
                   >
-                    {creating === qtd ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                    {row ? "Recriar" : "Criar template"}
+                    {creating === qtd ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                    Criar template "{(modelName || "Padrão").trim()}"
                   </Button>
                 </div>
+
+                {list.length > 0 && (
+                  <div className="space-y-1.5 pl-12">
+                    {list.map((row) => (
+                      <div
+                        key={row.id}
+                        className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5 flex-wrap"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate">{row.nome || "Padrão"}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{row.template_id}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {statusBadge(row)}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={creating === qtd}
+                            onClick={() => createRow(qtd, row.nome)}
+                            className="h-7 gap-1 text-xs"
+                          >
+                            <RefreshCw className="h-3 w-3" /> Recriar
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive"
+                            onClick={() => deleteRow(row)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Card>
             );
           })
