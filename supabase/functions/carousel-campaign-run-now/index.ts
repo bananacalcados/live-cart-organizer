@@ -130,18 +130,20 @@ Deno.serve(async (req) => {
 
   const enqueued = count ?? rows.length;
 
-  // 5) Kick off the sender immediately (fire-and-forget; cron also runs every 5 min).
-  try {
-    await fetch(`${url}/functions/v1/carousel-campaign-sender`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${serviceKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ trigger: "run-now", campanha_id: campanhaId }),
-    });
-  } catch (_e) {
-    // Sending will still happen via the every-5-min cron.
+  // 5) Kick off the sender immediately in the background so this request returns
+  //    right away. The every-5-min cron is a fallback if this call is dropped.
+  const kick = fetch(`${url}/functions/v1/carousel-campaign-sender`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ trigger: "run-now", campanha_id: campanhaId }),
+  }).catch(() => {/* cron fallback handles it */});
+  // @ts-ignore EdgeRuntime is available in the Supabase edge runtime.
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) {
+    // @ts-ignore
+    EdgeRuntime.waitUntil(kick);
   }
 
   return json({ ok: true, enqueued, started: true });
