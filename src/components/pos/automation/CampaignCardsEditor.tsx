@@ -3,12 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
 import { ProductSelector } from "@/components/ProductSelector";
-import { VariableTextField } from "@/components/admin/VariableTextField";
-import { Loader2, Plus, Trash2, Upload, Store, ImageIcon } from "lucide-react";
-import type { VarDef } from "@/lib/pos/carouselTemplate";
+import { Loader2, Trash2, Upload, Store, ImageIcon, Link2, Phone, MessageSquare } from "lucide-react";
+import type { ParsedTplButton } from "@/lib/pos/carouselTemplate";
 import type { DbOrderProduct } from "@/types/database";
 
 export interface CampaignCard {
@@ -27,10 +28,14 @@ export function emptyCard(ordem: number): CampaignCard {
 interface Props {
   cards: CampaignCard[];
   onChange: (cards: CampaignCard[]) => void;
-  variables: VarDef[];
-  onAddVariable: (v: VarDef) => void;
-  /** Approved card-counts available for the selected model/instance (for the warning). */
-  approvedCounts: number[];
+  /** Approved card body text (positional vars) — shown for reference. */
+  cardBodyText: string | null;
+  /** Buttons configured per card in the approved template (read-only). */
+  buttonsPerCard: ParsedTplButton[][];
+  /** Whether any card variable was mapped to the per-card "legenda". */
+  showLegenda: boolean;
+  /** True once a template/qtd is selected: card count is fixed by the template. */
+  templateLoaded: boolean;
 }
 
 async function uploadCardImage(blob: Blob): Promise<string> {
@@ -43,7 +48,21 @@ async function uploadCardImage(blob: Blob): Promise<string> {
   return data.publicUrl;
 }
 
-export function CampaignCardsEditor({ cards, onChange, variables, onAddVariable, approvedCounts }: Props) {
+function ButtonBadge({ b }: { b: ParsedTplButton }) {
+  const Icon = b.type === "URL" ? Link2 : b.type === "PHONE_NUMBER" ? Phone : MessageSquare;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-[11px] text-neutral-600">
+      <Icon className="h-3 w-3" />
+      {b.text || "(sem texto)"}
+      {b.url ? <span className="text-neutral-400">· {b.url}</span> : null}
+      {b.phone ? <span className="text-neutral-400">· {b.phone}</span> : null}
+    </span>
+  );
+}
+
+export function CampaignCardsEditor({
+  cards, onChange, cardBodyText, buttonsPerCard, showLegenda, templateLoaded,
+}: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [pickTargetIdx, setPickTargetIdx] = useState<number | null>(null);
 
@@ -51,24 +70,10 @@ export function CampaignCardsEditor({ cards, onChange, variables, onAddVariable,
   const [cropIdx, setCropIdx] = useState<number | null>(null);
   const [cropMeta, setCropMeta] = useState<{ productId?: string | null; variantId?: string | null }>({});
   const [uploading, setUploading] = useState(false);
-
   const [siteOpen, setSiteOpen] = useState(false);
 
   const patchCard = (idx: number, patch: Partial<CampaignCard>) =>
     onChange(cards.map((c, i) => (i === idx ? { ...c, ...patch } : c)));
-
-  const addCard = () => {
-    if (cards.length >= 10) return;
-    onChange([...cards, emptyCard(cards.length)]);
-  };
-
-  const removeCard = (idx: number) => {
-    if (cards.length <= 2) {
-      toast.error("Um carrossel precisa de pelo menos 2 cards");
-      return;
-    }
-    onChange(cards.filter((_, i) => i !== idx).map((c, i) => ({ ...c, ordem: i })));
-  };
 
   // ----- Upload do PC -----
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,16 +94,8 @@ export function CampaignCardsEditor({ cards, onChange, variables, onAddVariable,
     reader.readAsDataURL(file);
   };
 
-  const triggerPc = (idx: number) => {
-    setPickTargetIdx(idx);
-    fileRef.current?.click();
-  };
-
-  // ----- Upload do site (Shopify) -----
-  const triggerSite = (idx: number) => {
-    setPickTargetIdx(idx);
-    setSiteOpen(true);
-  };
+  const triggerPc = (idx: number) => { setPickTargetIdx(idx); fileRef.current?.click(); };
+  const triggerSite = (idx: number) => { setPickTargetIdx(idx); setSiteOpen(true); };
 
   const onPickProduct = (p: DbOrderProduct) => {
     if (!p.image || pickTargetIdx === null) {
@@ -134,73 +131,89 @@ export function CampaignCardsEditor({ cards, onChange, variables, onAddVariable,
   };
 
   const countOk = cards.filter((c) => c.imagem_url).length;
-  const matchesTemplate = approvedCounts.includes(countOk);
+
+  if (!templateLoaded) {
+    return (
+      <p className="text-xs text-neutral-500">
+        Escolha a instância, o modelo e a quantidade de cards para carregar a estrutura do template aprovado.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-3">
       <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onPickFile} />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h4 className="text-sm font-bold text-neutral-800">Cards do carrossel ({cards.length})</h4>
-          <p className="text-xs text-neutral-500">
-            {countOk} card(s) com imagem.{" "}
-            {approvedCounts.length === 0
-              ? "Selecione instância e modelo para validar contra os templates aprovados."
-              : matchesTemplate
-                ? "✅ Existe um template aprovado para essa quantidade."
-                : `⚠️ Nenhum template aprovado para ${countOk} cards. Aprovados: ${approvedCounts.join(", ")}.`}
+      <div>
+        <h4 className="text-sm font-bold text-neutral-800">Cards do carrossel ({cards.length})</h4>
+        <p className="text-xs text-neutral-500">
+          {countOk} de {cards.length} card(s) com imagem. A quantidade segue o template aprovado.
+        </p>
+        {cardBodyText ? (
+          <p className="mt-1 rounded-md bg-neutral-50 px-2 py-1 text-[11px] text-neutral-500">
+            Texto do card (aprovado na Meta): <span className="text-neutral-700">{cardBodyText}</span>
           </p>
-        </div>
-        <Button type="button" variant="outline" size="sm" className="gap-1" onClick={addCard} disabled={cards.length >= 10}>
-          <Plus className="h-4 w-4" /> Adicionar card
-        </Button>
+        ) : null}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {cards.map((c, idx) => (
-          <Card key={idx} className="p-3 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-neutral-600">Card {idx + 1}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-rose-500 hover:bg-rose-50"
-                onClick={() => removeCard(idx)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </div>
+        {cards.map((c, idx) => {
+          const btns = buttonsPerCard[idx] || buttonsPerCard[0] || [];
+          return (
+            <Card key={idx} className="p-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-neutral-600">Card {idx + 1}</span>
+                {c.imagem_url && (
+                  <Button
+                    type="button" variant="ghost" size="icon"
+                    className="h-7 w-7 text-rose-500 hover:bg-rose-50"
+                    onClick={() => patchCard(idx, { imagem_url: null, shopify_product_id: null, shopify_variant_id: null })}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
 
-            <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted flex items-center justify-center">
-              {c.imagem_url ? (
-                <img src={c.imagem_url} alt={`Card ${idx + 1}`} className="h-full w-full object-cover" />
-              ) : (
-                <ImageIcon className="h-8 w-8 text-neutral-300" />
+              <div className="relative aspect-square w-full overflow-hidden rounded-md bg-muted flex items-center justify-center">
+                {c.imagem_url ? (
+                  <img src={c.imagem_url} alt={`Card ${idx + 1}`} className="h-full w-full object-cover" />
+                ) : (
+                  <ImageIcon className="h-8 w-8 text-neutral-300" />
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <Button type="button" variant="outline" size="sm" className="gap-1 text-xs" onClick={() => triggerPc(idx)}>
+                  <Upload className="h-3.5 w-3.5" /> Subir do PC
+                </Button>
+                <Button type="button" variant="outline" size="sm" className="gap-1 text-xs" onClick={() => triggerSite(idx)}>
+                  <Store className="h-3.5 w-3.5" /> Subir do site
+                </Button>
+              </div>
+
+              {showLegenda && (
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-neutral-600">Texto próprio deste card</Label>
+                  <Textarea
+                    value={c.legenda}
+                    onChange={(e) => patchCard(idx, { legenda: e.target.value })}
+                    placeholder="Ex.: Tênis branco 37 — R$ 199"
+                    className="min-h-[56px] bg-white text-sm"
+                  />
+                </div>
               )}
-            </div>
 
-            <div className="grid grid-cols-2 gap-1.5">
-              <Button type="button" variant="outline" size="sm" className="gap-1 text-xs" onClick={() => triggerPc(idx)}>
-                <Upload className="h-3.5 w-3.5" /> Subir do PC
-              </Button>
-              <Button type="button" variant="outline" size="sm" className="gap-1 text-xs" onClick={() => triggerSite(idx)}>
-                <Store className="h-3.5 w-3.5" /> Subir do site
-              </Button>
-            </div>
-
-            <VariableTextField
-              label="Legenda do card"
-              value={c.legenda}
-              onChange={(v) => patchCard(idx, { legenda: v })}
-              variables={variables}
-              onAddVariable={onAddVariable}
-              multiline
-              placeholder="Texto abaixo da foto (opcional)"
-            />
-          </Card>
-        ))}
+              {btns.length > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-neutral-600">Botões (aprovados na Meta)</Label>
+                  <div className="flex flex-wrap gap-1">
+                    {btns.map((b, i) => <ButtonBadge key={i} b={b} />)}
+                  </div>
+                </div>
+              )}
+            </Card>
+          );
+        })}
       </div>
 
       {/* Seletor de produto Shopify */}
