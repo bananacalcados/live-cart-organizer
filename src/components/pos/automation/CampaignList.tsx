@@ -153,6 +153,18 @@ export function CampaignList() {
                 </p>
               </button>
               <Switch checked={r.ativa} onCheckedChange={() => toggleActive(r)} />
+              <Button
+                size="sm"
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                title="Enviar agora para o lote do dia"
+                disabled={!r.ativa || runningId === r.id}
+                onClick={() => runNow(r)}
+              >
+                {runningId === r.id
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Rocket className="h-4 w-4" />}
+                <span className="hidden sm:inline">Iniciar disparos agora</span>
+              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:bg-indigo-50"
                 title="Painel de resultados"
                 onClick={() => { setDashId(r.id); setDashNome(r.nome); setView("dashboard"); }}>
