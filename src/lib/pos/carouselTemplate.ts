@@ -71,3 +71,152 @@ export const BUTTON_TYPE_LABEL: Record<ButtonType, string> = {
   URL: "Link (URL)",
   PHONE_NUMBER: "Ligar (telefone)",
 };
+
+// ---------------------------------------------------------------------------
+// Reading the STRUCTURE of an approved carousel template back from Meta.
+// meta-whatsapp-get-templates returns the raw template objects (components,
+// carousel cards, buttons). We parse it so the campaign builder can show the
+// exact body text, per-card text and buttons that were approved.
+// ---------------------------------------------------------------------------
+
+export interface ParsedTplButton {
+  type: string; // QUICK_REPLY | URL | PHONE_NUMBER
+  text: string;
+  url?: string;
+  phone?: string;
+}
+
+export interface ParsedCarouselTemplate {
+  topBodyText: string;
+  topVarCount: number;
+  cardBodyText: string;
+  cardVarCount: number;
+  cards: { buttons: ParsedTplButton[] }[];
+  qtdCards: number;
+}
+
+const POSITIONAL_RE = /\{\{\s*\d+\s*\}\}/g;
+
+export function countPositionalVars(text: string | null | undefined): number {
+  if (!text) return 0;
+  return (text.match(POSITIONAL_RE) || []).length;
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export function parseCarouselTemplate(tpl: any): ParsedCarouselTemplate | null {
+  if (!tpl || !Array.isArray(tpl.components)) return null;
+  const comps = tpl.components as any[];
+  const topBody = comps.find((c) => String(c?.type).toUpperCase() === "BODY");
+  const carousel = comps.find((c) => String(c?.type).toUpperCase() === "CAROUSEL");
+  if (!carousel || !Array.isArray(carousel.cards) || carousel.cards.length === 0) return null;
+
+  const card0 = carousel.cards[0];
+  const card0Body = (card0?.components || []).find(
+    (c: any) => String(c?.type).toUpperCase() === "BODY",
+  );
+
+  const cards = carousel.cards.map((cd: any) => {
+    const btnComp = (cd?.components || []).find(
+      (c: any) => String(c?.type).toUpperCase() === "BUTTONS",
+    );
+    const buttons: ParsedTplButton[] = (btnComp?.buttons || []).map((b: any) => ({
+      type: String(b?.type || "QUICK_REPLY"),
+      text: String(b?.text || ""),
+      url: b?.url,
+      phone: b?.phone_number,
+    }));
+    return { buttons };
+  });
+
+  const topBodyText = topBody?.text || "";
+  const cardBodyText = card0Body?.text || "";
+  return {
+    topBodyText,
+    topVarCount: countPositionalVars(topBodyText),
+    cardBodyText,
+    cardVarCount: countPositionalVars(cardBodyText),
+    cards,
+    qtdCards: carousel.cards.length,
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ---- Mapping the approved positional vars to our named tokens ----
+
+export type VarKind =
+  | "nome"
+  | "primeiro_nome"
+  | "tamanho"
+  | "vendedora"
+  | "legenda"
+  | "livre";
+
+export interface VarMapping {
+  kind: VarKind;
+  value?: string; // only for "livre"
+}
+
+export const BODY_VAR_OPTIONS: { kind: VarKind; label: string }[] = [
+  { kind: "nome", label: "Nome do cliente" },
+  { kind: "primeiro_nome", label: "Primeiro nome" },
+  { kind: "tamanho", label: "Tamanho que calça" },
+  { kind: "vendedora", label: "Nome da vendedora (rodízio)" },
+  { kind: "livre", label: "Texto livre" },
+];
+
+export const CARD_VAR_OPTIONS: { kind: VarKind; label: string }[] = [
+  { kind: "legenda", label: "Texto próprio de cada card" },
+  { kind: "nome", label: "Nome do cliente" },
+  { kind: "primeiro_nome", label: "Primeiro nome" },
+  { kind: "tamanho", label: "Tamanho que calça" },
+  { kind: "vendedora", label: "Nome da vendedora (rodízio)" },
+  { kind: "livre", label: "Texto livre" },
+];
+
+/** Token name stored in top_body/card_body for a given mapping. */
+export function mappingToken(m: VarMapping, prefix: string, idx: number): string {
+  if (m.kind === "livre") return `${prefix}_${idx + 1}`;
+  return m.kind;
+}
+
+/** Replace approved positional {{1}}.. with our named {{token}} in order. */
+export function applyTokens(approvedText: string, tokens: string[]): string {
+  let i = 0;
+  return (approvedText || "").replace(POSITIONAL_RE, () => {
+    const t = tokens[i] || `var_${i + 1}`;
+    i += 1;
+    return `{{${t}}}`;
+  });
+}
+
+/** Tokens (named) found in a stored body string, in order. */
+export function namedTokensOf(text: string | null | undefined): string[] {
+  const out: string[] = [];
+  const re = /\{\{\s*([\w-]+)\s*\}\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text || "")) !== null) out.push(m[1]);
+  return out;
+}
+
+/** Reverse a stored named token into a mapping (for editing). */
+export function tokenToMapping(
+  token: string,
+  vars: Record<string, unknown> | null,
+): VarMapping {
+  if (["nome", "primeiro_nome", "tamanho", "vendedora", "legenda"].includes(token)) {
+    return { kind: token as VarKind };
+  }
+  return { kind: "livre", value: vars && vars[token] != null ? String(vars[token]) : "" };
+}
+
+/** Resolve a single mapping to a friendly preview value. */
+export function previewMappingValue(m: VarMapping): string {
+  switch (m.kind) {
+    case "nome": return "Maria";
+    case "primeiro_nome": return "Maria";
+    case "tamanho": return "37";
+    case "vendedora": return "Jéssica";
+    case "legenda": return "texto do card";
+    case "livre": return m.value || "texto livre";
+  }
+}
