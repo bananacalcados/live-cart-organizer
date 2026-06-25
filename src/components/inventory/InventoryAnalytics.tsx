@@ -38,6 +38,13 @@ type RawProduct = {
   updated_at: string;
 };
 
+const toNumber = (value: unknown) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const fixed = (value: unknown, digits = 2) => toNumber(value).toFixed(digits);
+
 type EnrichedProduct = RawProduct & {
   brand: string;
   parent_key: string; // chave do "produto pai" (sem tamanho/cor)
@@ -50,8 +57,8 @@ type SalesAgg = {
 
 // ---------- Helpers ----------
 const fmtMoney = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const fmtNum = (v: number) => v.toLocaleString("pt-BR");
+  toNumber(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const fmtNum = (v: number) => toNumber(v).toLocaleString("pt-BR");
 
 function parseBrand(name: string): string {
   if (!name) return "—";
@@ -211,9 +218,9 @@ export function InventoryAnalytics() {
           ...raw,
           size: fixed.size,
           color: fixed.color,
-          stock: Number(raw.stock || 0),
-          cost_price: Number(raw.cost_price || 0),
-          price: Number(raw.price || 0),
+          stock: toNumber(raw.stock),
+          cost_price: toNumber(raw.cost_price),
+          price: toNumber(raw.price),
           brand: parseBrand(raw.name),
           parent_key: parentKey(raw),
         });
@@ -581,8 +588,8 @@ export function InventoryAnalytics() {
     const rows = filtered.map((p) => [
       p.sku || "", p.name, p.brand, p.category || "", p.size || "", p.color || "",
       storeMap.get(p.store_id) || "", String(p.stock),
-      p.cost_price.toFixed(2), p.price.toFixed(2),
-      (p.stock * p.cost_price).toFixed(2), (p.stock * p.price).toFixed(2),
+      fixed(p.cost_price), fixed(p.price),
+      fixed(toNumber(p.stock) * toNumber(p.cost_price)), fixed(toNumber(p.stock) * toNumber(p.price)),
     ]);
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
@@ -712,7 +719,7 @@ export function InventoryAnalytics() {
         <KpiCard
           icon={<TrendingUp className="h-4 w-4" />}
           label="Markup observado"
-          value={kpis.observedMarkup > 0 ? `${kpis.observedMarkup.toFixed(2)}x` : "—"}
+          value={kpis.observedMarkup > 0 ? `${fixed(kpis.observedMarkup)}x` : "—"}
           hint={kpis.observedMarkup > 0
             ? `Margem: ${fmtMoney(kpis.margin)}`
             : "Cadastre custos para calcular"}
@@ -781,8 +788,8 @@ export function InventoryAnalytics() {
                       <TableCell className="min-w-[180px] whitespace-normal break-words">{r.label}</TableCell>
                       <TableCell className="text-right">{fmtNum(r.qty)}</TableCell>
                       <TableCell className="text-right">{fmtMoney(r.revenue)}</TableCell>
-                      <TableCell className="text-right">{r.pct.toFixed(1)}%</TableCell>
-                      <TableCell className="text-right">{r.cumPct.toFixed(1)}%</TableCell>
+                      <TableCell className="text-right">{fixed(r.pct, 1)}%</TableCell>
+                      <TableCell className="text-right">{fixed(r.cumPct, 1)}%</TableCell>
                       <TableCell className="text-right">{fmtNum(r.stock)}</TableCell>
                       <TableCell className="text-right">{fmtMoney(r.cost)}</TableCell>
                     </TableRow>
@@ -866,10 +873,10 @@ export function InventoryAnalytics() {
                       const cov = r.coverageDays;
                       const badge =
                         cov === null ? { label: "Sem venda", variant: "outline" as const } :
-                        cov < 15 ? { label: `${cov.toFixed(1)}d`, variant: "destructive" as const } :
-                        cov < 30 ? { label: `${cov.toFixed(1)}d`, variant: "secondary" as const } :
-                        cov <= 90 ? { label: `${cov.toFixed(0)}d`, variant: "default" as const } :
-                        { label: `${cov.toFixed(0)}d`, variant: "outline" as const };
+                        cov < 15 ? { label: `${fixed(cov, 1)}d`, variant: "destructive" as const } :
+                        cov < 30 ? { label: `${fixed(cov, 1)}d`, variant: "secondary" as const } :
+                        cov <= 90 ? { label: `${fixed(cov, 0)}d`, variant: "default" as const } :
+                        { label: `${fixed(cov, 0)}d`, variant: "outline" as const };
                       return (
                         <TableRow key={r.key}>
                           <TableCell className="min-w-[180px] whitespace-normal break-words">{r.label}</TableCell>
@@ -879,7 +886,7 @@ export function InventoryAnalytics() {
                           {coverageScope === "variants" && <TableCell>{r.color || "—"}</TableCell>}
                           <TableCell className="text-right">{fmtNum(r.stock)}</TableCell>
                           <TableCell className="text-right">{fmtNum(r.soldQty)}</TableCell>
-                          <TableCell className="text-right">{r.avgDaily.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">{fixed(r.avgDaily)}</TableCell>
                           <TableCell className="text-right">
                             <Badge variant={badge.variant}>{badge.label}</Badge>
                           </TableCell>
@@ -1078,7 +1085,7 @@ function DimTable({ rows, label }: { rows: any[]; label: string }) {
                 <TableCell className="text-right">{r.qty.toLocaleString("pt-BR")}</TableCell>
                 <TableCell className="text-right">{r.cost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</TableCell>
                 <TableCell className="text-right">{r.sale.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</TableCell>
-                <TableCell className="text-right">{((r.cost / total) * 100).toFixed(1)}%</TableCell>
+                <TableCell className="text-right">{total ? fixed((toNumber(r.cost) / toNumber(total)) * 100, 1) : "0.0"}%</TableCell>
               </TableRow>
             ))}
           </TableBody>
