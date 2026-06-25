@@ -287,7 +287,7 @@ export function CarouselTemplatesLadder() {
           await supabase
             .from("templates_carrossel")
             .update({ meta_status: metaStatus, aprovado: metaStatus === "APPROVED" })
-            .eq("qtd_cards", qtd);
+            .eq("id", row.id);
           updated++;
         }
       }
