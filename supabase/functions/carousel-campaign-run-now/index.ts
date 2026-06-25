@@ -38,23 +38,25 @@ function json(body: unknown, status = 200) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  // --- Auth: require a valid authenticated user JWT. ---
-  const authHeader = req.headers.get("Authorization") || "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return json({ error: "Unauthorized" }, 401);
-  }
-  const token = authHeader.replace("Bearer ", "");
-  const authClient = createClient(url, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: claims, error: claimsErr } = await authClient.auth.getClaims(token);
-  if (claimsErr || !claims?.claims?.sub) {
-    return json({ error: "Unauthorized" }, 401);
-  }
+    // --- Auth: require a valid authenticated user JWT. ---
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return json({ error: "Faça login novamente para iniciar os disparos." }, 401);
+    }
+    const token = authHeader.replace("Bearer ", "");
+    const authClient = createClient(url, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userErr } = await authClient.auth.getUser(token);
+    if (userErr || !userData?.user) {
+      console.error("[run-now] auth failed:", userErr?.message);
+      return json({ error: "Sessão inválida. Faça login novamente." }, 401);
+    }
 
   let body: { campanha_id?: string; ignore_global_cap?: boolean; limit?: number } = {};
   try {
