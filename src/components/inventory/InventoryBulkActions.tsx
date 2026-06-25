@@ -25,6 +25,11 @@ interface Category {
 
 const BATCH_SIZE = 200;
 
+const toNumber = (value: unknown) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
 export default function InventoryBulkActions() {
   // ====== CUSTO ======
   const [divisor, setDivisor] = useState<number>(2.5);
@@ -122,7 +127,7 @@ export default function InventoryBulkActions() {
 
         await Promise.all(
           data.map((p: any) => {
-            const cost = Number((p.price / divisor).toFixed(2));
+            const cost = Number((toNumber(p.price) / divisor).toFixed(2));
             return supabase.from("pos_products").update({ cost_price: cost }).eq("id", p.id);
           })
         );
@@ -149,7 +154,7 @@ export default function InventoryBulkActions() {
 
         await Promise.all(
           data.map((p: any) => {
-            const cost = Number((p.sale_price / divisor).toFixed(2));
+            const cost = Number((toNumber(p.sale_price) / divisor).toFixed(2));
             return supabase.from("products_master").update({ cost_price: cost }).eq("id", p.id);
           })
         );
