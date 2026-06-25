@@ -115,6 +115,9 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
   const [vendedorasSel, setVendedorasSel] = useState<string[]>([]);
   const [ativa, setAtiva] = useState(false);
 
+  const [testPhone, setTestPhone] = useState("");
+  const [testSending, setTestSending] = useState(false);
+
   const [numbers, setNumbers] = useState<MetaNumber[]>([]);
   const [tplByModel, setTplByModel] = useState<Record<string, TplEntry[]>>({});
   const [publicos, setPublicos] = useState<Publico[]>([]);
