@@ -319,11 +319,11 @@ export function ProductsList() {
                   <div className="flex items-center justify-between text-sm">
                     <div>
                       <span className="text-muted-foreground text-xs">Custo</span>
-                      <div className="font-semibold">R$ {p.cost_price.toFixed(2)}</div>
+                      <div className="font-semibold">R$ {(p.cost_price ?? 0).toFixed(2)}</div>
                     </div>
                     <div>
                       <span className="text-muted-foreground text-xs">Venda</span>
-                      <div className="font-semibold text-primary">R$ {p.sale_price.toFixed(2)}</div>
+                      <div className="font-semibold text-primary">R$ {(p.sale_price ?? 0).toFixed(2)}</div>
                     </div>
                   </div>
                   <div className="flex gap-1 pt-2 border-t">
