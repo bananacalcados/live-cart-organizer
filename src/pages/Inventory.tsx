@@ -1320,6 +1320,14 @@ export default function Inventory() {
               >
                 <Link2 className="h-3 w-3" /> De-para Vendas
               </Button>
+              <Button
+                variant={inventoryMode === "divergencias" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("divergencias")}
+                className="text-xs h-7 gap-1"
+              >
+                <GitMerge className="h-3 w-3" /> Divergências PDV
+              </Button>
               {selectedStoreId && (
                 <>
                   <Button
