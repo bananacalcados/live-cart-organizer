@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Plus, Trash2, Zap, Pencil, BarChart3, Rocket } from "lucide-react";
+import { Loader2, Plus, Trash2, Zap, Pencil, BarChart3, Rocket, Flame } from "lucide-react";
 import { CampaignBuilder } from "./CampaignBuilder";
 import { CampaignDashboard } from "./CampaignDashboard";
 
@@ -80,13 +80,17 @@ export function CampaignList() {
     load();
   };
 
-  const runNow = async (row: Row) => {
+  const runNow = async (row: Row, opts?: { ignoreGlobalCap?: boolean }) => {
     if (!row.ativa) { toast.error("Ative a automação antes de iniciar os disparos."); return; }
-    if (!confirm(`Iniciar disparos AGORA para "${row.nome}"?\n\nVamos enviar para até ${row.qtd_por_dia} pessoas do público neste momento. O restante segue automaticamente nos próximos dias de disparo.`)) return;
+    const force = opts?.ignoreGlobalCap === true;
+    const msg = force
+      ? `DISPARAR PARA TODO O PÚBLICO AGORA de "${row.nome}"?\n\nVamos ignorar o teto de 7 dias (mensagens de template/disparo em massa) e enviar para TODOS do público — exceto quem já recebeu esta mesma mensagem. Sem limite diário neste disparo.`
+      : `Iniciar disparos AGORA para "${row.nome}"?\n\nVamos enviar para até ${row.qtd_por_dia} pessoas do público neste momento. O restante segue automaticamente nos próximos dias de disparo.`;
+    if (!confirm(msg)) return;
     setRunningId(row.id);
     try {
       const { data, error } = await supabase.functions.invoke("carousel-campaign-run-now", {
-        body: { campanha_id: row.id },
+        body: { campanha_id: row.id, ignore_global_cap: force },
       });
       if (error) throw error;
       if (data?.error) { toast.error(data.error); return; }
@@ -164,6 +168,17 @@ export function CampaignList() {
                   ? <Loader2 className="h-4 w-4 animate-spin" />
                   : <Rocket className="h-4 w-4" />}
                 <span className="hidden sm:inline">Iniciar disparos agora</span>
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+                title="Disparar para TODO o público agora, ignorando o teto de 7 dias (exceto quem já recebeu esta mesma mensagem)"
+                disabled={!r.ativa || runningId === r.id}
+                onClick={() => runNow(r, { ignoreGlobalCap: true })}
+              >
+                <Flame className="h-4 w-4" />
+                <span className="hidden sm:inline">Disparar a todos</span>
               </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:bg-indigo-50"
                 title="Painel de resultados"

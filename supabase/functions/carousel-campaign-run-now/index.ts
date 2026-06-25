@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     return json({ error: "Unauthorized" }, 401);
   }
 
-  let body: { campanha_id?: string } = {};
+  let body: { campanha_id?: string; ignore_global_cap?: boolean; limit?: number } = {};
   try {
     body = await req.json();
   } catch (_e) {
@@ -64,6 +64,11 @@ Deno.serve(async (req) => {
   }
   const campanhaId = body.campanha_id;
   if (!campanhaId) return json({ error: "campanha_id obrigatório" }, 400);
+  // Force mode: ignore the 7-day global template/mass-dispatch cap and (optionally)
+  // the daily limit, while still excluding anyone who already got THIS campaign's
+  // message. Used for time-sensitive promos that can't wait for the cooldown.
+  const ignoreGlobalCap = body.ignore_global_cap === true;
+  const limitOverride = typeof body.limit === "number" && body.limit > 0 ? Math.floor(body.limit) : null;
 
   const sb = createClient(url, serviceKey);
 
@@ -87,7 +92,8 @@ Deno.serve(async (req) => {
   // 3) Select eligible batch (already skips clients with pendente / recently-sent rows).
   const { data: batch, error: batchErr } = await sb.rpc("select_campaign_batch", {
     p_campanha_id: campanhaId,
-    p_limit: c.qtd_por_dia ?? 50,
+    p_limit: limitOverride ?? (ignoreGlobalCap ? 100000 : (c.qtd_por_dia ?? 50)),
+    p_ignore_global_cap: ignoreGlobalCap,
   });
   if (batchErr) return json({ error: batchErr.message }, 500);
   if (!batch || batch.length === 0) {
