@@ -309,7 +309,11 @@ export function CarouselTemplatesLadder() {
     }
   };
 
-  const approvedCount = LADDER.filter((q) => rows[q]?.aprovado).length;
+  const totalTemplates = LADDER.reduce((acc, q) => acc + (rows[q]?.length || 0), 0);
+  const approvedCount = LADDER.reduce(
+    (acc, q) => acc + (rows[q] || []).filter((r) => r.aprovado || r.meta_status === "APPROVED").length,
+    0,
+  );
 
   const renderButtonExtra = (
     slot: BtnSlot,
