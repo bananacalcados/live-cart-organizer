@@ -36,6 +36,8 @@ interface MetaNumber {
 }
 
 interface LadderRow {
+  id: string;
+  nome: string;
   qtd_cards: number;
   template_id: string;
   template_language: string;
@@ -64,8 +66,10 @@ function emptyCardValues(): BtnValue[] {
 export function CarouselTemplatesLadder() {
   const [numbers, setNumbers] = useState<MetaNumber[]>([]);
   const [numberId, setNumberId] = useState<string>("");
+  const [models, setModels] = useState<string[]>([]);
+  const [modelName, setModelName] = useState<string>("Padrão");
   const [rows, setRows] = useState<Record<number, LadderRow>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
 
@@ -126,9 +130,27 @@ export function CarouselTemplatesLadder() {
     if (meta.length && !numberId) setNumberId(meta[0].id);
   };
 
+  // Distinct model names that already exist for the selected instance.
+  const loadModels = async () => {
+    if (!numberId) { setModels([]); return; }
+    const { data } = await supabase
+      .from("templates_carrossel")
+      .select("nome")
+      .eq("whatsapp_number_id", numberId);
+    const names = Array.from(
+      new Set((data || []).map((r: { nome: string | null }) => (r.nome || "Padrão").trim())),
+    );
+    setModels(names);
+  };
+
   const loadRows = async () => {
+    if (!numberId) { setRows({}); return; }
     setLoading(true);
-    const { data } = await supabase.from("templates_carrossel").select("*");
+    const { data } = await supabase
+      .from("templates_carrossel")
+      .select("*")
+      .eq("whatsapp_number_id", numberId)
+      .eq("nome", modelName);
     const map: Record<number, LadderRow> = {};
     (data || []).forEach((r: LadderRow) => { map[r.qtd_cards] = r; });
     setRows(map);
@@ -158,7 +180,13 @@ export function CarouselTemplatesLadder() {
     }
   };
 
-  useEffect(() => { loadNumbers(); loadRows(); loadSellers(); }, []);
+  useEffect(() => { loadNumbers(); loadSellers(); }, []);
+
+  // When the instance changes, reload its models + ladder.
+  useEffect(() => { loadModels(); loadRows(); }, [numberId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When the model changes, reload its ladder.
+  useEffect(() => { loadRows(); }, [modelName]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -221,6 +249,7 @@ export function CarouselTemplatesLadder() {
         body: {
           whatsappNumberId: numberId,
           qtdCards: qtd,
+          modelo: modelName,
           sampleImageBase64: sampleB64,
           sampleImageType: sampleType,
           topBody: top,
@@ -230,7 +259,8 @@ export function CarouselTemplatesLadder() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
-      toast.success(`Template de ${qtd} cards enviado à Meta (${data?.meta_status || "PENDING"})`);
+      toast.success(`Template "${modelName}" de ${qtd} cards enviado à Meta (${data?.meta_status || "PENDING"})`);
+      await loadModels();
       await loadRows();
     } catch (e) {
       toast.error(`Erro ao criar template de ${qtd} cards: ${(e as Error).message}`);
@@ -257,7 +287,7 @@ export function CarouselTemplatesLadder() {
           await supabase
             .from("templates_carrossel")
             .update({ meta_status: metaStatus, aprovado: metaStatus === "APPROVED" })
-            .eq("qtd_cards", qtd);
+            .eq("id", row.id);
           updated++;
         }
       }
@@ -341,6 +371,46 @@ export function CarouselTemplatesLadder() {
             </Button>
           </div>
         </div>
+
+        {/* Modelo de template */}
+        <div className="space-y-2 rounded-lg border p-3">
+          <Label className="text-sm font-semibold">Modelo de template</Label>
+          <p className="text-[11px] text-muted-foreground">
+            Crie modelos diferentes para situações diferentes (ex.: "Tamanho 34", "Lançamentos"). Cada modelo tem sua própria escada de 2 a 10 cards na instância selecionada.
+          </p>
+          <Input
+            value={modelName}
+            onChange={(e) => setModelName(e.target.value)}
+            placeholder='Nome do modelo (ex.: Lançamentos)'
+            className="h-9"
+            disabled={!numberId}
+          />
+          {models.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {models.map((m) => (
+                <Button
+                  key={m}
+                  type="button"
+                  size="sm"
+                  variant={m === modelName ? "default" : "outline"}
+                  className="h-7 text-xs"
+                  onClick={() => setModelName(m)}
+                >
+                  {m}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {!numberId ? (
+        <Card className="p-6 text-center text-sm text-muted-foreground">
+          Selecione uma instância Meta acima para ver e gerenciar os templates aprovados dessa instância.
+        </Card>
+      ) : (
+        <>
+        <Card className="p-4 space-y-4">
 
         <div className="rounded-md border border-dashed bg-muted/30 p-2.5 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Rodízio de vendedoras:</span>{" "}
@@ -499,6 +569,8 @@ export function CarouselTemplatesLadder() {
           })
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

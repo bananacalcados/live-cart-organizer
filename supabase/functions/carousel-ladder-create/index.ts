@@ -34,7 +34,14 @@ serve(async (req) => {
       topBody,
       cardBody,
       cards: cardsInput,
+      modelo,
     } = body as Record<string, unknown>;
+
+    const modelName = (typeof modelo === "string" && modelo.trim()) ? modelo.trim() : "Padrão";
+    const modelSlug = modelName
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")
+      .slice(0, 40) || "padrao";
 
     const cards = Number(qtdCards);
     if (!Number.isInteger(cards) || cards < 2 || cards > 10) {
@@ -89,7 +96,10 @@ serve(async (req) => {
 
     // 3) Monta os componentes do carrossel.
     const lang = (language as string) || 'pt_BR';
-    const name = (templateName as string) || `carrossel_escada_${cards}cards`;
+    const name = (templateName as string) ||
+      (modelSlug === "padrao"
+        ? `carrossel_escada_${cards}cards`
+        : `carrossel_${modelSlug}_${cards}cards`);
 
     const textComponent = (comp: TextComp) => {
       const c: Record<string, unknown> = { type: 'BODY', text: comp.text };
@@ -145,13 +155,14 @@ serve(async (req) => {
       .from('templates_carrossel')
       .upsert({
         qtd_cards: cards,
+        nome: modelName,
         template_id: name,
         template_language: lang,
         aprovado: metaStatus === 'APPROVED',
         meta_status: metaStatus,
         whatsapp_number_id: (whatsappNumberId as string) || null,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'qtd_cards' });
+      }, { onConflict: 'whatsapp_number_id,nome,qtd_cards' });
     if (upErr) {
       console.error('Upsert templates_carrossel error:', upErr);
       return json({ error: 'Template criado na Meta, mas falhou ao salvar na escada', details: upErr.message }, 500);

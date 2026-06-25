@@ -20,6 +20,7 @@ interface Props {
   onChange: (next: string[]) => void;
   placeholder?: string;
   tone?: "include" | "exclude";
+  renderLabel?: (value: string) => string;
 }
 
 export function MultiSelectFilter({
@@ -29,7 +30,9 @@ export function MultiSelectFilter({
   onChange,
   placeholder = "Selecionar...",
   tone = "include",
+  renderLabel,
 }: Props) {
+  const display = (v: string) => (renderLabel ? renderLabel(v) : v);
   const [open, setOpen] = useState(false);
 
   const toggle = (opt: string) => {
@@ -65,14 +68,14 @@ export function MultiSelectFilter({
               <CommandEmpty>Nada encontrado.</CommandEmpty>
               <CommandGroup>
                 {options.map((opt) => (
-                  <CommandItem key={opt} value={opt} onSelect={() => toggle(opt)} className="text-xs">
+                  <CommandItem key={opt} value={display(opt)} onSelect={() => toggle(opt)} className="text-xs">
                     <Check
                       className={cn(
                         "mr-2 h-3.5 w-3.5",
                         value.includes(opt) ? "opacity-100" : "opacity-0"
                       )}
                     />
-                    {opt}
+                    {display(opt)}
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -89,7 +92,7 @@ export function MultiSelectFilter({
               className={cn("text-[10px] gap-1 cursor-pointer", badgeClass)}
               onClick={() => toggle(v)}
             >
-              {v}
+              {display(v)}
               <X className="h-2.5 w-2.5" />
             </Badge>
           ))}

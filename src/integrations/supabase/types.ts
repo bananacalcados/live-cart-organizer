@@ -1746,6 +1746,7 @@ export type Database = {
           nome: string
           qtd_por_dia: number
           rodizio_vendedora: boolean
+          template_modelo: string | null
           tipo: string
           top_body: string
           updated_at: string
@@ -1766,6 +1767,7 @@ export type Database = {
           nome: string
           qtd_por_dia?: number
           rodizio_vendedora?: boolean
+          template_modelo?: string | null
           tipo?: string
           top_body?: string
           updated_at?: string
@@ -1786,6 +1788,7 @@ export type Database = {
           nome?: string
           qtd_por_dia?: number
           rodizio_vendedora?: boolean
+          template_modelo?: string | null
           tipo?: string
           top_body?: string
           updated_at?: string
@@ -14645,7 +14648,9 @@ export type Database = {
         Row: {
           aprovado: boolean
           created_at: string
+          id: string
           meta_status: string
+          nome: string
           observacao: string | null
           qtd_cards: number
           template_id: string
@@ -14656,7 +14661,9 @@ export type Database = {
         Insert: {
           aprovado?: boolean
           created_at?: string
+          id?: string
           meta_status?: string
+          nome?: string
           observacao?: string | null
           qtd_cards: number
           template_id: string
@@ -14667,7 +14674,9 @@ export type Database = {
         Update: {
           aprovado?: boolean
           created_at?: string
+          id?: string
           meta_status?: string
+          nome?: string
           observacao?: string | null
           qtd_cards?: number
           template_id?: string
@@ -17395,7 +17404,9 @@ export type Database = {
         Returns: {
           aprovado: boolean
           created_at: string
+          id: string
           meta_status: string
+          nome: string
           observacao: string | null
           qtd_cards: number
           template_id: string
