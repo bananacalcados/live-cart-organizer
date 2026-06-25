@@ -298,3 +298,12 @@ verify_jwt = false
 
 [functions.uazapi-send-buttons]
 verify_jwt = false
+
+[functions.carousel-ladder-create]
+verify_jwt = false
+
+[functions.carousel-campaign-scheduler]
+verify_jwt = false
+
+[functions.carousel-campaign-sender]
+verify_jwt = false
