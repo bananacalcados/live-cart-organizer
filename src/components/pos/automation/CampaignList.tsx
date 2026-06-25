@@ -92,7 +92,20 @@ export function CampaignList() {
       const { data, error } = await supabase.functions.invoke("carousel-campaign-run-now", {
         body: { campanha_id: row.id, ignore_global_cap: force },
       });
-      if (error) throw error;
+      if (error) {
+        // FunctionsHttpError esconde o corpo real da resposta; tentamos extrair a
+        // mensagem de erro retornada pela Edge Function para mostrar ao usuário.
+        let detail = (error as Error).message || "tente novamente";
+        const ctx = (error as unknown as { context?: Response }).context;
+        if (ctx && typeof ctx.json === "function") {
+          try {
+            const bodyErr = await ctx.json();
+            if (bodyErr?.error) detail = bodyErr.error;
+          } catch { /* corpo não-JSON */ }
+        }
+        toast.error("Erro ao iniciar disparos: " + detail);
+        return;
+      }
       if (data?.error) { toast.error(data.error); return; }
       const n = data?.enqueued ?? 0;
       if (n === 0) {
@@ -105,6 +118,7 @@ export function CampaignList() {
     } finally {
       setRunningId(null);
     }
+
   };
 
   if (view === "builder") {
