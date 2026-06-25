@@ -376,6 +376,7 @@ export function AudienceFilterBuilder({ value, onChange }: Props) {
   const [options, setOptions] = useState<Options>(EMPTY_OPTIONS);
   const [count, setCount] = useState<number | null>(null);
   const [counting, setCounting] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
 
   useEffect(() => {
     (async () => {
