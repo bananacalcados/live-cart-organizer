@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
-import { Loader2, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Users, List } from "lucide-react";
 import { MultiSelectFilter } from "./MultiSelectFilter";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 export type LastPurchaseOp = "" | "gt_days" | "lt_days" | "after" | "before" | "between";
 
