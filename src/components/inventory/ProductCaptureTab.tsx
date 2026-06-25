@@ -284,8 +284,8 @@ export function ProductCaptureTab({ storeId, storeName }: Props) {
 
   const totalModels = grouped.length;
   const totalVariations = items.length;
-  const totalUnits = items.reduce((s, i) => s + i.quantity, 0);
-  const totalCost = items.reduce((s, i) => s + (i.cost_price || 0) * i.quantity, 0);
+  const totalUnits = items.reduce((s, i) => s + toNumber(i.quantity), 0);
+  const totalCost = items.reduce((s, i) => s + toNumber(i.cost_price) * toNumber(i.quantity), 0);
 
   // Send to Tiny
   const handleSendToTiny = async (parentCode: string) => {
@@ -368,9 +368,9 @@ export function ProductCaptureTab({ storeId, storeName }: Props) {
       productName: g.productName,
       totalQty: g.items.reduce((s, i) => s + i.quantity, 0),
       avgCost: g.items.length > 0
-        ? g.items.reduce((s, i) => s + (i.cost_price || 0), 0) / g.items.length
+        ? g.items.reduce((s, i) => s + toNumber(i.cost_price), 0) / g.items.length
         : 0,
-      totalCost: g.items.reduce((s, i) => s + (i.cost_price || 0) * i.quantity, 0),
+      totalCost: g.items.reduce((s, i) => s + toNumber(i.cost_price) * toNumber(i.quantity), 0),
       items: g.items,
     }));
     const grandTotal = costGrouped.reduce((s, g) => s + g.totalCost, 0);
@@ -903,8 +903,8 @@ th{background:#f5f5f5;font-weight:600}
             </TableHeader>
             <TableBody>
               {grouped.map(g => {
-                const qty = g.items.reduce((s, i) => s + i.quantity, 0);
-                const cost = g.items.reduce((s, i) => s + (i.cost_price || 0) * i.quantity, 0);
+                const qty = g.items.reduce((s, i) => s + toNumber(i.quantity), 0);
+                const cost = g.items.reduce((s, i) => s + toNumber(i.cost_price) * toNumber(i.quantity), 0);
                 const avgCost = qty > 0 ? cost / qty : 0;
                 return (
                   <TableRow key={g.parentCode}>
