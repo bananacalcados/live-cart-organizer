@@ -51,4 +51,29 @@ Estabelecer um único fluxo que mantém o Módulo Estoque como espelho do PDV:
 - **Backfill (Fase 1):** preferível via função de banco (migration + função) lendo `pos_products` agrupado por `parent_sku`, com `INSERT ... ON CONFLICT` em `products_master(sku_root)` e `product_variants(gtin)`; rodar primeiro em modo "dry-run" (relatório) antes do commit.
 - **Lixo a excluir do backfill:** `parent_sku` em (`TESTE-005`, `POS-<uuid>`); duplicidades de slug do mesmo produto devem ser mescladas por referência numérica (ex.: `7403.103`).
 
-Nada foi alterado — aguardo seu aval para começar pela Fase 1 (backfill em dry-run) ou pela Fase 2 (parar de gerar fantasmas).
+---
+
+## STATUS DE EXECUÇÃO
+
+### Fase 1 — CONCLUÍDA
+- `backfill_estoque_from_pos(true)`: 6 pais + 21 variações criados (needs_review=true).
+
+### Fase 2 — CONCLUÍDA
+1. **Anti-fantasma (busca ao vivo):** `pos-tiny-search-product` agora faz INSERT no `pos_products`
+   de todo produto puxado do Tiny que ainda não exista na loja (estoque inicia em 0; nunca
+   sobrescreve produto já cadastrado). A partir de agora nenhuma venda gera fantasma.
+2. **Backfill dos fantasmas históricos:** função `backfill_pos_products_from_sales(p_commit, p_clean_only)`
+   reconstrói no cache do PDV os produtos já vendidos e ausentes. Commit real:
+   **642 produtos inseridos** (catálogo real), **220 ignorados** (produtos de anúncio/online com
+   nome de marketing "–/—"). ZOE e KATIA incluídos.
+3. **Empurrar p/ Estoque:** `backfill_estoque_from_pos(true)` rodou de novo e criou **0 novos** —
+   porque os 417 SKUs distintos reconstruídos **já existiam em `product_variants`** (vindos da
+   importação separada do Tiny). O buraco era só no cache do PDV.
+
+### Achado para Fase 3 (consolidação de pais)
+ZOE/KATIA e similares ESTÃO no Estoque, mas com **pai fragmentado por COR** (ex.: `100152 = ZOE - Cafe`,
+`100157 = ZOE - Branco Off`). O padrão desejado é pai = MODELO e filhos = tamanho+cor. Falta uma
+rotina de consolidação que mescle esses pais por referência (`7223.102`) e mova as variações.
+Restam ainda **169 fantasmas** — todos produtos de anúncio/online (nome de marketing), deixados de fora
+de propósito.
+

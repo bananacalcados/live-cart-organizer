@@ -16893,6 +16893,12 @@ export type Database = {
           variants_updated: number
         }[]
       }
+      backfill_pos_products_from_sales:
+        | { Args: { p_commit?: boolean }; Returns: Json }
+        | {
+            Args: { p_clean_only?: boolean; p_commit?: boolean }
+            Returns: Json
+          }
       bc_match_audience: {
         Args: {
           cv: Database["public"]["Views"]["crm_customers_v"]["Row"]
