@@ -130,9 +130,27 @@ export function CarouselTemplatesLadder() {
     if (meta.length && !numberId) setNumberId(meta[0].id);
   };
 
+  // Distinct model names that already exist for the selected instance.
+  const loadModels = async () => {
+    if (!numberId) { setModels([]); return; }
+    const { data } = await supabase
+      .from("templates_carrossel")
+      .select("nome")
+      .eq("whatsapp_number_id", numberId);
+    const names = Array.from(
+      new Set((data || []).map((r: { nome: string | null }) => (r.nome || "Padrão").trim())),
+    );
+    setModels(names);
+  };
+
   const loadRows = async () => {
+    if (!numberId) { setRows({}); return; }
     setLoading(true);
-    const { data } = await supabase.from("templates_carrossel").select("*");
+    const { data } = await supabase
+      .from("templates_carrossel")
+      .select("*")
+      .eq("whatsapp_number_id", numberId)
+      .eq("nome", modelName);
     const map: Record<number, LadderRow> = {};
     (data || []).forEach((r: LadderRow) => { map[r.qtd_cards] = r; });
     setRows(map);
