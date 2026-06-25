@@ -468,6 +468,11 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
                 onChange={(nm) => setCardVars((prev) => prev.map((x, j) => (j === i ? nm : x)))}
               />
             ))}
+            <p className="rounded-md bg-blue-50 px-3 py-2 text-[12px] text-blue-700">
+              Para colocar <strong>nome e preço diferentes em cada card</strong>, escolha
+              {" "}<strong>"Texto diferente em cada card"</strong>. Aí aparecerá um campo de texto
+              próprio em cada card abaixo. Use "Texto fixo" só quando a legenda for igual em todos.
+            </p>
           </div>
         )}
         <CampaignCardsEditor
