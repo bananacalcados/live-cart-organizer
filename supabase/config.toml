@@ -307,3 +307,6 @@ verify_jwt = false
 
 [functions.carousel-campaign-sender]
 verify_jwt = false
+
+[functions.carousel-campaign-run-now]
+verify_jwt = false
