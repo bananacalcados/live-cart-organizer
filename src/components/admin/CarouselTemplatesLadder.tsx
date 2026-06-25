@@ -68,7 +68,7 @@ export function CarouselTemplatesLadder() {
   const [numberId, setNumberId] = useState<string>("");
   const [models, setModels] = useState<string[]>([]);
   const [modelName, setModelName] = useState<string>("Padrão");
-  const [rows, setRows] = useState<Record<number, LadderRow>>({});
+  const [rows, setRows] = useState<Record<number, LadderRow[]>>({});
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
