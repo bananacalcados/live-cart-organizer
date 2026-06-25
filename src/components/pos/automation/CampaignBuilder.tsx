@@ -351,6 +351,8 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
       setTestSending(false);
     }
   };
+
+  const validateStart = (): string | null => {
     if (!nome.trim()) return "Dê um nome à automação";
     if (!numberId) return "Selecione a instância Meta";
     if (!modelo) return "Selecione o modelo de template";
