@@ -17347,6 +17347,20 @@ export type Database = {
       }
       is_sync_in_progress: { Args: never; Returns: boolean }
       is_unified_inventory_enabled: { Args: never; Returns: boolean }
+      list_campaign_audience: {
+        Args: { p_filtro: Json; p_limit?: number; p_offset?: number }
+        Returns: {
+          avg_ticket: number
+          city: string
+          cliente_id: string
+          last_purchase_at: string
+          nome: string
+          phone: string
+          state: string
+          tamanhos: string[]
+          total_orders: number
+        }[]
+      }
       list_nfe_emitters: {
         Args: never
         Returns: {
