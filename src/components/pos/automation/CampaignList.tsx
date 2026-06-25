@@ -169,6 +169,17 @@ export function CampaignList() {
                   : <Rocket className="h-4 w-4" />}
                 <span className="hidden sm:inline">Iniciar disparos agora</span>
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+                title="Disparar para TODO o público agora, ignorando o teto de 7 dias (exceto quem já recebeu esta mesma mensagem)"
+                disabled={!r.ativa || runningId === r.id}
+                onClick={() => runNow(r, { ignoreGlobalCap: true })}
+              >
+                <Flame className="h-4 w-4" />
+                <span className="hidden sm:inline">Disparar a todos</span>
+              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:bg-indigo-50"
                 title="Painel de resultados"
                 onClick={() => { setDashId(r.id); setDashNome(r.nome); setView("dashboard"); }}>
