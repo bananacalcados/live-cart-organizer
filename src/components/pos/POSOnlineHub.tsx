@@ -5,6 +5,7 @@ import { POSOnlineSales } from "./POSOnlineSales";
 import { POSCustomLinkDialog } from "./POSCustomLinkDialog";
 import { CarouselTemplatesLadder } from "@/components/admin/CarouselTemplatesLadder";
 import { CampaignAudienceManager } from "./audience/CampaignAudienceManager";
+import { CampaignList } from "./automation/CampaignList";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Events from "@/pages/Events";
 
