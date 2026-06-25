@@ -69,6 +69,11 @@ interface GtinMatch {
   name: string;
 }
 
+const fixed = (value: unknown, digits = 2) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n.toFixed(digits) : (0).toFixed(digits);
+};
+
 export function NfeDetailEditor({
   invoiceId,
   open,
@@ -505,7 +510,7 @@ export function NfeDetailEditor({
             <TabsContent value="installments" className="space-y-3 mt-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                  Total a pagar: R$ {installments.reduce((s, i) => s + (i.amount || 0), 0).toFixed(2)}
+                  Total a pagar: R$ {fixed(installments.reduce((s, i) => s + Number(i.amount ?? 0), 0))}
                 </p>
                 <Button size="sm" onClick={addInstallment}>
                   <Plus className="h-4 w-4 mr-1" /> Nova Parcela
