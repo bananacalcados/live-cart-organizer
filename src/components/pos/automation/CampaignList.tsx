@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Plus, Trash2, Zap, Pencil, BarChart3 } from "lucide-react";
+import { Loader2, Plus, Trash2, Zap, Pencil, BarChart3, Rocket } from "lucide-react";
 import { CampaignBuilder } from "./CampaignBuilder";
 import { CampaignDashboard } from "./CampaignDashboard";
 
@@ -31,6 +31,7 @@ export function CampaignList() {
   const [numberLabels, setNumberLabels] = useState<Record<string, string>>({});
   const [publicoLabels, setPublicoLabels] = useState<Record<string, string>>({});
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
+  const [runningId, setRunningId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -77,6 +78,29 @@ export function CampaignList() {
     if (error) { toast.error("Erro ao excluir"); return; }
     toast.success("Automação excluída");
     load();
+  };
+
+  const runNow = async (row: Row) => {
+    if (!row.ativa) { toast.error("Ative a automação antes de iniciar os disparos."); return; }
+    if (!confirm(`Iniciar disparos AGORA para "${row.nome}"?\n\nVamos enviar para até ${row.qtd_por_dia} pessoas do público neste momento. O restante segue automaticamente nos próximos dias de disparo.`)) return;
+    setRunningId(row.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("carousel-campaign-run-now", {
+        body: { campanha_id: row.id },
+      });
+      if (error) throw error;
+      if (data?.error) { toast.error(data.error); return; }
+      const n = data?.enqueued ?? 0;
+      if (n === 0) {
+        toast.info(data?.note || "Nenhum cliente elegível no momento.");
+      } else {
+        toast.success(`Disparo iniciado! ${n} ${n === 1 ? "pessoa entrou" : "pessoas entraram"} na fila e já começam a receber.`);
+      }
+    } catch (e) {
+      toast.error("Erro ao iniciar disparos: " + ((e as Error).message || "tente novamente"));
+    } finally {
+      setRunningId(null);
+    }
   };
 
   if (view === "builder") {
@@ -129,6 +153,18 @@ export function CampaignList() {
                 </p>
               </button>
               <Switch checked={r.ativa} onCheckedChange={() => toggleActive(r)} />
+              <Button
+                size="sm"
+                className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                title="Enviar agora para o lote do dia"
+                disabled={!r.ativa || runningId === r.id}
+                onClick={() => runNow(r)}
+              >
+                {runningId === r.id
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Rocket className="h-4 w-4" />}
+                <span className="hidden sm:inline">Iniciar disparos agora</span>
+              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:bg-indigo-50"
                 title="Painel de resultados"
                 onClick={() => { setDashId(r.id); setDashNome(r.nome); setView("dashboard"); }}>
