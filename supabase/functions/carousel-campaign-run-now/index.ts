@@ -38,23 +38,25 @@ function json(body: unknown, status = 200) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+  try {
+    const url = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-  // --- Auth: require a valid authenticated user JWT. ---
-  const authHeader = req.headers.get("Authorization") || "";
-  if (!authHeader.startsWith("Bearer ")) {
-    return json({ error: "Unauthorized" }, 401);
-  }
-  const token = authHeader.replace("Bearer ", "");
-  const authClient = createClient(url, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: claims, error: claimsErr } = await authClient.auth.getClaims(token);
-  if (claimsErr || !claims?.claims?.sub) {
-    return json({ error: "Unauthorized" }, 401);
-  }
+    // --- Auth: require a valid authenticated user JWT. ---
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return json({ error: "Faça login novamente para iniciar os disparos." }, 401);
+    }
+    const token = authHeader.replace("Bearer ", "");
+    const authClient = createClient(url, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userErr } = await authClient.auth.getUser(token);
+    if (userErr || !userData?.user) {
+      console.error("[run-now] auth failed:", userErr?.message);
+      return json({ error: "Sessão inválida. Faça login novamente." }, 401);
+    }
 
   let body: { campanha_id?: string; ignore_global_cap?: boolean; limit?: number } = {};
   try {
@@ -78,7 +80,7 @@ Deno.serve(async (req) => {
     .select("*")
     .eq("id", campanhaId)
     .maybeSingle();
-  if (cErr) return json({ error: cErr.message }, 500);
+  if (cErr) { console.error("[run-now] campaign load:", cErr.message); return json({ error: cErr.message }, 500); }
   if (!c) return json({ error: "Automação não encontrada" }, 404);
   if (!c.ativa) return json({ error: "Ative a automação antes de iniciar os disparos." }, 400);
 
@@ -95,7 +97,7 @@ Deno.serve(async (req) => {
     p_limit: limitOverride ?? (ignoreGlobalCap ? 100000 : (c.qtd_por_dia ?? 50)),
     p_ignore_global_cap: ignoreGlobalCap,
   });
-  if (batchErr) return json({ error: batchErr.message }, 500);
+  if (batchErr) { console.error("[run-now] select_campaign_batch:", batchErr.message); return json({ error: batchErr.message }, 500); }
   if (!batch || batch.length === 0) {
     return json({ ok: true, enqueued: 0, note: "Nenhum cliente elegível no momento (público vazio, em cooldown ou já enfileirado)." });
   }
@@ -132,7 +134,7 @@ Deno.serve(async (req) => {
   const { error: insErr, count } = await sb
     .from("campanha_envios")
     .insert(rows, { count: "exact" });
-  if (insErr) return json({ error: insErr.message }, 500);
+  if (insErr) { console.error("[run-now] insert envios:", insErr.message); return json({ error: insErr.message }, 500); }
 
   const enqueued = count ?? rows.length;
 
@@ -152,5 +154,10 @@ Deno.serve(async (req) => {
     EdgeRuntime.waitUntil(kick);
   }
 
-  return json({ ok: true, enqueued, started: true });
+    return json({ ok: true, enqueued, started: true });
+  } catch (e) {
+    const msg = (e as Error)?.message || String(e);
+    console.error("[run-now] unexpected error:", msg, (e as Error)?.stack);
+    return json({ error: `Falha ao iniciar disparos: ${msg}` }, 500);
+  }
 });

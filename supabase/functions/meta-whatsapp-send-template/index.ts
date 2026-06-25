@@ -233,8 +233,16 @@ function buildCarouselPayload(def: any, sentComponents: any[] | undefined): any 
     });
   const bubbleBody = bodyDef?.text ? subst(bodyDef.text, sentBody?.parameters || []) : '';
 
-  const cards = carouselDef.cards.map((cardDef: any, i: number) => {
-    const sentCard = sentCards.find((c: any) => c.card_index === i) || sentCards[i] || {};
+  // Iterate over the cards actually SENT (what the customer received), not over the
+  // full template definition — otherwise extra unused template slots would show up as
+  // empty/duplicated cards in the chat. Falls back to the definition when nothing was
+  // sent (defensive).
+  const cardSource = sentCards.length ? sentCards : carouselDef.cards;
+  const cards = cardSource.map((src: any, i: number) => {
+    const sentCard = sentCards.length
+      ? src
+      : (sentCards.find((c: any) => c.card_index === i) || sentCards[i] || {});
+    const cardDef = carouselDef.cards[sentCard.card_index ?? i] || carouselDef.cards[i] || {};
     const sentCardComps: any[] = sentCard.components || [];
     const findSentComp = (type: string, subType?: string) =>
       sentCardComps.find(
