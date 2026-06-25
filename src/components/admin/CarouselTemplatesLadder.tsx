@@ -187,9 +187,6 @@ export function CarouselTemplatesLadder() {
   // When the instance changes, reload its models + ladder.
   useEffect(() => { loadModels(); loadRows(); }, [numberId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When the model changes, reload its ladder.
-  useEffect(() => { loadRows(); }, [modelName]); // eslint-disable-line react-hooks/exhaustive-deps
-
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
