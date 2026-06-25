@@ -1,64 +1,75 @@
-# Plano: Filtros de período/RFM + múltiplos modelos de template por instância
+# Plano: Construtor de Automações de Carrossel (Online > Automações)
 
-Quatro mudanças pedidas, agrupadas em 3 frentes.
+## Diagnóstico
 
-## 1) Filtros de período de compra + Matriz RFM (construtor de públicos)
+O backend já está pronto e funcionando:
+- `campanhas_auto` guarda TODA a configuração da campanha (template, textos com variáveis, filtro, limite diário `qtd_por_dia`, dias da semana `dias_semana`, cooldown `cooldown_dias`, rodízio de vendedora, `ativa`).
+- `campanha_cards` guarda os cards (imagem + legenda) — a quantidade de cards "ok" escolhe automaticamente o template aprovado certo.
+- `campanha_envios` é a fila de disparo.
+- As funções `resolve_campaign_template` e `select_campaign_batch` e as edge functions `carousel-campaign-scheduler` (agenda por dia da semana) e `carousel-campaign-sender` (dispara respeitando limites/cooldown/retry) já operam sobre essas tabelas.
 
-**Onde:** `AudienceFilterBuilder.tsx` (aba Online > Automação > Públicos) + RPCs no banco.
+O que **não existe** é a interface para o operador montar e **iniciar** a campanha. Hoje a aba "Públicos" (`CampaignAudienceManager`) grava em `campanhas_auto`, mas só preenche nome + filtro + instância + modelo — sem cards, sem variáveis, sem agendamento e sem botão de iniciar. É exatamente essa peça que falta.
 
-Novos filtros, disponíveis tanto em **Incluir** quanto em **Excluir**:
+## Decisão de arquitetura: separar Público de Campanha
 
-- **Período da última compra** (modos):
-  - `Comprou há mais de N dias` (sem compra recente)
-  - `Comprou há menos de N dias` (compra recente)
-  - `Última compra depois de DD/MM/AAAA`
-  - `Última compra antes de DD/MM/AAAA`
-  - `Comprou entre data X e data Y`
-- **Matriz RFM**: multiseleção dos segmentos existentes (champions, loyal_customers, at_risk, cant_lose, hibernating, lost, new_customers, promising, leads, others), com rótulos amigáveis em PT.
+Hoje "público" e "campanha" estão na mesma tabela (`campanhas_auto`), o que confunde. Como você já criou públicos e quer "selecionar o público" ao montar a automação, vou separar:
 
-Implementação técnica:
-- `AudienceFilterBlock` ganha campos: `last_purchase_op` (`gt_days`|`lt_days`|`after`|`before`|`between`), `last_purchase_days`, `last_purchase_from`, `last_purchase_to`, e `rfm_segments: string[]`.
-- `bc_match_audience` (função IMMUTABLE) passa a avaliar `last_purchase_at` e `rfm_segment` nos blocos include/exclude.
-- `audience_filter_options` passa a devolver também a lista de `rfm_segments`.
-- UI: nova seção "Período de compra" (select de modo + inputs de dias/datas) e multiselect "Matriz RFM" dentro de cada bloco.
+- Nova tabela leve `campanha_publicos` (id, nome, filtro_json) = só o público reutilizável.
+- Migração: os registros que você criou como "públicos" (inativos, sem cards) passam para `campanha_publicos`.
+- `campanhas_auto` ganha `publico_id` (referência ao público escolhido). O disparo continua lendo o filtro — `select_campaign_batch` passa a usar o `filtro_json` do público vinculado (com fallback para o filtro próprio, mantendo o legado).
+- A aba "Públicos" passa a gravar em `campanha_publicos` (não cria mais campanha pela metade).
 
-## 2) Múltiplos modelos de template por quantidade de cards
+## O que será construído
 
-Hoje `templates_carrossel` tem PK em `qtd_cards` → só 1 template por contagem. Vamos permitir vários "modelos" (ex.: "Tamanho 34", "Lançamentos"), cada um com sua própria escada de 2–10 cards.
+### 1) Nova aba "Automações" no hub (`POSOnlineHub.tsx`)
+Três abas: **Automações** (novo, padrão) · **Templates** · **Públicos**.
 
-Migração de banco:
-- Trocar a PK: adicionar `id uuid default gen_random_uuid()` como PK; adicionar `nome text not null default 'Padrão'` (nome do modelo).
-- `whatsapp_number_id` passa a ser obrigatório para novos registros.
-- Índice único `(whatsapp_number_id, nome, qtd_cards)`.
-- Backfill: registros existentes recebem `nome = 'Padrão'`.
-- `resolve_campaign_template` passa a receber/filtrar por `whatsapp_number_id` + `nome` do modelo da campanha.
+### 2) Lista de automações (`CampaignList.tsx`, novo)
+- Lista campanhas de `campanhas_auto` com: nome, público, instância, status (Ativa/Pausada), nº de cards prontos, resumo do agendamento.
+- Ações: **Nova automação**, Editar, Pausar/Ativar (toggle `ativa`), Excluir, e um resumo de envios (enviados/pendentes/falhas a partir de `campanha_envios`).
 
-UI (`CarouselTemplatesLadder.tsx`):
-- Campo **Nome do modelo** na criação (ex.: "Tamanho 34").
-- Lista de modelos existentes por instância; ao escolher um modelo mostra a escada (2–10) dele.
-- "Criar/Recriar" grava com `nome` + `whatsapp_number_id`.
-- `carousel-ladder-create` (edge function) passa a receber e gravar `nome`.
+### 3) Construtor da automação (`CampaignBuilder.tsx`, novo)
+Fluxo em seções, salvando em `campanhas_auto` + `campanha_cards`:
 
-## 3) Templates escopados pela instância Meta selecionada
+1. **Instância Meta + Modelo de template**
+   - Seletor de instância (só Meta ativas) e de modelo aprovado (reusa a lógica de `CampaignAudienceManager.loadModels`).
+   - Só mostra modelos que tenham templates **aprovados** para a instância.
 
-**Onde:** `CarouselTemplatesLadder.tsx`.
+2. **Cards (imagens + legendas)**
+   - Para cada card: botões **Subir do PC** e **Subir do site** (Shopify) — reusa `ImageCropDialog` (crop 1:1 da miniatura) e `ProductSelector`, já existentes.
+   - Legenda por card via `VariableTextField` (já existe: inserção de variáveis + emojis).
+   - Adicionar/remover cards (2 a 10). A contagem de cards "ok" define o template usado.
+   - Valida que a quantidade de cards casa com um template aprovado do modelo (mostra aviso se não houver template aprovado para aquela contagem).
 
-- A escada/lista de templates aprovados **só aparece depois** de selecionar a instância Meta no topo. Sem instância selecionada → mensagem "Selecione uma instância Meta para ver/gerenciar os templates".
-- `loadRows()` passa a filtrar `templates_carrossel` por `whatsapp_number_id = numberId` (hoje carrega tudo). Assim, ao selecionar "Meta Pérola" só aparecem os templates dessa instância — nunca da Zoppy ou de outra.
-- A sincronização de status (`syncStatus`) já usa `numberId`; passa a atualizar apenas as linhas daquela instância + modelo.
+3. **Texto/variáveis**
+   - Corpo do topo (`top_body`) e corpo do card (`card_body`) via `VariableTextField`, com as variáveis padrão (`{{nome}}`, `{{tamanho}}`, `{{vendedora}}`, texto livre) e emojis.
 
-## Vínculo público → instância/modelo (necessário para o disparo)
+4. **Público**
+   - Seletor de público (`campanha_publicos`) com contagem estimada em tempo real (reusa `count_campaign_audience`). Atalho "Criar/editar público" abre o builder de público.
 
-Para o disparo saber qual modelo/instância usar, `campanhas_auto` ganha `whatsapp_number_id` e `template_modelo` (nome). No editor de público (`CampaignAudienceManager.tsx`) adiciono os seletores de **Instância Meta** e **Modelo de template**. `resolve_campaign_template` usa esses campos.
+5. **Agendamento e limites**
+   - **Limite diário** (`qtd_por_dia`) — input numérico.
+   - **Dias da semana** (`dias_semana`) — toggles Dom–Sáb.
+   - **Cooldown** (`cooldown_dias`) — quantos dias até a mesma pessoa poder receber de novo.
+   - **Rodízio de vendedora** (`rodizio_vendedora` + `vendedoras_rodizio`) — opcional.
+
+6. **Iniciar automação**
+   - Botão **Iniciar automação** grava `ativa = true` (e Pausar grava `false`). Validações antes de ativar: instância + modelo + ≥2 cards prontos + público selecionado + ≥1 dia da semana + limite ≥ 1.
 
 ## Detalhes técnicos / arquivos
 
-- Migração SQL: `templates_carrossel` (nova PK, `nome`, índice único, backfill); `campanhas_auto` (+`whatsapp_number_id`, +`template_modelo`); recriar `bc_match_audience`, `audience_filter_options`, `resolve_campaign_template`.
-- Front: `AudienceFilterBuilder.tsx`, `MultiSelectFilter.tsx` (reuso), `CampaignAudienceManager.tsx`, `CarouselTemplatesLadder.tsx`.
-- Edge function: `carousel-ladder-create` (campo `nome`).
-- Sem quebrar legado: filtros antigos sem os novos campos continuam funcionando; templates sem `nome` viram "Padrão".
+- Migração (tool de migração):
+  - `CREATE TABLE public.campanha_publicos (id, nome, filtro_json, created_at, updated_at)` + GRANTs + RLS + trigger updated_at.
+  - `ALTER TABLE campanhas_auto ADD COLUMN publico_id uuid REFERENCES campanha_publicos(id)`.
+  - Backfill: mover registros "público" existentes de `campanhas_auto` para `campanha_publicos` (feito via tool de insert, não migração).
+  - Recriar `select_campaign_batch` para usar o filtro do `publico_id` quando houver (fallback ao `filtro_json` próprio).
+- Front (novos): `src/components/pos/automation/CampaignList.tsx`, `CampaignBuilder.tsx`, `CampaignCardsEditor.tsx`.
+- Front (alterados): `POSOnlineHub.tsx` (nova aba), `audience/CampaignAudienceManager.tsx` (gravar em `campanha_publicos`).
+- Reuso: `ImageCropDialog`, `ProductSelector`, `VariableTextField`, `EmojiPickerButton`, RPC `count_campaign_audience`.
+- Storage: imagens dos cards no bucket público já usado nos disparos (mesmo padrão do `AutomationFlowBuilder`).
 
 ## Validação
-- Contagem de público em tempo real com os novos filtros (período + RFM).
-- Criar 2 modelos distintos para a mesma contagem de cards na mesma instância.
-- Trocar instância no topo e confirmar que a lista de aprovados muda e nunca mistura instâncias.
+- Criar uma automação completa (5 cards, variáveis, público tamanho 34, limite 50/dia, seg–sex, cooldown 30) e ativar.
+- Rodar `carousel-campaign-scheduler` manualmente e confirmar enfileiramento em `campanha_envios`.
+- Rodar `carousel-campaign-sender` e confirmar disparo + variáveis resolvidas + identificação do card no webhook.
+- Confirmar que pausar zera novos enfileiramentos e que o público continua reutilizável entre automações.
