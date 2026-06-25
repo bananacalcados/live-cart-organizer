@@ -550,33 +550,70 @@ export function CarouselTemplatesLadder() {
           </div>
         ) : (
           LADDER.map((qtd) => {
-            const row = rows[qtd];
+            const list = rows[qtd] || [];
             return (
-              <Card key={qtd} className="p-3 flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center font-semibold text-sm">
-                    {qtd}
+              <Card key={qtd} className="p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-md bg-muted flex items-center justify-center font-semibold text-sm">
+                      {qtd}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{qtd} cards</p>
+                      <p className="text-xs text-muted-foreground">
+                        {list.length
+                          ? `${list.length} template(s) criado(s)`
+                          : "Nenhum template ainda"}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">{qtd} cards</p>
-                    <p className="text-xs text-muted-foreground">
-                      {row?.template_id || `carrossel_escada_${qtd}cards`}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {statusBadge(row)}
                   <Button
                     size="sm"
-                    variant={row ? "outline" : "default"}
+                    variant="default"
                     disabled={creating === qtd}
                     onClick={() => createRow(qtd)}
                     className="gap-1.5"
                   >
-                    {creating === qtd ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                    {row ? "Recriar" : "Criar template"}
+                    {creating === qtd ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                    Criar template "{(modelName || "Padrão").trim()}"
                   </Button>
                 </div>
+
+                {list.length > 0 && (
+                  <div className="space-y-1.5 pl-12">
+                    {list.map((row) => (
+                      <div
+                        key={row.id}
+                        className="flex items-center justify-between gap-2 rounded-md border bg-muted/30 px-2.5 py-1.5 flex-wrap"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium truncate">{row.nome || "Padrão"}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">{row.template_id}</p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {statusBadge(row)}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={creating === qtd}
+                            onClick={() => createRow(qtd, row.nome)}
+                            className="h-7 gap-1 text-xs"
+                          >
+                            <RefreshCw className="h-3 w-3" /> Recriar
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive"
+                            onClick={() => deleteRow(row)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Card>
             );
           })
