@@ -36,6 +36,8 @@ interface MetaNumber {
 }
 
 interface LadderRow {
+  id: string;
+  nome: string;
   qtd_cards: number;
   template_id: string;
   template_language: string;
