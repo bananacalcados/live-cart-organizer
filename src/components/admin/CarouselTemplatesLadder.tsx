@@ -150,9 +150,11 @@ export function CarouselTemplatesLadder() {
       .from("templates_carrossel")
       .select("*")
       .eq("whatsapp_number_id", numberId)
-      .eq("nome", modelName);
-    const map: Record<number, LadderRow> = {};
-    (data || []).forEach((r: LadderRow) => { map[r.qtd_cards] = r; });
+      .order("nome", { ascending: true });
+    const map: Record<number, LadderRow[]> = {};
+    (data || []).forEach((r: LadderRow) => {
+      (map[r.qtd_cards] ||= []).push(r);
+    });
     setRows(map);
     setLoading(false);
   };
