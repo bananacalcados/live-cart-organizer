@@ -1,75 +1,54 @@
-# Plano: Construtor de Automações de Carrossel (Online > Automações)
+# Por que o PDV e o Módulo Estoque mostram produtos diferentes
 
-## Diagnóstico
+## O que eu encontrei (causa raiz)
 
-O backend já está pronto e funcionando:
-- `campanhas_auto` guarda TODA a configuração da campanha (template, textos com variáveis, filtro, limite diário `qtd_por_dia`, dias da semana `dias_semana`, cooldown `cooldown_dias`, rodízio de vendedora, `ativa`).
-- `campanha_cards` guarda os cards (imagem + legenda) — a quantidade de cards "ok" escolhe automaticamente o template aprovado certo.
-- `campanha_envios` é a fila de disparo.
-- As funções `resolve_campaign_template` e `select_campaign_batch` e as edge functions `carousel-campaign-scheduler` (agenda por dia da semana) e `carousel-campaign-sender` (dispara respeitando limites/cooldown/retry) já operam sobre essas tabelas.
+O sistema hoje trabalha com **três fontes de produto paralelas**, e não uma só. Essa é a origem da inconsistência:
 
-O que **não existe** é a interface para o operador montar e **iniciar** a campanha. Hoje a aba "Públicos" (`CampaignAudienceManager`) grava em `campanhas_auto`, mas só preenche nome + filtro + instância + modelo — sem cards, sem variáveis, sem agendamento e sem botão de iniciar. É exatamente essa peça que falta.
+1. **Tiny ERP (externo)** — catálogo real e completo. Tem TODOS os produtos, inclusive a ZOE e a KATIA.
+2. **`pos_products` (cache do PDV)** — 17.703 linhas / ~5.195 códigos de barras distintos. É alimentado por uma sincronização própria a partir do Tiny. **Importante: o PDV NÃO depende só dessa tabela** — quando você bipa um produto que não está no cache, a tela de venda faz uma **busca AO VIVO no Tiny** (`pos-tiny-search-product`) e vende mesmo assim, **sem gravar o produto em lugar nenhum**.
+3. **`products_master` (pai) + `product_variants` (filho)** — é o Módulo Estoque: 654 pais / 5.769 variações. É populado por uma **importação separada do Tiny**, sem nenhuma ligação automática com o `pos_products` nem com as vendas do PDV.
 
-## Decisão de arquitetura: separar Público de Campanha
+### Por que a ZOE (7223.102) e a KATIA (8436.240) aparecem na Frente de Caixa mas não no Estoque
+Elas **não estão no `pos_products`** e **não estão no Módulo Estoque**. Elas só existem no Tiny. Quando a vendedora bipa o código, o PDV puxa o produto ao vivo do Tiny e conclui a venda (confirmei: há 56 itens vendidos de ZOE/KATIA em `pos_sale_items`). Como a busca ao vivo **não persiste nada**, esses produtos viram "fantasmas": passam pelo caixa e nunca entram em nenhuma tabela local.
 
-Hoje "público" e "campanha" estão na mesma tabela (`campanhas_auto`), o que confunde. Como você já criou públicos e quer "selecionar o público" ao montar a automação, vou separar:
+### Tamanho real da divergência (medido no banco)
+- **No nível do PAI:** das 510 referências (`parent_sku`) que existem no PDV, **498 já estão no Módulo Estoque** e **12 estão faltando**.
+- **No nível da VARIAÇÃO (por código de barras):** **17 códigos** do `pos_products` não existem em `product_variants`.
+- **242 produtos** do `pos_products` estão **sem código de barras**, então hoje é impossível casá-los com o Estoque.
+- **O grande buraco (os "vários outros" que você viu):** **217 produtos já vendidos** pelo PDV (em `pos_sale_items`) **não existem no Módulo Estoque** e **215 nem no `pos_products`** — são exatamente os fantasmas vindos da busca ao vivo do Tiny (ZOE e KATIA estão nesse grupo).
 
-- Nova tabela leve `campanha_publicos` (id, nome, filtro_json) = só o público reutilizável.
-- Migração: os registros que você criou como "públicos" (inativos, sem cards) passam para `campanha_publicos`.
-- `campanhas_auto` ganha `publico_id` (referência ao público escolhido). O disparo continua lendo o filtro — `select_campaign_batch` passa a usar o `filtro_json` do público vinculado (com fallback para o filtro próprio, mantendo o legado).
-- A aba "Públicos" passa a gravar em `campanha_publicos` (não cria mais campanha pela metade).
+### O PDV usa o estoque do Módulo Estoque?
+**Não.** O PDV usa o `pos_products.stock` + consulta ao vivo no Tiny. O Módulo Estoque (`product_variants.initial_stock`) é um registro paralelo, usado para catalogação/Shopify/fiscal. Os dois estão **totalmente desacoplados** — por isso a regra "Estoque é a tabela principal e espelha o PDV" **nunca chegou a ser aplicada**: são pipelines independentes que foram derivando.
 
-## O que será construído
+---
 
-### 1) Nova aba "Automações" no hub (`POSOnlineHub.tsx`)
-Três abas: **Automações** (novo, padrão) · **Templates** · **Públicos**.
+## Plano de ação
 
-### 2) Lista de automações (`CampaignList.tsx`, novo)
-- Lista campanhas de `campanhas_auto` com: nome, público, instância, status (Ativa/Pausada), nº de cards prontos, resumo do agendamento.
-- Ações: **Nova automação**, Editar, Pausar/Ativar (toggle `ativa`), Excluir, e um resumo de envios (enviados/pendentes/falhas a partir de `campanha_envios`).
+### Fase 1 — Backfill: trazer o que o PDV já conhece para o Estoque (pai>filho)
+Usar o `pos_products` como fonte (já tem `parent_sku`, `size`, `color`, `barcode`, preços) e materializar no padrão pai>filho:
+- Para cada `parent_sku` sem `products_master` correspondente → criar o **pai** (`sku_root = parent_sku`, nome-base sem tamanho/cor, marca, categoria, gênero, custo/preço derivados das variações).
+- Para cada linha do `pos_products` → criar/atualizar a **variação filho** (`gtin = barcode`, sku, tamanho, cor, preços), ligada ao pai.
+- Tratar os **12 pais e 17 variações** faltantes + consolidar os **242 sem código de barras** (gerar identificador interno quando não houver GTIN).
+- **Deduplicação:** alguns produtos aparecem com dois `parent_sku` diferentes (ex.: `7403-103-MOCASSIM-MODARE-NINA` e `MOCASSIM-FEMININO-ORTOPEDICO-NINA` são o mesmo sapato). O backfill precisa mesclar por código de referência real, e ignorar lixo de teste (`TESTE-005`, `POS-<uuid>`, "Produto Teste R$5").
 
-### 3) Construtor da automação (`CampaignBuilder.tsx`, novo)
-Fluxo em seções, salvando em `campanhas_auto` + `campanha_cards`:
+### Fase 2 — Eliminar os produtos-fantasma (ZOE/KATIA e os 217)
+Causa: a busca ao vivo no Tiny vende sem persistir. Duas frentes:
+- **Correção pontual:** na tela de venda, quando o produto vier da busca ao vivo do Tiny, **gravar/upsert no `pos_products`** (uma alteração pequena e localizada). A partir daí todo produto vendido passa a existir no cache.
+- **Importação completa do Tiny → Estoque:** rodar uma carga única que traz o catálogo inteiro do Tiny (pai>filho) para `products_master`/`product_variants`, fechando o gap dos 217 já vendidos e dos que ainda nem foram vendidos.
 
-1. **Instância Meta + Modelo de template**
-   - Seletor de instância (só Meta ativas) e de modelo aprovado (reusa a lógica de `CampaignAudienceManager.loadModels`).
-   - Só mostra modelos que tenham templates **aprovados** para a instância.
+### Fase 3 — Manter sincronizado (para não derivar de novo)
+Estabelecer um único fluxo que mantém o Módulo Estoque como espelho do PDV:
+- **Sincronização `pos_products` → Estoque** (trigger ou função agendada): toda vez que um produto entra/atualiza no `pos_products`, o pai e o filho correspondentes são criados/atualizados automaticamente no Módulo Estoque por `parent_sku`/`barcode`.
+- Painel de divergências no Módulo Estoque mostrando "produtos no PDV ainda não catalogados" para revisão humana (especialmente os sem GTIN e os que precisam de classificação pai).
 
-2. **Cards (imagens + legendas)**
-   - Para cada card: botões **Subir do PC** e **Subir do site** (Shopify) — reusa `ImageCropDialog` (crop 1:1 da miniatura) e `ProductSelector`, já existentes.
-   - Legenda por card via `VariableTextField` (já existe: inserção de variáveis + emojis).
-   - Adicionar/remover cards (2 a 10). A contagem de cards "ok" define o template usado.
-   - Valida que a quantidade de cards casa com um template aprovado do modelo (mostra aviso se não houver template aprovado para aquela contagem).
+---
 
-3. **Texto/variáveis**
-   - Corpo do topo (`top_body`) e corpo do card (`card_body`) via `VariableTextField`, com as variáveis padrão (`{{nome}}`, `{{tamanho}}`, `{{vendedora}}`, texto livre) e emojis.
+## Detalhes técnicos (para referência)
 
-4. **Público**
-   - Seletor de público (`campanha_publicos`) com contagem estimada em tempo real (reusa `count_campaign_audience`). Atalho "Criar/editar público" abre o builder de público.
+- **Chaves de junção:** PAI = `pos_products.parent_sku` ↔ `products_master.sku_root`; FILHO = `pos_products.barcode` ↔ `product_variants.gtin`.
+- **Busca ao vivo do PDV:** `src/components/pos/POSSalesView.tsx` (linhas ~480-496) chama `pos-tiny-search-product` e vende sem gravar — ponto exato da correção da Fase 2.
+- **Origem do Estoque:** `products_master`/`product_variants` têm `tiny_imported_at` (importação própria do Tiny), sem GRANT/trigger vindo do PDV.
+- **Backfill (Fase 1):** preferível via função de banco (migration + função) lendo `pos_products` agrupado por `parent_sku`, com `INSERT ... ON CONFLICT` em `products_master(sku_root)` e `product_variants(gtin)`; rodar primeiro em modo "dry-run" (relatório) antes do commit.
+- **Lixo a excluir do backfill:** `parent_sku` em (`TESTE-005`, `POS-<uuid>`); duplicidades de slug do mesmo produto devem ser mescladas por referência numérica (ex.: `7403.103`).
 
-5. **Agendamento e limites**
-   - **Limite diário** (`qtd_por_dia`) — input numérico.
-   - **Dias da semana** (`dias_semana`) — toggles Dom–Sáb.
-   - **Cooldown** (`cooldown_dias`) — quantos dias até a mesma pessoa poder receber de novo.
-   - **Rodízio de vendedora** (`rodizio_vendedora` + `vendedoras_rodizio`) — opcional.
-
-6. **Iniciar automação**
-   - Botão **Iniciar automação** grava `ativa = true` (e Pausar grava `false`). Validações antes de ativar: instância + modelo + ≥2 cards prontos + público selecionado + ≥1 dia da semana + limite ≥ 1.
-
-## Detalhes técnicos / arquivos
-
-- Migração (tool de migração):
-  - `CREATE TABLE public.campanha_publicos (id, nome, filtro_json, created_at, updated_at)` + GRANTs + RLS + trigger updated_at.
-  - `ALTER TABLE campanhas_auto ADD COLUMN publico_id uuid REFERENCES campanha_publicos(id)`.
-  - Backfill: mover registros "público" existentes de `campanhas_auto` para `campanha_publicos` (feito via tool de insert, não migração).
-  - Recriar `select_campaign_batch` para usar o filtro do `publico_id` quando houver (fallback ao `filtro_json` próprio).
-- Front (novos): `src/components/pos/automation/CampaignList.tsx`, `CampaignBuilder.tsx`, `CampaignCardsEditor.tsx`.
-- Front (alterados): `POSOnlineHub.tsx` (nova aba), `audience/CampaignAudienceManager.tsx` (gravar em `campanha_publicos`).
-- Reuso: `ImageCropDialog`, `ProductSelector`, `VariableTextField`, `EmojiPickerButton`, RPC `count_campaign_audience`.
-- Storage: imagens dos cards no bucket público já usado nos disparos (mesmo padrão do `AutomationFlowBuilder`).
-
-## Validação
-- Criar uma automação completa (5 cards, variáveis, público tamanho 34, limite 50/dia, seg–sex, cooldown 30) e ativar.
-- Rodar `carousel-campaign-scheduler` manualmente e confirmar enfileiramento em `campanha_envios`.
-- Rodar `carousel-campaign-sender` e confirmar disparo + variáveis resolvidas + identificação do card no webhook.
-- Confirmar que pausar zera novos enfileiramentos e que o público continua reutilizável entre automações.
+Nada foi alterado — aguardo seu aval para começar pela Fase 1 (backfill em dry-run) ou pela Fase 2 (parar de gerar fantasmas).

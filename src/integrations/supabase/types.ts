@@ -16885,6 +16885,7 @@ export type Database = {
         }[]
       }
       audience_filter_options: { Args: never; Returns: Json }
+      backfill_estoque_from_pos: { Args: { p_commit?: boolean }; Returns: Json }
       backfill_master_costs_from_pos: {
         Args: never
         Returns: {
