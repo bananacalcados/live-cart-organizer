@@ -142,7 +142,7 @@ export function AudienceFilterBuilder({ value, onChange }: Props) {
     setCounting(true);
     const t = setTimeout(async () => {
       const { data, error } = await supabase.rpc("count_campaign_audience", {
-        p_filtro: cleaned as unknown as Record<string, unknown>,
+        p_filtro: cleaned as unknown as never,
       });
       if (!active) return;
       if (!error) setCount(typeof data === "number" ? data : 0);
