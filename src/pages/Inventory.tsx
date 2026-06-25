@@ -194,7 +194,7 @@ export default function Inventory() {
   const [cloneScanQty, setCloneScanQty] = useState(1);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "shopify" | "depara">("dashboard");
+  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "shopify" | "depara" | "divergencias">("dashboard");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
