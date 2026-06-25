@@ -121,6 +121,61 @@ serve(async (req) => {
       }
     }
 
+    // FASE 2 — Anti-fantasma: persistir no cache local (pos_products) os produtos
+    // que vieram da busca ao vivo do Tiny e ainda não existem nesta loja.
+    // Só INSERE novos (nunca sobrescreve estoque/dados de produto já cadastrado).
+    try {
+      for (const prod of products) {
+        const sku = (prod.sku || '').trim();
+        if (!sku) continue;
+        const variant = prod.variant || '';
+
+        const { data: existing } = await supabase
+          .from('pos_products')
+          .select('id')
+          .eq('store_id', store_id)
+          .eq('sku', sku)
+          .eq('variant', variant)
+          .maybeSingle();
+
+        if (existing) continue; // já existe — não mexe (estoque é independente do Tiny)
+
+        // Deriva tamanho/cor a partir do nome quando não vier na grade
+        let size = prod.size || null;
+        let color: string | null = null;
+        const parts = (prod.name || '').split(' - ').map((s: string) => s.trim());
+        if (parts.length >= 3) {
+          if (!size) size = parts[parts.length - 1] || null;
+          color = parts[parts.length - 2] || null;
+          // formato comum: "NOME - COR - TAMANHO"
+          if (/^\d{1,2}$/.test(parts[parts.length - 1])) {
+            if (!size) size = parts[parts.length - 1];
+            color = parts[parts.length - 2] || null;
+          }
+        }
+
+        await supabase.from('pos_products').insert({
+          store_id,
+          tiny_id: prod.tiny_id || null,
+          sku,
+          name: prod.name || sku,
+          variant,
+          size,
+          color,
+          category: prod.category || null,
+          price: prod.price || 0,
+          barcode: prod.barcode || '',
+          stock: prod.stock || 0, // semente inicial vinda do Tiny; balanço passa a ser fonte da verdade
+          is_active: true,
+          synced_at: new Date().toISOString(),
+        });
+        console.log('Fase2 anti-fantasma: produto persistido no cache', { sku, variant, name: prod.name });
+      }
+    } catch (persistErr) {
+      // Nunca quebrar a venda por causa da persistência
+      console.error('Fase2 persist error (ignorado):', persistErr);
+    }
+
     return new Response(JSON.stringify({ success: true, products }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
