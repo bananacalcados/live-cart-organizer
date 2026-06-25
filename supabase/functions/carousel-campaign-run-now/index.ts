@@ -92,7 +92,8 @@ Deno.serve(async (req) => {
   // 3) Select eligible batch (already skips clients with pendente / recently-sent rows).
   const { data: batch, error: batchErr } = await sb.rpc("select_campaign_batch", {
     p_campanha_id: campanhaId,
-    p_limit: c.qtd_por_dia ?? 50,
+    p_limit: limitOverride ?? (ignoreGlobalCap ? 100000 : (c.qtd_por_dia ?? 50)),
+    p_ignore_global_cap: ignoreGlobalCap,
   });
   if (batchErr) return json({ error: batchErr.message }, 500);
   if (!batch || batch.length === 0) {
