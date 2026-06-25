@@ -180,7 +180,13 @@ export function CarouselTemplatesLadder() {
     }
   };
 
-  useEffect(() => { loadNumbers(); loadRows(); loadSellers(); }, []);
+  useEffect(() => { loadNumbers(); loadSellers(); }, []);
+
+  // When the instance changes, reload its models + ladder.
+  useEffect(() => { loadModels(); loadRows(); }, [numberId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When the model changes, reload its ladder.
+  useEffect(() => { loadRows(); }, [modelName]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
