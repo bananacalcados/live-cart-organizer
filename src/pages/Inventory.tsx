@@ -8,6 +8,7 @@ import {
   Sparkles, Activity, GitMerge
 } from "lucide-react";
 import { InventoryVerification } from "@/components/inventory/InventoryVerification";
+import { InventoryPosDivergences } from "@/components/inventory/InventoryPosDivergences";
 import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
