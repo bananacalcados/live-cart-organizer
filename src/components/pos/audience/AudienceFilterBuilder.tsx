@@ -230,6 +230,148 @@ interface Props {
   onChange: (next: AudienceFilter) => void;
 }
 
+interface AudienceMember {
+  cliente_id: string;
+  nome: string | null;
+  phone: string | null;
+  city: string | null;
+  state: string | null;
+  tamanhos: string[] | null;
+  avg_ticket: number | null;
+  total_orders: number | null;
+  last_purchase_at: string | null;
+}
+
+const PAGE = 100;
+
+const fmtMoney = (v?: number | null) =>
+  typeof v === "number"
+    ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+    : "—";
+const fmtDate = (d?: string | null) =>
+  d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+const fmtPhone = (p?: string | null) => {
+  if (!p) return "—";
+  const d = p.replace(/\D/g, "");
+  const local = d.length > 11 ? d.slice(-11) : d;
+  if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
+  if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
+  return p;
+};
+
+function AudienceListDialog({
+  open, onOpenChange, filtro, total,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  filtro: AudienceFilter;
+  total: number | null;
+}) {
+  const [rows, setRows] = useState<AudienceMember[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(0);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setRows([]);
+    setPage(0);
+    setDone(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    (async () => {
+      setLoading(true);
+      const { data, error } = await supabase.rpc("list_campaign_audience", {
+        p_filtro: filtro as unknown as never,
+        p_limit: PAGE,
+        p_offset: page * PAGE,
+      });
+      if (!active) return;
+      if (!error && Array.isArray(data)) {
+        setRows((prev) => (page === 0 ? data : [...prev, ...data]) as AudienceMember[]);
+        if (data.length < PAGE) setDone(true);
+      }
+      setLoading(false);
+    })();
+    return () => { active = false; };
+  }, [open, page]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-blue-600" />
+            Clientes do público
+            {total != null && (
+              <span className="text-sm font-normal text-neutral-500">
+                ({total.toLocaleString("pt-BR")} no total)
+              </span>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-auto -mx-2 px-2">
+          <table className="w-full text-xs">
+            <thead className="sticky top-0 bg-white">
+              <tr className="text-left text-neutral-500 border-b">
+                <th className="py-2 pr-2">#</th>
+                <th className="py-2 pr-2">Nome</th>
+                <th className="py-2 pr-2">Telefone</th>
+                <th className="py-2 pr-2">Cidade/UF</th>
+                <th className="py-2 pr-2">Tamanhos</th>
+                <th className="py-2 pr-2 text-right">Compras</th>
+                <th className="py-2 pr-2 text-right">Ticket méd.</th>
+                <th className="py-2 pr-2">Últ. compra</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.cliente_id} className="border-b border-neutral-100 hover:bg-blue-50/40">
+                  <td className="py-1.5 pr-2 text-neutral-400">{i + 1}</td>
+                  <td className="py-1.5 pr-2 font-medium text-neutral-800">{r.nome || "—"}</td>
+                  <td className="py-1.5 pr-2 tabular-nums">{fmtPhone(r.phone)}</td>
+                  <td className="py-1.5 pr-2 text-neutral-600">
+                    {[r.city, r.state].filter(Boolean).join(" / ") || "—"}
+                  </td>
+                  <td className="py-1.5 pr-2 text-neutral-600">
+                    {(r.tamanhos || []).join(", ") || "—"}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums">{r.total_orders ?? 0}</td>
+                  <td className="py-1.5 pr-2 text-right tabular-nums">{fmtMoney(r.avg_ticket)}</td>
+                  <td className="py-1.5 pr-2 text-neutral-600">{fmtDate(r.last_purchase_at)}</td>
+                </tr>
+              ))}
+              {rows.length === 0 && !loading && (
+                <tr><td colSpan={8} className="py-8 text-center text-neutral-400">
+                  Nenhum cliente neste público.
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="flex items-center justify-center pt-2">
+          {loading ? (
+            <span className="flex items-center gap-2 text-sm text-blue-500">
+              <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+            </span>
+          ) : !done && rows.length > 0 ? (
+            <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)}>
+              Carregar mais
+            </Button>
+          ) : rows.length > 0 ? (
+            <span className="text-xs text-neutral-400">{rows.length} clientes carregados</span>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function AudienceFilterBuilder({ value, onChange }: Props) {
   const [options, setOptions] = useState<Options>(EMPTY_OPTIONS);
   const [count, setCount] = useState<number | null>(null);
