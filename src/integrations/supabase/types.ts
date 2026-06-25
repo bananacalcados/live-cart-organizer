@@ -17630,6 +17630,7 @@ export type Database = {
         Args: {
           p_campanha_id: string
           p_global_cap_days?: number
+          p_ignore_global_cap?: boolean
           p_limit?: number
         }
         Returns: {
