@@ -16837,12 +16837,21 @@ export type Database = {
           moved_count: number
         }[]
       }
+      audience_filter_options: { Args: never; Returns: Json }
       backfill_master_costs_from_pos: {
         Args: never
         Returns: {
           masters_updated: number
           variants_updated: number
         }[]
+      }
+      bc_match_audience: {
+        Args: {
+          cv: Database["public"]["Views"]["crm_customers_v"]["Row"]
+          exc: Json
+          inc: Json
+        }
+        Returns: boolean
       }
       bc_norm_txt: { Args: { t: string }; Returns: string }
       calculate_rfm_scores: { Args: never; Returns: Json }
@@ -16920,6 +16929,7 @@ export type Database = {
         Args: { p_source_trigger_id: string; p_target_trigger_id: string }
         Returns: number
       }
+      count_campaign_audience: { Args: { p_filtro: Json }; Returns: number }
       create_meta_capi_vault_secret: {
         Args: { p_secret: string }
         Returns: string
