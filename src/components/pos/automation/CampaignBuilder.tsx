@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -10,29 +10,60 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ArrowLeft, Loader2, Save, Play, Users, Pause } from "lucide-react";
-import { VariableTextField } from "@/components/admin/VariableTextField";
 import { CampaignCardsEditor, CampaignCard, emptyCard } from "./CampaignCardsEditor";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
-import { STANDARD_VARS, SELLER_VAR_TOKEN, type VarDef } from "@/lib/pos/carouselTemplate";
+import {
+  applyTokens, mappingToken, namedTokensOf, tokenToMapping, previewMappingValue,
+  parseCarouselTemplate, BODY_VAR_OPTIONS, CARD_VAR_OPTIONS,
+  type ParsedCarouselTemplate, type VarKind, type VarMapping,
+} from "@/lib/pos/carouselTemplate";
 
-const STANDARD_TOKENS = new Set(STANDARD_VARS.map((v) => v.token));
 const WEEKDAYS = [
-  { v: 1, label: "Seg" },
-  { v: 2, label: "Ter" },
-  { v: 3, label: "Qua" },
-  { v: 4, label: "Qui" },
-  { v: 5, label: "Sex" },
-  { v: 6, label: "Sáb" },
-  { v: 0, label: "Dom" },
+  { v: 1, label: "Seg" }, { v: 2, label: "Ter" }, { v: 3, label: "Qua" },
+  { v: 4, label: "Qui" }, { v: 5, label: "Sex" }, { v: 6, label: "Sáb" }, { v: 0, label: "Dom" },
 ];
 
 interface MetaNumber { id: string; label: string | null; phone_display: string | null; }
 interface Publico { id: string; nome: string; filtro_json: unknown; }
 interface Seller { id: string; name: string }
+interface TplEntry { qtd: number; templateId: string; language: string }
 
 interface Props {
   editingId: string | null;
   onClose: () => void;
+}
+
+/** Row to map ONE approved positional variable to a named token. */
+function VarMappingRow({
+  index, mapping, options, onChange,
+}: {
+  index: number;
+  mapping: VarMapping;
+  options: { kind: VarKind; label: string }[];
+  onChange: (m: VarMapping) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-md border border-neutral-200 bg-white p-2">
+      <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[11px] font-semibold text-neutral-600">
+        {`{{${index + 1}}}`}
+      </span>
+      <span className="text-xs text-neutral-500">preenche com</span>
+      <Select value={mapping.kind} onValueChange={(v) => onChange({ kind: v as VarKind, value: mapping.value })}>
+        <SelectTrigger className="h-8 w-[210px] bg-white text-xs"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {options.map((o) => <SelectItem key={o.kind} value={o.kind}>{o.label}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {mapping.kind === "livre" && (
+        <Input
+          value={mapping.value || ""}
+          onChange={(e) => onChange({ kind: "livre", value: e.target.value })}
+          placeholder="Texto fixo"
+          className="h-8 w-[200px] bg-white text-xs"
+        />
+      )}
+    </div>
+  );
 }
 
 export function CampaignBuilder({ editingId, onClose }: Props) {
@@ -42,10 +73,15 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
   const [nome, setNome] = useState("");
   const [numberId, setNumberId] = useState("");
   const [modelo, setModelo] = useState("");
-  const [topBody, setTopBody] = useState("Oiee {{nome}}! Confira nossas novidades 👟");
-  const [cardBody, setCardBody] = useState("");
-  const [variables, setVariables] = useState<VarDef[]>([...STANDARD_VARS]);
-  const [cards, setCards] = useState<CampaignCard[]>([emptyCard(0), emptyCard(1)]);
+  const [selectedQtd, setSelectedQtd] = useState<number | null>(null);
+
+  const [cards, setCards] = useState<CampaignCard[]>([]);
+
+  // Template structure + variable mappings.
+  const [tplStruct, setTplStruct] = useState<ParsedCarouselTemplate | null>(null);
+  const [loadingTpl, setLoadingTpl] = useState(false);
+  const [bodyVars, setBodyVars] = useState<VarMapping[]>([]);
+  const [cardVars, setCardVars] = useState<VarMapping[]>([]);
 
   const [publicoId, setPublicoId] = useState("");
   const [qtdPorDia, setQtdPorDia] = useState(50);
@@ -56,14 +92,14 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
   const [ativa, setAtiva] = useState(false);
 
   const [numbers, setNumbers] = useState<MetaNumber[]>([]);
-  const [models, setModels] = useState<string[]>([]);
-  const [approvedByModel, setApprovedByModel] = useState<Record<string, number[]>>({});
+  const [tplByModel, setTplByModel] = useState<Record<string, TplEntry[]>>({});
   const [publicos, setPublicos] = useState<Publico[]>([]);
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [audienceCount, setAudienceCount] = useState<number | null>(null);
 
-  const addVariable = (v: VarDef) =>
-    setVariables((prev) => (prev.some((x) => x.token === v.token) ? prev : [...prev, v]));
+  // Holds stored values while editing, until the template is fetched and we can
+  // reverse-derive the variable mappings.
+  const editStored = useRef<{ topBody: string; cardBody: string; vars: Record<string, unknown> } | null>(null);
 
   // ---- loaders ----
   const loadNumbers = async () => {
@@ -79,19 +115,19 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
   };
 
   const loadApproved = async (instanceId: string) => {
-    if (!instanceId) { setModels([]); setApprovedByModel({}); return; }
+    if (!instanceId) { setTplByModel({}); return; }
     const { data } = await supabase
       .from("templates_carrossel")
-      .select("nome, qtd_cards")
+      .select("nome, qtd_cards, template_id, template_language")
       .eq("whatsapp_number_id", instanceId)
       .eq("aprovado", true);
-    const byModel: Record<string, number[]> = {};
-    (data || []).forEach((r: { nome: string | null; qtd_cards: number }) => {
+    const byModel: Record<string, TplEntry[]> = {};
+    (data || []).forEach((r: { nome: string | null; qtd_cards: number; template_id: string; template_language: string | null }) => {
       const m = (r.nome || "Padrão").trim();
-      (byModel[m] ||= []).push(r.qtd_cards);
+      (byModel[m] ||= []).push({ qtd: r.qtd_cards, templateId: r.template_id, language: r.template_language || "pt_BR" });
     });
-    setApprovedByModel(byModel);
-    setModels(Object.keys(byModel));
+    Object.values(byModel).forEach((arr) => arr.sort((a, b) => a.qtd - b.qtd));
+    setTplByModel(byModel);
   };
 
   const loadPublicos = async () => {
@@ -117,8 +153,6 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     setNome(c.nome || "");
     setNumberId(c.whatsapp_number_id || "");
     setModelo(c.template_modelo || "");
-    setTopBody(c.top_body || "");
-    setCardBody(c.card_body || "");
     setPublicoId(c.publico_id || "");
     setQtdPorDia(c.qtd_por_dia ?? 50);
     setDiasSemana(Array.isArray(c.dias_semana) ? c.dias_semana : [1, 2, 3, 4, 5]);
@@ -127,13 +161,9 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     setVendedorasSel(Array.isArray(c.vendedoras_rodizio) ? c.vendedoras_rodizio : []);
     setAtiva(!!c.ativa);
 
-    // Rebuild free variables from stored map.
-    const v = (c.variaveis && typeof c.variaveis === "object" && !Array.isArray(c.variaveis))
+    const vars = (c.variaveis && typeof c.variaveis === "object" && !Array.isArray(c.variaveis))
       ? (c.variaveis as Record<string, unknown>) : {};
-    const freeVars: VarDef[] = Object.entries(v).map(([token, val]) => ({
-      token, label: token.startsWith("livre_") ? "Texto livre" : token, example: String(val ?? ""),
-    }));
-    setVariables([...STANDARD_VARS, ...freeVars.filter((fv) => !STANDARD_TOKENS.has(fv.token))]);
+    editStored.current = { topBody: c.top_body || "", cardBody: c.card_body || "", vars };
 
     const { data: cc } = await supabase
       .from("campanha_cards")
@@ -144,7 +174,8 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
       id: r.id, ordem: r.ordem, imagem_url: r.imagem_url, legenda: r.legenda || "",
       shopify_product_id: r.shopify_product_id, shopify_variant_id: r.shopify_variant_id,
     }));
-    setCards(loaded.length >= 2 ? loaded : [emptyCard(0), emptyCard(1)]);
+    setCards(loaded);
+    if (loaded.length >= 2) setSelectedQtd(loaded.length);
     setLoading(false);
   };
 
@@ -170,31 +201,83 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     return () => { active = false; };
   }, [publicoId, publicos]);
 
-  const approvedCounts = useMemo(
-    () => (modelo && approvedByModel[modelo] ? approvedByModel[modelo] : []),
-    [modelo, approvedByModel],
+  const qtdOptions = useMemo<number[]>(
+    () => (modelo && tplByModel[modelo] ? tplByModel[modelo].map((e) => e.qtd) : []),
+    [modelo, tplByModel],
   );
 
-  const buildVariaveis = (): Record<string, string> => {
-    const out: Record<string, string> = {};
-    for (const v of variables) {
-      if (STANDARD_TOKENS.has(v.token) || v.token === SELLER_VAR_TOKEN) continue;
-      out[v.token] = v.example || "";
-    }
-    return out;
+  // Fetch the approved template structure from Meta when instance/model/qtd ready.
+  useEffect(() => {
+    const entry = (tplByModel[modelo] || []).find((e) => e.qtd === selectedQtd);
+    if (!numberId || !modelo || !selectedQtd || !entry) { setTplStruct(null); return; }
+    let active = true;
+    setLoadingTpl(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
+          body: { whatsappNumberId: numberId },
+        });
+        if (!active) return;
+        if (error || !data?.templates) throw new Error(error?.message || "Falha ao buscar templates");
+        const tpl = (data.templates as { name?: string; language?: string }[]).find(
+          (t) => t.name === entry.templateId,
+        );
+        const parsed = parseCarouselTemplate(tpl);
+        if (!parsed) { toast.error("Não foi possível ler a estrutura do template aprovado"); setTplStruct(null); return; }
+        setTplStruct(parsed);
+
+        // Build / restore mappings.
+        const stored = editStored.current;
+        const topTokens = stored ? namedTokensOf(stored.topBody) : [];
+        const cardTokens = stored ? namedTokensOf(stored.cardBody) : [];
+        setBodyVars(Array.from({ length: parsed.topVarCount }, (_, i) =>
+          topTokens[i] ? tokenToMapping(topTokens[i], stored!.vars) : { kind: "nome" as VarKind }));
+        setCardVars(Array.from({ length: parsed.cardVarCount }, (_, i) =>
+          cardTokens[i] ? tokenToMapping(cardTokens[i], stored!.vars) : { kind: "legenda" as VarKind }));
+        editStored.current = null;
+
+        // Align card count with the template.
+        setCards((prev) => {
+          const next = [...prev];
+          while (next.length < parsed.qtdCards) next.push(emptyCard(next.length));
+          return next.slice(0, parsed.qtdCards).map((c, i) => ({ ...c, ordem: i }));
+        });
+      } catch (e) {
+        if (active) { toast.error("Erro ao carregar template: " + (e as Error).message); setTplStruct(null); }
+      } finally {
+        if (active) setLoadingTpl(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [numberId, modelo, selectedQtd, tplByModel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const showCardLegenda = cardVars.some((m) => m.kind === "legenda");
+
+  const buildPersistTexts = () => {
+    if (!tplStruct) return { top: "", card: "", variaveis: {} as Record<string, string> };
+    const topTokens = bodyVars.map((m, i) => mappingToken(m, "livre_top", i));
+    const cardTokens = cardVars.map((m, i) => mappingToken(m, "livre_card", i));
+    const variaveis: Record<string, string> = {};
+    bodyVars.forEach((m, i) => { if (m.kind === "livre") variaveis[`livre_top_${i + 1}`] = m.value || ""; });
+    cardVars.forEach((m, i) => { if (m.kind === "livre") variaveis[`livre_card_${i + 1}`] = m.value || ""; });
+    return {
+      top: applyTokens(tplStruct.topBodyText, topTokens),
+      card: applyTokens(tplStruct.cardBodyText, cardTokens),
+      variaveis,
+    };
   };
 
   const validateStart = (): string | null => {
     if (!nome.trim()) return "Dê um nome à automação";
     if (!numberId) return "Selecione a instância Meta";
     if (!modelo) return "Selecione o modelo de template";
+    if (!selectedQtd) return "Selecione a quantidade de cards";
+    if (!tplStruct) return "Aguarde o carregamento do template aprovado";
     if (!publicoId) return "Selecione o público";
     if (diasSemana.length === 0) return "Escolha ao menos um dia da semana";
     if (qtdPorDia < 1) return "O limite diário precisa ser ≥ 1";
     const okCards = cards.filter((c) => c.imagem_url).length;
-    if (okCards < 2) return "Adicione ao menos 2 cards com imagem";
-    if (!approvedCounts.includes(okCards))
-      return `Não há template aprovado de ${okCards} cards para o modelo "${modelo}". Aprovados: ${approvedCounts.join(", ") || "nenhum"}.`;
+    if (okCards < selectedQtd) return `Adicione imagem em todos os ${selectedQtd} cards`;
     return null;
   };
 
@@ -209,13 +292,14 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
 
     setSaving(true);
     try {
+      const texts = buildPersistTexts();
       const payload = {
         nome: nome.trim(),
         whatsapp_number_id: numberId || null,
         template_modelo: modelo || null,
-        top_body: topBody,
-        card_body: cardBody,
-        variaveis: buildVariaveis() as unknown as never,
+        top_body: texts.top,
+        card_body: texts.card,
+        variaveis: texts.variaveis as unknown as never,
         publico_id: publicoId || null,
         qtd_por_dia: qtdPorDia,
         dias_semana: diasSemana,
@@ -235,7 +319,6 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         campId = data.id;
       }
 
-      // Replace cards.
       await supabase.from("campanha_cards").delete().eq("campanha_id", campId);
       const cardRows = cards
         .filter((c) => c.imagem_url)
@@ -266,9 +349,13 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
 
   const toggleDay = (d: number) =>
     setDiasSemana((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]));
-
   const toggleSeller = (id: string) =>
     setVendedorasSel((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const models = Object.keys(tplByModel);
+  const bodyPreview = tplStruct
+    ? applyTokens(tplStruct.topBodyText, bodyVars.map((m) => previewMappingValue(m)))
+    : "";
 
   if (loading) {
     return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-blue-500" /></div>;
@@ -285,13 +372,13 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         <Input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Novidades tamanho 34" className="bg-white" />
       </div>
 
-      {/* Instância + modelo */}
+      {/* 1. Instância + modelo + quantidade de cards */}
       <Card className="p-4 space-y-3">
         <h4 className="text-sm font-bold text-neutral-800">1. Template aprovado</h4>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label>Instância Meta</Label>
-            <Select value={numberId} onValueChange={(v) => { setNumberId(v); setModelo(""); }}>
+            <Select value={numberId} onValueChange={(v) => { setNumberId(v); setModelo(""); setSelectedQtd(null); setTplStruct(null); }}>
               <SelectTrigger className="bg-white"><SelectValue placeholder="Selecione a instância" /></SelectTrigger>
               <SelectContent>
                 {numbers.map((n) => <SelectItem key={n.id} value={n.id}>{n.label || n.phone_display || n.id}</SelectItem>)}
@@ -300,7 +387,7 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
           </div>
           <div className="space-y-1.5">
             <Label>Modelo de template</Label>
-            <Select value={modelo} onValueChange={setModelo} disabled={!numberId}>
+            <Select value={modelo} onValueChange={(v) => { setModelo(v); setSelectedQtd(null); setTplStruct(null); }} disabled={!numberId}>
               <SelectTrigger className="bg-white">
                 <SelectValue placeholder={numberId ? "Selecione o modelo" : "Escolha a instância primeiro"} />
               </SelectTrigger>
@@ -310,48 +397,90 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
                   : models.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
-            {modelo && (
-              <p className="text-[11px] text-neutral-400">Aprovados: {(approvedByModel[modelo] || []).sort((a, b) => a - b).join(", ") || "nenhum"} cards.</p>
-            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label>Quantidade de cards</Label>
+            <Select
+              value={selectedQtd ? String(selectedQtd) : ""}
+              onValueChange={(v) => setSelectedQtd(Number(v))}
+              disabled={!modelo}
+            >
+              <SelectTrigger className="bg-white">
+                <SelectValue placeholder={modelo ? "Escolha a qtd" : "Escolha o modelo"} />
+              </SelectTrigger>
+              <SelectContent>
+                {qtdOptions.length === 0
+                  ? <div className="px-2 py-1.5 text-xs text-neutral-400">Nenhuma quantidade aprovada</div>
+                  : qtdOptions.map((q) => <SelectItem key={q} value={String(q)}>{q} cards</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
         </div>
+        {loadingTpl && (
+          <p className="text-[11px] text-neutral-500 flex items-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" /> Carregando estrutura do template aprovado...
+          </p>
+        )}
       </Card>
 
-      {/* Cards */}
+      {/* 2. Mensagem (texto do corpo, ACIMA dos cards) */}
       <Card className="p-4 space-y-3">
-        <h4 className="text-sm font-bold text-neutral-800">2. Imagens e legendas dos cards</h4>
+        <h4 className="text-sm font-bold text-neutral-800">2. Mensagem do disparo (acima dos cards)</h4>
+        {!tplStruct ? (
+          <p className="text-xs text-neutral-500">
+            Selecione instância, modelo e quantidade de cards para carregar o texto aprovado.
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            <div className="rounded-md bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Texto aprovado na Meta</p>
+              {tplStruct.topBodyText || <span className="text-neutral-400">(sem texto)</span>}
+            </div>
+            {bodyVars.length > 0 ? (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Como preencher cada variável</Label>
+                {bodyVars.map((m, i) => (
+                  <VarMappingRow
+                    key={i} index={i} mapping={m} options={BODY_VAR_OPTIONS}
+                    onChange={(nm) => setBodyVars((prev) => prev.map((x, j) => (j === i ? nm : x)))}
+                  />
+                ))}
+                <p className="rounded-md bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700">
+                  Prévia: {bodyPreview}
+                </p>
+              </div>
+            ) : (
+              <p className="text-[11px] text-neutral-400">Este texto não tem variáveis — será enviado fixo.</p>
+            )}
+          </div>
+        )}
+      </Card>
+
+      {/* 3. Cards (abaixo da mensagem) */}
+      <Card className="p-4 space-y-3">
+        <h4 className="text-sm font-bold text-neutral-800">3. Imagens e cards do carrossel</h4>
+        {tplStruct && tplStruct.cardVarCount > 0 && (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Como preencher as variáveis do texto de cada card</Label>
+            {cardVars.map((m, i) => (
+              <VarMappingRow
+                key={i} index={i} mapping={m} options={CARD_VAR_OPTIONS}
+                onChange={(nm) => setCardVars((prev) => prev.map((x, j) => (j === i ? nm : x)))}
+              />
+            ))}
+          </div>
+        )}
         <CampaignCardsEditor
           cards={cards}
           onChange={setCards}
-          variables={variables}
-          onAddVariable={addVariable}
-          approvedCounts={approvedCounts}
+          cardBodyText={tplStruct?.cardBodyText || null}
+          buttonsPerCard={tplStruct?.cards.map((c) => c.buttons) || []}
+          showLegenda={showCardLegenda}
+          templateLoaded={!!tplStruct}
         />
       </Card>
 
-      {/* Textos */}
-      <Card className="p-4 space-y-3">
-        <h4 className="text-sm font-bold text-neutral-800">3. Mensagem (variáveis)</h4>
-        <VariableTextField
-          label="Texto do corpo (acima dos cards)"
-          value={topBody}
-          onChange={setTopBody}
-          variables={variables}
-          onAddVariable={addVariable}
-          multiline
-          hint="As variáveis são preenchidas no envio (nome, tamanho, vendedora em rodízio, texto livre)."
-        />
-        <VariableTextField
-          label="Legenda padrão dos cards (se o card não tiver legenda própria)"
-          value={cardBody}
-          onChange={setCardBody}
-          variables={variables}
-          onAddVariable={addVariable}
-          multiline
-        />
-      </Card>
-
-      {/* Público */}
+      {/* 4. Público */}
       <Card className="p-4 space-y-3">
         <h4 className="text-sm font-bold text-neutral-800">4. Público</h4>
         <div className="space-y-1.5">
@@ -373,7 +502,7 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         </div>
       </Card>
 
-      {/* Agendamento */}
+      {/* 5. Agendamento */}
       <Card className="p-4 space-y-4">
         <h4 className="text-sm font-bold text-neutral-800">5. Agendamento e limites</h4>
 
