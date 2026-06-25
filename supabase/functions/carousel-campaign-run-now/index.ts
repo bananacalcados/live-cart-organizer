@@ -154,5 +154,10 @@ Deno.serve(async (req) => {
     EdgeRuntime.waitUntil(kick);
   }
 
-  return json({ ok: true, enqueued, started: true });
+    return json({ ok: true, enqueued, started: true });
+  } catch (e) {
+    const msg = (e as Error)?.message || String(e);
+    console.error("[run-now] unexpected error:", msg, (e as Error)?.stack);
+    return json({ error: `Falha ao iniciar disparos: ${msg}` }, 500);
+  }
 });
