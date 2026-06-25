@@ -385,11 +385,11 @@ export function CarouselTemplatesLadder() {
           </div>
         </div>
 
-        {/* Modelo de template */}
+        {/* Nome do template / modelo */}
         <div className="space-y-2 rounded-lg border p-3">
-          <Label className="text-sm font-semibold">Modelo de template</Label>
+          <Label className="text-sm font-semibold">Nome do template (modelo)</Label>
           <p className="text-[11px] text-muted-foreground">
-            Crie modelos diferentes para situações diferentes (ex.: "Tamanho 34", "Lançamentos"). Cada modelo tem sua própria escada de 2 a 10 cards na instância selecionada.
+            Esse nome identifica o template que será criado. Para ter <strong>vários templates na mesma quantidade de cards</strong>, basta criar com nomes diferentes (ex.: "Tamanho 34", "Lançamentos"). Clique em um nome existente para reaproveitá-lo.
           </p>
           <Input
             value={modelName}
