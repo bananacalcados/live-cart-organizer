@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Save, Play, Users, Pause } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Play, Users, Pause, Send } from "lucide-react";
 import { CampaignCardsEditor, CampaignCard, emptyCard } from "./CampaignCardsEditor";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import {
@@ -17,6 +17,30 @@ import {
   parseCarouselTemplate, BODY_VAR_OPTIONS, CARD_VAR_OPTIONS,
   type ParsedCarouselTemplate, type VarKind, type VarMapping,
 } from "@/lib/pos/carouselTemplate";
+
+/** Resolve a named token to a SAMPLE value for the test send. */
+function resolveTestToken(
+  token: string,
+  cardLegenda: string | null,
+  vars: Record<string, string>,
+  vendedora: string,
+): string {
+  switch (token) {
+    case "nome": return "Maria Teste";
+    case "primeiro_nome": return "Maria";
+    case "tamanho": return "37";
+    case "vendedora": return vendedora || "nossa loja";
+    case "legenda": return (cardLegenda || "").trim() || "—";
+    default: return (vars[token] || "").trim() || "—";
+  }
+}
+
+/** Keep only digits and ensure a Brazilian country code. */
+function normalizeTestPhone(raw: string): string {
+  let d = (raw || "").replace(/\D/g, "");
+  if (d.length === 10 || d.length === 11) d = "55" + d;
+  return d;
+}
 
 const WEEKDAYS = [
   { v: 1, label: "Seg" }, { v: 2, label: "Ter" }, { v: 3, label: "Qua" },
@@ -90,6 +114,9 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
   const [rodizio, setRodizio] = useState(true);
   const [vendedorasSel, setVendedorasSel] = useState<string[]>([]);
   const [ativa, setAtiva] = useState(false);
+
+  const [testPhone, setTestPhone] = useState("");
+  const [testSending, setTestSending] = useState(false);
 
   const [numbers, setNumbers] = useState<MetaNumber[]>([]);
   const [tplByModel, setTplByModel] = useState<Record<string, TplEntry[]>>({});
@@ -265,6 +292,64 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
       card: applyTokens(tplStruct.cardBodyText, cardTokens),
       variaveis,
     };
+  };
+
+  const sendTest = async () => {
+    const phone = normalizeTestPhone(testPhone);
+    if (phone.length < 12) { toast.error("Informe um telefone válido com DDD"); return; }
+    if (!tplStruct) { toast.error("Aguarde o carregamento do template aprovado"); return; }
+    const entry = (tplByModel[modelo] || []).find((e) => e.qtd === selectedQtd);
+    if (!entry) { toast.error("Selecione instância, modelo e quantidade de cards"); return; }
+    const okCards = cards.filter((c) => c.imagem_url).slice(0, selectedQtd || 0);
+    if (okCards.length < (selectedQtd || 0)) { toast.error(`Adicione imagem em todos os ${selectedQtd} cards`); return; }
+
+    setTestSending(true);
+    try {
+      const texts = buildPersistTexts();
+      const vendedora = sellers.find((s) => vendedorasSel.includes(s.id))?.name || sellers[0]?.name || "";
+      const topTokens = namedTokensOf(texts.top);
+      const cardTokens = namedTokensOf(texts.card);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const components: any[] = [];
+      if (topTokens.length) {
+        components.push({
+          type: "body",
+          parameters: topTokens.map((t) => ({ type: "text", text: resolveTestToken(t, null, texts.variaveis, vendedora) })),
+        });
+      }
+      const carouselCards = okCards.map((card, i) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const comps: any[] = [
+          { type: "header", parameters: [{ type: "image", image: { link: card.imagem_url } }] },
+        ];
+        if (cardTokens.length) {
+          comps.push({
+            type: "body",
+            parameters: cardTokens.map((t) => ({ type: "text", text: resolveTestToken(t, card.legenda, texts.variaveis, vendedora) })),
+          });
+        }
+        return { card_index: i, components: comps };
+      });
+      components.push({ type: "carousel", cards: carouselCards });
+
+      const { data, error } = await supabase.functions.invoke("meta-whatsapp-send-template", {
+        body: {
+          phone,
+          templateName: entry.templateId,
+          language: entry.language,
+          whatsappNumberId: numberId,
+          components,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data && data.success === false) throw new Error(data.error || "Falha no envio");
+      toast.success(`Teste enviado para ${phone} 🚀`);
+    } catch (e) {
+      toast.error("Erro ao enviar teste: " + (e as Error).message);
+    } finally {
+      setTestSending(false);
+    }
   };
 
   const validateStart = (): string | null => {
@@ -562,6 +647,41 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
           </div>
         )}
       </Card>
+
+      {/* 6. Testar disparo */}
+      <Card className="p-4 space-y-3">
+        <h4 className="text-sm font-bold text-neutral-800">6. Testar disparo</h4>
+        <p className="text-xs text-neutral-500">
+          Envie o template exatamente como está configurado acima para um número de teste antes de
+          iniciar a automação para todo o público.
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Telefone do teste (com DDD)</Label>
+            <Input
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value)}
+              placeholder="Ex.: 33 99195-5003"
+              className="h-9 w-[220px] bg-white"
+            />
+          </div>
+          <Button
+            type="button"
+            onClick={sendTest}
+            disabled={testSending || !tplStruct}
+            className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700"
+          >
+            {testSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Disparar teste
+          </Button>
+        </div>
+        <p className="text-[11px] text-neutral-400">
+          Variáveis de cliente ({`{{nome}}`}, {`{{tamanho}}`}) usam valores de exemplo. As legendas
+          de cada card são enviadas exatamente como você digitou.
+        </p>
+      </Card>
+
+
 
       {/* Ações */}
       <div className="flex flex-wrap items-center justify-end gap-2 pb-2">

@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Plus, Trash2, Zap, Pencil } from "lucide-react";
+import { Loader2, Plus, Trash2, Zap, Pencil, BarChart3 } from "lucide-react";
 import { CampaignBuilder } from "./CampaignBuilder";
+import { CampaignDashboard } from "./CampaignDashboard";
 
 interface Row {
   id: string;
@@ -23,8 +24,10 @@ const DAY_LABEL: Record<number, string> = { 0: "Dom", 1: "Seg", 2: "Ter", 3: "Qu
 export function CampaignList() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"list" | "builder">("list");
+  const [view, setView] = useState<"list" | "builder" | "dashboard">("list");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [dashId, setDashId] = useState<string | null>(null);
+  const [dashNome, setDashNome] = useState("");
   const [numberLabels, setNumberLabels] = useState<Record<string, string>>({});
   const [publicoLabels, setPublicoLabels] = useState<Record<string, string>>({});
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
@@ -80,6 +83,10 @@ export function CampaignList() {
     return <CampaignBuilder editingId={editingId} onClose={() => { setEditingId(null); setView("list"); }} />;
   }
 
+  if (view === "dashboard" && dashId) {
+    return <CampaignDashboard campanhaId={dashId} nome={dashNome} onClose={() => { setDashId(null); setView("list"); }} />;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -122,6 +129,11 @@ export function CampaignList() {
                 </p>
               </button>
               <Switch checked={r.ativa} onCheckedChange={() => toggleActive(r)} />
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:bg-indigo-50"
+                title="Painel de resultados"
+                onClick={() => { setDashId(r.id); setDashNome(r.nome); setView("dashboard"); }}>
+                <BarChart3 className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingId(r.id); setView("builder"); }}>
                 <Pencil className="h-4 w-4" />
               </Button>

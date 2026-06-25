@@ -16806,6 +16806,10 @@ export type Database = {
       }
     }
     Functions: {
+      add_business_days: {
+        Args: { p_days: number; p_start: string }
+        Returns: string
+      }
       analyze_catalog_sync_from_pos: { Args: never; Returns: Json }
       analyze_master_duplicates: {
         Args: { p_limit?: number }
@@ -16899,6 +16903,23 @@ export type Database = {
       bc_norm_txt: { Args: { t: string }; Returns: string }
       calculate_rfm_scores: { Args: never; Returns: Json }
       calculate_rfm_scores_unified: { Args: never; Returns: Json }
+      campaign_dashboard_stats: {
+        Args: { p_campanha_id: string }
+        Returns: Json
+      }
+      campaign_envios_detail: {
+        Args: { p_campanha_id: string }
+        Returns: {
+          converteu: boolean
+          enviado_em: string
+          envio_id: string
+          erro: string
+          nome: string
+          phone: string
+          status: string
+          valor: number
+        }[]
+      }
       check_chargeback_risk: {
         Args: {
           p_address_cep?: string
