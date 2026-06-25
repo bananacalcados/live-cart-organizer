@@ -20,6 +20,11 @@ interface Invoice {
   created_at: string;
 }
 
+const fixed = (value: unknown, digits = 2) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n.toFixed(digits) : (0).toFixed(digits);
+};
+
 export function NfeImporter() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,7 +236,7 @@ export function NfeImporter() {
                       </Badge>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      NF {inv.invoice_number || "—"} · {inv.emission_date ? new Date(inv.emission_date).toLocaleDateString("pt-BR") : "—"} · R$ {(inv.total_value || 0).toFixed(2)}
+                      NF {inv.invoice_number || "—"} · {inv.emission_date ? new Date(inv.emission_date).toLocaleDateString("pt-BR") : "—"} · R$ {fixed(inv.total_value)}
                     </div>
                   </div>
                   <Button size="sm" variant="ghost" onClick={() => setEditingId(inv.id)}>
