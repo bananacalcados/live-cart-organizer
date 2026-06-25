@@ -129,6 +129,11 @@ export function CampaignList() {
                 </p>
               </button>
               <Switch checked={r.ativa} onCheckedChange={() => toggleActive(r)} />
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-600 hover:bg-indigo-50"
+                title="Painel de resultados"
+                onClick={() => { setDashId(r.id); setDashNome(r.nome); setView("dashboard"); }}>
+                <BarChart3 className="h-4 w-4" />
+              </Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditingId(r.id); setView("builder"); }}>
                 <Pencil className="h-4 w-4" />
               </Button>
