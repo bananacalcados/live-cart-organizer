@@ -5,9 +5,10 @@ import {
   AlertTriangle, Loader2, Play, Pause, RotateCcw, Store,
   ClipboardList, Trash2, Search, ChevronDown, HelpCircle,
   Camera, Tag, Printer, Download, FileText, Link2, ShoppingBag, ClipboardCheck,
-  Sparkles, Activity
+  Sparkles, Activity, GitMerge
 } from "lucide-react";
 import { InventoryVerification } from "@/components/inventory/InventoryVerification";
+import { InventoryPosDivergences } from "@/components/inventory/InventoryPosDivergences";
 import { ProductCaptureTab } from "@/components/inventory/ProductCaptureTab";
 import { ProductsList } from "@/components/inventory/ProductsList";
 import { NfeImporter } from "@/components/inventory/NfeImporter";
@@ -193,7 +194,7 @@ export default function Inventory() {
   const [cloneScanQty, setCloneScanQty] = useState(1);
   const [activeTab, setActiveTab] = useState("counting");
   const [pastCounts, setPastCounts] = useState<InventoryCount[]>([]);
-  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "shopify" | "depara">("dashboard");
+  const [inventoryMode, setInventoryMode] = useState<"dashboard" | "health" | "analytics" | "ai" | "bulk" | "stock" | "capture" | "products" | "nfe" | "shopify" | "depara" | "divergencias">("dashboard");
 
   // Unknown barcode states
   const [unresolvedBarcodes, setUnresolvedBarcodes] = useState<UnresolvedBarcode[]>([]);
@@ -1319,6 +1320,14 @@ export default function Inventory() {
               >
                 <Link2 className="h-3 w-3" /> De-para Vendas
               </Button>
+              <Button
+                variant={inventoryMode === "divergencias" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setInventoryMode("divergencias")}
+                className="text-xs h-7 gap-1"
+              >
+                <GitMerge className="h-3 w-3" /> Divergências PDV
+              </Button>
               {selectedStoreId && (
                 <>
                   <Button
@@ -1397,6 +1406,8 @@ export default function Inventory() {
           <ShopifyLinkManager />
         ) : inventoryMode === "depara" ? (
           <SaleUnmatchedItems />
+        ) : inventoryMode === "divergencias" ? (
+          <InventoryPosDivergences />
         ) : !selectedStoreId ? (
           <div className="text-center py-20">
             <Store className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />

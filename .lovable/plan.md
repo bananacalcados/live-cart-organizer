@@ -70,10 +70,19 @@ Estabelecer um único fluxo que mantém o Módulo Estoque como espelho do PDV:
    porque os 417 SKUs distintos reconstruídos **já existiam em `product_variants`** (vindos da
    importação separada do Tiny). O buraco era só no cache do PDV.
 
-### Achado para Fase 3 (consolidação de pais)
-ZOE/KATIA e similares ESTÃO no Estoque, mas com **pai fragmentado por COR** (ex.: `100152 = ZOE - Cafe`,
-`100157 = ZOE - Branco Off`). O padrão desejado é pai = MODELO e filhos = tamanho+cor. Falta uma
-rotina de consolidação que mescle esses pais por referência (`7223.102`) e mova as variações.
-Restam ainda **169 fantasmas** — todos produtos de anúncio/online (nome de marketing), deixados de fora
-de propósito.
+### Fase 3 — IMPLEMENTADA (consolidação aguarda commit)
+1. **Trigger contínuo (ATIVO):** `trg_sync_pos_product_to_estoque` em `pos_products` (AFTER INSERT/UPDATE
+   de parent_sku, barcode, sku, name, color, size) chama `sync_pos_product_to_estoque()`, que cria
+   pai (`sku_root = parent_sku`) + filho (`gtin = barcode`) no Estoque automaticamente. Ignora lixo
+   (POS-/TESTE-/produto teste/nomes de anúncio com travessão) e nunca quebra a gravação do PDV
+   (EXCEPTION → RETURN NEW). A partir de agora o Estoque espelha o PDV sozinho.
+2. **Consolidação de pais (função criada):** `consolidate_estoque_parents_by_pos(p_commit)` reagrupa
+   variações fragmentadas sob o pai-modelo correto (`sku_root = parent_sku do PDV`), remove duplicatas
+   por (cor,tamanho), apaga pais numéricos vazios e marca needs_review. DRY-RUN: **66 pais a criar,
+   318 variações a reagrupar** (ex.: ZOE, KATIA, BRENDA, ANE). Commit feito pelo botão "Consolidar"
+   no painel ou via RPC com p_commit=true.
+3. **Painel de divergências (UI):** novo modo "Divergências PDV" no Módulo Estoque
+   (`InventoryPosDivergences.tsx`) — cards de resumo (não catalogados / sem GTIN / pais fragmentados),
+   lista paginada com busca e botão de consolidação com preview. RPCs:
+   `pos_estoque_divergence_summary()` e `list_pos_estoque_divergences()`.
 
