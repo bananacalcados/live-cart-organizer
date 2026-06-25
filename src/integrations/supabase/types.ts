@@ -16996,6 +16996,10 @@ export type Database = {
         Args: { p_event_id: string }
         Returns: undefined
       }
+      consolidate_estoque_parents_by_pos: {
+        Args: { p_commit?: boolean }
+        Returns: Json
+      }
       copy_trigger_messages: {
         Args: { p_source_trigger_id: string; p_target_trigger_id: string }
         Returns: number
@@ -17380,6 +17384,20 @@ export type Database = {
           trade_name: string
         }[]
       }
+      list_pos_estoque_divergences: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          barcode: string
+          category: string
+          color: string
+          name: string
+          parent_sku: string
+          sem_gtin: boolean
+          size: string
+          sku: string
+          store_count: number
+        }[]
+      }
       lookup_crm_by_phones: {
         Args: { p_phones: string[] }
         Returns: {
@@ -17445,6 +17463,7 @@ export type Database = {
       parse_size_from_name: { Args: { p_name: string }; Returns: string }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
+      pos_estoque_divergence_summary: { Args: never; Returns: Json }
       pos_sale_to_faturamento: {
         Args: { p_sale_id: string }
         Returns: undefined
