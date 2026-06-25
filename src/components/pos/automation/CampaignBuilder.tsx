@@ -648,6 +648,41 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         )}
       </Card>
 
+      {/* 6. Testar disparo */}
+      <Card className="p-4 space-y-3">
+        <h4 className="text-sm font-bold text-neutral-800">6. Testar disparo</h4>
+        <p className="text-xs text-neutral-500">
+          Envie o template exatamente como está configurado acima para um número de teste antes de
+          iniciar a automação para todo o público.
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Telefone do teste (com DDD)</Label>
+            <Input
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value)}
+              placeholder="Ex.: 33 99195-5003"
+              className="h-9 w-[220px] bg-white"
+            />
+          </div>
+          <Button
+            type="button"
+            onClick={sendTest}
+            disabled={testSending || !tplStruct}
+            className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700"
+          >
+            {testSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Disparar teste
+          </Button>
+        </div>
+        <p className="text-[11px] text-neutral-400">
+          Variáveis de cliente ({`{{nome}}`}, {`{{tamanho}}`}) usam valores de exemplo. As legendas
+          de cada card são enviadas exatamente como você digitou.
+        </p>
+      </Card>
+
+
+
       {/* Ações */}
       <div className="flex flex-wrap items-center justify-end gap-2 pb-2">
         <Button variant="outline" onClick={() => persist(false)} disabled={saving} className="gap-2">
