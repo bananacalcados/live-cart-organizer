@@ -53,6 +53,13 @@ interface PosSku {
   is_active: boolean;
 }
 
+const toNumber = (value: unknown) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const fixed = (value: unknown, digits = 2) => toNumber(value).toFixed(digits);
+
 const PAGE_SIZE = 50;
 
 interface Store {
@@ -313,7 +320,7 @@ export function UnifiedProductsList() {
                   <div className="text-right text-xs">
                     <div className="text-muted-foreground">Custo / Venda</div>
                     <div className="font-semibold">
-                      R$ {(g.master?.cost_price || 0).toFixed(2)} / R$ {(g.master?.sale_price || 0).toFixed(2)}
+                      R$ {fixed(g.master?.cost_price)} / R$ {fixed(g.master?.sale_price)}
                     </div>
                   </div>
                   <Button
@@ -388,7 +395,7 @@ export function UnifiedProductsList() {
                                       key={st.id}
                                       className={`py-1 px-2 text-right cursor-pointer hover:underline ${stock <= 0 ? "text-destructive" : "font-semibold"}`}
                                       onClick={() => setEditingSku(sku)}
-                                      title={`SKU: ${sku.sku || "—"}\nBarcode: ${sku.barcode || "—"}\nR$ ${(sku.price || 0).toFixed(2)}`}
+                                      title={`SKU: ${sku.sku || "—"}\nBarcode: ${sku.barcode || "—"}\nR$ ${fixed(sku.price)}`}
                                     >
                                       {stock}
                                     </td>

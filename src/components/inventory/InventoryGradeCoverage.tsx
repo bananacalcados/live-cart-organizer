@@ -32,9 +32,16 @@ const GENDERS = [
   { value: "infantil", label: "Infantil" },
 ];
 
-const fmtNum = (v: number) => v.toLocaleString("pt-BR");
+const toNumber = (value: unknown) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const fixed = (value: unknown, digits = 2) => toNumber(value).toFixed(digits);
+
+const fmtNum = (v: number) => toNumber(v).toLocaleString("pt-BR");
 const fmtMoney = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+  toNumber(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 export function InventoryGradeCoverage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -69,7 +76,12 @@ export function InventoryGradeCoverage() {
         .select("parent_sku, name, stock, price, cost_price, category_id, gender, store_id, sku")
         .range(from, from + pageSize - 1);
       if (error || !data || data.length === 0) break;
-      all.push(...(data as any));
+      all.push(...(data as any[]).map((r) => ({
+        ...r,
+        stock: toNumber(r.stock),
+        price: toNumber(r.price),
+        cost_price: toNumber(r.cost_price),
+      })));
       if (data.length < pageSize) break;
       from += pageSize;
     }
@@ -219,9 +231,9 @@ export function InventoryGradeCoverage() {
         cat,
         p.gender || "",
         p.totalPairs,
-        p.saleValue.toFixed(2),
+        fixed(p.saleValue),
         p.missingSizes.join("/"),
-        p.coveragePct.toFixed(0),
+        fixed(p.coveragePct, 0),
       ].join(";"));
     }
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
@@ -275,11 +287,11 @@ export function InventoryGradeCoverage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <KpiMini label="Modelos (pais)" value={fmtNum(totals.total)} loading={loading} />
         <KpiMini label="Grade completa" value={fmtNum(totals.complete)} tone="ok"
-          sub={totals.total ? `${((totals.complete / totals.total) * 100).toFixed(0)}%` : "—"} loading={loading} />
+          sub={totals.total ? `${fixed((totals.complete / totals.total) * 100, 0)}%` : "—"} loading={loading} />
         <KpiMini label="Grade quebrada" value={fmtNum(totals.broken)} tone="warn"
-          sub={totals.total ? `${((totals.broken / totals.total) * 100).toFixed(0)}%` : "—"} loading={loading} />
+          sub={totals.total ? `${fixed((totals.broken / totals.total) * 100, 0)}%` : "—"} loading={loading} />
         <KpiMini label="Crítico (<50%)" value={fmtNum(totals.critical)} tone="bad"
-          sub={totals.total ? `${((totals.critical / totals.total) * 100).toFixed(0)}%` : "—"} loading={loading} />
+          sub={totals.total ? `${fixed((totals.critical / totals.total) * 100, 0)}%` : "—"} loading={loading} />
         <KpiMini label="Total de furos" value={fmtNum(totals.holesCount)} tone="warn" loading={loading} />
       </div>
 
@@ -313,7 +325,7 @@ export function InventoryGradeCoverage() {
                         </button>
                       </div>
                       <div className="text-2xl font-bold mb-2">
-                        {completePct.toFixed(0)}% <span className="text-xs font-normal text-muted-foreground">grade completa</span>
+                        {fixed(completePct, 0)}% <span className="text-xs font-normal text-muted-foreground">grade completa</span>
                       </div>
                       <div className="flex h-2 rounded-full overflow-hidden mb-2 bg-muted">
                         <div className="bg-emerald-500" style={{ width: `${completePct}%` }} />
@@ -371,7 +383,7 @@ export function InventoryGradeCoverage() {
                         return (
                           <TableCell key={g.value} className="text-center">
                             <div className={cn("rounded-md py-1 px-2 inline-flex flex-col items-center min-w-[80px]", bg)}>
-                              <span className="font-bold">{pct.toFixed(0)}%</span>
+                              <span className="font-bold">{fixed(pct, 0)}%</span>
                               <span className="text-[10px] opacity-80">
                                 {cell.complete}/{cell.total} · {fmtNum(cell.pairs)} pares
                               </span>
@@ -451,7 +463,7 @@ export function InventoryGradeCoverage() {
                         <TableCell className="min-w-[140px]">
                           <div className="flex items-center gap-2">
                             <Progress value={p.coveragePct} className="h-1.5 w-20" />
-                            <span className="text-xs font-medium">{p.coveragePct.toFixed(0)}%</span>
+                            <span className="text-xs font-medium">{fixed(p.coveragePct, 0)}%</span>
                           </div>
                           <div className="text-[10px] text-muted-foreground">
                             {p.presentSizes.length}/{p.expectedSizes.length} tamanhos
@@ -544,7 +556,7 @@ export function InventoryGradeCoverage() {
                           bucket === "critical" && "bg-destructive/10 text-destructive border-destructive/30",
                         )}
                       >
-                        {p.coveragePct.toFixed(0)}% · {fmtNum(p.totalPairs)} pares
+                        {fixed(p.coveragePct, 0)}% · {fmtNum(p.totalPairs)} pares
                       </Badge>
                     </div>
                     <div className="overflow-x-auto -mx-1 px-1 pb-1">

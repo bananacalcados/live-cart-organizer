@@ -81,6 +81,13 @@ interface ConsignmentReport {
   capture_summary: { total_captured_skus: number; total_captured_units: number };
 }
 
+const toNumber = (value: unknown) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const fixed = (value: unknown, digits = 2) => toNumber(value).toFixed(digits);
+
 export function ProductCaptureTab({ storeId, storeName }: Props) {
   const [session, setSession] = useState<CaptureSession | null>(null);
   const [items, setItems] = useState<CaptureItem[]>([]);
@@ -277,8 +284,8 @@ export function ProductCaptureTab({ storeId, storeName }: Props) {
 
   const totalModels = grouped.length;
   const totalVariations = items.length;
-  const totalUnits = items.reduce((s, i) => s + i.quantity, 0);
-  const totalCost = items.reduce((s, i) => s + (i.cost_price || 0) * i.quantity, 0);
+  const totalUnits = items.reduce((s, i) => s + toNumber(i.quantity), 0);
+  const totalCost = items.reduce((s, i) => s + toNumber(i.cost_price) * toNumber(i.quantity), 0);
 
   // Send to Tiny
   const handleSendToTiny = async (parentCode: string) => {
@@ -361,9 +368,9 @@ export function ProductCaptureTab({ storeId, storeName }: Props) {
       productName: g.productName,
       totalQty: g.items.reduce((s, i) => s + i.quantity, 0),
       avgCost: g.items.length > 0
-        ? g.items.reduce((s, i) => s + (i.cost_price || 0), 0) / g.items.length
+        ? g.items.reduce((s, i) => s + toNumber(i.cost_price), 0) / g.items.length
         : 0,
-      totalCost: g.items.reduce((s, i) => s + (i.cost_price || 0) * i.quantity, 0),
+      totalCost: g.items.reduce((s, i) => s + toNumber(i.cost_price) * toNumber(i.quantity), 0),
       items: g.items,
     }));
     const grandTotal = costGrouped.reduce((s, g) => s + g.totalCost, 0);
@@ -388,15 +395,15 @@ th{background:#f5f5f5;font-weight:600}
 ${costGrouped.map(g => `<tr>
 <td>${g.parentCode}</td><td>${g.productName}</td>
 <td class="right">${g.totalQty}</td>
-<td class="right">R$ ${g.avgCost.toFixed(2)}</td>
-<td class="right">R$ ${g.totalCost.toFixed(2)}</td>
+<td class="right">R$ ${fixed(g.avgCost)}</td>
+<td class="right">R$ ${fixed(g.totalCost)}</td>
 </tr>`).join("")}
 </tbody>
 <tfoot><tr class="total-row">
 <td colspan="2">TOTAL</td>
 <td class="right">${totalUnits}</td>
 <td></td>
-<td class="right">R$ ${grandTotal.toFixed(2)}</td>
+<td class="right">R$ ${fixed(grandTotal)}</td>
 </tr></tfoot>
 </table>
 <script>window.print();</script>
@@ -448,7 +455,7 @@ th{background:#f5f5f5;font-weight:600}
 <h3>Vendas por Loja</h3>
 <table>
 <thead><tr><th>Loja</th><th class="right">Pares</th><th class="right">Valor Total</th></tr></thead>
-<tbody>${by_store.map(s => `<tr><td>${s.store_name}</td><td class="right">${s.total_qty}</td><td class="right">R$ ${s.total_value.toFixed(2)}</td></tr>`).join("")}</tbody>
+<tbody>${by_store.map(s => `<tr><td>${s.store_name}</td><td class="right">${s.total_qty}</td><td class="right">R$ ${fixed(s.total_value)}</td></tr>`).join("")}</tbody>
 </table>
 <h3>Detalhamento de Vendas</h3>
 <table>
@@ -456,14 +463,14 @@ th{background:#f5f5f5;font-weight:600}
 <tbody>${sales.map(s => `<tr>
 <td>${s.product_name}</td><td>${s.sku}</td><td>${s.store_name}</td>
 <td>${s.order_date}</td><td>${s.order_number}</td>
-<td class="right">${s.quantity_sold}</td><td class="right">R$ ${s.unit_price.toFixed(2)}</td>
-<td class="right">R$ ${s.total.toFixed(2)}</td>
+<td class="right">${s.quantity_sold}</td><td class="right">R$ ${fixed(s.unit_price)}</td>
+<td class="right">R$ ${fixed(s.total)}</td>
 </tr>`).join("")}</tbody>
 </table>
 <div class="summary">
 <p><strong>Total de pares vendidos:</strong> ${totals.total_pairs}</p>
-<p><strong>Valor total a repassar:</strong> R$ ${totals.total_value.toFixed(2)}</p>
-<p><strong>Custo total:</strong> R$ ${totals.total_cost.toFixed(2)}</p>
+<p><strong>Valor total a repassar:</strong> R$ ${fixed(totals.total_value)}</p>
+<p><strong>Custo total:</strong> R$ ${fixed(totals.total_cost)}</p>
 </div>
 <script>window.print();</script>
 </body></html>`;
@@ -529,7 +536,7 @@ th{background:#f5f5f5;font-weight:600}
         <Card>
           <CardContent className="p-3 text-center">
             <p className="text-2xl font-bold text-primary">
-              R$ {totalCost.toFixed(2)}
+              R$ {fixed(totalCost)}
             </p>
             <p className="text-xs text-muted-foreground">Custo Total</p>
           </CardContent>
@@ -896,16 +903,16 @@ th{background:#f5f5f5;font-weight:600}
             </TableHeader>
             <TableBody>
               {grouped.map(g => {
-                const qty = g.items.reduce((s, i) => s + i.quantity, 0);
-                const cost = g.items.reduce((s, i) => s + (i.cost_price || 0) * i.quantity, 0);
+                const qty = g.items.reduce((s, i) => s + toNumber(i.quantity), 0);
+                const cost = g.items.reduce((s, i) => s + toNumber(i.cost_price) * toNumber(i.quantity), 0);
                 const avgCost = qty > 0 ? cost / qty : 0;
                 return (
                   <TableRow key={g.parentCode}>
                     <TableCell className="font-mono text-xs">{g.parentCode}</TableCell>
                     <TableCell>{g.productName}</TableCell>
                     <TableCell className="text-right">{qty}</TableCell>
-                    <TableCell className="text-right">R$ {avgCost.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-medium">R$ {cost.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">R$ {fixed(avgCost)}</TableCell>
+                    <TableCell className="text-right font-medium">R$ {fixed(cost)}</TableCell>
                   </TableRow>
                 );
               })}
@@ -915,7 +922,7 @@ th{background:#f5f5f5;font-weight:600}
                 <TableCell colSpan={2} className="font-bold">TOTAL</TableCell>
                 <TableCell className="text-right font-bold">{totalUnits}</TableCell>
                 <TableCell />
-                <TableCell className="text-right font-bold">R$ {totalCost.toFixed(2)}</TableCell>
+                <TableCell className="text-right font-bold">R$ {fixed(totalCost)}</TableCell>
               </TableRow>
             </TableFooter>
           </Table>
@@ -960,7 +967,7 @@ th{background:#f5f5f5;font-weight:600}
                 <Card>
                   <CardContent className="p-3 text-center">
                     <p className="text-2xl font-bold text-primary">
-                      R$ {consignmentData.totals.total_value.toFixed(2)}
+                      R$ {fixed(consignmentData.totals.total_value)}
                     </p>
                     <p className="text-xs text-muted-foreground">Valor Total</p>
                   </CardContent>
@@ -968,7 +975,7 @@ th{background:#f5f5f5;font-weight:600}
                 <Card>
                   <CardContent className="p-3 text-center">
                     <p className="text-2xl font-bold text-destructive">
-                      R$ {consignmentData.totals.total_cost.toFixed(2)}
+                      R$ {fixed(consignmentData.totals.total_cost)}
                     </p>
                     <p className="text-xs text-muted-foreground">Custo Total</p>
                   </CardContent>
@@ -992,7 +999,7 @@ th{background:#f5f5f5;font-weight:600}
                         <TableRow key={idx}>
                           <TableCell>{s.store_name}</TableCell>
                           <TableCell className="text-right">{s.total_qty}</TableCell>
-                          <TableCell className="text-right">R$ {s.total_value.toFixed(2)}</TableCell>
+                          <TableCell className="text-right">R$ {fixed(s.total_value)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -1025,8 +1032,8 @@ th{background:#f5f5f5;font-weight:600}
                             <TableCell className="text-xs">{s.order_date}</TableCell>
                             <TableCell className="text-xs">{s.order_number}</TableCell>
                             <TableCell className="text-right">{s.quantity_sold}</TableCell>
-                            <TableCell className="text-right text-xs">R$ {s.unit_price.toFixed(2)}</TableCell>
-                            <TableCell className="text-right font-medium text-xs">R$ {s.total.toFixed(2)}</TableCell>
+                            <TableCell className="text-right text-xs">R$ {fixed(s.unit_price)}</TableCell>
+                            <TableCell className="text-right font-medium text-xs">R$ {fixed(s.total)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>

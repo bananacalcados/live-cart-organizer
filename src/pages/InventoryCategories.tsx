@@ -29,8 +29,8 @@ interface Category {
 interface PriceTier {
   id: string;
   label: string;
-  min_price: number;
-  max_price: number | null;
+  min_price: number | string | null;
+  max_price: number | string | null;
   color: string;
   sort_order: number;
 }
@@ -45,6 +45,13 @@ interface ReviewProduct {
   age_group: string | null;
   classification_confidence: number | null;
 }
+
+const toNumber = (value: unknown) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const fixed = (value: unknown, digits = 2) => toNumber(value).toFixed(digits);
 
 const GENDER_OPTIONS = ["masculino", "feminino", "unissex", "infantil"];
 const AGE_OPTIONS = ["adulto", "infantil"];
@@ -259,7 +266,7 @@ export default function InventoryCategories() {
                     <div>
                       <p className="font-semibold">{t.label}</p>
                       <p className="text-xs text-muted-foreground">
-                        R$ {t.min_price.toFixed(2)} — {t.max_price ? `R$ ${t.max_price.toFixed(2)}` : "sem limite"}
+                        R$ {fixed(t.min_price)} — {t.max_price != null ? `R$ ${fixed(t.max_price)}` : "sem limite"}
                       </p>
                     </div>
                   </div>
@@ -298,7 +305,7 @@ export default function InventoryCategories() {
                             {p.gender && <Badge variant="outline" className="text-[10px]">{p.gender}</Badge>}
                             {p.classification_confidence != null && (
                               <Badge variant={p.classification_confidence < 0.7 ? "destructive" : "secondary"} className="text-[10px]">
-                                {(p.classification_confidence * 100).toFixed(0)}%
+                                {fixed(toNumber(p.classification_confidence) * 100, 0)}%
                               </Badge>
                             )}
                           </div>

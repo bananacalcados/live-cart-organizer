@@ -36,9 +36,16 @@ const GENDERS = [
   { value: "infantil", label: "Infantil" },
 ];
 
-const fmtNum = (v: number) => v.toLocaleString("pt-BR");
+const toNumber = (value: unknown) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const fixed = (value: unknown, digits = 2) => toNumber(value).toFixed(digits);
+
+const fmtNum = (v: number) => toNumber(v).toLocaleString("pt-BR");
 const fmtMoney = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+  toNumber(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 export function InventoryHealthDashboard() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -102,11 +109,11 @@ export function InventoryHealthDashboard() {
     for (const p of filtered) {
       skus++;
       if (!p.category_id) uncategorized++;
-      const s = Number(p.stock ?? 0);
+      const s = toNumber(p.stock);
       if (s > 0) {
         pairs += s;
-        cost += s * Number(p.cost_price ?? 0);
-        sale += s * Number(p.price ?? 0);
+        cost += s * toNumber(p.cost_price);
+        sale += s * toNumber(p.price);
       }
     }
     return { pairs, cost, sale, skus, uncategorized };
@@ -123,11 +130,11 @@ export function InventoryHealthDashboard() {
       const key = `${cat}|${gen}|${tier}`;
       const cur = map.get(key) || { pairs: 0, skus: 0, cost: 0, sale: 0 };
       cur.skus += 1;
-      const s = Number(p.stock ?? 0);
+      const s = toNumber(p.stock);
       if (s > 0) {
         cur.pairs += s;
-        cur.cost += s * Number(p.cost_price ?? 0);
-        cur.sale += s * Number(p.price ?? 0);
+        cur.cost += s * toNumber(p.cost_price);
+        cur.sale += s * toNumber(p.price);
       }
       map.set(key, cur);
     }
@@ -165,10 +172,10 @@ export function InventoryHealthDashboard() {
       const name = categories.find(c => c.id === id)?.name || "Sem categoria";
       const cur = map.get(id) || { name, pairs: 0, skus: 0, sale: 0 };
       cur.skus += 1;
-      const s = Number(p.stock ?? 0);
+      const s = toNumber(p.stock);
       if (s > 0) {
         cur.pairs += s;
-        cur.sale += s * Number(p.price ?? 0);
+        cur.sale += s * toNumber(p.price);
       }
       map.set(id, cur);
     }
@@ -343,7 +350,7 @@ export function InventoryHealthDashboard() {
                   <TableCell className="text-right">{fmtNum(c.pairs)}</TableCell>
                   <TableCell className="text-right">{fmtMoney(c.sale)}</TableCell>
                   <TableCell className="text-right">
-                    {kpis.pairs > 0 ? `${((c.pairs / kpis.pairs) * 100).toFixed(1)}%` : "—"}
+                    {kpis.pairs > 0 ? `${fixed((c.pairs / kpis.pairs) * 100, 1)}%` : "—"}
                   </TableCell>
                 </TableRow>
               ))}
