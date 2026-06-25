@@ -169,7 +169,18 @@ export function POSOnlineHub({ storeId, sellers }: Props) {
         </div>
         <div className="flex-1 overflow-auto p-4 md:p-6" style={{ background: "var(--pos-bg, #f5f0e8)" }}>
           <div className="max-w-5xl mx-auto">
-            <CarouselTemplatesLadder />
+            <Tabs defaultValue="templates">
+              <TabsList className="mb-4">
+                <TabsTrigger value="templates">Templates</TabsTrigger>
+                <TabsTrigger value="publicos">Públicos</TabsTrigger>
+              </TabsList>
+              <TabsContent value="templates">
+                <CarouselTemplatesLadder />
+              </TabsContent>
+              <TabsContent value="publicos">
+                <CampaignAudienceManager />
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </div>
