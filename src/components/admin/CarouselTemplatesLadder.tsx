@@ -569,6 +569,8 @@ export function CarouselTemplatesLadder() {
           })
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }
