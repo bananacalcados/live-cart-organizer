@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2, Save, Play, Users, Pause } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Play, Users, Pause, Send } from "lucide-react";
 import { CampaignCardsEditor, CampaignCard, emptyCard } from "./CampaignCardsEditor";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import {
@@ -17,6 +17,30 @@ import {
   parseCarouselTemplate, BODY_VAR_OPTIONS, CARD_VAR_OPTIONS,
   type ParsedCarouselTemplate, type VarKind, type VarMapping,
 } from "@/lib/pos/carouselTemplate";
+
+/** Resolve a named token to a SAMPLE value for the test send. */
+function resolveTestToken(
+  token: string,
+  cardLegenda: string | null,
+  vars: Record<string, string>,
+  vendedora: string,
+): string {
+  switch (token) {
+    case "nome": return "Maria Teste";
+    case "primeiro_nome": return "Maria";
+    case "tamanho": return "37";
+    case "vendedora": return vendedora || "nossa loja";
+    case "legenda": return (cardLegenda || "").trim() || "—";
+    default: return (vars[token] || "").trim() || "—";
+  }
+}
+
+/** Keep only digits and ensure a Brazilian country code. */
+function normalizeTestPhone(raw: string): string {
+  let d = (raw || "").replace(/\D/g, "");
+  if (d.length === 10 || d.length === 11) d = "55" + d;
+  return d;
+}
 
 const WEEKDAYS = [
   { v: 1, label: "Seg" }, { v: 2, label: "Ter" }, { v: 3, label: "Qua" },
