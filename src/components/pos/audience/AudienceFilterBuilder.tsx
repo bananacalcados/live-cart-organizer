@@ -430,12 +430,31 @@ export function AudienceFilterBuilder({ value, onChange }: Props) {
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Calculando público...
           </span>
         ) : (
-          <span>
-            Público estimado:{" "}
-            <span className="text-blue-900">{(count ?? 0).toLocaleString("pt-BR")}</span> clientes
-          </span>
+          <>
+            <span>
+              Público estimado:{" "}
+              <span className="text-blue-900">{(count ?? 0).toLocaleString("pt-BR")}</span> clientes
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ml-2 h-8 gap-1.5 bg-white"
+              disabled={!count}
+              onClick={() => setListOpen(true)}
+            >
+              <List className="h-3.5 w-3.5" /> Ver clientes
+            </Button>
+          </>
         )}
       </div>
+
+      <AudienceListDialog
+        open={listOpen}
+        onOpenChange={setListOpen}
+        filtro={cleaned}
+        total={count}
+      />
     </div>
   );
 }
