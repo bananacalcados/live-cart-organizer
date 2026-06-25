@@ -237,7 +237,8 @@ export function CarouselTemplatesLadder() {
     return null;
   };
 
-  const createRow = async (qtd: number) => {
+  const createRow = async (qtd: number, nameArg?: string) => {
+    const name = (nameArg ?? modelName).trim() || "Padrão";
     const err = validate(qtd);
     if (err) { toast.error(err); return; }
     setCreating(qtd);
@@ -248,7 +249,7 @@ export function CarouselTemplatesLadder() {
         body: {
           whatsappNumberId: numberId,
           qtdCards: qtd,
-          modelo: modelName,
+          modelo: name,
           sampleImageBase64: sampleB64,
           sampleImageType: sampleType,
           topBody: top,
@@ -258,7 +259,7 @@ export function CarouselTemplatesLadder() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
-      toast.success(`Template "${modelName}" de ${qtd} cards enviado à Meta (${data?.meta_status || "PENDING"})`);
+      toast.success(`Template "${name}" de ${qtd} cards enviado à Meta (${data?.meta_status || "PENDING"})`);
       await loadModels();
       await loadRows();
     } catch (e) {
@@ -266,6 +267,15 @@ export function CarouselTemplatesLadder() {
     } finally {
       setCreating(null);
     }
+  };
+
+  const deleteRow = async (row: LadderRow) => {
+    if (!confirm(`Excluir o template "${row.nome}" de ${row.qtd_cards} cards? Isso remove apenas o registro no sistema.`)) return;
+    const { error } = await supabase.from("templates_carrossel").delete().eq("id", row.id);
+    if (error) { toast.error("Erro ao excluir: " + error.message); return; }
+    toast.success("Template removido");
+    await loadModels();
+    await loadRows();
   };
 
   const syncStatus = async () => {
@@ -279,15 +289,15 @@ export function CarouselTemplatesLadder() {
       const byName = new Map(templates.map((t) => [t.name, t.status]));
       let updated = 0;
       for (const qtd of LADDER) {
-        const row = rows[qtd];
-        if (!row) continue;
-        const metaStatus = byName.get(row.template_id);
-        if (metaStatus && metaStatus !== row.meta_status) {
-          await supabase
-            .from("templates_carrossel")
-            .update({ meta_status: metaStatus, aprovado: metaStatus === "APPROVED" })
-            .eq("id", row.id);
-          updated++;
+        for (const row of rows[qtd] || []) {
+          const metaStatus = byName.get(row.template_id);
+          if (metaStatus && metaStatus !== row.meta_status) {
+            await supabase
+              .from("templates_carrossel")
+              .update({ meta_status: metaStatus, aprovado: metaStatus === "APPROVED" })
+              .eq("id", row.id);
+            updated++;
+          }
         }
       }
       toast.success(updated ? `${updated} status atualizados` : "Status já sincronizados");
