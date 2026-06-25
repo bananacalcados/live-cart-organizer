@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Plus, Trash2, Zap, Pencil } from "lucide-react";
+import { Loader2, Plus, Trash2, Zap, Pencil, BarChart3 } from "lucide-react";
 import { CampaignBuilder } from "./CampaignBuilder";
+import { CampaignDashboard } from "./CampaignDashboard";
 
 interface Row {
   id: string;
