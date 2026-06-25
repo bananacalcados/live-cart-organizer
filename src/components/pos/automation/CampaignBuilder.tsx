@@ -294,7 +294,63 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
     };
   };
 
-  const validateStart = (): string | null => {
+  const sendTest = async () => {
+    const phone = normalizeTestPhone(testPhone);
+    if (phone.length < 12) { toast.error("Informe um telefone válido com DDD"); return; }
+    if (!tplStruct) { toast.error("Aguarde o carregamento do template aprovado"); return; }
+    const entry = (tplByModel[modelo] || []).find((e) => e.qtd === selectedQtd);
+    if (!entry) { toast.error("Selecione instância, modelo e quantidade de cards"); return; }
+    const okCards = cards.filter((c) => c.imagem_url).slice(0, selectedQtd || 0);
+    if (okCards.length < (selectedQtd || 0)) { toast.error(`Adicione imagem em todos os ${selectedQtd} cards`); return; }
+
+    setTestSending(true);
+    try {
+      const texts = buildPersistTexts();
+      const vendedora = sellers.find((s) => vendedorasSel.includes(s.id))?.name || sellers[0]?.name || "";
+      const topTokens = namedTokensOf(texts.top);
+      const cardTokens = namedTokensOf(texts.card);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const components: any[] = [];
+      if (topTokens.length) {
+        components.push({
+          type: "body",
+          parameters: topTokens.map((t) => ({ type: "text", text: resolveTestToken(t, null, texts.variaveis, vendedora) })),
+        });
+      }
+      const carouselCards = okCards.map((card, i) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const comps: any[] = [
+          { type: "header", parameters: [{ type: "image", image: { link: card.imagem_url } }] },
+        ];
+        if (cardTokens.length) {
+          comps.push({
+            type: "body",
+            parameters: cardTokens.map((t) => ({ type: "text", text: resolveTestToken(t, card.legenda, texts.variaveis, vendedora) })),
+          });
+        }
+        return { card_index: i, components: comps };
+      });
+      components.push({ type: "carousel", cards: carouselCards });
+
+      const { data, error } = await supabase.functions.invoke("meta-whatsapp-send-template", {
+        body: {
+          phone,
+          templateName: entry.templateId,
+          language: entry.language,
+          whatsappNumberId: numberId,
+          components,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (data && data.success === false) throw new Error(data.error || "Falha no envio");
+      toast.success(`Teste enviado para ${phone} 🚀`);
+    } catch (e) {
+      toast.error("Erro ao enviar teste: " + (e as Error).message);
+    } finally {
+      setTestSending(false);
+    }
+  };
     if (!nome.trim()) return "Dê um nome à automação";
     if (!numberId) return "Selecione a instância Meta";
     if (!modelo) return "Selecione o modelo de template";
