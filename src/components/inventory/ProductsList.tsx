@@ -23,13 +23,20 @@ interface Master {
   name: string;
   brand: string | null;
   category: string | null;
-  cost_price: number;
-  sale_price: number;
+  cost_price: number | string | null;
+  sale_price: number | string | null;
   is_active: boolean;
   shopify_product_id: string | null;
   tiny_product_id: string | null;
   created_at: string;
 }
+
+const toNumber = (value: unknown) => {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const fixed = (value: unknown, digits = 2) => toNumber(value).toFixed(digits);
 
 interface VariantSummary {
   master_id: string;
@@ -319,11 +326,11 @@ export function ProductsList() {
                   <div className="flex items-center justify-between text-sm">
                     <div>
                       <span className="text-muted-foreground text-xs">Custo</span>
-                      <div className="font-semibold">R$ {(p.cost_price ?? 0).toFixed(2)}</div>
+                      <div className="font-semibold">R$ {fixed(p.cost_price)}</div>
                     </div>
                     <div>
                       <span className="text-muted-foreground text-xs">Venda</span>
-                      <div className="font-semibold text-primary">R$ {(p.sale_price ?? 0).toFixed(2)}</div>
+                      <div className="font-semibold text-primary">R$ {fixed(p.sale_price)}</div>
                     </div>
                   </div>
                   <div className="flex gap-1 pt-2 border-t">
