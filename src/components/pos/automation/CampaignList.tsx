@@ -24,8 +24,10 @@ const DAY_LABEL: Record<number, string> = { 0: "Dom", 1: "Seg", 2: "Ter", 3: "Qu
 export function CampaignList() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"list" | "builder">("list");
+  const [view, setView] = useState<"list" | "builder" | "dashboard">("list");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [dashId, setDashId] = useState<string | null>(null);
+  const [dashNome, setDashNome] = useState("");
   const [numberLabels, setNumberLabels] = useState<Record<string, string>>({});
   const [publicoLabels, setPublicoLabels] = useState<Record<string, string>>({});
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
