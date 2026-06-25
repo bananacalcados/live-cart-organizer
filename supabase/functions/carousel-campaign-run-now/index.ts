@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     .select("*")
     .eq("id", campanhaId)
     .maybeSingle();
-  if (cErr) return json({ error: cErr.message }, 500);
+  if (cErr) { console.error("[run-now] campaign load:", cErr.message); return json({ error: cErr.message }, 500); }
   if (!c) return json({ error: "Automação não encontrada" }, 404);
   if (!c.ativa) return json({ error: "Ative a automação antes de iniciar os disparos." }, 400);
 
@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
     p_limit: limitOverride ?? (ignoreGlobalCap ? 100000 : (c.qtd_por_dia ?? 50)),
     p_ignore_global_cap: ignoreGlobalCap,
   });
-  if (batchErr) return json({ error: batchErr.message }, 500);
+  if (batchErr) { console.error("[run-now] select_campaign_batch:", batchErr.message); return json({ error: batchErr.message }, 500); }
   if (!batch || batch.length === 0) {
     return json({ ok: true, enqueued: 0, note: "Nenhum cliente elegível no momento (público vazio, em cooldown ou já enfileirado)." });
   }
@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
   const { error: insErr, count } = await sb
     .from("campanha_envios")
     .insert(rows, { count: "exact" });
-  if (insErr) return json({ error: insErr.message }, 500);
+  if (insErr) { console.error("[run-now] insert envios:", insErr.message); return json({ error: insErr.message }, 500); }
 
   const enqueued = count ?? rows.length;
 
