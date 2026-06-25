@@ -1,91 +1,88 @@
-# Automação de Carrossel WhatsApp recorrente (operada pelo PDV)
+# Construtor de Públicos com Inclusão e Exclusão — Online > Automações
 
-Vendedoras criam, de dentro do PDV, campanhas recorrentes de carrossel. Elas definem **conteúdo + público + ritmo**; o sistema impõe dedup, cooldown, teto global, opt-out e tratamento de falha de forma invisível. Reaproveita o máximo da infraestrutura existente.
+## Objetivo
+Permitir montar públicos para as campanhas de carrossel combinando **filtros de INCLUSÃO** e **filtros de EXCLUSÃO** (interseção), com os 9 critérios pedidos. Nada do que já existe é quebrado: o motor atual de campanhas continua funcionando com campanhas antigas.
 
-## Decisões adotadas (recomendadas — me corrija se quiser mudar)
-- **Fonte de cliente:** `customers_unified` via view `crm_customers_v` (regra do projeto). O `cliente_id` do brief = `customers_unified.id`.
-- **Opt-out:** usar o campo já existente `customers_unified.opt_out_mass_dispatch` (não criar tabela nova).
-- **Teto global de marketing:** consolidar via VIEW sobre os logs existentes (`dispatch_recipients` + `automation_dispatch_sent` + os envios da nova campanha). Sem tabela duplicada.
-- **Provedor:** carrossel só dispara por número **Meta/WABA oficial** (`whatsapp_numbers` tipo meta). Campanha bloqueia seleção de número não-oficial (guard-rail Seção 0/10).
-- **Parâmetros default:** cooldown 30 dias · teto global 1 msg / 7 dias · janela de atribuição 7 dias (last-touch) · retry 48h × 3 tentativas.
+## O que já está pronto (não precisa criar dado novo)
+A view `crm_customers_v` (fonte única do CRM) já entrega por cliente:
+- **Tamanho** → `purchased_sizes`
+- **Cidade** → `city`
+- **DDD** → `ddd`
+- **Ticket médio** → `avg_ticket`
+- **Quantidade de compras** → `total_orders`
+- **Categoria de produtos** → `purchased_categories`
+- **Marcas** → `purchased_brands`
 
-## O que já existe e será reaproveitado
-- **Motor de filtros (público):** `automation-dispatch-audience` + `dispatch-orchestrator` (pg_cron/min) + `dispatch-worker` (claim SKIP LOCKED). Filtros JSONB em `automation_flows.trigger_config` / `dispatch_history.audience_filters` — é o análogo do `filtro_json`.
-- **Picker de foto Shopify + cropper 1:1:** `AutomationFlowBuilder.tsx` (`openShopifyForCard` → `selectShopifyImage` → `ImageCropDialog`) usando `fetchProducts` de `@/lib/shopify`.
-- **Atribuição de venda (ROI):** `dispatch-attribution` já faz last-touch + janela `window_days` cruzando `pos_sales`/`zoppy_sales`/`orders` por sufixo de telefone.
-- **Tarefas + popup do PDV:** `pos_task_definitions`, `pos_seller_task_instances`, `pos_task_contacts`, gerador `pos-tasks-generate`, board `POSSellerTasksBoard`, popup `SellerTaskReminderPopup`.
-- **Carrossel ponta a ponta:** `meta-whatsapp-create-template` (cria a escada), `meta-whatsapp-send-template`, `meta-whatsapp-webhook` (status), coluna `whatsapp_messages.template_payload`, render `CarouselMessageBubble`.
-- **Cron seguro:** `_shared/cron-guard.ts` (`x-cron-secret`).
-
-## O que é novo (criar do zero)
-4 tabelas da campanha, a query de lote (Seção 3), o resolvedor de template por contagem (Seção 4), o check de estoque consultivo e o wizard de 5 modais no PDV.
+## O que falta como dado (2 dos 9)
+- **Lojas** e **Formas de pagamento** ainda não existem agregados por cliente.
 
 ---
 
-## Etapas (uma por vez — eu paro ao fim de cada uma para você testar)
+## Etapa 1 — Dados faltantes (loja e forma de pagamento)
 
-### Pré-requisito (você, fora do código)
-Validar que o número está na Cloud API oficial e consegue criar + enviar 1 carrossel de teste de 2 cards ponta a ponta. Sem isso o resto não roda.
+Reaproveita o mecanismo que já popula tamanhos/marcas/categorias (`recalc_customer_product_attributes` + trigger em `pos_sale_items`).
 
-### Etapa 1 — Escada de templates
-- Tabela `templates_carrossel` (`qtd_cards` PK 2..10, `template_id`, `aprovado`) + GRANT/RLS.
-- Tela admin para criar os 9 templates (2→10 cards) via `meta-whatsapp-create-template` e acompanhar aprovação (`meta-template-status-log`).
+1. Adicionar em `customers_unified`: `purchased_stores text[]` e `payment_methods text[]`.
+2. Criar função `parse_payment_methods(texto)` que normaliza o texto livre de `pos_sales.payment_method` (hoje vem como `"Pix (R$49.99) + Cartão de crédito 4x..."`) para rótulos canônicos:
+   - `Pix`, `Cartão de crédito`, `Cartão de débito`, `Crediário` (inclui gateways vindi/appmax/boleto/crediário), `VP` (Vale-presente/Vps), e também `Dinheiro` / `Vale-troca` para completude.
+3. Estender `recalc_customer_product_attributes` para também agregar:
+   - `purchased_stores` = nomes das lojas (`pos_stores.name`) onde o cliente comprou;
+   - `payment_methods` = união normalizada das formas usadas.
+4. Backfill único de toda a base e expor as 2 colunas novas na `crm_customers_v`.
 
-### Etapa 2 — Modelo de dados da campanha ✅ (concluída)
-- `campanhas_auto` (nome, criada_por, filtro_json jsonb, qtd_por_dia, dias_semana int[], cooldown_dias, ativa, tipo `lancamento|numeracao`, top_body, card_body, variaveis jsonb, botoes jsonb, whatsapp_number_id, **rodizio_vendedora bool + vendedoras_rodizio uuid[]**).
-- `campanha_cards` (campanha_id, ordem, shopify_product_id, shopify_variant_id, imagem_url, legenda, botao_tipo, botao_payload, status `ok|esgotado|inativo`, ultima_verificacao).
-- `campanha_envios` (LOG/dedup: campanha_id, cliente_id, phone, phone_suffix8, vendedora_id/nome do rodízio, message_wamid, enviado_em, status `pendente|enviado|entregue|lido|falhou|capped`, erro, tentativas, proxima_tentativa).
-- VIEW `marketing_envios_globais` (security_invoker) consolidando `campanha_envios` + `dispatch_recipients` + `automation_dispatch_sent` para o teto global.
-- Todas com GRANT + RLS (authenticated full access + service_role).
-- **Variável `{{vendedora}}`** (rodízio): builder puxa as vendedoras ativas do PDV (exclui virtuais) e usa nome real como exemplo de aprovação; rodízio aplicado no envio (Etapa 4).
+Sem CHECK constraints (uso de função/normalização). GRANTs já existem na tabela.
 
-### Etapa 3 — Seleção do lote + template + agendador ✅ (concluída)
-- RPC `select_campaign_batch` (filtro dinâmico via `crm_customers_v`, opt-out, cooldown da própria campanha, teto global via `marketing_envios_globais`, `ORDER BY last_purchase_at NULLS FIRST`).
-- RPC `resolve_campaign_template` pela contagem de cards `ok`; < 2 → retorna vazio (agendador pula; tarefa fica para a Etapa 9).
-- Edge function `carousel-campaign-scheduler` (cron-guard) diária: respeita `dias_semana` (fuso SP), enfileira `pendente` em `campanha_envios` e aplica o **rodízio de vendedoras** (só nomes humanos; "Loja física"/"Vendedor Live"/"Live Shopping" são excluídos). Falta criar o job pg_cron + worker de envio (Etapa 4).
+## Etapa 2 — Formato do filtro (incluir + excluir) sem quebrar o legado
 
-### Etapa 4 — Envio + webhook + tratamento de falha ✅ (concluída)
-- Worker `carousel-campaign-sender` (cron a cada 5min, cron-guard): pega `pendente` vencidos, resolve template pela contagem de cards `ok`, monta os componentes do carrossel (header imagem + body com variáveis resolvidas por destinatário: `nome/primeiro_nome/tamanho/vendedora/livre`), envia via `meta-whatsapp-send-template` (que grava no chat) e marca `enviado` + `message_wamid`.
-- `meta-whatsapp-webhook` atualizado: `delivered→entregue`, `read→lido` (rank-protegido, sem downgrade); falha pós-envio re-enfileira após 48h até 3 tentativas, depois `falhou`.
-- Tratamento de falha no envio (API) idem: `tentativas++`, reagenda 48h, na 3ª vira `falhou`.
-- Agendador diário (`carousel-campaign-scheduler`) e o disparador agendados via pg_cron (09h SP / a cada 5min) com `x-cron-secret`.
-- Espelhamento no log global: `campanha_envios` já entra na VIEW `marketing_envios_globais` (sucesso conta no teto global).
+Hoje `campanhas_auto.filtro_json` é um objeto plano (só inclusão). Novo formato:
 
+```text
+{
+  "include": { sizes:[], cities:[], ddds:[], categories:[], brands:[],
+               stores:[], payment_methods:[],
+               min_avg_ticket, max_avg_ticket,
+               min_total_orders, max_total_orders },
+  "exclude": { ...mesmos campos... }
+}
+```
 
-### Etapa 5 — Teto global entre campanhas ✅ (concluída)
-- `select_campaign_batch` aplica teto global de **7 dias** (`p_global_cap_days DEFAULT 7`) via VIEW `marketing_envios_globais` (consolida `campanha_envios` + `dispatch_recipients` + `automation_dispatch_sent`).
-- Reforço anti-duplicação no mesmo dia: também exclui clientes com envio `pendente` (em voo) de QUALQUER campanha de carrossel na janela de 7 dias — evita que duas campanhas no mesmo dia enfileirem o mesmo cliente.
-- GRANT EXECUTE da função para `authenticated` + `service_role`.
+Compatibilidade: o motor detecta o formato. Se o JSON **não** tiver `include`/`exclude`, ele é tratado como `include` (campanhas antigas seguem idênticas).
 
-### Etapa 6 — Atribuição de venda (ROI)
-- Adaptar `dispatch-attribution` para a janela por envio (last-touch, 7 dias) por `campanha_envios`.
-- Métricas por campanha: enviados, entregues, lidos, vendas, faturamento, ROI.
+## Etapa 3 — Motor de seleção (RPC `select_campaign_batch`)
 
-### Etapa 7 — UX no PDV (wizard de 5 modais)
-1. Nome + tipo (lançamento/numeração).
-2. Montar carrossel (2–10 cards) reusando picker Shopify + cropper; contador "X de 10".
-3. Público: filtro pré-configurado + contagem estimada agora.
-4. Ritmo: qtd/dia + dias da semana.
-5. Revisão + ativar.
-- Botão "Atualizar carrossel" reabre o Modal 2 da campanha existente (mantém ID e histórico).
+Atualizar a função para aplicar, em interseção (AND entre blocos):
+- Cada filtro de `include` restringe o público (quando preenchido).
+- Cada filtro de `exclude` remove quem casar (quando preenchido).
+- Arrays (tamanho, categoria, marca, loja, pagamento) usam sobreposição (`&&`); cidade/DDD usam pertencimento; ticket/qtd usam faixa min/max.
 
-### Etapa 8 — Check de estoque consultivo
-- 1x/dia, antes dos lotes: `numeracao` → checa variante (≤0 = `esgotado`); `lancamento` → checa produto ativo (inativo = `inativo`). Grava `ultima_verificacao`.
-- Card fora de `ok`: **não remove**, cria tarefa de troca e **pausa o disparo** da campanha; volta sozinho quando tudo voltar a `ok` (mín. 2).
+Mantém intactas as regras já existentes: opt-out, arquivados, carência da campanha (`cooldown_dias`) e teto global de 7 dias.
 
-### Etapa 9 — Integração com Tarefas + popup
-- Campanha gera tarefas (revisão recorrente + exceção por card esgotado) em `pos_seller_task_instances`.
-- Clique na tarefa → navega ao Modal 2 daquela campanha (passando `campanha_id` e `card_id` problemático para destacar). Popup já existente inclui essas tarefas.
+Exemplos do usuário ficam expressos como:
+- Valadares-MG **sem** crediário/VP → include: `cities=[Governador Valadares]`; exclude: `payment_methods=[Crediário, VP]`.
+- Quem comprou +2x com ticket ~R$250 **fora** de Valadares → include: `min_total_orders=2, min_avg_ticket=250`; exclude: `cities=[Governador Valadares]`.
+
+## Etapa 4 — Contagem ao vivo (preview do público)
+
+Nova RPC `count_campaign_audience(filtro_json)` que devolve quantos clientes o público atinge, para mostrar o número em tempo real enquanto a pessoa monta os filtros (sem disparar nada).
+
+## Etapa 5 — Interface (frontend) na aba Online > Automações
+
+Criar `AudienceFilterBuilder.tsx`, um bloco com duas seções claramente separadas:
+- **✅ INCLUIR** e **🚫 EXCLUIR**, cada uma com os 9 filtros (multiseleção para tamanho/cidade/DDD/categoria/marca/loja/forma de pagamento; faixas numéricas para ticket médio e quantidade de compras).
+- As opções de cada lista (cidades, marcas, tamanhos, lojas etc.) vêm de uma RPC de "valores distintos" para preencher os seletores.
+- Rodapé com **"Público estimado: N clientes"** atualizado ao vivo.
+
+Integrado ao fluxo de criação/edição de campanha que já existe sob Automações; o JSON montado é salvo em `campanhas_auto.filtro_json` no novo formato.
+
+## Garantias de não-quebra
+- Campanhas já criadas continuam válidas (fallback de formato legado no motor).
+- Colunas novas são aditivas (`ADD COLUMN IF NOT EXISTS`), sem alterar as existentes.
+- Nenhuma mudança nos workers de envio, no rodízio de vendedoras ou no teto global.
 
 ---
 
-## Detalhes técnicos
-- Migrations seguem a ordem CREATE → GRANT → ENABLE RLS → POLICY; regras com `now()` via trigger, não CHECK.
-- Dedup considera apenas `status IN ('enviado','entregue','lido')`; `falhou/capped` re-enfileira (não simplificar).
-- Telefones casados por DDD + 8 dígitos (padrão do projeto / `phone_suffix8`).
-- Nada destrutivo em tabela existente sem eu parar e perguntar antes.
-
-## Riscos / dependências
-- Bloqueante: Cloud API oficial + aprovação dos 9 templates (~24–48h, até 7 dias).
-- Tier de envio Meta (Tier 0 ~250 conversas/24h) — 200/dia fica colado no piso; monitorar quality rating.
-- Estoque Shopify pode divergir do físico — por isso o check é só consultivo.
+## Detalhes técnicos (resumo)
+- **Migração 1:** colunas + `parse_payment_methods` + extensão de `recalc_customer_product_attributes` + backfill + recriação da `crm_customers_v` com as 2 colunas novas.
+- **Migração 2:** novas versões de `select_campaign_batch` (include/exclude + 2 dimensões novas) e `count_campaign_audience` + RPC de valores distintos para os seletores.
+- **Frontend:** `AudienceFilterBuilder.tsx` + integração no editor de campanha em `POSOnlineHub`/Automações.
+- Sem alterar `pos_sales`, workers, ou estrutura de envios.
