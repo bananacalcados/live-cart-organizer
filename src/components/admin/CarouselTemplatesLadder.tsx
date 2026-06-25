@@ -249,6 +249,7 @@ export function CarouselTemplatesLadder() {
         body: {
           whatsappNumberId: numberId,
           qtdCards: qtd,
+          modelo: modelName,
           sampleImageBase64: sampleB64,
           sampleImageType: sampleType,
           topBody: top,
@@ -258,7 +259,8 @@ export function CarouselTemplatesLadder() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(typeof data.error === "string" ? data.error : JSON.stringify(data.error));
-      toast.success(`Template de ${qtd} cards enviado à Meta (${data?.meta_status || "PENDING"})`);
+      toast.success(`Template "${modelName}" de ${qtd} cards enviado à Meta (${data?.meta_status || "PENDING"})`);
+      await loadModels();
       await loadRows();
     } catch (e) {
       toast.error(`Erro ao criar template de ${qtd} cards: ${(e as Error).message}`);
