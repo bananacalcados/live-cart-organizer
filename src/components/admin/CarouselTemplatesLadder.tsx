@@ -350,7 +350,7 @@ export function CarouselTemplatesLadder() {
               <Images className="h-4 w-4" /> Escada de templates de carrossel
             </h3>
             <p className="text-sm text-muted-foreground">
-              Crie 1 template aprovado para cada quantidade de cards (2 a 10). A vendedora nunca escolhe template — o sistema escolhe pela quantidade de fotos. {approvedCount}/9 aprovados.
+              Cada quantidade de cards (2 a 10) pode ter <strong>vários templates</strong>. A vendedora nunca escolhe template — o sistema escolhe pela quantidade de fotos e pelo modelo da campanha. {totalTemplates} template(s), {approvedCount} aprovado(s).
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={syncStatus} disabled={syncing} className="gap-1.5">
