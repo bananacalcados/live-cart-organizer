@@ -165,12 +165,12 @@ export const BODY_VAR_OPTIONS: { kind: VarKind; label: string }[] = [
 ];
 
 export const CARD_VAR_OPTIONS: { kind: VarKind; label: string }[] = [
-  { kind: "legenda", label: "Texto próprio de cada card" },
+  { kind: "legenda", label: "Texto diferente em cada card (ex.: nome e preço do produto)" },
+  { kind: "livre", label: "Texto fixo (igual em todos os cards)" },
   { kind: "nome", label: "Nome do cliente" },
   { kind: "primeiro_nome", label: "Primeiro nome" },
   { kind: "tamanho", label: "Tamanho que calça" },
   { kind: "vendedora", label: "Nome da vendedora (rodízio)" },
-  { kind: "livre", label: "Texto livre" },
 ];
 
 /** Token name stored in top_body/card_body for a given mapping. */
