@@ -372,6 +372,46 @@ export function CarouselTemplatesLadder() {
           </div>
         </div>
 
+        {/* Modelo de template */}
+        <div className="space-y-2 rounded-lg border p-3">
+          <Label className="text-sm font-semibold">Modelo de template</Label>
+          <p className="text-[11px] text-muted-foreground">
+            Crie modelos diferentes para situações diferentes (ex.: "Tamanho 34", "Lançamentos"). Cada modelo tem sua própria escada de 2 a 10 cards na instância selecionada.
+          </p>
+          <Input
+            value={modelName}
+            onChange={(e) => setModelName(e.target.value)}
+            placeholder='Nome do modelo (ex.: Lançamentos)'
+            className="h-9"
+            disabled={!numberId}
+          />
+          {models.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {models.map((m) => (
+                <Button
+                  key={m}
+                  type="button"
+                  size="sm"
+                  variant={m === modelName ? "default" : "outline"}
+                  className="h-7 text-xs"
+                  onClick={() => setModelName(m)}
+                >
+                  {m}
+                </Button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {!numberId ? (
+        <Card className="p-6 text-center text-sm text-muted-foreground">
+          Selecione uma instância Meta acima para ver e gerenciar os templates aprovados dessa instância.
+        </Card>
+      ) : (
+        <>
+        <Card className="p-4 space-y-4">
+
         <div className="rounded-md border border-dashed bg-muted/30 p-2.5 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">Rodízio de vendedoras:</span>{" "}
           ao usar a variável <code className="rounded bg-muted px-1">{`{{vendedora}}`}</code>, cada
