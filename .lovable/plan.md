@@ -1,88 +1,64 @@
-# Construtor de Públicos com Inclusão e Exclusão — Online > Automações
+# Plano: Filtros de período/RFM + múltiplos modelos de template por instância
 
-## Objetivo
-Permitir montar públicos para as campanhas de carrossel combinando **filtros de INCLUSÃO** e **filtros de EXCLUSÃO** (interseção), com os 9 critérios pedidos. Nada do que já existe é quebrado: o motor atual de campanhas continua funcionando com campanhas antigas.
+Quatro mudanças pedidas, agrupadas em 3 frentes.
 
-## O que já está pronto (não precisa criar dado novo)
-A view `crm_customers_v` (fonte única do CRM) já entrega por cliente:
-- **Tamanho** → `purchased_sizes`
-- **Cidade** → `city`
-- **DDD** → `ddd`
-- **Ticket médio** → `avg_ticket`
-- **Quantidade de compras** → `total_orders`
-- **Categoria de produtos** → `purchased_categories`
-- **Marcas** → `purchased_brands`
+## 1) Filtros de período de compra + Matriz RFM (construtor de públicos)
 
-## O que falta como dado (2 dos 9)
-- **Lojas** e **Formas de pagamento** ainda não existem agregados por cliente.
+**Onde:** `AudienceFilterBuilder.tsx` (aba Online > Automação > Públicos) + RPCs no banco.
 
----
+Novos filtros, disponíveis tanto em **Incluir** quanto em **Excluir**:
 
-## Etapa 1 — Dados faltantes (loja e forma de pagamento)
+- **Período da última compra** (modos):
+  - `Comprou há mais de N dias` (sem compra recente)
+  - `Comprou há menos de N dias` (compra recente)
+  - `Última compra depois de DD/MM/AAAA`
+  - `Última compra antes de DD/MM/AAAA`
+  - `Comprou entre data X e data Y`
+- **Matriz RFM**: multiseleção dos segmentos existentes (champions, loyal_customers, at_risk, cant_lose, hibernating, lost, new_customers, promising, leads, others), com rótulos amigáveis em PT.
 
-Reaproveita o mecanismo que já popula tamanhos/marcas/categorias (`recalc_customer_product_attributes` + trigger em `pos_sale_items`).
+Implementação técnica:
+- `AudienceFilterBlock` ganha campos: `last_purchase_op` (`gt_days`|`lt_days`|`after`|`before`|`between`), `last_purchase_days`, `last_purchase_from`, `last_purchase_to`, e `rfm_segments: string[]`.
+- `bc_match_audience` (função IMMUTABLE) passa a avaliar `last_purchase_at` e `rfm_segment` nos blocos include/exclude.
+- `audience_filter_options` passa a devolver também a lista de `rfm_segments`.
+- UI: nova seção "Período de compra" (select de modo + inputs de dias/datas) e multiselect "Matriz RFM" dentro de cada bloco.
 
-1. Adicionar em `customers_unified`: `purchased_stores text[]` e `payment_methods text[]`.
-2. Criar função `parse_payment_methods(texto)` que normaliza o texto livre de `pos_sales.payment_method` (hoje vem como `"Pix (R$49.99) + Cartão de crédito 4x..."`) para rótulos canônicos:
-   - `Pix`, `Cartão de crédito`, `Cartão de débito`, `Crediário` (inclui gateways vindi/appmax/boleto/crediário), `VP` (Vale-presente/Vps), e também `Dinheiro` / `Vale-troca` para completude.
-3. Estender `recalc_customer_product_attributes` para também agregar:
-   - `purchased_stores` = nomes das lojas (`pos_stores.name`) onde o cliente comprou;
-   - `payment_methods` = união normalizada das formas usadas.
-4. Backfill único de toda a base e expor as 2 colunas novas na `crm_customers_v`.
+## 2) Múltiplos modelos de template por quantidade de cards
 
-Sem CHECK constraints (uso de função/normalização). GRANTs já existem na tabela.
+Hoje `templates_carrossel` tem PK em `qtd_cards` → só 1 template por contagem. Vamos permitir vários "modelos" (ex.: "Tamanho 34", "Lançamentos"), cada um com sua própria escada de 2–10 cards.
 
-## Etapa 2 — Formato do filtro (incluir + excluir) sem quebrar o legado
+Migração de banco:
+- Trocar a PK: adicionar `id uuid default gen_random_uuid()` como PK; adicionar `nome text not null default 'Padrão'` (nome do modelo).
+- `whatsapp_number_id` passa a ser obrigatório para novos registros.
+- Índice único `(whatsapp_number_id, nome, qtd_cards)`.
+- Backfill: registros existentes recebem `nome = 'Padrão'`.
+- `resolve_campaign_template` passa a receber/filtrar por `whatsapp_number_id` + `nome` do modelo da campanha.
 
-Hoje `campanhas_auto.filtro_json` é um objeto plano (só inclusão). Novo formato:
+UI (`CarouselTemplatesLadder.tsx`):
+- Campo **Nome do modelo** na criação (ex.: "Tamanho 34").
+- Lista de modelos existentes por instância; ao escolher um modelo mostra a escada (2–10) dele.
+- "Criar/Recriar" grava com `nome` + `whatsapp_number_id`.
+- `carousel-ladder-create` (edge function) passa a receber e gravar `nome`.
 
-```text
-{
-  "include": { sizes:[], cities:[], ddds:[], categories:[], brands:[],
-               stores:[], payment_methods:[],
-               min_avg_ticket, max_avg_ticket,
-               min_total_orders, max_total_orders },
-  "exclude": { ...mesmos campos... }
-}
-```
+## 3) Templates escopados pela instância Meta selecionada
 
-Compatibilidade: o motor detecta o formato. Se o JSON **não** tiver `include`/`exclude`, ele é tratado como `include` (campanhas antigas seguem idênticas).
+**Onde:** `CarouselTemplatesLadder.tsx`.
 
-## Etapa 3 — Motor de seleção (RPC `select_campaign_batch`)
+- A escada/lista de templates aprovados **só aparece depois** de selecionar a instância Meta no topo. Sem instância selecionada → mensagem "Selecione uma instância Meta para ver/gerenciar os templates".
+- `loadRows()` passa a filtrar `templates_carrossel` por `whatsapp_number_id = numberId` (hoje carrega tudo). Assim, ao selecionar "Meta Pérola" só aparecem os templates dessa instância — nunca da Zoppy ou de outra.
+- A sincronização de status (`syncStatus`) já usa `numberId`; passa a atualizar apenas as linhas daquela instância + modelo.
 
-Atualizar a função para aplicar, em interseção (AND entre blocos):
-- Cada filtro de `include` restringe o público (quando preenchido).
-- Cada filtro de `exclude` remove quem casar (quando preenchido).
-- Arrays (tamanho, categoria, marca, loja, pagamento) usam sobreposição (`&&`); cidade/DDD usam pertencimento; ticket/qtd usam faixa min/max.
+## Vínculo público → instância/modelo (necessário para o disparo)
 
-Mantém intactas as regras já existentes: opt-out, arquivados, carência da campanha (`cooldown_dias`) e teto global de 7 dias.
+Para o disparo saber qual modelo/instância usar, `campanhas_auto` ganha `whatsapp_number_id` e `template_modelo` (nome). No editor de público (`CampaignAudienceManager.tsx`) adiciono os seletores de **Instância Meta** e **Modelo de template**. `resolve_campaign_template` usa esses campos.
 
-Exemplos do usuário ficam expressos como:
-- Valadares-MG **sem** crediário/VP → include: `cities=[Governador Valadares]`; exclude: `payment_methods=[Crediário, VP]`.
-- Quem comprou +2x com ticket ~R$250 **fora** de Valadares → include: `min_total_orders=2, min_avg_ticket=250`; exclude: `cities=[Governador Valadares]`.
+## Detalhes técnicos / arquivos
 
-## Etapa 4 — Contagem ao vivo (preview do público)
+- Migração SQL: `templates_carrossel` (nova PK, `nome`, índice único, backfill); `campanhas_auto` (+`whatsapp_number_id`, +`template_modelo`); recriar `bc_match_audience`, `audience_filter_options`, `resolve_campaign_template`.
+- Front: `AudienceFilterBuilder.tsx`, `MultiSelectFilter.tsx` (reuso), `CampaignAudienceManager.tsx`, `CarouselTemplatesLadder.tsx`.
+- Edge function: `carousel-ladder-create` (campo `nome`).
+- Sem quebrar legado: filtros antigos sem os novos campos continuam funcionando; templates sem `nome` viram "Padrão".
 
-Nova RPC `count_campaign_audience(filtro_json)` que devolve quantos clientes o público atinge, para mostrar o número em tempo real enquanto a pessoa monta os filtros (sem disparar nada).
-
-## Etapa 5 — Interface (frontend) na aba Online > Automações
-
-Criar `AudienceFilterBuilder.tsx`, um bloco com duas seções claramente separadas:
-- **✅ INCLUIR** e **🚫 EXCLUIR**, cada uma com os 9 filtros (multiseleção para tamanho/cidade/DDD/categoria/marca/loja/forma de pagamento; faixas numéricas para ticket médio e quantidade de compras).
-- As opções de cada lista (cidades, marcas, tamanhos, lojas etc.) vêm de uma RPC de "valores distintos" para preencher os seletores.
-- Rodapé com **"Público estimado: N clientes"** atualizado ao vivo.
-
-Integrado ao fluxo de criação/edição de campanha que já existe sob Automações; o JSON montado é salvo em `campanhas_auto.filtro_json` no novo formato.
-
-## Garantias de não-quebra
-- Campanhas já criadas continuam válidas (fallback de formato legado no motor).
-- Colunas novas são aditivas (`ADD COLUMN IF NOT EXISTS`), sem alterar as existentes.
-- Nenhuma mudança nos workers de envio, no rodízio de vendedoras ou no teto global.
-
----
-
-## Detalhes técnicos (resumo)
-- **Migração 1:** colunas + `parse_payment_methods` + extensão de `recalc_customer_product_attributes` + backfill + recriação da `crm_customers_v` com as 2 colunas novas.
-- **Migração 2:** novas versões de `select_campaign_batch` (include/exclude + 2 dimensões novas) e `count_campaign_audience` + RPC de valores distintos para os seletores.
-- **Frontend:** `AudienceFilterBuilder.tsx` + integração no editor de campanha em `POSOnlineHub`/Automações.
-- Sem alterar `pos_sales`, workers, ou estrutura de envios.
+## Validação
+- Contagem de público em tempo real com os novos filtros (período + RFM).
+- Criar 2 modelos distintos para a mesma contagem de cards na mesma instância.
+- Trocar instância no topo e confirmar que a lista de aprovados muda e nunca mistura instâncias.
