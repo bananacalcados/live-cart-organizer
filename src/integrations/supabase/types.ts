@@ -1732,6 +1732,30 @@ export type Database = {
           },
         ]
       }
+      campanha_publicos: {
+        Row: {
+          created_at: string
+          filtro_json: Json
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          filtro_json?: Json
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          filtro_json?: Json
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       campanhas_auto: {
         Row: {
           ativa: boolean
@@ -1744,6 +1768,7 @@ export type Database = {
           filtro_json: Json
           id: string
           nome: string
+          publico_id: string | null
           qtd_por_dia: number
           rodizio_vendedora: boolean
           template_modelo: string | null
@@ -1765,6 +1790,7 @@ export type Database = {
           filtro_json?: Json
           id?: string
           nome: string
+          publico_id?: string | null
           qtd_por_dia?: number
           rodizio_vendedora?: boolean
           template_modelo?: string | null
@@ -1786,6 +1812,7 @@ export type Database = {
           filtro_json?: Json
           id?: string
           nome?: string
+          publico_id?: string | null
           qtd_por_dia?: number
           rodizio_vendedora?: boolean
           template_modelo?: string | null
@@ -1797,6 +1824,13 @@ export type Database = {
           whatsapp_number_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "campanhas_auto_publico_id_fkey"
+            columns: ["publico_id"]
+            isOneToOne: false
+            referencedRelation: "campanha_publicos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "campanhas_auto_whatsapp_number_id_fkey"
             columns: ["whatsapp_number_id"]
