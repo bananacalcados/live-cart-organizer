@@ -16910,6 +16910,10 @@ export type Database = {
       bc_norm_txt: { Args: { t: string }; Returns: string }
       calculate_rfm_scores: { Args: never; Returns: Json }
       calculate_rfm_scores_unified: { Args: never; Returns: Json }
+      campaign_daily_deficit: {
+        Args: { p_campanha_id: string }
+        Returns: number
+      }
       campaign_dashboard_stats: {
         Args: { p_campanha_id: string }
         Returns: Json
