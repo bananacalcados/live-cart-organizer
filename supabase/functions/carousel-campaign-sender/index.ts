@@ -18,8 +18,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
+import { classifySendError, extractMetaErrorCode } from "../_shared/meta-send-error.ts";
 
-const RETRY_HOURS = 48;
 const MAX_ATTEMPTS = 3;
 const BATCH = 80;
 
