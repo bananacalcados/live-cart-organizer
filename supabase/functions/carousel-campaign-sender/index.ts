@@ -24,6 +24,21 @@ const MAX_ATTEMPTS = 3;
 const BATCH = 80;
 const TRANSIENT_FALLBACK_MS = 30 * 60 * 1000; // 30min se o classificador não der retryMs
 
+// Espelho de src/lib/pos/virtualSellers.ts — só nomes humanos reais entram no rodízio.
+const VIRTUAL_SELLER_PATTERNS = [
+  /^live\s*shopping$/i,
+  /^vendedor[a]?\s*live$/i,
+  /^live$/i,
+  /^loja$/i,
+  /^loja\s*f[ií]sica$/i,
+  /^loja\s*online$/i,
+];
+function isVirtualSeller(name?: string | null): boolean {
+  const n = (name || "").trim();
+  if (!n) return false;
+  return VIRTUAL_SELLER_PATTERNS.some((re) => re.test(n));
+}
+
 const TOKEN_RE = /\{\{\s*([\w-]+)\s*\}\}/g;
 
 function tokensInOrder(raw: string | null | undefined): string[] {
