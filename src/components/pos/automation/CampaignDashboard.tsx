@@ -18,8 +18,12 @@ interface Stats {
   entregues: number;
   lidos: number;
   falhou: number;
+  nao_entregavel: number;
   pendente: number;
   capped: number;
+  rate_limit: number;
+  aguardando_retry: number;
+  enfileirados: number;
   pct_concluida: number;
   conversoes: number;
   valor_conversao: number;
