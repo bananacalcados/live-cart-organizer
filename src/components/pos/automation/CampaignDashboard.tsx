@@ -54,6 +54,7 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   entregue: { label: "Entregue", cls: "bg-emerald-100 text-emerald-700" },
   lido: { label: "Lido", cls: "bg-emerald-100 text-emerald-700" },
   falhou: { label: "Falhou", cls: "bg-rose-100 text-rose-700" },
+  nao_entregavel: { label: "Não entregável", cls: "bg-orange-100 text-orange-700" },
   pendente: { label: "Pendente", cls: "bg-amber-100 text-amber-700" },
   capped: { label: "Limite", cls: "bg-neutral-200 text-neutral-600" },
 };
