@@ -163,8 +163,11 @@ Deno.serve(async (req) => {
   let sent = 0;
   let failed = 0;
   let skipped = 0;
+  const touchedCampaigns = new Set<string>();
 
   for (const env of pendentes) {
+    touchedCampaigns.add(env.campanha_id);
+
     const cc = await getCampaignCtx(env.campanha_id);
 
     if (!cc.campaign || !cc.campaign.ativa) {
