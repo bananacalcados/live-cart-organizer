@@ -144,10 +144,16 @@ export function CampaignDashboard({
           <span className="rounded bg-sky-50 px-2 py-0.5 text-sky-700">Enviados: {stats?.enviados ?? 0}</span>
           <span className="rounded bg-emerald-50 px-2 py-0.5 text-emerald-700">Entregues: {stats?.entregues ?? 0}</span>
           <span className="rounded bg-emerald-50 px-2 py-0.5 text-emerald-700">Lidos: {stats?.lidos ?? 0}</span>
+          <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-600">Na fila: {stats?.enfileirados ?? 0}</span>
+          <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">Aguardando reenvio: {stats?.aguardando_retry ?? 0}</span>
+          <span className="rounded bg-violet-50 px-2 py-0.5 text-violet-700">Limite Meta (aguardando): {stats?.rate_limit ?? 0}</span>
+          <span className="rounded bg-orange-50 px-2 py-0.5 text-orange-700">Não entregáveis: {stats?.nao_entregavel ?? 0}</span>
           <span className="rounded bg-rose-50 px-2 py-0.5 text-rose-700">Falhas: {stats?.falhou ?? 0}</span>
-          <span className="rounded bg-amber-50 px-2 py-0.5 text-amber-700">Pendentes: {stats?.pendente ?? 0}</span>
           <span className="rounded bg-neutral-100 px-2 py-0.5 text-neutral-600">Total: {stats?.total ?? 0}</span>
         </div>
+        <p className="text-[10px] text-neutral-400 pt-0.5">
+          "Não entregáveis" = a Meta recusou o número (sem WhatsApp ativo, inválido ou que não aceita a mensagem). Não são reenviados.
+        </p>
       </Card>
 
       {/* Resultado financeiro */}
