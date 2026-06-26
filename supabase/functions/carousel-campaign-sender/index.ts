@@ -24,6 +24,21 @@ const MAX_ATTEMPTS = 3;
 const BATCH = 80;
 const TRANSIENT_FALLBACK_MS = 30 * 60 * 1000; // 30min se o classificador não der retryMs
 
+// Espelho de src/lib/pos/virtualSellers.ts — só nomes humanos reais entram no rodízio.
+const VIRTUAL_SELLER_PATTERNS = [
+  /^live\s*shopping$/i,
+  /^vendedor[a]?\s*live$/i,
+  /^live$/i,
+  /^loja$/i,
+  /^loja\s*f[ií]sica$/i,
+  /^loja\s*online$/i,
+];
+function isVirtualSeller(name?: string | null): boolean {
+  const n = (name || "").trim();
+  if (!n) return false;
+  return VIRTUAL_SELLER_PATTERNS.some((re) => re.test(n));
+}
+
 const TOKEN_RE = /\{\{\s*([\w-]+)\s*\}\}/g;
 
 function tokensInOrder(raw: string | null | undefined): string[] {
@@ -148,8 +163,11 @@ Deno.serve(async (req) => {
   let sent = 0;
   let failed = 0;
   let skipped = 0;
+  const touchedCampaigns = new Set<string>();
 
   for (const env of pendentes) {
+    touchedCampaigns.add(env.campanha_id);
+
     const cc = await getCampaignCtx(env.campanha_id);
 
     if (!cc.campaign || !cc.campaign.ativa) {
@@ -275,5 +293,67 @@ Deno.serve(async (req) => {
     await new Promise((r) => setTimeout(r, 150));
   }
 
-  return json({ ok: true, processed: pendentes.length, sent, failed, skipped });
+  // 2) Reposição: para cada campanha tocada neste ciclo, repõe o público com NOVAS
+  //    pessoas elegíveis até atingir a meta diária de envios bem-sucedidos
+  //    (qtd_por_dia). Considera quem já deu certo hoje + quem ainda está pendente.
+  //    Quem falhou definitivamente (nao_entregavel/falhou) já é excluído na seleção,
+  //    então cada falha abre espaço para uma nova tentativa em outra pessoa.
+  let toppedUp = 0;
+  for (const campanhaId of touchedCampaigns) {
+    try {
+      const cc = campCache.get(campanhaId);
+      if (!cc?.campaign?.ativa) continue;
+
+      const { data: deficit, error: defErr } = await sb.rpc("campaign_daily_deficit", {
+        p_campanha_id: campanhaId,
+      });
+      const need = typeof deficit === "number" ? deficit : Number(deficit ?? 0);
+      if (defErr || !need || need <= 0) continue;
+
+      const { data: batch, error: batchErr } = await sb.rpc("select_campaign_batch", {
+        p_campanha_id: campanhaId,
+        p_limit: need,
+      });
+      if (batchErr || !batch || batch.length === 0) continue;
+
+      // Pool de rodízio de vendedoras (só nomes humanos reais).
+      let sellers: Array<{ id: string; name: string }> = [];
+      if (cc.campaign.rodizio_vendedora) {
+        let q = sb.from("pos_sellers").select("id, name").eq("is_active", true);
+        const allow: string[] | null = Array.isArray(cc.campaign.vendedoras_rodizio) && cc.campaign.vendedoras_rodizio.length
+          ? cc.campaign.vendedoras_rodizio
+          : null;
+        if (allow) q = q.in("id", allow);
+        const { data: sellerRows } = await q;
+        sellers = (sellerRows || [])
+          .map((s: { id: string; name: string | null }) => ({ id: s.id, name: (s.name || "").trim() }))
+          .filter((s) => s.name && !isVirtualSeller(s.name));
+      }
+
+      const rows = (batch as Array<{ cliente_id: string; phone: string; phone_suffix8: string }>).map(
+        (b, idx) => {
+          const seller = sellers.length ? sellers[idx % sellers.length] : null;
+          return {
+            campanha_id: campanhaId,
+            cliente_id: b.cliente_id,
+            phone: b.phone,
+            phone_suffix8: b.phone_suffix8,
+            vendedora_id: seller?.id ?? null,
+            vendedora_nome: seller?.name ?? null,
+            status: "pendente",
+          };
+        },
+      );
+
+      const { count, error: insErr } = await sb
+        .from("campanha_envios")
+        .insert(rows, { count: "exact" });
+      if (!insErr) toppedUp += count ?? rows.length;
+    } catch (_e) {
+      // Reposição é best-effort; o próximo ciclo do cron tenta de novo.
+    }
+  }
+
+  return json({ ok: true, processed: pendentes.length, sent, failed, skipped, toppedUp });
+
 });
