@@ -887,8 +887,11 @@ serve(async (req) => {
                     .eq('message_wamid', messageId);
 
                   // Also update carousel campaign deliveries (campanha_envios).
-                  // delivered -> entregue, read -> lido. failed -> retry up to 3x
-                  // (48h apart), then 'falhou'. Rank-protected so we never downgrade.
+                  // delivered -> entregue, read -> lido.
+                  // failed: classificado — rate limit reagenda em minutos (sem
+                  // contar tentativa), inentregável (131026 etc.) vira
+                  // 'nao_entregavel' (terminal), erro temporário reagenda em
+                  // ~30min até o limite e então 'falhou'. Rank-protegido.
                   const ceRank: Record<string, number> = { enviado: 1, entregue: 2, lido: 3 };
                   const { data: ce } = await supabase
                     .from('campanha_envios')
@@ -897,18 +900,36 @@ serve(async (req) => {
                     .maybeSingle();
                   if (ce) {
                     if (newStatus === 'failed') {
-                      const attempts = (ce.tentativas || 0) + 1;
-                      const terminal = attempts >= 3;
+                      const errCode = status.errors?.[0]?.code ?? null;
+                      const cls = classifySendError(
+                        typeof errCode === 'number' ? errCode : Number(errCode) || null,
+                        updateData.error_message as string,
+                      );
+                      const attempts = (ce.tentativas || 0) + (cls.countsAttempt ? 1 : 0);
+                      let ceStatus: string;
+                      let proxima: string | null;
+                      let keepWamid: boolean;
+                      if (cls.status === 'nao_entregavel') {
+                        ceStatus = 'nao_entregavel';
+                        proxima = null;
+                        keepWamid = true;
+                      } else if (cls.countsAttempt && attempts >= 3) {
+                        ceStatus = 'falhou';
+                        proxima = null;
+                        keepWamid = true;
+                      } else {
+                        ceStatus = 'pendente';
+                        proxima = new Date(Date.now() + (cls.retryMs ?? 30 * 60 * 1000)).toISOString();
+                        keepWamid = false;
+                      }
                       await supabase
                         .from('campanha_envios')
                         .update({
                           tentativas: attempts,
                           erro: updateData.error_message as string ?? 'Falha pós-envio (webhook)',
-                          status: terminal ? 'falhou' : 'pendente',
-                          message_wamid: terminal ? messageId : null,
-                          proxima_tentativa: terminal
-                            ? null
-                            : new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
+                          status: ceStatus,
+                          message_wamid: keepWamid ? messageId : null,
+                          proxima_tentativa: proxima,
                         })
                         .eq('id', ce.id);
                     } else {
@@ -923,6 +944,7 @@ serve(async (req) => {
                     }
                   }
                 }
+
 
               }
             } else {
