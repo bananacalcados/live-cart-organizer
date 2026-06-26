@@ -251,6 +251,14 @@ export async function processCommentAutomation(
 ): Promise<{ actions: string[] }> {
   const actions: string[] = [];
 
+  // Meta also delivers our own public replies as comment webhooks. If we let
+  // those pass through, a keyword contained in the bot reply can trigger the
+  // same rule again and create a visible reply loop on the post/reel.
+  if (isOwnInstagramUsername(comment.username)) {
+    console.log(`Skipping own Instagram comment automation for ${comment.username}`);
+    return { actions };
+  }
+
   // Fetch active rules
   const { data: rules, error } = await supabase
     .from("instagram_comment_rules")
