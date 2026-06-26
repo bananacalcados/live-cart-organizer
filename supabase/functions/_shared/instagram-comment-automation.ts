@@ -113,6 +113,27 @@ function normMediaType(mt: string | null | undefined): string {
 }
 
 const USER_COOLDOWN_ACTION_TYPE = "user_cooldown";
+const DEFAULT_OWN_IG_USERNAMES = ["bananacalcados"];
+
+function normalizeIgUsername(value: string | null | undefined): string {
+  return (value || "").replace(/^@+/, "").trim().toLowerCase();
+}
+
+function ownIgUsernames(): string[] {
+  const raw = [
+    Deno.env.get("META_INSTAGRAM_USERNAME"),
+    Deno.env.get("INSTAGRAM_USERNAME"),
+    Deno.env.get("IG_USERNAME"),
+    ...DEFAULT_OWN_IG_USERNAMES,
+  ];
+
+  return Array.from(new Set(raw.map(normalizeIgUsername).filter(Boolean)));
+}
+
+function isOwnInstagramUsername(username: string | null | undefined): boolean {
+  const normalized = normalizeIgUsername(username);
+  return Boolean(normalized && ownIgUsernames().includes(normalized));
+}
 
 function cooldownMarkerId(userId: string, cooldownMinutes: number): string {
   const minutes = Math.max(1, Number(cooldownMinutes) || 60);
