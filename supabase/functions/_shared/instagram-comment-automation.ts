@@ -112,6 +112,113 @@ function normMediaType(mt: string | null | undefined): string {
   return "post";
 }
 
+const USER_COOLDOWN_ACTION_TYPE = "user_cooldown";
+
+function cooldownMarkerId(userId: string, cooldownMinutes: number): string {
+  const minutes = Math.max(1, Number(cooldownMinutes) || 60);
+  const bucket = Math.floor(Date.now() / (minutes * 60 * 1000));
+  return `user:${userId}:${bucket}`;
+}
+
+async function hasRecentUserCooldown(
+  supabase: ReturnType<typeof createClient>,
+  ruleId: string,
+  userId: string,
+  cooldownMinutes: number,
+): Promise<boolean> {
+  if (!cooldownMinutes || cooldownMinutes <= 0) return false;
+
+  const cooldownTime = new Date(Date.now() - cooldownMinutes * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("instagram_comment_actions")
+    .select("id")
+    .eq("rule_id", ruleId)
+    .eq("action_type", USER_COOLDOWN_ACTION_TYPE)
+    .like("comment_id", `user:${userId}:%`)
+    .gte("created_at", cooldownTime)
+    .limit(1);
+
+  if (error) {
+    console.warn(`[ig-comment-automation] cooldown lookup failed for user ${userId}:`, error);
+    return false;
+  }
+
+  return Boolean(data && data.length > 0);
+}
+
+async function reserveUserCooldown(
+  supabase: ReturnType<typeof createClient>,
+  rule: Rule,
+  userId: string,
+): Promise<boolean> {
+  if (!rule.cooldown_minutes || rule.cooldown_minutes <= 0) return true;
+
+  if (await hasRecentUserCooldown(supabase, rule.id, userId, rule.cooldown_minutes)) {
+    console.log(`Cooldown active for rule ${rule.name}, user ${userId}`);
+    return false;
+  }
+
+  const marker = cooldownMarkerId(userId, rule.cooldown_minutes);
+  const { error } = await supabase.from("instagram_comment_actions").insert({
+    comment_id: marker,
+    rule_id: rule.id,
+    action_type: USER_COOLDOWN_ACTION_TYPE,
+    status: "locked",
+  });
+
+  if (!error) return true;
+
+  if ((error as any).code === "23505") {
+    console.log(`Cooldown lock already exists for rule ${rule.name}, user ${userId}`);
+    return false;
+  }
+
+  console.warn(`[ig-comment-automation] cooldown lock failed for rule ${rule.name}, user ${userId}:`, error);
+  return false;
+}
+
+async function reserveRuleAction(
+  supabase: ReturnType<typeof createClient>,
+  commentId: string,
+  ruleId: string,
+  actionType: "reply" | "dm" | "automation",
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("instagram_comment_actions")
+    .insert({
+      comment_id: commentId,
+      rule_id: ruleId,
+      action_type: actionType,
+      status: "pending",
+    })
+    .select("id")
+    .single();
+
+  if (!error) return (data as any).id;
+
+  if ((error as any).code !== "23505") {
+    console.warn(`[ig-comment-automation] action reservation failed (${actionType}/${commentId}):`, error);
+  }
+
+  return null;
+}
+
+async function finishReservedAction(
+  supabase: ReturnType<typeof createClient>,
+  actionId: string,
+  status: string,
+  errorMessage: string | null = null,
+) {
+  const { error } = await supabase
+    .from("instagram_comment_actions")
+    .update({ status, error_message: errorMessage })
+    .eq("id", actionId);
+
+  if (error) {
+    console.warn(`[ig-comment-automation] failed to update reserved action ${actionId}:`, error);
+  }
+}
+
 
 /**
  * Process a comment against all active automation rules.
