@@ -603,9 +603,13 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
               onChange={(e) => setQtdPorDia(Math.max(1, Number(e.target.value) || 1))} className="bg-white" />
           </div>
           <div className="space-y-1.5">
-            <Label>Cooldown (dias até reenviar à mesma pessoa)</Label>
-            <Input type="number" min={0} value={cooldownDias}
-              onChange={(e) => setCooldownDias(Math.max(0, Number(e.target.value) || 0))} className="bg-white" />
+            <Label className="text-neutral-400">Cooldown de tempo</Label>
+            <div className="rounded-md border border-dashed border-neutral-200 bg-neutral-50 px-3 py-2 text-[11px] leading-snug text-neutral-500">
+              As automações não usam mais limite de dias. Cada pessoa só recebe
+              esta automação <b>uma vez</b> (sem reenvio) e o público é recalculado
+              a cada ciclo. O cooldown por tempo fica no módulo
+              <b> Marketing &gt; Disparos em massa</b>.
+            </div>
           </div>
         </div>
 
