@@ -281,30 +281,10 @@ export async function processCommentAutomation(
 
     if (!triggered) continue;
 
-    // Check cooldown: was this user already actioned by this rule recently?
-    const cooldownTime = new Date(Date.now() - rule.cooldown_minutes * 60 * 1000).toISOString();
-    const { data: recentAction } = await supabase
-      .from("instagram_comment_actions")
-      .select("id")
-      .eq("rule_id", rule.id)
-      .eq("comment_id", comment.fromId) // use fromId for per-user cooldown
-      .gte("created_at", cooldownTime)
-      .limit(1);
-
-    if (recentAction && recentAction.length > 0) {
-      console.log(`Cooldown active for rule ${rule.name}, user ${comment.fromId}`);
-      continue;
-    }
-
-    // Check dedup: exact comment already processed
-    const { data: existingAction } = await supabase
-      .from("instagram_comment_actions")
-      .select("id")
-      .eq("comment_id", comment.commentId)
-      .eq("rule_id", rule.id)
-      .limit(1);
-
-    if (existingAction && existingAction.length > 0) {
+    // Reserve a per-user cooldown before calling Meta. This is intentionally
+    // atomic (unique marker per cooldown bucket), so duplicate webhook deliveries
+    // or multiple near-simultaneous comments cannot reply 4–5 times in parallel.
+    if (!(await reserveUserCooldown(supabase, rule, comment.fromId))) {
       continue;
     }
 
@@ -313,6 +293,9 @@ export async function processCommentAutomation(
     // ── Action 1: Reply to comment publicly (com variações anti-spam) ──
     const replyTemplate = pickReplyText(rule);
     if (rule.action_reply_comment && replyTemplate) {
+      const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, "reply");
+      if (!actionId) continue;
+
       try {
         const replyText = replyTemplate
           .replace("{username}", usernameClean)
@@ -333,13 +316,7 @@ export async function processCommentAutomation(
         const data = await res.json();
         const status = res.ok ? "sent" : "error";
 
-        await supabase.from("instagram_comment_actions").insert({
-          comment_id: comment.commentId,
-          rule_id: rule.id,
-          action_type: "reply",
-          status,
-          error_message: res.ok ? null : JSON.stringify(data),
-        });
+        await finishReservedAction(supabase, actionId, status, res.ok ? null : JSON.stringify(data));
 
         if (res.ok) {
           actions.push(`reply:${rule.name}`);
@@ -349,11 +326,15 @@ export async function processCommentAutomation(
         }
       } catch (e) {
         console.error(`Error replying to comment:`, e);
+        await finishReservedAction(supabase, actionId, "error", e instanceof Error ? e.message : String(e));
       }
     }
 
     // ── Action 2: Send Private DM ──
     if (rule.action_send_dm && rule.dm_message_text) {
+      const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, "dm");
+      if (!actionId) continue;
+
       try {
         const dmText = rule.dm_message_text
           .replace("{username}", usernameClean)
@@ -389,13 +370,7 @@ export async function processCommentAutomation(
         const data = await res.json();
         const status = res.ok ? "sent" : "error";
 
-        await supabase.from("instagram_comment_actions").insert({
-          comment_id: comment.commentId,
-          rule_id: rule.id,
-          action_type: "dm",
-          status,
-          error_message: res.ok ? null : JSON.stringify(data),
-        });
+        await finishReservedAction(supabase, actionId, status, res.ok ? null : JSON.stringify(data));
 
         if (res.ok) {
           actions.push(`dm:${rule.name}`);
@@ -468,19 +443,16 @@ export async function processCommentAutomation(
         }
       } catch (e) {
         console.error(`Error sending DM:`, e);
+        await finishReservedAction(supabase, actionId, "error", e instanceof Error ? e.message : String(e));
       }
     }
 
     // ── Action 3: Trigger automation flow ──
     if (rule.action_trigger_automation && rule.automation_flow_id) {
-      try {
-        await supabase.from("instagram_comment_actions").insert({
-          comment_id: comment.commentId,
-          rule_id: rule.id,
-          action_type: "automation",
-          status: "triggered",
-        });
+      const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, "automation");
+      if (!actionId) continue;
 
+      try {
         // Invoke the automation trigger
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -504,10 +476,13 @@ export async function processCommentAutomation(
           }),
         });
 
+        await finishReservedAction(supabase, actionId, "triggered");
+
         actions.push(`automation:${rule.name}`);
         console.log(`✅ Automation triggered for comment ${comment.commentId} via rule "${rule.name}"`);
       } catch (e) {
         console.error(`Error triggering automation:`, e);
+        await finishReservedAction(supabase, actionId, "error", e instanceof Error ? e.message : String(e));
       }
     }
   }
