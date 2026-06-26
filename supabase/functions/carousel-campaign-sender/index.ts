@@ -18,10 +18,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
+import { classifySendError, extractMetaErrorCode } from "../_shared/meta-send-error.ts";
 
-const RETRY_HOURS = 48;
 const MAX_ATTEMPTS = 3;
 const BATCH = 80;
+const TRANSIENT_FALLBACK_MS = 30 * 60 * 1000; // 30min se o classificador não der retryMs
 
 const TOKEN_RE = /\{\{\s*([\w-]+)\s*\}\}/g;
 
@@ -199,6 +200,7 @@ Deno.serve(async (req) => {
     let ok = false;
     let wamid: string | null = null;
     let errMsg = "";
+    let errCode: number | null = null;
     try {
       const res = await fetch(`${url}/functions/v1/meta-whatsapp-send-template`, {
         method: "POST",
@@ -219,6 +221,7 @@ Deno.serve(async (req) => {
         ok = true;
         wamid = data.messageId || null;
       } else {
+        errCode = extractMetaErrorCode(data?.details) ?? extractMetaErrorCode(data?.error);
         errMsg = data?.error
           ? `${data.error}${data.details ? ": " + JSON.stringify(data.details).slice(0, 400) : ""}`
           : `HTTP ${res.status}`;
@@ -239,21 +242,34 @@ Deno.serve(async (req) => {
         .eq("id", env.id);
       sent++;
     } else {
-      const attempts = (env.tentativas || 0) + 1;
-      const terminal = attempts >= MAX_ATTEMPTS;
+      const cls = classifySendError(errCode, errMsg);
+      const attempts = (env.tentativas || 0) + (cls.countsAttempt ? 1 : 0);
+      // Terminal quando: a Meta diz que é inentregável (nao_entregavel) OU
+      // estourou o limite de tentativas de erros temporários.
+      let status: string;
+      let proxima: string | null;
+      if (cls.status === "nao_entregavel") {
+        status = "nao_entregavel";
+        proxima = null;
+      } else if (cls.countsAttempt && attempts >= MAX_ATTEMPTS) {
+        status = "falhou";
+        proxima = null;
+      } else {
+        status = "pendente";
+        proxima = new Date(Date.now() + (cls.retryMs ?? TRANSIENT_FALLBACK_MS)).toISOString();
+      }
       await sb
         .from("campanha_envios")
         .update({
           tentativas: attempts,
           erro: errMsg.slice(0, 500),
-          status: terminal ? "falhou" : "pendente",
-          proxima_tentativa: terminal
-            ? null
-            : new Date(Date.now() + RETRY_HOURS * 3600 * 1000).toISOString(),
+          status,
+          proxima_tentativa: proxima,
         })
         .eq("id", env.id);
       failed++;
     }
+
 
     // Throttle leve para respeitar o rate limit da Meta.
     await new Promise((r) => setTimeout(r, 150));
