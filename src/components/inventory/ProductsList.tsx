@@ -15,6 +15,7 @@ import { ProductEditDialog } from "./ProductEditDialog";
 
 import { ProductLabelPrintDialog } from "./ProductLabelPrintDialog";
 import { UnifiedProductsList } from "./UnifiedProductsList";
+import { LegacyProductsList } from "./LegacyProductsList";
 import { toast } from "sonner";
 
 interface Master {
