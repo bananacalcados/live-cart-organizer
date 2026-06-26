@@ -548,33 +548,19 @@ export async function processStoryReplyAutomation(
     }
     if (!triggered) continue;
 
-    // Cooldown per user
-    const cooldownTime = new Date(Date.now() - rule.cooldown_minutes * 60 * 1000).toISOString();
-    const { data: recentAction } = await supabase
-      .from("instagram_comment_actions")
-      .select("id")
-      .eq("rule_id", rule.id)
-      .eq("comment_id", reply.fromId)
-      .gte("created_at", cooldownTime)
-      .limit(1);
-    if (recentAction && recentAction.length > 0) {
-      console.log(`Cooldown active for story rule ${rule.name}, user ${reply.fromId}`);
+    // Atomic per-user cooldown for story replies too, preventing duplicate
+    // webhook deliveries from sending several DMs in the same minute.
+    if (!(await reserveUserCooldown(supabase, rule, reply.fromId))) {
       continue;
     }
-
-    // Dedup per story reply
-    const { data: existingAction } = await supabase
-      .from("instagram_comment_actions")
-      .select("id")
-      .eq("comment_id", dedupId)
-      .eq("rule_id", rule.id)
-      .limit(1);
-    if (existingAction && existingAction.length > 0) continue;
 
     const usernameClean = reply.username?.replace("@", "") || "";
 
     // ── Action: Send DM (direct, since story replies arrive in the inbox) ──
     if (rule.action_send_dm && rule.dm_message_text) {
+      const actionId = await reserveRuleAction(supabase, dedupId, rule.id, "dm");
+      if (!actionId) continue;
+
       try {
         const dmText = rule.dm_message_text
           .replace("{username}", usernameClean)
@@ -611,13 +597,7 @@ export async function processStoryReplyAutomation(
         const data = await res.json();
         const status = res.ok ? "sent" : "error";
 
-        await supabase.from("instagram_comment_actions").insert({
-          comment_id: dedupId,
-          rule_id: rule.id,
-          action_type: "dm",
-          status,
-          error_message: res.ok ? null : JSON.stringify(data),
-        });
+        await finishReservedAction(supabase, actionId, status, res.ok ? null : JSON.stringify(data));
 
         if (res.ok) {
           actions.push(`dm:${rule.name}`);
@@ -639,19 +619,16 @@ export async function processStoryReplyAutomation(
         }
       } catch (e) {
         console.error(`Error sending story DM:`, e);
+        await finishReservedAction(supabase, actionId, "error", e instanceof Error ? e.message : String(e));
       }
     }
 
     // ── Action: Trigger automation flow ──
     if (rule.action_trigger_automation && rule.automation_flow_id) {
-      try {
-        await supabase.from("instagram_comment_actions").insert({
-          comment_id: dedupId,
-          rule_id: rule.id,
-          action_type: "automation",
-          status: "triggered",
-        });
+      const actionId = await reserveRuleAction(supabase, dedupId, rule.id, "automation");
+      if (!actionId) continue;
 
+      try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
         const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
         await fetch(`${supabaseUrl}/functions/v1/automation-trigger-incoming`, {
@@ -672,10 +649,12 @@ export async function processStoryReplyAutomation(
             },
           }),
         });
+        await finishReservedAction(supabase, actionId, "triggered");
         actions.push(`automation:${rule.name}`);
         console.log(`✅ Story automation triggered via rule "${rule.name}"`);
       } catch (e) {
         console.error(`Error triggering story automation:`, e);
+        await finishReservedAction(supabase, actionId, "error", e instanceof Error ? e.message : String(e));
       }
     }
   }
