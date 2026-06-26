@@ -9,6 +9,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const DEFAULT_OWN_IG_USERNAMES = ['bananacalcados'];
+
+function normalizeIgUsername(value: string | null | undefined): string {
+  return (value || '').replace(/^@+/, '').trim().toLowerCase();
+}
+
+function isOwnInstagramUsername(username: string | null | undefined): boolean {
+  const normalized = normalizeIgUsername(username);
+  if (!normalized) return false;
+
+  const ownUsernames = [
+    Deno.env.get('META_INSTAGRAM_USERNAME'),
+    Deno.env.get('INSTAGRAM_USERNAME'),
+    Deno.env.get('IG_USERNAME'),
+    ...DEFAULT_OWN_IG_USERNAMES,
+  ].map(normalizeIgUsername).filter(Boolean);
+
+  return ownUsernames.includes(normalized);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -466,6 +486,10 @@ serve(async (req) => {
           const isLiveComment = change.field === 'live_comments' || mediaType === 'LIVE';
 
           if (!fromId) continue;
+          if (fromId === entry.id || isOwnInstagramUsername(username)) {
+            console.log(`Skipping own Instagram comment webhook from ${username || fromId}`);
+            continue;
+          }
 
           const senderName = username ? `@${username}` : null;
           const commentSurface = isLiveComment
