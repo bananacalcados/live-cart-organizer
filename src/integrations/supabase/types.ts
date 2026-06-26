@@ -17362,6 +17362,26 @@ export type Database = {
       }
       is_sync_in_progress: { Args: never; Returns: boolean }
       is_unified_inventory_enabled: { Args: never; Returns: boolean }
+      legacy_master_variants: {
+        Args: { p_master_id: string }
+        Returns: {
+          color: string
+          gtin: string
+          id: string
+          is_active: boolean
+          size: string
+          sku: string
+          stock: number
+        }[]
+      }
+      legacy_masters_summary: {
+        Args: { p_master_ids: string[] }
+        Returns: {
+          master_id: string
+          total_stock: number
+          variant_count: number
+        }[]
+      }
       list_campaign_audience: {
         Args: { p_filtro: Json; p_limit?: number; p_offset?: number }
         Returns: {
@@ -17435,6 +17455,10 @@ export type Database = {
         }[]
       }
       merge_master_duplicates: { Args: { p_limit?: number }; Returns: Json }
+      merge_selected_masters: {
+        Args: { p_source_ids: string[]; p_target_id: string }
+        Returns: Json
+      }
       merge_tiny_online_duplicates: {
         Args: never
         Returns: {
