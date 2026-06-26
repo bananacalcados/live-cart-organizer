@@ -22,6 +22,7 @@ import { classifySendError, extractMetaErrorCode } from "../_shared/meta-send-er
 
 const MAX_ATTEMPTS = 3;
 const BATCH = 80;
+const TRANSIENT_FALLBACK_MS = 30 * 60 * 1000; // 30min se o classificador não der retryMs
 
 const TOKEN_RE = /\{\{\s*([\w-]+)\s*\}\}/g;
 
