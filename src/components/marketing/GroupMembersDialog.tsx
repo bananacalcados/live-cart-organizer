@@ -60,17 +60,27 @@ const EVENT_META: Record<string, { label: string; icon: typeof UserPlus; cls: st
   demoted: { label: "rebaixado", icon: ArrowDownCircle, cls: "text-muted-foreground" },
 };
 
-/** Lead score 0–100 baseado em vínculo CRM, permanência, cargo e histórico. */
-function leadScore(m: Member, joinCounts: Map<string, number>): number {
+/** Pontos de engajamento (votar > comentar > reagir). Voto = intenção forte. */
+function engagementScore(a: Activity | undefined): number {
+  if (!a) return 0;
+  const poll = Math.min(25, a.poll_votes * 8);
+  const msg = Math.min(14, a.messages * 3);
+  const react = Math.min(8, a.reactions * 2);
+  return Math.min(35, poll + msg + react);
+}
+
+/** Lead score 0–100: vínculo CRM, permanência, cargo, histórico e ENGAJAMENTO. */
+function leadScore(m: Member, joinCounts: Map<string, number>, a: Activity | undefined): number {
   let s = 0;
-  if (m.status === "member") s += 25;
-  if (m.customer_id) s += 35;
-  if (m.is_admin) s += 10;
+  if (m.status === "member") s += 18;
+  if (m.customer_id) s += 25;
+  if (m.is_admin) s += 8;
   if (m.joined_at) {
     const days = (Date.now() - new Date(m.joined_at).getTime()) / 86_400_000;
-    if (days > 0) s += Math.min(20, Math.round(days / 3));
+    if (days > 0) s += Math.min(12, Math.round(days / 5));
   }
-  if ((joinCounts.get(m.phone) || 0) > 1) s += 10; // re-entrou = engajado
+  if ((joinCounts.get(m.phone) || 0) > 1) s += 6; // re-entrou = engajado
+  s += engagementScore(a); // votou/comentou/reagiu no grupo
   if (m.status === "left") s -= 25;
   return Math.max(0, Math.min(100, s));
 }
