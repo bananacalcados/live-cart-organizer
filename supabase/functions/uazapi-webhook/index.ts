@@ -572,7 +572,7 @@ serve(async (req) => {
     }).select("id").maybeSingle();
 
     if (insErr) {
-      if ((insErr as AnyObj).code === "23505") return ok({ dedup: true });
+      if ((insErr as unknown as AnyObj).code === "23505") return ok({ dedup: true });
       console.error("[uazapi-webhook] erro ao salvar incoming:", insErr);
     } else {
       scheduleMediaDownload(((insertedIncoming as AnyObj)?.id as string) ?? null);
