@@ -423,7 +423,8 @@ serve(async (req) => {
         senderName,
       });
       try {
-        (globalThis as AnyObj).EdgeRuntime?.waitUntil?.(task);
+        // @ts-ignore EdgeRuntime está disponível no runtime de edge functions da Supabase.
+        if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(task);
       } catch {
         // best-effort
       }
