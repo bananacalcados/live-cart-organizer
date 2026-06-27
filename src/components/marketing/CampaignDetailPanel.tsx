@@ -1003,7 +1003,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             </div>
             <p className="text-xs text-muted-foreground">{groupCount} grupos selecionados</p>
             <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
-              {filteredAllGroups.map(g => (
+              {filteredAllGroups.map(g => {
+                const inOtherCampaigns = getOtherCampaignsForGroup(g);
+                return (
                 <div key={g.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
                   <Checkbox checked={targetGroups.includes(g.id)} onCheckedChange={() => toggleGroupInCampaign(g.id)} />
                   {g.photo_url ? (
@@ -1017,9 +1019,27 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                     <p className="text-xs font-medium truncate">{g.name}</p>
                     <p className="text-[10px] text-muted-foreground">{g.participant_count}/{g.max_participants}</p>
                   </div>
+                  {inOtherCampaigns.length > 0 && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge variant="outline" className="text-[10px] shrink-0 border-amber-500/60 text-amber-600 dark:text-amber-400 gap-1 cursor-default">
+                            <AlertTriangle className="h-3 w-3" />
+                            Em {inOtherCampaigns.length} campanha{inOtherCampaigns.length > 1 ? 's' : ''}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs max-w-[220px]">
+                            Já usado em: {inOtherCampaigns.join(', ')}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                   {targetGroups.includes(g.id) && getGroupStatusBadge(g)}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </TabsContent>
 
