@@ -15769,6 +15769,105 @@ export type Database = {
           },
         ]
       }
+      whatsapp_group_member_events: {
+        Row: {
+          actor_phone: string | null
+          created_at: string
+          customer_id: string | null
+          display_name: string | null
+          event_type: string
+          group_id: string
+          id: string
+          instance_id: string | null
+          is_internal: boolean
+          jid: string | null
+          phone: string
+        }
+        Insert: {
+          actor_phone?: string | null
+          created_at?: string
+          customer_id?: string | null
+          display_name?: string | null
+          event_type: string
+          group_id: string
+          id?: string
+          instance_id?: string | null
+          is_internal?: boolean
+          jid?: string | null
+          phone: string
+        }
+        Update: {
+          actor_phone?: string | null
+          created_at?: string
+          customer_id?: string | null
+          display_name?: string | null
+          event_type?: string
+          group_id?: string
+          id?: string
+          instance_id?: string | null
+          is_internal?: boolean
+          jid?: string | null
+          phone?: string
+        }
+        Relationships: []
+      }
+      whatsapp_group_members: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          display_name: string | null
+          group_id: string
+          id: string
+          instance_id: string | null
+          internal_kind: string | null
+          is_admin: boolean
+          is_internal: boolean
+          jid: string | null
+          joined_at: string | null
+          last_event_at: string
+          left_at: string | null
+          phone: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          display_name?: string | null
+          group_id: string
+          id?: string
+          instance_id?: string | null
+          internal_kind?: string | null
+          is_admin?: boolean
+          is_internal?: boolean
+          jid?: string | null
+          joined_at?: string | null
+          last_event_at?: string
+          left_at?: string | null
+          phone: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          display_name?: string | null
+          group_id?: string
+          id?: string
+          instance_id?: string | null
+          internal_kind?: string | null
+          is_admin?: boolean
+          is_internal?: boolean
+          jid?: string | null
+          joined_at?: string | null
+          last_event_at?: string
+          left_at?: string | null
+          phone?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       whatsapp_group_snapshots: {
         Row: {
           group_id: string
