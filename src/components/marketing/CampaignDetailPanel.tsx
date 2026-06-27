@@ -209,7 +209,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setAllGroups(data || []);
   }, []);
 
-  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchAllGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchAllGroups]);
+  // Grupos já usados em OUTRAS campanhas (para sinalizar duplicidade)
+  const [otherCampaignGroups, setOtherCampaignGroups] = useState<{ id: string; name: string; target_groups: string[] }[]>([]);
+  const fetchOtherCampaignGroups = useCallback(async () => {
+    const { data } = await supabase.from('group_campaigns')
+      .select('id, name, target_groups')
+      .neq('id', campaignId);
+    setOtherCampaignGroups((data || []) as any);
+  }, [campaignId]);
+
+  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchAllGroups(); fetchOtherCampaignGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchAllGroups, fetchOtherCampaignGroups]);
 
   // Auto-refresh messages list to reflect server-side cron dispatches
   useEffect(() => {
