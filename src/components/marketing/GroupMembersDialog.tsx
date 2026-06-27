@@ -259,6 +259,15 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
           <StatBox label="Saíram" value={stats.left} icon={UserMinus} cls="text-red-500" />
         </div>
 
+        {/* Engajamento (votos / comentários / reações) */}
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="text-muted-foreground">Engajamento:</span>
+          <Badge variant="outline" className="gap-1"><BarChart3 className="h-3 w-3 text-violet-500" />{stats.votes} votos</Badge>
+          <Badge variant="outline" className="gap-1"><MessageCircle className="h-3 w-3 text-sky-500" />{stats.msgs} comentários</Badge>
+          <Badge variant="outline" className="gap-1"><Heart className="h-3 w-3 text-rose-500" />{stats.reacts} reações</Badge>
+          <Badge variant="outline" className="gap-1"><Flame className="h-3 w-3 text-amber-500" />{stats.engaged} engajados</Badge>
+        </div>
+
         <Tabs defaultValue="members">
           <TabsList>
             <TabsTrigger value="members" className="gap-1"><Flame className="h-3.5 w-3.5" />Lead Scoring</TabsTrigger>
