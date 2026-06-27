@@ -26,6 +26,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Calendar } from "@/components/ui/calendar";
 import { ScheduledMessageForm, type ScheduledMessageData } from "./ScheduledMessageForm";
 import { CampaignBulkSettings } from "./CampaignBulkSettings";
@@ -209,7 +210,16 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     setAllGroups(data || []);
   }, []);
 
-  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchAllGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchAllGroups]);
+  // Grupos já usados em OUTRAS campanhas (para sinalizar duplicidade)
+  const [otherCampaignGroups, setOtherCampaignGroups] = useState<{ id: string; name: string; target_groups: string[] }[]>([]);
+  const fetchOtherCampaignGroups = useCallback(async () => {
+    const { data } = await supabase.from('group_campaigns')
+      .select('id, name, target_groups')
+      .neq('id', campaignId);
+    setOtherCampaignGroups((data || []) as any);
+  }, [campaignId]);
+
+  useEffect(() => { fetchCampaign(); fetchMessages(); fetchLinks(); fetchVariables(); fetchAllGroups(); fetchOtherCampaignGroups(); }, [fetchCampaign, fetchMessages, fetchLinks, fetchVariables, fetchAllGroups, fetchOtherCampaignGroups]);
 
   // Auto-refresh messages list to reflect server-side cron dispatches
   useEffect(() => {
@@ -822,6 +832,34 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     return Array.from(byDigits.values());
   })();
 
+  // Mapeia os DÍGITOS do grupo -> nomes de OUTRAS campanhas que já o utilizam.
+  // Usa dígitos do JID para casar mesmo quando o grupo está salvo em ids/instâncias diferentes.
+  const groupDigitsToOtherCampaigns = useMemo(() => {
+    // id (UUID) do whatsapp_groups -> dígitos do JID
+    const idToDigits = new Map<string, string>();
+    for (const g of allGroups) {
+      const digits = String(g.group_id || g.id || "").replace(/\D/g, "") || g.id;
+      idToDigits.set(g.id, digits);
+    }
+    const map = new Map<string, string[]>();
+    for (const camp of otherCampaignGroups) {
+      const ids: string[] = Array.isArray(camp.target_groups) ? camp.target_groups : [];
+      for (const gid of ids) {
+        const digits = idToDigits.get(gid);
+        if (!digits) continue;
+        const arr = map.get(digits) || [];
+        if (!arr.includes(camp.name)) arr.push(camp.name);
+        map.set(digits, arr);
+      }
+    }
+    return map;
+  }, [allGroups, otherCampaignGroups]);
+
+  const getOtherCampaignsForGroup = (g: any): string[] => {
+    const digits = String(g.group_id || g.id || "").replace(/\D/g, "") || g.id;
+    return groupDigitsToOtherCampaigns.get(digits) || [];
+  };
+
   const filteredAllGroups = dedupedAllGroups.filter(g => {
     if (!groupSearch) return true;
     return g.name?.toLowerCase().includes(groupSearch.toLowerCase());
@@ -966,7 +1004,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
             </div>
             <p className="text-xs text-muted-foreground">{groupCount} grupos selecionados</p>
             <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
-              {filteredAllGroups.map(g => (
+              {filteredAllGroups.map(g => {
+                const inOtherCampaigns = getOtherCampaignsForGroup(g);
+                return (
                 <div key={g.id} className="flex items-center gap-2 p-2 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
                   <Checkbox checked={targetGroups.includes(g.id)} onCheckedChange={() => toggleGroupInCampaign(g.id)} />
                   {g.photo_url ? (
@@ -980,9 +1020,27 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                     <p className="text-xs font-medium truncate">{g.name}</p>
                     <p className="text-[10px] text-muted-foreground">{g.participant_count}/{g.max_participants}</p>
                   </div>
+                  {inOtherCampaigns.length > 0 && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge variant="outline" className="text-[10px] shrink-0 border-amber-500/60 text-amber-600 dark:text-amber-400 gap-1 cursor-default">
+                            <AlertTriangle className="h-3 w-3" />
+                            Em {inOtherCampaigns.length} campanha{inOtherCampaigns.length > 1 ? 's' : ''}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs max-w-[220px]">
+                            Já usado em: {inOtherCampaigns.join(', ')}
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
                   {targetGroups.includes(g.id) && getGroupStatusBadge(g)}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </TabsContent>
 
