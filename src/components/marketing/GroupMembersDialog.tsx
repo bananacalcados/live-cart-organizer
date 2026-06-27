@@ -210,13 +210,21 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
 
   const stats = useMemo(() => {
     const real = members.filter((m) => !m.is_internal);
+    let votes = 0, msgs = 0, reacts = 0, engaged = 0;
+    for (const m of real) {
+      const a = activity.get(m.phone);
+      if (!a) continue;
+      votes += a.poll_votes; msgs += a.messages; reacts += a.reactions;
+      if (a.total > 0) engaged++;
+    }
     return {
       current: real.filter((m) => m.status === "member").length,
       customers: real.filter((m) => m.status === "member" && m.customer_id).length,
       admins: real.filter((m) => m.status === "member" && m.is_admin).length,
       left: real.filter((m) => m.status === "left").length,
+      votes, msgs, reacts, engaged,
     };
-  }, [members]);
+  }, [members, activity]);
 
   const visibleEvents = events.filter((e) => showInternal || !e.is_internal);
 
