@@ -831,6 +831,34 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     return Array.from(byDigits.values());
   })();
 
+  // Mapeia os DÍGITOS do grupo -> nomes de OUTRAS campanhas que já o utilizam.
+  // Usa dígitos do JID para casar mesmo quando o grupo está salvo em ids/instâncias diferentes.
+  const groupDigitsToOtherCampaigns = useMemo(() => {
+    // id (UUID) do whatsapp_groups -> dígitos do JID
+    const idToDigits = new Map<string, string>();
+    for (const g of allGroups) {
+      const digits = String(g.group_id || g.id || "").replace(/\D/g, "") || g.id;
+      idToDigits.set(g.id, digits);
+    }
+    const map = new Map<string, string[]>();
+    for (const camp of otherCampaignGroups) {
+      const ids: string[] = Array.isArray(camp.target_groups) ? camp.target_groups : [];
+      for (const gid of ids) {
+        const digits = idToDigits.get(gid);
+        if (!digits) continue;
+        const arr = map.get(digits) || [];
+        if (!arr.includes(camp.name)) arr.push(camp.name);
+        map.set(digits, arr);
+      }
+    }
+    return map;
+  }, [allGroups, otherCampaignGroups]);
+
+  const getOtherCampaignsForGroup = (g: any): string[] => {
+    const digits = String(g.group_id || g.id || "").replace(/\D/g, "") || g.id;
+    return groupDigitsToOtherCampaigns.get(digits) || [];
+  };
+
   const filteredAllGroups = dedupedAllGroups.filter(g => {
     if (!groupSearch) return true;
     return g.name?.toLowerCase().includes(groupSearch.toLowerCase());
