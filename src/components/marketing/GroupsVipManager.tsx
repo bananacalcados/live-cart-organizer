@@ -102,6 +102,7 @@ export function GroupsVipManager() {
   const [renameValue, setRenameValue] = useState("");
   const [isRenamingCampaign, setIsRenamingCampaign] = useState(false);
   const [settingsGroup, setSettingsGroup] = useState<WhatsAppGroup | null>(null);
+  const [membersGroup, setMembersGroup] = useState<WhatsAppGroup | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
   const [instanceFilter, setInstanceFilter] = useState("all");
