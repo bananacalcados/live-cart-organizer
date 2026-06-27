@@ -75,24 +75,34 @@ export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttr
   const [isLoading, setIsLoading] = useState(false);
   const [loadedWindow, setLoadedWindow] = useState<number | null>(null);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const fetchAttribution = async (days: number) => {
     setWindowDays(days);
     setIsLoading(true);
     setExpandedIndex(null);
+    setErrorMsg(null);
     try {
       const { data, error } = await supabase.functions.invoke("dispatch-attribution", {
         body: { dispatch_id: dispatchId, window_days: days },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       setResult(data);
       setLoadedWindow(days);
     } catch (err) {
       console.error("Attribution error:", err);
+      setResult(null);
+      setLoadedWindow(null);
+      setErrorMsg(
+        (err as Error)?.message ||
+          "Não foi possível calcular a atribuição. Tente novamente."
+      );
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="space-y-3">
