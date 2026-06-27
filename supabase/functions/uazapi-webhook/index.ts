@@ -382,6 +382,52 @@ serve(async (req) => {
       asString(message.senderName) || asString(message.groupName) || null;
     const statusRaw = asString(message.status);
     const status = statusRaw ? statusRaw.toLowerCase() : fromMe ? "sent" : "received";
+    const messageType = (asString(message.messageType) || asString((message as AnyObj).type) || "").toLowerCase();
+
+    /**
+     * Classifica o ENGAJAMENTO de um membro num grupo (voto/reação/comentário).
+     * Roda em background — nunca segura o webhook nem o derruba.
+     */
+    const scheduleGroupActivity = (memberPhone: string | null) => {
+      if (!isGroup || fromMe || !memberPhone) return;
+      // Reação: messageType "reactionmessage" OU campo reaction no payload.
+      const reactionEmoji =
+        asString((message as AnyObj).reaction) ||
+        asString(((message as AnyObj).reaction as AnyObj)?.text) ||
+        null;
+      const isReaction = messageType.includes("reaction") || Boolean(reactionEmoji);
+      // Enquete (voto): messageType "pollupdatemessage" OU campo poll no payload.
+      const isPoll = messageType.includes("poll") || Boolean((message as AnyObj).poll);
+
+      let activityType: GroupActivityType;
+      let content: string | null;
+      if (isPoll) {
+        activityType = "poll_vote";
+        content = displayMessage || asString((message as AnyObj).poll) || null;
+      } else if (isReaction) {
+        activityType = "reaction";
+        content = reactionEmoji || displayMessage || null;
+      } else {
+        activityType = "group_message";
+        content = displayMessage || null;
+      }
+
+      const task = recordGroupActivity(supabase, {
+        groupId: chatid,
+        instanceId: numberId,
+        phone: memberPhone,
+        jid: asString(message.sender_pn) || asString(message.sender) || null,
+        activityType,
+        messageId,
+        content,
+        senderName,
+      });
+      try {
+        (globalThis as AnyObj).EdgeRuntime?.waitUntil?.(task);
+      } catch {
+        // best-effort
+      }
+    };
 
     // Diagnostic: log how incoming (customer) messages were routed to an instance
     if (!fromMe && !isGroup) {
