@@ -134,11 +134,26 @@ export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttr
         </div>
       )}
 
-      {!isLoading && !result && (
+      {!isLoading && errorMsg && (
+        <Card className="p-4 text-center text-sm space-y-2 border-destructive/40">
+          <div className="text-destructive">{errorMsg}</div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-xs"
+            onClick={() => fetchAttribution(windowDays)}
+          >
+            Tentar novamente
+          </Button>
+        </Card>
+      )}
+
+      {!isLoading && !errorMsg && !result && (
         <Card className="p-4 text-center text-sm text-muted-foreground">
           Selecione uma janela de atribuição acima para ver as vendas atribuídas a este disparo.
         </Card>
       )}
+
 
       {!isLoading && result && (
         <>
