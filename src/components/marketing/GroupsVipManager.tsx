@@ -26,6 +26,7 @@ import { VipStrategyPanel } from "./VipStrategyPanel";
 import { CreateGroupDialog } from "./CreateGroupDialog";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { GroupMembersDialog } from "./GroupMembersDialog";
 
 interface WhatsAppGroup {
   id: string;
