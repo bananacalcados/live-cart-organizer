@@ -355,6 +355,71 @@ serve(async (req) => {
           results,
         });
       }
+      case "syncMembers": {
+        // Tira a "foto inicial" dos membros atuais de cada grupo via /group/info,
+        // populando whatsapp_group_members (estado atual) para o lead scoring.
+        const instanceId = String(body.whatsapp_number_id || "");
+        if (!instanceId) return json({ error: "whatsapp_number_id obrigatório" }, 400);
+
+        const supabase = createClient(
+          Deno.env.get("SUPABASE_URL")!,
+          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        );
+
+        let query = supabase
+          .from("whatsapp_groups")
+          .select("id, group_id, name")
+          .eq("instance_id", instanceId);
+        if (Array.isArray(body.groupIds) && body.groupIds.length > 0) {
+          query = query.in("id", body.groupIds);
+        } else if (body.vipOnly) {
+          query = query.eq("is_vip", true);
+        }
+        const { data: dbGroups, error: dbErr } = await query;
+        if (dbErr) return json({ error: dbErr.message }, 500);
+
+        const startedAt = Date.now();
+        const TIME_BUDGET_MS = 110_000;
+        const results: any[] = [];
+        let processed = 0;
+
+        const extractParticipants = (raw: any): any[] =>
+          Array.isArray(raw?.Participants) ? raw.Participants
+            : Array.isArray(raw?.participants) ? raw.participants
+              : Array.isArray(raw?.group?.participants) ? raw.group.participants
+                : Array.isArray(raw?.data?.participants) ? raw.data.participants
+                  : [];
+
+        for (const g of dbGroups || []) {
+          if (Date.now() - startedAt > TIME_BUDGET_MS) break;
+          const gjid = groupJid(String(g.group_id));
+          const info = await uazapiInstance("/group/info", token, {
+            method: "POST",
+            body: { groupjid: gjid },
+          });
+          if (!info.ok) {
+            results.push({ id: g.id, name: g.name, error: true });
+            continue;
+          }
+          const participants = extractParticipants(info.data);
+          try {
+            const stats = await snapshotGroupMembers(supabase, String(g.group_id), participants, instanceId);
+            results.push({ id: g.id, name: g.name, ...stats });
+          } catch (e) {
+            results.push({ id: g.id, name: g.name, error: true, message: (e as Error).message });
+          }
+          processed++;
+          await new Promise((res) => setTimeout(res, 250));
+        }
+
+        return json({
+          success: true,
+          processed,
+          total: (dbGroups || []).length,
+          remaining: Math.max(0, (dbGroups || []).length - processed),
+          results,
+        });
+      }
       default:
         return json({ error: `Ação desconhecida: ${action}` }, 400);
     }
