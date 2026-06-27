@@ -32,6 +32,12 @@ Deno.serve(async (req) => {
       .eq("id", dispatch_id)
       .single();
 
+    if (dErr || !dispatch) {
+      return new Response(JSON.stringify({ error: "Dispatch not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     let whatsapp_label: string | null = null;
     let whatsapp_phone: string | null = null;
     if (dispatch?.whatsapp_number_id) {
@@ -39,17 +45,11 @@ Deno.serve(async (req) => {
         .from("whatsapp_numbers")
         .select("label, phone_display")
         .eq("id", dispatch.whatsapp_number_id)
-        .single();
+        .maybeSingle();
       if (wn) {
         whatsapp_label = wn.label;
         whatsapp_phone = wn.phone_display;
       }
-    }
-
-    if (dErr || !dispatch) {
-      return new Response(JSON.stringify({ error: "Dispatch not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
     }
 
     // 2. Get ALL recipients (paginated)
@@ -69,30 +69,63 @@ Deno.serve(async (req) => {
       if (recipients.length >= 50000) break;
     }
 
+    const dispatchDate = dispatch.created_at || dispatch.started_at;
+    const windowEnd = new Date(new Date(dispatchDate).getTime() + window_days * 86400000).toISOString();
+    const category = (dispatch.template_category || "MARKETING").toUpperCase();
+    const costPerMsg = dispatch.cost_per_message != null
+      ? Number(dispatch.cost_per_message)
+      : (category === "UTILITY" ? 0.05 : 0.40);
+    const baseCost = costPerMsg * (dispatch.sent_count || 0);
+
     if (!recipients || recipients.length === 0) {
       return new Response(JSON.stringify({
         buyers: [], total_revenue: 0, total_buyers: 0, total_orders: 0,
-        cost: 0, cost_per_message: 0, template_category: "MARKETING",
-        template_name: null, whatsapp_label: null, whatsapp_phone: null,
-        roi: null, roas: null, window_days,
+        cost: baseCost, cost_per_message: costPerMsg, template_category: category,
+        template_name: dispatch.template_name || null, whatsapp_label, whatsapp_phone,
+        roi: null, roas: null, window_days, dispatch_date: dispatchDate, window_end: windowEnd,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const dispatchDate = dispatch.created_at || dispatch.started_at;
-    const windowEnd = new Date(new Date(dispatchDate).getTime() + window_days * 86400000).toISOString();
-
-    // Build phone suffix map (DDD + last 8 digits)
+    // Build phone suffix map (DDD + last 8 digits) for recipients of THIS dispatch
     const phoneSuffixes = new Map<string, string>();
     const recipientNames = new Map<string, string>();
     for (const r of recipients) {
       const key = extractPhoneKey(r.phone);
       if (!key) continue;
-      const suffix = key; // DDD + 8 digits
-      phoneSuffixes.set(suffix, r.phone);
-      if (r.recipient_name) recipientNames.set(suffix, r.recipient_name);
+      phoneSuffixes.set(key, r.phone);
+      if (r.recipient_name) recipientNames.set(key, r.recipient_name);
     }
 
-    // 3. Dedup with newer dispatches
+    // ===== Pre-fetch ALL pos_customers ONCE (paginated) =====
+    // Built once and reused for current-window matching AND historical lookups.
+    // (Previously re-fetched inside a per-buyer loop AND capped at 1000 rows,
+    //  which both slowed the function and silently dropped customers > 1000.)
+    const custIdToInfo = new Map<string, { name: string; whatsapp: string; suffix: string }>();
+    const suffixToCustIds = new Map<string, string[]>();
+    {
+      let cPage = 0;
+      while (true) {
+        const { data: batch } = await supabase
+          .from("pos_customers")
+          .select("id, name, whatsapp")
+          .not("whatsapp", "is", null)
+          .range(cPage * PAGE_SIZE, (cPage + 1) * PAGE_SIZE - 1);
+        if (!batch || batch.length === 0) break;
+        for (const c of batch) {
+          const suffix = extractPhoneKey(c.whatsapp);
+          if (!suffix) continue;
+          custIdToInfo.set(c.id, { name: c.name || "", whatsapp: c.whatsapp, suffix });
+          const arr = suffixToCustIds.get(suffix) || [];
+          arr.push(c.id);
+          suffixToCustIds.set(suffix, arr);
+        }
+        if (batch.length < PAGE_SIZE) break;
+        cPage++;
+      }
+    }
+
+    // 3. Dedup with newer dispatches (a buyer is attributed to the most recent
+    //    dispatch that reached them before the purchase)
     const { data: laterDispatches } = await supabase
       .from("dispatch_history")
       .select("id, created_at")
@@ -105,7 +138,6 @@ Deno.serve(async (req) => {
     const dedupMap = new Map<string, string>();
     if (laterDispatches && laterDispatches.length > 0) {
       for (const ld of laterDispatches) {
-        // Paginate ALL recipients of later dispatches (fix for >1000 recipients)
         let ldPage = 0;
         while (true) {
           const { data: ldRecipients } = await supabase
@@ -126,76 +158,76 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Helper: did a later dispatch supersede attribution for this purchase?
+    const supersededByLater = (suffix: string, purchaseISO: string) => {
+      const laterDate = dedupMap.get(suffix);
+      return !!laterDate && new Date(purchaseISO) >= new Date(laterDate);
+    };
+
     // 4. Query sales from ALL sources
     const buyers: BuyerResult[] = [];
-    const countedPhones = new Set<string>();
-    // Track suffixes that matched for previous purchase lookup
+    const countedKeys = new Set<string>();
     const matchedSuffixes = new Set<string>();
 
-    // ===== GLOBAL RECURRENCE CHECK =====
-    // Pre-fetch zoppy_customers data for ALL recipients at once (batch)
-    // We'll check total_orders and first_purchase_at
-    const globalRecurrenceMap = new Map<string, boolean>(); // suffix -> is_first_purchase
-
-    // 4a. POS Sales
+    // ─── 4a. POS Sales (physical stores) ───
+    // Match via customer_id → pos_customers.whatsapp OR directly via
+    // pos_sales.customer_phone (catches sales whose customer has no whatsapp
+    // on file, or sales without a linked customer record).
     let posSales: any[] = [];
-    let posPage = 0;
-    while (true) {
-      const { data: batch } = await supabase
-        .from("pos_sales")
-        .select("id, total, created_at, customer_id, status, store_id, seller_id")
-        .gte("created_at", dispatchDate)
-        .lte("created_at", windowEnd)
-        .in("status", ["completed", "paid"])
-        .range(posPage * 1000, (posPage + 1) * 1000 - 1);
-      if (!batch || batch.length === 0) break;
-      posSales = posSales.concat(batch);
-      if (batch.length < 1000) break;
-      posPage++;
+    {
+      let posPage = 0;
+      while (true) {
+        const { data: batch } = await supabase
+          .from("pos_sales")
+          .select("id, total, created_at, customer_id, customer_phone, customer_name, status, store_id, seller_id")
+          .gte("created_at", dispatchDate)
+          .lte("created_at", windowEnd)
+          .in("status", ["completed", "paid"])
+          .range(posPage * PAGE_SIZE, (posPage + 1) * PAGE_SIZE - 1);
+        if (!batch || batch.length === 0) break;
+        posSales = posSales.concat(batch);
+        if (batch.length < PAGE_SIZE) break;
+        posPage++;
+      }
     }
 
     if (posSales.length > 0) {
-      const customerIds = [...new Set(posSales.filter(s => s.customer_id).map(s => s.customer_id))];
-      const storeIds = [...new Set(posSales.filter(s => s.store_id).map(s => s.store_id))];
-      const sellerIds = [...new Set(posSales.filter(s => s.seller_id).map(s => s.seller_id))];
-
-      const customerMap = new Map<string, { name: string; whatsapp: string; suffix: string }>();
-      for (let i = 0; i < customerIds.length; i += 100) {
-        const batch = customerIds.slice(i, i + 100);
-        const { data: customers } = await supabase
-          .from("pos_customers")
-          .select("id, name, whatsapp")
-          .in("id", batch);
-        if (customers) {
-          for (const c of customers) {
-            if (c.whatsapp) {
-              const suffix = extractPhoneKey(c.whatsapp);
-              if (suffix) customerMap.set(c.id, { name: c.name || "", whatsapp: c.whatsapp, suffix });
-            }
-          }
+      // Resolve each sale's matching recipient suffix (if any) up-front
+      type PosMatch = { suffix: string; name: string; phone: string };
+      const saleMatch = new Map<string, PosMatch>(); // sale.id -> match
+      for (const sale of posSales) {
+        let suffix: string | null = null;
+        let name = sale.customer_name || "";
+        let phone = sale.customer_phone || "";
+        // Prefer linked customer record (has reliable whatsapp + name)
+        if (sale.customer_id && custIdToInfo.has(sale.customer_id)) {
+          const c = custIdToInfo.get(sale.customer_id)!;
+          suffix = c.suffix;
+          name = name || c.name;
+          phone = c.whatsapp || phone;
         }
+        // Fallback: match directly on the phone stored on the sale
+        if (!suffix && sale.customer_phone) {
+          suffix = extractPhoneKey(sale.customer_phone);
+        }
+        if (!suffix || !phoneSuffixes.has(suffix)) continue;
+        if (supersededByLater(suffix, sale.created_at)) continue;
+        saleMatch.set(sale.id, { suffix, name, phone });
       }
+
+      const matchedSaleIds = [...saleMatch.keys()];
+      const storeIds = [...new Set(posSales.filter(s => s.store_id && saleMatch.has(s.id)).map(s => s.store_id))];
+      const sellerIds = [...new Set(posSales.filter(s => s.seller_id && saleMatch.has(s.id)).map(s => s.seller_id))];
 
       const storeMap = new Map<string, string>();
       if (storeIds.length > 0) {
         const { data: stores } = await supabase.from("pos_stores").select("id, name").in("id", storeIds);
         if (stores) for (const s of stores) storeMap.set(s.id, s.name);
       }
-
       const sellerMap = new Map<string, string>();
       if (sellerIds.length > 0) {
         const { data: sellers } = await supabase.from("pos_sellers").select("id, name").in("id", sellerIds);
         if (sellers) for (const s of sellers) sellerMap.set(s.id, s.name);
-      }
-
-      const matchedSaleIds: string[] = [];
-      for (const sale of posSales) {
-        if (!sale.customer_id) continue;
-        const customer = customerMap.get(sale.customer_id);
-        if (!customer || !phoneSuffixes.has(customer.suffix)) continue;
-        const laterDate = dedupMap.get(customer.suffix);
-        if (laterDate && new Date(sale.created_at) >= new Date(laterDate)) continue;
-        matchedSaleIds.push(sale.id);
       }
 
       const saleItemsMap = new Map<string, BuyerProduct[]>();
@@ -219,33 +251,28 @@ Deno.serve(async (req) => {
       }
 
       for (const sale of posSales) {
-        if (!sale.customer_id) continue;
-        const customer = customerMap.get(sale.customer_id);
-        if (!customer || !phoneSuffixes.has(customer.suffix)) continue;
-        const laterDate = dedupMap.get(customer.suffix);
-        if (laterDate && new Date(sale.created_at) >= new Date(laterDate)) continue;
-
-        const key = customer.suffix + "_pos_" + sale.id;
-        if (!countedPhones.has(key)) {
-          countedPhones.add(key);
-          matchedSuffixes.add(customer.suffix);
-          buyers.push({
-            name: customer.name || recipientNames.get(customer.suffix) || customer.whatsapp,
-            phone: customer.whatsapp,
-            total: sale.total || 0,
-            source: "PDV",
-            purchased_at: sale.created_at,
-            store_name: storeMap.get(sale.store_id) || null,
-            seller_name: sellerMap.get(sale.seller_id) || null,
-            products: saleItemsMap.get(sale.id) || [],
-            is_first_purchase: false, // Will be set later
-            previous_purchases: [],
-          });
-        }
+        const m = saleMatch.get(sale.id);
+        if (!m) continue;
+        const key = m.suffix + "_pos_" + sale.id;
+        if (countedKeys.has(key)) continue;
+        countedKeys.add(key);
+        matchedSuffixes.add(m.suffix);
+        buyers.push({
+          name: m.name || recipientNames.get(m.suffix) || m.phone,
+          phone: m.phone || m.suffix,
+          total: sale.total || 0,
+          source: "PDV",
+          purchased_at: sale.created_at,
+          store_name: storeMap.get(sale.store_id) || null,
+          seller_name: sellerMap.get(sale.seller_id) || null,
+          products: saleItemsMap.get(sale.id) || [],
+          is_first_purchase: false,
+          previous_purchases: [],
+        });
       }
     }
 
-    // 4b. Shopify/Online sales (zoppy_sales)
+    // ─── 4b. Shopify/Online sales (zoppy_sales — site / Tiny) ───
     const { data: zoppySales } = await supabase
       .from("zoppy_sales")
       .select("id, total, customer_phone, customer_name, completed_at, status, line_items")
@@ -258,30 +285,28 @@ Deno.serve(async (req) => {
         if (!sale.customer_phone) continue;
         const suffix = extractPhoneKey(sale.customer_phone);
         if (!suffix || !phoneSuffixes.has(suffix)) continue;
-        const laterDate = dedupMap.get(suffix);
-        if (laterDate && new Date(sale.completed_at) >= new Date(laterDate)) continue;
+        if (supersededByLater(suffix, sale.completed_at)) continue;
 
         const key = suffix + "_zoppy_" + sale.id;
-        if (!countedPhones.has(key)) {
-          countedPhones.add(key);
-          matchedSuffixes.add(suffix);
-          buyers.push({
-            name: sale.customer_name || recipientNames.get(suffix) || sale.customer_phone,
-            phone: sale.customer_phone,
-            total: sale.total || 0,
-            source: "Shopify",
-            purchased_at: sale.completed_at,
-            store_name: null,
-            seller_name: null,
-            products: parseLineItems(sale.line_items),
-            is_first_purchase: false,
-            previous_purchases: [],
-          });
-        }
+        if (countedKeys.has(key)) continue;
+        countedKeys.add(key);
+        matchedSuffixes.add(suffix);
+        buyers.push({
+          name: sale.customer_name || recipientNames.get(suffix) || sale.customer_phone,
+          phone: sale.customer_phone,
+          total: sale.total || 0,
+          source: "Shopify",
+          purchased_at: sale.completed_at,
+          store_name: null,
+          seller_name: null,
+          products: parseLineItems(sale.line_items),
+          is_first_purchase: false,
+          previous_purchases: [],
+        });
       }
     }
 
-    // 4c. WhatsApp/Event orders (only truly paid & not cancelled)
+    // ─── 4c. WhatsApp/Event orders (only truly paid & not cancelled) ───
     const PAID_STAGES = ["paid", "shipped", "awaiting_shipment", "awaiting_shipping", "store_pickup", "awaiting_mototaxi", "awaiting_pickup", "completed"];
     const { data: orders } = await supabase
       .from("orders")
@@ -315,52 +340,37 @@ Deno.serve(async (req) => {
         if (!customer) continue;
         const suffix = extractPhoneKey(customer.whatsapp);
         if (!suffix || !phoneSuffixes.has(suffix)) continue;
-        const laterDate = dedupMap.get(suffix);
         const purchaseDate = order.paid_at || order.created_at;
-        if (laterDate && new Date(purchaseDate) >= new Date(laterDate)) continue;
+        if (supersededByLater(suffix, purchaseDate)) continue;
 
         const { items, total: orderTotal } = parseOrderProducts(order.products as any);
         const key = suffix + "_order_" + order.id;
-        if (!countedPhones.has(key)) {
-          countedPhones.add(key);
-          matchedSuffixes.add(suffix);
-          buyers.push({
-            name: customer.instagram || recipientNames.get(suffix) || customer.whatsapp,
-            phone: customer.whatsapp,
-            total: orderTotal,
-            source: "WhatsApp",
-            purchased_at: purchaseDate,
-            store_name: null,
-            seller_name: null,
-            products: items,
-            is_first_purchase: false,
-            previous_purchases: [],
-          });
-        }
+        if (countedKeys.has(key)) continue;
+        countedKeys.add(key);
+        matchedSuffixes.add(suffix);
+        buyers.push({
+          name: customer.instagram || recipientNames.get(suffix) || customer.whatsapp,
+          phone: customer.whatsapp,
+          total: orderTotal,
+          source: "WhatsApp",
+          purchased_at: purchaseDate,
+          store_name: null,
+          seller_name: null,
+          products: items,
+          is_first_purchase: false,
+          previous_purchases: [],
+        });
       }
     }
 
     // ===== 5. GLOBAL RECURRENCE + PREVIOUS PURCHASES =====
-    // For each matched suffix, gather ALL historical purchases from ALL sources
+    // For each matched suffix, gather historical purchases (before the dispatch).
     for (const suffix of matchedSuffixes) {
       const prevPurchases: PreviousPurchase[] = [];
       let hasAnyPrior = false;
 
-      // 5a. pos_sales history (all time before dispatch)
-      // Find customer IDs matching this suffix
-      const { data: posCustomers } = await supabase
-        .from("pos_customers")
-        .select("id, name, whatsapp")
-        .filter("whatsapp", "not.is", null);
-
-      const matchingCustIds: string[] = [];
-      if (posCustomers) {
-        for (const pc of posCustomers) {
-          const k = extractPhoneKey(pc.whatsapp);
-          if (k === suffix) matchingCustIds.push(pc.id);
-        }
-      }
-
+      // 5a. pos_sales history — via pre-built suffix→customerIds map (fast, complete)
+      const matchingCustIds = suffixToCustIds.get(suffix) || [];
       if (matchingCustIds.length > 0) {
         const { data: prevPos } = await supabase
           .from("pos_sales")
@@ -373,7 +383,6 @@ Deno.serve(async (req) => {
 
         if (prevPos && prevPos.length > 0) {
           hasAnyPrior = true;
-          // Fetch store/seller names
           const sIds = [...new Set(prevPos.filter(s => s.store_id).map(s => s.store_id))];
           const slIds = [...new Set(prevPos.filter(s => s.seller_id).map(s => s.seller_id))];
           const stMap = new Map<string, string>();
@@ -387,7 +396,6 @@ Deno.serve(async (req) => {
             if (sls) for (const s of sls) slMap.set(s.id, s.name);
           }
 
-          // Fetch items
           const prevSaleIds = prevPos.map(s => s.id);
           const prevItemsMap = new Map<string, BuyerProduct[]>();
           for (let i = 0; i < prevSaleIds.length; i += 50) {
@@ -448,7 +456,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 5c. Check zoppy_customers for ERP consolidated history
+      // 5c. Check crm_customers_v for ERP consolidated history
       if (!hasAnyPrior) {
         const { data: zCust } = await supabase
           .from("crm_customers_v")
@@ -459,7 +467,6 @@ Deno.serve(async (req) => {
         if (zCust && zCust.length > 0 && zCust[0].first_purchase_at &&
             new Date(zCust[0].first_purchase_at) < new Date(dispatchDate)) {
           hasAnyPrior = true;
-          // Add a synthetic entry for the ERP history
           prevPurchases.push({
             source: "CRM/ERP",
             purchased_at: zCust[0].first_purchase_at,
@@ -472,9 +479,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      // 5d. Also check pos_customers itself for historical flag (created_at before dispatch)
+      // 5d. Customer cadastrado no PDV antes do disparo
       if (!hasAnyPrior && matchingCustIds.length > 0) {
-        // Customer exists in POS but no sales found — still a known customer
         hasAnyPrior = true;
         prevPurchases.push({
           source: "PDV (cadastro)",
@@ -487,13 +493,9 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Sort previous purchases desc
       sortPurchasesDesc(prevPurchases);
 
-      // Set recurrence + previous purchases for all buyers with this suffix
       const isFirst = !hasAnyPrior;
-      globalRecurrenceMap.set(suffix, isFirst);
-
       for (const b of buyers) {
         const bSuffix = extractPhoneKey(b.phone);
         if (bSuffix === suffix) {
@@ -503,21 +505,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Sort by purchase date
+    // Sort by purchase date (most recent first)
     buyers.sort((a, b) => new Date(b.purchased_at).getTime() - new Date(a.purchased_at).getTime());
 
     const totalRevenue = buyers.reduce((sum, b) => sum + b.total, 0);
-    const uniqueBuyerPhones = new Set(buyers.map(b => {
-      const k = extractPhoneKey(b.phone);
-      return k || b.phone;
-    }));
+    const uniqueBuyerPhones = new Set(buyers.map(b => extractPhoneKey(b.phone) || b.phone));
 
-    const category = (dispatch.template_category || "MARKETING").toUpperCase();
-    // Use saved cost_per_message if set (manual override), otherwise derive from category
-    const costPerMsg = dispatch.cost_per_message != null
-      ? Number(dispatch.cost_per_message)
-      : (category === "UTILITY" ? 0.05 : 0.40);
-    const cost = costPerMsg * (dispatch.sent_count || 0);
+    const cost = baseCost;
     const roas = cost > 0 ? (totalRevenue / cost).toFixed(2) : null;
 
     return new Response(JSON.stringify({
@@ -539,7 +533,7 @@ Deno.serve(async (req) => {
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (error) {
     console.error("dispatch-attribution error:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: (error as Error).message }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

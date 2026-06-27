@@ -75,24 +75,34 @@ export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttr
   const [isLoading, setIsLoading] = useState(false);
   const [loadedWindow, setLoadedWindow] = useState<number | null>(null);
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const fetchAttribution = async (days: number) => {
     setWindowDays(days);
     setIsLoading(true);
     setExpandedIndex(null);
+    setErrorMsg(null);
     try {
       const { data, error } = await supabase.functions.invoke("dispatch-attribution", {
         body: { dispatch_id: dispatchId, window_days: days },
       });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       setResult(data);
       setLoadedWindow(days);
     } catch (err) {
       console.error("Attribution error:", err);
+      setResult(null);
+      setLoadedWindow(null);
+      setErrorMsg(
+        (err as Error)?.message ||
+          "Não foi possível calcular a atribuição. Tente novamente."
+      );
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="space-y-3">
@@ -124,11 +134,26 @@ export function DispatchAttributionPanel({ dispatchId, sentCount }: DispatchAttr
         </div>
       )}
 
-      {!isLoading && !result && (
+      {!isLoading && errorMsg && (
+        <Card className="p-4 text-center text-sm space-y-2 border-destructive/40">
+          <div className="text-destructive">{errorMsg}</div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-xs"
+            onClick={() => fetchAttribution(windowDays)}
+          >
+            Tentar novamente
+          </Button>
+        </Card>
+      )}
+
+      {!isLoading && !errorMsg && !result && (
         <Card className="p-4 text-center text-sm text-muted-foreground">
           Selecione uma janela de atribuição acima para ver as vendas atribuídas a este disparo.
         </Card>
       )}
+
 
       {!isLoading && result && (
         <>
