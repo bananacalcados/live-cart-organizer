@@ -602,7 +602,7 @@ export function GroupsVipManager() {
   );
 }
 
-function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings }: {
+function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings, onOpenMembers }: {
   group: WhatsAppGroup;
   isSelected: boolean;
   instance: InstanceInfo | null;
@@ -611,6 +611,7 @@ function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onTog
   onToggleVip: () => void;
   onToggleFull: () => void;
   onOpenSettings: () => void;
+  onOpenMembers: () => void;
 }) {
   const instanceLabel = instance ? instance.label : (group.instance_id ? "Instância desconhecida" : "Sem instância");
   const ddd33 = group.ddd33_count;
