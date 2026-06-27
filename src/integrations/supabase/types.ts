@@ -17928,6 +17928,57 @@ export type Database = {
         Args: { p_instagram: string; p_phone: string; p_tag: string }
         Returns: undefined
       }
+      vip_groups_interaction_ranking: {
+        Args: { p_days?: number }
+        Returns: {
+          active_members: number
+          group_id: string
+          member_count: number
+          messages: number
+          name: string
+          photo_url: string
+          poll_votes: number
+          reactions: number
+          total_activities: number
+        }[]
+      }
+      vip_groups_overview: {
+        Args: never
+        Returns: {
+          groups_with_activity: number
+          total_activities: number
+          total_groups: number
+          total_members: number
+          total_memberships: number
+        }[]
+      }
+      vip_groups_sales_ranking: {
+        Args: { p_days?: number; p_window_days?: number }
+        Returns: {
+          buyers: number
+          group_id: string
+          name: string
+          photo_url: string
+          revenue: number
+          sales_count: number
+        }[]
+      }
+      vip_leads_ranking: {
+        Args: { p_days?: number; p_limit?: number }
+        Returns: {
+          customer_id: string
+          customer_name: string
+          display_name: string
+          groups_count: number
+          last_activity_at: string
+          messages: number
+          phone: string
+          poll_votes: number
+          reactions: number
+          source_origins: Json
+          total_activities: number
+        }[]
+      }
       wa_status_rank: { Args: { s: string }; Returns: number }
     }
     Enums: {
