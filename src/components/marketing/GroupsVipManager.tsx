@@ -26,6 +26,7 @@ import { VipStrategyPanel } from "./VipStrategyPanel";
 import { CreateGroupDialog } from "./CreateGroupDialog";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { GroupMembersDialog } from "./GroupMembersDialog";
 
 interface WhatsAppGroup {
   id: string;
@@ -101,6 +102,7 @@ export function GroupsVipManager() {
   const [renameValue, setRenameValue] = useState("");
   const [isRenamingCampaign, setIsRenamingCampaign] = useState(false);
   const [settingsGroup, setSettingsGroup] = useState<WhatsAppGroup | null>(null);
+  const [membersGroup, setMembersGroup] = useState<WhatsAppGroup | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [instances, setInstances] = useState<InstanceInfo[]>([]);
   const [instanceFilter, setInstanceFilter] = useState("all");
@@ -420,7 +422,7 @@ export function GroupsVipManager() {
                           canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
                           onToggleSelect={id => setSelectedGroups(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
                           onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
-                          onOpenSettings={() => setSettingsGroup(g)} />
+                          onOpenSettings={() => setSettingsGroup(g)} onOpenMembers={() => setMembersGroup(g)} />
                       ))}
 
                     </div>
@@ -436,7 +438,7 @@ export function GroupsVipManager() {
                           canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
                           onToggleSelect={id => setSelectedGroups(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
                           onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
-                          onOpenSettings={() => setSettingsGroup(g)} />
+                          onOpenSettings={() => setSettingsGroup(g)} onOpenMembers={() => setMembersGroup(g)} />
                       ))}
 
                     </div>
@@ -590,6 +592,15 @@ export function GroupsVipManager() {
           onUpdate={() => { fetchGroups(); setSettingsGroup(null); }} />
       )}
 
+      {membersGroup && (
+        <GroupMembersDialog
+          group={{ id: membersGroup.id, group_id: membersGroup.group_id, name: membersGroup.name }}
+          instanceId={membersGroup.instance_id}
+          canSync={!!membersGroup.instance_id}
+          open={!!membersGroup}
+          onOpenChange={open => { if (!open) setMembersGroup(null); }} />
+      )}
+
       {/* CREATE GROUP */}
       <CreateGroupDialog
         open={showCreateGroup}
@@ -600,7 +611,7 @@ export function GroupsVipManager() {
   );
 }
 
-function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings }: {
+function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onToggleVip, onToggleFull, onOpenSettings, onOpenMembers }: {
   group: WhatsAppGroup;
   isSelected: boolean;
   instance: InstanceInfo | null;
@@ -609,6 +620,7 @@ function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onTog
   onToggleVip: () => void;
   onToggleFull: () => void;
   onOpenSettings: () => void;
+  onOpenMembers: () => void;
 }) {
   const instanceLabel = instance ? instance.label : (group.instance_id ? "Instância desconhecida" : "Sem instância");
   const ddd33 = group.ddd33_count;
@@ -656,6 +668,10 @@ function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onTog
         <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); onToggleVip(); }}
           className={`h-8 w-8 ${group.is_vip ? 'text-amber-500' : 'text-muted-foreground'}`}>
           <Star className={`h-4 w-4 ${group.is_vip ? 'fill-amber-500' : ''}`} />
+        </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); onOpenMembers(); }}
+          title="Ver membros e lead scoring">
+          <Users className="h-4 w-4" />
         </Button>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); onOpenSettings(); }}>
           <Settings className="h-4 w-4" />

@@ -207,3 +207,152 @@ export async function processGroupMembershipEvent(
     console.error("[group-member-tracking] erro geral:", (e as Error).message);
   }
 }
+
+/**
+ * Extrai o telefone E.164 de um participante retornado por /group/info.
+ * Aceita várias chaves possíveis (PhoneNumber, phone, JID, etc.).
+ */
+function phoneFromParticipant(p: AnyObj): { phone: string; jid: string } | null {
+  const candidates = [p?.JID, p?.jid, p?.id, p?.remoteJid, p?.PhoneNumber, p?.phoneNumber, p?.phone, p?.number];
+  for (const c of candidates) {
+    const raw = asString(c) || "";
+    if (!raw) continue;
+    const phone = phoneFromJid(raw.includes("@") ? raw : `${raw.replace(/\D/g, "")}@s.whatsapp.net`);
+    if (phone) {
+      const jid = raw.includes("@") ? raw : `${raw.replace(/\D/g, "")}@s.whatsapp.net`;
+      return { phone, jid };
+    }
+  }
+  return null;
+}
+
+function participantIsAdmin(p: AnyObj): boolean {
+  return Boolean(
+    p?.IsAdmin ?? p?.isAdmin ?? p?.admin ?? p?.IsSuperAdmin ?? p?.isSuperAdmin ?? false,
+  );
+}
+
+/**
+ * Tira a "foto inicial" dos membros atuais de um grupo (via /group/info).
+ * Faz upsert do estado atual (status='member') e marca como 'left' quem já
+ * estava registrado como membro mas não aparece mais na lista atual.
+ *
+ * Retorna estatísticas para o chamador.
+ */
+export async function snapshotGroupMembers(
+  supabase: any,
+  groupIdRaw: string,
+  participants: AnyObj[],
+  numberId: string | null,
+): Promise<{ total: number; resolved: number; internal: number; customers: number; markedLeft: number }> {
+  const groupId = digitsOf(groupIdRaw);
+  const stats = { total: participants.length, resolved: 0, internal: 0, customers: 0, markedLeft: 0 };
+  if (!groupId) return stats;
+
+  // Resolve telefone + admin de cada participante.
+  type P = { phone: string; jid: string; isAdmin: boolean };
+  const resolved: P[] = [];
+  const seen = new Set<string>();
+  for (const p of participants) {
+    const r = phoneFromParticipant(p);
+    if (!r) continue;
+    if (seen.has(r.phone)) continue;
+    seen.add(r.phone);
+    resolved.push({ phone: r.phone, jid: r.jid, isAdmin: participantIsAdmin(p) });
+  }
+  stats.resolved = resolved.length;
+  if (resolved.length === 0) return stats;
+
+  const suffixes = Array.from(new Set(resolved.map((c) => c.phone.slice(-8))));
+
+  // ── Internos (instâncias + vendedores) por sufixo de 8 dígitos.
+  const internalSuffix = new Set<string>();
+  try {
+    const [{ data: nums }, { data: sellers }] = await Promise.all([
+      supabase.from("whatsapp_numbers").select("uazapi_owner, phone_display, wasender_phone_number"),
+      supabase.from("pos_sellers").select("whatsapp_phone"),
+    ]);
+    for (const n of (nums || []) as AnyObj[]) {
+      for (const key of ["uazapi_owner", "phone_display", "wasender_phone_number"]) {
+        const d = digitsOf((n as AnyObj)[key]);
+        if (d.length >= 8) internalSuffix.add(d.slice(-8));
+      }
+    }
+    for (const s of (sellers || []) as AnyObj[]) {
+      const d = digitsOf((s as AnyObj).whatsapp_phone);
+      if (d.length >= 8) internalSuffix.add(d.slice(-8));
+    }
+  } catch (e) {
+    console.error("[snapshotGroupMembers] internos falhou:", (e as Error).message);
+  }
+
+  // ── Enriquecimento CRM por sufixo de 8 dígitos.
+  const customerBySuffix = new Map<string, { id: string; name: string | null }>();
+  try {
+    const { data: customers } = await supabase
+      .from("crm_customers_v")
+      .select("id, name, phone_suffix8")
+      .in("phone_suffix8", suffixes);
+    for (const c of (customers || []) as AnyObj[]) {
+      const sfx = asString((c as AnyObj).phone_suffix8);
+      if (sfx && !customerBySuffix.has(sfx)) {
+        customerBySuffix.set(sfx, { id: (c as AnyObj).id as string, name: asString((c as AnyObj).name) });
+      }
+    }
+  } catch (e) {
+    console.error("[snapshotGroupMembers] enriquecimento falhou:", (e as Error).message);
+  }
+
+  const isInternal = (phone: string) => internalSuffix.has(phone.slice(-8));
+  const customerOf = (phone: string) => customerBySuffix.get(phone.slice(-8)) || null;
+  const now = new Date().toISOString();
+
+  const rows = resolved.map((c) => {
+    const cust = customerOf(c.phone);
+    if (isInternal(c.phone)) stats.internal++;
+    if (cust) stats.customers++;
+    return {
+      group_id: groupId,
+      instance_id: numberId,
+      phone: c.phone,
+      jid: c.jid,
+      status: "member",
+      is_admin: c.isAdmin,
+      is_internal: isInternal(c.phone),
+      customer_id: cust?.id ?? null,
+      display_name: cust?.name ?? null,
+      last_event_at: now,
+      updated_at: now,
+    };
+  });
+
+  const { error } = await supabase
+    .from("whatsapp_group_members")
+    .upsert(rows, { onConflict: "group_id,phone" });
+  if (error) console.error("[snapshotGroupMembers] upsert:", error.message);
+
+  // ── Marca como 'left' quem estava registrado como membro mas sumiu da lista.
+  try {
+    const presentPhones = new Set(resolved.map((c) => c.phone));
+    const { data: existing } = await supabase
+      .from("whatsapp_group_members")
+      .select("phone")
+      .eq("group_id", groupId)
+      .eq("status", "member");
+    const gone = ((existing || []) as AnyObj[])
+      .map((e) => asString(e.phone))
+      .filter((p): p is string => Boolean(p) && !presentPhones.has(p));
+    if (gone.length > 0) {
+      const { error: leftErr } = await supabase
+        .from("whatsapp_group_members")
+        .update({ status: "left", left_at: now, updated_at: now })
+        .eq("group_id", groupId)
+        .in("phone", gone);
+      if (!leftErr) stats.markedLeft = gone.length;
+    }
+  } catch (e) {
+    console.error("[snapshotGroupMembers] markLeft falhou:", (e as Error).message);
+  }
+
+  return stats;
+}
