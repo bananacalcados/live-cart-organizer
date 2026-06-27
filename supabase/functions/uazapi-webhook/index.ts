@@ -485,6 +485,12 @@ serve(async (req) => {
         : null;
     const displayMessage = text || caption || (sysMediaType ? `📎 ${sysMediaType}` : "");
     if (!displayMessage && !mediaUrl) {
+      // Votos de enquete chegam sem texto/mídia: ainda contam como engajamento.
+      if (isGroup && !fromMe) {
+        const memberPhone =
+          normalizeJid(asString(message.sender_pn) || asString(message.sender)).phone || null;
+        scheduleGroupActivity(memberPhone);
+      }
       await markSkip("empty");
       return ok({ skipped: "empty" });
     }
