@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Users, RefreshCw, Loader2, Crown, UserPlus, UserMinus,
   ArrowUpCircle, ArrowDownCircle, Star, ShieldCheck, EyeOff, Eye, Flame,
+  BarChart3, MessageCircle, Heart,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
