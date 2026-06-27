@@ -283,7 +283,7 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
             ) : (
               <ScrollArea className="h-[340px] pr-3">
                 <div className="space-y-1.5">
-                  {visibleMembers.map(({ m, score }) => (
+                  {visibleMembers.map(({ m, score, act }) => (
                     <div key={m.id} className={`flex items-center gap-2 p-2 rounded-md border ${m.status === "left" ? "opacity-60" : "bg-card"}`}>
                       <Badge variant="outline" className={`text-[11px] font-semibold tabular-nums w-9 justify-center ${scoreColor(score)}`}>{score}</Badge>
                       <div className="flex-1 min-w-0">
@@ -296,6 +296,15 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
                           <span className="text-[11px] text-muted-foreground">{fmtPhone(m.phone)}</span>
                           {m.joined_at && <span className="text-[11px] text-muted-foreground">· entrou {fmtDate(m.joined_at)}</span>}
                           {m.is_internal && <Badge variant="secondary" className="text-[9px]">interno</Badge>}
+                          {act && act.poll_votes > 0 && (
+                            <span className="text-[11px] text-violet-600 dark:text-violet-400 flex items-center gap-0.5"><BarChart3 className="h-3 w-3" />{act.poll_votes}</span>
+                          )}
+                          {act && act.messages > 0 && (
+                            <span className="text-[11px] text-sky-600 dark:text-sky-400 flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{act.messages}</span>
+                          )}
+                          {act && act.reactions > 0 && (
+                            <span className="text-[11px] text-rose-600 dark:text-rose-400 flex items-center gap-0.5"><Heart className="h-3 w-3" />{act.reactions}</span>
+                          )}
                         </div>
                       </div>
                       {m.status === "left" ? (
