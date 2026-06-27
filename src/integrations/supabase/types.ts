@@ -15769,6 +15769,51 @@ export type Database = {
           },
         ]
       }
+      whatsapp_group_member_activity: {
+        Row: {
+          activity_type: string
+          content: string | null
+          created_at: string
+          customer_id: string | null
+          display_name: string | null
+          group_id: string
+          id: string
+          instance_id: string | null
+          is_internal: boolean
+          jid: string | null
+          message_id: string | null
+          phone: string
+        }
+        Insert: {
+          activity_type: string
+          content?: string | null
+          created_at?: string
+          customer_id?: string | null
+          display_name?: string | null
+          group_id: string
+          id?: string
+          instance_id?: string | null
+          is_internal?: boolean
+          jid?: string | null
+          message_id?: string | null
+          phone: string
+        }
+        Update: {
+          activity_type?: string
+          content?: string | null
+          created_at?: string
+          customer_id?: string | null
+          display_name?: string | null
+          group_id?: string
+          id?: string
+          instance_id?: string | null
+          is_internal?: boolean
+          jid?: string | null
+          message_id?: string | null
+          phone?: string
+        }
+        Relationships: []
+      }
       whatsapp_group_member_events: {
         Row: {
           actor_phone: string | null
@@ -17282,6 +17327,17 @@ export type Database = {
         Args: never
         Returns: {
           whatsapp_number_id: string
+        }[]
+      }
+      get_group_member_activity: {
+        Args: { p_group_id: string }
+        Returns: {
+          last_activity_at: string
+          messages: number
+          phone: string
+          poll_votes: number
+          reactions: number
+          total: number
         }[]
       }
       get_inventory_summary: {

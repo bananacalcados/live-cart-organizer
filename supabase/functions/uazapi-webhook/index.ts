@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
 import { uazapiInstance, rehostMedia } from "../_shared/uazapi-credentials.ts";
 import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
-import { processGroupMembershipEvent } from "../_shared/group-member-tracking.ts";
+import { processGroupMembershipEvent, recordGroupActivity, type GroupActivityType } from "../_shared/group-member-tracking.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -382,6 +382,53 @@ serve(async (req) => {
       asString(message.senderName) || asString(message.groupName) || null;
     const statusRaw = asString(message.status);
     const status = statusRaw ? statusRaw.toLowerCase() : fromMe ? "sent" : "received";
+    const messageType = (asString(message.messageType) || asString((message as AnyObj).type) || "").toLowerCase();
+
+    /**
+     * Classifica o ENGAJAMENTO de um membro num grupo (voto/reação/comentário).
+     * Roda em background — nunca segura o webhook nem o derruba.
+     */
+    const scheduleGroupActivity = (memberPhone: string | null) => {
+      if (!isGroup || fromMe || !memberPhone) return;
+      // Reação: messageType "reactionmessage" OU campo reaction no payload.
+      const reactionEmoji =
+        asString((message as AnyObj).reaction) ||
+        asString(((message as AnyObj).reaction as AnyObj)?.text) ||
+        null;
+      const isReaction = messageType.includes("reaction") || Boolean(reactionEmoji);
+      // Enquete (voto): messageType "pollupdatemessage" OU campo poll no payload.
+      const isPoll = messageType.includes("poll") || Boolean((message as AnyObj).poll);
+
+      let activityType: GroupActivityType;
+      let content: string | null;
+      if (isPoll) {
+        activityType = "poll_vote";
+        content = displayMessage || asString((message as AnyObj).poll) || null;
+      } else if (isReaction) {
+        activityType = "reaction";
+        content = reactionEmoji || displayMessage || null;
+      } else {
+        activityType = "group_message";
+        content = displayMessage || null;
+      }
+
+      const task = recordGroupActivity(supabase, {
+        groupId: chatid,
+        instanceId: numberId,
+        phone: memberPhone,
+        jid: asString(message.sender_pn) || asString(message.sender) || null,
+        activityType,
+        messageId,
+        content,
+        senderName,
+      });
+      try {
+        // @ts-ignore EdgeRuntime está disponível no runtime de edge functions da Supabase.
+        if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(task);
+      } catch {
+        // best-effort
+      }
+    };
 
     // Diagnostic: log how incoming (customer) messages were routed to an instance
     if (!fromMe && !isGroup) {
@@ -427,7 +474,8 @@ serve(async (req) => {
         }
       })();
       try {
-        (globalThis as AnyObj).EdgeRuntime?.waitUntil?.(task);
+        // @ts-ignore EdgeRuntime está disponível no runtime de edge functions da Supabase.
+        if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(task);
       } catch {
         // Sem EdgeRuntime: deixa a task correr solta (best-effort).
       }
@@ -439,6 +487,12 @@ serve(async (req) => {
         : null;
     const displayMessage = text || caption || (sysMediaType ? `📎 ${sysMediaType}` : "");
     if (!displayMessage && !mediaUrl) {
+      // Votos de enquete chegam sem texto/mídia: ainda contam como engajamento.
+      if (isGroup && !fromMe) {
+        const memberPhone =
+          normalizeJid(asString(message.sender_pn) || asString(message.sender)).phone || null;
+        scheduleGroupActivity(memberPhone);
+      }
       await markSkip("empty");
       return ok({ skipped: "empty" });
     }
@@ -518,10 +572,12 @@ serve(async (req) => {
     }).select("id").maybeSingle();
 
     if (insErr) {
-      if ((insErr as AnyObj).code === "23505") return ok({ dedup: true });
+      if ((insErr as unknown as AnyObj).code === "23505") return ok({ dedup: true });
       console.error("[uazapi-webhook] erro ao salvar incoming:", insErr);
     } else {
       scheduleMediaDownload(((insertedIncoming as AnyObj)?.id as string) ?? null);
+      // Engajamento em grupo (voto/reação/comentário) → lead scoring.
+      scheduleGroupActivity(rawParticipant);
       // Detecta sinais de indicação (cupom / telefone) — fire & forget
       fetch(`${SB_URL}/functions/v1/referral-detect-incoming`, {
         method: "POST",

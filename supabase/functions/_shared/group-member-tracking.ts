@@ -341,7 +341,7 @@ export async function snapshotGroupMembers(
       .eq("status", "member");
     const gone = ((existing || []) as AnyObj[])
       .map((e) => asString(e.phone))
-      .filter((p): p is string => Boolean(p) && !presentPhones.has(p));
+      .filter((p): p is string => Boolean(p) && !presentPhones.has(p as string));
     if (gone.length > 0) {
       const { error: leftErr } = await supabase
         .from("whatsapp_group_members")
@@ -355,4 +355,120 @@ export async function snapshotGroupMembers(
   }
 
   return stats;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Engajamento de membros: voto em enquete, comentário no grupo e reação.
+//
+// Grava em whatsapp_group_member_activity (append-only) para turbinar o
+// lead scoring. Idempotente por message_id, tolerante a falhas e leve
+// (uma busca de internos + uma de CRM por sufixo de 8 dígitos).
+// ════════════════════════════════════════════════════════════════════
+
+export type GroupActivityType = "poll_vote" | "group_message" | "reaction";
+
+export interface GroupActivityInput {
+  groupId: string;
+  instanceId: string | null;
+  phone: string;            // telefone E.164 do membro (sender)
+  jid?: string | null;
+  activityType: GroupActivityType;
+  messageId?: string | null;
+  content?: string | null;  // emoji da reação / opção da enquete / trecho do texto
+  senderName?: string | null;
+}
+
+/**
+ * Registra UMA atividade de engajamento de um membro de grupo.
+ * Nunca lança — qualquer erro é logado e engolido para não derrubar o webhook.
+ */
+export async function recordGroupActivity(
+  supabase: any,
+  input: GroupActivityInput,
+): Promise<void> {
+  try {
+    const groupId = digitsOf(input.groupId);
+    const phone = digitsOf(input.phone);
+    if (!groupId || !phone) return;
+
+    const suffix = phone.slice(-8);
+
+    // ── Interno? (instâncias + vendedores) por sufixo de 8 dígitos.
+    let isInternal = false;
+    try {
+      const [{ data: nums }, { data: sellers }] = await Promise.all([
+        supabase.from("whatsapp_numbers").select("uazapi_owner, phone_display, wasender_phone_number"),
+        supabase.from("pos_sellers").select("whatsapp_phone"),
+      ]);
+      const internalSuffix = new Set<string>();
+      for (const n of (nums || []) as AnyObj[]) {
+        for (const key of ["uazapi_owner", "phone_display", "wasender_phone_number"]) {
+          const d = digitsOf((n as AnyObj)[key]);
+          if (d.length >= 8) internalSuffix.add(d.slice(-8));
+        }
+      }
+      for (const s of (sellers || []) as AnyObj[]) {
+        const d = digitsOf((s as AnyObj).whatsapp_phone);
+        if (d.length >= 8) internalSuffix.add(d.slice(-8));
+      }
+      isInternal = internalSuffix.has(suffix);
+    } catch (e) {
+      console.error("[recordGroupActivity] internos falhou:", (e as Error).message);
+    }
+
+    // ── Vínculo CRM por sufixo de 8 dígitos.
+    let customerId: string | null = null;
+    let crmName: string | null = null;
+    try {
+      const { data: customers } = await supabase
+        .from("crm_customers_v")
+        .select("id, name, phone_suffix8")
+        .eq("phone_suffix8", suffix)
+        .limit(1);
+      const c = ((customers || []) as AnyObj[])[0];
+      if (c) {
+        customerId = (c.id as string) ?? null;
+        crmName = asString(c.name);
+      }
+    } catch (e) {
+      console.error("[recordGroupActivity] enriquecimento falhou:", (e as Error).message);
+    }
+
+    const row: AnyObj = {
+      group_id: groupId,
+      instance_id: input.instanceId,
+      phone,
+      jid: input.jid ?? null,
+      activity_type: input.activityType,
+      message_id: input.messageId ?? null,
+      content: input.content ? String(input.content).slice(0, 300) : null,
+      is_internal: isInternal,
+      customer_id: customerId,
+      display_name: crmName ?? input.senderName ?? null,
+    };
+
+    // Dedup por message_id (índice único parcial). Sem message_id, sempre insere.
+    if (row.message_id) {
+      const { error } = await supabase
+        .from("whatsapp_group_member_activity")
+        .upsert(row, { onConflict: "message_id", ignoreDuplicates: true });
+      if (error) console.error("[recordGroupActivity] upsert:", error.message);
+    } else {
+      const { error } = await supabase.from("whatsapp_group_member_activity").insert(row);
+      if (error) console.error("[recordGroupActivity] insert:", error.message);
+    }
+
+    // Mantém last_event_at do membro fresco (se já existir registro de membro).
+    try {
+      await supabase
+        .from("whatsapp_group_members")
+        .update({ last_event_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("group_id", groupId)
+        .eq("phone", phone);
+    } catch {
+      // best-effort
+    }
+  } catch (e) {
+    console.error("[recordGroupActivity] erro geral:", (e as Error).message);
+  }
 }

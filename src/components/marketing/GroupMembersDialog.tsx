@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   Users, RefreshCw, Loader2, Crown, UserPlus, UserMinus,
   ArrowUpCircle, ArrowDownCircle, Star, ShieldCheck, EyeOff, Eye, Flame,
+  BarChart3, MessageCircle, Heart,
 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -36,6 +37,14 @@ interface MemberEvent {
   created_at: string;
 }
 
+interface Activity {
+  poll_votes: number;
+  messages: number;
+  reactions: number;
+  total: number;
+  last_activity_at: string | null;
+}
+
 interface Props {
   group: { id: string; group_id: string; name: string };
   instanceId: string | null;
@@ -51,17 +60,27 @@ const EVENT_META: Record<string, { label: string; icon: typeof UserPlus; cls: st
   demoted: { label: "rebaixado", icon: ArrowDownCircle, cls: "text-muted-foreground" },
 };
 
-/** Lead score 0–100 baseado em vínculo CRM, permanência, cargo e histórico. */
-function leadScore(m: Member, joinCounts: Map<string, number>): number {
+/** Pontos de engajamento (votar > comentar > reagir). Voto = intenção forte. */
+function engagementScore(a: Activity | undefined): number {
+  if (!a) return 0;
+  const poll = Math.min(25, a.poll_votes * 8);
+  const msg = Math.min(14, a.messages * 3);
+  const react = Math.min(8, a.reactions * 2);
+  return Math.min(35, poll + msg + react);
+}
+
+/** Lead score 0–100: vínculo CRM, permanência, cargo, histórico e ENGAJAMENTO. */
+function leadScore(m: Member, joinCounts: Map<string, number>, a: Activity | undefined): number {
   let s = 0;
-  if (m.status === "member") s += 25;
-  if (m.customer_id) s += 35;
-  if (m.is_admin) s += 10;
+  if (m.status === "member") s += 18;
+  if (m.customer_id) s += 25;
+  if (m.is_admin) s += 8;
   if (m.joined_at) {
     const days = (Date.now() - new Date(m.joined_at).getTime()) / 86_400_000;
-    if (days > 0) s += Math.min(20, Math.round(days / 3));
+    if (days > 0) s += Math.min(12, Math.round(days / 5));
   }
-  if ((joinCounts.get(m.phone) || 0) > 1) s += 10; // re-entrou = engajado
+  if ((joinCounts.get(m.phone) || 0) > 1) s += 6; // re-entrou = engajado
+  s += engagementScore(a); // votou/comentou/reagiu no grupo
   if (m.status === "left") s -= 25;
   return Math.max(0, Math.min(100, s));
 }
@@ -89,6 +108,7 @@ function fmtDate(s: string): string {
 export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenChange }: Props) {
   const [members, setMembers] = useState<Member[]>([]);
   const [events, setEvents] = useState<MemberEvent[]>([]);
+  const [activity, setActivity] = useState<Map<string, Activity>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [search, setSearch] = useState("");
@@ -100,7 +120,7 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
     if (!groupDigits) return;
     setIsLoading(true);
     try {
-      const [mRes, eRes] = await Promise.all([
+      const [mRes, eRes, aRes] = await Promise.all([
         supabase
           .from("whatsapp_group_members")
           .select("id, phone, status, is_admin, is_internal, customer_id, display_name, joined_at, left_at, last_event_at")
@@ -112,9 +132,21 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
           .eq("group_id", groupDigits)
           .order("created_at", { ascending: false })
           .limit(150),
+        supabase.rpc("get_group_member_activity", { p_group_id: groupDigits }),
       ]);
       setMembers((mRes.data || []) as Member[]);
       setEvents((eRes.data || []) as MemberEvent[]);
+      const map = new Map<string, Activity>();
+      for (const r of (aRes.data || []) as Array<Activity & { phone: string }>) {
+        map.set(String(r.phone), {
+          poll_votes: Number(r.poll_votes) || 0,
+          messages: Number(r.messages) || 0,
+          reactions: Number(r.reactions) || 0,
+          total: Number(r.total) || 0,
+          last_activity_at: r.last_activity_at ?? null,
+        });
+      }
+      setActivity(map);
     } catch {
       toast.error("Erro ao carregar membros");
     } finally {
@@ -168,23 +200,31 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
       list = list.filter((m) => (m.display_name || "").toLowerCase().includes(q) || m.phone.includes(q.replace(/\D/g, "")));
     }
     return list
-      .map((m) => ({ m, score: leadScore(m, joinCounts) }))
+      .map((m) => ({ m, score: leadScore(m, joinCounts, activity.get(m.phone)), act: activity.get(m.phone) }))
       .sort((a, b) => {
         // membros atuais primeiro, depois por score
         if ((a.m.status === "member") !== (b.m.status === "member")) return a.m.status === "member" ? -1 : 1;
         return b.score - a.score;
       });
-  }, [members, showInternal, search, joinCounts]);
+  }, [members, showInternal, search, joinCounts, activity]);
 
   const stats = useMemo(() => {
     const real = members.filter((m) => !m.is_internal);
+    let votes = 0, msgs = 0, reacts = 0, engaged = 0;
+    for (const m of real) {
+      const a = activity.get(m.phone);
+      if (!a) continue;
+      votes += a.poll_votes; msgs += a.messages; reacts += a.reactions;
+      if (a.total > 0) engaged++;
+    }
     return {
       current: real.filter((m) => m.status === "member").length,
       customers: real.filter((m) => m.status === "member" && m.customer_id).length,
       admins: real.filter((m) => m.status === "member" && m.is_admin).length,
       left: real.filter((m) => m.status === "left").length,
+      votes, msgs, reacts, engaged,
     };
-  }, [members]);
+  }, [members, activity]);
 
   const visibleEvents = events.filter((e) => showInternal || !e.is_internal);
 
@@ -219,6 +259,15 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
           <StatBox label="Saíram" value={stats.left} icon={UserMinus} cls="text-red-500" />
         </div>
 
+        {/* Engajamento (votos / comentários / reações) */}
+        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          <span className="text-muted-foreground">Engajamento:</span>
+          <Badge variant="outline" className="gap-1"><BarChart3 className="h-3 w-3 text-violet-500" />{stats.votes} votos</Badge>
+          <Badge variant="outline" className="gap-1"><MessageCircle className="h-3 w-3 text-sky-500" />{stats.msgs} comentários</Badge>
+          <Badge variant="outline" className="gap-1"><Heart className="h-3 w-3 text-rose-500" />{stats.reacts} reações</Badge>
+          <Badge variant="outline" className="gap-1"><Flame className="h-3 w-3 text-amber-500" />{stats.engaged} engajados</Badge>
+        </div>
+
         <Tabs defaultValue="members">
           <TabsList>
             <TabsTrigger value="members" className="gap-1"><Flame className="h-3.5 w-3.5" />Lead Scoring</TabsTrigger>
@@ -234,7 +283,7 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
             ) : (
               <ScrollArea className="h-[340px] pr-3">
                 <div className="space-y-1.5">
-                  {visibleMembers.map(({ m, score }) => (
+                  {visibleMembers.map(({ m, score, act }) => (
                     <div key={m.id} className={`flex items-center gap-2 p-2 rounded-md border ${m.status === "left" ? "opacity-60" : "bg-card"}`}>
                       <Badge variant="outline" className={`text-[11px] font-semibold tabular-nums w-9 justify-center ${scoreColor(score)}`}>{score}</Badge>
                       <div className="flex-1 min-w-0">
@@ -247,6 +296,15 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
                           <span className="text-[11px] text-muted-foreground">{fmtPhone(m.phone)}</span>
                           {m.joined_at && <span className="text-[11px] text-muted-foreground">· entrou {fmtDate(m.joined_at)}</span>}
                           {m.is_internal && <Badge variant="secondary" className="text-[9px]">interno</Badge>}
+                          {act && act.poll_votes > 0 && (
+                            <span className="text-[11px] text-violet-600 dark:text-violet-400 flex items-center gap-0.5"><BarChart3 className="h-3 w-3" />{act.poll_votes}</span>
+                          )}
+                          {act && act.messages > 0 && (
+                            <span className="text-[11px] text-sky-600 dark:text-sky-400 flex items-center gap-0.5"><MessageCircle className="h-3 w-3" />{act.messages}</span>
+                          )}
+                          {act && act.reactions > 0 && (
+                            <span className="text-[11px] text-rose-600 dark:text-rose-400 flex items-center gap-0.5"><Heart className="h-3 w-3" />{act.reactions}</span>
+                          )}
                         </div>
                       </div>
                       {m.status === "left" ? (
