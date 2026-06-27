@@ -108,6 +108,7 @@ function fmtDate(s: string): string {
 export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenChange }: Props) {
   const [members, setMembers] = useState<Member[]>([]);
   const [events, setEvents] = useState<MemberEvent[]>([]);
+  const [activity, setActivity] = useState<Map<string, Activity>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [search, setSearch] = useState("");
