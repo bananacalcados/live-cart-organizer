@@ -568,6 +568,8 @@ serve(async (req) => {
       console.error("[uazapi-webhook] erro ao salvar incoming:", insErr);
     } else {
       scheduleMediaDownload(((insertedIncoming as AnyObj)?.id as string) ?? null);
+      // Engajamento em grupo (voto/reação/comentário) → lead scoring.
+      scheduleGroupActivity(rawParticipant);
       // Detecta sinais de indicação (cupom / telefone) — fire & forget
       fetch(`${SB_URL}/functions/v1/referral-detect-incoming`, {
         method: "POST",
