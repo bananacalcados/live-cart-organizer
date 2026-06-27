@@ -592,6 +592,15 @@ export function GroupsVipManager() {
           onUpdate={() => { fetchGroups(); setSettingsGroup(null); }} />
       )}
 
+      {membersGroup && (
+        <GroupMembersDialog
+          group={{ id: membersGroup.id, group_id: membersGroup.group_id, name: membersGroup.name }}
+          instanceId={membersGroup.instance_id}
+          canSync={!!membersGroup.instance_id}
+          open={!!membersGroup}
+          onOpenChange={open => { if (!open) setMembersGroup(null); }} />
+      )}
+
       {/* CREATE GROUP */}
       <CreateGroupDialog
         open={showCreateGroup}
