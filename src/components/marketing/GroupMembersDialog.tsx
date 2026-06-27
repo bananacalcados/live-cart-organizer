@@ -200,13 +200,13 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
       list = list.filter((m) => (m.display_name || "").toLowerCase().includes(q) || m.phone.includes(q.replace(/\D/g, "")));
     }
     return list
-      .map((m) => ({ m, score: leadScore(m, joinCounts) }))
+      .map((m) => ({ m, score: leadScore(m, joinCounts, activity.get(m.phone)), act: activity.get(m.phone) }))
       .sort((a, b) => {
         // membros atuais primeiro, depois por score
         if ((a.m.status === "member") !== (b.m.status === "member")) return a.m.status === "member" ? -1 : 1;
         return b.score - a.score;
       });
-  }, [members, showInternal, search, joinCounts]);
+  }, [members, showInternal, search, joinCounts, activity]);
 
   const stats = useMemo(() => {
     const real = members.filter((m) => !m.is_internal);
