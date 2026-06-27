@@ -120,7 +120,7 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
     if (!groupDigits) return;
     setIsLoading(true);
     try {
-      const [mRes, eRes] = await Promise.all([
+      const [mRes, eRes, aRes] = await Promise.all([
         supabase
           .from("whatsapp_group_members")
           .select("id, phone, status, is_admin, is_internal, customer_id, display_name, joined_at, left_at, last_event_at")
@@ -132,9 +132,21 @@ export function GroupMembersDialog({ group, instanceId, canSync, open, onOpenCha
           .eq("group_id", groupDigits)
           .order("created_at", { ascending: false })
           .limit(150),
+        supabase.rpc("get_group_member_activity", { p_group_id: groupDigits }),
       ]);
       setMembers((mRes.data || []) as Member[]);
       setEvents((eRes.data || []) as MemberEvent[]);
+      const map = new Map<string, Activity>();
+      for (const r of (aRes.data || []) as Array<Activity & { phone: string }>) {
+        map.set(String(r.phone), {
+          poll_votes: Number(r.poll_votes) || 0,
+          messages: Number(r.messages) || 0,
+          reactions: Number(r.reactions) || 0,
+          total: Number(r.total) || 0,
+          last_activity_at: r.last_activity_at ?? null,
+        });
+      }
+      setActivity(map);
     } catch {
       toast.error("Erro ao carregar membros");
     } finally {
