@@ -346,7 +346,13 @@ export function GroupsVipManager() {
         <TabsList>
           <TabsTrigger value="campaigns" className="gap-1"><Send className="h-3.5 w-3.5" />Campanhas</TabsTrigger>
           <TabsTrigger value="groups" className="gap-1"><Users className="h-3.5 w-3.5" />Grupos</TabsTrigger>
+          <TabsTrigger value="dashboard" className="gap-1"><BarChart3 className="h-3.5 w-3.5" />Dashboard</TabsTrigger>
         </TabsList>
+
+        {/* DASHBOARD TAB */}
+        <TabsContent value="dashboard" className="space-y-4">
+          <VipGroupsAnalyticsDashboard />
+        </TabsContent>
 
         {/* GROUPS TAB */}
         <TabsContent value="groups" className="space-y-4">
