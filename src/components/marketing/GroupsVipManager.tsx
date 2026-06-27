@@ -660,6 +660,10 @@ function GroupCard({ group, isSelected, instance, canSend, onToggleSelect, onTog
           className={`h-8 w-8 ${group.is_vip ? 'text-amber-500' : 'text-muted-foreground'}`}>
           <Star className={`h-4 w-4 ${group.is_vip ? 'fill-amber-500' : ''}`} />
         </Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); onOpenMembers(); }}
+          title="Ver membros e lead scoring">
+          <Users className="h-4 w-4" />
+        </Button>
         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={e => { e.stopPropagation(); onOpenSettings(); }}>
           <Settings className="h-4 w-4" />
         </Button>
