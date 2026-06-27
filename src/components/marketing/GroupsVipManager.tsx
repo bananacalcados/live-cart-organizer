@@ -422,7 +422,7 @@ export function GroupsVipManager() {
                           canSend={!selectedNumberId || resolveInstance(g.instance_id)?.id === selectedNumberId}
                           onToggleSelect={id => setSelectedGroups(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
                           onToggleVip={() => toggleVip(g)} onToggleFull={() => toggleFull(g)}
-                          onOpenSettings={() => setSettingsGroup(g)} />
+                          onOpenSettings={() => setSettingsGroup(g)} onOpenMembers={() => setMembersGroup(g)} />
                       ))}
 
                     </div>
