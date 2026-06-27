@@ -341,7 +341,7 @@ export async function snapshotGroupMembers(
       .eq("status", "member");
     const gone = ((existing || []) as AnyObj[])
       .map((e) => asString(e.phone))
-      .filter((p): p is string => Boolean(p) && !presentPhones.has(p));
+      .filter((p): p is string => Boolean(p) && !presentPhones.has(p as string));
     if (gone.length > 0) {
       const { error: leftErr } = await supabase
         .from("whatsapp_group_members")
