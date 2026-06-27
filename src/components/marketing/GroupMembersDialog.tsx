@@ -37,6 +37,14 @@ interface MemberEvent {
   created_at: string;
 }
 
+interface Activity {
+  poll_votes: number;
+  messages: number;
+  reactions: number;
+  total: number;
+  last_activity_at: string | null;
+}
+
 interface Props {
   group: { id: string; group_id: string; name: string };
   instanceId: string | null;
