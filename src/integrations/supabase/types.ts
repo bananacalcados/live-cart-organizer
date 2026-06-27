@@ -15782,6 +15782,7 @@ export type Database = {
           is_internal: boolean
           jid: string | null
           phone: string
+          source_version_id: string | null
         }
         Insert: {
           actor_phone?: string | null
@@ -15795,6 +15796,7 @@ export type Database = {
           is_internal?: boolean
           jid?: string | null
           phone: string
+          source_version_id?: string | null
         }
         Update: {
           actor_phone?: string | null
@@ -15808,6 +15810,7 @@ export type Database = {
           is_internal?: boolean
           jid?: string | null
           phone?: string
+          source_version_id?: string | null
         }
         Relationships: []
       }
