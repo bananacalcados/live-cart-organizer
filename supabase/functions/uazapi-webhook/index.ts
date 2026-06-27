@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
 import { uazapiInstance, rehostMedia } from "../_shared/uazapi-credentials.ts";
 import { logRouting, type ResolutionMethod } from "../_shared/routing-log.ts";
+import { processGroupMembershipEvent } from "../_shared/group-member-tracking.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -316,8 +317,13 @@ serve(async (req) => {
     // ───────────────────────── groups ─────────────────────────
     if (eventType === "groups") {
       const chat = (payload.chat as AnyObj) || {};
-      const groupId = (asString(chat.wa_chatid) || "").replace("@g.us", "").replace(/\D/g, "");
-      const name = asString(chat.wa_name) || asString(chat.name);
+      const ev = (payload.event as AnyObj) || {};
+      // O payload real da uazapi (whatsmeow GroupInfo) usa `event.JID`; mantemos
+      // o fallback antigo em `chat.wa_chatid` por segurança.
+      const groupId = (
+        (asString(chat.wa_chatid) || asString(ev.JID) || "")
+      ).replace("@g.us", "").replace(/\D/g, "");
+      const name = asString(chat.wa_name) || asString(chat.name) || asString(ev.Name);
       if (groupId) {
         const { data: known } = await supabase
           .from("whatsapp_groups")
@@ -333,8 +339,12 @@ serve(async (req) => {
           await supabase.from("whatsapp_groups").update(update).eq("group_id", groupId);
         }
       }
+      // Rastreamento de movimentação de membros (entrou/saiu/promovido).
+      // Isolado em try/catch interno — nunca derruba o webhook.
+      await processGroupMembershipEvent(supabase, payload, numberId);
       return ok();
     }
+
 
     // ───────────────────────── messages ─────────────────────────
     if (eventType !== "messages" && eventType !== "message") {
