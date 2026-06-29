@@ -338,6 +338,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   const isLastStep = stepIndex === STEPS.length - 1;
 
+  if (!event) return null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
