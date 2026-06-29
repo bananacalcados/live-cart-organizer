@@ -178,11 +178,13 @@ export function POSWhatsAppCheckoutDialog({
       const link = `https://checkout.bananacalcados.com.br/checkout-loja/${storeId}/${sale.id}`;
       setGeneratedLink(link);
 
-      // Add to awaiting payment
+      // Add to awaiting payment (scoped to store + instance for the tabs bar)
       await supabase.from("chat_awaiting_payment").upsert({
         phone,
         sale_id: sale.id,
         type: 'checkout',
+        store_id: storeId,
+        whatsapp_number_id: selectedNumberId,
       } as any, { onConflict: 'phone' });
 
       // Create follow-up timer (first reminder in 30 min)

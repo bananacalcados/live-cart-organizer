@@ -61,7 +61,14 @@ export function PixPendingTabsBar() {
               {paid ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5 text-amber-300" />}
             </span>
             <span className="flex flex-col min-w-0 leading-tight">
-              <span className="truncate text-xs font-semibold">{tab.name}</span>
+              <span className="flex items-center gap-1 min-w-0">
+                <span className="truncate text-xs font-semibold">{tab.name}</span>
+                {tab.isLive && (
+                  <span className="shrink-0 rounded-sm bg-fuchsia-500/90 px-1 text-[9px] font-bold uppercase leading-tight text-white">
+                    Live
+                  </span>
+                )}
+              </span>
               <span className={cn("text-[11px]", paid ? "text-white/90" : "text-zinc-400")}>
                 {paid ? "PAGO • " : "Aguardando • "}R$ {tab.amount.toFixed(2)}
               </span>

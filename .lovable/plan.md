@@ -1,88 +1,58 @@
-# Por que o PDV e o Módulo Estoque mostram produtos diferentes
+# Correção das abas de pagamento (PIX/Checkout) no chat do WhatsApp
 
-## O que eu encontrei (causa raiz)
+## Antes de tudo: o histórico NÃO está sendo apagado
 
-O sistema hoje trabalha com **três fontes de produto paralelas**, e não uma só. Essa é a origem da inconsistência:
+Confirmei direto no banco. Para a Karol (R$110, 08/06) e a Maria Foss (R$139,98, 22/06) as mensagens continuam todas lá — só estão distribuídas entre instâncias diferentes:
 
-1. **Tiny ERP (externo)** — catálogo real e completo. Tem TODOS os produtos, inclusive a ZOE e a KATIA.
-2. **`pos_products` (cache do PDV)** — 17.703 linhas / ~5.195 códigos de barras distintos. É alimentado por uma sincronização própria a partir do Tiny. **Importante: o PDV NÃO depende só dessa tabela** — quando você bipa um produto que não está no cache, a tela de venda faz uma **busca AO VIVO no Tiny** (`pos-tiny-search-product`) e vende mesmo assim, **sem gravar o produto em lugar nenhum**.
-3. **`products_master` (pai) + `product_variants` (filho)** — é o Módulo Estoque: 654 pais / 5.769 variações. É populado por uma **importação separada do Tiny**, sem nenhuma ligação automática com o `pos_products` nem com as vendas do PDV.
+```text
+Karol 5533991221163  → 94 msgs (Whats Centro uazapi) + 22 (Whats Pérola) + 2 (Meta Centro) + 1 (Meta Pérola)
+Maria Foss 5547...   → 25 msgs (Meta Centro) + 1 (Meta Pérola)
+```
 
-### Por que a ZOE (7223.102) e a KATIA (8436.240) aparecem na Frente de Caixa mas não no Estoque
-Elas **não estão no `pos_products`** e **não estão no Módulo Estoque**. Elas só existem no Tiny. Quando a vendedora bipa o código, o PDV puxa o produto ao vivo do Tiny e conclui a venda (confirmei: há 56 itens vendidos de ZOE/KATIA em `pos_sale_items`). Como a busca ao vivo **não persiste nada**, esses produtos viram "fantasmas": passam pelo caixa e nunca entram em nenhuma tabela local.
+A conversa abre VAZIA porque o card abre sem dizer em qual instância está o histórico (abre como `telefone__none`), e aí o sistema não encontra as mensagens daquela instância. Paginação e arquivamento que criamos não apagam nada — está tudo intacto.
 
-### Tamanho real da divergência (medido no banco)
-- **No nível do PAI:** das 510 referências (`parent_sku`) que existem no PDV, **498 já estão no Módulo Estoque** e **12 estão faltando**.
-- **No nível da VARIAÇÃO (por código de barras):** **17 códigos** do `pos_products` não existem em `product_variants`.
-- **242 produtos** do `pos_products` estão **sem código de barras**, então hoje é impossível casá-los com o Estoque.
-- **O grande buraco (os "vários outros" que você viu):** **217 produtos já vendidos** pelo PDV (em `pos_sale_items`) **não existem no Módulo Estoque** e **215 nem no `pos_products`** — são exatamente os fantasmas vindos da busca ao vivo do Tiny (ZOE e KATIA estão nesse grupo).
+## O que está errado hoje (causas-raiz)
 
-### O PDV usa o estoque do Módulo Estoque?
-**Não.** O PDV usa o `pos_products.stock` + consulta ao vivo no Tiny. O Módulo Estoque (`product_variants.initial_stock`) é um registro paralelo, usado para catalogação/Shopify/fiscal. Os dois estão **totalmente desacoplados** — por isso a regra "Estoque é a tabela principal e espelha o PDV" **nunca chegou a ser aplicada**: são pipelines independentes que foram derivando.
+A tabela que alimenta as abas (`chat_awaiting_payment`) só guarda `phone`, `sale_id`, `type`, `created_at`. Ela **não guarda a loja nem a instância**. Por isso:
 
----
+1. **Aparece nas 3 lojas ao mesmo tempo** → o store de notificações lê a tabela inteira, sem filtrar por loja. Verifiquei: quase todos os cards são da Loja Centro, mas aparecem na Pérola.
+2. **Abre conversa vazia** → o clique manda `instância = null`, então não casa com a conversa real (que está em "Whats Centro", "Meta Centro" etc.).
+3. **Não abre na instância do pedido** → mesma causa do item 2.
+4. **Pode puxar pedido de fora do chat** → hoje entram também linhas `type='ads_checkout'` (sem `sale_id`) e linhas órfãs (sale_id sem venda). Pedidos de Live ainda nem entram nas abas (Live usa outro mecanismo).
 
-## Plano de ação
+## Plano de correção (sem quebrar nada)
 
-### Fase 1 — Backfill: trazer o que o PDV já conhece para o Estoque (pai>filho)
-Usar o `pos_products` como fonte (já tem `parent_sku`, `size`, `color`, `barcode`, preços) e materializar no padrão pai>filho:
-- Para cada `parent_sku` sem `products_master` correspondente → criar o **pai** (`sku_root = parent_sku`, nome-base sem tamanho/cor, marca, categoria, gênero, custo/preço derivados das variações).
-- Para cada linha do `pos_products` → criar/atualizar a **variação filho** (`gtin = barcode`, sku, tamanho, cor, preços), ligada ao pai.
-- Tratar os **12 pais e 17 variações** faltantes + consolidar os **242 sem código de barras** (gerar identificador interno quando não houver GTIN).
-- **Deduplicação:** alguns produtos aparecem com dois `parent_sku` diferentes (ex.: `7403-103-MOCASSIM-MODARE-NINA` e `MOCASSIM-FEMININO-ORTOPEDICO-NINA` são o mesmo sapato). O backfill precisa mesclar por código de referência real, e ignorar lixo de teste (`TESTE-005`, `POS-<uuid>`, "Produto Teste R$5").
+### 1. Guardar loja + instância em cada pagamento aguardando
+- Adicionar 2 colunas em `chat_awaiting_payment`: `store_id` e `whatsapp_number_id` (ambas opcionais, nullable — nada existente quebra).
+- Os 2 botões do chat (`POSWhatsAppPixDialog` e `POSWhatsAppCheckoutDialog`) passam a gravar a loja atual e a instância da conversa aberta junto com o registro.
+- **Backfill** dos registros antigos via migração: preencher `store_id` a partir de `pos_sales.store_id` e `whatsapp_number_id` a partir da instância da última mensagem real daquele telefone. Para Live, a loja vem do evento (`events.default_store_id`).
 
-### Fase 2 — Eliminar os produtos-fantasma (ZOE/KATIA e os 217)
-Causa: a busca ao vivo no Tiny vende sem persistir. Duas frentes:
-- **Correção pontual:** na tela de venda, quando o produto vier da busca ao vivo do Tiny, **gravar/upsert no `pos_products`** (uma alteração pequena e localizada). A partir daí todo produto vendido passa a existir no cache.
-- **Importação completa do Tiny → Estoque:** rodar uma carga única que traz o catálogo inteiro do Tiny (pai>filho) para `products_master`/`product_variants`, fechando o gap dos 217 já vendidos e dos que ainda nem foram vendidos.
+### 2. Escopo por loja (cada pedido só na loja certa)
+- O store de notificações passa a receber o `storeId` do módulo de WhatsApp aberto e **só mostra abas cuja `store_id` = loja atual**.
+- Pedido criado no chat da Loja Centro → aparece **só** na Loja Centro. Pérola/Site não veem mais.
+- Pedido de Live → vinculado à loja do evento (a loja que você selecionou ao criar o evento), aparecendo só no chat daquela loja.
 
-### Fase 3 — Manter sincronizado (para não derivar de novo)
-Estabelecer um único fluxo que mantém o Módulo Estoque como espelho do PDV:
-- **Sincronização `pos_products` → Estoque** (trigger ou função agendada): toda vez que um produto entra/atualiza no `pos_products`, o pai e o filho correspondentes são criados/atualizados automaticamente no Módulo Estoque por `parent_sku`/`barcode`.
-- Painel de divergências no Módulo Estoque mostrando "produtos no PDV ainda não catalogados" para revisão humana (especialmente os sem GTIN e os que precisam de classificação pai).
+### 3. Abrir na instância correta
+- O clique no card passa a abrir a conversa com a instância gravada (`whatsapp_number_id`), e não mais `null`. Assim o histórico aparece na hora, sem precisar trocar de instância na mão.
 
----
+### 4. Só pedidos vindos do chat (PIX/Checkout) ou de Live
+- Filtrar para incluir **apenas** vendas cujo pagamento foi gerado pelos botões do próprio chat (PIX/Checkout) ou por Live Shopping.
+- Excluir: `type='ads_checkout'`, linhas sem `sale_id` e linhas órfãs (sale_id sem venda real).
+- Pedidos feitos fora do WhatsApp não aparecem.
 
-## Detalhes técnicos (para referência)
+### 5. Tag de Live
+- Quando o pedido for de Live (`sale_type='live'`), o card mostra uma **tag "LIVE"** para diferenciar dos pedidos normais do chat.
 
-- **Chaves de junção:** PAI = `pos_products.parent_sku` ↔ `products_master.sku_root`; FILHO = `pos_products.barcode` ↔ `product_variants.gtin`.
-- **Busca ao vivo do PDV:** `src/components/pos/POSSalesView.tsx` (linhas ~480-496) chama `pos-tiny-search-product` e vende sem gravar — ponto exato da correção da Fase 2.
-- **Origem do Estoque:** `products_master`/`product_variants` têm `tiny_imported_at` (importação própria do Tiny), sem GRANT/trigger vindo do PDV.
-- **Backfill (Fase 1):** preferível via função de banco (migration + função) lendo `pos_products` agrupado por `parent_sku`, com `INSERT ... ON CONFLICT` em `products_master(sku_root)` e `product_variants(gtin)`; rodar primeiro em modo "dry-run" (relatório) antes do commit.
-- **Lixo a excluir do backfill:** `parent_sku` em (`TESTE-005`, `POS-<uuid>`); duplicidades de slug do mesmo produto devem ser mescladas por referência numérica (ex.: `7403.103`).
+### 6. Limpeza de descartados antigos
+- O "X" já é permanente (salvo no navegador). Manter como está; só revalidar que segue funcionando após o escopo por loja.
 
----
+## Detalhes técnicos
 
-## STATUS DE EXECUÇÃO
+- **Migração** (aditiva, sem perda): `ALTER TABLE chat_awaiting_payment ADD COLUMN store_id uuid, ADD COLUMN whatsapp_number_id uuid;` + UPDATE de backfill cruzando `pos_sales` (store_id, sale_type, event_id) e a instância da última `whatsapp_messages` por telefone. Mantém a UNIQUE(phone) atual.
+- **`pixNotificationStore.ts`**: `init(storeId)` agora recebe a loja; `refresh()` faz join com `pos_sales` (store_id, sale_type, event_id, status) e filtra por loja + origem (chat/live). `PixTab` ganha `numberId` real e `isLive`.
+- **`PixPendingTabsBar.tsx` / `PixPaidGlobalAlert.tsx`**: render da tag "LIVE"; `init` recebe `storeId` (vindo do `POSWhatsApp`, que já tem `storeId`).
+- **`POSWhatsAppPixDialog.tsx` / `POSWhatsAppCheckoutDialog.tsx`**: incluir `store_id` e `whatsapp_number_id` no upsert.
+- **`POSWhatsApp.tsx`**: clique já chama `handleSelectConversation(phone, numberId)` — passará o `numberId` real, resolvendo a conversa vazia.
+- Tudo é incremental: colunas nullable, filtros adicionais e backfill. Nenhuma alteração destrutiva em dados ou fluxos existentes.
 
-### Fase 1 — CONCLUÍDA
-- `backfill_estoque_from_pos(true)`: 6 pais + 21 variações criados (needs_review=true).
-
-### Fase 2 — CONCLUÍDA
-1. **Anti-fantasma (busca ao vivo):** `pos-tiny-search-product` agora faz INSERT no `pos_products`
-   de todo produto puxado do Tiny que ainda não exista na loja (estoque inicia em 0; nunca
-   sobrescreve produto já cadastrado). A partir de agora nenhuma venda gera fantasma.
-2. **Backfill dos fantasmas históricos:** função `backfill_pos_products_from_sales(p_commit, p_clean_only)`
-   reconstrói no cache do PDV os produtos já vendidos e ausentes. Commit real:
-   **642 produtos inseridos** (catálogo real), **220 ignorados** (produtos de anúncio/online com
-   nome de marketing "–/—"). ZOE e KATIA incluídos.
-3. **Empurrar p/ Estoque:** `backfill_estoque_from_pos(true)` rodou de novo e criou **0 novos** —
-   porque os 417 SKUs distintos reconstruídos **já existiam em `product_variants`** (vindos da
-   importação separada do Tiny). O buraco era só no cache do PDV.
-
-### Fase 3 — IMPLEMENTADA (consolidação aguarda commit)
-1. **Trigger contínuo (ATIVO):** `trg_sync_pos_product_to_estoque` em `pos_products` (AFTER INSERT/UPDATE
-   de parent_sku, barcode, sku, name, color, size) chama `sync_pos_product_to_estoque()`, que cria
-   pai (`sku_root = parent_sku`) + filho (`gtin = barcode`) no Estoque automaticamente. Ignora lixo
-   (POS-/TESTE-/produto teste/nomes de anúncio com travessão) e nunca quebra a gravação do PDV
-   (EXCEPTION → RETURN NEW). A partir de agora o Estoque espelha o PDV sozinho.
-2. **Consolidação de pais (função criada):** `consolidate_estoque_parents_by_pos(p_commit)` reagrupa
-   variações fragmentadas sob o pai-modelo correto (`sku_root = parent_sku do PDV`), remove duplicatas
-   por (cor,tamanho), apaga pais numéricos vazios e marca needs_review. DRY-RUN: **66 pais a criar,
-   318 variações a reagrupar** (ex.: ZOE, KATIA, BRENDA, ANE). Commit feito pelo botão "Consolidar"
-   no painel ou via RPC com p_commit=true.
-3. **Painel de divergências (UI):** novo modo "Divergências PDV" no Módulo Estoque
-   (`InventoryPosDivergences.tsx`) — cards de resumo (não catalogados / sem GTIN / pais fragmentados),
-   lista paginada com busca e botão de consolidação com preview. RPCs:
-   `pos_estoque_divergence_summary()` e `list_pos_estoque_divergences()`.
-
+Quer que eu implemente nessa ordem (migração + backfill primeiro, depois store/UI)?

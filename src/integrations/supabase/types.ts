@@ -2391,21 +2391,27 @@ export type Database = {
           id: string
           phone: string
           sale_id: string | null
+          store_id: string | null
           type: string
+          whatsapp_number_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
           phone: string
           sale_id?: string | null
+          store_id?: string | null
           type?: string
+          whatsapp_number_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
           phone?: string
           sale_id?: string | null
+          store_id?: string | null
           type?: string
+          whatsapp_number_id?: string | null
         }
         Relationships: []
       }
