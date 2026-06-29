@@ -141,9 +141,14 @@ export default function CrossellModal({
 
   const hasOffers = offers.length > 0;
 
-  const totalSavings = useMemo(
+  // Maior desconto unitário entre as ofertas (diferença do item de maior desconto),
+  // NÃO a soma de vários itens.
+  const maxSavings = useMemo(
     () =>
-      offers.reduce((s, o) => s + Math.max(0, o.original_price - o.discount_price), 0),
+      offers.reduce(
+        (max, o) => Math.max(max, Math.max(0, o.original_price - o.discount_price)),
+        0,
+      ),
     [offers],
   );
 
@@ -151,17 +156,17 @@ export default function CrossellModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-3xl w-[95vw] p-0 overflow-hidden gap-0 border-2 border-primary/40">
+      <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] p-0 overflow-y-auto gap-0 border-2 border-primary/40">
         {/* Header */}
-        <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-background px-5 pt-5 pb-4 text-center">
+        <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-background px-4 sm:px-5 pt-5 pb-4 text-center">
           <div className="flex items-center justify-center gap-2 mb-1">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <h2 className="text-lg sm:text-xl font-bold">Oferta exclusiva pra você!</h2>
+            <Sparkles className="h-5 w-5 text-primary shrink-0" />
+            <h2 className="text-base sm:text-xl font-bold leading-tight">Oferta exclusiva pra você!</h2>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground max-w-lg mx-auto">
             Como você já tem um produto no carrinho, liberamos condições especiais
-            {totalSavings > 0 && (
-              <> com até <strong className="text-primary">{brl(totalSavings)}</strong> de desconto</>
+            {maxSavings > 0 && (
+              <> com até <strong className="text-primary">{brl(maxSavings)}</strong> de desconto</>
             )}
             . Aproveite antes que o tempo acabe!
           </p>
@@ -182,7 +187,10 @@ export default function CrossellModal({
 
         {/* Horizontal scroll carousel */}
         <div className="px-3 pb-2">
-          <div className="flex gap-3 overflow-x-auto py-4 px-1 snap-x snap-mandatory scrollbar-thin">
+          <div
+            className="flex gap-3 overflow-x-auto py-4 px-1 snap-x snap-mandatory scrollbar-thin touch-pan-x"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {offers.map((block) => {
               const isAdded = added.has(block.variant_id);
               const isBusy = busyVariant === block.variant_id;
@@ -195,7 +203,7 @@ export default function CrossellModal({
               return (
                 <div
                   key={block.variant_id}
-                  className="snap-start shrink-0 w-[220px] sm:w-[240px] rounded-xl border border-border bg-card overflow-hidden flex flex-col"
+                  className="snap-start shrink-0 w-[160px] sm:w-[240px] rounded-xl border border-border bg-card overflow-hidden flex flex-col"
                 >
                   <div className="relative aspect-square bg-muted">
                     {block.image ? (
@@ -284,12 +292,16 @@ export default function CrossellModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t bg-muted/30 flex items-center justify-between gap-3">
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-            <Check className="h-3.5 w-3.5 text-primary" />
+        <div className="px-4 sm:px-5 py-3 border-t bg-muted/30 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1 order-2 sm:order-1">
+            <Check className="h-3.5 w-3.5 text-primary shrink-0" />
             Itens adicionados entram no mesmo pagamento
           </p>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button
+            size="sm"
+            onClick={onClose}
+            className="order-1 sm:order-2 w-full sm:w-auto font-semibold shrink-0"
+          >
             Continuar pagamento
           </Button>
         </div>
