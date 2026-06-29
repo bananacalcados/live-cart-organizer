@@ -1538,6 +1538,32 @@ export default function TransparentCheckout() {
     loadInstallmentConfig();
   }, [orderId]);
 
+  // Per-event installment override: "acima de R$ X, parcelar em até N× sem juros".
+  useEffect(() => {
+    const evId = orderData?.eventId;
+    const total = orderData?.totalAmount;
+    if (!evId || total == null) return;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("events")
+          .select("installment_min_value, installment_max")
+          .eq("id", evId)
+          .maybeSingle();
+        const maxInst = Number((data as any)?.installment_max || 0);
+        if (!maxInst) return;
+        const minVal = Number((data as any)?.installment_min_value || 0);
+        if (total >= minVal) {
+          setInstallmentConfig((prev) => ({
+            ...prev,
+            max_installments: maxInst,
+            interest_free_installments: Math.max(prev.interest_free_installments, maxInst),
+          }));
+        }
+      } catch {}
+    })();
+  }, [orderData?.eventId, orderData?.totalAmount]);
+
   const loadOrder = async () => {
     try {
       const { data: orderRaw, error } = await supabase
