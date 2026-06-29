@@ -273,7 +273,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       const variants: string[] = [];
       handles.forEach((h) => {
         if (!map.has(h)) {
-          variants.push(h, `@${h}`);
+          variants.push(h, `@${h}`, `@ ${h}`);
         }
       });
       if (variants.length > 0) {
