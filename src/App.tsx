@@ -138,6 +138,7 @@ const App = () => (
           </Suspense>
           <TeamChat />
           <StickyNotesFloatingButton />
+          <PixPaidGlobalAlert />
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>
