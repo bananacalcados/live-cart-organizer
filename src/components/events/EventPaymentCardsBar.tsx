@@ -164,14 +164,14 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                     "group flex flex-col gap-1 min-w-[200px] max-w-[240px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0",
                     paidCard
                       ? "bg-stage-paid/10 border-stage-paid/40 hover:bg-stage-paid/20"
-                      : "bg-neutral-900 text-white border-neutral-700 hover:bg-neutral-800",
+                      : "bg-neutral-900 text-white border-l-4 border-l-yellow-400 border-y-neutral-700 border-r-neutral-700 hover:bg-neutral-800",
                   )}
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span
                       className={cn(
                         "flex h-5 w-5 items-center justify-center rounded-full shrink-0",
-                        paidCard ? "bg-stage-paid/25 text-stage-paid" : "bg-white/15 text-white",
+                        paidCard ? "bg-stage-paid/25 text-stage-paid" : "bg-yellow-400/20 text-yellow-400",
                       )}
                     >
                       {paidCard ? <Check className="h-3 w-3" /> : <QrCode className="h-3 w-3" />}
@@ -192,7 +192,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                   <span
                     className={cn(
                       "text-[12px] font-bold",
-                      paidCard ? "text-stage-paid" : "text-white",
+                      paidCard ? "text-stage-paid" : "text-yellow-400",
                     )}
                   >
                     {paidCard ? "PAGO • " : "Aguardando • "}R$ {value.toFixed(2)}
