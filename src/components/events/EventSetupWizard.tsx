@@ -23,6 +23,7 @@ import { MetaTemplateConfigurator } from "./MetaTemplateConfigurator";
 import { InitialMessageEditor } from "./InitialMessageEditor";
 import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { CrossellConfigStep, CrossellOfferDraft } from "./CrossellConfigStep";
 import {
   Truck,
   FileText,
@@ -34,6 +35,7 @@ import {
   Loader2,
   Gift,
   Smartphone,
+  ShoppingBag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -45,12 +47,13 @@ interface Props {
   onCompleted: () => void;
 }
 
-type StepKey = "shipping" | "template" | "installments" | "live";
+type StepKey = "shipping" | "template" | "installments" | "crossell" | "live";
 
 const STEPS: { key: StepKey; title: string; icon: typeof Truck }[] = [
   { key: "shipping", title: "Frete", icon: Truck },
   { key: "template", title: "Mensagem", icon: FileText },
   { key: "installments", title: "Parcelamento", icon: CreditCard },
+  { key: "crossell", title: "Crossell", icon: ShoppingBag },
   { key: "live", title: "Ativar Live", icon: Radio },
 ];
 
