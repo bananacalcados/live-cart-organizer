@@ -821,6 +821,21 @@ const Events = () => {
           </TabsContent>
         </Tabs>
       </main>
+
+      <EventSetupWizard
+        event={wizardEvent}
+        open={wizardOpen}
+        onOpenChange={(open) => {
+          setWizardOpen(open);
+          if (!open) setWizardEvent(null);
+        }}
+        onCompleted={() => {
+          const id = wizardEvent?.id;
+          setWizardOpen(false);
+          setWizardEvent(null);
+          if (id) enterEvent(id);
+        }}
+      />
     </div>
   );
 };
