@@ -325,6 +325,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       if (error) throw error;
 
       if (data?.qrCode) {
+        setPixCode(data.qrCode);
         try {
           await navigator.clipboard.writeText(data.qrCode);
           toast.success(`PIX gerado! Código copiado. Valor: R$ ${data.amount}`, { duration: 6000 });
