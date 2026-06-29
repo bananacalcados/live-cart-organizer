@@ -397,16 +397,18 @@ const Events = () => {
               <MessageCircle className="h-4 w-4" />
               Chat
             </Button>
+            <Button className="btn-accent" onClick={handleNewLive} disabled={creatingDraft}>
+              {creatingDraft ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 mr-2" />
+              )}
+              Nova Live
+            </Button>
             <Dialog open={dialogOpen} onOpenChange={(open) => {
               setDialogOpen(open);
               if (!open) resetForm();
             }}>
-              <DialogTrigger asChild>
-                <Button className="btn-accent">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nova Live
-                </Button>
-              </DialogTrigger>
               <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
