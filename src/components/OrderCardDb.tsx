@@ -656,7 +656,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             Pago Externo
           </Badge>
         )}
-        {/* Forma de pagamento (somente quando PAGO) */}
+        {/* Forma de pagamento (somente quando PAGO) — tags separadas: gateway + método (+ parcelas) */}
         {(order.is_paid || order.paid_externally) && (() => {
           const gateway = order.mercadopago_payment_id ? 'Mercado Pago'
             : order.pagarme_order_id ? 'Pagar.me'
@@ -666,41 +666,48 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             : null;
 
           const label = (order.payment_method_label || '').toLowerCase();
-          const isPix = label.includes('pix');
-          // Parcelas: usa coluna installments, com fallback no texto "Cartão de Crédito 6x"
+          // Parcelas: coluna installments → texto "Cartão de Crédito 6x" → fallback do checkout
           const parsedFromLabel = parseInt((label.match(/(\d+)\s*x/) || [])[1] || '', 10);
           const installments = order.installments && order.installments > 0
             ? order.installments
-            : (!isNaN(parsedFromLabel) ? parsedFromLabel : 0);
-          const isCard = label.includes('cart') || label.includes('crédito') || label.includes('credito') || installments > 1;
+            : (!isNaN(parsedFromLabel) && parsedFromLabel > 0 ? parsedFromLabel
+            : (checkoutInstallments || 0));
 
-          if (isPix) {
-            return (
-              <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
-                <DollarSign className="h-3 w-3 mr-1" />
-                PAGAMENTO: PIX
-              </Badge>
-            );
-          }
-          if (isCard) {
-            return (
-              <Badge variant="secondary" className="text-[10px] bg-stage-contacted/20 text-stage-contacted border-stage-contacted/30">
-                <CreditCard className="h-3 w-3 mr-1" />
-                CARTÃO{installments > 0 ? ` ${installments}x` : ''}{gateway ? ` · ${gateway}` : ''}
-              </Badge>
-            );
-          }
-          // Pago, mas método não identificado: mostra ao menos o gateway, se houver
-          if (gateway) {
-            return (
-              <Badge variant="secondary" className="text-[10px] bg-muted text-muted-foreground border-border">
-                <CreditCard className="h-3 w-3 mr-1" />
-                PAGAMENTO: {gateway}
-              </Badge>
-            );
-          }
-          return null;
+          // Identifica o método: 1) pela label, 2) por parcelas, 3) pelo checkout
+          const cm = (checkoutMethod || '').toLowerCase();
+          let method: 'pix' | 'card' | null = null;
+          if (label.includes('pix')) method = 'pix';
+          else if (label.includes('cart') || label.includes('crédito') || label.includes('credito') || label.includes('débito') || label.includes('debito') || installments > 1) method = 'card';
+          else if (cm === 'pix') method = 'pix';
+          else if (cm === 'card' || cm === 'credit_card' || cm === 'debit_card') method = 'card';
+
+          // Nada identificado e sem gateway → não mostra nada
+          if (!gateway && !method) return null;
+
+          return (
+            <>
+              {gateway && (
+                <Badge variant="secondary" className="text-[10px] bg-muted text-muted-foreground border-border">
+                  <Store className="h-3 w-3 mr-1" />
+                  {gateway}
+                </Badge>
+              )}
+              {method === 'pix' && (
+                <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
+                  <DollarSign className="h-3 w-3 mr-1" />
+                  PIX
+                </Badge>
+              )}
+              {method === 'card' && (
+                <Badge variant="secondary" className="text-[10px] bg-stage-contacted/20 text-stage-contacted border-stage-contacted/30">
+                  <CreditCard className="h-3 w-3 mr-1" />
+                  CARTÃO{installments > 0 ? ` ${installments}x` : ''}
+                </Badge>
+              )}
+            </>
+          );
         })()}
+
         {order.has_gift && (
           <Badge variant="secondary" className="text-[10px] bg-accent/20 text-accent border-accent/30">
             <Gift className="h-3 w-3 mr-1" />
