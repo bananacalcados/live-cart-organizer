@@ -3,6 +3,7 @@ import { CheckCircle2, PartyPopper, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -20,6 +21,22 @@ interface PaidInfo {
   customerName: string;
   amount?: number | null;
 }
+
+const calculateOrderAmount = (order: any) => {
+  const products = Array.isArray(order?.products) ? order.products : [];
+  const subtotal = products.reduce((sum: number, product: any) => {
+    return sum + Number(product?.price || 0) * Number(product?.quantity || 1);
+  }, 0);
+
+  const discountValue = Number(order?.discount_value || 0);
+  const discount = order?.discount_type === "percentage"
+    ? subtotal * (discountValue / 100)
+    : discountValue;
+  const shipping = order?.free_shipping ? 0 : Number(order?.shipping_cost || 0);
+  const total = subtotal - discount + shipping;
+
+  return Number.isFinite(total) && total > 0 ? Math.round(total * 100) / 100 : null;
+};
 
 /**
  * Escuta em tempo real os pedidos do evento atual e exibe um modal de
@@ -69,18 +86,28 @@ export function EventPaymentNotification({ eventId }: EventPaymentNotificationPr
     };
 
     const handleUpdate = async (newRow: any) => {
-      if (!newRow || newRow.event_id !== eventId) return;
-      const isPaid = isOrderMarkedPaid(newRow);
-      if (!isPaid) return;
+      if (!newRow?.id) return;
+      if (newRow.event_id && newRow.event_id !== eventId) return;
       if (knownPaidRef.current.has(newRow.id)) return;
+
+      let orderForNotification = newRow;
+      const { data: freshOrder } = await supabase
+        .from("orders")
+        .select("id, event_id, customer_id, is_paid, paid_externally, stage, products, discount_type, discount_value, shipping_cost, free_shipping")
+        .eq("id", newRow.id)
+        .maybeSingle();
+      if (freshOrder) orderForNotification = freshOrder;
+
+      if (orderForNotification.event_id !== eventId) return;
+      if (!isOrderMarkedPaid(orderForNotification)) return;
       knownPaidRef.current.add(newRow.id);
 
-      const customerName = await resolveCustomerName(newRow);
+      const customerName = await resolveCustomerName(orderForNotification);
       if (!active) return;
       setPaidInfo({
-        orderId: newRow.id,
+        orderId: orderForNotification.id,
         customerName,
-        amount: newRow.amount_paid ?? newRow.paid_amount ?? null,
+        amount: calculateOrderAmount(orderForNotification),
       });
     };
 
@@ -120,6 +147,9 @@ export function EventPaymentNotification({ eventId }: EventPaymentNotificationPr
               Pagamento confirmado!
             </span>
           </DialogTitle>
+          <DialogDescription>
+            Confirmação automática de pagamento do evento atual.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-2 py-2">
           <p className="text-base">
