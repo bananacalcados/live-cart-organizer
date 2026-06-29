@@ -305,7 +305,10 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     });
   }
 
-  // Find the order by mercadopago_payment_id
+  // Find the order by mercadopago_payment_id.
+  // Safety net: Mercado Pago also stores our internal order id in external_reference.
+  // If the webhook arrives while the mp_id update is stale/raced, reconcile by external_reference
+  // so paid event orders never stay stuck in "contacted".
   let updated = false;
   let orderId: string | null = null;
 
@@ -318,7 +321,27 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     .limit(1);
   if (orderSearchErr) console.error("[mercadopago] order search error:", orderSearchErr);
   console.log(`[mercadopago] Found ${orders?.length || 0} order(s)`);
-  const order = orders && orders.length > 0 ? orders[0] : null;
+  let order = orders && orders.length > 0 ? orders[0] : null;
+
+  if (!order && mpPayment?.external_reference) {
+    const externalRef = String(mpPayment.external_reference);
+    console.log(`[mercadopago] No order by mp_id. Trying external_reference=${externalRef}`);
+    const { data: refOrder, error: refOrderErr } = await supabase
+      .from("orders")
+      .select("id, is_paid, pickup_store_id")
+      .eq("id", externalRef)
+      .maybeSingle();
+
+    if (refOrderErr) console.error("[mercadopago] external_reference order search error:", refOrderErr);
+    if (refOrder) {
+      order = refOrder;
+      await supabase
+        .from("orders")
+        .update({ mercadopago_payment_id: mpIdStr })
+        .eq("id", refOrder.id);
+      console.log(`[mercadopago] Reconciled order ${refOrder.id} via external_reference for mp_id=${mpIdStr}`);
+    }
+  }
 
   if (order) {
     orderId = order.id;
