@@ -125,8 +125,8 @@ serve(async (req) => {
       const ownedProductGids = new Set<string>();
       for (const it of originalItems) {
         ownedProductGids.add(productGidFromOrderItem(String(it.id || "")));
-        const t = sizeToken(String(it.variant || ""));
-        if (t) customerSizes.add(t);
+        // A variant string can carry one or more size tokens (e.g. "34" or "33/34").
+        for (const t of sizeTokens(String(it.variant || ""))) customerSizes.add(t);
       }
 
       const { data: offers } = await supabase
