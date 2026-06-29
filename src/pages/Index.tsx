@@ -180,6 +180,8 @@ const Index = () => {
           </div>
         )}
 
+        {currentEventId && <EventInnerDashboard eventId={currentEventId} />}
+
         {currentEventId && currentEvent && (
           <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
         )}
