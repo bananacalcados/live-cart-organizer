@@ -10,11 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { DbEvent } from "@/types/database";
 import { MetaTemplateConfigurator } from "./MetaTemplateConfigurator";
 import { InitialMessageEditor } from "./InitialMessageEditor";
 import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import {
   Truck,
   FileText,
@@ -25,6 +33,7 @@ import {
   ChevronRight,
   Loader2,
   Gift,
+  Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
