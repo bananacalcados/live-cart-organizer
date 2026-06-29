@@ -289,25 +289,49 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
           {currentStep.key === "template" && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Configure a mensagem que os clientes recebem. {usesMeta
-                  ? "Selecione o template oficial da Meta e preencha as variáveis."
-                  : "Este evento não usa WhatsApp oficial (Meta), então configure apenas a mensagem inicial."}
+                Selecione a instância de WhatsApp oficial (Meta), escolha o template aprovado e
+                preencha as variáveis. A mensagem inicial abaixo é usada como saudação no chat.
               </p>
-              {usesMeta && (
-                <MetaTemplateConfigurator
-                  whatsappNumberId={whatsappNumberId}
-                  templateName={metaTemplateName}
-                  language={metaTemplateLanguage}
-                  bodyVariables={metaTemplateBodyVars}
-                  headerVariable={metaTemplateHeaderVar}
-                  onChange={(next) => {
-                    setMetaTemplateName(next.templateName);
-                    setMetaTemplateLanguage(next.language);
-                    setMetaTemplateBodyVars(next.bodyVariables);
-                    setMetaTemplateHeaderVar(next.headerVariable);
-                  }}
-                />
-              )}
+
+              {/* WhatsApp API instance selector */}
+              <div className="space-y-2 rounded-md border p-3 bg-muted/30">
+                <Label className="flex items-center gap-2 text-xs font-semibold">
+                  <Smartphone className="h-4 w-4 text-accent" /> Instância de WhatsApp (Meta API)
+                </Label>
+                <Select value={selectedWaId} onValueChange={setSelectedWaId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o número WhatsApp..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma (sem template Meta)</SelectItem>
+                    {numbers
+                      .filter((n) => (n.provider || "meta") === "meta")
+                      .map((n) => (
+                        <SelectItem key={n.id} value={n.id}>
+                          {n.label} <span className="text-muted-foreground ml-1">({n.phone_display})</span>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Apenas números oficiais da Meta carregam templates aprovados.
+                </p>
+              </div>
+
+              <MetaTemplateConfigurator
+                whatsappNumberId={whatsappNumberId}
+                templateName={metaTemplateName}
+                language={metaTemplateLanguage}
+                bodyVariables={metaTemplateBodyVars}
+                headerVariable={metaTemplateHeaderVar}
+                onChange={(next) => {
+                  setMetaTemplateName(next.templateName);
+                  setMetaTemplateLanguage(next.language);
+                  setMetaTemplateBodyVars(next.bodyVariables);
+                  setMetaTemplateHeaderVar(next.headerVariable);
+                }}
+              />
+
               <InitialMessageEditor
                 enabled={initialMessageEnabled}
                 blocks={initialMessageBlocks}
