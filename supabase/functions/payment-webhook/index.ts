@@ -313,7 +313,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   console.log(`[mercadopago] Searching for order with mercadopago_payment_id=${mpIdStr}`);
   const { data: orders, error: orderSearchErr } = await supabase
     .from("orders")
-    .select("id, is_paid, store_id")
+    .select("id, is_paid, pickup_store_id")
     .filter("mercadopago_payment_id", "eq", mpIdStr)
     .limit(1);
   if (orderSearchErr) console.error("[mercadopago] order search error:", orderSearchErr);
