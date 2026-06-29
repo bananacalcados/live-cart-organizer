@@ -191,6 +191,52 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     loadBanned();
   }, [loadBanned]);
 
+  // Carrega o WhatsApp cadastrado dos @ que comentaram (para o botão de WhatsApp)
+  useEffect(() => {
+    const handles = Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean)));
+    if (handles.length === 0) {
+      setWhatsappByHandle(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const map = new Map<string, string>();
+      // 1) Aproveita o WhatsApp dos pedidos já carregados deste evento
+      for (const o of orders) {
+        const h = cleanHandle(o.customer?.instagram_handle || "");
+        const wa = (o.customer?.whatsapp || "").replace(/\D/g, "");
+        if (h && wa) map.set(h, o.customer!.whatsapp!);
+      }
+      // 2) Busca na tabela de clientes os handles ainda sem WhatsApp
+      const variants: string[] = [];
+      handles.forEach((h) => {
+        if (!map.has(h)) {
+          variants.push(h, `@${h}`);
+        }
+      });
+      if (variants.length > 0) {
+        const batchSize = 200;
+        for (let i = 0; i < variants.length; i += batchSize) {
+          const batch = variants.slice(i, i + batchSize);
+          const { data } = await supabase
+            .from("customers")
+            .select("instagram_handle, whatsapp")
+            .in("instagram_handle", batch);
+          (data || []).forEach((c: any) => {
+            const h = cleanHandle(c.instagram_handle || "");
+            const wa = (c.whatsapp || "").replace(/\D/g, "");
+            if (h && wa && !map.has(h)) map.set(h, c.whatsapp);
+          });
+        }
+      }
+      if (!cancelled) setWhatsappByHandle(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [comments, orders]);
+
+
   // Realtime: novos comentários (live_comments) entram automaticamente
   useEffect(() => {
     if (!eventId) return;
