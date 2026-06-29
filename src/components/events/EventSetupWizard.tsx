@@ -10,11 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { DbEvent } from "@/types/database";
 import { MetaTemplateConfigurator } from "./MetaTemplateConfigurator";
 import { InitialMessageEditor } from "./InitialMessageEditor";
 import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import {
   Truck,
   FileText,
@@ -25,6 +33,7 @@ import {
   ChevronRight,
   Loader2,
   Gift,
+  Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -62,6 +71,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [freeThreshold, setFreeThreshold] = useState("");
 
   // Template + mensagem
+  const [selectedWaId, setSelectedWaId] = useState<string>("none");
   const [metaTemplateName, setMetaTemplateName] = useState<string | null>(null);
   const [metaTemplateLanguage, setMetaTemplateLanguage] = useState("pt_BR");
   const [metaTemplateBodyVars, setMetaTemplateBodyVars] = useState<string[]>([]);
@@ -73,9 +83,13 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [installMin, setInstallMin] = useState("");
   const [installMax, setInstallMax] = useState("");
 
-  const channelPrefs: string[] = ((event as any)?.channel_preferences as string[]) || [];
-  const usesMeta = channelPrefs.includes("meta_whatsapp");
-  const whatsappNumberId = (event as any)?.whatsapp_number_id || null;
+  const { numbers, fetchNumbers } = useWhatsAppNumberStore();
+  const whatsappNumberId = selectedWaId === "none" ? null : selectedWaId;
+
+  useEffect(() => {
+    if (open && numbers.length === 0) fetchNumbers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Per-step completeness based on the persisted event (used to skip configured steps).
   const completeFromEvent = useMemo(() => {
@@ -95,6 +109,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     const e = event as any;
     setShippingCost(e.default_shipping_cost != null ? String(e.default_shipping_cost) : "");
     setFreeThreshold(e.free_shipping_threshold != null ? String(e.free_shipping_threshold) : "");
+    setSelectedWaId(e.whatsapp_number_id || "none");
     setMetaTemplateName(e.meta_template_name || null);
     setMetaTemplateLanguage(e.meta_template_language || "pt_BR");
     setMetaTemplateBodyVars((e.meta_template_body_variables as string[]) || []);
@@ -119,6 +134,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.default_shipping_cost = toNum(shippingCost);
       updates.free_shipping_threshold = toNum(freeThreshold);
     } else if (key === "template") {
+      updates.whatsapp_number_id = whatsappNumberId;
       updates.meta_template_name = metaTemplateName;
       updates.meta_template_language = metaTemplateLanguage;
       updates.meta_template_body_variables = metaTemplateBodyVars;
@@ -273,25 +289,49 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
           {currentStep.key === "template" && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Configure a mensagem que os clientes recebem. {usesMeta
-                  ? "Selecione o template oficial da Meta e preencha as variáveis."
-                  : "Este evento não usa WhatsApp oficial (Meta), então configure apenas a mensagem inicial."}
+                Selecione a instância de WhatsApp oficial (Meta), escolha o template aprovado e
+                preencha as variáveis. A mensagem inicial abaixo é usada como saudação no chat.
               </p>
-              {usesMeta && (
-                <MetaTemplateConfigurator
-                  whatsappNumberId={whatsappNumberId}
-                  templateName={metaTemplateName}
-                  language={metaTemplateLanguage}
-                  bodyVariables={metaTemplateBodyVars}
-                  headerVariable={metaTemplateHeaderVar}
-                  onChange={(next) => {
-                    setMetaTemplateName(next.templateName);
-                    setMetaTemplateLanguage(next.language);
-                    setMetaTemplateBodyVars(next.bodyVariables);
-                    setMetaTemplateHeaderVar(next.headerVariable);
-                  }}
-                />
-              )}
+
+              {/* WhatsApp API instance selector */}
+              <div className="space-y-2 rounded-md border p-3 bg-muted/30">
+                <Label className="flex items-center gap-2 text-xs font-semibold">
+                  <Smartphone className="h-4 w-4 text-accent" /> Instância de WhatsApp (Meta API)
+                </Label>
+                <Select value={selectedWaId} onValueChange={setSelectedWaId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o número WhatsApp..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma (sem template Meta)</SelectItem>
+                    {numbers
+                      .filter((n) => (n.provider || "meta") === "meta")
+                      .map((n) => (
+                        <SelectItem key={n.id} value={n.id}>
+                          {n.label} <span className="text-muted-foreground ml-1">({n.phone_display})</span>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Apenas números oficiais da Meta carregam templates aprovados.
+                </p>
+              </div>
+
+              <MetaTemplateConfigurator
+                whatsappNumberId={whatsappNumberId}
+                templateName={metaTemplateName}
+                language={metaTemplateLanguage}
+                bodyVariables={metaTemplateBodyVars}
+                headerVariable={metaTemplateHeaderVar}
+                onChange={(next) => {
+                  setMetaTemplateName(next.templateName);
+                  setMetaTemplateLanguage(next.language);
+                  setMetaTemplateBodyVars(next.bodyVariables);
+                  setMetaTemplateHeaderVar(next.headerVariable);
+                }}
+              />
+
               <InitialMessageEditor
                 enabled={initialMessageEnabled}
                 blocks={initialMessageBlocks}
