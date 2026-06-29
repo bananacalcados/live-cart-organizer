@@ -782,20 +782,13 @@ async function updateOrder(
       transactionValue: String(tokenTransaction),
       paidAt,
     });
-    // Busca store_id real do pedido
+    // Busca store_id real do pedido (orders usa pickup_store_id)
     let lojaName = 'centro'; // fallback
-    if (sale?.store_id) {
+    if (order?.pickup_store_id) {
       const { data: storeData } = await supabase
         .from('pos_stores')
         .select('name')
-        .eq('id', sale.store_id)
-        .single();
-      if (storeData?.name) lojaName = storeData.name.toLowerCase();
-    } else if (order?.store_id) {
-      const { data: storeData } = await supabase
-        .from('pos_stores')
-        .select('name')
-        .eq('id', order.store_id)
+        .eq('id', order.pickup_store_id)
         .single();
       if (storeData?.name) lojaName = storeData.name.toLowerCase();
     }
