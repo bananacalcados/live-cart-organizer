@@ -1,78 +1,107 @@
-# Plano — Crossell no link do checkout da Live
+# Melhorias no Módulo de Eventos
 
-Antes de qualquer alteração no checkout, este é o plano por etapas. Só implemento após sua aprovação. Nada do checkout atual é removido — o crossell é uma camada nova, sempre opcional por evento.
+## 1. "Nova Live" passa a usar o novo Wizard (com etapa de identificação)
 
-## Conceito (regras de negócio confirmadas)
-- O crossell é configurado **por evento**, selecionando 3–5 produtos da Shopify, cada um com **valor original** e **valor com desconto**.
-- A oferta só aparece **para quem já tem produto no carrinho/pedido** (o pedido criado no evento já tem itens).
-- Se o carrinho só tiver **1 item e esse item for um dos produtos da oferta**, esse produto **não é ofertado** (conta valor normal); os demais produtos da oferta continuam aparecendo.
-- **Calçados**: só mostrar opções que tenham estoque no **mesmo tamanho** do(s) calçado(s) já no pedido. **Acessórios sem tamanho** (bolsa, mochila, meia…) aparecem sempre.
-- A foto puxada é a da **variação de cor** disponível naquele tamanho. Se houver mais de uma cor disponível no tamanho do cliente, cada cor vira um **bloco separado** no carrossel.
-- Modal grande, carrossel **com rolagem lateral** (scroll horizontal, sem botões de avançar), fotos grandes, mostrando cor + tamanho + valor normal e com desconto, e um **título** explicando que é uma condição especial por já ter um produto no carrinho.
-- **Cronômetro regressivo de 2 minutos** ao abrir o modal.
-- Adicionar/remover crossell **reflete em tempo real no card do pedido do evento** (via webhook/realtime). O cliente **só pode remover itens de crossell**, nunca o item original do pedido.
-- Desconto **sempre** aplicado em cima do produto de crossell — nunca abatido no produto original.
-- Vínculo do crossell é **pelo pedido/checkout** (order_id), evitando que a mesma oferta seja contada em 2 pedidos do mesmo cliente no mesmo evento.
+Hoje "Nova Live" abre um modal antigo (nome, data, canal, frete, automações) e o Wizard novo só abre no "Abrir Evento". Vamos unificar tudo no Wizard.
 
-## Como o checkout funciona hoje (base para não quebrar)
-- O link é `/checkout/order/:orderId`. O checkout carrega o pedido via RPC `get_checkout_order(p_order_id)` e os dados do cliente via `get_checkout_registration`.
-- Os itens ficam em `orders.products` (JSONB, lista de itens com title/variant/price/image/quantity).
-- Frete via `checkout-quote-freight` (recebe `order_id`/`total_value`); parcelamento por evento já existe.
-- Imagem por variação de cor já existe em `getVariantImage` (lib/shopify).
+- Adicionar uma **nova primeira etapa "Identificação"** no `EventSetupWizard.tsx`:
+  - Nome do evento
+  - Data de início e fim (opcional)
+  - Canal de venda: **Shopify (site)** ou **Loja Física** (Pérola / Centro)
+- Botão **"Nova Live"** no `Events.tsx`: cria um evento rascunho (nome temporário) e abre o Wizard direto na etapa Identificação — substituindo o modal antigo. O modal antigo de criação é removido.
+- O Wizard valida que nome e canal estão preenchidos antes de avançar da etapa 1.
+- Ordem final das etapas: **Identificação → Frete → Mensagem → Parcelamento → Crossell → Ativar Live**.
+
+## 2. Corrigir botão "Pular e abrir"
+
+Atualmente o `onClick` chama `onCompleted`, mas em eventos recém-criados sem `name`/canal o fluxo pode falhar silenciosamente. Vamos:
+- Garantir que "Pular e abrir" **sempre** feche o modal e entre no evento (`setCurrentEvent` + navegar para o evento), sem depender de validação das etapas seguintes.
+- Tratar o caso do evento rascunho: se o nome ainda não foi salvo, exigir preenchimento da etapa 1 antes de permitir pular.
+
+## 3. Botão para reabrir a configuração dentro do evento
+
+- No cabeçalho da tela do evento (`src/pages/Index.tsx`), adicionar um botão **"Configurar Live"** que reabre o `EventSetupWizard` para o evento atual.
+
+## 4. Dashboard dentro do evento
+
+Novo componente `EventInnerDashboard` exibido no topo da tela do evento (`Index.tsx`), com os indicadores:
+
+- **Ticket médio** do evento (faturamento ÷ pedidos pagos).
+- **Itens adicionados via Crossell** (do link de checkout) — contagem de `order_crossell_items` do evento.
+- **Itens de Crossell que converteram** — itens de crossell cujo pedido está pago.
+- **Leads captados** pelo Typebot ou LP do evento (`event_leads` por `event_id`, separando por `source`).
+- **Leads que converteram em venda** — leads cujo telefone (DDD + 9 dígitos) bate com o WhatsApp de um pedido **pago** do evento.
+- **Taxa de conversão** = leads que converteram ÷ total de leads captados (%).
+
+Para performance, esses números virão de uma **RPC** dedicada (`event_inner_dashboard`).
+
+## 5. Tags no painel lateral de comentários da Live
+
+No `EventLiveCommentsPanel.tsx`, ao lado do @ de cada comentário:
+
+- **TAG "Lead"** (verde) se o @ foi captado pelo Typebot/LP **deste** evento (match por DDD + 9 dígitos com o WhatsApp do cadastro do pedido / cliente).
+- **TAG "Lead de outra campanha"** se o telefone existir como lead em **outro** evento/origem de marketing (`event_leads` de outros eventos).
+- **Badge de classificação do Participante Score** (ver item 6), indicando o nível de engajamento daquele @.
+
+## 6. Nova aba "Participante Score" (módulo Eventos)
+
+Nova aba no `Events.tsx` com ranking inteligente de **todos os @ que já comentaram em qualquer Live**.
+
+Métricas agregadas por @:
+- Nº de Lives em que participou (comentou)
+- Nº de comentários em lives
+- Nº de compras pagas em lives
+- Ticket médio de compra nas lives
+- Nº de pedidos avançados (pagos/expedidos) e cancelados
+- Data da última participação + datas de todas as lives em que participou
+
+Sistema de pontos (proposta inicial — ajustável depois):
+- Participar de uma live: **+5** por live
+- Comentário em live: **+1** por comentário (limite p/ não inflar)
+- Compra paga em live: **+30** por pedido pago
+- Valor gasto: **+1** a cada R$ 50 gastos
+- Pedido cancelado: **-10** por cancelamento
+
+Categorias de ranking por faixa de pontos:
+- 🏆 **VIP** (top)
+- 🔥 **Engajado**
+- 👍 **Ativo**
+- 🌱 **Novo / Frio**
+
+A classificação calculada aqui alimenta o badge do item 5 no painel lateral.
+
+Tudo agregado via **RPC** (`participant_score_ranking`) para não sobrecarregar o front.
 
 ---
 
-## Etapa 1 — Banco de dados (migração)
-Criar a base, sem mexer em nada existente.
+## Detalhes técnicos
 
-1. Tabela `event_crossell_offers` (config por evento):
-   - `event_id`, `shopify_product_id`, `shopify_variant_handle/title`, `original_price`, `discount_price`, `has_sizes` (bool), `position`, `is_active`.
-   - GRANTs + RLS (leitura autenticada; leitura anônima necessária para o checkout público — via RPC security definer, ver Etapa 3).
-2. Tabela `order_crossell_items` (o que cada pedido adicionou):
-   - `order_id`, `event_id`, `offer_id`, `shopify_variant_id`, `title`, `color`, `size`, `image`, `original_price`, `discount_price`, `qty`, `added_at`.
-   - Vínculo único por `order_id` para evitar duplicidade entre pedidos.
-3. Coluna em `events`: `crossell_enabled boolean default false` (permite "evento sem crossell").
+**Correlação de telefone (DDD + 9 dígitos):** normalizar removendo não-dígitos, tirar DDI (55), e comparar os últimos 11 dígitos (DDD + 9). Onde houver 8 dígitos legados, usar fallback por DDD + 8 (padrão já usado no projeto).
 
-## Etapa 2 — Etapa nova no Wizard de configuração do evento
-No `EventSetupWizard.tsx`, adicionar a etapa **"Crossell"** entre **Parcelamento** e **Ativar Live**.
-- Toggle **"Realizar evento sem crossell"** (quando ligado, pula a seleção e marca `crossell_enabled=false`).
-- Reaproveitar o seletor de produtos da Shopify (padrão já usado no projeto) para escolher 3–5 produtos.
-- Sob cada produto selecionado: inputs **Valor original** e **Valor com desconto**, e detecção automática de "tem tamanho" (calçado) vs "sem tamanho" (acessório).
-- Gravar em `event_crossell_offers`. A etapa conta como configurada quando: sem-crossell ligado **ou** ≥1 oferta salva.
+**RPCs novas (migrations):**
+- `event_inner_dashboard(p_event_id uuid)` → ticket médio, crossell add/convert, leads por fonte, leads convertidos, taxa de conversão.
+- `participant_score_ranking()` → ranking agregado de participantes de lives (varre `live_comments` + comentários de live em `whatsapp_messages` + `orders`), com pontos, categoria, datas de participação.
+- `event_lead_handles(p_event_id uuid)` (ou incluir no dashboard) → conjunto de telefones de leads para casar com @ no painel.
 
-## Etapa 3 — Backend de leitura para o checkout (edge functions/RPC)
-Sem tocar no fluxo de pagamento atual.
-1. RPC/edge `get_order_crossell(p_order_id)`:
-   - Carrega ofertas do evento do pedido.
-   - Lê os itens atuais do pedido para descobrir tamanho(s) de calçado e quais ofertas já estão no carrinho.
-   - Para cada oferta de calçado, consulta Shopify (estoque por tamanho/cor) e retorna **só** as cores com estoque no tamanho do cliente; acessórios retornam sempre.
-   - Aplica a regra "1 item só e é da oferta → não ofertar aquele".
-   - Retorna blocos prontos (cor, tamanho, foto da variação, preço normal/desconto, variant_id).
-2. Edge `checkout-add-crossell` e `checkout-remove-crossell`:
-   - Inserem/removem em `order_crossell_items` e atualizam `orders.products` adicionando/removendo **apenas** o item de crossell, recalculando total com desconto isolado no item de crossell.
-   - Disparam atualização realtime para o card do pedido no evento.
+**Fontes de dados:**
+- Comentários de live: `live_comments` + `whatsapp_messages` (channel instagram, prefixo "💬 Comentário no Live:").
+- Crossell: `order_crossell_items` (tem `event_id` e `order_id`).
+- Leads: `event_leads` (`source` lp/typebot/referral/manual, `phone_suffix` já calculado).
+- Pedidos: `orders` (stage/is_paid/paid_externally).
 
-## Etapa 4 — Modal de Crossell no checkout (frontend)
-Em `TransparentCheckout.tsx`, **adição isolada** (sem alterar o fluxo existente):
-- Após o link carregar por completo, chamar `get_order_crossell`; se houver ofertas, abrir o modal grande.
-- Título de condição especial + **cronômetro regressivo de 2 min** (ao expirar, fecha o modal).
-- Carrossel horizontal com scroll lateral, fotos grandes, cor/tamanho/preços, botão **Adicionar ao carrinho** por bloco.
-- Itens de crossell já no carrinho exibem botão **Remover** (somente eles). Item original nunca removível.
-- Adicionar/remover chama as edges da Etapa 3 e atualiza o resumo do pedido na hora.
+**Arquivos afetados:**
+- `src/components/events/EventSetupWizard.tsx` (nova etapa, fix pular, validação)
+- `src/pages/Events.tsx` (botão Nova Live → wizard, remoção do modal antigo, nova aba Participante Score)
+- `src/pages/Index.tsx` (botão Configurar Live + dashboard interno)
+- `src/components/events/EventLiveCommentsPanel.tsx` (tags Lead / outra campanha / score)
+- Novos: `EventInnerDashboard.tsx`, `ParticipantScorePanel.tsx`
+- Migrations com as RPCs acima.
 
-## Etapa 5 — Reflexo no card do pedido do evento (tempo real)
-- `OrderCardDb.tsx` passa a exibir itens de crossell com tag distinta ("CROSSELL").
-- Assinatura realtime (Supabase) em `order_crossell_items`/`orders` para refletir adição/remoção feita pelo cliente no link, sem reload.
+## Sugestão de execução em fases
+Para testar com segurança, sugiro implementar e validar em blocos:
+1. **Fase A** — Wizard unificado + fix "Pular e abrir" + botão Configurar Live.
+2. **Fase B** — Dashboard interno do evento (RPC + UI).
+3. **Fase C** — Tags no painel lateral (Lead / outra campanha).
+4. **Fase D** — Aba Participante Score + badge de score no painel.
 
-## Etapa 6 — Salvaguardas anti-bug
-- Desconto sempre atrelado ao próprio item de crossell (preço gravado no item), nunca aplicado no item original — remover crossell não altera valores do item original.
-- Recalcular frete/parcelamento após mudança usando os fluxos atuais (que já recebem `order_id`).
-- Vínculo por `order_id` garante que a oferta pertence a um único pedido daquele cliente no evento.
-- Tudo opcional: evento com `crossell_enabled=false` ou sem ofertas → checkout funciona exatamente como hoje.
-
----
-
-## Ordem de entrega sugerida
-1. Migração (Etapa 1) → 2. Wizard/config (Etapa 2) → 3. Backend leitura/escrita (Etapa 3) → 4. Modal no checkout (Etapa 4) → 5. Card do evento + realtime (Etapa 5) → 6. Testes das salvaguardas (Etapa 6).
-
-Confirme se aprova (ou ajuste qualquer etapa) que eu implemento começando pela migração. Não vou alterar o checkout antes do seu OK.
+Posso seguir por essas fases ou implementar tudo de uma vez — como preferir.
