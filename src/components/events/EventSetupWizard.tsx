@@ -124,9 +124,10 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   // Per-step completeness based on the persisted event (used to skip configured steps).
   const completeFromEvent = useMemo(() => {
     if (!event)
-      return { shipping: false, template: false, installments: false, crossell: false, live: false };
+      return { general: false, shipping: false, template: false, installments: false, crossell: false, live: false };
     const e = event as any;
     return {
+      general: Boolean(e.name) && e.name !== EVENT_DRAFT_NAME && Boolean(e.channel),
       shipping: e.default_shipping_cost != null || e.free_shipping_threshold != null,
       template: Boolean(e.meta_template_name) || Boolean(e.initial_message_enabled),
       installments: e.installment_max != null,
