@@ -439,8 +439,9 @@ export default function Admin() {
             <AiErrorLogs />
           </TabsContent>
 
-          <TabsContent value="mercadopago" className="mt-4">
+          <TabsContent value="mercadopago" className="mt-4 space-y-6">
             <MercadoPagoAccountsManager />
+            <PointTerminalsPanel />
           </TabsContent>
 
           <TabsContent value="fiscal" className="mt-4 space-y-4">
