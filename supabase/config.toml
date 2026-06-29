@@ -1,5 +1,10 @@
 project_id = "tqxhcyuxgqbzqwoidpie"
 
+[functions.backfill-payment-method]
+verify_jwt = false
+
+
+
 [functions.point-webhook]
 verify_jwt = false
 
