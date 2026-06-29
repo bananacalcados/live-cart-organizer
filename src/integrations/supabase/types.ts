@@ -4550,6 +4550,7 @@ export type Database = {
           default_shipping_cost: number | null
           default_store_id: string | null
           description: string | null
+          end_date: string | null
           id: string
           initial_message_blocks: Json
           initial_message_enabled: boolean
@@ -4560,6 +4561,7 @@ export type Database = {
           meta_template_language: string | null
           meta_template_name: string | null
           name: string
+          start_date: string | null
           updated_at: string
           whatsapp_number_id: string | null
         }
@@ -4574,6 +4576,7 @@ export type Database = {
           default_shipping_cost?: number | null
           default_store_id?: string | null
           description?: string | null
+          end_date?: string | null
           id?: string
           initial_message_blocks?: Json
           initial_message_enabled?: boolean
@@ -4584,6 +4587,7 @@ export type Database = {
           meta_template_language?: string | null
           meta_template_name?: string | null
           name: string
+          start_date?: string | null
           updated_at?: string
           whatsapp_number_id?: string | null
         }
@@ -4598,6 +4602,7 @@ export type Database = {
           default_shipping_cost?: number | null
           default_store_id?: string | null
           description?: string | null
+          end_date?: string | null
           id?: string
           initial_message_blocks?: Json
           initial_message_enabled?: boolean
@@ -4608,6 +4613,7 @@ export type Database = {
           meta_template_language?: string | null
           meta_template_name?: string | null
           name?: string
+          start_date?: string | null
           updated_at?: string
           whatsapp_number_id?: string | null
         }

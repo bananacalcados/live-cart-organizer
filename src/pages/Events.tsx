@@ -64,6 +64,8 @@ const Events = () => {
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [shippingCost, setShippingCost] = useState("");
   const [selectedWhatsAppId, setSelectedWhatsAppId] = useState<string>("");
   const [channel, setChannel] = useState<string>("site");
@@ -224,6 +226,8 @@ const Events = () => {
       await updateEvent(editingEvent, {
         name,
         description,
+        start_date: startDate || null,
+        end_date: endDate || null,
         default_shipping_cost: shippingValue ?? null,
         whatsapp_number_id: whatsappId,
         channel,
@@ -246,6 +250,8 @@ const Events = () => {
           automation_enabled: automationEnabled,
           initial_message_enabled: initialMessageEnabled,
           initial_message_blocks: initialMessageBlocks,
+          start_date: startDate || null,
+          end_date: endDate || null,
           ...metaTemplateFields,
         };
         if (shippingValue) updates.default_shipping_cost = shippingValue;
@@ -261,6 +267,8 @@ const Events = () => {
   const resetForm = () => {
     setName("");
     setDescription("");
+    setStartDate("");
+    setEndDate("");
     setShippingCost("");
     setSelectedWhatsAppId("");
     setChannel("site");
@@ -280,6 +288,8 @@ const Events = () => {
     setEditingEvent(event.id);
     setName(event.name);
     setDescription(event.description || "");
+    setStartDate(((event as any).start_date as string) || "");
+    setEndDate(((event as any).end_date as string) || "");
     setShippingCost(event.default_shipping_cost?.toString() || "");
     setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
     setChannel((event as any).channel || "site");
@@ -365,6 +375,40 @@ const Events = () => {
                       onChange={(e) => setDescription(e.target.value)}
                     rows={3}
                   />
+                  </div>
+                  {/* Datas do evento — quando a live vai acontecer (pode durar vários dias) */}
+                  <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                    <Label className="flex items-center gap-2 m-0">
+                      <Calendar className="h-4 w-4" />
+                      Data do Evento
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="startDate" className="text-xs text-muted-foreground">Início</Label>
+                        <Input
+                          id="startDate"
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => {
+                            setStartDate(e.target.value);
+                            if (endDate && e.target.value && endDate < e.target.value) setEndDate(e.target.value);
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="endDate" className="text-xs text-muted-foreground">Fim (opcional)</Label>
+                        <Input
+                          id="endDate"
+                          type="date"
+                          min={startDate || undefined}
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Defina quando a live vai acontecer (pode ser uma data futura). Para eventos de vários dias, preencha a data de fim — assim conseguimos medir a duração depois.
+                    </p>
                   </div>
                    {/* Canal do evento — define onde o pedido é roteado */}
                    <div className="space-y-2">

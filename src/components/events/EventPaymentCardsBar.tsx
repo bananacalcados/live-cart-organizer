@@ -2,12 +2,16 @@ import { useMemo, useState } from "react";
 import { Check, QrCode, Phone, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DbOrder } from "@/types/database";
+import { Order } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { getOrderFinalValue } from "@/lib/orderTotal";
+import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
+import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 
 interface EventPaymentCardsBarProps {
   orders: DbOrder[];
-  onSelectOrder: (order: DbOrder) => void;
+  /** Mantido por compatibilidade — abrir pedido (não usado no clique principal). */
+  onSelectOrder?: (order: DbOrder) => void;
 }
 
 type PayFilter = "awaiting" | "paid";
@@ -21,17 +25,62 @@ function formatPhone(phone?: string | null): string {
   return digits;
 }
 
+/** Converte DbOrder para o tipo Order legado usado pelo chat de WhatsApp. */
+function dbOrderToLegacy(dbOrder: DbOrder): Order {
+  const handle = dbOrder.customer?.instagram_handle?.trim()
+    ? (dbOrder.customer.instagram_handle.startsWith("@")
+        ? dbOrder.customer.instagram_handle
+        : `@${dbOrder.customer.instagram_handle}`)
+    : "";
+  return {
+    id: dbOrder.id,
+    instagramHandle: handle,
+    whatsapp: dbOrder.customer?.whatsapp,
+    cartLink: dbOrder.cart_link,
+    products: dbOrder.products,
+    stage: dbOrder.stage as Order["stage"],
+    notes: dbOrder.notes,
+    createdAt: new Date(dbOrder.created_at),
+    updatedAt: new Date(dbOrder.updated_at),
+    hasUnreadMessages: dbOrder.has_unread_messages,
+    lastCustomerMessageAt: dbOrder.last_customer_message_at ? new Date(dbOrder.last_customer_message_at) : undefined,
+    lastSentMessageAt: dbOrder.last_sent_message_at ? new Date(dbOrder.last_sent_message_at) : undefined,
+  };
+}
+
 /**
  * Barra de cards de pagamento dos pedidos DESTE evento.
  * Substitui a barra de filtros (Todos / Não Pagos / etc) dentro do evento.
  *
  * - "Aguardando": pedidos em aguardando pagamento (não pagos).
  * - "Pagos": pedidos com pagamento confirmado.
- * Mostra @ / nome do cliente, telefone, valor da compra e status.
- * Só lista pedidos do evento atual (os `orders` já vêm escopados pelo evento).
+ *
+ * Ao clicar no card abre o CHAT da conversa (WhatsApp ou Instagram) na
+ * instância em que a conversa aconteceu (mesma da mensagem inicial da live),
+ * e não o modal de pedido.
  */
-export function EventPaymentCardsBar({ orders, onSelectOrder }: EventPaymentCardsBarProps) {
+export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const [filter, setFilter] = useState<PayFilter>("awaiting");
+  const [chatOrder, setChatOrder] = useState<Order | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [igHandle, setIgHandle] = useState<string | null>(null);
+  const [igOpen, setIgOpen] = useState(false);
+
+  const handleCardClick = (order: DbOrder) => {
+    const phone = order.customer?.whatsapp?.replace(/\D/g, "");
+    if (phone) {
+      // Tem WhatsApp → abre o chat de WhatsApp na instância da conversa.
+      setChatOrder(dbOrderToLegacy(order));
+      setChatOpen(true);
+      return;
+    }
+    // Sem WhatsApp → tenta abrir DM do Instagram.
+    const handle = order.customer?.instagram_handle?.replace(/^@/, "").trim();
+    if (handle) {
+      setIgHandle(handle);
+      setIgOpen(true);
+    }
+  };
 
   const { awaiting, paid } = useMemo(() => {
     const awaitingList: DbOrder[] = [];
@@ -62,8 +111,8 @@ export function EventPaymentCardsBar({ orders, onSelectOrder }: EventPaymentCard
             className={cn(
               "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all",
               filter === "awaiting"
-                ? "bg-stage-awaiting text-white"
-                : "bg-stage-awaiting/10 text-stage-awaiting hover:bg-stage-awaiting/20",
+                ? "bg-neutral-900 text-white"
+                : "bg-neutral-900/10 text-neutral-900 dark:text-neutral-200 hover:bg-neutral-900/20",
             )}
           >
             <Clock className="h-3.5 w-3.5" />
@@ -102,28 +151,33 @@ export function EventPaymentCardsBar({ orders, onSelectOrder }: EventPaymentCard
               return (
                 <button
                   key={order.id}
-                  onClick={() => onSelectOrder(order)}
-                  title="Abrir pedido"
+                  onClick={() => handleCardClick(order)}
+                  title="Abrir conversa"
                   className={cn(
                     "group flex flex-col gap-1 min-w-[200px] max-w-[240px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0",
                     paidCard
                       ? "bg-stage-paid/10 border-stage-paid/40 hover:bg-stage-paid/20"
-                      : "bg-stage-awaiting/10 border-stage-awaiting/40 hover:bg-stage-awaiting/20",
+                      : "bg-neutral-900 text-white border-neutral-700 hover:bg-neutral-800",
                   )}
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span
                       className={cn(
                         "flex h-5 w-5 items-center justify-center rounded-full shrink-0",
-                        paidCard ? "bg-stage-paid/25 text-stage-paid" : "bg-stage-awaiting/25 text-stage-awaiting",
+                        paidCard ? "bg-stage-paid/25 text-stage-paid" : "bg-white/15 text-white",
                       )}
                     >
                       {paidCard ? <Check className="h-3 w-3" /> : <QrCode className="h-3 w-3" />}
                     </span>
-                    <span className="truncate text-xs font-semibold">@{name}</span>
+                    <span className={cn("truncate text-xs font-semibold", !paidCard && "text-white")}>@{name}</span>
                   </div>
                   {phone && (
-                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground truncate">
+                    <span
+                      className={cn(
+                        "flex items-center gap-1 text-[11px] truncate",
+                        paidCard ? "text-muted-foreground" : "text-white/70",
+                      )}
+                    >
                       <Phone className="h-3 w-3 shrink-0" />
                       {phone}
                     </span>
@@ -131,7 +185,7 @@ export function EventPaymentCardsBar({ orders, onSelectOrder }: EventPaymentCard
                   <span
                     className={cn(
                       "text-[12px] font-bold",
-                      paidCard ? "text-stage-paid" : "text-stage-awaiting",
+                      paidCard ? "text-stage-paid" : "text-white",
                     )}
                   >
                     {paidCard ? "PAGO • " : "Aguardando • "}R$ {value.toFixed(2)}
@@ -142,6 +196,14 @@ export function EventPaymentCardsBar({ orders, onSelectOrder }: EventPaymentCard
           </div>
         )}
       </div>
+
+      {/* Chat de WhatsApp na instância da conversa */}
+      {chatOrder?.whatsapp && (
+        <WhatsAppChatDialog open={chatOpen} onOpenChange={setChatOpen} order={chatOrder} />
+      )}
+
+      {/* DM do Instagram (quando não há WhatsApp) */}
+      {igHandle && <InstagramDMChat open={igOpen} onOpenChange={setIgOpen} username={igHandle} />}
     </div>
   );
 }

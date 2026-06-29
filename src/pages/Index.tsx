@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { DashboardChatPanel } from "@/components/DashboardChatPanel";
+import { EventLiveCommentsPanel } from "@/components/events/EventLiveCommentsPanel";
 import { Header } from "@/components/Header";
 import { KanbanBoardDb } from "@/components/KanbanBoardDb";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
@@ -270,7 +270,7 @@ const Index = () => {
 
       {/* Fixed WhatsApp Chat Panel - Right Side */}
       <div className="hidden xl:flex w-[420px] flex-shrink-0 h-screen sticky top-0">
-        <DashboardChatPanel />
+        <EventLiveCommentsPanel eventId={currentEventId} />
       </div>
     </div>
   );
