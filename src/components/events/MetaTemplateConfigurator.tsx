@@ -191,6 +191,28 @@ export const MetaTemplateConfigurator = ({
 
       {selectedTemplate && (
         <>
+          {/* Category badge: UTILITY vs MARKETING */}
+          {selectedTemplate.category && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Categoria:</span>
+              <Badge
+                className={
+                  selectedTemplate.category.toUpperCase() === "MARKETING"
+                    ? "bg-amber-500 text-white hover:bg-amber-500"
+                    : selectedTemplate.category.toUpperCase() === "UTILITY"
+                    ? "bg-sky-600 text-white hover:bg-sky-600"
+                    : "bg-muted text-foreground"
+                }
+              >
+                {selectedTemplate.category.toUpperCase() === "MARKETING"
+                  ? "MARKETING"
+                  : selectedTemplate.category.toUpperCase() === "UTILITY"
+                  ? "UTILIDADE"
+                  : selectedTemplate.category}
+              </Badge>
+            </div>
+          )}
+
           {/* Header text variables */}
           {headerComponent?.format === "TEXT" && headerVarCount > 0 && (
             <div className="space-y-2">
