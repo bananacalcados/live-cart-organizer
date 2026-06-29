@@ -921,27 +921,29 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 Checkout Loja (+10 pts)
               </Button>
 
-              {/* Yampi + PayPal */}
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  className="h-11 text-sm font-bold bg-[hsl(45,100%,50%)] hover:bg-[hsl(45,100%,45%)] text-black gap-2"
-                  onClick={generateYampiLink}
-                  disabled={isGeneratingYampiLink || localProducts.length === 0}
-                >
-                  {isGeneratingYampiLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className="h-4 w-4" />}
-                  Yampi
-                </Button>
-                <Button
-                  type="button"
-                  className="h-11 text-sm font-bold bg-[hsl(220,80%,55%)] hover:opacity-90 text-white gap-2"
-                  onClick={generatePayPalLink}
-                  disabled={isGeneratingPayPalLink || localProducts.length === 0 || !editingOrder}
-                >
-                  {isGeneratingPayPalLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                  PayPal
-                </Button>
-              </div>
+              {/* Yampi + PayPal — ocultos temporariamente (mantidos no código para retorno futuro) */}
+              {false && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    className="h-11 text-sm font-bold bg-[hsl(45,100%,50%)] hover:bg-[hsl(45,100%,45%)] text-black gap-2"
+                    onClick={generateYampiLink}
+                    disabled={isGeneratingYampiLink || localProducts.length === 0}
+                  >
+                    {isGeneratingYampiLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className="h-4 w-4" />}
+                    Yampi
+                  </Button>
+                  <Button
+                    type="button"
+                    className="h-11 text-sm font-bold bg-[hsl(220,80%,55%)] hover:opacity-90 text-white gap-2"
+                    onClick={generatePayPalLink}
+                    disabled={isGeneratingPayPalLink || localProducts.length === 0 || !editingOrder}
+                  >
+                    {isGeneratingPayPalLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                    PayPal
+                  </Button>
+                </div>
+              )}
 
               {/* PIX */}
               <Button
@@ -953,6 +955,35 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 {isGeneratingPixLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
                 PIX
               </Button>
+
+              {/* Código PIX gerado — para copiar novamente */}
+              {pixCode && (
+                <div className="space-y-1 rounded-md border border-[hsl(160,70%,40%)]/40 bg-[hsl(160,70%,40%)]/5 p-2">
+                  <Label className="text-xs font-semibold text-[hsl(160,70%,30%)]">Código PIX gerado (copia e cola)</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={pixCode}
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="h-9 text-xs font-mono"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-9 shrink-0 gap-1"
+                      onClick={() => {
+                        navigator.clipboard.writeText(pixCode)
+                          .then(() => toast.success("Código PIX copiado!"))
+                          .catch(() => window.prompt("Copie o código PIX:", pixCode));
+                      }}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copiar
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Na Entrega */}
               <Button
