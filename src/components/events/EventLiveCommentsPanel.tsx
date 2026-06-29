@@ -33,6 +33,33 @@ interface HandleOrderStats {
   openPast: number;
 }
 
+interface LeadTag {
+  thisEvent: boolean;
+  otherEvent: boolean;
+}
+
+interface ParticipantScore {
+  score: number;
+  category: string;
+  liveCount: number;
+}
+
+// Categoria de score -> rótulo/estilo do badge de engajamento
+const SCORE_META: Record<string, { label: string; className: string }> = {
+  vip: { label: "VIP", className: "bg-purple-600 text-white" },
+  engajado: { label: "Engajado", className: "bg-blue-600 text-white" },
+  ativo: { label: "Ativo", className: "bg-teal-600 text-white" },
+  frio: { label: "Frio", className: "bg-neutral-400 text-white" },
+};
+
+// Chave de telefone: DDD + 8 últimos dígitos (ignora DDI/9), igual à RPC bc_phone_key
+const phoneKey = (p: string): string => {
+  let d = (p || "").replace(/\D/g, "");
+  if (d.length > 11) d = d.slice(-11);
+  if (d.length >= 10) return d.slice(0, 2) + d.slice(-8);
+  return d;
+};
+
 
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
 
