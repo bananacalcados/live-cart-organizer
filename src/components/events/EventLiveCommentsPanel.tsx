@@ -26,6 +26,14 @@ interface LiveComment {
   created_at: string;
 }
 
+interface HandleOrderStats {
+  paidThisEvent: number;
+  paidPast: number;
+  paidDates: string[];
+  openPast: number;
+}
+
+
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
 
 // Remove o prefixo "💬 Comentário no Live/Reel/post: " salvo em whatsapp_messages
