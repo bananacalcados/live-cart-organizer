@@ -4,6 +4,10 @@ export interface DbEvent {
   description?: string;
   is_active: boolean;
   default_shipping_cost?: number;
+  free_shipping_threshold?: number | null;
+  installment_min_value?: number | null;
+  installment_max?: number | null;
+  setup_completed?: boolean;
   catalog_lead_page_id?: string;
   active_product_delay_seconds?: number;
   automation_enabled?: boolean;
