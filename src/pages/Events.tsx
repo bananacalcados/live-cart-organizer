@@ -40,7 +40,7 @@ import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { MetaTemplateConfigurator } from "@/components/events/MetaTemplateConfigurator";
 import { InitialMessageEditor } from "@/components/events/InitialMessageEditor";
-import { EventSetupWizard } from "@/components/events/EventSetupWizard";
+import { EventSetupWizard, EVENT_DRAFT_NAME } from "@/components/events/EventSetupWizard";
 import { DbEvent } from "@/types/database";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
