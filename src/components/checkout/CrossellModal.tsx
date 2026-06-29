@@ -141,9 +141,14 @@ export default function CrossellModal({
 
   const hasOffers = offers.length > 0;
 
-  const totalSavings = useMemo(
+  // Maior desconto unitário entre as ofertas (diferença do item de maior desconto),
+  // NÃO a soma de vários itens.
+  const maxSavings = useMemo(
     () =>
-      offers.reduce((s, o) => s + Math.max(0, o.original_price - o.discount_price), 0),
+      offers.reduce(
+        (max, o) => Math.max(max, Math.max(0, o.original_price - o.discount_price)),
+        0,
+      ),
     [offers],
   );
 
@@ -151,17 +156,17 @@ export default function CrossellModal({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-3xl w-[95vw] p-0 overflow-hidden gap-0 border-2 border-primary/40">
+      <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] p-0 overflow-y-auto gap-0 border-2 border-primary/40">
         {/* Header */}
-        <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-background px-5 pt-5 pb-4 text-center">
+        <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-background px-4 sm:px-5 pt-5 pb-4 text-center">
           <div className="flex items-center justify-center gap-2 mb-1">
-            <Sparkles className="h-5 w-5 text-primary" />
-            <h2 className="text-lg sm:text-xl font-bold">Oferta exclusiva pra você!</h2>
+            <Sparkles className="h-5 w-5 text-primary shrink-0" />
+            <h2 className="text-base sm:text-xl font-bold leading-tight">Oferta exclusiva pra você!</h2>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground max-w-lg mx-auto">
             Como você já tem um produto no carrinho, liberamos condições especiais
-            {totalSavings > 0 && (
-              <> com até <strong className="text-primary">{brl(totalSavings)}</strong> de desconto</>
+            {maxSavings > 0 && (
+              <> com até <strong className="text-primary">{brl(maxSavings)}</strong> de desconto</>
             )}
             . Aproveite antes que o tempo acabe!
           </p>
@@ -182,7 +187,10 @@ export default function CrossellModal({
 
         {/* Horizontal scroll carousel */}
         <div className="px-3 pb-2">
-          <div className="flex gap-3 overflow-x-auto py-4 px-1 snap-x snap-mandatory scrollbar-thin">
+          <div
+            className="flex gap-3 overflow-x-auto py-4 px-1 snap-x snap-mandatory scrollbar-thin touch-pan-x"
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
             {offers.map((block) => {
               const isAdded = added.has(block.variant_id);
               const isBusy = busyVariant === block.variant_id;
