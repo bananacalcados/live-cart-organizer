@@ -180,6 +180,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
     setStage("new");
     setLocalProducts([]);
     setBanReason("");
+    setPixCode("");
     setDiscountType("");
     setDiscountValue(0);
     setFreeShipping(false);
