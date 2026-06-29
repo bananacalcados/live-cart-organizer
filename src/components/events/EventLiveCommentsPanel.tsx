@@ -474,18 +474,59 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           });
         },
       )
+      // Comentários da LIVE chegam pelo webhook do Meta em whatsapp_messages.
+      // Inserimos em tempo real (sem recarregar tudo), preservando o scroll.
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "whatsapp_messages", filter: "channel=eq.instagram" },
+        (payload) => {
+          const row = payload.new as any;
+          if (row?.direction !== "incoming") return;
+          const message = (row?.message || "").toString();
+          if (!message.startsWith("💬 Comentário no Live:")) return;
+          const username = (row?.sender_name || "").toString();
+          if (!username.startsWith("@")) return;
+          const created = (row?.created_at as string) || new Date().toISOString();
+          // Respeita a faixa de datas selecionada (pente fino)
+          if (fromDate && created < new Date(`${fromDate}T00:00:00`).toISOString()) return;
+          if (toDate && created > new Date(`${toDate}T23:59:59.999`).toISOString()) return;
+          const nc: LiveComment = {
+            id: row.id,
+            comment_id: row.id,
+            username,
+            comment_text: stripCommentPrefix(message),
+            profile_pic_url: null,
+            is_order: null,
+            ai_classification: null,
+            created_at: created,
+          };
+          setComments((prev) => {
+            const dupKey = `${cleanHandle(nc.username)}|${(nc.comment_text || "").toLowerCase().trim()}|${nc.created_at.slice(0, 16)}`;
+            const exists = prev.some(
+              (x) =>
+                x.id === nc.id ||
+                `${cleanHandle(x.username)}|${(x.comment_text || "").toLowerCase().trim()}|${x.created_at.slice(0, 16)}` === dupKey,
+            );
+            if (exists) return prev;
+            const next = [nc, ...prev];
+            next.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            return next;
+          });
+        },
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
     };
-  }, [eventId]);
+  }, [eventId, fromDate, toDate]);
 
-  // Polling leve (30s) para puxar novos comentários do webhook quando o "to" é hoje
+  // Polling de segurança (60s) como fallback do realtime quando o "Até" é hoje.
+  // Silencioso: não pisca o painel nem reseta o scroll (só troca o array se mudou).
   useEffect(() => {
     if (!eventId) return;
     const isToToday = toDate === format(new Date(), "yyyy-MM-dd");
     if (!isToToday) return;
-    const t = setInterval(() => loadComments(), 30000);
+    const t = setInterval(() => loadComments({ silent: true }), 60000);
     return () => clearInterval(t);
   }, [eventId, toDate, loadComments]);
 
