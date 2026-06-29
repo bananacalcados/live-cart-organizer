@@ -10,15 +10,10 @@ import { usePixNotificationStore } from "@/stores/pixNotificationStore";
  * raiz do app — também é quem inicializa o store de notificações de PIX.
  */
 export function PixPaidGlobalAlert() {
-  const init = usePixNotificationStore((s) => s.init);
   const paidAlert = usePixNotificationStore((s) => s.paidAlert);
   const clearPaidAlert = usePixNotificationStore((s) => s.clearPaidAlert);
   const requestOpen = usePixNotificationStore((s) => s.requestOpen);
   const dismiss = usePixNotificationStore((s) => s.dismiss);
-
-  useEffect(() => {
-    init();
-  }, [init]);
 
   // Beep curto pra chamar atenção quando abrir o alerta.
   useEffect(() => {
