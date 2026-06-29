@@ -676,6 +676,25 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         <Badge variant="outline" className="text-[10px] bg-muted/50 text-muted-foreground border-border">
           📅 {format(new Date(order.created_at), "dd/MM/yyyy")}
         </Badge>
+        {/* Status do link de checkout — só exibe enquanto o pedido não está pago */}
+        {!order.is_paid && !order.paid_externally && linkStep >= 0 && (
+          linkStep === 0 ? (
+            <Badge variant="outline" className="text-[10px] bg-muted/60 text-muted-foreground border-border">
+              ⏳ Aguard. abertura
+            </Badge>
+          ) : (
+            <>
+              <Badge variant="secondary" className="text-[10px] bg-stage-contacted/20 text-stage-contacted border-stage-contacted/40">
+                🔗 Link aberto
+              </Badge>
+              <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/40">
+                {linkStep === 1 ? "Etapa 1/3 · Identificação"
+                  : linkStep === 2 ? "Etapa 2/3 · Entrega"
+                  : "Etapa 3/3 · Pagamento"}
+              </Badge>
+            </>
+          )
+        )}
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && (
           <button
             type="button"
