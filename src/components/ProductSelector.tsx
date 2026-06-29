@@ -68,7 +68,7 @@ export function ProductSelector({
             price,
             compareAtPrice: compareAt && compareAt > price ? compareAt : undefined,
             quantity: 1,
-            image: variant.image?.url || product.node.images.edges[0]?.node.url,
+            image: getVariantImage(product, variant),
           });
           setSearch("");
         }
