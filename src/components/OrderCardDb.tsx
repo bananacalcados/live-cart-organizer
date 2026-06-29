@@ -89,7 +89,47 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   // quando o pedido não tem payment_method_label preenchido.
   const [checkoutMethod, setCheckoutMethod] = useState<string | null>(null);
   const [checkoutInstallments, setCheckoutInstallments] = useState<number | null>(null);
+  // Progresso do link de checkout: -1 = ainda não calculado, 0 = aguardando abertura,
+  // 1 = Identificação, 2 = Entrega, 3 = Pagamento. Quando pago, deixamos de exibir.
+  const [linkStep, setLinkStep] = useState<number>(-1);
   const { moveOrder: storeMove, updateOrder } = useDbOrderStore();
+
+  // Calcula em que etapa do link de checkout o cliente parou (com base no que ele
+  // já preencheu na ficha) e se o link chegou a ser aberto.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: reg } = await supabase
+          .from("customer_registrations")
+          .select("full_name,cpf,whatsapp,cep,address,city,state")
+          .eq("order_id", order.id)
+          .maybeSingle();
+        if (cancelled) return;
+
+        const notPlaceholder = (v?: string | null, ph?: string) =>
+          !!(v && v.trim() && (!ph || v.trim().toUpperCase() !== ph.toUpperCase()));
+
+        const hasIdentification = !!reg && notPlaceholder(reg.full_name) && notPlaceholder(reg.cpf) && notPlaceholder(reg.whatsapp);
+        const hasAddress = !!reg
+          && notPlaceholder(reg.cep) && reg.cep?.replace(/\D/g, "") !== "00000000"
+          && notPlaceholder(reg.address, "Pendente")
+          && notPlaceholder(reg.city, "Pendente")
+          && notPlaceholder(reg.state);
+
+        let step = 0;
+        if (hasAddress) step = 3;
+        else if (hasIdentification) step = 2;
+        else if (order.checkout_started_at) step = 1;
+        else step = 0;
+
+        setLinkStep(step);
+      } catch {
+        if (!cancelled) setLinkStep(-1);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [order.id, order.checkout_started_at]);
 
   const persistShopifyVerification = useCallback((verified: boolean, orderName: string | null) => {
     if (!order.event_id) return;
@@ -569,6 +609,16 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
                 {order.customer?.instagram_handle}
               </button>
             </div>
+            {/* Botão para abrir/editar os dados que o cliente preencheu no link de checkout */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowFichaDialog(true); }}
+              className="mt-0.5 inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/20"
+              title="Ver/editar os dados cadastrais do cliente"
+            >
+              <UserCheck className="h-3 w-3" />
+              VER DADOS
+            </button>
             <div className="flex items-center gap-1.5 min-w-0">
               <p className="text-[11px] text-muted-foreground truncate font-mono">
                 ID: {order.id}
@@ -626,6 +676,25 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         <Badge variant="outline" className="text-[10px] bg-muted/50 text-muted-foreground border-border">
           📅 {format(new Date(order.created_at), "dd/MM/yyyy")}
         </Badge>
+        {/* Status do link de checkout — só exibe enquanto o pedido não está pago */}
+        {!order.is_paid && !order.paid_externally && linkStep >= 0 && (
+          linkStep === 0 ? (
+            <Badge variant="outline" className="text-[10px] bg-muted/60 text-muted-foreground border-border">
+              ⏳ Aguard. abertura
+            </Badge>
+          ) : (
+            <>
+              <Badge variant="secondary" className="text-[10px] bg-stage-contacted/20 text-stage-contacted border-stage-contacted/40">
+                🔗 Link aberto
+              </Badge>
+              <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/40">
+                {linkStep === 1 ? "Etapa 1/3 · Identificação"
+                  : linkStep === 2 ? "Etapa 2/3 · Entrega"
+                  : "Etapa 3/3 · Pagamento"}
+              </Badge>
+            </>
+          )
+        )}
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && (
           <button
             type="button"
