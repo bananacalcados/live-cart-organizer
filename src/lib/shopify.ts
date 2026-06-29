@@ -68,6 +68,57 @@ export interface ShopifyProduct {
   };
 }
 
+type ShopifyVariantNode = ShopifyProduct["node"]["variants"]["edges"][number]["node"];
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Resolve a imagem que realmente corresponde à VARIAÇÃO selecionada (ex: cor).
+ * Ordem de prioridade:
+ * 1. Imagem vinculada diretamente à variação na Shopify (variant.image).
+ * 2. Imagem do produto cujo altText casa com o valor da opção de cor selecionada.
+ * 3. Primeira imagem do produto (fallback).
+ *
+ * Evita que o checkout mostre a cor "padrão" (primeira foto) em vez da cor escolhida.
+ */
+export function getVariantImage(
+  product: ShopifyProduct,
+  variant: ShopifyVariantNode | undefined,
+): string | undefined {
+  const images = product.node.images.edges;
+  const firstImage = images[0]?.node.url;
+
+  if (!variant) return firstImage;
+
+  // 1. Imagem atribuída diretamente à variação na Shopify
+  if (variant.image?.url) return variant.image.url;
+
+  // 2. Casar pela opção de cor com o altText das fotos
+  const colorOption = variant.selectedOptions.find((o) =>
+    ["cor", "color", "colour"].includes(normalizeText(o.name)),
+  );
+
+  if (colorOption?.value) {
+    const target = normalizeText(colorOption.value);
+    const match = images.find((img) => {
+      const alt = img.node.altText ? normalizeText(img.node.altText) : "";
+      return alt && (alt.includes(target) || target.includes(alt));
+    });
+    if (match) return match.node.url;
+  }
+
+  // 3. Fallback
+  return firstImage;
+}
+
+
 const STOREFRONT_QUERY = `
   query GetProducts($first: Int!, $query: String) {
     products(first: $first, query: $query) {
