@@ -43,6 +43,18 @@ function shiftDate(dateStr: string, days: number): string {
   return fmt.format(d);
 }
 
+// Chave normalizada de telefone (DDD + 8 últimos dígitos), tolerante a
+// variações de formato (com/sem 55, com/sem 9º dígito). Usada para deduplicar
+// clientes mesmo quando o número está salvo em formatos diferentes.
+function phoneKey(raw: string): string {
+  let d = (raw || "").replace(/\D/g, "");
+  if (!d) return "";
+  if (d.length >= 12 && d.startsWith("55")) d = d.slice(2);
+  return d.length >= 10 ? d.slice(0, 2) + d.slice(-8) : d;
+}
+
+
+
 // Verifica se a definição se aplica hoje conforme recorrência.
 function appliesToday(def: any, dateStr: string): boolean {
   const d = new Date(dateStr + "T12:00:00-03:00");
