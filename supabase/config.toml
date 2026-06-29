@@ -1,5 +1,12 @@
 project_id = "tqxhcyuxgqbzqwoidpie"
 
+[functions.point-webhook]
+verify_jwt = false
+
+[functions.point-create-order]
+verify_jwt = false
+
+
 [functions.brasilnfe-webhook]
 verify_jwt = false
 

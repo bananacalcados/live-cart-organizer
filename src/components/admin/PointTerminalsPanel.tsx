@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Smartphone, RefreshCw, CheckCircle2, AlertTriangle, FlaskConical } from "lucide-react";
+import { Smartphone, RefreshCw, CheckCircle2, AlertTriangle, FlaskConical, CreditCard } from "lucide-react";
+import { PointChargeDialog } from "@/components/pos/PointChargeDialog";
 
 interface Terminal {
   id: string;
@@ -15,6 +18,8 @@ interface Terminal {
   operating_mode?: string | null;
 }
 
+const TEST_FLAG_KEY = "point_manual_test_mode";
+
 export function PointTerminalsPanel() {
   const { toast } = useToast();
   const [terminals, setTerminals] = useState<Terminal[]>([]);
@@ -22,6 +27,20 @@ export function PointTerminalsPanel() {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [isSandbox, setIsSandbox] = useState(false);
+  const [manualTest, setManualTest] = useState(false);
+  const [chargeOpen, setChargeOpen] = useState(false);
+  const [chargeTerminal, setChargeTerminal] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    setManualTest(localStorage.getItem(TEST_FLAG_KEY) === "1");
+  }, []);
+
+  const toggleManualTest = (v: boolean) => {
+    setManualTest(v);
+    localStorage.setItem(TEST_FLAG_KEY, v ? "1" : "0");
+  };
+
+
 
   const loadTerminals = async () => {
     setLoading(true);
@@ -94,12 +113,24 @@ export function PointTerminalsPanel() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isSandbox && (
+        <div className="flex items-center justify-between gap-3 flex-wrap rounded-md border bg-muted/30 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="h-4 w-4 text-amber-600" />
+            <Label htmlFor="point-test-mode" className="text-sm cursor-pointer">
+              Marcar como ambiente de teste
+            </Label>
+          </div>
+          <Switch id="point-test-mode" checked={manualTest} onCheckedChange={toggleManualTest} />
+        </div>
+
+        {(isSandbox || manualTest) && (
           <div className="flex items-center gap-2 text-sm rounded-md border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2">
             <FlaskConical className="h-4 w-4 shrink-0" />
-            Usando credenciais de <strong>teste</strong>. As maquininhas físicas reais só aparecem com o token de produção.
+            Ambiente de <strong>teste</strong>. As maquininhas físicas reais só aparecem e processam
+            cobranças com o token de <strong>produção</strong> da conta.
           </div>
         )}
+
 
         {loaded && terminals.length === 0 && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground rounded-md border border-dashed px-3 py-6 justify-center">
@@ -141,18 +172,32 @@ export function PointTerminalsPanel() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={savingId === t.id}
-                          onClick={() => toggleMode(t)}
-                        >
-                          {savingId === t.id
-                            ? "Salvando..."
-                            : isPdv
-                            ? "Mudar p/ STANDALONE"
-                            : "Ativar PDV"}
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={!isPdv}
+                            title={isPdv ? "Testar cobrança nesta maquininha" : "Ative o modo PDV para cobrar"}
+                            onClick={() => {
+                              setChargeTerminal(t.id);
+                              setChargeOpen(true);
+                            }}
+                          >
+                            <CreditCard className="h-3.5 w-3.5 mr-1" /> Cobrar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={savingId === t.id}
+                            onClick={() => toggleMode(t)}
+                          >
+                            {savingId === t.id
+                              ? "Salvando..."
+                              : isPdv
+                              ? "Mudar p/ STANDALONE"
+                              : "Ativar PDV"}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -162,6 +207,13 @@ export function PointTerminalsPanel() {
           </div>
         )}
       </CardContent>
+
+      <PointChargeDialog
+        open={chargeOpen}
+        onOpenChange={setChargeOpen}
+        terminalId={chargeTerminal}
+      />
     </Card>
   );
 }
+
