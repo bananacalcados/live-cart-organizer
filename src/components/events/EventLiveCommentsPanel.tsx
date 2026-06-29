@@ -43,8 +43,8 @@ const stripCommentPrefix = (m: string) =>
 function timeLabel(iso: string): string {
   const d = new Date(iso);
   if (isToday(d)) return format(d, "HH:mm");
-  if (isYesterday(d)) return "Ontem";
-  return format(d, "dd/MM HH:mm", { locale: ptBR });
+  if (isYesterday(d)) return `Ontem ${format(d, "HH:mm")}`;
+  return format(d, "dd/MM/yyyy HH:mm", { locale: ptBR });
 }
 
 interface Props {
