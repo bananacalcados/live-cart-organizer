@@ -309,9 +309,20 @@ const Events = () => {
     setDialogOpen(true);
   };
 
-  const handleOpenEvent = (eventId: string) => {
+  const enterEvent = (eventId: string) => {
     setCurrentEvent(eventId);
     navigate("/dashboard");
+  };
+
+  const handleOpenEvent = (eventId: string) => {
+    const ev = events.find((e) => e.id === eventId);
+    // If the event hasn't been fully configured yet, open the setup wizard first.
+    if (ev && !(ev as any).setup_completed) {
+      setWizardEvent(ev);
+      setWizardOpen(true);
+      return;
+    }
+    enterEvent(eventId);
   };
 
   const getStats = (eventId: string) => {
