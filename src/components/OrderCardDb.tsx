@@ -252,11 +252,17 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   // checkout bem-sucedida, quando o pedido pago não tem o método identificado.
   useEffect(() => {
     const isPaid = order.is_paid || order.paid_externally;
-    if (!isPaid || order.payment_method_label) {
+    const lbl = (order.payment_method_label || '').toLowerCase();
+    const labelHasMethod = lbl.includes('pix') || lbl.includes('cart') || lbl.includes('crédito')
+      || lbl.includes('credito') || lbl.includes('débito') || lbl.includes('debito');
+    // Roda o fallback sempre que o método (PIX/Cartão) não puder ser extraído da label,
+    // mesmo que exista uma label só com o nome do gateway (ex.: "Mercado Pago").
+    if (!isPaid || labelHasMethod) {
       setCheckoutMethod(null);
       setCheckoutInstallments(null);
       return;
     }
+
     let cancelled = false;
     (async () => {
       const { data } = await supabase
