@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Smartphone, RefreshCw, CheckCircle2, AlertTriangle, FlaskConical } from "lucide-react";
+import { Smartphone, RefreshCw, CheckCircle2, AlertTriangle, FlaskConical, CreditCard } from "lucide-react";
+import { PointChargeDialog } from "@/components/pos/PointChargeDialog";
 
 interface Terminal {
   id: string;
@@ -15,6 +18,8 @@ interface Terminal {
   operating_mode?: string | null;
 }
 
+const TEST_FLAG_KEY = "point_manual_test_mode";
+
 export function PointTerminalsPanel() {
   const { toast } = useToast();
   const [terminals, setTerminals] = useState<Terminal[]>([]);
@@ -22,6 +27,20 @@ export function PointTerminalsPanel() {
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [isSandbox, setIsSandbox] = useState(false);
+  const [manualTest, setManualTest] = useState(false);
+  const [chargeOpen, setChargeOpen] = useState(false);
+  const [chargeTerminal, setChargeTerminal] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    setManualTest(localStorage.getItem(TEST_FLAG_KEY) === "1");
+  }, []);
+
+  const toggleManualTest = (v: boolean) => {
+    setManualTest(v);
+    localStorage.setItem(TEST_FLAG_KEY, v ? "1" : "0");
+  };
+
+
 
   const loadTerminals = async () => {
     setLoading(true);
