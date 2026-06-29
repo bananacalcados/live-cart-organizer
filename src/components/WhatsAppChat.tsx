@@ -883,6 +883,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           {aiPaused ? '▶ Retomar IA' : '⏸ Pausar IA'}
         </Button>
 
+        <ChatPixButton orderId={order.id} variant="icon-light" />
+
         <CreateSupportTicketDialog
           phone={phone}
           customerName={contactName}
