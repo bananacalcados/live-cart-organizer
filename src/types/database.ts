@@ -9,6 +9,8 @@ export interface DbEvent {
   automation_enabled?: boolean;
   channel?: 'site' | 'pos_perola' | 'pos_centro';
   default_store_id?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   created_at: string;
   updated_at: string;
 }
