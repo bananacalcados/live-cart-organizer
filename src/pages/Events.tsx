@@ -666,7 +666,7 @@ const Events = () => {
                   <p className="text-muted-foreground text-center mb-4">
                     Crie seu primeiro evento para começar a organizar os pedidos das lives.
                   </p>
-                  <Button className="btn-accent" onClick={() => setDialogOpen(true)}>
+                  <Button className="btn-accent" onClick={handleNewLive} disabled={creatingDraft}>
                     <Plus className="h-4 w-4 mr-2" />
                     Criar Primeiro Evento
                   </Button>
