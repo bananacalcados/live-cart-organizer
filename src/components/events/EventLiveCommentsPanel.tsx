@@ -530,6 +530,31 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                           Pedido aberto
                         </span>
                       )}
+                      {stats && stats.paidThisEvent > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          Concluído neste evento
+                        </span>
+                      )}
+                      {stats && stats.paidPast > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
+                          title={stats.paidDates.length ? `Eventos: ${stats.paidDates.join(" • ")}` : undefined}
+                        >
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          {stats.paidPast} {stats.paidPast === 1 ? "compra anterior" : "compras anteriores"}
+                          {stats.paidDates.length > 0 && ` (${stats.paidDates.slice(0, 3).join(", ")}${stats.paidDates.length > 3 ? "…" : ""})`}
+                        </span>
+                      )}
+                      {stats && stats.openPast > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-black"
+                          title="Pedidos feitos em lives anteriores que nunca foram pagos"
+                        >
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          {stats.openPast} {stats.openPast === 1 ? "não finalizado" : "não finalizados"}
+                        </span>
+                      )}
                       <span className="ml-auto text-[10px] text-muted-foreground">{timeLabel(c.created_at)}</span>
                     </div>
                     <p className="mt-0.5 break-words text-sm text-foreground/90">{c.comment_text}</p>
