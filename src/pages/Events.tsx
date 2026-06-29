@@ -66,6 +66,10 @@ const Events = () => {
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardEvent, setWizardEvent] = useState<DbEvent | null>(null);
+  // Tracks an event created as a pristine draft via "Nova Live", so we can
+  // discard it if the user closes the wizard without naming it.
+  const [draftEventId, setDraftEventId] = useState<string | null>(null);
+  const [creatingDraft, setCreatingDraft] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
