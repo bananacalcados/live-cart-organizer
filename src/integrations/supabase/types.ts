@@ -9822,6 +9822,72 @@ export type Database = {
           },
         ]
       }
+      point_payment_intents: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          description: string | null
+          error_message: string | null
+          external_reference: string
+          id: string
+          is_sandbox: boolean
+          mp_account_id: string | null
+          mp_order_id: string | null
+          mp_payment_id: string | null
+          mp_status: string | null
+          paid_at: string | null
+          raw_response: Json | null
+          sale_id: string | null
+          status: string
+          store_id: string | null
+          terminal_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          error_message?: string | null
+          external_reference: string
+          id?: string
+          is_sandbox?: boolean
+          mp_account_id?: string | null
+          mp_order_id?: string | null
+          mp_payment_id?: string | null
+          mp_status?: string | null
+          paid_at?: string | null
+          raw_response?: Json | null
+          sale_id?: string | null
+          status?: string
+          store_id?: string | null
+          terminal_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          error_message?: string | null
+          external_reference?: string
+          id?: string
+          is_sandbox?: boolean
+          mp_account_id?: string | null
+          mp_order_id?: string | null
+          mp_payment_id?: string | null
+          mp_status?: string | null
+          paid_at?: string | null
+          raw_response?: Json | null
+          sale_id?: string | null
+          status?: string
+          store_id?: string | null
+          terminal_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pos_cash_movements: {
         Row: {
           amount: number
