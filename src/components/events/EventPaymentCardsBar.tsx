@@ -111,13 +111,20 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
             className={cn(
               "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all",
               filter === "awaiting"
-                ? "bg-neutral-900 text-white"
+                ? "bg-neutral-900 text-yellow-400 ring-1 ring-yellow-400/60"
                 : "bg-neutral-900/10 text-neutral-900 dark:text-neutral-200 hover:bg-neutral-900/20",
             )}
           >
             <Clock className="h-3.5 w-3.5" />
             Aguardando Pagamento
-            <span className="bg-background/20 px-1.5 py-0.5 rounded-full text-[10px]">{awaiting.length}</span>
+            <span
+              className={cn(
+                "px-1.5 py-0.5 rounded-full text-[10px]",
+                filter === "awaiting" ? "bg-yellow-400 text-neutral-900 font-bold" : "bg-background/20",
+              )}
+            >
+              {awaiting.length}
+            </span>
           </button>
           <button
             onClick={() => setFilter("paid")}
