@@ -296,6 +296,33 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     setDialogOpen(true);
   };
 
+  // Abre a DM do Instagram do @ que comentou
+  const openInstagramChat = (rawHandle: string) => {
+    const clean = cleanHandle(rawHandle);
+    if (!clean) return;
+    setIgChatHandle(clean);
+    setIgChatOpen(true);
+  };
+
+  // Abre o chat de WhatsApp (se o cliente tiver telefone cadastrado)
+  const openWhatsappChat = (rawHandle: string) => {
+    const clean = cleanHandle(rawHandle);
+    const whatsapp = whatsappByHandle.get(clean);
+    if (!whatsapp) return;
+    setWaChatOrder({
+      id: clean,
+      instagramHandle: `@${clean}`,
+      whatsapp,
+      products: [],
+      stage: "awaiting_payment" as Order["stage"],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as Order);
+    setWaChatOpen(true);
+  };
+
+
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return comments;
