@@ -423,11 +423,11 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
 
       // Notify payment confirmed
       let lojaName = "centro";
-      if (order.store_id) {
+      if (order.pickup_store_id) {
         const { data: storeData } = await supabase
           .from("pos_stores")
           .select("name")
-          .eq("id", order.store_id)
+          .eq("id", order.pickup_store_id)
           .single();
         if (storeData?.name) lojaName = storeData.name.toLowerCase();
       }
