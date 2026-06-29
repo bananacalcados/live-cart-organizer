@@ -468,6 +468,24 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           prefillInstagram={prefillHandle || undefined}
         />
       )}
+
+      {igChatHandle && (
+        <InstagramDMChat
+          open={igChatOpen}
+          onOpenChange={setIgChatOpen}
+          username={igChatHandle}
+          eventId={eventId}
+        />
+      )}
+
+      {waChatOrder && (
+        <WhatsAppChatDialog
+          open={waChatOpen}
+          onOpenChange={setWaChatOpen}
+          order={waChatOrder}
+        />
+      )}
+
     </div>
   );
 }
