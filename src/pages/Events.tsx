@@ -288,6 +288,8 @@ const Events = () => {
     setEditingEvent(event.id);
     setName(event.name);
     setDescription(event.description || "");
+    setStartDate(((event as any).start_date as string) || "");
+    setEndDate(((event as any).end_date as string) || "");
     setShippingCost(event.default_shipping_cost?.toString() || "");
     setSelectedWhatsAppId((event as any).whatsapp_number_id || "none");
     setChannel((event as any).channel || "site");
