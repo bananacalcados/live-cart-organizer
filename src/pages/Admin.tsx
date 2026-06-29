@@ -22,6 +22,7 @@ import { AiTestPanel } from "@/components/admin/AiTestPanel";
 import { SecretaryChat } from "@/components/admin/SecretaryChat";
 import { AiErrorLogs } from "@/components/admin/AiErrorLogs";
 import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccountsManager";
+import { PointTerminalsPanel } from "@/components/admin/PointTerminalsPanel";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
@@ -438,8 +439,9 @@ export default function Admin() {
             <AiErrorLogs />
           </TabsContent>
 
-          <TabsContent value="mercadopago" className="mt-4">
+          <TabsContent value="mercadopago" className="mt-4 space-y-6">
             <MercadoPagoAccountsManager />
+            <PointTerminalsPanel />
           </TabsContent>
 
           <TabsContent value="fiscal" className="mt-4 space-y-4">
