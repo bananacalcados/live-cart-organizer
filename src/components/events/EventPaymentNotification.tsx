@@ -54,13 +54,12 @@ export function EventPaymentNotification({ eventId }: EventPaymentNotificationPr
         if (order?.customer_id) {
           const { data: cust } = await supabase
             .from("customers")
-            .select("instagram_handle, whatsapp, name")
+            .select("instagram_handle, whatsapp")
             .eq("id", order.customer_id)
             .maybeSingle();
           if (cust?.instagram_handle) {
             return cust.instagram_handle.startsWith("@") ? cust.instagram_handle : `@${cust.instagram_handle}`;
           }
-          if ((cust as any)?.name) return (cust as any).name;
           if (cust?.whatsapp) return cust.whatsapp;
         }
       } catch {
