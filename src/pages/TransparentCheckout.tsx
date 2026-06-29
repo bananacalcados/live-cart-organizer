@@ -2043,6 +2043,17 @@ export default function TransparentCheckout() {
 
         <StepBanner currentStep={currentStep} />
 
+        {/* Etapa B — Modal de Crossell */}
+        <CrossellModal
+          open={crossellOpen}
+          orderId={orderData.id}
+          offers={crossellOffers}
+          initialCart={crossellCart}
+          onClose={() => setCrossellOpen(false)}
+          onCartChanged={handleCrossellCartChanged}
+        />
+
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main content */}
           <div className="lg:col-span-2">
