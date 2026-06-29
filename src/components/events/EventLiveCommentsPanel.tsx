@@ -370,6 +370,75 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     };
   }, [comments, eventId]);
 
+  // Tags de LEAD: descobre quais @ foram captados pela LP/Typebot deste evento
+  // ou de outras campanhas. Faz o match pelo WhatsApp (DDD + 9 dígitos) já que
+  // os comentários não trazem o telefone diretamente.
+  useEffect(() => {
+    if (!eventId || whatsappByHandle.size === 0) {
+      setLeadTagByHandle(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      // monta phone -> [handles] e a lista de telefones únicos
+      const phones = Array.from(new Set(Array.from(whatsappByHandle.values())));
+      const keyToHandles = new Map<string, string[]>();
+      whatsappByHandle.forEach((wa, h) => {
+        const k = phoneKey(wa);
+        if (!k) return;
+        const arr = keyToHandles.get(k) || [];
+        arr.push(h);
+        keyToHandles.set(k, arr);
+      });
+      const { data, error } = await supabase.rpc("match_event_leads", {
+        p_event_id: eventId,
+        p_phones: phones,
+      });
+      if (cancelled || error || !data) return;
+      const map = new Map<string, LeadTag>();
+      (data as any[]).forEach((row) => {
+        const handles = keyToHandles.get(row.phone_key) || [];
+        handles.forEach((h) =>
+          map.set(h, { thisEvent: !!row.this_event, otherEvent: !!row.other_event }),
+        );
+      });
+      setLeadTagByHandle(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, whatsappByHandle]);
+
+  // Score de participação (engajamento) dos @ presentes no painel
+  useEffect(() => {
+    const handles = Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean)));
+    if (handles.length === 0) {
+      setScoreByHandle(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc("participant_score_ranking", {
+        p_handles: handles,
+      });
+      if (cancelled || error || !data) return;
+      const map = new Map<string, ParticipantScore>();
+      (data as any[]).forEach((row) => {
+        map.set(cleanHandle(row.handle), {
+          score: row.score ?? 0,
+          category: row.category || "frio",
+          liveCount: row.live_count ?? 0,
+        });
+      });
+      setScoreByHandle(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [comments]);
+
+
+
 
 
 
