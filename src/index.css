@@ -475,3 +475,12 @@
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--muted-foreground) / 0.45) hsl(var(--muted));
 }
+
+/* Pisca-pisca para notificações de PIX/checkout pago (chamar atenção) */
+@keyframes pix-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.animate-pix-blink {
+  animation: pix-blink 0.9s ease-in-out infinite;
+}
