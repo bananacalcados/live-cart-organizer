@@ -53,6 +53,8 @@ import { TeamChatPanel } from "@/components/chat/TeamChatPanel";
 import { ContactTagsPopover } from "@/components/chat/ContactTagsPopover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useWhatsAppViewStore } from "@/stores/whatsappViewStore";
+import { PixPendingTabsBar } from "./PixPendingTabsBar";
+import { usePixNotificationStore } from "@/stores/pixNotificationStore";
 
 interface Props {
   storeId: string;
