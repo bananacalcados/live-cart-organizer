@@ -393,6 +393,85 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
         </div>
 
         <div className="py-3 min-h-[260px]">
+          {currentStep.key === "general" && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Comece pela identificação do evento: nome, quando vai acontecer e em qual canal a
+                venda será roteada.
+              </p>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Tag className="h-4 w-4" /> Nome do evento *
+                </Label>
+                <Input
+                  placeholder="Ex: Live de Verão 2024"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Descrição</Label>
+                <Textarea
+                  placeholder="Descrição opcional..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                <Label className="flex items-center gap-2 m-0">
+                  <Calendar className="h-4 w-4" /> Data do evento
+                </Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Início</Label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => {
+                        setStartDate(e.target.value);
+                        if (endDate && e.target.value && endDate < e.target.value)
+                          setEndDate(e.target.value);
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Fim (opcional)</Label>
+                    <Input
+                      type="date"
+                      min={startDate || undefined}
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Pode ser uma data futura. Para lives de vários dias, preencha a data de fim.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Store className="h-4 w-4" /> Canal de venda *
+                </Label>
+                <Select value={channel} onValueChange={setChannel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="site">🌐 Site (Shopify) — venda online</SelectItem>
+                    <SelectItem value="pos_perola">🏬 Loja Pérola — venda física</SelectItem>
+                    <SelectItem value="pos_centro">🏬 Loja Centro — venda física</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {channel === "site"
+                    ? "Pedidos vão para a Shopify (venda online)."
+                    : "Pedidos pagos são roteados para a aba Pedidos da loja escolhida e contam como venda dela."}
+                </p>
+              </div>
+            </div>
+          )}
+
           {currentStep.key === "shipping" && (
             <div className="space-y-5">
               <p className="text-sm text-muted-foreground">
