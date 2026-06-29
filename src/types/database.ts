@@ -73,7 +73,6 @@ export interface DbOrder {
   vindi_transaction_id?: string | null;
   pos_sale_id?: string | null;
   // Payment details
-  paid_at?: string | null;
   payment_method_label?: string | null;
   installments?: number | null;
   // AI pause
