@@ -564,11 +564,13 @@ function StepDelivery({ form, setForm, onNext, onBack, orderId, orderData, onShi
             onShippingSelected(freeOpt);
           }
         } else {
+          const eventFree = quotes.find((q: FreightOption) => q.type === 'event_free');
           const eventFixed = quotes.find((q: FreightOption) => q.type === 'event_fixed');
-          if (eventFixed) {
-            setSelectedFreight(eventFixed.id);
+          const preferred = eventFree || eventFixed;
+          if (preferred) {
+            setSelectedFreight(preferred.id);
             setShowAllFreight(false);
-            onShippingSelected(eventFixed);
+            onShippingSelected(preferred);
           }
         }
       }
