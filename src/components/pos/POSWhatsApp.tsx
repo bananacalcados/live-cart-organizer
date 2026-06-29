@@ -382,9 +382,15 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   }, [selectedPhone, selectedConvNumberId, sellerViewerId, currentUserId, selectedSellerName, assignConversation]);
 
   // ── Notificações de PIX/checkout pendente (abas estilo navegador) ──────────
+  const pixInit = usePixNotificationStore((s) => s.init);
   const pixSetActivePhone = usePixNotificationStore((s) => s.setActivePhone);
   const pixOpenRequest = usePixNotificationStore((s) => s.openRequest);
   const pixClearOpenRequest = usePixNotificationStore((s) => s.clearOpenRequest);
+
+  // Inicializa/escopa as abas de pagamento para a LOJA atual deste módulo.
+  useEffect(() => {
+    pixInit(storeId);
+  }, [storeId, pixInit]);
 
   // Informa ao store qual conversa está aberta (pra decidir piscar x abrir modal).
   useEffect(() => {
