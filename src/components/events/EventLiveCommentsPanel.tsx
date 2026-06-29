@@ -76,6 +76,15 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   const [editingOrder, setEditingOrder] = useState<DbOrder | null>(null);
   const [prefillHandle, setPrefillHandle] = useState<string>("");
 
+  // Chats (Instagram DM / WhatsApp) abertos a partir de um comentário
+  const [igChatHandle, setIgChatHandle] = useState<string | null>(null);
+  const [igChatOpen, setIgChatOpen] = useState(false);
+  const [waChatOrder, setWaChatOrder] = useState<Order | null>(null);
+  const [waChatOpen, setWaChatOpen] = useState(false);
+
+  // Mapa handle(limpo) -> whatsapp cadastrado (para o botão de WhatsApp)
+  const [whatsappByHandle, setWhatsappByHandle] = useState<Map<string, string>>(new Map());
+
   // Define o início padrão da faixa = data de criação/início do evento
   useEffect(() => {
     if (!eventId) return;
