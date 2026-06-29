@@ -501,6 +501,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
               const isBanned = bannedHandles.has(handle);
               const hasUnpaid = unpaidOrderByHandle.has(handle);
               const hasWhatsapp = whatsappByHandle.has(handle);
+              const stats = orderStatsByHandle.get(handle);
               return (
                 <div key={c.id} className="flex gap-2.5 px-3 py-2.5 hover:bg-muted/40">
                   <Avatar className="h-9 w-9 shrink-0">
