@@ -93,6 +93,9 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   // Mapa handle(limpo) -> whatsapp cadastrado (para o botão de WhatsApp)
   const [whatsappByHandle, setWhatsappByHandle] = useState<Map<string, string>>(new Map());
 
+  // Mapa handle(limpo) -> estatísticas de pedidos (concluídos/abertos no histórico)
+  const [orderStatsByHandle, setOrderStatsByHandle] = useState<Map<string, HandleOrderStats>>(new Map());
+
   // Define o início padrão da faixa = data de criação/início do evento
   useEffect(() => {
     if (!eventId) return;
