@@ -34,26 +34,40 @@ export async function notifyPaymentConfirmed(payload: PaymentConfirmedPayload) {
     ...(payload.source ? { source: payload.source } : {}),
   };
 
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  const responseText = await response.text();
-
-  if (!response.ok) {
-    throw new Error(`payment-confirmado ${response.status}: ${responseText}`);
-  }
-
-  console.log(`[payment-confirmado] delivered for order ${payload.pedido_id}: ${responseText || "ok"}`);
-
-  // Trigger Livete payment confirmation (fire-and-forget)
   triggerLiveteConfirmation(payload.pedido_id);
 
-  return {
-    ok: true,
-    status: response.status,
-    body: responseText,
-  };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      console.error(`payment-confirmado ${response.status}: ${responseText}`);
+      return { ok: false, status: response.status, body: responseText };
+    }
+
+    console.log(`[payment-confirmado] delivered for order ${payload.pedido_id}: ${responseText || "ok"}`);
+    return {
+      ok: true,
+      status: response.status,
+      body: responseText,
+    };
+  } catch (error) {
+    console.error("[payment-confirmado] non-blocking delivery error:", error);
+    return {
+      ok: false,
+      status: 0,
+      body: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
