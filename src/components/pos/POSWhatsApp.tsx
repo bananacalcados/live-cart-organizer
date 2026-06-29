@@ -54,6 +54,7 @@ import { ContactTagsPopover } from "@/components/chat/ContactTagsPopover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useWhatsAppViewStore } from "@/stores/whatsappViewStore";
 import { PixPendingTabsBar } from "./PixPendingTabsBar";
+import { PixPaidGlobalAlert } from "./PixPaidGlobalAlert";
 import { usePixNotificationStore } from "@/stores/pixNotificationStore";
 
 interface Props {
@@ -393,10 +394,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // Quando uma aba é clicada, abre a conversa correspondente.
   useEffect(() => {
     if (!pixOpenRequest) return;
+    // Sai do dashboard / chat de equipe para que o chat realmente apareça.
+    setShowDashboard(false);
+    setTeamChatActive(false);
     handleSelectConversation(pixOpenRequest.phone, pixOpenRequest.numberId);
     pixClearOpenRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixOpenRequest]);
+
 
 
 
@@ -1488,6 +1493,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       <>
       {/* Abas de PIX/checkout aguardando pagamento (estilo aba do navegador) */}
       <PixPendingTabsBar />
+      {/* Alerta global de pagamento confirmado — só dentro do módulo WhatsApp */}
+      <PixPaidGlobalAlert />
       {/* Content - Split view */}
       <div className="flex-1 flex overflow-hidden min-w-0">
         {/* Conversation List */}
