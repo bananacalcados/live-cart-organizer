@@ -1,0 +1,1 @@
+ALTER TABLE public.events ADD COLUMN IF NOT EXISTS crossell_configured boolean NOT NULL DEFAULT false;

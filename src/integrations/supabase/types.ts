@@ -4603,6 +4603,7 @@ export type Database = {
           channel_preference: string
           channel_preferences: string[]
           created_at: string
+          crossell_configured: boolean
           crossell_enabled: boolean
           default_shipping_cost: number | null
           default_store_id: string | null
@@ -4634,6 +4635,7 @@ export type Database = {
           channel_preference?: string
           channel_preferences?: string[]
           created_at?: string
+          crossell_configured?: boolean
           crossell_enabled?: boolean
           default_shipping_cost?: number | null
           default_store_id?: string | null
@@ -4665,6 +4667,7 @@ export type Database = {
           channel_preference?: string
           channel_preferences?: string[]
           created_at?: string
+          crossell_configured?: boolean
           crossell_enabled?: boolean
           default_shipping_cost?: number | null
           default_store_id?: string | null
