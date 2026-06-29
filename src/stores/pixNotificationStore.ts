@@ -286,6 +286,10 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             paidAt: prev?.paidAt || Date.now(),
             fresh: isFresh,
             isLive,
+            storeId: saleStore,
+            storeName: saleStore ? storeNameById.get(String(saleStore)) ?? null : null,
+            instanceLabel: numberId ? instanceLabelById.get(String(numberId)) ?? null : null,
+            orderNumber: orderNumberOf(sale),
           };
           next.push(tab);
 
@@ -306,6 +310,10 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             status: "pending",
             createdAt: (awaitingRow.created_at as string) || new Date().toISOString(),
             isLive,
+            storeId: saleStore,
+            storeName: saleStore ? storeNameById.get(String(saleStore)) ?? null : null,
+            instanceLabel: numberId ? instanceLabelById.get(String(numberId)) ?? null : null,
+            orderNumber: orderNumberOf(sale),
           });
         } else if (prev && prev.status === "paid") {
           next.push(prev); // mantém paga até o operador descartar
