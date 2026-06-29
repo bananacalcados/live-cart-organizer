@@ -292,12 +292,16 @@ export default function CrossellModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t bg-muted/30 flex items-center justify-between gap-3">
-          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-            <Check className="h-3.5 w-3.5 text-primary" />
+        <div className="px-4 sm:px-5 py-3 border-t bg-muted/30 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3">
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1 order-2 sm:order-1">
+            <Check className="h-3.5 w-3.5 text-primary shrink-0" />
             Itens adicionados entram no mesmo pagamento
           </p>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button
+            size="sm"
+            onClick={onClose}
+            className="order-1 sm:order-2 w-full sm:w-auto font-semibold shrink-0"
+          >
             Continuar pagamento
           </Button>
         </div>
