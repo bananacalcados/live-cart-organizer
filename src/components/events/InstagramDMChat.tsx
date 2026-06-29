@@ -27,6 +27,7 @@ interface InstagramDMChatProps {
   eventId?: string;
   fallbackCommentId?: string; // último comment_id desse usuário (pra private_reply)
   profilePicUrl?: string | null;
+  orderId?: string | null;    // pedido associado, para gerar PIX direto do chat
 }
 
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
