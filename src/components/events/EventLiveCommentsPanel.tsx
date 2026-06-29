@@ -273,7 +273,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       const variants: string[] = [];
       handles.forEach((h) => {
         if (!map.has(h)) {
-          variants.push(h, `@${h}`);
+          variants.push(h, `@${h}`, `@ ${h}`);
         }
       });
       if (variants.length > 0) {
@@ -309,9 +309,21 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     let cancelled = false;
     (async () => {
       // 1) Resolve customer_id -> handle (limpo) para todos os @ presentes.
+      const handlesSet = new Set(handles);
       const idToHandle = new Map<string, string>();
+
+      // 1a) Resolve via pedidos já carregados (robusto: pega o @ direto do pedido,
+      //     mesmo quando o cadastro do cliente está com formato divergente).
+      for (const o of orders) {
+        const h = cleanHandle(o.customer?.instagram_handle || "");
+        const cid = o.customer_id || (o.customer as any)?.id;
+        if (h && cid && handlesSet.has(h)) idToHandle.set(cid, h);
+      }
+
+      // 1b) Resolve via tabela de clientes. Inclui variantes "@h" e "@ h"
+      //     (alguns handles foram salvos com espaço depois do @).
       const variants: string[] = [];
-      handles.forEach((h) => variants.push(h, `@${h}`));
+      handles.forEach((h) => variants.push(h, `@${h}`, `@ ${h}`));
       const cBatch = 200;
       for (let i = 0; i < variants.length; i += cBatch) {
         const batch = variants.slice(i, i + cBatch);
@@ -321,9 +333,10 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           .in("instagram_handle", batch);
         (data || []).forEach((c: any) => {
           const h = cleanHandle(c.instagram_handle || "");
-          if (h && c.id) idToHandle.set(c.id, h);
+          if (h && c.id && handlesSet.has(h)) idToHandle.set(c.id, h);
         });
       }
+
 
       const customerIds = Array.from(idToHandle.keys());
       const stats = new Map<string, HandleOrderStats>();
@@ -384,7 +397,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [comments, eventId]);
+  }, [comments, eventId, orders]);
 
   // Tags de LEAD: descobre quais @ foram captados pela LP/Typebot deste evento
   // ou de outras campanhas. Faz o match pelo WhatsApp (DDD + 9 dígitos) já que
