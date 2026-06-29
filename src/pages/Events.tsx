@@ -871,12 +871,18 @@ const Events = () => {
         open={wizardOpen}
         onOpenChange={(open) => {
           setWizardOpen(open);
-          if (!open) setWizardEvent(null);
+          if (!open) {
+            setWizardEvent(null);
+            // If closed without finishing, drop a pristine draft.
+            discardDraftIfPristine();
+          }
         }}
         onCompleted={() => {
           const id = wizardEvent?.id;
+          setDraftEventId(null);
           setWizardOpen(false);
           setWizardEvent(null);
+          fetchEvents();
           if (id) enterEvent(id);
         }}
       />
