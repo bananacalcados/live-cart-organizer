@@ -101,6 +101,8 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   const [bannedHandles, setBannedHandles] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // Só mostra "Carregando..." na primeira carga; refreshes silenciosos não piscam o painel
+  const firstLoadRef = useRef(true);
 
   // Faixa de datas (pente fino)
   const [fromDate, setFromDate] = useState<string>("");
