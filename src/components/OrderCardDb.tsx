@@ -609,6 +609,16 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
                 {order.customer?.instagram_handle}
               </button>
             </div>
+            {/* Botão para abrir/editar os dados que o cliente preencheu no link de checkout */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowFichaDialog(true); }}
+              className="mt-0.5 inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/20"
+              title="Ver/editar os dados cadastrais do cliente"
+            >
+              <UserCheck className="h-3 w-3" />
+              VER DADOS
+            </button>
             <div className="flex items-center gap-1.5 min-w-0">
               <p className="text-[11px] text-muted-foreground truncate font-mono">
                 ID: {order.id}
