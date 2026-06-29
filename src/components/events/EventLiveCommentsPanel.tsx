@@ -397,7 +397,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [comments, eventId]);
+  }, [comments, eventId, orders]);
 
   // Tags de LEAD: descobre quais @ foram captados pela LP/Typebot deste evento
   // ou de outras campanhas. Faz o match pelo WhatsApp (DDD + 9 dígitos) já que
