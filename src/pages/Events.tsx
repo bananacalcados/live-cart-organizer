@@ -320,6 +320,34 @@ const Events = () => {
     navigate("/dashboard");
   };
 
+  // "Nova Live": cria um evento rascunho e abre o novo Wizard na etapa de identificação.
+  const handleNewLive = async () => {
+    if (creatingDraft) return;
+    setCreatingDraft(true);
+    try {
+      const id = await createEvent(EVENT_DRAFT_NAME);
+      if (!id) return;
+      const ev = useEventStore.getState().events.find((e) => e.id === id) || null;
+      setDraftEventId(id);
+      setWizardEvent(ev);
+      setWizardOpen(true);
+    } finally {
+      setCreatingDraft(false);
+    }
+  };
+
+  // Descarta o rascunho se o usuário fechar o wizard sem nomear o evento.
+  const discardDraftIfPristine = async () => {
+    if (!draftEventId) return;
+    const ev = useEventStore.getState().events.find((e) => e.id === draftEventId);
+    if (ev && (ev.name === EVENT_DRAFT_NAME || !ev.name?.trim())) {
+      await deleteEvent(draftEventId);
+    }
+    setDraftEventId(null);
+  };
+
+
+
   const handleOpenEvent = (eventId: string) => {
     const ev = events.find((e) => e.id === eventId);
     if (ev) {
