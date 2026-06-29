@@ -313,7 +313,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   console.log(`[mercadopago] Searching for order with mercadopago_payment_id=${mpIdStr}`);
   const { data: orders, error: orderSearchErr } = await supabase
     .from("orders")
-    .select("id, is_paid, store_id")
+    .select("id, is_paid, pickup_store_id")
     .filter("mercadopago_payment_id", "eq", mpIdStr)
     .limit(1);
   if (orderSearchErr) console.error("[mercadopago] order search error:", orderSearchErr);
@@ -423,11 +423,11 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
 
       // Notify payment confirmed
       let lojaName = "centro";
-      if (order.store_id) {
+      if (order.pickup_store_id) {
         const { data: storeData } = await supabase
           .from("pos_stores")
           .select("name")
-          .eq("id", order.store_id)
+          .eq("id", order.pickup_store_id)
           .single();
         if (storeData?.name) lojaName = storeData.name.toLowerCase();
       }
@@ -498,12 +498,12 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       // CRM order — fetch customer data
       const { data: fullOrder } = await supabase
         .from("orders")
-        .select("total, store_id, customer:customers(instagram_handle, whatsapp)")
+        .select("pickup_store_id, customer:customers(instagram_handle, whatsapp)")
         .eq("id", orderId)
         .maybeSingle();
+      logAmount = mpPayment?.transaction_amount ? Number(mpPayment.transaction_amount) : null;
       if (fullOrder) {
-        logAmount = fullOrder.total ? Number(fullOrder.total) : null;
-        logStoreId = fullOrder.store_id;
+        logStoreId = fullOrder.pickup_store_id;
         const cust = fullOrder.customer as any;
         logCustomerName = cust?.instagram_handle || null;
         logCustomerPhone = cust?.whatsapp || null;
@@ -646,7 +646,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   {
     const { data: orderByGateway } = await supabase
       .from("orders")
-      .select("id, is_paid, notes, store_id")
+      .select("id, is_paid, notes, pickup_store_id")
       .eq("vindi_transaction_id", String(tokenTransaction))
       .maybeSingle();
 
@@ -675,7 +675,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   if (!orderSource && ourOrderId) {
     const { data: orderById } = await supabase
       .from("orders")
-      .select("id, is_paid, notes, store_id")
+      .select("id, is_paid, notes, pickup_store_id")
       .eq("id", ourOrderId)
       .maybeSingle();
 
@@ -782,20 +782,13 @@ async function updateOrder(
       transactionValue: String(tokenTransaction),
       paidAt,
     });
-    // Busca store_id real do pedido
+    // Busca store_id real do pedido (orders usa pickup_store_id)
     let lojaName = 'centro'; // fallback
-    if (sale?.store_id) {
+    if (order?.pickup_store_id) {
       const { data: storeData } = await supabase
         .from('pos_stores')
         .select('name')
-        .eq('id', sale.store_id)
-        .single();
-      if (storeData?.name) lojaName = storeData.name.toLowerCase();
-    } else if (order?.store_id) {
-      const { data: storeData } = await supabase
-        .from('pos_stores')
-        .select('name')
-        .eq('id', order.store_id)
+        .eq('id', order.pickup_store_id)
         .single();
       if (storeData?.name) lojaName = storeData.name.toLowerCase();
     }

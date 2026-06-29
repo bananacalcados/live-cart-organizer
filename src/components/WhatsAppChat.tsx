@@ -8,6 +8,7 @@ import { useZapi } from "@/hooks/useZapi";
 import { useConversationInstance } from "@/hooks/useConversationInstance";
 import { normalizeBRPhone, buildPhoneVariations } from "@/lib/phoneUtils";
 import { cn } from "@/lib/utils";
+import { ChatPixButton } from "./ChatPixButton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Order, OrderStage, STAGES } from "@/types/order";
@@ -882,6 +883,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           <Bot className="h-3.5 w-3.5" />
           {aiPaused ? '▶ Retomar IA' : '⏸ Pausar IA'}
         </Button>
+
+        <ChatPixButton orderId={order.id} variant="icon-light" />
 
         <CreateSupportTicketDialog
           phone={phone}

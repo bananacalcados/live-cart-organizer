@@ -17,6 +17,7 @@ import { EventStockAlerts } from "@/components/events/EventStockAlerts";
 import { EventCartsPanel } from "@/components/events/EventCartsPanel";
 import { LiveCommentsHistory } from "@/components/events/LiveCommentsHistory";
 import { LiveActiveToggleButton } from "@/components/events/LiveActiveToggleButton";
+import { EventPaymentNotification } from "@/components/events/EventPaymentNotification";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
@@ -115,6 +116,8 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
+      {/* Modal de confirmação de pagamento — isolado por evento */}
+      <EventPaymentNotification eventId={currentEventId} />
       {/* Main content */}
       <div className="flex-1 min-w-0 flex flex-col">
         <Header onNewOrder={handleNewOrder} />

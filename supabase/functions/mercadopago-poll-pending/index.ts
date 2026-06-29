@@ -30,7 +30,7 @@ serve(async (req) => {
   const [ordersRes, salesRes] = await Promise.all([
     supabase
       .from("orders")
-      .select("id, mercadopago_payment_id, mp_account_id, store_id, is_paid")
+      .select("id, mercadopago_payment_id, mp_account_id, is_paid")
       .not("mercadopago_payment_id", "is", null)
       .eq("is_paid", false)
       .gte("created_at", since)

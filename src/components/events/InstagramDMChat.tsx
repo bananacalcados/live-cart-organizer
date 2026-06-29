@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Instagram, Send, Loader2, AlertCircle, Info, Camera, Video, Mic, Paperclip, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { convertAudioBlobToWav } from "@/lib/audioRecorder";
+import { ChatPixButton } from "@/components/ChatPixButton";
 
 interface DMMessage {
   id: string;
@@ -27,6 +28,7 @@ interface InstagramDMChatProps {
   eventId?: string;
   fallbackCommentId?: string; // último comment_id desse usuário (pra private_reply)
   profilePicUrl?: string | null;
+  orderId?: string | null;    // pedido associado, para gerar PIX direto do chat
 }
 
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
@@ -38,6 +40,7 @@ export function InstagramDMChat({
   eventId,
   fallbackCommentId,
   profilePicUrl,
+  orderId,
 }: InstagramDMChatProps) {
   const [messages, setMessages] = useState<DMMessage[]>([]);
   const [igUserId, setIgUserId] = useState<string | null>(null);
@@ -435,6 +438,7 @@ export function InstagramDMChat({
                 )}
               </div>
             </div>
+            <ChatPixButton orderId={orderId} variant="button" className="gap-1.5 shrink-0" />
           </DialogTitle>
         </DialogHeader>
 
