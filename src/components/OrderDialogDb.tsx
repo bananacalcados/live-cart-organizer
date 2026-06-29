@@ -66,6 +66,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [isGeneratingYampiLink, setIsGeneratingYampiLink] = useState(false);
   const [isGeneratingPayPalLink, setIsGeneratingPayPalLink] = useState(false);
   const [isGeneratingPixLink, setIsGeneratingPixLink] = useState(false);
+  const [pixCode, setPixCode] = useState<string>("");
   const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
   const [banReason, setBanReason] = useState("");
   
