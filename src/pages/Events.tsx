@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, CreditCard, Monitor, Send, Store, Target } from "lucide-react";
+import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, Monitor, Send, Store, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EventsDashboard } from "@/components/events/EventsDashboard";
-import { EventCheckoutMonitor } from "@/components/events/EventCheckoutMonitor";
+
 import { EventTeamManager } from "@/components/events/EventTeamManager";
 import { EventTeamSelector } from "@/components/events/EventTeamSelector";
 import { EventTeamDisplay } from "@/components/events/EventTeamSelector";
@@ -583,10 +583,8 @@ const Events = () => {
             <TabsTrigger value="events" className="gap-1">
               <Calendar className="h-4 w-4" /> Eventos
             </TabsTrigger>
-            <TabsTrigger value="payments" className="gap-1">
-              <CreditCard className="h-4 w-4" /> Pagamentos
-            </TabsTrigger>
              <TabsTrigger value="team" className="gap-1">
+
               <UserCheck className="h-4 w-4" /> Equipe
             </TabsTrigger>
             <TabsTrigger value="shipping" className="gap-1">
@@ -790,9 +788,7 @@ const Events = () => {
             )}
           </TabsContent>
 
-          <TabsContent value="payments">
-            <EventCheckoutMonitor events={events} />
-          </TabsContent>
+
 
           <TabsContent value="team">
             <EventTeamManager />

@@ -3,11 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Radio, Search, Ban, ShoppingBag } from "lucide-react";
+import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
+import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
+import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
+import { Order } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -72,6 +75,15 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<DbOrder | null>(null);
   const [prefillHandle, setPrefillHandle] = useState<string>("");
+
+  // Chats (Instagram DM / WhatsApp) abertos a partir de um comentário
+  const [igChatHandle, setIgChatHandle] = useState<string | null>(null);
+  const [igChatOpen, setIgChatOpen] = useState(false);
+  const [waChatOrder, setWaChatOrder] = useState<Order | null>(null);
+  const [waChatOpen, setWaChatOpen] = useState(false);
+
+  // Mapa handle(limpo) -> whatsapp cadastrado (para o botão de WhatsApp)
+  const [whatsappByHandle, setWhatsappByHandle] = useState<Map<string, string>>(new Map());
 
   // Define o início padrão da faixa = data de criação/início do evento
   useEffect(() => {
@@ -179,6 +191,52 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     loadBanned();
   }, [loadBanned]);
 
+  // Carrega o WhatsApp cadastrado dos @ que comentaram (para o botão de WhatsApp)
+  useEffect(() => {
+    const handles = Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean)));
+    if (handles.length === 0) {
+      setWhatsappByHandle(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const map = new Map<string, string>();
+      // 1) Aproveita o WhatsApp dos pedidos já carregados deste evento
+      for (const o of orders) {
+        const h = cleanHandle(o.customer?.instagram_handle || "");
+        const wa = (o.customer?.whatsapp || "").replace(/\D/g, "");
+        if (h && wa) map.set(h, o.customer!.whatsapp!);
+      }
+      // 2) Busca na tabela de clientes os handles ainda sem WhatsApp
+      const variants: string[] = [];
+      handles.forEach((h) => {
+        if (!map.has(h)) {
+          variants.push(h, `@${h}`);
+        }
+      });
+      if (variants.length > 0) {
+        const batchSize = 200;
+        for (let i = 0; i < variants.length; i += batchSize) {
+          const batch = variants.slice(i, i + batchSize);
+          const { data } = await supabase
+            .from("customers")
+            .select("instagram_handle, whatsapp")
+            .in("instagram_handle", batch);
+          (data || []).forEach((c: any) => {
+            const h = cleanHandle(c.instagram_handle || "");
+            const wa = (c.whatsapp || "").replace(/\D/g, "");
+            if (h && wa && !map.has(h)) map.set(h, c.whatsapp);
+          });
+        }
+      }
+      if (!cancelled) setWhatsappByHandle(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [comments, orders]);
+
+
   // Realtime: novos comentários (live_comments) entram automaticamente
   useEffect(() => {
     if (!eventId) return;
@@ -237,6 +295,33 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     }
     setDialogOpen(true);
   };
+
+  // Abre a DM do Instagram do @ que comentou
+  const openInstagramChat = (rawHandle: string) => {
+    const clean = cleanHandle(rawHandle);
+    if (!clean) return;
+    setIgChatHandle(clean);
+    setIgChatOpen(true);
+  };
+
+  // Abre o chat de WhatsApp (se o cliente tiver telefone cadastrado)
+  const openWhatsappChat = (rawHandle: string) => {
+    const clean = cleanHandle(rawHandle);
+    const whatsapp = whatsappByHandle.get(clean);
+    if (!whatsapp) return;
+    setWaChatOrder({
+      id: clean,
+      instagramHandle: `@${clean}`,
+      whatsapp,
+      products: [],
+      stage: "awaiting_payment" as Order["stage"],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as Order);
+    setWaChatOpen(true);
+  };
+
+
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -312,6 +397,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
               const handle = cleanHandle(c.username);
               const isBanned = bannedHandles.has(handle);
               const hasUnpaid = unpaidOrderByHandle.has(handle);
+              const hasWhatsapp = whatsappByHandle.has(handle);
               return (
                 <div key={c.id} className="flex gap-2.5 px-3 py-2.5 hover:bg-muted/40">
                   <Avatar className="h-9 w-9 shrink-0">
@@ -343,10 +429,32 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                       <span className="ml-auto text-[10px] text-muted-foreground">{timeLabel(c.created_at)}</span>
                     </div>
                     <p className="mt-0.5 break-words text-sm text-foreground/90">{c.comment_text}</p>
+                    {/* Ações: abrir chat do Instagram / WhatsApp */}
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <button
+                        onClick={() => openInstagramChat(c.username)}
+                        title="Abrir DM do Instagram"
+                        className="inline-flex items-center gap-1 rounded-md bg-pink-500/10 px-2 py-1 text-[11px] font-medium text-pink-600 hover:bg-pink-500/20 dark:text-pink-300"
+                      >
+                        <Instagram className="h-3 w-3" />
+                        Instagram
+                      </button>
+                      {hasWhatsapp && (
+                        <button
+                          onClick={() => openWhatsappChat(c.username)}
+                          title="Abrir conversa no WhatsApp"
+                          className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-[11px] font-medium text-green-600 hover:bg-green-500/20 dark:text-green-400"
+                        >
+                          <MessageCircle className="h-3 w-3" />
+                          WhatsApp
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })}
+
           </div>
         )}
       </ScrollArea>
@@ -360,6 +468,24 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           prefillInstagram={prefillHandle || undefined}
         />
       )}
+
+      {igChatHandle && (
+        <InstagramDMChat
+          open={igChatOpen}
+          onOpenChange={setIgChatOpen}
+          username={igChatHandle}
+          eventId={eventId}
+        />
+      )}
+
+      {waChatOrder && (
+        <WhatsAppChatDialog
+          open={waChatOpen}
+          onOpenChange={setWaChatOpen}
+          order={waChatOrder}
+        />
+      )}
+
     </div>
   );
 }
