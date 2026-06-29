@@ -17273,6 +17273,11 @@ export type Database = {
         Returns: boolean
       }
       bc_norm_txt: { Args: { t: string }; Returns: string }
+      bc_order_total: {
+        Args: { discount_type: string; discount_value: number; products: Json }
+        Returns: number
+      }
+      bc_phone_key: { Args: { p: string }; Returns: string }
       calculate_rfm_scores: { Args: never; Returns: Json }
       calculate_rfm_scores_unified: { Args: never; Returns: Json }
       campaign_daily_deficit: {
@@ -17394,6 +17399,7 @@ export type Database = {
           message_id: string
         }[]
       }
+      event_inner_dashboard: { Args: { p_event_id: string }; Returns: Json }
       extract_base_product_name: { Args: { p_name: string }; Returns: string }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       extract_phone_suffix8: { Args: { phone_input: string }; Returns: string }
@@ -17823,6 +17829,14 @@ export type Database = {
         Returns: undefined
       }
       mark_lead_as_paid: { Args: { p_whatsapp: string }; Returns: undefined }
+      match_event_leads: {
+        Args: { p_event_id: string; p_phones: string[] }
+        Returns: {
+          other_event: boolean
+          phone_key: string
+          this_event: boolean
+        }[]
+      }
       merge_duplicate_zoppy_customers: {
         Args: never
         Returns: {
@@ -17865,6 +17879,22 @@ export type Database = {
       parse_category_from_name: { Args: { p_name: string }; Returns: string }
       parse_payment_methods: { Args: { p_text: string }; Returns: string[] }
       parse_size_from_name: { Args: { p_name: string }; Returns: string }
+      participant_score_ranking: {
+        Args: { p_handles?: string[] }
+        Returns: {
+          avg_ticket: number
+          cancelled_orders: number
+          category: string
+          comment_count: number
+          handle: string
+          last_participation: string
+          live_count: number
+          live_dates: string[]
+          paid_orders: number
+          score: number
+          total_spent: number
+        }[]
+      }
       phone_ddd: { Args: { e164: string }; Returns: string }
       phone_suffix8: { Args: { e164: string }; Returns: string }
       pos_estoque_divergence_summary: { Args: never; Returns: Json }
