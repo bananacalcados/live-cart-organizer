@@ -202,8 +202,37 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-4 flex-1 overflow-hidden flex flex-col">
+          {/* Filtro por @ do cliente */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Filtrar por @ ou WhatsApp do cliente..."
+              value={customerQuery}
+              onChange={(e) => setCustomerQuery(e.target.value)}
+              className="pl-9"
+            />
+            {customerQuery && (
+              <button
+                onClick={() => setCustomerQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
           {/* Filters */}
           <div className="flex flex-wrap gap-4 items-center">
+            <div className="flex items-center gap-2">
+              <Checkbox 
+                id="paidOnly" 
+                checked={filterPaidOnly}
+                onCheckedChange={(v) => setFilterPaidOnly(!!v)}
+              />
+              <Label htmlFor="paidOnly" className="text-sm cursor-pointer">
+                Apenas pagos
+              </Label>
+            </div>
             <div className="flex items-center gap-2">
               <Checkbox 
                 id="paidOnly" 
