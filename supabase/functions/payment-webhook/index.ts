@@ -646,7 +646,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   {
     const { data: orderByGateway } = await supabase
       .from("orders")
-      .select("id, is_paid, notes, store_id")
+      .select("id, is_paid, notes, pickup_store_id")
       .eq("vindi_transaction_id", String(tokenTransaction))
       .maybeSingle();
 
