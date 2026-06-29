@@ -3,7 +3,7 @@ import { Search, Plus, Minus, Loader2, ChevronDown, ChevronUp } from "lucide-rea
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
+import { fetchProducts, ShopifyProduct, getVariantImage } from "@/lib/shopify";
 import { DbOrderProduct } from "@/types/database";
 import {
   Select,
@@ -68,7 +68,7 @@ export function ProductSelector({
             price,
             compareAtPrice: compareAt && compareAt > price ? compareAt : undefined,
             quantity: 1,
-            image: variant.image?.url || product.node.images.edges[0]?.node.url,
+            image: getVariantImage(product, variant),
           });
           setSearch("");
         }
@@ -151,7 +151,7 @@ export function ProductSelector({
       price,
       compareAtPrice: compareAt && compareAt > price ? compareAt : undefined,
       quantity: 1,
-      image: product.node.images.edges[0]?.node.url,
+      image: getVariantImage(product, variant),
     };
 
     onAddProduct(orderProduct);
