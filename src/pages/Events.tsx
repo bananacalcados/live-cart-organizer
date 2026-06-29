@@ -866,6 +866,10 @@ const Events = () => {
               )}
             </div>
           </TabsContent>
+
+          <TabsContent value="participants">
+            <ParticipantScorePanel />
+          </TabsContent>
         </Tabs>
       </main>
 
