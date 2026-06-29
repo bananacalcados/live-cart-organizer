@@ -267,6 +267,8 @@ const Events = () => {
   const resetForm = () => {
     setName("");
     setDescription("");
+    setStartDate("");
+    setEndDate("");
     setShippingCost("");
     setSelectedWhatsAppId("");
     setChannel("site");
