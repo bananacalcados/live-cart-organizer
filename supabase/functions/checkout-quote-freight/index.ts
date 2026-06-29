@@ -320,21 +320,31 @@ serve(async (req) => {
 
     // 3. Apply the override to the CHEAPEST carrier quote (raise OR lower its price).
     //    Skipped entirely when the order/sale was marked as free shipping (handled by callers).
-    if (!forceFreeShipping && fixedShippingValue != null) {
+    //    Free-shipping-above-threshold has PRIORITY over the fixed value when the order
+    //    total reaches the configured threshold.
+    const qualifiesForEventFree =
+      eventFreeThreshold != null && Number(total_value || 0) >= eventFreeThreshold;
+
+    if (!forceFreeShipping && (qualifiesForEventFree || fixedShippingValue != null)) {
+      const targetValue = qualifiesForEventFree ? 0 : (fixedShippingValue as number);
+      const targetType = qualifiesForEventFree ? 'event_free' : 'event_fixed';
       const carrierQuotes = quotes.filter(q => q.type === 'carrier');
       if (carrierQuotes.length > 0) {
         const cheapest = carrierQuotes.reduce((acc, cur) => (cur.price < acc.price ? cur : acc));
-        cheapest.price = Math.round(fixedShippingValue * 100) / 100;
-        cheapest.type = 'event_fixed';
+        cheapest.price = Math.round(targetValue * 100) / 100;
+        cheapest.type = targetType;
+        if (qualifiesForEventFree) {
+          cheapest.carrier = `${cheapest.carrier} — Frete Grátis ✅`;
+        }
       } else {
-        // Frenet returned nothing — still offer the fixed value so the customer can pay.
+        // Frenet returned nothing — still offer the value so the customer can pay.
         quotes.push({
-          id: 'fixed-shipping',
-          carrier: 'Frete',
-          service: 'Padrão',
-          price: Math.round(fixedShippingValue * 100) / 100,
+          id: qualifiesForEventFree ? 'event-free' : 'fixed-shipping',
+          carrier: qualifiesForEventFree ? 'Frete Grátis ✅' : 'Frete',
+          service: qualifiesForEventFree ? 'Cortesia' : 'Padrão',
+          price: Math.round(targetValue * 100) / 100,
           delivery_days: null,
-          type: 'event_fixed',
+          type: targetType,
         });
       }
     }
