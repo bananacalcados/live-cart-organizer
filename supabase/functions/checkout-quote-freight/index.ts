@@ -349,8 +349,10 @@ serve(async (req) => {
       }
     }
 
-    // Sort: repeat_free first, then event_fixed, then pickup, then local, then by price
+    // Sort: free options first, then event_fixed, then pickup, then local, then by price
     quotes.sort((a, b) => {
+      if (a.type === 'event_free') return -1;
+      if (b.type === 'event_free') return 1;
       if (a.type === 'repeat_free') return -1;
       if (b.type === 'repeat_free') return 1;
       if (a.type === 'event_fixed') return -1;
