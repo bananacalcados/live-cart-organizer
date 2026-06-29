@@ -250,6 +250,8 @@ const Events = () => {
           automation_enabled: automationEnabled,
           initial_message_enabled: initialMessageEnabled,
           initial_message_blocks: initialMessageBlocks,
+          start_date: startDate || null,
+          end_date: endDate || null,
           ...metaTemplateFields,
         };
         if (shippingValue) updates.default_shipping_cost = shippingValue;
