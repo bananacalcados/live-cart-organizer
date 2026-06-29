@@ -624,6 +624,36 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                       >
                         <ShoppingBag className="h-3 w-3" />@{handle}
                       </button>
+                      {scoreMeta && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase",
+                            scoreMeta.className,
+                          )}
+                          title={`Score de participação: ${score!.score} • ${score!.liveCount} live(s)`}
+                        >
+                          <Sparkles className="h-2.5 w-2.5" />
+                          {scoreMeta.label} {score!.score}
+                        </span>
+                      )}
+                      {leadTag?.thisEvent && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-pink-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
+                          title="Captado pela LP/Typebot deste evento"
+                        >
+                          <Tag className="h-2.5 w-2.5" />
+                          Lead
+                        </span>
+                      )}
+                      {leadTag && !leadTag.thisEvent && leadTag.otherEvent && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
+                          title="Já captado em outra campanha/evento de marketing"
+                        >
+                          <Tag className="h-2.5 w-2.5" />
+                          Lead de outra campanha
+                        </span>
+                      )}
                       {isBanned && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase text-destructive-foreground">
                           <Ban className="h-2.5 w-2.5" />
