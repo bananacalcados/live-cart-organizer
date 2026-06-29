@@ -788,9 +788,7 @@ const Events = () => {
             )}
           </TabsContent>
 
-          <TabsContent value="payments">
-            <EventCheckoutMonitor events={events} />
-          </TabsContent>
+
 
           <TabsContent value="team">
             <EventTeamManager />
