@@ -86,24 +86,21 @@ export function EventPaymentNotification({ eventId }: EventPaymentNotificationPr
     };
 
     const handleUpdate = async (newRow: any) => {
-      if (!newRow || newRow.event_id !== eventId) return;
-      const isPaid = isOrderMarkedPaid(newRow);
-      if (!isPaid) return;
+      if (!newRow?.id) return;
+      if (newRow.event_id && newRow.event_id !== eventId) return;
       if (knownPaidRef.current.has(newRow.id)) return;
-      knownPaidRef.current.add(newRow.id);
 
       let orderForNotification = newRow;
-      if (newRow?.id) {
-        const { data: freshOrder } = await supabase
-          .from("orders")
-          .select("id, event_id, customer_id, is_paid, paid_externally, stage, products, discount_type, discount_value, shipping_cost, free_shipping")
-          .eq("id", newRow.id)
-          .maybeSingle();
-        if (freshOrder) orderForNotification = freshOrder;
-      }
+      const { data: freshOrder } = await supabase
+        .from("orders")
+        .select("id, event_id, customer_id, is_paid, paid_externally, stage, products, discount_type, discount_value, shipping_cost, free_shipping")
+        .eq("id", newRow.id)
+        .maybeSingle();
+      if (freshOrder) orderForNotification = freshOrder;
 
       if (orderForNotification.event_id !== eventId) return;
       if (!isOrderMarkedPaid(orderForNotification)) return;
+      knownPaidRef.current.add(newRow.id);
 
       const customerName = await resolveCustomerName(orderForNotification);
       if (!active) return;
