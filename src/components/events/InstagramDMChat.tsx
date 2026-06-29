@@ -437,6 +437,7 @@ export function InstagramDMChat({
                 )}
               </div>
             </div>
+            <ChatPixButton orderId={orderId} variant="button" className="gap-1.5 shrink-0" />
           </DialogTitle>
         </DialogHeader>
 
