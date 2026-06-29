@@ -1957,7 +1957,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           phone={selectedPhone}
           customerName={selectedConversation?.customerName}
           sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
-          selectedNumberId={selectedSendNumberId}
+          selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
         />
       )}
 
