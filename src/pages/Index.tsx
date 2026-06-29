@@ -5,7 +5,7 @@ import { Header } from "@/components/Header";
 import { KanbanBoardDb } from "@/components/KanbanBoardDb";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { StatsBar } from "@/components/StatsBar";
-import { StageNavigation } from "@/components/StageNavigation";
+
 import { OrderReportDialog } from "@/components/OrderReportDialog";
 
 import { PrizeEligibleList } from "@/components/PrizeEligibleList";
