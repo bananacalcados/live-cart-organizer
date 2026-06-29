@@ -39,6 +39,13 @@ const sizeToken = (v: string): string | null => {
   return m ? m[1].replace(",", ".") : null;
 };
 
+// Extract ALL numeric shoe-size tokens from a value.
+// Handles ranges like "33/34", "35-36" and singles like "34" / "37.5".
+const sizeTokens = (v: string): string[] => {
+  const matches = (v || "").match(/\d{2}(?:[.,]\d)?/g) || [];
+  return matches.map((m) => m.replace(",", "."));
+};
+
 const productGidToNumeric = (gid: string): string =>
   (gid || "").replace("gid://shopify/Product/", "").split("-")[0];
 
