@@ -1571,6 +1571,58 @@ export default function TransparentCheckout() {
     })();
   }, [orderData?.eventId, orderData?.totalAmount]);
 
+  // ===== Etapa A — Carregar ofertas de crossell após o pedido estar pronto =====
+  useEffect(() => {
+    if (!orderData || crossellLoadedRef.current) return;
+    if (orderData.isPaid) return;
+    if (orderData.id.startsWith("live-")) return; // só pedidos reais
+    if (!orderData.eventId) return;
+    crossellLoadedRef.current = true;
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("checkout-crossell", {
+          body: { action: "list", order_id: orderData.id },
+        });
+        if (error) return;
+        const offers = ((data as any)?.offers || []) as CrossellBlock[];
+        const cart = ((data as any)?.cart || []) as { shopify_variant_id: string }[];
+        if (offers.length > 0) {
+          setCrossellOffers(offers);
+          setCrossellCart(cart);
+          setCrossellOpen(true);
+        }
+      } catch {
+        // silencioso — crossell nunca pode quebrar o checkout
+      }
+    })();
+  }, [orderData]);
+
+  // Recalcula o pedido local quando itens de crossell são adicionados/removidos
+  const handleCrossellCartChanged = useCallback((products: any[]) => {
+    setOrderData((prev) => {
+      if (!prev) return prev;
+      const mapped: OrderProduct[] = (products || []).map((p) => ({
+        title: p.title,
+        variant: p.variant,
+        price: Number(p.price) || 0,
+        quantity: Number(p.quantity) || 1,
+        image: p.image,
+      }));
+      const subtotal = mapped.reduce((s, p) => s + p.price * p.quantity, 0);
+      const shipping = prev.freeShipping ? 0 : prev.shippingCost;
+      const totalAmount =
+        Math.round(Math.max(0, subtotal - prev.discountAmount + shipping) * 100) / 100;
+      return { ...prev, products: mapped, subtotal, totalAmount };
+    });
+    setCrossellCart(
+      (products || [])
+        .filter((p) => p.is_crossell)
+        .map((p) => ({ shopify_variant_id: p.shopifyId })),
+    );
+  }, []);
+
+
+
   const loadOrder = async () => {
     try {
       const { data: orderRaw, error } = await supabase
