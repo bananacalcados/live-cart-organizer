@@ -19,6 +19,8 @@ import { LiveCommentsHistory } from "@/components/events/LiveCommentsHistory";
 import { EventPaymentCardsBar } from "@/components/events/EventPaymentCardsBar";
 import { LiveActiveToggleButton } from "@/components/events/LiveActiveToggleButton";
 import { EventPaymentNotification } from "@/components/events/EventPaymentNotification";
+import { EventSetupWizard } from "@/components/events/EventSetupWizard";
+import { EventInnerDashboard } from "@/components/events/EventInnerDashboard";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
