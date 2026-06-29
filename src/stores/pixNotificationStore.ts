@@ -41,6 +41,10 @@ export interface PixTab {
   paidAt?: number;
   fresh?: boolean; // confirmado AO VIVO nesta sessão (pisca / dispara modal)
   isLive?: boolean; // pedido proveniente de Live Shopping
+  storeId?: string | null; // loja onde o pedido foi feito
+  storeName?: string | null; // nome da loja (exibido no card)
+  instanceLabel?: string | null; // rótulo da instância do WhatsApp do pedido
+  orderNumber?: string | null; // nº do pedido (nota/tiny/externo), se houver
 }
 
 const PAID_STATUSES = new Set(["paid", "online_paid", "approved", "completed"]);
