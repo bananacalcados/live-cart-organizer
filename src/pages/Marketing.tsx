@@ -1816,6 +1816,7 @@ export default function Marketing() {
 
           {/* ── LEADS ── */}
           <TabsContent value="leads" className="space-y-4">
+            <LeadsAnalyticsDashboard />
             {(() => {
               const campaignIds = [...new Set(leads.map(l => l.campaign_tag))].sort();
               const filteredLeads = leads.filter(l => {
