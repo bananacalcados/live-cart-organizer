@@ -39,6 +39,13 @@ const sizeToken = (v: string): string | null => {
   return m ? m[1].replace(",", ".") : null;
 };
 
+// Extract ALL numeric shoe-size tokens from a value.
+// Handles ranges like "33/34", "35-36" and singles like "34" / "37.5".
+const sizeTokens = (v: string): string[] => {
+  const matches = (v || "").match(/\d{2}(?:[.,]\d)?/g) || [];
+  return matches.map((m) => m.replace(",", "."));
+};
+
 const productGidToNumeric = (gid: string): string =>
   (gid || "").replace("gid://shopify/Product/", "").split("-")[0];
 
@@ -118,8 +125,8 @@ serve(async (req) => {
       const ownedProductGids = new Set<string>();
       for (const it of originalItems) {
         ownedProductGids.add(productGidFromOrderItem(String(it.id || "")));
-        const t = sizeToken(String(it.variant || ""));
-        if (t) customerSizes.add(t);
+        // A variant string can carry one or more size tokens (e.g. "34" or "33/34").
+        for (const t of sizeTokens(String(it.variant || ""))) customerSizes.add(t);
       }
 
       const { data: offers } = await supabase
@@ -167,11 +174,14 @@ serve(async (req) => {
           if (inv <= 0) continue;
 
           const color = (colorPos ? optVal(v, colorPos) : "") || "Único";
-          const vSize = sizePos ? sizeToken(String(optVal(v, sizePos) || "")) : null;
+          const rawSize = sizePos ? String(optVal(v, sizePos) || "") : "";
+          // Sizes can be ranges (e.g. "33/34"); match if ANY token is a customer size.
+          const vTokens = sizeTokens(rawSize);
 
           if (offer.has_sizes) {
-            // footwear: must match a customer size
-            if (!vSize || !customerSizes.has(vSize)) continue;
+            // footwear: at least one size token must match a size the customer bought
+            const matches = vTokens.some((t) => customerSizes.has(t));
+            if (!matches) continue;
           }
 
           const colorKey = norm(color) || "unico";
@@ -179,7 +189,7 @@ serve(async (req) => {
           const image = (v.image_id && imageById[String(v.image_id)]) || firstImage;
           byColor[colorKey] = {
             color,
-            size: offer.has_sizes ? vSize : null,
+            size: offer.has_sizes ? (rawSize || null) : null,
             variantId: `gid://shopify/ProductVariant/${v.id}`,
             image,
           };
