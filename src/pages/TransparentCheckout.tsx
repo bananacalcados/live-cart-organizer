@@ -1487,6 +1487,12 @@ export default function TransparentCheckout() {
   });
   const [registrationId, setRegistrationId] = useState<string | null>(null);
 
+  // ===== Crossell (Etapa A + B) =====
+  const [crossellOffers, setCrossellOffers] = useState<CrossellBlock[]>([]);
+  const [crossellCart, setCrossellCart] = useState<{ shopify_variant_id: string }[]>([]);
+  const [crossellOpen, setCrossellOpen] = useState(false);
+  const crossellLoadedRef = useRef(false);
+
   // Init Meta Pixel (browser only — full InitiateCheckout fires after order loads)
   useEffect(() => {
     initMetaPixel();
