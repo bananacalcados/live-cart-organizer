@@ -51,15 +51,26 @@ interface Props {
   onCompleted: () => void;
 }
 
-type StepKey = "shipping" | "template" | "installments" | "crossell" | "live";
+type StepKey = "general" | "shipping" | "template" | "installments" | "crossell" | "live";
 
 const STEPS: { key: StepKey; title: string; icon: typeof Truck }[] = [
+  { key: "general", title: "Identificação", icon: Tag },
   { key: "shipping", title: "Frete", icon: Truck },
   { key: "template", title: "Mensagem", icon: FileText },
   { key: "installments", title: "Parcelamento", icon: CreditCard },
   { key: "crossell", title: "Crossell", icon: ShoppingBag },
   { key: "live", title: "Ativar Live", icon: Radio },
 ];
+
+// Nome temporário aplicado a um evento recém-criado pelo botão "Nova Live".
+export const EVENT_DRAFT_NAME = "Nova Live (rascunho)";
+
+// Canal de venda -> loja física padrão (mesma regra usada em Events.tsx).
+const STORE_BY_CHANNEL: Record<string, string | null> = {
+  site: null,
+  pos_perola: "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2",
+  pos_centro: "4ade7b44-5043-4ab1-a124-7a6ab5468e29",
+};
 
 const toNum = (v: string): number | null => {
   const t = (v ?? "").toString().replace(",", ".").trim();
