@@ -1195,6 +1195,12 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         order={orderForDialog}
       />
 
+      <CustomerFichaDialog
+        open={showFichaDialog}
+        onOpenChange={setShowFichaDialog}
+        order={order}
+      />
+
       {order.customer?.whatsapp && (
         <WhatsAppChatDialog
           open={showChatDialog}
