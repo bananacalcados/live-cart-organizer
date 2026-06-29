@@ -96,6 +96,12 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   // Mapa handle(limpo) -> estatísticas de pedidos (concluídos/abertos no histórico)
   const [orderStatsByHandle, setOrderStatsByHandle] = useState<Map<string, HandleOrderStats>>(new Map());
 
+  // Mapa handle(limpo) -> situação de Lead (captado neste evento / em outra campanha)
+  const [leadTagByHandle, setLeadTagByHandle] = useState<Map<string, LeadTag>>(new Map());
+
+  // Mapa handle(limpo) -> score de participação na live (engajamento)
+  const [scoreByHandle, setScoreByHandle] = useState<Map<string, ParticipantScore>>(new Map());
+
   // Define o início padrão da faixa = data de criação/início do evento
   useEffect(() => {
     if (!eventId) return;
