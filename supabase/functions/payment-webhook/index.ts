@@ -675,7 +675,7 @@ async function handleVindi(req: Request, supabase: any, supabaseUrl: string, sup
   if (!orderSource && ourOrderId) {
     const { data: orderById } = await supabase
       .from("orders")
-      .select("id, is_paid, notes, store_id")
+      .select("id, is_paid, notes, pickup_store_id")
       .eq("id", ourOrderId)
       .maybeSingle();
 
