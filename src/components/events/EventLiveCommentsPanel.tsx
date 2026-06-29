@@ -63,6 +63,16 @@ const phoneKey = (p: string): string => {
 
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
 
+// Compara duas listas de comentários por identidade (id + ordem). Usado para
+// evitar substituir o array (e resetar o scroll) quando nada mudou no refresh.
+const sameComments = (a: LiveComment[], b: LiveComment[]): boolean => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].id !== b[i].id) return false;
+  }
+  return true;
+};
+
 // Remove o prefixo "💬 Comentário no Live/Reel/post: " salvo em whatsapp_messages
 const stripCommentPrefix = (m: string) =>
   (m || "").replace(/^💬\s*Coment[áa]rio\s+no\s+[^:]+:\s*/i, "").trim();
