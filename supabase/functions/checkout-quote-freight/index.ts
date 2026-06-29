@@ -302,20 +302,29 @@ serve(async (req) => {
     }
 
     // 2. Resolve the SINGLE fixed shipping value that REPLACES the cheapest carrier quote.
-    //    Priority: region-specific rule > explicit per-sale value > event default > global rule.
-    const regionRule = sortedRules.find((r: any) =>
+    //    Priority: event-specific region rule > event default (wizard) > explicit per-sale
+    //              value > global region rule > global rule.
+    //    NOTE: the event default (set in the event setup wizard) MUST win over any GLOBAL
+    //    shipping rule (event_id = null), otherwise a broad global region rule would silently
+    //    override the value the operator typed for the event.
+    const isRegionRule = (r: any) =>
       r.rule_type === 'fixed_price' && r.fixed_price != null && !r.carrier_match &&
-      r.region_states && r.region_states.length > 0 && destState && r.region_states.includes(destState)
-    );
-    const globalRule = sortedRules.find((r: any) =>
+      r.region_states && r.region_states.length > 0 && destState && r.region_states.includes(destState);
+    const isGlobalScopeRule = (r: any) =>
       r.rule_type === 'fixed_price' && r.fixed_price != null && !r.carrier_match &&
-      (!r.region_states || r.region_states.length === 0)
-    );
+      (!r.region_states || r.region_states.length === 0);
+
+    const eventRegionRule = event_id
+      ? sortedRules.find((r: any) => r.event_id === event_id && isRegionRule(r))
+      : undefined;
+    const globalRegionRule = sortedRules.find((r: any) => !r.event_id && isRegionRule(r));
+    const globalRule = sortedRules.find((r: any) => isGlobalScopeRule(r));
 
     let fixedShippingValue: number | null = null;
-    if (regionRule) fixedShippingValue = Number(regionRule.fixed_price);
-    else if (explicitFixedShipping != null) fixedShippingValue = explicitFixedShipping;
+    if (eventRegionRule) fixedShippingValue = Number(eventRegionRule.fixed_price);
     else if (eventDefaultShipping != null) fixedShippingValue = eventDefaultShipping;
+    else if (explicitFixedShipping != null) fixedShippingValue = explicitFixedShipping;
+    else if (globalRegionRule) fixedShippingValue = Number(globalRegionRule.fixed_price);
     else if (globalRule) fixedShippingValue = Number(globalRule.fixed_price);
 
     // 3. Apply the override to the CHEAPEST carrier quote (raise OR lower its price).
