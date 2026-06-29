@@ -101,12 +101,14 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   // Per-step completeness based on the persisted event (used to skip configured steps).
   const completeFromEvent = useMemo(() => {
-    if (!event) return { shipping: false, template: false, installments: false, live: false };
+    if (!event)
+      return { shipping: false, template: false, installments: false, crossell: false, live: false };
     const e = event as any;
     return {
       shipping: e.default_shipping_cost != null || e.free_shipping_threshold != null,
       template: Boolean(e.meta_template_name) || Boolean(e.initial_message_enabled),
       installments: e.installment_max != null,
+      crossell: Boolean(e.crossell_configured),
       live: Boolean(e.live_active_until) && new Date(e.live_active_until).getTime() > Date.now(),
     };
   }, [event]);
