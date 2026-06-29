@@ -11,7 +11,6 @@ import NotFound from "./pages/NotFound";
 import { TeamChat } from "./components/TeamChat";
 import { InstallPrompt } from "./components/InstallPrompt";
 import { StickyNotesFloatingButton } from "./components/sticky-notes/StickyNotesFloatingButton";
-import { PixPaidGlobalAlert } from "./components/pos/PixPaidGlobalAlert";
 
 // Lazy-loaded modules
 const Home = lazy(() => import("./pages/Home"));
