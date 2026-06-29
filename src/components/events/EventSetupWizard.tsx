@@ -243,7 +243,18 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   const persistStep = async (key: StepKey): Promise<boolean> => {
     const updates: Record<string, any> = {};
-    if (key === "shipping") {
+    if (key === "general") {
+      if (!name.trim()) {
+        toast.error("Defina o nome do evento.");
+        return false;
+      }
+      updates.name = name.trim();
+      updates.description = description || null;
+      updates.start_date = startDate || null;
+      updates.end_date = endDate || null;
+      updates.channel = channel;
+      updates.default_store_id = STORE_BY_CHANNEL[channel] ?? null;
+    } else if (key === "shipping") {
       updates.default_shipping_cost = toNum(shippingCost);
       updates.free_shipping_threshold = toNum(freeThreshold);
     } else if (key === "template") {
@@ -282,7 +293,29 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
 
+  // "Pular e abrir": fecha o modal e entra no evento, sem exigir as etapas seguintes.
+  // Garante apenas que a identificação (nome + canal) esteja preenchida.
+  const skipAndOpen = async () => {
+    if (!name.trim()) {
+      setStepIndex(0);
+      toast.error("Defina o nome do evento antes de abrir.");
+      return;
+    }
+    setSaving(true);
+    const ok = await persistStep(currentStep.key);
+    setSaving(false);
+    if (!ok) return;
+    // Defer navigation a tick so the Radix dialog finishes closing cleanly.
+    onOpenChange(false);
+    setTimeout(() => onCompleted(), 0);
+  };
+
   const finish = async () => {
+    if (!name.trim()) {
+      setStepIndex(0);
+      toast.error("Defina o nome do evento antes de concluir.");
+      return;
+    }
     setSaving(true);
     const ok = await persistStep(currentStep.key);
     if (ok) {
@@ -296,10 +329,12 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
         return;
       }
       toast.success("Evento configurado!");
-      onCompleted();
+      onOpenChange(false);
+      setTimeout(() => onCompleted(), 0);
     }
     setSaving(false);
   };
+
 
   const isLastStep = stepIndex === STEPS.length - 1;
 
