@@ -393,10 +393,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // Quando uma aba é clicada, abre a conversa correspondente.
   useEffect(() => {
     if (!pixOpenRequest) return;
+    // Sai do dashboard / chat de equipe para que o chat realmente apareça.
+    setShowDashboard(false);
+    setTeamChatActive(false);
     handleSelectConversation(pixOpenRequest.phone, pixOpenRequest.numberId);
     pixClearOpenRequest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixOpenRequest]);
+
 
 
 
