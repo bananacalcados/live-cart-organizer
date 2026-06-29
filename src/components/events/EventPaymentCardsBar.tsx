@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Check, QrCode, Phone, Clock } from "lucide-react";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DbOrder } from "@/types/database";
 import { Order } from "@/types/order";
@@ -7,6 +7,9 @@ import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { getOrderFinalValue } from "@/lib/orderTotal";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface EventPaymentCardsBarProps {
   orders: DbOrder[];
@@ -14,7 +17,19 @@ interface EventPaymentCardsBarProps {
   onSelectOrder?: (order: DbOrder) => void;
 }
 
-type PayFilter = "awaiting" | "paid";
+type PayFilter = "awaiting" | "paid" | "errors";
+
+interface FailedAttempt {
+  id: string;
+  sale_id: string;
+  amount: number | null;
+  payment_method: string;
+  gateway: string | null;
+  error_message: string | null;
+  customer_name: string | null;
+  customer_phone: string | null;
+  created_at: string;
+}
 
 function formatPhone(phone?: string | null): string {
   const digits = String(phone || "").replace(/\D/g, "");
@@ -23,6 +38,12 @@ function formatPhone(phone?: string | null): string {
   if (local.length === 11) return `(${local.slice(0, 2)}) ${local.slice(2, 7)}-${local.slice(7)}`;
   if (local.length === 10) return `(${local.slice(0, 2)}) ${local.slice(2, 6)}-${local.slice(6)}`;
   return digits;
+}
+
+function methodLabel(method: string): string {
+  if (method === "pix") return "PIX";
+  if (method === "credit_card" || method === "card") return "Cartão";
+  return method || "—";
 }
 
 /** Converte DbOrder para o tipo Order legado usado pelo chat de WhatsApp. */
@@ -54,6 +75,8 @@ function dbOrderToLegacy(dbOrder: DbOrder): Order {
  *
  * - "Aguardando": pedidos em aguardando pagamento (não pagos).
  * - "Pagos": pedidos com pagamento confirmado.
+ * - "Erros de Pagamento": tentativas de pagamento que FALHARAM no checkout
+ *   (somente deste evento). Fundo vermelho escuro com letras brancas.
  *
  * Ao clicar no card abre o CHAT da conversa (WhatsApp ou Instagram) na
  * instância em que a conversa aconteceu (mesma da mensagem inicial da live),
@@ -65,6 +88,11 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const [chatOpen, setChatOpen] = useState(false);
   const [igHandle, setIgHandle] = useState<string | null>(null);
   const [igOpen, setIgOpen] = useState(false);
+
+  const [failedAttempts, setFailedAttempts] = useState<FailedAttempt[]>([]);
+  const [loadingErrors, setLoadingErrors] = useState(false);
+
+  const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
 
   const handleCardClick = (order: DbOrder) => {
     const phone = order.customer?.whatsapp?.replace(/\D/g, "");
@@ -81,6 +109,61 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
       setIgOpen(true);
     }
   };
+
+  // Abre o chat a partir de uma tentativa de pagamento que falhou.
+  const handleAttemptClick = (att: FailedAttempt) => {
+    const phone = att.customer_phone?.replace(/\D/g, "");
+    if (phone) {
+      setChatOrder({
+        id: att.sale_id,
+        instagramHandle: att.customer_name?.startsWith("@") ? att.customer_name : "",
+        whatsapp: att.customer_phone || undefined,
+        products: [],
+        stage: "awaiting_payment" as Order["stage"],
+        createdAt: new Date(att.created_at),
+        updatedAt: new Date(att.created_at),
+      } as Order);
+      setChatOpen(true);
+      return;
+    }
+    const handle = att.customer_name?.replace(/^@/, "").trim();
+    if (handle) {
+      setIgHandle(handle);
+      setIgOpen(true);
+    }
+  };
+
+  const loadErrors = useCallback(async () => {
+    if (orderIds.length === 0) {
+      setFailedAttempts([]);
+      return;
+    }
+    setLoadingErrors(true);
+    try {
+      const batchSize = 100;
+      const all: FailedAttempt[] = [];
+      for (let i = 0; i < orderIds.length; i += batchSize) {
+        const batch = orderIds.slice(i, i + batchSize);
+        const { data } = await supabase
+          .from("pos_checkout_attempts")
+          .select("id, sale_id, amount, payment_method, gateway, error_message, customer_name, customer_phone, created_at")
+          .in("sale_id", batch)
+          .eq("status", "failed")
+          .order("created_at", { ascending: false });
+        if (data) all.push(...(data as FailedAttempt[]));
+      }
+      all.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setFailedAttempts(all);
+    } catch (err) {
+      console.error("Erro ao carregar erros de pagamento:", err);
+    } finally {
+      setLoadingErrors(false);
+    }
+  }, [orderIds]);
+
+  useEffect(() => {
+    if (filter === "errors") loadErrors();
+  }, [filter, loadErrors]);
 
   const { awaiting, paid } = useMemo(() => {
     const awaitingList: DbOrder[] = [];
@@ -104,7 +187,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   return (
     <div className="sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40">
       <div className="container py-2">
-        {/* Toggle Aguardando / Pagos */}
+        {/* Toggle Aguardando / Pagos / Erros */}
         <div className="flex gap-2 mb-2">
           <button
             onClick={() => setFilter("awaiting")}
@@ -139,10 +222,93 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
             Pagamentos Concluídos
             <span className="bg-background/20 px-1.5 py-0.5 rounded-full text-[10px]">{paid.length}</span>
           </button>
+          <button
+            onClick={() => setFilter("errors")}
+            className={cn(
+              "flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all",
+              filter === "errors"
+                ? "bg-red-900 text-white ring-1 ring-red-400/60"
+                : "bg-red-900/10 text-red-800 dark:text-red-300 hover:bg-red-900/20",
+            )}
+          >
+            <AlertCircle className="h-3.5 w-3.5" />
+            Erros de Pagamento
+            {failedAttempts.length > 0 && (
+              <span
+                className={cn(
+                  "px-1.5 py-0.5 rounded-full text-[10px] font-bold",
+                  filter === "errors" ? "bg-white text-red-900" : "bg-red-900/20",
+                )}
+              >
+                {failedAttempts.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* Cards */}
-        {list.length === 0 ? (
+        {/* Conteúdo: Erros de Pagamento */}
+        {filter === "errors" ? (
+          <div className="rounded-lg bg-red-950 border border-red-800/60 p-2 text-white">
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className="text-xs font-semibold text-red-100">
+                Tentativas de pagamento que falharam neste evento
+              </span>
+              <button
+                onClick={loadErrors}
+                className="flex items-center gap-1 text-[11px] text-red-200 hover:text-white"
+              >
+                <RefreshCw className={cn("h-3 w-3", loadingErrors && "animate-spin")} />
+                Atualizar
+              </button>
+            </div>
+            {loadingErrors && failedAttempts.length === 0 ? (
+              <div className="text-xs text-red-200 py-2 px-1">Carregando erros de pagamento...</div>
+            ) : failedAttempts.length === 0 ? (
+              <div className="text-xs text-red-200 py-2 px-1">
+                Nenhum erro de pagamento registrado neste evento.
+              </div>
+            ) : (
+              <div className="flex items-stretch gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                {failedAttempts.map((att) => (
+                  <button
+                    key={att.id}
+                    onClick={() => handleAttemptClick(att)}
+                    title="Abrir conversa"
+                    className="group flex flex-col gap-1 min-w-[220px] max-w-[260px] px-3 py-2 rounded-lg border border-red-700 bg-red-900 text-white text-left transition-colors shrink-0 hover:bg-red-800"
+                  >
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/15 text-white shrink-0">
+                        <AlertCircle className="h-3 w-3" />
+                      </span>
+                      <span className="truncate text-xs font-semibold text-white">
+                        {att.customer_name || "Sem nome"}
+                      </span>
+                    </div>
+                    {att.customer_phone && (
+                      <span className="flex items-center gap-1 text-[11px] truncate text-white/70">
+                        <Phone className="h-3 w-3 shrink-0" />
+                        {formatPhone(att.customer_phone)}
+                      </span>
+                    )}
+                    <span className="text-[12px] font-bold text-red-200">
+                      {methodLabel(att.payment_method)}
+                      {att.gateway ? ` · ${att.gateway}` : ""}
+                      {att.amount ? ` • R$ ${att.amount.toFixed(2)}` : ""}
+                    </span>
+                    {att.error_message && (
+                      <span className="text-[10px] text-red-300 line-clamp-2" title={att.error_message}>
+                        {att.error_message}
+                      </span>
+                    )}
+                    <span className="text-[10px] text-white/50">
+                      {format(new Date(att.created_at), "dd/MM HH:mm", { locale: ptBR })}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : /* Cards de pedidos (Aguardando / Pagos) */ list.length === 0 ? (
           <div className="text-xs text-muted-foreground py-2 px-1">
             {filter === "paid"
               ? "Nenhum pagamento concluído neste evento ainda."
