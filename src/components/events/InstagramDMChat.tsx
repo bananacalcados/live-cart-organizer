@@ -39,6 +39,7 @@ export function InstagramDMChat({
   eventId,
   fallbackCommentId,
   profilePicUrl,
+  orderId,
 }: InstagramDMChatProps) {
   const [messages, setMessages] = useState<DMMessage[]>([]);
   const [igUserId, setIgUserId] = useState<string | null>(null);
