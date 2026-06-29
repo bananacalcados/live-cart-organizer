@@ -249,6 +249,96 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     };
   }, [comments, orders]);
 
+  // Carrega o histórico de pedidos (concluídos x abertos) dos @ que comentaram.
+  // Serve para sinalizar no painel quem já comprou e quem costuma deixar pedidos sem pagar.
+  useEffect(() => {
+    const handles = Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean)));
+    if (handles.length === 0 || !eventId) {
+      setOrderStatsByHandle(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      // 1) Resolve customer_id -> handle (limpo) para todos os @ presentes.
+      const idToHandle = new Map<string, string>();
+      const variants: string[] = [];
+      handles.forEach((h) => variants.push(h, `@${h}`));
+      const cBatch = 200;
+      for (let i = 0; i < variants.length; i += cBatch) {
+        const batch = variants.slice(i, i + cBatch);
+        const { data } = await supabase
+          .from("customers")
+          .select("id, instagram_handle")
+          .in("instagram_handle", batch);
+        (data || []).forEach((c: any) => {
+          const h = cleanHandle(c.instagram_handle || "");
+          if (h && c.id) idToHandle.set(c.id, h);
+        });
+      }
+
+      const customerIds = Array.from(idToHandle.keys());
+      const stats = new Map<string, HandleOrderStats>();
+      const ensure = (h: string): HandleOrderStats => {
+        let s = stats.get(h);
+        if (!s) {
+          s = { paidThisEvent: 0, paidPast: 0, paidDates: [], openPast: 0 };
+          stats.set(h, s);
+        }
+        return s;
+      };
+
+      if (customerIds.length > 0) {
+        const oBatch = 100;
+        const datesByHandle = new Map<string, Set<string>>();
+        for (let i = 0; i < customerIds.length; i += oBatch) {
+          const batch = customerIds.slice(i, i + oBatch);
+          const { data } = await supabase
+            .from("orders")
+            .select("id, customer_id, event_id, stage, is_paid, paid_externally, paid_at, created_at, events(name, start_date, created_at)")
+            .in("customer_id", batch);
+          (data || []).forEach((o: any) => {
+            const h = idToHandle.get(o.customer_id);
+            if (!h) return;
+            const s = ensure(h);
+            const paid = Boolean(o.is_paid || o.paid_externally || isPaidOrderStage(o.stage));
+            const isThisEvent = o.event_id === eventId;
+            if (paid) {
+              if (isThisEvent) {
+                s.paidThisEvent += 1;
+              } else {
+                s.paidPast += 1;
+                const ev = o.events;
+                const evDate = ev?.start_date || ev?.created_at || o.paid_at || o.created_at;
+                if (evDate) {
+                  const set = datesByHandle.get(h) || new Set<string>();
+                  set.add(format(new Date(evDate), "dd/MM/yyyy"));
+                  datesByHandle.set(h, set);
+                }
+              }
+            } else if (!isThisEvent && o.stage !== "cancelled") {
+              s.openPast += 1;
+            }
+          });
+        }
+        datesByHandle.forEach((set, h) => {
+          const s = stats.get(h);
+          if (s) s.paidDates = Array.from(set).sort((a, b) => {
+            const [da, ma, ya] = a.split("/").map(Number);
+            const [db, mb, yb] = b.split("/").map(Number);
+            return new Date(yb, mb - 1, db).getTime() - new Date(ya, ma - 1, da).getTime();
+          });
+        });
+      }
+
+      if (!cancelled) setOrderStatsByHandle(stats);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [comments, eventId]);
+
+
+
 
   // Realtime: novos comentários (live_comments) entram automaticamente
   useEffect(() => {
