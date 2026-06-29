@@ -652,7 +652,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
             <ChevronLeft className="h-4 w-4" /> Voltar
           </Button>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={onCompleted} disabled={saving}>
+            <Button variant="ghost" onClick={skipAndOpen} disabled={saving}>
               Pular e abrir
             </Button>
             {isLastStep ? (
