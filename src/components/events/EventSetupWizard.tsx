@@ -71,6 +71,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [freeThreshold, setFreeThreshold] = useState("");
 
   // Template + mensagem
+  const [selectedWaId, setSelectedWaId] = useState<string>("none");
   const [metaTemplateName, setMetaTemplateName] = useState<string | null>(null);
   const [metaTemplateLanguage, setMetaTemplateLanguage] = useState("pt_BR");
   const [metaTemplateBodyVars, setMetaTemplateBodyVars] = useState<string[]>([]);
@@ -82,9 +83,13 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [installMin, setInstallMin] = useState("");
   const [installMax, setInstallMax] = useState("");
 
-  const channelPrefs: string[] = ((event as any)?.channel_preferences as string[]) || [];
-  const usesMeta = channelPrefs.includes("meta_whatsapp");
-  const whatsappNumberId = (event as any)?.whatsapp_number_id || null;
+  const { numbers, fetchNumbers } = useWhatsAppNumberStore();
+  const whatsappNumberId = selectedWaId === "none" ? null : selectedWaId;
+
+  useEffect(() => {
+    if (open && numbers.length === 0) fetchNumbers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Per-step completeness based on the persisted event (used to skip configured steps).
   const completeFromEvent = useMemo(() => {
@@ -104,6 +109,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     const e = event as any;
     setShippingCost(e.default_shipping_cost != null ? String(e.default_shipping_cost) : "");
     setFreeThreshold(e.free_shipping_threshold != null ? String(e.free_shipping_threshold) : "");
+    setSelectedWaId(e.whatsapp_number_id || "none");
     setMetaTemplateName(e.meta_template_name || null);
     setMetaTemplateLanguage(e.meta_template_language || "pt_BR");
     setMetaTemplateBodyVars((e.meta_template_body_variables as string[]) || []);
