@@ -154,6 +154,7 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
       setIsPickup((editingOrder as any).is_pickup || false);
       setPickupStoreId((editingOrder as any).pickup_store_id || "");
       setIsDelivery((editingOrder as any).is_delivery || false);
+      setPixCode("");
     } else {
       resetForm();
       if (prefillInstagram && open) {
