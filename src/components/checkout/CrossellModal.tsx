@@ -203,7 +203,7 @@ export default function CrossellModal({
               return (
                 <div
                   key={block.variant_id}
-                  className="snap-start shrink-0 w-[220px] sm:w-[240px] rounded-xl border border-border bg-card overflow-hidden flex flex-col"
+                  className="snap-start shrink-0 w-[160px] sm:w-[240px] rounded-xl border border-border bg-card overflow-hidden flex flex-col"
                 >
                   <div className="relative aspect-square bg-muted">
                     {block.image ? (
