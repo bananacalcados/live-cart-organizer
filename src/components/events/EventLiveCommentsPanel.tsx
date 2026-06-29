@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle } from "lucide-react";
+import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
@@ -11,7 +11,7 @@ import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { Order } from "@/types/order";
-import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
+import { isOrderMarkedPaid, isPaidOrderStage } from "@/lib/orderPaymentStages";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -26,6 +26,14 @@ interface LiveComment {
   created_at: string;
 }
 
+interface HandleOrderStats {
+  paidThisEvent: number;
+  paidPast: number;
+  paidDates: string[];
+  openPast: number;
+}
+
+
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
 
 // Remove o prefixo "💬 Comentário no Live/Reel/post: " salvo em whatsapp_messages
@@ -35,8 +43,8 @@ const stripCommentPrefix = (m: string) =>
 function timeLabel(iso: string): string {
   const d = new Date(iso);
   if (isToday(d)) return format(d, "HH:mm");
-  if (isYesterday(d)) return "Ontem";
-  return format(d, "dd/MM HH:mm", { locale: ptBR });
+  if (isYesterday(d)) return `Ontem ${format(d, "HH:mm")}`;
+  return format(d, "dd/MM/yyyy HH:mm", { locale: ptBR });
 }
 
 interface Props {
@@ -85,6 +93,9 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   // Mapa handle(limpo) -> whatsapp cadastrado (para o botão de WhatsApp)
   const [whatsappByHandle, setWhatsappByHandle] = useState<Map<string, string>>(new Map());
 
+  // Mapa handle(limpo) -> estatísticas de pedidos (concluídos/abertos no histórico)
+  const [orderStatsByHandle, setOrderStatsByHandle] = useState<Map<string, HandleOrderStats>>(new Map());
+
   // Define o início padrão da faixa = data de criação/início do evento
   useEffect(() => {
     if (!eventId) return;
@@ -124,13 +135,15 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         .eq("event_id", eventId)
         .order("created_at", { ascending: false })
         .limit(2000),
-      // 2) comentários de live/reel que chegaram pelo webhook do Meta
+      // 2) SOMENTE comentários da LIVE (vídeo ao vivo) que chegaram pelo webhook do Meta.
+      //    Ignora STORIES, FEED, REELS e posts — esses ficam com outro prefixo
+      //    ("💬 Comentário no Reel/post: ..."). Só "💬 Comentário no Live:" é live shopping.
       supabase
         .from("whatsapp_messages")
         .select("id, sender_name, message, created_at")
         .eq("channel", "instagram")
         .eq("direction", "incoming")
-        .ilike("message", "💬 Comentário no%")
+        .ilike("message", "💬 Comentário no Live:%")
         .gte("created_at", startIso)
         .lte("created_at", endIso)
         .order("created_at", { ascending: false })
@@ -235,6 +248,96 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       cancelled = true;
     };
   }, [comments, orders]);
+
+  // Carrega o histórico de pedidos (concluídos x abertos) dos @ que comentaram.
+  // Serve para sinalizar no painel quem já comprou e quem costuma deixar pedidos sem pagar.
+  useEffect(() => {
+    const handles = Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean)));
+    if (handles.length === 0 || !eventId) {
+      setOrderStatsByHandle(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      // 1) Resolve customer_id -> handle (limpo) para todos os @ presentes.
+      const idToHandle = new Map<string, string>();
+      const variants: string[] = [];
+      handles.forEach((h) => variants.push(h, `@${h}`));
+      const cBatch = 200;
+      for (let i = 0; i < variants.length; i += cBatch) {
+        const batch = variants.slice(i, i + cBatch);
+        const { data } = await supabase
+          .from("customers")
+          .select("id, instagram_handle")
+          .in("instagram_handle", batch);
+        (data || []).forEach((c: any) => {
+          const h = cleanHandle(c.instagram_handle || "");
+          if (h && c.id) idToHandle.set(c.id, h);
+        });
+      }
+
+      const customerIds = Array.from(idToHandle.keys());
+      const stats = new Map<string, HandleOrderStats>();
+      const ensure = (h: string): HandleOrderStats => {
+        let s = stats.get(h);
+        if (!s) {
+          s = { paidThisEvent: 0, paidPast: 0, paidDates: [], openPast: 0 };
+          stats.set(h, s);
+        }
+        return s;
+      };
+
+      if (customerIds.length > 0) {
+        const oBatch = 100;
+        const datesByHandle = new Map<string, Set<string>>();
+        for (let i = 0; i < customerIds.length; i += oBatch) {
+          const batch = customerIds.slice(i, i + oBatch);
+          const { data } = await supabase
+            .from("orders")
+            .select("id, customer_id, event_id, stage, is_paid, paid_externally, paid_at, created_at, events(name, start_date, created_at)")
+            .in("customer_id", batch);
+          (data || []).forEach((o: any) => {
+            const h = idToHandle.get(o.customer_id);
+            if (!h) return;
+            const s = ensure(h);
+            const paid = Boolean(o.is_paid || o.paid_externally || isPaidOrderStage(o.stage));
+            const isThisEvent = o.event_id === eventId;
+            if (paid) {
+              if (isThisEvent) {
+                s.paidThisEvent += 1;
+              } else {
+                s.paidPast += 1;
+                const ev = o.events;
+                const evDate = ev?.start_date || ev?.created_at || o.paid_at || o.created_at;
+                if (evDate) {
+                  const set = datesByHandle.get(h) || new Set<string>();
+                  set.add(format(new Date(evDate), "dd/MM/yyyy"));
+                  datesByHandle.set(h, set);
+                }
+              }
+            } else if (!isThisEvent && o.stage !== "cancelled") {
+              s.openPast += 1;
+            }
+          });
+        }
+        datesByHandle.forEach((set, h) => {
+          const s = stats.get(h);
+          if (s) s.paidDates = Array.from(set).sort((a, b) => {
+            const [da, ma, ya] = a.split("/").map(Number);
+            const [db, mb, yb] = b.split("/").map(Number);
+            return new Date(yb, mb - 1, db).getTime() - new Date(ya, ma - 1, da).getTime();
+          });
+        });
+      }
+
+      if (!cancelled) setOrderStatsByHandle(stats);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [comments, eventId]);
+
+
 
 
   // Realtime: novos comentários (live_comments) entram automaticamente
@@ -398,6 +501,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
               const isBanned = bannedHandles.has(handle);
               const hasUnpaid = unpaidOrderByHandle.has(handle);
               const hasWhatsapp = whatsappByHandle.has(handle);
+              const stats = orderStatsByHandle.get(handle);
               return (
                 <div key={c.id} className="flex gap-2.5 px-3 py-2.5 hover:bg-muted/40">
                   <Avatar className="h-9 w-9 shrink-0">
@@ -424,6 +528,31 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                       {hasUnpaid && (
                         <span className="rounded-full bg-neutral-900 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
                           Pedido aberto
+                        </span>
+                      )}
+                      {stats && stats.paidThisEvent > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          Concluído neste evento
+                        </span>
+                      )}
+                      {stats && stats.paidPast > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
+                          title={stats.paidDates.length ? `Eventos: ${stats.paidDates.join(" • ")}` : undefined}
+                        >
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          {stats.paidPast} {stats.paidPast === 1 ? "compra anterior" : "compras anteriores"}
+                          {stats.paidDates.length > 0 && ` (${stats.paidDates.slice(0, 3).join(", ")}${stats.paidDates.length > 3 ? "…" : ""})`}
+                        </span>
+                      )}
+                      {stats && stats.openPast > 0 && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-black"
+                          title="Pedidos feitos em lives anteriores que nunca foram pagos"
+                        >
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          {stats.openPast} {stats.openPast === 1 ? "não finalizado" : "não finalizados"}
                         </span>
                       )}
                       <span className="ml-auto text-[10px] text-muted-foreground">{timeLabel(c.created_at)}</span>
