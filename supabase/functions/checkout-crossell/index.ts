@@ -174,11 +174,14 @@ serve(async (req) => {
           if (inv <= 0) continue;
 
           const color = (colorPos ? optVal(v, colorPos) : "") || "Único";
-          const vSize = sizePos ? sizeToken(String(optVal(v, sizePos) || "")) : null;
+          const rawSize = sizePos ? String(optVal(v, sizePos) || "") : "";
+          // Sizes can be ranges (e.g. "33/34"); match if ANY token is a customer size.
+          const vTokens = sizeTokens(rawSize);
 
           if (offer.has_sizes) {
-            // footwear: must match a customer size
-            if (!vSize || !customerSizes.has(vSize)) continue;
+            // footwear: at least one size token must match a size the customer bought
+            const matches = vTokens.some((t) => customerSizes.has(t));
+            if (!matches) continue;
           }
 
           const colorKey = norm(color) || "unico";
@@ -186,7 +189,7 @@ serve(async (req) => {
           const image = (v.image_id && imageById[String(v.image_id)]) || firstImage;
           byColor[colorKey] = {
             color,
-            size: offer.has_sizes ? vSize : null,
+            size: offer.has_sizes ? (rawSize || null) : null,
             variantId: `gid://shopify/ProductVariant/${v.id}`,
             image,
           };
