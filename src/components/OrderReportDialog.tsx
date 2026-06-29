@@ -38,9 +38,11 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
   const [filterPaidOnly, setFilterPaidOnly] = useState(true);
   const [filterWithGift, setFilterWithGift] = useState(false);
   const [filterFreeShipping, setFilterFreeShipping] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState("");
 
   // Filter orders
   const filteredOrders = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase().replace(/^@/, "");
     return orders.filter(order => {
       if (filterPaidOnly && order.stage !== 'paid' && order.stage !== 'shipped') {
         return false;
@@ -51,9 +53,17 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
       if (filterFreeShipping && !order.free_shipping) {
         return false;
       }
+      if (q) {
+        const handle = (order.customer?.instagram_handle || "").toLowerCase();
+        const whats = (order.customer?.whatsapp || "").replace(/\D/g, "");
+        if (!handle.includes(q) && !(q.replace(/\D/g, "") && whats.includes(q.replace(/\D/g, "")))) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [orders, filterPaidOnly, filterWithGift, filterFreeShipping]);
+  }, [orders, filterPaidOnly, filterWithGift, filterFreeShipping, customerQuery]);
+
 
   // Find customers with multiple orders
   const customerOrderCounts = useMemo(() => {
