@@ -171,9 +171,9 @@ const Index = () => {
           <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
         )}
         
-        <StageNavigation 
-          selectedStage={selectedStage} 
-          onSelectStage={setSelectedStage} 
+        <EventPaymentCardsBar
+          orders={orders}
+          onSelectOrder={handleEditOrder}
         />
 
         {currentEventId && (
