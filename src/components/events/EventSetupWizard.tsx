@@ -134,6 +134,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.default_shipping_cost = toNum(shippingCost);
       updates.free_shipping_threshold = toNum(freeThreshold);
     } else if (key === "template") {
+      updates.whatsapp_number_id = whatsappNumberId;
       updates.meta_template_name = metaTemplateName;
       updates.meta_template_language = metaTemplateLanguage;
       updates.meta_template_body_variables = metaTemplateBodyVars;
