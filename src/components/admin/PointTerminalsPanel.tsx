@@ -113,12 +113,24 @@ export function PointTerminalsPanel() {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isSandbox && (
+        <div className="flex items-center justify-between gap-3 flex-wrap rounded-md border bg-muted/30 px-3 py-2">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="h-4 w-4 text-amber-600" />
+            <Label htmlFor="point-test-mode" className="text-sm cursor-pointer">
+              Marcar como ambiente de teste
+            </Label>
+          </div>
+          <Switch id="point-test-mode" checked={manualTest} onCheckedChange={toggleManualTest} />
+        </div>
+
+        {(isSandbox || manualTest) && (
           <div className="flex items-center gap-2 text-sm rounded-md border border-amber-300 bg-amber-50 text-amber-800 px-3 py-2">
             <FlaskConical className="h-4 w-4 shrink-0" />
-            Usando credenciais de <strong>teste</strong>. As maquininhas físicas reais só aparecem com o token de produção.
+            Ambiente de <strong>teste</strong>. As maquininhas físicas reais só aparecem e processam
+            cobranças com o token de <strong>produção</strong> da conta.
           </div>
         )}
+
 
         {loaded && terminals.length === 0 && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground rounded-md border border-dashed px-3 py-6 justify-center">
