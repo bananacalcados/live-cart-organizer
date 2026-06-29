@@ -49,6 +49,7 @@ import * as XLSX from "@e965/xlsx";
 import PushNotificationPanel from "@/components/marketing/PushNotificationPanel";
 import { CatalogLeadPageCreator } from "@/components/marketing/CatalogLeadPageCreator";
 import { LeadImportDialog } from "@/components/marketing/LeadImportDialog";
+import { LeadsAnalyticsDashboard } from "@/components/marketing/LeadsAnalyticsDashboard";
 import WhatsAppAdKeywords from "@/components/marketing/WhatsAppAdKeywords";
 import LiveCampaignsManager from "@/components/marketing/LiveCampaignsManager";
 import { MarketingAttributionDashboard } from "@/components/marketing/MarketingAttributionDashboard";
@@ -1815,6 +1816,7 @@ export default function Marketing() {
 
           {/* ── LEADS ── */}
           <TabsContent value="leads" className="space-y-4">
+            <LeadsAnalyticsDashboard />
             {(() => {
               const campaignIds = [...new Set(leads.map(l => l.campaign_tag))].sort();
               const filteredLeads = leads.filter(l => {
