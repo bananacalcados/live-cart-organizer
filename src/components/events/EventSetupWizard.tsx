@@ -469,6 +469,19 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
             </div>
           )}
 
+          {currentStep.key === "crossell" && (
+            <CrossellConfigStep
+              noCrossell={crossellNone}
+              offers={crossellOffers}
+              onChange={({ noCrossell, offers }) => {
+                setCrossellNone(noCrossell);
+                setCrossellOffers(offers);
+              }}
+            />
+          )}
+
+
+
           {currentStep.key === "live" && (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
