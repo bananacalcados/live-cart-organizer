@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Instagram, Send, Loader2, AlertCircle, Info, Camera, Video, Mic, Paperclip, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { convertAudioBlobToWav } from "@/lib/audioRecorder";
+import { ChatPixButton } from "@/components/ChatPixButton";
 
 interface DMMessage {
   id: string;
