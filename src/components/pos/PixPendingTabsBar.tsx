@@ -72,6 +72,16 @@ export function PixPendingTabsBar() {
               <span className={cn("text-[11px]", paid ? "text-white/90" : "text-zinc-400")}>
                 {paid ? "PAGO • " : "Aguardando • "}R$ {tab.amount.toFixed(2)}
               </span>
+              {(tab.storeName || tab.instanceLabel) && (
+                <span className={cn("truncate text-[10px]", paid ? "text-white/80" : "text-zinc-400")}>
+                  {[tab.storeName, tab.instanceLabel].filter(Boolean).join(" · ")}
+                </span>
+              )}
+              {tab.orderNumber && (
+                <span className={cn("truncate text-[10px]", paid ? "text-white/70" : "text-zinc-500")}>
+                  Pedido #{tab.orderNumber}
+                </span>
+              )}
               {dateLabel && (
                 <span className={cn("text-[10px]", paid ? "text-white/70" : "text-zinc-500")}>
                   {dateLabel}

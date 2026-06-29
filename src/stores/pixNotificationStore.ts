@@ -41,6 +41,10 @@ export interface PixTab {
   paidAt?: number;
   fresh?: boolean; // confirmado AO VIVO nesta sessão (pisca / dispara modal)
   isLive?: boolean; // pedido proveniente de Live Shopping
+  storeId?: string | null; // loja onde o pedido foi feito
+  storeName?: string | null; // nome da loja (exibido no card)
+  instanceLabel?: string | null; // rótulo da instância do WhatsApp do pedido
+  orderNumber?: string | null; // nº do pedido (nota/tiny/externo), se houver
 }
 
 const PAID_STATUSES = new Set(["paid", "online_paid", "approved", "completed"]);
@@ -191,11 +195,28 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
 
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, total, status, payment_details, store_id, sale_type, event_id")
+        .select("id, total, status, payment_details, store_id, sale_type, event_id, invoice_number, tiny_order_number, nfce_number, external_order_id")
         .in("id", saleIds);
 
       const saleById = new Map<string, any>();
       (sales || []).forEach((s: any) => saleById.set(String(s.id), s));
+
+      // Mapas auxiliares para exibir a ORIGEM do pedido no card (loja + instância).
+      const [{ data: numRows }, { data: storeRows }] = await Promise.all([
+        supabase.from("whatsapp_numbers").select("id, label"),
+        supabase.from("pos_stores").select("id, name"),
+      ]);
+      const instanceLabelById = new Map<string, string>();
+      (numRows || []).forEach((n: any) => instanceLabelById.set(String(n.id), n.label));
+      const storeNameById = new Map<string, string>();
+      (storeRows || []).forEach((s: any) => storeNameById.set(String(s.id), s.name));
+
+      const orderNumberOf = (sale: any): string | null =>
+        (sale?.invoice_number as string) ||
+        (sale?.tiny_order_number as string) ||
+        (sale?.nfce_number as string) ||
+        (sale?.external_order_id as string) ||
+        null;
 
       const awaitingBySale = new Map<string, any>();
       awaitingRows.forEach((r: any) => awaitingBySale.set(String(r.sale_id), r));
@@ -265,6 +286,10 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             paidAt: prev?.paidAt || Date.now(),
             fresh: isFresh,
             isLive,
+            storeId: saleStore,
+            storeName: saleStore ? storeNameById.get(String(saleStore)) ?? null : null,
+            instanceLabel: numberId ? instanceLabelById.get(String(numberId)) ?? null : null,
+            orderNumber: orderNumberOf(sale),
           };
           next.push(tab);
 
@@ -285,6 +310,10 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             status: "pending",
             createdAt: (awaitingRow.created_at as string) || new Date().toISOString(),
             isLive,
+            storeId: saleStore,
+            storeName: saleStore ? storeNameById.get(String(saleStore)) ?? null : null,
+            instanceLabel: numberId ? instanceLabelById.get(String(numberId)) ?? null : null,
+            orderNumber: orderNumberOf(sale),
           });
         } else if (prev && prev.status === "paid") {
           next.push(prev); // mantém paga até o operador descartar

@@ -824,29 +824,50 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   useEffect(() => {
     const loadConversations = async () => {
       // Determine which number IDs to query (store-specific filtering)
-      // If store has specific numbers assigned, query each; otherwise query all
       const needsDispatch = statusFilter === 'dispatch';
 
-      // Use first store number as filter if only one; otherwise load all and filter client-side
-      const numberId = storeNumberIds.length === 1 ? storeNumberIds[0] : null;
+      // IMPORTANT — porque a lista "perdia" conversas (ex.: chats que sumiam):
+      // chamar get_conversations(NULL) traz as conversas de TODAS as instâncias
+      // do sistema ordenadas pela mais recente, e o PostgREST CORTA o resultado
+      // em 1000 linhas. Numa loja com várias instâncias, as 1000 mais recentes
+      // são dominadas por outras instâncias/lojas de alto volume, então conversas
+      // mais antigas desta loja caem fora do corte e somem da lista.
+      //
+      // Correção: além da consulta global (que preserva DMs do Instagram e chats
+      // sem instância), consultamos CADA instância da loja separadamente. Cada
+      // instância tem bem menos de 1000 conversas, então nada é cortado. Os
+      // resultados são unidos e deduplicados por (telefone + instância).
+      const buildCalls = (dispatchOnly: boolean) => {
+        const calls: any[] = [];
+        if (storeNumberIds.length === 1) {
+          calls.push(supabase.rpc('get_conversations', { p_number_id: storeNumberIds[0], p_dispatch_only: dispatchOnly }));
+        } else {
+          // Consulta global (mantém comportamento atual: IG DMs / sem instância)
+          calls.push(supabase.rpc('get_conversations', { p_number_id: null, p_dispatch_only: dispatchOnly }));
+          // Uma consulta por instância da loja (garante a lista completa da loja)
+          for (const id of storeNumberIds) {
+            calls.push(supabase.rpc('get_conversations', { p_number_id: id, p_dispatch_only: dispatchOnly }));
+          }
+        }
+        return calls;
+      };
 
-      const regularPromise = supabase.rpc('get_conversations', {
-        p_number_id: numberId,
-        p_dispatch_only: false,
-      });
+      const regularResults = await Promise.all(buildCalls(false));
+      const dispatchResults = needsDispatch ? await Promise.all(buildCalls(true)) : [];
 
-      const dispatchPromise = needsDispatch
-        ? supabase.rpc('get_conversations', {
-            p_number_id: numberId,
-            p_dispatch_only: true,
-          })
-        : Promise.resolve({ data: [], error: null });
+      const firstErr = regularResults.find((r: any) => r.error);
+      if (firstErr?.error) { console.error('Error loading conversations:', firstErr.error); return; }
 
-      const [regularResult, dispatchResult] = await Promise.all([regularPromise, dispatchPromise]);
+      // Une todos os resultados e deduplica por (telefone + instância).
+      const mergedByKey = new Map<string, any>();
+      for (const res of [...regularResults, ...dispatchResults]) {
+        for (const row of (res.data || [])) {
+          const key = `${row.phone}__${row.whatsapp_number_id || 'none'}`;
+          if (!mergedByKey.has(key)) mergedByKey.set(key, row);
+        }
+      }
+      let allRows = Array.from(mergedByKey.values());
 
-      if (regularResult.error) { console.error('Error loading conversations:', regularResult.error); return; }
-
-      let allRows = [...(regularResult.data || []), ...(dispatchResult.data || [])];
 
       // Hide Instagram comment-only conversations (Live/Post/Reel comments) — chat should show DMs only
       const isCommentMessage = (msg?: string | null) => {
@@ -1926,7 +1947,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           storeId={storeId}
           phone={selectedPhone}
           sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
-          selectedNumberId={selectedSendNumberId}
+          selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
           open={showCatalog}
           onOpenChange={setShowCatalog}
         />
@@ -1957,7 +1978,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           phone={selectedPhone}
           customerName={selectedConversation?.customerName}
           sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
-          selectedNumberId={selectedSendNumberId}
+          selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
         />
       )}
 
@@ -1970,7 +1991,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           phone={selectedPhone}
           customerName={selectedConversation?.customerName}
           sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
-          selectedNumberId={selectedSendNumberId}
+          selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
         />
       )}
 
