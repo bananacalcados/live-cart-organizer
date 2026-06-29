@@ -85,6 +85,10 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [liveMessages, setLiveMessages] = useState<string[]>([]);
   const [togglingFreeShipping, setTogglingFreeShipping] = useState(false);
   const [togglingAiPause, setTogglingAiPause] = useState(false);
+  // Fallback da forma de pagamento via pos_checkout_attempts (PIX vs Cartão)
+  // quando o pedido não tem payment_method_label preenchido.
+  const [checkoutMethod, setCheckoutMethod] = useState<string | null>(null);
+  const [checkoutInstallments, setCheckoutInstallments] = useState<number | null>(null);
   const { moveOrder: storeMove, updateOrder } = useDbOrderStore();
 
   const persistShopifyVerification = useCallback((verified: boolean, orderName: string | null) => {
