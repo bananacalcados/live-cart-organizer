@@ -498,12 +498,12 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
       // CRM order — fetch customer data
       const { data: fullOrder } = await supabase
         .from("orders")
-        .select("total, store_id, customer:customers(instagram_handle, whatsapp)")
+        .select("pickup_store_id, customer:customers(instagram_handle, whatsapp)")
         .eq("id", orderId)
         .maybeSingle();
+      logAmount = mpPayment?.transaction_amount ? Number(mpPayment.transaction_amount) : null;
       if (fullOrder) {
-        logAmount = fullOrder.total ? Number(fullOrder.total) : null;
-        logStoreId = fullOrder.store_id;
+        logStoreId = fullOrder.pickup_store_id;
         const cust = fullOrder.customer as any;
         logCustomerName = cust?.instagram_handle || null;
         logCustomerPhone = cust?.whatsapp || null;
