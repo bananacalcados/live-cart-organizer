@@ -140,6 +140,11 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   useEffect(() => {
     if (!open || !event) return;
     const e = event as any;
+    setName(e.name && e.name !== EVENT_DRAFT_NAME ? e.name : "");
+    setDescription(e.description || "");
+    setStartDate(e.start_date || "");
+    setEndDate(e.end_date || "");
+    setChannel(e.channel || "site");
     setShippingCost(e.default_shipping_cost != null ? String(e.default_shipping_cost) : "");
     setFreeThreshold(e.free_shipping_threshold != null ? String(e.free_shipping_threshold) : "");
     setSelectedWaId(e.whatsapp_number_id || "none");
