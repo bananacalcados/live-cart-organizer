@@ -376,6 +376,40 @@ const Events = () => {
                     rows={3}
                   />
                   </div>
+                  {/* Datas do evento — quando a live vai acontecer (pode durar vários dias) */}
+                  <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                    <Label className="flex items-center gap-2 m-0">
+                      <Calendar className="h-4 w-4" />
+                      Data do Evento
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="startDate" className="text-xs text-muted-foreground">Início</Label>
+                        <Input
+                          id="startDate"
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => {
+                            setStartDate(e.target.value);
+                            if (endDate && e.target.value && endDate < e.target.value) setEndDate(e.target.value);
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="endDate" className="text-xs text-muted-foreground">Fim (opcional)</Label>
+                        <Input
+                          id="endDate"
+                          type="date"
+                          min={startDate || undefined}
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Defina quando a live vai acontecer (pode ser uma data futura). Para eventos de vários dias, preencha a data de fim — assim conseguimos medir a duração depois.
+                    </p>
+                  </div>
                    {/* Canal do evento — define onde o pedido é roteado */}
                    <div className="space-y-2">
                      <Label className="flex items-center gap-2">
