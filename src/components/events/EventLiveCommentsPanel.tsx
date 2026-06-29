@@ -151,13 +151,15 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     };
   }, [eventId]);
 
-  const loadComments = useCallback(async () => {
+  const loadComments = useCallback(async (opts?: { silent?: boolean }) => {
     if (!eventId || !fromDate) {
       setComments([]);
+      firstLoadRef.current = false;
       setLoading(false);
       return;
     }
-    setLoading(true);
+    // Refresh em background (polling) não deve piscar o painel nem resetar o scroll
+    if (!opts?.silent && firstLoadRef.current) setLoading(true);
 
     const startIso = new Date(`${fromDate}T00:00:00`).toISOString();
     const endIso = new Date(`${toDate}T23:59:59.999`).toISOString();
@@ -213,7 +215,9 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     }
 
     merged.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    setComments(merged);
+    // Só troca o array (e re-renderiza/reseta scroll) quando o conteúdo realmente mudou
+    setComments((prev) => (sameComments(prev, merged) ? prev : merged));
+    firstLoadRef.current = false;
     setLoading(false);
   }, [eventId, fromDate, toDate]);
 
