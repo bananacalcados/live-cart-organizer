@@ -43,7 +43,7 @@ export interface PixTab {
   isLive?: boolean; // pedido proveniente de Live Shopping
 }
 
-const PAID_STATUSES = new Set(["paid", "online_paid", "approved"]);
+const PAID_STATUSES = new Set(["paid", "online_paid", "approved", "completed"]);
 // Origens válidas: chat (online) e live shopping. Tudo o que não for isso é ignorado.
 const ALLOWED_SALE_TYPES = new Set(["online", "live"]);
 const DISMISSED_KEY = "pix_notif_dismissed_v1";
