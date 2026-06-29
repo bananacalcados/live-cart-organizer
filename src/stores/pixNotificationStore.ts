@@ -13,12 +13,18 @@ import { toast } from "sonner";
  *  - se o operador NÃO estiver olhando aquela conversa, dispara um alerta global.
  *
  * Regras importantes (pedidos do usuário):
+ *  - As abas são ESCOPADAS POR LOJA: um pedido criado no chat da Loja Centro só
+ *    aparece no chat da Loja Centro. Pedidos de Live são vinculados à loja do
+ *    evento. Filtra por `store_id` da venda.
+ *  - SÓ entram pedidos vindos do próprio chat (botões PIX/Checkout) ou de Live
+ *    Shopping. Pedidos feitos fora do WhatsApp (ads, órfãos) são ignorados.
+ *  - Ao clicar na aba, abre a conversa NA INSTÂNCIA em que o pedido foi feito
+ *    (`whatsapp_number_id`), para o histórico aparecer corretamente.
  *  - O modal de "pagamento confirmado" SÓ aparece para pagamentos confirmados
  *    AGORA. Pedidos antigos (já pagos quando o store inicializou) NUNCA disparam
  *    modal — eles entram numa "baseline".
  *  - Cada pagamento dispara o modal no máximo UMA vez.
- *  - Fechar (X) uma aba é PERMANENTE: ela não reaparece (persistido em
- *    localStorage), mesmo que a venda continue paga e a linha continue na fila.
+ *  - Fechar (X) uma aba é PERMANENTE (persistido em localStorage).
  *
  * Fonte da verdade: tabela `chat_awaiting_payment` + status real em `pos_sales`.
  */
@@ -34,9 +40,12 @@ export interface PixTab {
   createdAt: string;
   paidAt?: number;
   fresh?: boolean; // confirmado AO VIVO nesta sessão (pisca / dispara modal)
+  isLive?: boolean; // pedido proveniente de Live Shopping
 }
 
 const PAID_STATUSES = new Set(["paid", "online_paid", "approved"]);
+// Origens válidas: chat (online) e live shopping. Tudo o que não for isso é ignorado.
+const ALLOWED_SALE_TYPES = new Set(["online", "live"]);
 const DISMISSED_KEY = "pix_notif_dismissed_v1";
 
 function phoneKey(phone: string | null | undefined): string {
@@ -69,6 +78,7 @@ interface PixNotificationState {
   paidAlert: PixTab | null;
 
   _inited: boolean;
+  _storeId: string | null;
   _baselineDone: boolean;
   _baseline: Set<string>; // vendas já pagas quando o store iniciou (sem modal)
   _alerted: Set<string>; // vendas que já dispararam o modal (uma vez só)
@@ -77,13 +87,18 @@ interface PixNotificationState {
   _poll: ReturnType<typeof setInterval> | null;
   _refreshTimer: ReturnType<typeof setTimeout> | null;
 
-  init: () => void;
+  init: (storeId?: string | null) => void;
   refresh: () => Promise<void>;
   setActivePhone: (phone: string | null) => void;
   requestOpen: (phone: string, numberId: string | null) => void;
   clearOpenRequest: () => void;
   dismiss: (saleId: string) => void;
   clearPaidAlert: () => void;
+}
+
+// UUID v4-ish guard: lojas virtuais (ex.: "expedition") não filtram por loja real.
+function isUuid(v: string | null | undefined): boolean {
+  return !!v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 }
 
 export const usePixNotificationStore = create<PixNotificationState>((set, get) => ({
@@ -93,6 +108,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
   paidAlert: null,
 
   _inited: false,
+  _storeId: null,
   _baselineDone: false,
   _baseline: new Set(),
   _alerted: new Set(),
@@ -101,9 +117,20 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
   _poll: null,
   _refreshTimer: null,
 
-  init: () => {
-    if (get()._inited) return;
-    set({ _inited: true });
+  init: (storeId) => {
+    const prevStore = get()._storeId;
+    const nextStore = storeId ?? prevStore ?? null;
+
+    if (get()._inited) {
+      // Se a loja mudou (troca de módulo), re-escopa e recarrega do zero.
+      if (storeId !== undefined && storeId !== prevStore) {
+        set({ _storeId: nextStore, tabs: [], _baselineDone: false, _baseline: new Set() });
+        get().refresh();
+      }
+      return;
+    }
+
+    set({ _inited: true, _storeId: nextStore });
 
     get().refresh();
 
@@ -134,13 +161,18 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
   refresh: async () => {
     try {
       const dismissed = get()._dismissed;
+      const storeId = get()._storeId;
+      const scoped = isUuid(storeId); // só filtra por loja quando há loja real
 
       const { data: awaiting } = await supabase
         .from("chat_awaiting_payment")
-        .select("phone, sale_id, type, created_at");
+        .select("phone, sale_id, type, created_at, store_id, whatsapp_number_id");
 
       const awaitingRows = (awaiting || []).filter(
-        (r: any) => r.sale_id && !dismissed.has(String(r.sale_id)),
+        (r: any) =>
+          r.sale_id &&
+          r.type !== "ads_checkout" && // origem fora do chat
+          !dismissed.has(String(r.sale_id)),
       );
       const existing = get().tabs;
 
@@ -159,7 +191,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
 
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, total, status, payment_details")
+        .select("id, total, status, payment_details, store_id, sale_type, event_id")
         .in("id", saleIds);
 
       const saleById = new Map<string, any>();
@@ -171,6 +203,11 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
       const isInitial = !get()._baselineDone;
       const baseline = get()._baseline;
       const alerted = get()._alerted;
+
+      // Resolve a loja de uma venda (venda > linha awaiting). Live usa store da venda
+      // (que já é a loja do evento via backfill/cadastro).
+      const resolveStoreId = (sale: any, awaitingRow: any): string | null =>
+        (sale?.store_id as string) || (awaitingRow?.store_id as string) || null;
 
       // Na primeira passada: tudo que já está pago vira "baseline" (pedido antigo).
       if (isInitial) {
@@ -188,10 +225,27 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
         const sale = saleById.get(saleId);
         const awaitingRow = awaitingBySale.get(saleId);
         const prev = existing.find((t) => t.saleId === saleId);
-        const isPaid = sale && PAID_STATUSES.has(String(sale.status));
+
+        // Sem venda real = pedido fora do chat / órfão → ignora.
+        if (!sale) continue;
+
+        // Origem precisa ser chat (online) ou live.
+        const saleType = String(sale.sale_type || "");
+        if (!ALLOWED_SALE_TYPES.has(saleType)) continue;
+
+        // Escopo por loja: só mostra na loja onde o pedido foi feito.
+        const saleStore = resolveStoreId(sale, awaitingRow);
+        if (scoped && saleStore && saleStore !== storeId) continue;
+        // Se temos loja real mas a venda não tem loja resolvida, não arrisca cross-store.
+        if (scoped && !saleStore) continue;
+
+        const isLive = saleType === "live";
+        const isPaid = PAID_STATUSES.has(String(sale.status));
+        const pd = (sale.payment_details || {}) as Record<string, unknown>;
+        const numberId =
+          (awaitingRow?.whatsapp_number_id as string) || prev?.numberId || null;
 
         if (isPaid) {
-          const pd = (sale.payment_details || {}) as Record<string, unknown>;
           const phone =
             (awaitingRow?.phone as string) || prev?.phone || (pd.customer_phone as string) || "";
 
@@ -201,14 +255,16 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
           const tab: PixTab = {
             saleId,
             phone,
-            numberId: prev?.numberId ?? null,
+            numberId,
             name: prev?.name || (pd.customer_name as string) || phone || "Cliente",
             amount: Number(sale.total) || prev?.amount || 0,
             type: (awaitingRow?.type as string) || prev?.type || "pix",
             status: "paid",
-            createdAt: prev?.createdAt || (awaitingRow?.created_at as string) || new Date().toISOString(),
+            createdAt:
+              prev?.createdAt || (awaitingRow?.created_at as string) || new Date().toISOString(),
             paidAt: prev?.paidAt || Date.now(),
             fresh: isFresh,
+            isLive,
           };
           next.push(tab);
 
@@ -217,18 +273,18 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
             alerted.add(saleId);
             newlyPaid = tab;
           }
-        } else if (awaitingRow && sale) {
-          const pd = (sale.payment_details || {}) as Record<string, unknown>;
+        } else if (awaitingRow) {
           const phone = (awaitingRow.phone as string) || (pd.customer_phone as string) || "";
           next.push({
             saleId,
             phone,
-            numberId: prev?.numberId ?? null,
+            numberId,
             name: (pd.customer_name as string) || prev?.name || phone || "Cliente",
             amount: Number(sale.total) || 0,
             type: (awaitingRow.type as string) || "pix",
             status: "pending",
             createdAt: (awaitingRow.created_at as string) || new Date().toISOString(),
+            isLive,
           });
         } else if (prev && prev.status === "paid") {
           next.push(prev); // mantém paga até o operador descartar
