@@ -226,6 +226,8 @@ const Events = () => {
       await updateEvent(editingEvent, {
         name,
         description,
+        start_date: startDate || null,
+        end_date: endDate || null,
         default_shipping_cost: shippingValue ?? null,
         whatsapp_number_id: whatsappId,
         channel,
