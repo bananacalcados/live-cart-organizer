@@ -160,6 +160,15 @@ const Index = () => {
                 <LiveActiveToggleButton eventId={currentEventId} />
                 <OrderReportDialog orders={orders} />
                 <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => setWizardOpen(true)}
+                >
+                  <Settings className="h-4 w-4" />
+                  Configurar Live
+                </Button>
+                <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => navigate("/events")}
