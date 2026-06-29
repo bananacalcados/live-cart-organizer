@@ -838,7 +838,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       // instância tem bem menos de 1000 conversas, então nada é cortado. Os
       // resultados são unidos e deduplicados por (telefone + instância).
       const buildCalls = (dispatchOnly: boolean) => {
-        const calls: Promise<any>[] = [];
+        const calls: any[] = [];
         if (storeNumberIds.length === 1) {
           calls.push(supabase.rpc('get_conversations', { p_number_id: storeNumberIds[0], p_dispatch_only: dispatchOnly }));
         } else {
