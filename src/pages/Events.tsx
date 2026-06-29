@@ -318,11 +318,21 @@ const Events = () => {
 
   const handleOpenEvent = (eventId: string) => {
     const ev = events.find((e) => e.id === eventId);
-    // If the event hasn't been fully configured yet, open the setup wizard first.
-    if (ev && !(ev as any).setup_completed) {
-      setWizardEvent(ev);
-      setWizardOpen(true);
-      return;
+    if (ev) {
+      const e = ev as any;
+      const liveActive =
+        e.live_active_until && new Date(e.live_active_until).getTime() > Date.now();
+      // Event still relevant (no end date, or end date is today/future).
+      const stillRelevant =
+        !e.end_date || new Date(`${e.end_date}T23:59:59`).getTime() >= Date.now();
+      // Reopen the wizard if setup is incomplete OR the Live step wasn't activated yet
+      // for an event that is still upcoming/current.
+      const needsSetup = !e.setup_completed || (!liveActive && stillRelevant);
+      if (needsSetup) {
+        setWizardEvent(ev);
+        setWizardOpen(true);
+        return;
+      }
     }
     enterEvent(eventId);
   };
