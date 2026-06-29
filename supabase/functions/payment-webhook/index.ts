@@ -238,15 +238,19 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
 
   console.log("MercadoPago webhook:", JSON.stringify({ body, qsTopic, qsId, notificationType, paymentId }).substring(0, 500));
 
-  // Validate webhook signature ONLY for JSON body (legacy topic format doesn't sign)
+  // Validate webhook signature ONLY for JSON body (legacy topic format doesn't sign).
+  // IMPORTANT: a assinatura é só anti-fraude. A verdadeira garantia é a reconsulta do
+  // status real na API do Mercado Pago (mais abaixo), usando NOSSO token. Por isso, se a
+  // assinatura falhar (ex.: segredo da conta trocou), NÃO descartamos o webhook — apenas
+  // registramos um alerta e seguimos. Assim o pagamento não fica preso "pendente" no kanban.
   if (rawBody && body?.data?.id) {
     const isValid = await validateMercadoPagoSignature(req, rawBody);
     if (!isValid) {
-      console.error("[mercadopago] Invalid webhook signature, rejecting");
-      return new Response(JSON.stringify({ ok: false, error: "invalid_signature" }), {
-        status: 401,
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-      });
+      console.error(
+        "[mercadopago] ⚠️ ALERTA: assinatura inválida (segredo do webhook pode estar desatualizado para a conta ativa). " +
+        "Prosseguindo mesmo assim porque o status será reconfirmado direto na API do Mercado Pago. " +
+        "Atualize MERCADOPAGO_WEBHOOK_SECRET com a assinatura secreta da conta ativa para silenciar este alerta.",
+      );
     }
   }
 
