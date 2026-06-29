@@ -582,6 +582,10 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">
+        {/* Data em que o card/pedido foi montado */}
+        <Badge variant="outline" className="text-[10px] bg-muted/50 text-muted-foreground border-border">
+          📅 {format(new Date(order.created_at), "dd/MM/yyyy")}
+        </Badge>
         {(order.is_paid || order.paid_externally) && hasShopifyOrder === true && (
           <button
             type="button"
