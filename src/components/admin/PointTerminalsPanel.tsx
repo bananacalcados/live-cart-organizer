@@ -172,18 +172,32 @@ export function PointTerminalsPanel() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={savingId === t.id}
-                          onClick={() => toggleMode(t)}
-                        >
-                          {savingId === t.id
-                            ? "Salvando..."
-                            : isPdv
-                            ? "Mudar p/ STANDALONE"
-                            : "Ativar PDV"}
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={!isPdv}
+                            title={isPdv ? "Testar cobrança nesta maquininha" : "Ative o modo PDV para cobrar"}
+                            onClick={() => {
+                              setChargeTerminal(t.id);
+                              setChargeOpen(true);
+                            }}
+                          >
+                            <CreditCard className="h-3.5 w-3.5 mr-1" /> Cobrar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={savingId === t.id}
+                            onClick={() => toggleMode(t)}
+                          >
+                            {savingId === t.id
+                              ? "Salvando..."
+                              : isPdv
+                              ? "Mudar p/ STANDALONE"
+                              : "Ativar PDV"}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -193,6 +207,13 @@ export function PointTerminalsPanel() {
           </div>
         )}
       </CardContent>
+
+      <PointChargeDialog
+        open={chargeOpen}
+        onOpenChange={setChargeOpen}
+        terminalId={chargeTerminal}
+      />
     </Card>
   );
 }
+
