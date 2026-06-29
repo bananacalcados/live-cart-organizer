@@ -286,6 +286,16 @@ const Index = () => {
       <div className="hidden xl:flex w-[420px] flex-shrink-0 h-screen sticky top-0">
         <EventLiveCommentsPanel eventId={currentEventId} />
       </div>
+
+      <EventSetupWizard
+        event={currentEvent as any}
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onCompleted={() => {
+          setWizardOpen(false);
+          fetchEvents();
+        }}
+      />
     </div>
   );
 };
