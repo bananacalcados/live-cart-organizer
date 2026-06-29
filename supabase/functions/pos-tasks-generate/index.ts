@@ -402,8 +402,12 @@ async function buildContacts(supabase: any, def: any, storeId: string, target: n
       .gte("created_at", start)
       .lte("created_at", end)
       .limit(target * 4);
+    const seenLead = new Set<string>();
     for (const c of data || []) {
       if (!c.phone) continue;
+      const ph = phoneKey(c.phone);
+      if (!ph || seenLead.has(ph)) continue;
+      seenLead.add(ph);
       out.push({ phone: c.phone, name: c.custom_name || c.display_name || "Lead", meta: { lead_at: c.created_at } });
       if (out.length >= target) break;
     }
