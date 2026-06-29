@@ -129,6 +129,27 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setInstallMin(e.installment_min_value != null ? String(e.installment_min_value) : "");
     setInstallMax(e.installment_max != null ? String(e.installment_max) : "");
 
+    // Crossell: load existing offers + "no crossell" preference
+    setCrossellNone(Boolean(e.crossell_configured) && !e.crossell_enabled);
+    supabase
+      .from("event_crossell_offers")
+      .select("*")
+      .eq("event_id", event.id)
+      .order("position", { ascending: true })
+      .then(({ data }) => {
+        setCrossellOffers(
+          (data || []).map((o: any) => ({
+            id: o.id,
+            shopify_product_id: o.shopify_product_id,
+            product_title: o.product_title || "",
+            image: o.image,
+            has_sizes: o.has_sizes,
+            original_price: o.original_price != null ? String(o.original_price) : "",
+            discount_price: o.discount_price != null ? String(o.discount_price) : "",
+          })),
+        );
+      });
+
     const firstIncomplete = STEPS.findIndex((s) => !completeFromEvent[s.key]);
     setStepIndex(firstIncomplete === -1 ? 0 : firstIncomplete);
     // eslint-disable-next-line react-hooks/exhaustive-deps
