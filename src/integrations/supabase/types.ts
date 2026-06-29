@@ -4551,9 +4551,12 @@ export type Database = {
           default_store_id: string | null
           description: string | null
           end_date: string | null
+          free_shipping_threshold: number | null
           id: string
           initial_message_blocks: Json
           initial_message_enabled: boolean
+          installment_max: number | null
+          installment_min_value: number | null
           is_active: boolean
           live_active_until: string | null
           meta_template_body_variables: Json | null
@@ -4561,6 +4564,7 @@ export type Database = {
           meta_template_language: string | null
           meta_template_name: string | null
           name: string
+          setup_completed: boolean
           start_date: string | null
           updated_at: string
           whatsapp_number_id: string | null
@@ -4577,9 +4581,12 @@ export type Database = {
           default_store_id?: string | null
           description?: string | null
           end_date?: string | null
+          free_shipping_threshold?: number | null
           id?: string
           initial_message_blocks?: Json
           initial_message_enabled?: boolean
+          installment_max?: number | null
+          installment_min_value?: number | null
           is_active?: boolean
           live_active_until?: string | null
           meta_template_body_variables?: Json | null
@@ -4587,6 +4594,7 @@ export type Database = {
           meta_template_language?: string | null
           meta_template_name?: string | null
           name: string
+          setup_completed?: boolean
           start_date?: string | null
           updated_at?: string
           whatsapp_number_id?: string | null
@@ -4603,9 +4611,12 @@ export type Database = {
           default_store_id?: string | null
           description?: string | null
           end_date?: string | null
+          free_shipping_threshold?: number | null
           id?: string
           initial_message_blocks?: Json
           initial_message_enabled?: boolean
+          installment_max?: number | null
+          installment_min_value?: number | null
           is_active?: boolean
           live_active_until?: string | null
           meta_template_body_variables?: Json | null
@@ -4613,6 +4624,7 @@ export type Database = {
           meta_template_language?: string | null
           meta_template_name?: string | null
           name?: string
+          setup_completed?: boolean
           start_date?: string | null
           updated_at?: string
           whatsapp_number_id?: string | null

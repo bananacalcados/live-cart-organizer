@@ -40,6 +40,8 @@ import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { MetaTemplateConfigurator } from "@/components/events/MetaTemplateConfigurator";
 import { InitialMessageEditor } from "@/components/events/InitialMessageEditor";
+import { EventSetupWizard } from "@/components/events/EventSetupWizard";
+import { DbEvent } from "@/types/database";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
@@ -62,6 +64,8 @@ const Events = () => {
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardEvent, setWizardEvent] = useState<DbEvent | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -307,9 +311,20 @@ const Events = () => {
     setDialogOpen(true);
   };
 
-  const handleOpenEvent = (eventId: string) => {
+  const enterEvent = (eventId: string) => {
     setCurrentEvent(eventId);
     navigate("/dashboard");
+  };
+
+  const handleOpenEvent = (eventId: string) => {
+    const ev = events.find((e) => e.id === eventId);
+    // If the event hasn't been fully configured yet, open the setup wizard first.
+    if (ev && !(ev as any).setup_completed) {
+      setWizardEvent(ev);
+      setWizardOpen(true);
+      return;
+    }
+    enterEvent(eventId);
   };
 
   const getStats = (eventId: string) => {
@@ -806,6 +821,21 @@ const Events = () => {
           </TabsContent>
         </Tabs>
       </main>
+
+      <EventSetupWizard
+        event={wizardEvent}
+        open={wizardOpen}
+        onOpenChange={(open) => {
+          setWizardOpen(open);
+          if (!open) setWizardEvent(null);
+        }}
+        onCompleted={() => {
+          const id = wizardEvent?.id;
+          setWizardOpen(false);
+          setWizardEvent(null);
+          if (id) enterEvent(id);
+        }}
+      />
     </div>
   );
 };

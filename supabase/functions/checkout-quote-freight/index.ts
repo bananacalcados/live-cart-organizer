@@ -117,8 +117,11 @@ serve(async (req) => {
     const explicitFixedShipping: number | null =
       (typeof fixed_shipping === 'number' && fixed_shipping > 0) ? fixed_shipping : null;
 
-    // Event-level default shipping value (set when creating the Live event).
+    // Event-level shipping config (set in the event setup wizard).
+    //  - eventDefaultShipping: fixed value applied to the cheapest carrier.
+    //  - eventFreeThreshold: free shipping (cheapest carrier) when total >= threshold.
     let eventDefaultShipping: number | null = null;
+    let eventFreeThreshold: number | null = null;
     if (event_id) {
       try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -126,14 +129,17 @@ serve(async (req) => {
         const sb = createClient(supabaseUrl, supabaseKey);
         const { data: ev } = await sb
           .from('events')
-          .select('default_shipping_cost')
+          .select('default_shipping_cost, free_shipping_threshold')
           .eq('id', event_id)
           .maybeSingle();
         if (ev?.default_shipping_cost != null && Number(ev.default_shipping_cost) > 0) {
           eventDefaultShipping = Number(ev.default_shipping_cost);
         }
+        if (ev?.free_shipping_threshold != null && Number(ev.free_shipping_threshold) > 0) {
+          eventFreeThreshold = Number(ev.free_shipping_threshold);
+        }
       } catch (e) {
-        console.warn('Error fetching event default shipping:', e.message);
+        console.warn('Error fetching event shipping config:', e.message);
       }
     }
 
@@ -314,27 +320,39 @@ serve(async (req) => {
 
     // 3. Apply the override to the CHEAPEST carrier quote (raise OR lower its price).
     //    Skipped entirely when the order/sale was marked as free shipping (handled by callers).
-    if (!forceFreeShipping && fixedShippingValue != null) {
+    //    Free-shipping-above-threshold has PRIORITY over the fixed value when the order
+    //    total reaches the configured threshold.
+    const qualifiesForEventFree =
+      eventFreeThreshold != null && Number(total_value || 0) >= eventFreeThreshold;
+
+    if (!forceFreeShipping && (qualifiesForEventFree || fixedShippingValue != null)) {
+      const targetValue = qualifiesForEventFree ? 0 : (fixedShippingValue as number);
+      const targetType = qualifiesForEventFree ? 'event_free' : 'event_fixed';
       const carrierQuotes = quotes.filter(q => q.type === 'carrier');
       if (carrierQuotes.length > 0) {
         const cheapest = carrierQuotes.reduce((acc, cur) => (cur.price < acc.price ? cur : acc));
-        cheapest.price = Math.round(fixedShippingValue * 100) / 100;
-        cheapest.type = 'event_fixed';
+        cheapest.price = Math.round(targetValue * 100) / 100;
+        cheapest.type = targetType;
+        if (qualifiesForEventFree) {
+          cheapest.carrier = `${cheapest.carrier} — Frete Grátis ✅`;
+        }
       } else {
-        // Frenet returned nothing — still offer the fixed value so the customer can pay.
+        // Frenet returned nothing — still offer the value so the customer can pay.
         quotes.push({
-          id: 'fixed-shipping',
-          carrier: 'Frete',
-          service: 'Padrão',
-          price: Math.round(fixedShippingValue * 100) / 100,
+          id: qualifiesForEventFree ? 'event-free' : 'fixed-shipping',
+          carrier: qualifiesForEventFree ? 'Frete Grátis ✅' : 'Frete',
+          service: qualifiesForEventFree ? 'Cortesia' : 'Padrão',
+          price: Math.round(targetValue * 100) / 100,
           delivery_days: null,
-          type: 'event_fixed',
+          type: targetType,
         });
       }
     }
 
-    // Sort: repeat_free first, then event_fixed, then pickup, then local, then by price
+    // Sort: free options first, then event_fixed, then pickup, then local, then by price
     quotes.sort((a, b) => {
+      if (a.type === 'event_free') return -1;
+      if (b.type === 'event_free') return 1;
       if (a.type === 'repeat_free') return -1;
       if (b.type === 'repeat_free') return 1;
       if (a.type === 'event_fixed') return -1;
