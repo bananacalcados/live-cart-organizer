@@ -53,6 +53,8 @@ import { TeamChatPanel } from "@/components/chat/TeamChatPanel";
 import { ContactTagsPopover } from "@/components/chat/ContactTagsPopover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useWhatsAppViewStore } from "@/stores/whatsappViewStore";
+import { PixPendingTabsBar } from "./PixPendingTabsBar";
+import { usePixNotificationStore } from "@/stores/pixNotificationStore";
 
 interface Props {
   storeId: string;
@@ -377,6 +379,26 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       onlyIfUnassigned: true,
     });
   }, [selectedPhone, selectedConvNumberId, sellerViewerId, currentUserId, selectedSellerName, assignConversation]);
+
+  // ── Notificações de PIX/checkout pendente (abas estilo navegador) ──────────
+  const pixSetActivePhone = usePixNotificationStore((s) => s.setActivePhone);
+  const pixOpenRequest = usePixNotificationStore((s) => s.openRequest);
+  const pixClearOpenRequest = usePixNotificationStore((s) => s.clearOpenRequest);
+
+  // Informa ao store qual conversa está aberta (pra decidir piscar x abrir modal).
+  useEffect(() => {
+    pixSetActivePhone(selectedPhone);
+  }, [selectedPhone, pixSetActivePhone]);
+
+  // Quando uma aba é clicada, abre a conversa correspondente.
+  useEffect(() => {
+    if (!pixOpenRequest) return;
+    handleSelectConversation(pixOpenRequest.phone, pixOpenRequest.numberId);
+    pixClearOpenRequest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pixOpenRequest]);
+
+
 
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
@@ -1464,6 +1486,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         />
       ) : (
       <>
+      {/* Abas de PIX/checkout aguardando pagamento (estilo aba do navegador) */}
+      <PixPendingTabsBar />
       {/* Content - Split view */}
       <div className="flex-1 flex overflow-hidden min-w-0">
         {/* Conversation List */}
