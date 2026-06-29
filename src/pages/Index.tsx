@@ -270,7 +270,7 @@ const Index = () => {
 
       {/* Fixed WhatsApp Chat Panel - Right Side */}
       <div className="hidden xl:flex w-[420px] flex-shrink-0 h-screen sticky top-0">
-        <DashboardChatPanel />
+        <EventLiveCommentsPanel eventId={currentEventId} />
       </div>
     </div>
   );
