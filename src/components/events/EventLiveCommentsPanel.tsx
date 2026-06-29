@@ -132,13 +132,15 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         .eq("event_id", eventId)
         .order("created_at", { ascending: false })
         .limit(2000),
-      // 2) comentários de live/reel que chegaram pelo webhook do Meta
+      // 2) SOMENTE comentários da LIVE (vídeo ao vivo) que chegaram pelo webhook do Meta.
+      //    Ignora STORIES, FEED, REELS e posts — esses ficam com outro prefixo
+      //    ("💬 Comentário no Reel/post: ..."). Só "💬 Comentário no Live:" é live shopping.
       supabase
         .from("whatsapp_messages")
         .select("id, sender_name, message, created_at")
         .eq("channel", "instagram")
         .eq("direction", "incoming")
-        .ilike("message", "💬 Comentário no%")
+        .ilike("message", "💬 Comentário no Live:%")
         .gte("created_at", startIso)
         .lte("created_at", endIso)
         .order("created_at", { ascending: false })
