@@ -117,8 +117,11 @@ serve(async (req) => {
     const explicitFixedShipping: number | null =
       (typeof fixed_shipping === 'number' && fixed_shipping > 0) ? fixed_shipping : null;
 
-    // Event-level default shipping value (set when creating the Live event).
+    // Event-level shipping config (set in the event setup wizard).
+    //  - eventDefaultShipping: fixed value applied to the cheapest carrier.
+    //  - eventFreeThreshold: free shipping (cheapest carrier) when total >= threshold.
     let eventDefaultShipping: number | null = null;
+    let eventFreeThreshold: number | null = null;
     if (event_id) {
       try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -126,14 +129,17 @@ serve(async (req) => {
         const sb = createClient(supabaseUrl, supabaseKey);
         const { data: ev } = await sb
           .from('events')
-          .select('default_shipping_cost')
+          .select('default_shipping_cost, free_shipping_threshold')
           .eq('id', event_id)
           .maybeSingle();
         if (ev?.default_shipping_cost != null && Number(ev.default_shipping_cost) > 0) {
           eventDefaultShipping = Number(ev.default_shipping_cost);
         }
+        if (ev?.free_shipping_threshold != null && Number(ev.free_shipping_threshold) > 0) {
+          eventFreeThreshold = Number(ev.free_shipping_threshold);
+        }
       } catch (e) {
-        console.warn('Error fetching event default shipping:', e.message);
+        console.warn('Error fetching event shipping config:', e.message);
       }
     }
 
