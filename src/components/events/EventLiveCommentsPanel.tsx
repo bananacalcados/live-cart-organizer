@@ -11,7 +11,7 @@ import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { Order } from "@/types/order";
-import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
+import { isOrderMarkedPaid, isPaidOrderStage } from "@/lib/orderPaymentStages";
 import { format, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
