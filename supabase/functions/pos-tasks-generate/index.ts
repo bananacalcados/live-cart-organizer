@@ -237,11 +237,14 @@ async function buildContacts(supabase: any, def: any, storeId: string, target: n
   const out: { phone: string; name: string; meta?: any }[] = [];
 
   if (def.category === "contact_old_customers") {
-    // Clientes antigos: 5 (ou N) clientes DIFERENTES para cada vendedora,
-    // independente de quem atendeu no passado. Para não repetir os mesmos
-    // clientes entre vendedoras, excluímos quem já foi atribuído nas tarefas
-    // desta mesma definição e data (de qualquer vendedora).
+    // Clientes antigos/ausentes: N clientes DIFERENTES para cada vendedora.
+    // Para não repetir as mesmas pessoas, excluímos:
+    //  (a) quem já foi atribuído HOJE em qualquer vendedora (não duplica no dia);
+    //  (b) quem já foi atribuído a ESTA vendedora nos últimos N dias (rotação real
+    //      por toda a base — sem isso, os "mais antigos" voltavam todo dia).
     const used = new Set<string>();
+
+    // (a) Já atribuídos hoje (qualquer vendedora)
     {
       const { data: insts } = await supabase
         .from("pos_seller_task_instances")
@@ -255,30 +258,91 @@ async function buildContacts(supabase: any, def: any, storeId: string, target: n
           .select("customer_phone")
           .in("instance_id", ids);
         for (const r of usedRows || []) {
-          const ph = (r.customer_phone || "").replace(/\D/g, "");
+          const ph = phoneKey(r.customer_phone || "");
           if (ph) used.add(ph);
         }
       }
     }
 
-    // Busca um pool maior para sobrar candidatos depois de remover os já usados.
+    // (b) Já atribuídos a ESTA vendedora nos últimos N dias
+    const noRepeatDays = Math.max(1, Number(cfg.no_repeat_days) || 60);
+    if (seller?.id) {
+      const sinceDate = shiftDate(dateStr, -noRepeatDays);
+      const { data: pastInsts } = await supabase
+        .from("pos_seller_task_instances")
+        .select("id")
+        .eq("definition_id", def.id)
+        .eq("seller_id", seller.id)
+        .gte("due_date", sinceDate)
+        .lt("due_date", dateStr);
+      const pastIds = (pastInsts || []).map((i: any) => i.id);
+      for (let i = 0; i < pastIds.length; i += 100) {
+        const { data: pastRows } = await supabase
+          .from("pos_task_contacts")
+          .select("customer_phone")
+          .in("instance_id", pastIds.slice(i, i + 100));
+        for (const r of pastRows || []) {
+          const ph = phoneKey(r.customer_phone || "");
+          if (ph) used.add(ph);
+        }
+      }
+    }
+
+    // Pool grande o suficiente para sobrar candidatos após remover os excluídos.
     let q = supabase
       .from("customers_unified")
       .select("name, phone_e164, rfm_segment, last_purchase_at, total_orders")
       .not("phone_e164", "is", null)
       .gt("total_orders", 0)
       .order("last_purchase_at", { ascending: true, nullsFirst: false })
-      .limit(Math.max(target * 20, 200));
+      .limit(Math.max(target * 80, 500));
     if (cfg.rfm_segment) q = q.eq("rfm_segment", cfg.rfm_segment);
     const { data } = await q;
-    for (const c of data || []) {
+
+    const candidates = data || [];
+    for (const c of candidates) {
       if (!c.phone_e164) continue;
-      const ph = c.phone_e164.replace(/\D/g, "");
+      const ph = phoneKey(c.phone_e164);
       if (!ph || used.has(ph)) continue;
       used.add(ph);
       out.push({ phone: c.phone_e164, name: c.name || "Cliente", meta: { rfm: c.rfm_segment, last_purchase_at: c.last_purchase_at } });
       if (out.length >= target) break;
     }
+
+    // Fallback: se a base de clientes antigos se esgotou dentro da janela de
+    // não-repetição, completamos liberando o histórico (mantendo só a regra de
+    // não duplicar no MESMO dia). Garante que a lista nunca venha vazia à toa.
+    if (out.length < target) {
+      const sameDay = new Set<string>();
+      {
+        const { data: insts } = await supabase
+          .from("pos_seller_task_instances")
+          .select("id")
+          .eq("definition_id", def.id)
+          .eq("due_date", dateStr);
+        const ids = (insts || []).map((i: any) => i.id);
+        if (ids.length) {
+          const { data: usedRows } = await supabase
+            .from("pos_task_contacts")
+            .select("customer_phone")
+            .in("instance_id", ids);
+          for (const r of usedRows || []) {
+            const ph = phoneKey(r.customer_phone || "");
+            if (ph) sameDay.add(ph);
+          }
+        }
+      }
+      const picked = new Set(out.map((o) => phoneKey(o.phone)));
+      for (const c of candidates) {
+        if (!c.phone_e164) continue;
+        const ph = phoneKey(c.phone_e164);
+        if (!ph || picked.has(ph) || sameDay.has(ph)) continue;
+        picked.add(ph);
+        out.push({ phone: c.phone_e164, name: c.name || "Cliente", meta: { rfm: c.rfm_segment, last_purchase_at: c.last_purchase_at } });
+        if (out.length >= target) break;
+      }
+    }
+
   } else if (def.category === "post_sale") {
     // Pós-venda: clientes que compraram no(s) dia(s) anterior(es) nesta loja
     // ATENDIDOS PELA PRÓPRIA VENDEDORA da tarefa (não mistura vendas de outras).
