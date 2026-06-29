@@ -84,6 +84,13 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [stepIndex, setStepIndex] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  // Identificação (etapa 1)
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [channel, setChannel] = useState<string>("site");
+
   // Frete
   const [shippingCost, setShippingCost] = useState("");
   const [freeThreshold, setFreeThreshold] = useState("");
