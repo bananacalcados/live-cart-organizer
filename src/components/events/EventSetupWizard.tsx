@@ -86,6 +86,11 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [installMin, setInstallMin] = useState("");
   const [installMax, setInstallMax] = useState("");
 
+  // Crossell
+  const [crossellNone, setCrossellNone] = useState(false);
+  const [crossellOffers, setCrossellOffers] = useState<CrossellOfferDraft[]>([]);
+
+
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
   const whatsappNumberId = selectedWaId === "none" ? null : selectedWaId;
 
