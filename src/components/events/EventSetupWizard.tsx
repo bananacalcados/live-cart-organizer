@@ -159,6 +159,60 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   const currentStep = STEPS[stepIndex];
 
+  // Persist crossell offers: sync events flags + replace offer rows for this event.
+  const persistCrossell = async (): Promise<boolean> => {
+    const validOffers = crossellNone
+      ? []
+      : crossellOffers.filter(
+          (o) =>
+            o.shopify_product_id &&
+            toNum(o.original_price) != null &&
+            toNum(o.discount_price) != null,
+        );
+
+    const { error: evErr } = await supabase
+      .from("events")
+      .update({
+        crossell_configured: true,
+        crossell_enabled: !crossellNone && validOffers.length > 0,
+      } as any)
+      .eq("id", event.id);
+    if (evErr) {
+      toast.error("Erro ao salvar crossell: " + evErr.message);
+      return false;
+    }
+
+    // Replace offers (delete + insert) to keep it simple and consistent.
+    const { error: delErr } = await supabase
+      .from("event_crossell_offers")
+      .delete()
+      .eq("event_id", event.id);
+    if (delErr) {
+      toast.error("Erro ao atualizar ofertas: " + delErr.message);
+      return false;
+    }
+
+    if (validOffers.length > 0) {
+      const rows = validOffers.map((o, i) => ({
+        event_id: event.id,
+        shopify_product_id: o.shopify_product_id,
+        product_title: o.product_title,
+        image: o.image,
+        has_sizes: o.has_sizes,
+        original_price: toNum(o.original_price),
+        discount_price: toNum(o.discount_price),
+        position: i,
+        is_active: true,
+      }));
+      const { error: insErr } = await supabase.from("event_crossell_offers").insert(rows);
+      if (insErr) {
+        toast.error("Erro ao salvar ofertas: " + insErr.message);
+        return false;
+      }
+    }
+    return true;
+  };
+
   const persistStep = async (key: StepKey): Promise<boolean> => {
     const updates: Record<string, any> = {};
     if (key === "shipping") {
