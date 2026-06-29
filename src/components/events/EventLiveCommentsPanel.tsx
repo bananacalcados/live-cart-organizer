@@ -397,6 +397,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
               const handle = cleanHandle(c.username);
               const isBanned = bannedHandles.has(handle);
               const hasUnpaid = unpaidOrderByHandle.has(handle);
+              const hasWhatsapp = whatsappByHandle.has(handle);
               return (
                 <div key={c.id} className="flex gap-2.5 px-3 py-2.5 hover:bg-muted/40">
                   <Avatar className="h-9 w-9 shrink-0">
@@ -428,10 +429,32 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                       <span className="ml-auto text-[10px] text-muted-foreground">{timeLabel(c.created_at)}</span>
                     </div>
                     <p className="mt-0.5 break-words text-sm text-foreground/90">{c.comment_text}</p>
+                    {/* Ações: abrir chat do Instagram / WhatsApp */}
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <button
+                        onClick={() => openInstagramChat(c.username)}
+                        title="Abrir DM do Instagram"
+                        className="inline-flex items-center gap-1 rounded-md bg-pink-500/10 px-2 py-1 text-[11px] font-medium text-pink-600 hover:bg-pink-500/20 dark:text-pink-300"
+                      >
+                        <Instagram className="h-3 w-3" />
+                        Instagram
+                      </button>
+                      {hasWhatsapp && (
+                        <button
+                          onClick={() => openWhatsappChat(c.username)}
+                          title="Abrir conversa no WhatsApp"
+                          className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-[11px] font-medium text-green-600 hover:bg-green-500/20 dark:text-green-400"
+                        >
+                          <MessageCircle className="h-3 w-3" />
+                          WhatsApp
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
             })}
+
           </div>
         )}
       </ScrollArea>
