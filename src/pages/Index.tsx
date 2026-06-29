@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { DashboardChatPanel } from "@/components/DashboardChatPanel";
+import { EventLiveCommentsPanel } from "@/components/events/EventLiveCommentsPanel";
 import { Header } from "@/components/Header";
 import { KanbanBoardDb } from "@/components/KanbanBoardDb";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
