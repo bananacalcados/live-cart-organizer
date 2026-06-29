@@ -28,6 +28,9 @@ verify_jwt = false
 [functions.shopify-get-variant-sku]
 verify_jwt = false
 
+[functions.checkout-crossell]
+verify_jwt = false
+
 [functions.meta-whatsapp-webhook]
 verify_jwt = false
 
