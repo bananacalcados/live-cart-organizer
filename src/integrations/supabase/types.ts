@@ -4159,6 +4159,62 @@ export type Database = {
         }
         Relationships: []
       }
+      event_crossell_offers: {
+        Row: {
+          created_at: string
+          discount_price: number
+          event_id: string
+          has_sizes: boolean
+          id: string
+          image: string | null
+          is_active: boolean
+          original_price: number
+          position: number
+          product_title: string | null
+          shopify_product_id: string
+          updated_at: string
+          variant_handle: string | null
+        }
+        Insert: {
+          created_at?: string
+          discount_price?: number
+          event_id: string
+          has_sizes?: boolean
+          id?: string
+          image?: string | null
+          is_active?: boolean
+          original_price?: number
+          position?: number
+          product_title?: string | null
+          shopify_product_id: string
+          updated_at?: string
+          variant_handle?: string | null
+        }
+        Update: {
+          created_at?: string
+          discount_price?: number
+          event_id?: string
+          has_sizes?: boolean
+          id?: string
+          image?: string | null
+          is_active?: boolean
+          original_price?: number
+          position?: number
+          product_title?: string | null
+          shopify_product_id?: string
+          updated_at?: string
+          variant_handle?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_crossell_offers_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_landing_pages: {
         Row: {
           config_json: Json
@@ -4547,6 +4603,8 @@ export type Database = {
           channel_preference: string
           channel_preferences: string[]
           created_at: string
+          crossell_configured: boolean
+          crossell_enabled: boolean
           default_shipping_cost: number | null
           default_store_id: string | null
           description: string | null
@@ -4577,6 +4635,8 @@ export type Database = {
           channel_preference?: string
           channel_preferences?: string[]
           created_at?: string
+          crossell_configured?: boolean
+          crossell_enabled?: boolean
           default_shipping_cost?: number | null
           default_store_id?: string | null
           description?: string | null
@@ -4607,6 +4667,8 @@ export type Database = {
           channel_preference?: string
           channel_preferences?: string[]
           created_at?: string
+          crossell_configured?: boolean
+          crossell_enabled?: boolean
           default_shipping_cost?: number | null
           default_store_id?: string | null
           description?: string | null
@@ -9504,6 +9566,72 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      order_crossell_items: {
+        Row: {
+          added_at: string
+          color: string | null
+          discount_price: number
+          event_id: string | null
+          id: string
+          image: string | null
+          offer_id: string | null
+          order_id: string
+          original_price: number
+          qty: number
+          shopify_product_id: string | null
+          shopify_variant_id: string | null
+          size: string | null
+          title: string | null
+        }
+        Insert: {
+          added_at?: string
+          color?: string | null
+          discount_price?: number
+          event_id?: string | null
+          id?: string
+          image?: string | null
+          offer_id?: string | null
+          order_id: string
+          original_price?: number
+          qty?: number
+          shopify_product_id?: string | null
+          shopify_variant_id?: string | null
+          size?: string | null
+          title?: string | null
+        }
+        Update: {
+          added_at?: string
+          color?: string | null
+          discount_price?: number
+          event_id?: string | null
+          id?: string
+          image?: string | null
+          offer_id?: string | null
+          order_id?: string
+          original_price?: number
+          qty?: number
+          shopify_product_id?: string | null
+          shopify_variant_id?: string | null
+          size?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_crossell_items_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "event_crossell_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_crossell_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       order_shopify_history: {
         Row: {

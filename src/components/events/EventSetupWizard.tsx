@@ -23,6 +23,7 @@ import { MetaTemplateConfigurator } from "./MetaTemplateConfigurator";
 import { InitialMessageEditor } from "./InitialMessageEditor";
 import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { CrossellConfigStep, CrossellOfferDraft } from "./CrossellConfigStep";
 import {
   Truck,
   FileText,
@@ -34,6 +35,7 @@ import {
   Loader2,
   Gift,
   Smartphone,
+  ShoppingBag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -45,12 +47,13 @@ interface Props {
   onCompleted: () => void;
 }
 
-type StepKey = "shipping" | "template" | "installments" | "live";
+type StepKey = "shipping" | "template" | "installments" | "crossell" | "live";
 
 const STEPS: { key: StepKey; title: string; icon: typeof Truck }[] = [
   { key: "shipping", title: "Frete", icon: Truck },
   { key: "template", title: "Mensagem", icon: FileText },
   { key: "installments", title: "Parcelamento", icon: CreditCard },
+  { key: "crossell", title: "Crossell", icon: ShoppingBag },
   { key: "live", title: "Ativar Live", icon: Radio },
 ];
 
@@ -83,6 +86,11 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [installMin, setInstallMin] = useState("");
   const [installMax, setInstallMax] = useState("");
 
+  // Crossell
+  const [crossellNone, setCrossellNone] = useState(false);
+  const [crossellOffers, setCrossellOffers] = useState<CrossellOfferDraft[]>([]);
+
+
   const { numbers, fetchNumbers } = useWhatsAppNumberStore();
   const whatsappNumberId = selectedWaId === "none" ? null : selectedWaId;
 
@@ -93,12 +101,14 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   // Per-step completeness based on the persisted event (used to skip configured steps).
   const completeFromEvent = useMemo(() => {
-    if (!event) return { shipping: false, template: false, installments: false, live: false };
+    if (!event)
+      return { shipping: false, template: false, installments: false, crossell: false, live: false };
     const e = event as any;
     return {
       shipping: e.default_shipping_cost != null || e.free_shipping_threshold != null,
       template: Boolean(e.meta_template_name) || Boolean(e.initial_message_enabled),
       installments: e.installment_max != null,
+      crossell: Boolean(e.crossell_configured),
       live: Boolean(e.live_active_until) && new Date(e.live_active_until).getTime() > Date.now(),
     };
   }, [event]);
@@ -119,6 +129,27 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setInstallMin(e.installment_min_value != null ? String(e.installment_min_value) : "");
     setInstallMax(e.installment_max != null ? String(e.installment_max) : "");
 
+    // Crossell: load existing offers + "no crossell" preference
+    setCrossellNone(Boolean(e.crossell_configured) && !e.crossell_enabled);
+    supabase
+      .from("event_crossell_offers")
+      .select("*")
+      .eq("event_id", event.id)
+      .order("position", { ascending: true })
+      .then(({ data }) => {
+        setCrossellOffers(
+          (data || []).map((o: any) => ({
+            id: o.id,
+            shopify_product_id: o.shopify_product_id,
+            product_title: o.product_title || "",
+            image: o.image,
+            has_sizes: o.has_sizes,
+            original_price: o.original_price != null ? String(o.original_price) : "",
+            discount_price: o.discount_price != null ? String(o.discount_price) : "",
+          })),
+        );
+      });
+
     const firstIncomplete = STEPS.findIndex((s) => !completeFromEvent[s.key]);
     setStepIndex(firstIncomplete === -1 ? 0 : firstIncomplete);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,6 +158,60 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   if (!event) return null;
 
   const currentStep = STEPS[stepIndex];
+
+  // Persist crossell offers: sync events flags + replace offer rows for this event.
+  const persistCrossell = async (): Promise<boolean> => {
+    const validOffers = crossellNone
+      ? []
+      : crossellOffers.filter(
+          (o) =>
+            o.shopify_product_id &&
+            toNum(o.original_price) != null &&
+            toNum(o.discount_price) != null,
+        );
+
+    const { error: evErr } = await supabase
+      .from("events")
+      .update({
+        crossell_configured: true,
+        crossell_enabled: !crossellNone && validOffers.length > 0,
+      } as any)
+      .eq("id", event.id);
+    if (evErr) {
+      toast.error("Erro ao salvar crossell: " + evErr.message);
+      return false;
+    }
+
+    // Replace offers (delete + insert) to keep it simple and consistent.
+    const { error: delErr } = await supabase
+      .from("event_crossell_offers")
+      .delete()
+      .eq("event_id", event.id);
+    if (delErr) {
+      toast.error("Erro ao atualizar ofertas: " + delErr.message);
+      return false;
+    }
+
+    if (validOffers.length > 0) {
+      const rows = validOffers.map((o, i) => ({
+        event_id: event.id,
+        shopify_product_id: o.shopify_product_id,
+        product_title: o.product_title,
+        image: o.image,
+        has_sizes: o.has_sizes,
+        original_price: toNum(o.original_price),
+        discount_price: toNum(o.discount_price),
+        position: i,
+        is_active: true,
+      }));
+      const { error: insErr } = await supabase.from("event_crossell_offers").insert(rows);
+      if (insErr) {
+        toast.error("Erro ao salvar ofertas: " + insErr.message);
+        return false;
+      }
+    }
+    return true;
+  };
 
   const persistStep = async (key: StepKey): Promise<boolean> => {
     const updates: Record<string, any> = {};
@@ -144,6 +229,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     } else if (key === "installments") {
       updates.installment_min_value = toNum(installMin);
       updates.installment_max = installMax ? parseInt(installMax, 10) : null;
+    } else if (key === "crossell") {
+      return await persistCrossell();
     } else {
       return true; // live step is persisted by the toggle itself
     }
@@ -381,6 +468,19 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
               </p>
             </div>
           )}
+
+          {currentStep.key === "crossell" && (
+            <CrossellConfigStep
+              noCrossell={crossellNone}
+              offers={crossellOffers}
+              onChange={({ noCrossell, offers }) => {
+                setCrossellNone(noCrossell);
+                setCrossellOffers(offers);
+              }}
+            />
+          )}
+
+
 
           {currentStep.key === "live" && (
             <div className="space-y-4">
