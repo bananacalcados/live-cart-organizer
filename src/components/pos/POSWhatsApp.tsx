@@ -1464,6 +1464,8 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         />
       ) : (
       <>
+      {/* Abas de PIX/checkout aguardando pagamento (estilo aba do navegador) */}
+      <PixPendingTabsBar />
       {/* Content - Split view */}
       <div className="flex-1 flex overflow-hidden min-w-0">
         {/* Conversation List */}
