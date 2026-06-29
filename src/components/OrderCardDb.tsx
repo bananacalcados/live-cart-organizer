@@ -89,7 +89,47 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   // quando o pedido não tem payment_method_label preenchido.
   const [checkoutMethod, setCheckoutMethod] = useState<string | null>(null);
   const [checkoutInstallments, setCheckoutInstallments] = useState<number | null>(null);
+  // Progresso do link de checkout: -1 = ainda não calculado, 0 = aguardando abertura,
+  // 1 = Identificação, 2 = Entrega, 3 = Pagamento. Quando pago, deixamos de exibir.
+  const [linkStep, setLinkStep] = useState<number>(-1);
   const { moveOrder: storeMove, updateOrder } = useDbOrderStore();
+
+  // Calcula em que etapa do link de checkout o cliente parou (com base no que ele
+  // já preencheu na ficha) e se o link chegou a ser aberto.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: reg } = await supabase
+          .from("customer_registrations")
+          .select("full_name,cpf,whatsapp,cep,address,city,state")
+          .eq("order_id", order.id)
+          .maybeSingle();
+        if (cancelled) return;
+
+        const notPlaceholder = (v?: string | null, ph?: string) =>
+          !!(v && v.trim() && (!ph || v.trim().toUpperCase() !== ph.toUpperCase()));
+
+        const hasIdentification = !!reg && notPlaceholder(reg.full_name) && notPlaceholder(reg.cpf) && notPlaceholder(reg.whatsapp);
+        const hasAddress = !!reg
+          && notPlaceholder(reg.cep) && reg.cep?.replace(/\D/g, "") !== "00000000"
+          && notPlaceholder(reg.address, "Pendente")
+          && notPlaceholder(reg.city, "Pendente")
+          && notPlaceholder(reg.state);
+
+        let step = 0;
+        if (hasAddress) step = 3;
+        else if (hasIdentification) step = 2;
+        else if (order.checkout_started_at) step = 1;
+        else step = 0;
+
+        setLinkStep(step);
+      } catch {
+        if (!cancelled) setLinkStep(-1);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [order.id, order.checkout_started_at]);
 
   const persistShopifyVerification = useCallback((verified: boolean, orderName: string | null) => {
     if (!order.event_id) return;
