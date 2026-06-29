@@ -248,6 +248,36 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
     fetchMessages();
   }, [order.stage, order.customer?.whatsapp]);
 
+  // Fallback: descobre PIX vs Cartão (e parcelas) a partir da tentativa de
+  // checkout bem-sucedida, quando o pedido pago não tem o método identificado.
+  useEffect(() => {
+    const isPaid = order.is_paid || order.paid_externally;
+    if (!isPaid || order.payment_method_label) {
+      setCheckoutMethod(null);
+      setCheckoutInstallments(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('pos_checkout_attempts')
+        .select('payment_method, metadata')
+        .eq('sale_id', order.id)
+        .eq('status', 'success')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      setCheckoutMethod(data.payment_method || null);
+      const meta = (data.metadata as Record<string, unknown> | null) || {};
+      const inst = Number(meta.installments ?? meta.installment ?? 0);
+      setCheckoutInstallments(Number.isFinite(inst) && inst > 0 ? inst : null);
+    })();
+    return () => { cancelled = true; };
+  }, [order.id, order.is_paid, order.paid_externally, order.payment_method_label]);
+
+
+
   const handleConfirmOrder = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsConfirming(true);
