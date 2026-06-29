@@ -385,7 +385,7 @@ async function buildContacts(supabase: any, def: any, storeId: string, target: n
     const { data } = await salesQ;
     const seen = new Set<string>();
     for (const s of data || []) {
-      const ph = (s.customer_phone || "").replace(/\D/g, "");
+      const ph = phoneKey(s.customer_phone || "");
       if (!ph || seen.has(ph)) continue;
       seen.add(ph);
       out.push({ phone: s.customer_phone, name: s.customer_name || "Cliente", meta: { sale_at: s.created_at } });
