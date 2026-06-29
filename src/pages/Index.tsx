@@ -116,6 +116,8 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
+      {/* Modal de confirmação de pagamento — isolado por evento */}
+      <EventPaymentNotification eventId={currentEventId} />
       {/* Main content */}
       <div className="flex-1 min-w-0 flex flex-col">
         <Header onNewOrder={handleNewOrder} />
