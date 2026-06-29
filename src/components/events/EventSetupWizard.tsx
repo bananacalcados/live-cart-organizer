@@ -175,6 +175,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     } else if (key === "installments") {
       updates.installment_min_value = toNum(installMin);
       updates.installment_max = installMax ? parseInt(installMax, 10) : null;
+    } else if (key === "crossell") {
+      return await persistCrossell();
     } else {
       return true; // live step is persisted by the toggle itself
     }
