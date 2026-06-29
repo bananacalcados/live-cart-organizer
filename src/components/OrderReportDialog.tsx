@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { FileDown, Filter, AlertTriangle, Users, Package, X } from "lucide-react";
+import { FileDown, Filter, AlertTriangle, Users, Package, X, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -38,9 +39,11 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
   const [filterPaidOnly, setFilterPaidOnly] = useState(true);
   const [filterWithGift, setFilterWithGift] = useState(false);
   const [filterFreeShipping, setFilterFreeShipping] = useState(false);
+  const [customerQuery, setCustomerQuery] = useState("");
 
   // Filter orders
   const filteredOrders = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase().replace(/^@/, "");
     return orders.filter(order => {
       if (filterPaidOnly && order.stage !== 'paid' && order.stage !== 'shipped') {
         return false;
@@ -51,9 +54,17 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
       if (filterFreeShipping && !order.free_shipping) {
         return false;
       }
+      if (q) {
+        const handle = (order.customer?.instagram_handle || "").toLowerCase();
+        const whats = (order.customer?.whatsapp || "").replace(/\D/g, "");
+        if (!handle.includes(q) && !(q.replace(/\D/g, "") && whats.includes(q.replace(/\D/g, "")))) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [orders, filterPaidOnly, filterWithGift, filterFreeShipping]);
+  }, [orders, filterPaidOnly, filterWithGift, filterFreeShipping, customerQuery]);
+
 
   // Find customers with multiple orders
   const customerOrderCounts = useMemo(() => {
@@ -192,6 +203,25 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-4 flex-1 overflow-hidden flex flex-col">
+          {/* Filtro por @ do cliente */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Filtrar por @ ou WhatsApp do cliente..."
+              value={customerQuery}
+              onChange={(e) => setCustomerQuery(e.target.value)}
+              className="pl-9"
+            />
+            {customerQuery && (
+              <button
+                onClick={() => setCustomerQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
           {/* Filters */}
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
