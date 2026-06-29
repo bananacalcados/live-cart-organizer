@@ -613,7 +613,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); setShowFichaDialog(true); }}
-              className="mt-0.5 inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/20"
+              className="mt-0.5 inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm hover:bg-red-700"
               title="Ver/editar os dados cadastrais do cliente"
             >
               <UserCheck className="h-3 w-3" />
