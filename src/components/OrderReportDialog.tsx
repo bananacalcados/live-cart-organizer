@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { FileDown, Filter, AlertTriangle, Users, Package, X } from "lucide-react";
+import { FileDown, Filter, AlertTriangle, Users, Package, X, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
