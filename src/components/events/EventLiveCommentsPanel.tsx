@@ -604,6 +604,9 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
               const hasUnpaid = unpaidOrderByHandle.has(handle);
               const hasWhatsapp = whatsappByHandle.has(handle);
               const stats = orderStatsByHandle.get(handle);
+              const leadTag = leadTagByHandle.get(handle);
+              const score = scoreByHandle.get(handle);
+              const scoreMeta = score ? SCORE_META[score.category] : undefined;
               return (
                 <div key={c.id} className="flex gap-2.5 px-3 py-2.5 hover:bg-muted/40">
                   <Avatar className="h-9 w-9 shrink-0">
