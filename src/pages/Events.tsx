@@ -649,6 +649,9 @@ const Events = () => {
             <TabsTrigger value="shipping" className="gap-1">
               <Truck className="h-4 w-4" /> Frete
             </TabsTrigger>
+            <TabsTrigger value="participants" className="gap-1">
+              <Trophy className="h-4 w-4" /> Participante Score
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="events">
