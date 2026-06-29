@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle, CheckCircle2, AlertTriangle, Sparkles, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
@@ -32,6 +32,33 @@ interface HandleOrderStats {
   paidDates: string[];
   openPast: number;
 }
+
+interface LeadTag {
+  thisEvent: boolean;
+  otherEvent: boolean;
+}
+
+interface ParticipantScore {
+  score: number;
+  category: string;
+  liveCount: number;
+}
+
+// Categoria de score -> rótulo/estilo do badge de engajamento
+const SCORE_META: Record<string, { label: string; className: string }> = {
+  vip: { label: "VIP", className: "bg-purple-600 text-white" },
+  engajado: { label: "Engajado", className: "bg-blue-600 text-white" },
+  ativo: { label: "Ativo", className: "bg-teal-600 text-white" },
+  frio: { label: "Frio", className: "bg-neutral-400 text-white" },
+};
+
+// Chave de telefone: DDD + 8 últimos dígitos (ignora DDI/9), igual à RPC bc_phone_key
+const phoneKey = (p: string): string => {
+  let d = (p || "").replace(/\D/g, "");
+  if (d.length > 11) d = d.slice(-11);
+  if (d.length >= 10) return d.slice(0, 2) + d.slice(-8);
+  return d;
+};
 
 
 const cleanHandle = (h: string) => (h || "").replace(/^@/, "").trim().toLowerCase();
@@ -95,6 +122,12 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
 
   // Mapa handle(limpo) -> estatísticas de pedidos (concluídos/abertos no histórico)
   const [orderStatsByHandle, setOrderStatsByHandle] = useState<Map<string, HandleOrderStats>>(new Map());
+
+  // Mapa handle(limpo) -> situação de Lead (captado neste evento / em outra campanha)
+  const [leadTagByHandle, setLeadTagByHandle] = useState<Map<string, LeadTag>>(new Map());
+
+  // Mapa handle(limpo) -> score de participação na live (engajamento)
+  const [scoreByHandle, setScoreByHandle] = useState<Map<string, ParticipantScore>>(new Map());
 
   // Define o início padrão da faixa = data de criação/início do evento
   useEffect(() => {
@@ -337,6 +370,75 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     };
   }, [comments, eventId]);
 
+  // Tags de LEAD: descobre quais @ foram captados pela LP/Typebot deste evento
+  // ou de outras campanhas. Faz o match pelo WhatsApp (DDD + 9 dígitos) já que
+  // os comentários não trazem o telefone diretamente.
+  useEffect(() => {
+    if (!eventId || whatsappByHandle.size === 0) {
+      setLeadTagByHandle(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      // monta phone -> [handles] e a lista de telefones únicos
+      const phones = Array.from(new Set(Array.from(whatsappByHandle.values())));
+      const keyToHandles = new Map<string, string[]>();
+      whatsappByHandle.forEach((wa, h) => {
+        const k = phoneKey(wa);
+        if (!k) return;
+        const arr = keyToHandles.get(k) || [];
+        arr.push(h);
+        keyToHandles.set(k, arr);
+      });
+      const { data, error } = await supabase.rpc("match_event_leads", {
+        p_event_id: eventId,
+        p_phones: phones,
+      });
+      if (cancelled || error || !data) return;
+      const map = new Map<string, LeadTag>();
+      (data as any[]).forEach((row) => {
+        const handles = keyToHandles.get(row.phone_key) || [];
+        handles.forEach((h) =>
+          map.set(h, { thisEvent: !!row.this_event, otherEvent: !!row.other_event }),
+        );
+      });
+      setLeadTagByHandle(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [eventId, whatsappByHandle]);
+
+  // Score de participação (engajamento) dos @ presentes no painel
+  useEffect(() => {
+    const handles = Array.from(new Set(comments.map((c) => cleanHandle(c.username)).filter(Boolean)));
+    if (handles.length === 0) {
+      setScoreByHandle(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.rpc("participant_score_ranking", {
+        p_handles: handles,
+      });
+      if (cancelled || error || !data) return;
+      const map = new Map<string, ParticipantScore>();
+      (data as any[]).forEach((row) => {
+        map.set(cleanHandle(row.handle), {
+          score: row.score ?? 0,
+          category: row.category || "frio",
+          liveCount: row.live_count ?? 0,
+        });
+      });
+      setScoreByHandle(map);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [comments]);
+
+
+
 
 
 
@@ -502,6 +604,9 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
               const hasUnpaid = unpaidOrderByHandle.has(handle);
               const hasWhatsapp = whatsappByHandle.has(handle);
               const stats = orderStatsByHandle.get(handle);
+              const leadTag = leadTagByHandle.get(handle);
+              const score = scoreByHandle.get(handle);
+              const scoreMeta = score ? SCORE_META[score.category] : undefined;
               return (
                 <div key={c.id} className="flex gap-2.5 px-3 py-2.5 hover:bg-muted/40">
                   <Avatar className="h-9 w-9 shrink-0">
@@ -519,6 +624,36 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                       >
                         <ShoppingBag className="h-3 w-3" />@{handle}
                       </button>
+                      {scoreMeta && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase",
+                            scoreMeta.className,
+                          )}
+                          title={`Score de participação: ${score!.score} • ${score!.liveCount} live(s)`}
+                        >
+                          <Sparkles className="h-2.5 w-2.5" />
+                          {scoreMeta.label} {score!.score}
+                        </span>
+                      )}
+                      {leadTag?.thisEvent && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-pink-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
+                          title="Captado pela LP/Typebot deste evento"
+                        >
+                          <Tag className="h-2.5 w-2.5" />
+                          Lead
+                        </span>
+                      )}
+                      {leadTag && !leadTag.thisEvent && leadTag.otherEvent && (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
+                          title="Já captado em outra campanha/evento de marketing"
+                        >
+                          <Tag className="h-2.5 w-2.5" />
+                          Lead de outra campanha
+                        </span>
+                      )}
                       {isBanned && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase text-destructive-foreground">
                           <Ban className="h-2.5 w-2.5" />

@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -36,6 +37,9 @@ import {
   Gift,
   Smartphone,
   ShoppingBag,
+  Tag,
+  Store,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -47,15 +51,26 @@ interface Props {
   onCompleted: () => void;
 }
 
-type StepKey = "shipping" | "template" | "installments" | "crossell" | "live";
+type StepKey = "general" | "shipping" | "template" | "installments" | "crossell" | "live";
 
 const STEPS: { key: StepKey; title: string; icon: typeof Truck }[] = [
+  { key: "general", title: "Identificação", icon: Tag },
   { key: "shipping", title: "Frete", icon: Truck },
   { key: "template", title: "Mensagem", icon: FileText },
   { key: "installments", title: "Parcelamento", icon: CreditCard },
   { key: "crossell", title: "Crossell", icon: ShoppingBag },
   { key: "live", title: "Ativar Live", icon: Radio },
 ];
+
+// Nome temporário aplicado a um evento recém-criado pelo botão "Nova Live".
+export const EVENT_DRAFT_NAME = "Nova Live (rascunho)";
+
+// Canal de venda -> loja física padrão (mesma regra usada em Events.tsx).
+const STORE_BY_CHANNEL: Record<string, string | null> = {
+  site: null,
+  pos_perola: "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2",
+  pos_centro: "4ade7b44-5043-4ab1-a124-7a6ab5468e29",
+};
 
 const toNum = (v: string): number | null => {
   const t = (v ?? "").toString().replace(",", ".").trim();
@@ -68,6 +83,13 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   // Step state
   const [stepIndex, setStepIndex] = useState(0);
   const [saving, setSaving] = useState(false);
+
+  // Identificação (etapa 1)
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [channel, setChannel] = useState<string>("site");
 
   // Frete
   const [shippingCost, setShippingCost] = useState("");
@@ -102,9 +124,10 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   // Per-step completeness based on the persisted event (used to skip configured steps).
   const completeFromEvent = useMemo(() => {
     if (!event)
-      return { shipping: false, template: false, installments: false, crossell: false, live: false };
+      return { general: false, shipping: false, template: false, installments: false, crossell: false, live: false };
     const e = event as any;
     return {
+      general: Boolean(e.name) && e.name !== EVENT_DRAFT_NAME && Boolean(e.channel),
       shipping: e.default_shipping_cost != null || e.free_shipping_threshold != null,
       template: Boolean(e.meta_template_name) || Boolean(e.initial_message_enabled),
       installments: e.installment_max != null,
@@ -117,6 +140,11 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   useEffect(() => {
     if (!open || !event) return;
     const e = event as any;
+    setName(e.name && e.name !== EVENT_DRAFT_NAME ? e.name : "");
+    setDescription(e.description || "");
+    setStartDate(e.start_date || "");
+    setEndDate(e.end_date || "");
+    setChannel(e.channel || "site");
     setShippingCost(e.default_shipping_cost != null ? String(e.default_shipping_cost) : "");
     setFreeThreshold(e.free_shipping_threshold != null ? String(e.free_shipping_threshold) : "");
     setSelectedWaId(e.whatsapp_number_id || "none");
@@ -215,7 +243,18 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   const persistStep = async (key: StepKey): Promise<boolean> => {
     const updates: Record<string, any> = {};
-    if (key === "shipping") {
+    if (key === "general") {
+      if (!name.trim()) {
+        toast.error("Defina o nome do evento.");
+        return false;
+      }
+      updates.name = name.trim();
+      updates.description = description || null;
+      updates.start_date = startDate || null;
+      updates.end_date = endDate || null;
+      updates.channel = channel;
+      updates.default_store_id = STORE_BY_CHANNEL[channel] ?? null;
+    } else if (key === "shipping") {
       updates.default_shipping_cost = toNum(shippingCost);
       updates.free_shipping_threshold = toNum(freeThreshold);
     } else if (key === "template") {
@@ -254,7 +293,29 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
 
   const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
 
+  // "Pular e abrir": fecha o modal e entra no evento, sem exigir as etapas seguintes.
+  // Garante apenas que a identificação (nome + canal) esteja preenchida.
+  const skipAndOpen = async () => {
+    if (!name.trim()) {
+      setStepIndex(0);
+      toast.error("Defina o nome do evento antes de abrir.");
+      return;
+    }
+    setSaving(true);
+    const ok = await persistStep(currentStep.key);
+    setSaving(false);
+    if (!ok) return;
+    // Defer navigation a tick so the Radix dialog finishes closing cleanly.
+    onOpenChange(false);
+    setTimeout(() => onCompleted(), 0);
+  };
+
   const finish = async () => {
+    if (!name.trim()) {
+      setStepIndex(0);
+      toast.error("Defina o nome do evento antes de concluir.");
+      return;
+    }
     setSaving(true);
     const ok = await persistStep(currentStep.key);
     if (ok) {
@@ -268,10 +329,12 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
         return;
       }
       toast.success("Evento configurado!");
-      onCompleted();
+      onOpenChange(false);
+      setTimeout(() => onCompleted(), 0);
     }
     setSaving(false);
   };
+
 
   const isLastStep = stepIndex === STEPS.length - 1;
 
@@ -330,6 +393,85 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
         </div>
 
         <div className="py-3 min-h-[260px]">
+          {currentStep.key === "general" && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Comece pela identificação do evento: nome, quando vai acontecer e em qual canal a
+                venda será roteada.
+              </p>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Tag className="h-4 w-4" /> Nome do evento *
+                </Label>
+                <Input
+                  placeholder="Ex: Live de Verão 2024"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Descrição</Label>
+                <Textarea
+                  placeholder="Descrição opcional..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                />
+              </div>
+              <div className="space-y-2 rounded-lg border bg-muted/30 p-3">
+                <Label className="flex items-center gap-2 m-0">
+                  <Calendar className="h-4 w-4" /> Data do evento
+                </Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Início</Label>
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => {
+                        setStartDate(e.target.value);
+                        if (endDate && e.target.value && endDate < e.target.value)
+                          setEndDate(e.target.value);
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Fim (opcional)</Label>
+                    <Input
+                      type="date"
+                      min={startDate || undefined}
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Pode ser uma data futura. Para lives de vários dias, preencha a data de fim.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Store className="h-4 w-4" /> Canal de venda *
+                </Label>
+                <Select value={channel} onValueChange={setChannel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="site">🌐 Site (Shopify) — venda online</SelectItem>
+                    <SelectItem value="pos_perola">🏬 Loja Pérola — venda física</SelectItem>
+                    <SelectItem value="pos_centro">🏬 Loja Centro — venda física</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {channel === "site"
+                    ? "Pedidos vão para a Shopify (venda online)."
+                    : "Pedidos pagos são roteados para a aba Pedidos da loja escolhida e contam como venda dela."}
+                </p>
+              </div>
+            </div>
+          )}
+
           {currentStep.key === "shipping" && (
             <div className="space-y-5">
               <p className="text-sm text-muted-foreground">
@@ -510,7 +652,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
             <ChevronLeft className="h-4 w-4" /> Voltar
           </Button>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={onCompleted} disabled={saving}>
+            <Button variant="ghost" onClick={skipAndOpen} disabled={saving}>
               Pular e abrir
             </Button>
             {isLastStep ? (

@@ -19,13 +19,15 @@ import { LiveCommentsHistory } from "@/components/events/LiveCommentsHistory";
 import { EventPaymentCardsBar } from "@/components/events/EventPaymentCardsBar";
 import { LiveActiveToggleButton } from "@/components/events/LiveActiveToggleButton";
 import { EventPaymentNotification } from "@/components/events/EventPaymentNotification";
+import { EventSetupWizard } from "@/components/events/EventSetupWizard";
+import { EventInnerDashboard } from "@/components/events/EventInnerDashboard";
 import { useEventStore } from "@/stores/eventStore";
 import { useCustomerStore } from "@/stores/customerStore";
 import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
-import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram } from "lucide-react";
+import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,6 +40,7 @@ const Index = () => {
   const [editingOrder, setEditingOrder] = useState<DbOrder | null>(null);
   const [selectedStage, setSelectedStage] = useState<OrderStage | "all" | "unpaid">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [wizardOpen, setWizardOpen] = useState(false);
   
   const { currentEventId, getCurrentEvent, fetchEvents, updateEvent } = useEventStore();
   const { fetchCustomers } = useCustomerStore();
@@ -157,6 +160,15 @@ const Index = () => {
                 <LiveActiveToggleButton eventId={currentEventId} />
                 <OrderReportDialog orders={orders} />
                 <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                  onClick={() => setWizardOpen(true)}
+                >
+                  <Settings className="h-4 w-4" />
+                  Configurar Live
+                </Button>
+                <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => navigate("/events")}
@@ -167,6 +179,8 @@ const Index = () => {
             </div>
           </div>
         )}
+
+        {currentEventId && <EventInnerDashboard eventId={currentEventId} />}
 
         {currentEventId && currentEvent && (
           <ActiveProductBar eventId={currentEventId} eventName={currentEvent.name} />
@@ -272,6 +286,16 @@ const Index = () => {
       <div className="hidden xl:flex w-[420px] flex-shrink-0 h-screen sticky top-0">
         <EventLiveCommentsPanel eventId={currentEventId} />
       </div>
+
+      <EventSetupWizard
+        event={currentEvent as any}
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onCompleted={() => {
+          setWizardOpen(false);
+          fetchEvents();
+        }}
+      />
     </div>
   );
 };

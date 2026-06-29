@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, Monitor, Send, Store, Target } from "lucide-react";
+import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, Monitor, Send, Store, Target, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,7 +40,8 @@ import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { MetaTemplateConfigurator } from "@/components/events/MetaTemplateConfigurator";
 import { InitialMessageEditor } from "@/components/events/InitialMessageEditor";
-import { EventSetupWizard } from "@/components/events/EventSetupWizard";
+import { EventSetupWizard, EVENT_DRAFT_NAME } from "@/components/events/EventSetupWizard";
+import { ParticipantScorePanel } from "@/components/events/ParticipantScorePanel";
 import { DbEvent } from "@/types/database";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -66,6 +67,10 @@ const Events = () => {
   const [editingEvent, setEditingEvent] = useState<string | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardEvent, setWizardEvent] = useState<DbEvent | null>(null);
+  // Tracks an event created as a pristine draft via "Nova Live", so we can
+  // discard it if the user closes the wizard without naming it.
+  const [draftEventId, setDraftEventId] = useState<string | null>(null);
+  const [creatingDraft, setCreatingDraft] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -316,6 +321,34 @@ const Events = () => {
     navigate("/dashboard");
   };
 
+  // "Nova Live": cria um evento rascunho e abre o novo Wizard na etapa de identificação.
+  const handleNewLive = async () => {
+    if (creatingDraft) return;
+    setCreatingDraft(true);
+    try {
+      const id = await createEvent(EVENT_DRAFT_NAME);
+      if (!id) return;
+      const ev = useEventStore.getState().events.find((e) => e.id === id) || null;
+      setDraftEventId(id);
+      setWizardEvent(ev);
+      setWizardOpen(true);
+    } finally {
+      setCreatingDraft(false);
+    }
+  };
+
+  // Descarta o rascunho se o usuário fechar o wizard sem nomear o evento.
+  const discardDraftIfPristine = async () => {
+    if (!draftEventId) return;
+    const ev = useEventStore.getState().events.find((e) => e.id === draftEventId);
+    if (ev && (ev.name === EVENT_DRAFT_NAME || !ev.name?.trim())) {
+      await deleteEvent(draftEventId);
+    }
+    setDraftEventId(null);
+  };
+
+
+
   const handleOpenEvent = (eventId: string) => {
     const ev = events.find((e) => e.id === eventId);
     if (ev) {
@@ -365,16 +398,18 @@ const Events = () => {
               <MessageCircle className="h-4 w-4" />
               Chat
             </Button>
+            <Button className="btn-accent" onClick={handleNewLive} disabled={creatingDraft}>
+              {creatingDraft ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4 mr-2" />
+              )}
+              Nova Live
+            </Button>
             <Dialog open={dialogOpen} onOpenChange={(open) => {
               setDialogOpen(open);
               if (!open) resetForm();
             }}>
-              <DialogTrigger asChild>
-                <Button className="btn-accent">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nova Live
-                </Button>
-              </DialogTrigger>
               <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
@@ -615,6 +650,9 @@ const Events = () => {
             <TabsTrigger value="shipping" className="gap-1">
               <Truck className="h-4 w-4" /> Frete
             </TabsTrigger>
+            <TabsTrigger value="participants" className="gap-1">
+              <Trophy className="h-4 w-4" /> Participante Score
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="events">
@@ -632,7 +670,7 @@ const Events = () => {
                   <p className="text-muted-foreground text-center mb-4">
                     Crie seu primeiro evento para começar a organizar os pedidos das lives.
                   </p>
-                  <Button className="btn-accent" onClick={() => setDialogOpen(true)}>
+                  <Button className="btn-accent" onClick={handleNewLive} disabled={creatingDraft}>
                     <Plus className="h-4 w-4 mr-2" />
                     Criar Primeiro Evento
                   </Button>
@@ -829,6 +867,10 @@ const Events = () => {
               )}
             </div>
           </TabsContent>
+
+          <TabsContent value="participants">
+            <ParticipantScorePanel />
+          </TabsContent>
         </Tabs>
       </main>
 
@@ -837,12 +879,18 @@ const Events = () => {
         open={wizardOpen}
         onOpenChange={(open) => {
           setWizardOpen(open);
-          if (!open) setWizardEvent(null);
+          if (!open) {
+            setWizardEvent(null);
+            // If closed without finishing, drop a pristine draft.
+            discardDraftIfPristine();
+          }
         }}
         onCompleted={() => {
           const id = wizardEvent?.id;
+          setDraftEventId(null);
           setWizardOpen(false);
           setWizardEvent(null);
+          fetchEvents();
           if (id) enterEvent(id);
         }}
       />
