@@ -235,16 +235,6 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
             </div>
             <div className="flex items-center gap-2">
               <Checkbox 
-                id="paidOnly" 
-                checked={filterPaidOnly}
-                onCheckedChange={(v) => setFilterPaidOnly(!!v)}
-              />
-              <Label htmlFor="paidOnly" className="text-sm cursor-pointer">
-                Apenas pagos
-              </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox 
                 id="duplicates" 
                 checked={filterDuplicates}
                 onCheckedChange={(v) => setFilterDuplicates(!!v)}
