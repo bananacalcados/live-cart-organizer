@@ -31,7 +31,9 @@ interface HandleOrderStats {
   paidPast: number;
   paidDates: string[];
   openPast: number;
+  openDates: string[];
 }
+
 
 interface LeadTag {
   thisEvent: boolean;
