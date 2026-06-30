@@ -440,17 +440,25 @@ export async function processCommentAutomation(
     }
 
     // ── Action 2: Send Private DM ──
-    if (rule.action_send_dm && rule.dm_message_text) {
-      const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, "dm");
+    // No fallback de captação (telefone não reconhecido) usamos o texto de
+    // fallback pedindo o número correto, SEM botões. Caso contrário, segue o DM
+    // normal da regra (ex.: confirmação + botão do Grupo VIP).
+    const dmBaseText = isCaptureFallback ? rule.capture_fallback_dm_text : rule.dm_message_text;
+    const shouldSendDm = isCaptureFallback ? !!rule.capture_fallback_dm_text : (rule.action_send_dm && !!rule.dm_message_text);
+    if (shouldSendDm && dmBaseText) {
+      const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, isCaptureFallback ? "dm_fallback" : "dm");
       if (!actionId) continue;
 
       try {
-        const dmText = rule.dm_message_text
-          .replace("{username}", usernameClean)
-          .replace("{comment}", comment.text);
+        const dmText = dmBaseText
+          .replace(/\{username\}/g, usernameClean)
+          .replace(/\{comment\}/g, comment.text)
+          .replace(/\{last4\}/g, phoneLast4)
+          .replace(/\{phone\}/g, extractedPhone || "");
 
         // Botões opcionais (button template). Máx 3 botões pela Meta.
-        const dmButtons = buildButtonPayload(rule.id, rule.dm_buttons || []);
+        // No fallback não enviamos botões (só pedimos o número correto).
+        const dmButtons = isCaptureFallback ? [] : buildButtonPayload(rule.id, rule.dm_buttons || []);
         const messagePayload = dmButtons.length > 0
           ? {
               attachment: {
