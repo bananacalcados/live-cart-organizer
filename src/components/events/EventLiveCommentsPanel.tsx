@@ -355,7 +355,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       const ensure = (h: string): HandleOrderStats => {
         let s = stats.get(h);
         if (!s) {
-          s = { paidThisEvent: 0, paidPast: 0, paidDates: [], openPast: 0 };
+          s = { paidThisEvent: 0, paidPast: 0, paidDates: [], openPast: 0, openDates: [] };
           stats.set(h, s);
         }
         return s;
