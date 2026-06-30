@@ -265,6 +265,13 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.meta_template_header_variable = metaTemplateHeaderVar;
       updates.initial_message_enabled = initialMessageEnabled;
       updates.initial_message_blocks = initialMessageBlocks;
+      // Keep channel preference consistent: a Meta instance + template means the
+      // event dispatches via Meta WhatsApp template, not a plain session message.
+      if (whatsappNumberId && metaTemplateName) {
+        updates.channel_preference = "meta_whatsapp";
+        updates.channel_preferences = ["meta_whatsapp"];
+      }
+
     } else if (key === "installments") {
       updates.installment_min_value = toNum(installMin);
       updates.installment_max = installMax ? parseInt(installMax, 10) : null;
