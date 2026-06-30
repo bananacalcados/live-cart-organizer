@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
     while (true) {
       const { data } = await supabase
         .from("pos_sales")
-        .select("id, customer_id, total, created_at, store_id")
+        .select("id, customer_id, total, created_at, store_id, sale_type, external_source")
         .eq("status", "completed")
         .not("customer_id", "is", null)
         .range(off, off + 999);
@@ -147,7 +147,7 @@ Deno.serve(async (req) => {
           id: `pos:${s.id}`,
           total: Number(s.total || 0),
           date: new Date(s.created_at),
-          channel: classifyChannel(storeNames[s.store_id]),
+          channel: classifyChannel({ saleType: s.sale_type, externalSource: s.external_source, storeId: s.store_id }),
         });
       }
       if (data.length < 1000) break;
