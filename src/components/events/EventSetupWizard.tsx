@@ -349,8 +349,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       return;
     }
     setSaving(true);
-    const ok = await persistStep(currentStep.key);
+    const ok = await persistAll();
     setSaving(false);
+
     if (!ok) return;
     // NÃO chamar onOpenChange(false) aqui: isso dispararia o descarte do rascunho
     // (que lê o estado local desatualizado) e apagaria o evento recém-configurado.
