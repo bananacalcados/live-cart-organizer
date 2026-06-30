@@ -241,13 +241,11 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     return true;
   };
 
-  const persistStep = async (key: StepKey): Promise<boolean> => {
+  // Build the `events` column updates for a given step from the current form state.
+  // (crossell/live are persisted separately and are not column-only updates.)
+  const stepUpdates = (key: StepKey): Record<string, any> => {
     const updates: Record<string, any> = {};
     if (key === "general") {
-      if (!name.trim()) {
-        toast.error("Defina o nome do evento.");
-        return false;
-      }
       updates.name = name.trim();
       updates.description = description || null;
       updates.start_date = startDate || null;
@@ -271,21 +269,61 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
         updates.channel_preference = "meta_whatsapp";
         updates.channel_preferences = ["meta_whatsapp"];
       }
-
     } else if (key === "installments") {
       updates.installment_min_value = toNum(installMin);
       updates.installment_max = installMax ? parseInt(installMax, 10) : null;
-    } else if (key === "crossell") {
-      return await persistCrossell();
-    } else {
-      return true; // live step is persisted by the toggle itself
     }
-    const { error } = await supabase.from("events").update(updates).eq("id", event.id);
+    return updates;
+  };
+
+  const persistStep = async (key: StepKey): Promise<boolean> => {
+    if (key === "general" && !name.trim()) {
+      toast.error("Defina o nome do evento.");
+      return false;
+    }
+    if (key === "crossell") return await persistCrossell();
+    if (key === "live") return true; // persisted by the toggle itself
+    const { error } = await supabase.from("events").update(stepUpdates(key)).eq("id", event.id);
     if (error) {
       toast.error("Erro ao salvar: " + error.message);
       return false;
     }
     return true;
+  };
+
+  // Persist EVERY step's fields at once. Used by "Concluir" / "Pular e abrir" so a
+  // change made on any step is never lost just because the user wasn't standing on
+  // that step when they saved (the original bug: only the current step was saved).
+  const persistAll = async (): Promise<boolean> => {
+    if (!name.trim()) {
+      setStepIndex(0);
+      toast.error("Defina o nome do evento.");
+      return false;
+    }
+    const updates = {
+      ...stepUpdates("general"),
+      ...stepUpdates("shipping"),
+      ...stepUpdates("template"),
+      ...stepUpdates("installments"),
+    };
+    const { error } = await supabase.from("events").update(updates).eq("id", event.id);
+    if (error) {
+      toast.error("Erro ao salvar: " + error.message);
+      return false;
+    }
+    return await persistCrossell();
+  };
+
+  // Save the current step's fields, then move to another step. Prevents losing edits
+  // when jumping around via the stepper circles or "Voltar".
+  const goToStep = async (i: number) => {
+    if (i === stepIndex || saving) return;
+    if (!(currentStep.key === "general" && !name.trim())) {
+      setSaving(true);
+      await persistStep(currentStep.key);
+      setSaving(false);
+    }
+    setStepIndex(i);
   };
 
   const goNext = async () => {
@@ -298,7 +336,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     }
   };
 
-  const goBack = () => setStepIndex((i) => Math.max(0, i - 1));
+  const goBack = () => goToStep(Math.max(0, stepIndex - 1));
+
+
 
   // "Pular e abrir": fecha o modal e entra no evento, sem exigir as etapas seguintes.
   // Garante apenas que a identificação (nome + canal) esteja preenchida.
