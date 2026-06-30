@@ -87,6 +87,7 @@ serve(async (req) => {
           name: cleanName,
           phone: e164,
           source,
+          instagram: instagram || null,
           landing_page_id: landing_page_id || null,
           typebot_id: typebot_id || null,
           referred_by_lead_id,
