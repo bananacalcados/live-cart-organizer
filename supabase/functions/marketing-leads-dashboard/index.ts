@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
           id: `zoppy:${s.id}`,
           total: Number(s.total || 0),
           date: new Date(s.completed_at),
-          channel: classifyChannel(undefined, true),
+          channel: classifyChannel({ isZoppy: true }),
         });
       }
       if (data.length < 1000) break;
