@@ -113,6 +113,7 @@ export function LeadsAnalyticsDashboard() {
 
   const s = data?.summary;
   const maxMonthRev = Math.max(1, ...(data?.months || []).map(m => m.revenue));
+  const maxChannelLeads = Math.max(1, ...(data?.channels || []).map(c => c.leads));
 
   return (
     <Card className="border-primary/20">
