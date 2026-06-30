@@ -284,7 +284,7 @@ Deno.serve(async (req) => {
         cap.revenue += s.total;
 
         const mk = `${s.date.getFullYear()}-${String(s.date.getMonth() + 1).padStart(2, "0")}`;
-        const m = (monthMap[mk] ||= { month: mk, purchases: 0, purchases_revenue: 0, revenue: 0 });
+        const m = (monthMap[mk] ||= { month: mk, purchases: 0, revenue: 0 });
         m.purchases++;
         m.revenue += s.total;
       }
