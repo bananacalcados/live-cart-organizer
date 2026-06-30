@@ -84,7 +84,7 @@ export function LeadsAnalyticsDashboard() {
   const [preset, setPreset] = useState<PeriodPreset>("month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const [firstPurchaseOnly, setFirstPurchaseOnly] = useState(false);
+  const [onlyNewLeads, setOnlyNewLeads] = useState(true);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
 
@@ -93,7 +93,7 @@ export function LeadsAnalyticsDashboard() {
     try {
       const { from, to } = computeRange(preset, customFrom, customTo);
       const { data: res, error } = await supabase.functions.invoke("marketing-leads-dashboard", {
-        body: { mode, date_from: from, date_to: to, first_purchase_only: firstPurchaseOnly },
+        body: { mode, date_from: from, date_to: to, include_existing_customers: !onlyNewLeads },
       });
       if (error) throw error;
       if ((res as any)?.error) throw new Error((res as any).error);
@@ -103,7 +103,7 @@ export function LeadsAnalyticsDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [mode, preset, customFrom, customTo, firstPurchaseOnly]);
+  }, [mode, preset, customFrom, customTo, onlyNewLeads]);
 
   // Reload on mount and whenever the mode toggle changes (period/filters use "Aplicar")
   useEffect(() => {
@@ -177,8 +177,8 @@ export function LeadsAnalyticsDashboard() {
             </>
           )}
           <div className="flex items-center gap-2 h-9 px-3 rounded-md border">
-            <Switch id="first-purchase" checked={firstPurchaseOnly} onCheckedChange={setFirstPurchaseOnly} />
-            <Label htmlFor="first-purchase" className="text-xs cursor-pointer">Apenas 1ª compra</Label>
+            <Switch id="only-new-leads" checked={onlyNewLeads} onCheckedChange={setOnlyNewLeads} />
+            <Label htmlFor="only-new-leads" className="text-xs cursor-pointer">Somente leads novos</Label>
           </div>
           <Button size="sm" onClick={load} disabled={loading} className="gap-1">
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
