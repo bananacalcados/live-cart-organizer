@@ -330,8 +330,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
         return;
       }
       toast.success("Evento configurado!");
-      onOpenChange(false);
-      setTimeout(() => onCompleted(), 0);
+      // NÃO chamar onOpenChange(false): evita o descarte do rascunho que apagaria
+      // o evento. O parent fecha o modal dentro de onCompleted().
+      onCompleted();
     }
     setSaving(false);
   };
