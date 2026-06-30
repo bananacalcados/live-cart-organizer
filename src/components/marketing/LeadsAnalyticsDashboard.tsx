@@ -204,21 +204,21 @@ export function LeadsAnalyticsDashboard() {
               <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Taxa de conversão" value={`${s.conversion_rate}%`} accent="emerald" />
             </div>
 
-            {/* Channels */}
+            {/* Capture channels */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div>
                 <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
-                  <ShoppingBag className="h-4 w-4 text-primary" /> Canal de conversão
+                  <ShoppingBag className="h-4 w-4 text-primary" /> Canal de captação (onde o lead entrou)
                 </h4>
                 <div className="space-y-1.5">
-                  {data!.channels.length === 0 && <p className="text-xs text-muted-foreground">Sem conversões no período.</p>}
+                  {data!.channels.length === 0 && <p className="text-xs text-muted-foreground">Sem leads no período.</p>}
                   {data!.channels.map(c => {
-                    const pct = s.total_revenue > 0 ? (c.revenue / s.total_revenue) * 100 : 0;
+                    const pct = (c.leads / maxChannelLeads) * 100;
                     return (
                       <div key={c.channel} className="text-xs">
                         <div className="flex justify-between mb-0.5">
                           <span className="font-medium">{c.channel}</span>
-                          <span className="text-muted-foreground">{fmtBRL(c.revenue)} · {c.purchases} compras</span>
+                          <span className="text-muted-foreground">{c.leads} leads · {c.converted} conv.</span>
                         </div>
                         <div className="h-2 rounded-full bg-muted overflow-hidden">
                           <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
