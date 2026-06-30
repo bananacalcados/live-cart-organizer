@@ -79,6 +79,7 @@ interface MediaItem {
 export default function InstagramCommentAutomation() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [flows, setFlows] = useState<Flow[]>([]);
+  const [events, setEvents] = useState<EventOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
   const [showDialog, setShowDialog] = useState(false);
