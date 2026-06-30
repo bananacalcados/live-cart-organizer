@@ -296,8 +296,11 @@ Deno.serve(async (req) => {
       cap.converted++;
       if (hadPriorSales) wereCustomersBefore++; else firstTimeBuyers++;
 
-      // NOTE: financial totals below still SUM ALL qualifying purchases of the
-      // lead (not just the conversion sale) — kept unchanged on purpose.
+      // VALOR DE CONVERSÃO (métrica principal): apenas a 1ª compra (conversionSale).
+      convertedRevenue += conversionSale.total;
+      cap.convertedRevenue += conversionSale.total;
+
+      // RECEITA TOTAL COM RECOMPRAS (métrica secundária): soma TODAS as qualifying.
       for (const s of qualifying) {
         totalPurchases++;
         totalRevenue += s.total;
