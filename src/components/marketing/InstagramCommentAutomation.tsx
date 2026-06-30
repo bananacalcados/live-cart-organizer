@@ -110,11 +110,16 @@ export default function InstagramCommentAutomation() {
     cooldown_minutes: 60,
     target_media_id: "",
     target_media_caption: "",
+    action_capture_lead: false,
+    capture_event_id: "",
+    capture_mode: "phone",
+    capture_fallback_dm_text: "",
   });
 
   useEffect(() => {
     loadRules();
     loadFlows();
+    loadEvents();
   }, []);
 
   async function loadRules() {
@@ -133,6 +138,15 @@ export default function InstagramCommentAutomation() {
       .eq("is_active", true)
       .order("name");
     setFlows((data as Flow[]) || []);
+  }
+
+  async function loadEvents() {
+    const { data } = await supabase
+      .from("events")
+      .select("id, name, event_date")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    setEvents((data as unknown as EventOpt[]) || []);
   }
 
   function openNew() {
