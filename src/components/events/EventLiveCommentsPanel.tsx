@@ -31,7 +31,9 @@ interface HandleOrderStats {
   paidPast: number;
   paidDates: string[];
   openPast: number;
+  openDates: string[];
 }
+
 
 interface LeadTag {
   thisEvent: boolean;
@@ -353,7 +355,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       const ensure = (h: string): HandleOrderStats => {
         let s = stats.get(h);
         if (!s) {
-          s = { paidThisEvent: 0, paidPast: 0, paidDates: [], openPast: 0 };
+          s = { paidThisEvent: 0, paidPast: 0, paidDates: [], openPast: 0, openDates: [] };
           stats.set(h, s);
         }
         return s;
@@ -361,7 +363,8 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
 
       if (customerIds.length > 0) {
         const oBatch = 100;
-        const datesByHandle = new Map<string, Set<string>>();
+        const paidDatesByHandle = new Map<string, Set<string>>();
+        const openDatesByHandle = new Map<string, Set<string>>();
         for (let i = 0; i < customerIds.length; i += oBatch) {
           const batch = customerIds.slice(i, i + oBatch);
           const { data } = await supabase
@@ -374,31 +377,41 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
             const s = ensure(h);
             const paid = Boolean(o.is_paid || o.paid_externally || isPaidOrderStage(o.stage));
             const isThisEvent = o.event_id === eventId;
+            const ev = o.events;
+            const evDate = ev?.start_date || ev?.created_at || o.created_at;
             if (paid) {
               if (isThisEvent) {
                 s.paidThisEvent += 1;
               } else {
                 s.paidPast += 1;
-                const ev = o.events;
-                const evDate = ev?.start_date || ev?.created_at || o.paid_at || o.created_at;
                 if (evDate) {
-                  const set = datesByHandle.get(h) || new Set<string>();
+                  const set = paidDatesByHandle.get(h) || new Set<string>();
                   set.add(format(new Date(evDate), "dd/MM/yyyy"));
-                  datesByHandle.set(h, set);
+                  paidDatesByHandle.set(h, set);
                 }
               }
             } else if (!isThisEvent && o.stage !== "cancelled") {
               s.openPast += 1;
+              if (evDate) {
+                const set = openDatesByHandle.get(h) || new Set<string>();
+                set.add(format(new Date(evDate), "dd/MM/yyyy"));
+                openDatesByHandle.set(h, set);
+              }
             }
           });
         }
-        datesByHandle.forEach((set, h) => {
+        const sortDates = (set: Set<string>) => Array.from(set).sort((a, b) => {
+          const [da, ma, ya] = a.split("/").map(Number);
+          const [db, mb, yb] = b.split("/").map(Number);
+          return new Date(yb, mb - 1, db).getTime() - new Date(ya, ma - 1, da).getTime();
+        });
+        paidDatesByHandle.forEach((set, h) => {
           const s = stats.get(h);
-          if (s) s.paidDates = Array.from(set).sort((a, b) => {
-            const [da, ma, ya] = a.split("/").map(Number);
-            const [db, mb, yb] = b.split("/").map(Number);
-            return new Date(yb, mb - 1, db).getTime() - new Date(ya, ma - 1, da).getTime();
-          });
+          if (s) s.paidDates = sortDates(set);
+        });
+        openDatesByHandle.forEach((set, h) => {
+          const s = stats.get(h);
+          if (s) s.openDates = sortDates(set);
         });
       }
 
@@ -779,10 +792,11 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                       {stats && stats.openPast > 0 && (
                         <span
                           className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-black"
-                          title="Pedidos feitos em lives anteriores que nunca foram pagos"
+                          title={stats.openDates.length ? `Eventos: ${stats.openDates.join(" • ")}` : "Pedidos feitos em lives anteriores que nunca foram pagos"}
                         >
                           <AlertTriangle className="h-2.5 w-2.5" />
                           {stats.openPast} {stats.openPast === 1 ? "não finalizado" : "não finalizados"}
+                          {stats.openDates.length > 0 && ` (${stats.openDates.slice(0, 3).join(", ")}${stats.openDates.length > 3 ? "…" : ""})`}
                         </span>
                       )}
                       <span className="ml-auto text-[10px] text-muted-foreground">{timeLabel(c.created_at)}</span>
