@@ -256,6 +256,10 @@ Deno.serve(async (req) => {
     const captureMap: Record<string, { channel: string; leads: number; converted: number; purchases: number; revenue: number; convertedRevenue: number }> = {};
     // Sale-channel aggregation (where the conversion sale happened) — for the monthly trend + future use
     const monthMap: Record<string, { month: string; purchases: number; revenue: number }> = {};
+    // NEW: conversion by SALE channel (channel of the conversionSale per converted lead).
+    const conversionChannelMap: Record<string, { channel: string; converted: number; valor_convertido: number }> = {};
+    // NEW: matrix capture-channel × sale-channel for converted leads.
+    const matrixMap: Record<string, { capture_channel: string; conversion_channel: string; converted: number; valor_convertido: number }> = {};
 
     for (const lead of Object.values(leadByPhone)) {
       const allSales = getAllSalesForPhone(lead.phone);
