@@ -114,6 +114,38 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
   const handleChange = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [k]: e.target.value }));
 
+  const lookupCep = async (rawCep: string) => {
+    const digits = rawCep.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setFetchingCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setForm((p) => ({
+          ...p,
+          address: data.logradouro || p.address,
+          neighborhood: data.bairro || p.neighborhood,
+          city: data.localidade || p.city,
+          state: data.uf || p.state,
+        }));
+      } else {
+        toast.error("CEP não encontrado");
+      }
+    } catch {
+      toast.error("Erro ao buscar CEP");
+    } finally {
+      setFetchingCep(false);
+    }
+  };
+
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setForm((p) => ({ ...p, cep: value }));
+    if (value.replace(/\D/g, "").length === 8) lookupCep(value);
+  };
+
+
   const handleSave = async () => {
     setSaving(true);
     try {
