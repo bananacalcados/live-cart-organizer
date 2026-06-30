@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractBRPhone, textHasDigits } from "./br-phone-extract.ts";
 
 interface CommentData {
   commentId: string;
