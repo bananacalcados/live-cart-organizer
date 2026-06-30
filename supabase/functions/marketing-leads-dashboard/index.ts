@@ -28,18 +28,30 @@ function classifyChannel(storeName?: string, isZoppy?: boolean): string {
   return "Loja Física";
 }
 
-// Human-friendly grouping for lead acquisition sources
+/**
+ * Human-friendly grouping for lead ACQUISITION (capture) sources.
+ * The `source` column in lp_leads is mixed: some rows carry real channel codes,
+ * others carry a person's first name (legacy XLS imports, e.g. "TYPEBOT março").
+ * Anything not recognized as a channel code is bucketed as an import list.
+ */
 function prettySource(source?: string): string {
-  const s = (source || "").toLowerCase();
+  const raw = (source || "").trim();
+  const s = raw.toLowerCase();
   if (!s) return "Não informado";
   if (s.includes("organic_whatsapp")) return "WhatsApp Orgânico";
-  if (s.includes("landing_page") || s === "landing_page_typebot") return "Landing Page / Typebot";
-  if (s.includes("event_typebot")) return "Evento (Typebot)";
+  if (s.includes("event_typebot")) return "Evento / Live (Typebot)";
+  if (s.includes("landing_page")) return "Landing Page (site)";
+  if (s.includes("catalog_lead_page")) return "Catálogo / Link";
   if (s.includes("whatsapp_ad") || s.includes("ia_ads")) return "Anúncios (Ads)";
   if (s.includes("abandoned_cart")) return "Carrinho Abandonado";
   if (s.includes("live_campaign")) return "Live";
   if (s.includes("external_lead")) return "Importação Externa";
-  return source as string;
+  // Known channel codes use snake_case; a value with letters/spaces only is a
+  // legacy named import (a person's name), group them all together.
+  if (/^[a-zà-ÿ][a-zà-ÿ .'-]*$/i.test(raw) && !raw.includes("_")) {
+    return "Importação (Lista)";
+  }
+  return raw;
 }
 
 Deno.serve(async (req) => {
@@ -153,14 +165,24 @@ Deno.serve(async (req) => {
       return sales;
     }
 
-    // ─── 5. Load leads, dedup by phone (earliest capture) ───
-    type LeadAgg = { phone: string; captureDate: Date; source: string; campaign: string };
+    // ─── 5. Load leads, aggregate per phone ───
+    // We keep BOTH the earliest-ever capture (to know prior-customer status and
+    // for "purchased" mode) and the earliest capture WITHIN the period (so a
+    // phone re-captured in the period — e.g. via the event typebot — still
+    // counts as "captado no período", which is what the user expects).
+    type LeadAgg = {
+      phone: string;
+      firstEverDate: Date;
+      firstEverSource: string;
+      firstInPeriodDate: Date | null;
+      firstInPeriodSource: string;
+    };
     const leadByPhone: Record<string, LeadAgg> = {};
     off = 0;
     while (true) {
       const { data } = await supabase
         .from("lp_leads")
-        .select("phone, source, campaign_tag, created_at")
+        .select("phone, source, created_at")
         .not("phone", "is", null)
         .range(off, off + 999);
       if (!data || data.length === 0) break;
@@ -168,14 +190,23 @@ Deno.serve(async (req) => {
         const p = normalizePhone(l.phone);
         if (!p) continue;
         const created = new Date(l.created_at);
-        const existing = leadByPhone[p];
-        if (!existing || created < existing.captureDate) {
-          leadByPhone[p] = {
-            phone: p,
-            captureDate: created,
-            source: l.source || "",
-            campaign: l.campaign_tag || "",
-          };
+        const src = l.source || "";
+        const agg = (leadByPhone[p] ||= {
+          phone: p,
+          firstEverDate: created,
+          firstEverSource: src,
+          firstInPeriodDate: null,
+          firstInPeriodSource: "",
+        });
+        if (created < agg.firstEverDate) {
+          agg.firstEverDate = created;
+          agg.firstEverSource = src;
+        }
+        if (inPeriod(created)) {
+          if (!agg.firstInPeriodDate || created < agg.firstInPeriodDate) {
+            agg.firstInPeriodDate = created;
+            agg.firstInPeriodSource = src;
+          }
         }
       }
       if (data.length < 1000) break;
@@ -183,84 +214,98 @@ Deno.serve(async (req) => {
     }
 
     // ─── 6. Compute metrics ───
-    let leadsInScope = 0;          // denominator (captured leads in period, or leads that bought in period)
+    let leadsInScope = 0;          // captured leads in period, or leads that bought in period
     let leadsConverted = 0;        // leads with >=1 qualifying purchase
     let wereCustomersBefore = 0;   // converted leads that already had purchases before becoming lead
     let firstTimeBuyers = 0;       // converted leads whose first ever purchase came after lead capture
     let totalPurchases = 0;
     let totalRevenue = 0;
 
-    const channelMap: Record<string, { channel: string; purchases: number; revenue: number; leads: Set<string> }> = {};
-    const sourceMap: Record<string, { source: string; leads: number; converted: number; purchases: number; revenue: number }> = {};
-    const monthMap: Record<string, { month: string; converted: number; purchases: number; revenue: number }> = {};
+    // Capture-channel aggregation (where the lead came in)
+    const captureMap: Record<string, { channel: string; leads: number; converted: number; purchases: number; revenue: number }> = {};
+    // Sale-channel aggregation (where the conversion sale happened) — for the monthly trend + future use
+    const monthMap: Record<string, { month: string; purchases: number; revenue: number }> = {};
 
     for (const lead of Object.values(leadByPhone)) {
       const allSales = getAllSalesForPhone(lead.phone);
-      const hadPriorSales = allSales.some(s => s.date < lead.captureDate);
 
-      // first_purchase_only: keep only leads that were NOT customers before (their conversion is a first purchase)
-      if (firstPurchaseOnly && hadPriorSales) continue;
+      // Reference capture date + capture source depend on the mode.
+      const captureDate = mode === "captured"
+        ? lead.firstInPeriodDate
+        : lead.firstEverDate;
+      const captureSource = mode === "captured"
+        ? lead.firstInPeriodSource
+        : lead.firstEverSource;
 
-      // Qualifying purchases = sales strictly after capture
-      let qualifying = allSales.filter(s => s.date > lead.captureDate);
-      if (mode === "purchased") {
-        qualifying = qualifying.filter(s => inPeriod(s.date));
-      }
-
-      // Determine scope membership
+      // Scope membership
       let inScope = false;
       if (mode === "captured") {
-        inScope = inPeriod(lead.captureDate);
-      } else {
+        inScope = !!lead.firstInPeriodDate; // has a capture record inside the period
+      }
+
+      // Prior-customer status is judged against the EARLIEST-ever capture,
+      // so the "1ª compra" semantics stay stable regardless of mode.
+      const hadPriorSales = allSales.some(s => s.date < lead.firstEverDate);
+      if (firstPurchaseOnly && hadPriorSales) continue;
+
+      // Qualifying purchases = sales strictly after the relevant capture date.
+      let qualifying = captureDate
+        ? allSales.filter(s => s.date > captureDate)
+        : [];
+      if (mode === "purchased") {
+        qualifying = qualifying.filter(s => inPeriod(s.date));
         inScope = qualifying.length > 0; // leads (any period) that bought within the period
       }
-      if (!inScope) continue;
 
+      if (!inScope) continue;
       leadsInScope++;
 
-      const srcKey = prettySource(lead.source);
-      const srcEntry = (sourceMap[srcKey] ||= { source: srcKey, leads: 0, converted: 0, purchases: 0, revenue: 0 });
-      srcEntry.leads++;
+      const chKey = prettySource(captureSource);
+      const cap = (captureMap[chKey] ||= { channel: chKey, leads: 0, converted: 0, purchases: 0, revenue: 0 });
+      cap.leads++;
 
       const converted = qualifying.length > 0;
       if (!converted) continue;
 
       leadsConverted++;
-      srcEntry.converted++;
+      cap.converted++;
       if (hadPriorSales) wereCustomersBefore++; else firstTimeBuyers++;
 
       for (const s of qualifying) {
         totalPurchases++;
         totalRevenue += s.total;
-        srcEntry.purchases++;
-        srcEntry.revenue += s.total;
-
-        const ch = (channelMap[s.channel] ||= { channel: s.channel, purchases: 0, revenue: 0, leads: new Set() });
-        ch.purchases++;
-        ch.revenue += s.total;
-        ch.leads.add(lead.phone);
+        cap.purchases++;
+        cap.revenue += s.total;
 
         const mk = `${s.date.getFullYear()}-${String(s.date.getMonth() + 1).padStart(2, "0")}`;
-        const m = (monthMap[mk] ||= { month: mk, converted: 0, purchases: 0, revenue: 0 });
+        const m = (monthMap[mk] ||= { month: mk, purchases: 0, revenue: 0 });
         m.purchases++;
         m.revenue += s.total;
       }
     }
 
-    const channels = Object.values(channelMap)
-      .map(c => ({ channel: c.channel, purchases: c.purchases, revenue: Math.round(c.revenue * 100) / 100, leads: c.leads.size }))
-      .sort((a, b) => b.revenue - a.revenue);
-
-    const sources = Object.values(sourceMap)
-      .map(s => ({
-        source: s.source,
-        leads: s.leads,
-        converted: s.converted,
-        purchases: s.purchases,
-        revenue: Math.round(s.revenue * 100) / 100,
-        conversion_rate: s.leads > 0 ? Math.round((s.converted / s.leads) * 10000) / 100 : 0,
+    // Channels (bar chart) and sources (table) are both the capture-channel
+    // breakdown now — the user wants "onde o lead foi captado", not where the
+    // sale happened. Sorted by number of leads captured.
+    const captureChannels = Object.values(captureMap)
+      .map(c => ({
+        channel: c.channel,
+        leads: c.leads,
+        converted: c.converted,
+        purchases: c.purchases,
+        revenue: Math.round(c.revenue * 100) / 100,
+        conversion_rate: c.leads > 0 ? Math.round((c.converted / c.leads) * 10000) / 100 : 0,
       }))
-      .sort((a, b) => b.revenue - a.revenue);
+      .sort((a, b) => b.leads - a.leads);
+
+    const sources = captureChannels.map(c => ({
+      source: c.channel,
+      leads: c.leads,
+      converted: c.converted,
+      purchases: c.purchases,
+      revenue: c.revenue,
+      conversion_rate: c.conversion_rate,
+    }));
 
     const months = Object.values(monthMap)
       .map(m => ({ ...m, revenue: Math.round(m.revenue * 100) / 100 }))
@@ -280,7 +325,8 @@ Deno.serve(async (req) => {
         avg_ticket: totalPurchases > 0 ? Math.round((totalRevenue / totalPurchases) * 100) / 100 : 0,
         avg_purchases_per_lead: leadsConverted > 0 ? Math.round((totalPurchases / leadsConverted) * 100) / 100 : 0,
       },
-      channels,
+      // capture channels (where the lead came in)
+      channels: captureChannels,
       sources,
       months,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
