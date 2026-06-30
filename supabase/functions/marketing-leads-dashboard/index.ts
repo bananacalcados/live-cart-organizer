@@ -391,6 +391,26 @@ Deno.serve(async (req) => {
       .map(m => ({ ...m, revenue: Math.round(m.revenue * 100) / 100 }))
       .sort((a, b) => a.month.localeCompare(b.month));
 
+    // NEW: conversion by SALE channel (one of the 5 real channels).
+    const conversionChannels = Object.values(conversionChannelMap)
+      .map(c => ({
+        channel: c.channel,
+        converted: c.converted,
+        valor_convertido: Math.round(c.valor_convertido * 100) / 100,
+        ticket_medio_conversao: c.converted > 0 ? Math.round((c.valor_convertido / c.converted) * 100) / 100 : 0,
+      }))
+      .sort((a, b) => b.converted - a.converted);
+
+    // NEW: capture-channel × sale-channel matrix (converted leads only).
+    const captureXconversion = Object.values(matrixMap)
+      .map(m => ({
+        capture_channel: m.capture_channel,
+        conversion_channel: m.conversion_channel,
+        converted: m.converted,
+        valor_convertido: Math.round(m.valor_convertido * 100) / 100,
+      }))
+      .sort((a, b) => b.converted - a.converted);
+
     return new Response(JSON.stringify({
       mode,
       only_new_leads: onlyNewLeads,
