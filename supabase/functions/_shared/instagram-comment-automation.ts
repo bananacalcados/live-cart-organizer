@@ -352,7 +352,6 @@ export async function processCommentAutomation(
     const usernameClean = comment.username?.replace("@", "") || "";
 
     // ── Captação: salva o lead no evento futuro (origem live_comment) ──
-    let leadSaved = false;
     if (captureEnabled && captureMode === "phone" && extractedPhone) {
       const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, "capture_lead");
       if (actionId) {
