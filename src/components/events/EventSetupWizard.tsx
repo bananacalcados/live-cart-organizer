@@ -305,9 +305,10 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     const ok = await persistStep(currentStep.key);
     setSaving(false);
     if (!ok) return;
-    // Defer navigation a tick so the Radix dialog finishes closing cleanly.
-    onOpenChange(false);
-    setTimeout(() => onCompleted(), 0);
+    // NÃO chamar onOpenChange(false) aqui: isso dispararia o descarte do rascunho
+    // (que lê o estado local desatualizado) e apagaria o evento recém-configurado.
+    // O parent fecha o modal dentro de onCompleted().
+    onCompleted();
   };
 
   const finish = async () => {
