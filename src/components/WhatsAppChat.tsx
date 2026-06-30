@@ -1366,6 +1366,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           })()}
         </DialogContent>
       </Dialog>
+
+      <CustomerFichaDialog open={fichaOpen} onOpenChange={setFichaOpen} order={fichaOrder} />
     </div>
   );
 }
