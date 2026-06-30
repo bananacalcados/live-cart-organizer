@@ -229,18 +229,20 @@ Deno.serve(async (req) => {
     for (const lead of Object.values(leadByPhone)) {
       const allSales = getAllSalesForPhone(lead.phone);
 
-      // Reference capture date + capture source depend on the mode.
-      const captureDate = mode === "captured"
-        ? lead.firstInPeriodDate
-        : lead.firstEverDate;
+      // Capture source for the channel breakdown depends on the mode.
       const captureSource = mode === "captured"
         ? lead.firstInPeriodSource
         : lead.firstEverSource;
 
-      // Scope membership
+      // ── Scope membership (the denominator = "Leads captados") ──
+      // captured: only leads with a capture record inside the period.
+      // purchased: EVERY lead ever registered (all-time base, e.g. 10k+),
+      //   then we check how many of them bought within the period.
       let inScope = false;
       if (mode === "captured") {
-        inScope = !!lead.firstInPeriodDate; // has a capture record inside the period
+        inScope = !!lead.firstInPeriodDate;
+      } else {
+        inScope = true;
       }
 
       // Prior-customer status is judged against the EARLIEST-ever capture,
@@ -248,16 +250,20 @@ Deno.serve(async (req) => {
       const hadPriorSales = allSales.some(s => s.date < lead.firstEverDate);
       if (firstPurchaseOnly && hadPriorSales) continue;
 
-      // Qualifying purchases = sales strictly after the relevant capture date.
-      let qualifying = captureDate
-        ? allSales.filter(s => s.date > captureDate)
-        : [];
-      if (mode === "purchased") {
-        qualifying = qualifying.filter(s => inPeriod(s.date));
-        inScope = qualifying.length > 0; // leads (any period) that bought within the period
+      if (!inScope) continue;
+
+      // ── Qualifying purchases (define conversion) ──
+      // captured: sales inside the period AND after the in-period capture.
+      // purchased: any sale inside the period (regardless of capture date),
+      //   so we count all-time leads that converted within the window.
+      let qualifying: any[];
+      if (mode === "captured") {
+        const capDate = lead.firstInPeriodDate!;
+        qualifying = allSales.filter(s => inPeriod(s.date) && s.date > capDate);
+      } else {
+        qualifying = allSales.filter(s => inPeriod(s.date));
       }
 
-      if (!inScope) continue;
       leadsInScope++;
 
       const chKey = prettySource(captureSource);
@@ -278,11 +284,12 @@ Deno.serve(async (req) => {
         cap.revenue += s.total;
 
         const mk = `${s.date.getFullYear()}-${String(s.date.getMonth() + 1).padStart(2, "0")}`;
-        const m = (monthMap[mk] ||= { month: mk, purchases: 0, revenue: 0 });
+        const m = (monthMap[mk] ||= { month: mk, purchases: 0, purchases_revenue: 0, revenue: 0 });
         m.purchases++;
         m.revenue += s.total;
       }
     }
+
 
     // Channels (bar chart) and sources (table) are both the capture-channel
     // breakdown now — the user wants "onde o lead foi captado", not where the
