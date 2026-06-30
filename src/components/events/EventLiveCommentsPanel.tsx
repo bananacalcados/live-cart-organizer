@@ -36,7 +36,17 @@ interface HandleOrderStats {
 interface LeadTag {
   thisEvent: boolean;
   otherEvent: boolean;
+  otherEventName?: string | null;
+  otherSource?: string | null;
 }
+
+// Rótulo amigável para o tipo de captação do lead
+const LEAD_SOURCE_LABEL: Record<string, string> = {
+  lp: "Página",
+  typebot: "Typebot",
+  referral: "Indicação",
+  manual: "Manual",
+};
 
 interface ParticipantScore {
   score: number;
