@@ -733,10 +733,20 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                       {leadTag && !leadTag.thisEvent && leadTag.otherEvent && (
                         <span
                           className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
-                          title="Já captado em outra campanha/evento de marketing"
+                          title={
+                            leadTag.otherEventName
+                              ? `Captado em: ${leadTag.otherEventName}${
+                                  leadTag.otherSource
+                                    ? ` (via ${LEAD_SOURCE_LABEL[leadTag.otherSource] || leadTag.otherSource})`
+                                    : ""
+                                }`
+                              : "Já captado em outra campanha/evento de marketing"
+                          }
                         >
                           <Tag className="h-2.5 w-2.5" />
-                          Lead de outra campanha
+                          {leadTag.otherEventName
+                            ? `Lead: ${leadTag.otherEventName}`
+                            : "Lead de outra campanha"}
                         </span>
                       )}
                       {isBanned && (
