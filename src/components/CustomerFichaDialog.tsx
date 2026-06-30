@@ -252,7 +252,18 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
             </div>
             <div>
               <Label>CEP</Label>
-              <Input value={form.cep} onChange={handleChange("cep")} />
+              <div className="relative">
+                <Input
+                  value={form.cep}
+                  onChange={handleCepChange}
+                  onBlur={(e) => lookupCep(e.target.value)}
+                  placeholder="00000-000"
+                  maxLength={9}
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  {fetchingCep ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </div>
+              </div>
             </div>
             <div>
               <Label>Cidade</Label>
