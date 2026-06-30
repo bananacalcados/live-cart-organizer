@@ -43,7 +43,7 @@ export const LiveActiveToggleButton = ({ eventId, size = "sm" }: Props) => {
       } else {
         const { data, error } = await supabase.rpc("set_event_live_active", { p_event_id: eventId });
         if (error) throw error;
-        toast.success("Live ativada — expira em 8h");
+        toast.success("Live ativada — expira em 12h");
         if (data) setLiveActiveUntil(new Date(data as string));
       }
       await refresh();
