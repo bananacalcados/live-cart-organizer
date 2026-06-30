@@ -1625,8 +1625,13 @@ export default function TransparentCheckout() {
 
   const loadOrder = async () => {
     try {
-      const { data: orderRaw, error } = await supabase
-        .rpc("get_checkout_order", { p_order_id: orderId });
+      // Pedido e cadastro deste pedido são buscados EM PARALELO (ambos só dependem
+      // do orderId da rota), removendo um round-trip sequencial do carregamento.
+      const [orderRes, orderRegRes] = await Promise.all([
+        supabase.rpc("get_checkout_order", { p_order_id: orderId }),
+        supabase.rpc("get_checkout_registration", { p_order_id: orderId }),
+      ]);
+      const { data: orderRaw, error } = orderRes;
       const order = orderRaw as any;
 
       if (error || !order) throw new Error("Pedido não encontrado");
@@ -1656,14 +1661,13 @@ export default function TransparentCheckout() {
         setPaymentStatus("success");
       } else if (!order.checkout_started_at) {
         const now = new Date().toISOString();
-        await cpUpdateOrder(order.id, { checkout_started_at: now });
         setOrderData((prev) => prev ? { ...prev, checkoutStartedAt: now } : prev);
+        // Marca o início do checkout sem bloquear o render (fire-and-forget).
+        void cpUpdateOrder(order.id, { checkout_started_at: now });
       }
 
-      // Pre-fill from existing registration for this order first
-      const { data: orderRegRaw } = await supabase
-        .rpc("get_checkout_registration", { p_order_id: order.id });
-      const orderReg = orderRegRaw as any;
+      // Pré-preenche a partir do cadastro deste pedido (já buscado em paralelo acima).
+      const orderReg = orderRegRes.data as any;
 
       if (orderReg) {
         setRegistrationId(orderReg.id);

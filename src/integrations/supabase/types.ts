@@ -2948,6 +2948,27 @@ export type Database = {
         }
         Relationships: []
       }
+      conversation_counts_cache: {
+        Row: {
+          awaiting_count: number
+          id: number
+          new_count: number
+          updated_at: string
+        }
+        Insert: {
+          awaiting_count?: number
+          id?: number
+          new_count?: number
+          updated_at?: string
+        }
+        Update: {
+          awaiting_count?: number
+          id?: number
+          new_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       cost_center_fixed_cost_items: {
         Row: {
           amount: number

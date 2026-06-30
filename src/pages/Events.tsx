@@ -120,55 +120,78 @@ const Events = () => {
     // Fetch stats for all events and auto-verify Shopify
     const fetchStats = async () => {
       if (events.length === 0) return;
-      
-      const stats: EventStats[] = [];
-      
-      for (const event of events) {
-        const { data } = await supabase
-          .from('orders')
-          .select('id, is_paid, paid_externally')
-          .eq('event_id', event.id);
-        
-        const orders = data || [];
+
+      const eventIds = events.map((e) => e.id);
+
+      // 1) UMA única query traz os pedidos de TODOS os eventos (antes era 1 query por evento).
+      const { data: allOrders } = await supabase
+        .from('orders')
+        .select('id, is_paid, paid_externally, event_id')
+        .in('event_id', eventIds);
+
+      const ordersByEvent = new Map<string, any[]>();
+      for (const o of allOrders || []) {
+        const arr = ordersByEvent.get(o.event_id) || [];
+        arr.push(o);
+        ordersByEvent.set(o.event_id, arr);
+      }
+
+      const stats: EventStats[] = events.map((event) => {
+        const orders = ordersByEvent.get(event.id) || [];
         const paidOrders = orders.filter((o) => isOrderMarkedPaid(o));
-        
-        stats.push({
+        return {
           eventId: event.id,
           totalOrders: orders.length,
-          unpaidOrders: orders.filter((o) => !isOrderMarkedPaid(o)).length,
+          unpaidOrders: orders.length - paidOrders.length,
           paidOrders: paidOrders.length,
           missingShopify: -1, // -1 = loading
-        });
-      }
-      
+        };
+      });
+
       setEventStats(stats);
 
-      // Auto-verify Shopify for events that have paid orders
-      for (const stat of stats) {
-        if (stat.paidOrders === 0) {
-          setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: 0 } : s));
-          continue;
-        }
-        try {
-          const { data, error } = await supabase.functions.invoke('shopify-verify-event-orders', {
-            body: { eventId: stat.eventId },
-          });
-          if (error || data?.error) {
+      // 2) Verificação Shopify: usa cache da sessão quando disponível e roda
+      //    as verificações restantes EM PARALELO (antes era sequencial, 1 por vez).
+      await Promise.all(
+        stats.map(async (stat) => {
+          if (stat.paidOrders === 0) {
             setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: 0 } : s));
-            continue;
+            return;
           }
-          const results = data.results as { orderId: string; hasShopify: boolean; shopifyOrderName?: string }[];
-          const missing = results.filter(r => !r.hasShopify).length;
-          sessionStorage.setItem(`shopify-verify-${stat.eventId}`, JSON.stringify(results));
-          setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: missing } : s));
-        } catch {
-          setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: 0 } : s));
-        }
-      }
+          // Reaproveita resultado já verificado nesta sessão (evita chamada cara à Shopify).
+          const cached = sessionStorage.getItem(`shopify-verify-${stat.eventId}`);
+          if (cached) {
+            try {
+              const results = JSON.parse(cached) as { hasShopify: boolean }[];
+              const missing = results.filter(r => !r.hasShopify).length;
+              setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: missing } : s));
+              return;
+            } catch {
+              /* cache inválido: segue para verificação */
+            }
+          }
+          try {
+            const { data, error } = await supabase.functions.invoke('shopify-verify-event-orders', {
+              body: { eventId: stat.eventId },
+            });
+            if (error || data?.error) {
+              setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: 0 } : s));
+              return;
+            }
+            const results = data.results as { orderId: string; hasShopify: boolean; shopifyOrderName?: string }[];
+            const missing = results.filter(r => !r.hasShopify).length;
+            sessionStorage.setItem(`shopify-verify-${stat.eventId}`, JSON.stringify(results));
+            setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: missing } : s));
+          } catch {
+            setEventStats(prev => prev.map(s => s.eventId === stat.eventId ? { ...s, missingShopify: 0 } : s));
+          }
+        })
+      );
     };
-    
+
     fetchStats();
   }, [events]);
+
 
   const handleVerifyShopify = async (eventId: string) => {
     setVerifyingEventId(eventId);
