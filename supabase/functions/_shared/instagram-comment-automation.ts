@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { extractBRPhone, textHasDigits } from "./br-phone-extract.ts";
 
 interface CommentData {
   commentId: string;
@@ -73,6 +74,11 @@ interface Rule {
   ai_generate_reply: boolean;
   ai_prompt: string | null;
   target_media_id: string | null;
+  // Captação de lead para evento (Live do Instagram)
+  action_capture_lead: boolean;
+  capture_event_id: string | null;
+  capture_mode: string | null; // 'phone' | 'keyword'
+  capture_fallback_dm_text: string | null;
 }
 
 function buildButtonPayload(ruleId: string, buttons: DmButton[]): any[] {
@@ -310,6 +316,32 @@ export async function processCommentAutomation(
 
     if (!triggered) continue;
 
+    // ── Captação de lead pela Live (extração de telefone do comentário) ──
+    // captureEnabled exige a regra ligada + evento de destino definido.
+    const captureEnabled = !!(rule.action_capture_lead && rule.capture_event_id);
+    const captureMode = (rule.capture_mode || "phone").toLowerCase();
+    let extractedPhone: string | null = null;
+    let phoneLast4 = "";
+    let isCaptureFallback = false;
+
+    if (captureEnabled && captureMode === "phone") {
+      const ext = extractBRPhone(comment.text);
+      if (ext) {
+        extractedPhone = ext.phone;
+        phoneLast4 = ext.last4;
+      } else {
+        // Sem telefone válido: só seguimos (para mandar DM de fallback) quando
+        // a pessoa tentou digitar algo numérico E há texto de fallback configurado.
+        // Caso contrário, ignoramos sem gastar o cooldown — assim ela pode comentar
+        // o número correto depois sem ficar travada.
+        if (rule.capture_fallback_dm_text && textHasDigits(comment.text)) {
+          isCaptureFallback = true;
+        } else {
+          continue;
+        }
+      }
+    }
+
     // Reserve a per-user cooldown before calling Meta. This is intentionally
     // atomic (unique marker per cooldown bucket), so duplicate webhook deliveries
     // or multiple near-simultaneous comments cannot reply 4–5 times in parallel.
@@ -318,6 +350,52 @@ export async function processCommentAutomation(
     }
 
     const usernameClean = comment.username?.replace("@", "") || "";
+
+    // ── Captação: salva o lead no evento futuro (origem live_comment) ──
+    if (captureEnabled && captureMode === "phone" && extractedPhone) {
+      const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, "capture_lead");
+      if (actionId) {
+        try {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          const res = await fetch(`${supabaseUrl}/functions/v1/event-lead-capture`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${supabaseKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              event_id: rule.capture_event_id,
+              source: "live_comment",
+              name: comment.username || `@${usernameClean}` || extractedPhone,
+              phone: extractedPhone,
+              instagram: comment.username ? `@${usernameClean}` : null,
+              utm_source: "instagram",
+              utm_medium: "live_comment",
+              metadata: {
+                comment_id: comment.commentId,
+                raw_text: comment.text,
+                instagram: comment.username ? `@${usernameClean}` : null,
+                ig_user_id: comment.fromId,
+                rule_id: rule.id,
+              },
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          await finishReservedAction(supabase, actionId, res.ok ? "saved" : "error", res.ok ? null : JSON.stringify(data));
+          if (res.ok) {
+            actions.push(`lead:${rule.name}`);
+            console.log(`✅ Lead da live capturado (${phoneLast4}) p/ evento ${rule.capture_event_id} via "${rule.name}"`);
+          } else {
+            console.error(`❌ Falha ao salvar lead da live para "${rule.name}":`, data);
+          }
+        } catch (e) {
+          console.error("Erro ao capturar lead da live:", e);
+          await finishReservedAction(supabase, actionId, "error", e instanceof Error ? e.message : String(e));
+        }
+      }
+    }
+
 
     // ── Action 1: Reply to comment publicly (com variações anti-spam) ──
     const replyTemplate = pickReplyText(rule);
@@ -360,17 +438,25 @@ export async function processCommentAutomation(
     }
 
     // ── Action 2: Send Private DM ──
-    if (rule.action_send_dm && rule.dm_message_text) {
-      const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, "dm");
+    // No fallback de captação (telefone não reconhecido) usamos o texto de
+    // fallback pedindo o número correto, SEM botões. Caso contrário, segue o DM
+    // normal da regra (ex.: confirmação + botão do Grupo VIP).
+    const dmBaseText = isCaptureFallback ? rule.capture_fallback_dm_text : rule.dm_message_text;
+    const shouldSendDm = isCaptureFallback ? !!rule.capture_fallback_dm_text : (rule.action_send_dm && !!rule.dm_message_text);
+    if (shouldSendDm && dmBaseText) {
+      const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, isCaptureFallback ? "dm_fallback" : "dm");
       if (!actionId) continue;
 
       try {
-        const dmText = rule.dm_message_text
-          .replace("{username}", usernameClean)
-          .replace("{comment}", comment.text);
+        const dmText = dmBaseText
+          .replace(/\{username\}/g, usernameClean)
+          .replace(/\{comment\}/g, comment.text)
+          .replace(/\{last4\}/g, phoneLast4)
+          .replace(/\{phone\}/g, extractedPhone || "");
 
         // Botões opcionais (button template). Máx 3 botões pela Meta.
-        const dmButtons = buildButtonPayload(rule.id, rule.dm_buttons || []);
+        // No fallback não enviamos botões (só pedimos o número correto).
+        const dmButtons = isCaptureFallback ? [] : buildButtonPayload(rule.id, rule.dm_buttons || []);
         const messagePayload = dmButtons.length > 0
           ? {
               attachment: {

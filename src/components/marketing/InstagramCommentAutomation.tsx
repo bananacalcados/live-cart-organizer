@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Instagram, Plus, Trash2, MessageSquare, Send, Zap, Save,
-  Edit, ChevronDown, ChevronUp, Image as ImageIcon, Loader2, Target, RefreshCw
+  Edit, ChevronDown, ChevronUp, Image as ImageIcon, Loader2, Target, RefreshCw, UserPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,12 +48,22 @@ interface Rule {
   ai_prompt: string | null;
   target_media_id: string | null;
   target_media_caption: string | null;
+  action_capture_lead: boolean;
+  capture_event_id: string | null;
+  capture_mode: string | null;
+  capture_fallback_dm_text: string | null;
   created_at: string;
 }
 
 interface Flow {
   id: string;
   name: string;
+}
+
+interface EventOpt {
+  id: string;
+  name: string;
+  event_date: string | null;
 }
 
 interface MediaItem {
@@ -69,6 +79,7 @@ interface MediaItem {
 export default function InstagramCommentAutomation() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [flows, setFlows] = useState<Flow[]>([]);
+  const [events, setEvents] = useState<EventOpt[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
   const [showDialog, setShowDialog] = useState(false);
@@ -99,11 +110,16 @@ export default function InstagramCommentAutomation() {
     cooldown_minutes: 60,
     target_media_id: "",
     target_media_caption: "",
+    action_capture_lead: false,
+    capture_event_id: "",
+    capture_mode: "phone",
+    capture_fallback_dm_text: "",
   });
 
   useEffect(() => {
     loadRules();
     loadFlows();
+    loadEvents();
   }, []);
 
   async function loadRules() {
@@ -124,6 +140,15 @@ export default function InstagramCommentAutomation() {
     setFlows((data as Flow[]) || []);
   }
 
+  async function loadEvents() {
+    const { data } = await supabase
+      .from("events")
+      .select("id, name, event_date")
+      .order("created_at", { ascending: false })
+      .limit(100);
+    setEvents((data as unknown as EventOpt[]) || []);
+  }
+
   function openNew() {
     setEditingRule(null);
     setForm({
@@ -142,6 +167,10 @@ export default function InstagramCommentAutomation() {
       cooldown_minutes: 60,
       target_media_id: "",
       target_media_caption: "",
+      action_capture_lead: false,
+      capture_event_id: "",
+      capture_mode: "phone",
+      capture_fallback_dm_text: "",
     });
     setShowDialog(true);
   }
@@ -164,6 +193,10 @@ export default function InstagramCommentAutomation() {
       cooldown_minutes: rule.cooldown_minutes,
       target_media_id: rule.target_media_id || "",
       target_media_caption: rule.target_media_caption || "",
+      action_capture_lead: rule.action_capture_lead || false,
+      capture_event_id: rule.capture_event_id || "",
+      capture_mode: rule.capture_mode || "phone",
+      capture_fallback_dm_text: rule.capture_fallback_dm_text || "",
     });
     setShowDialog(true);
   }
@@ -207,6 +240,10 @@ export default function InstagramCommentAutomation() {
       cooldown_minutes: form.cooldown_minutes,
       target_media_id: form.target_media_id || null,
       target_media_caption: form.target_media_id ? (form.target_media_caption || null) : null,
+      action_capture_lead: form.action_capture_lead,
+      capture_event_id: form.action_capture_lead ? (form.capture_event_id || null) : null,
+      capture_mode: form.capture_mode || "phone",
+      capture_fallback_dm_text: form.action_capture_lead ? (form.capture_fallback_dm_text || null) : null,
     };
 
     if (editingRule) {
@@ -651,6 +688,89 @@ export default function InstagramCommentAutomation() {
             </div>
 
             <hr />
+
+            {/* Action: Capturar Lead da Live (telefone no comentário) */}
+            <div className="space-y-2 rounded-md border border-emerald-200 bg-emerald-50/40 p-3">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={form.action_capture_lead}
+                  onCheckedChange={(v) => setForm({ ...form, action_capture_lead: v })}
+                />
+                <Label className="flex items-center gap-1.5">
+                  <UserPlus className="h-4 w-4 text-emerald-600" />
+                  Captar Lead da Live (salvar @ + WhatsApp do comentário)
+                </Label>
+              </div>
+              {form.action_capture_lead && (
+                <div className="space-y-3 pt-1">
+                  <p className="text-[11px] text-muted-foreground">
+                    O sistema detecta automaticamente um telefone brasileiro válido (DDD + 9 dígitos)
+                    no texto do comentário e salva como lead do evento escolhido, junto com o @ do Instagram.
+                    Números soltos (ex.: tamanho de calçado) são ignorados.
+                  </p>
+
+                  <div>
+                    <Label className="text-xs">Evento de destino (lead será vinculado)</Label>
+                    <Select
+                      value={form.capture_event_id || undefined}
+                      onValueChange={(v) => setForm({ ...form, capture_event_id: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o evento futuro" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {events.map((ev) => (
+                          <SelectItem key={ev.id} value={ev.id}>
+                            {ev.name}
+                            {ev.event_date ? ` — ${new Date(ev.event_date).toLocaleDateString("pt-BR")}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs">Modo de captação</Label>
+                    <Select
+                      value={form.capture_mode}
+                      onValueChange={(v) => setForm({ ...form, capture_mode: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="phone">Telefone no comentário (detecção automática)</SelectItem>
+                        <SelectItem value="keyword">Apenas palavra-chave (sem salvar telefone)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      No modo telefone, deixe o gatateilho da regra como "Todos os comentários".
+                      O DM de confirmação (com botão do Grupo VIP) é o configurado acima — use{" "}
+                      <code className="text-[10px]">{"{last4}"}</code> para mostrar os últimos 4 dígitos.
+                    </p>
+                  </div>
+
+                  {form.capture_mode === "phone" && (
+                    <div>
+                      <Label className="text-xs">DM de fallback (telefone não reconhecido)</Label>
+                      <Textarea
+                        value={form.capture_fallback_dm_text}
+                        onChange={(e) => setForm({ ...form, capture_fallback_dm_text: e.target.value })}
+                        placeholder="Oi {username}! Não consegui ler seu WhatsApp 😅 Pode comentar de novo no formato (DD) 9XXXX-XXXX?"
+                        className="text-sm"
+                        rows={2}
+                      />
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Enviado só quando a pessoa digita algo numérico inválido. Deixe vazio para não enviar.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <hr />
+
 
             {/* Action: Reply Comment */}
             <div className="space-y-2">

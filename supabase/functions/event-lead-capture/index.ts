@@ -31,12 +31,13 @@ serve(async (req) => {
     const body = await req.json();
     const {
       event_id,
-      source,           // 'lp' | 'typebot'
+      source,           // 'lp' | 'typebot' | 'live_comment'
       landing_page_id,
       typebot_id,
       slug,
       name,
       phone,
+      instagram,        // @ do Instagram (captação via comentário da live)
       ref_token,
       utm_source,
       utm_medium,
@@ -86,6 +87,7 @@ serve(async (req) => {
           name: cleanName,
           phone: e164,
           source,
+          instagram: instagram || null,
           landing_page_id: landing_page_id || null,
           typebot_id: typebot_id || null,
           referred_by_lead_id,
