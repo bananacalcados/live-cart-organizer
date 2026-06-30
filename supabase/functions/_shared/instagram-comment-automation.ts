@@ -384,7 +384,6 @@ export async function processCommentAutomation(
           const data = await res.json().catch(() => ({}));
           await finishReservedAction(supabase, actionId, res.ok ? "saved" : "error", res.ok ? null : JSON.stringify(data));
           if (res.ok) {
-            leadSaved = true;
             actions.push(`lead:${rule.name}`);
             console.log(`✅ Lead da live capturado (${phoneLast4}) p/ evento ${rule.capture_event_id} via "${rule.name}"`);
           } else {
