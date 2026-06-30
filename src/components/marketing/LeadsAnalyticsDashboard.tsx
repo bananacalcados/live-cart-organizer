@@ -143,7 +143,7 @@ export function LeadsAnalyticsDashboard() {
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
           {mode === "captured"
-            ? "Considera os leads CAPTADOS (1ª vez) dentro do período selecionado e quantos deles compraram."
+            ? "Considera todos os leads CAPTADOS dentro do período selecionado (por canal de entrada) e quantos deles compraram."
             : "Considera TODOS os leads cadastrados (desde o início) e verifica quais COMPRARAM dentro do período selecionado."}
         </p>
 
