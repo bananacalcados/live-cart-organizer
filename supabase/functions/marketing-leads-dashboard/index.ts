@@ -324,7 +324,12 @@ Deno.serve(async (req) => {
         leads: c.leads,
         converted: c.converted,
         purchases: c.purchases,
-        revenue: Math.round(c.revenue * 100) / 100,
+        // valor_convertido (1ª compra) é o valor financeiro principal do canal.
+        valor_convertido: Math.round(c.convertedRevenue * 100) / 100,
+        receita_total_com_recompras: Math.round(c.revenue * 100) / 100,
+        // `revenue` mantido = valor_convertido para o gráfico principal.
+        revenue: Math.round(c.convertedRevenue * 100) / 100,
+        ticket_medio_conversao: c.converted > 0 ? Math.round((c.convertedRevenue / c.converted) * 100) / 100 : 0,
         conversion_rate: c.leads > 0 ? Math.round((c.converted / c.leads) * 10000) / 100 : 0,
       }))
       .sort((a, b) => b.leads - a.leads);
@@ -334,7 +339,10 @@ Deno.serve(async (req) => {
       leads: c.leads,
       converted: c.converted,
       purchases: c.purchases,
+      valor_convertido: c.valor_convertido,
+      receita_total_com_recompras: c.receita_total_com_recompras,
       revenue: c.revenue,
+      ticket_medio_conversao: c.ticket_medio_conversao,
       conversion_rate: c.conversion_rate,
     }));
 
