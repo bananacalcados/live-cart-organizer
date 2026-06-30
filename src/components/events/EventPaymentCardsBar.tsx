@@ -323,18 +323,27 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
               const name = order.customer?.instagram_handle?.trim() || "Sem nome";
               const phone = formatPhone(order.customer?.whatsapp);
               const value = getOrderFinalValue(order);
+              // Pisca quando há mensagem do cliente não visualizada (apenas aguardando).
+              const unread = !paidCard && !!order.has_unread_messages;
               return (
                 <button
                   key={order.id}
                   onClick={() => handleCardClick(order)}
-                  title="Abrir conversa"
+                  title={unread ? "Mensagem não lida — abrir conversa" : "Abrir conversa"}
                   className={cn(
-                    "group flex flex-col gap-1 min-w-[200px] max-w-[240px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0",
+                    "group relative flex flex-col gap-1 min-w-[200px] max-w-[240px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0",
                     paidCard
                       ? "bg-stage-paid/10 border-stage-paid/40 hover:bg-stage-paid/20"
                       : "bg-neutral-900 text-white border-l-4 border-l-yellow-400 border-y-neutral-700 border-r-neutral-700 hover:bg-neutral-800",
+                    unread && "animate-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-background",
                   )}
                 >
+                  {unread && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-3.5 w-3.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+                      <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-yellow-400" />
+                    </span>
+                  )}
                   <div className="flex items-center gap-1.5 min-w-0">
                     <span
                       className={cn(
