@@ -4306,6 +4306,7 @@ export type Database = {
           created_at: string
           event_id: string
           id: string
+          instagram: string | null
           landing_page_id: string | null
           metadata: Json
           name: string
@@ -4327,6 +4328,7 @@ export type Database = {
           created_at?: string
           event_id: string
           id?: string
+          instagram?: string | null
           landing_page_id?: string | null
           metadata?: Json
           name: string
@@ -4348,6 +4350,7 @@ export type Database = {
           created_at?: string
           event_id?: string
           id?: string
+          instagram?: string | null
           landing_page_id?: string | null
           metadata?: Json
           name?: string
@@ -6723,12 +6726,16 @@ export type Database = {
       }
       instagram_comment_rules: {
         Row: {
+          action_capture_lead: boolean
           action_reply_comment: boolean | null
           action_send_dm: boolean | null
           action_trigger_automation: boolean | null
           ai_generate_reply: boolean | null
           ai_prompt: string | null
           automation_flow_id: string | null
+          capture_event_id: string | null
+          capture_fallback_dm_text: string | null
+          capture_mode: string
           cooldown_minutes: number | null
           created_at: string
           dm_buttons: Json
@@ -6746,12 +6753,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          action_capture_lead?: boolean
           action_reply_comment?: boolean | null
           action_send_dm?: boolean | null
           action_trigger_automation?: boolean | null
           ai_generate_reply?: boolean | null
           ai_prompt?: string | null
           automation_flow_id?: string | null
+          capture_event_id?: string | null
+          capture_fallback_dm_text?: string | null
+          capture_mode?: string
           cooldown_minutes?: number | null
           created_at?: string
           dm_buttons?: Json
@@ -6769,12 +6780,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          action_capture_lead?: boolean
           action_reply_comment?: boolean | null
           action_send_dm?: boolean | null
           action_trigger_automation?: boolean | null
           ai_generate_reply?: boolean | null
           ai_prompt?: string | null
           automation_flow_id?: string | null
+          capture_event_id?: string | null
+          capture_fallback_dm_text?: string | null
+          capture_mode?: string
           cooldown_minutes?: number | null
           created_at?: string
           dm_buttons?: Json
@@ -6797,6 +6812,13 @@ export type Database = {
             columns: ["automation_flow_id"]
             isOneToOne: false
             referencedRelation: "automation_flows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instagram_comment_rules_capture_event_id_fkey"
+            columns: ["capture_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]

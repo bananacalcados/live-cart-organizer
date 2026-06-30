@@ -1,107 +1,83 @@
-# Melhorias no Módulo de Eventos
+# Captação de leads pela Live do Instagram (overnight)
 
-## 1. "Nova Live" passa a usar o novo Wizard (com etapa de identificação)
+## Resumo da viabilidade
 
-Hoje "Nova Live" abre um modal antigo (nome, data, canal, frete, automações) e o Wizard novo só abre no "Abrir Evento". Vamos unificar tudo no Wizard.
+As duas ideias são viáveis **e quase tudo já existe no sistema**. Não precisamos construir do zero — só ligar peças e adicionar a detecção de telefone.
 
-- Adicionar uma **nova primeira etapa "Identificação"** no `EventSetupWizard.tsx`:
-  - Nome do evento
-  - Data de início e fim (opcional)
-  - Canal de venda: **Shopify (site)** ou **Loja Física** (Pérola / Centro)
-- Botão **"Nova Live"** no `Events.tsx`: cria um evento rascunho (nome temporário) e abre o Wizard direto na etapa Identificação — substituindo o modal antigo. O modal antigo de criação é removido.
-- O Wizard valida que nome e canal estão preenchidos antes de avançar da etapa 1.
-- Ordem final das etapas: **Identificação → Frete → Mensagem → Parcelamento → Crossell → Ativar Live**.
+O que já temos hoje funcionando:
+- O webhook do Instagram (`meta-messenger-webhook`) **já recebe comentários da live** (campo `live_comments` da Meta) com o `@` (username), o texto e o `id` do remetente, e já salva em `live_comments` + `whatsapp_messages`.
+- O motor de automação de comentários (`instagram_comment_rules` + `processCommentAutomation`) **já dispara**: resposta no comentário, **DM no Direct com botões** (incluindo botão que leva a um link, via `igbtn:`) e disparo de fluxo de automação, com **cooldown por usuário** (anti-spam/anti-ban).
+- A captação de leads de evento (`event-lead-capture` → tabela `event_leads`) já salva nome, telefone, origem, vincula a um `event_id` e tem **dedup por evento+telefone** e token de indicação.
+- O dashboard **Marketing > Leads** já quebra leads por canal de captação.
 
-## 2. Corrigir botão "Pular e abrir"
+Ou seja:
 
-Atualmente o `onClick` chama `onCompleted`, mas em eventos recém-criados sem `name`/canal o fluxo pode falhar silenciosamente. Vamos:
-- Garantir que "Pular e abrir" **sempre** feche o modal e entre no evento (`setCurrentEvent` + navegar para o evento), sem depender de validação das etapas seguintes.
-- Tratar o caso do evento rascunho: se o nome ainda não foi salvo, exigir preenchimento da etapa 1 antes de permitir pular.
+**Opção A (digitar "LIVE")** → praticamente pronta. É só criar uma regra de comentário com a palavra-chave e um botão de DM apontando para o link do grupo VIP. Zero código novo.
 
-## 3. Botão para reabrir a configuração dentro do evento
+**Opção B (digitar o WhatsApp no comentário)** → viável e com menos atrito, como você intuiu. Exige uma peça nova: **detecção e validação do telefone dentro do texto livre do comentário**. É aí que mora o risco, e é o que o plano blinda abaixo.
 
-- No cabeçalho da tela do evento (`src/pages/Index.tsx`), adicionar um botão **"Configurar Live"** que reabre o `EventSetupWizard` para o evento atual.
-
-## 4. Dashboard dentro do evento
-
-Novo componente `EventInnerDashboard` exibido no topo da tela do evento (`Index.tsx`), com os indicadores:
-
-- **Ticket médio** do evento (faturamento ÷ pedidos pagos).
-- **Itens adicionados via Crossell** (do link de checkout) — contagem de `order_crossell_items` do evento.
-- **Itens de Crossell que converteram** — itens de crossell cujo pedido está pago.
-- **Leads captados** pelo Typebot ou LP do evento (`event_leads` por `event_id`, separando por `source`).
-- **Leads que converteram em venda** — leads cujo telefone (DDD + 9 dígitos) bate com o WhatsApp de um pedido **pago** do evento.
-- **Taxa de conversão** = leads que converteram ÷ total de leads captados (%).
-
-Para performance, esses números virão de uma **RPC** dedicada (`event_inner_dashboard`).
-
-## 5. Tags no painel lateral de comentários da Live
-
-No `EventLiveCommentsPanel.tsx`, ao lado do @ de cada comentário:
-
-- **TAG "Lead"** (verde) se o @ foi captado pelo Typebot/LP **deste** evento (match por DDD + 9 dígitos com o WhatsApp do cadastro do pedido / cliente).
-- **TAG "Lead de outra campanha"** se o telefone existir como lead em **outro** evento/origem de marketing (`event_leads` de outros eventos).
-- **Badge de classificação do Participante Score** (ver item 6), indicando o nível de engajamento daquele @.
-
-## 6. Nova aba "Participante Score" (módulo Eventos)
-
-Nova aba no `Events.tsx` com ranking inteligente de **todos os @ que já comentaram em qualquer Live**.
-
-Métricas agregadas por @:
-- Nº de Lives em que participou (comentou)
-- Nº de comentários em lives
-- Nº de compras pagas em lives
-- Ticket médio de compra nas lives
-- Nº de pedidos avançados (pagos/expedidos) e cancelados
-- Data da última participação + datas de todas as lives em que participou
-
-Sistema de pontos (proposta inicial — ajustável depois):
-- Participar de uma live: **+5** por live
-- Comentário em live: **+1** por comentário (limite p/ não inflar)
-- Compra paga em live: **+30** por pedido pago
-- Valor gasto: **+1** a cada R$ 50 gastos
-- Pedido cancelado: **-10** por cancelamento
-
-Categorias de ranking por faixa de pontos:
-- 🏆 **VIP** (top)
-- 🔥 **Engajado**
-- 👍 **Ativo**
-- 🌱 **Novo / Frio**
-
-A classificação calculada aqui alimenta o badge do item 5 no painel lateral.
-
-Tudo agregado via **RPC** (`participant_score_ranking`) para não sobrecarregar o front.
+**Recomendação:** implementar as duas e deixar a Opção B como principal (menor atrito) e a "LIVE" como rede de segurança para quem não quiser digitar o número. Ambas terminam no mesmo lugar: lead salvo no evento futuro + DM convidando ao grupo VIP.
 
 ---
 
-## Detalhes técnicos
+## Como garantir que o número está certo (o ponto crítico da Opção B)
 
-**Correlação de telefone (DDD + 9 dígitos):** normalizar removendo não-dígitos, tirar DDI (55), e comparar os últimos 11 dígitos (DDD + 9). Onde houver 8 dígitos legados, usar fallback por DDD + 8 (padrão já usado no projeto).
+O sistema não pode "achar" que qualquer número é telefone. Camadas de garantia:
 
-**RPCs novas (migrations):**
-- `event_inner_dashboard(p_event_id uuid)` → ticket médio, crossell add/convert, leads por fonte, leads convertidos, taxa de conversão.
-- `participant_score_ranking()` → ranking agregado de participantes de lives (varre `live_comments` + comentários de live em `whatsapp_messages` + `orders`), com pontos, categoria, datas de participação.
-- `event_lead_handles(p_event_id uuid)` (ou incluir no dashboard) → conjunto de telefones de leads para casar com @ no painel.
+1. **Extração estrita por regex de telefone BR**: procura sequências de 10–11 dígitos (aceitando `()`, `-`, espaço, `+55`). Ignora 2 dígitos soltos (tamanho de calçado) e textos sem dígitos suficientes.
+2. **Validação de DDD**: confere o DDD contra a lista oficial de DDDs válidos do Brasil. DDD inválido → descarta.
+3. **Validação de celular**: exige 11 dígitos com o 9º dígito (injeção automática quando vier com 10), reaproveitando `normalizeBRPhone`/`normalizePhoneBR` que já usamos no resto do sistema (padrão E.164).
+4. **Desambiguação**: se o comentário tiver vários números, pega o primeiro válido; se nenhum for válido, **não salva** e cai no fluxo de fallback (DM pedindo para reenviar, ou orienta a digitar "LIVE").
+5. **Double opt-in leve via Direct**: ao salvar, o DM de confirmação mostra os últimos 4 dígitos ("Recebi seu número ...**3210** ✅") junto do botão do grupo VIP. Se estiver errado, a própria pessoa corrige — e guardamos o comentário cru em `metadata` para auditoria.
+6. **Dedup**: `event_leads` já tem unique por `event_id + phone`; adicionamos também dedup por `@` para não recapturar a mesma pessoa, e o cooldown por usuário do motor de comentários evita DM duplicado em re-entregas do webhook.
 
-**Fontes de dados:**
-- Comentários de live: `live_comments` + `whatsapp_messages` (channel instagram, prefixo "💬 Comentário no Live:").
-- Crossell: `order_crossell_items` (tem `event_id` e `order_id`).
-- Leads: `event_leads` (`source` lp/typebot/referral/manual, `phone_suffix` já calculado).
-- Pedidos: `orders` (stage/is_paid/paid_externally).
+Sempre salvamos **`@` do Instagram + telefone** (e `comment_id` + texto original em `metadata`).
 
-**Arquivos afetados:**
-- `src/components/events/EventSetupWizard.tsx` (nova etapa, fix pular, validação)
-- `src/pages/Events.tsx` (botão Nova Live → wizard, remoção do modal antigo, nova aba Participante Score)
-- `src/pages/Index.tsx` (botão Configurar Live + dashboard interno)
-- `src/components/events/EventLiveCommentsPanel.tsx` (tags Lead / outra campanha / score)
-- Novos: `EventInnerDashboard.tsx`, `ParticipantScorePanel.tsx`
-- Migrations com as RPCs acima.
+---
 
-## Sugestão de execução em fases
-Para testar com segurança, sugiro implementar e validar em blocos:
-1. **Fase A** — Wizard unificado + fix "Pular e abrir" + botão Configurar Live.
-2. **Fase B** — Dashboard interno do evento (RPC + UI).
-3. **Fase C** — Tags no painel lateral (Lead / outra campanha).
-4. **Fase D** — Aba Participante Score + badge de score no painel.
+## Como vincular ao evento futuro (sem criar nada do zero)
 
-Posso seguir por essas fases ou implementar tudo de uma vez — como preferir.
+A live de hoje é só a **superfície de captação**; o destino é um **evento futuro** já criado no módulo Eventos (a tabela `events` já tem `start_date`/`end_date` e o wizard de setup).
+
+Hoje o webhook escolhe "o evento ativo" por `live_active_until`. Para captação overnight, criamos um vínculo explícito: a regra de captação aponta para `capture_event_id` (o evento futuro), de modo que os leads não vão para o evento errado.
+
+---
+
+## Plano de implementação
+
+### 1. Detecção de telefone (novo, pequeno)
+- `supabase/functions/_shared/br-phone-extract.ts`: função `extractBRPhone(text)` que faz extração + validação de DDD + 9º dígito, retornando `{ phone E.164, last4 }` ou `null`. Reutiliza a lógica de `src/lib/phoneUtils.ts`.
+
+### 2. Estender as regras de comentário (reuso de `instagram_comment_rules`)
+Migration adicionando colunas:
+- `action_capture_lead boolean default false`
+- `capture_event_id uuid` (evento futuro destino)
+- `capture_mode text` — `'phone'` (extrai do texto) ou `'keyword'` (palavra "LIVE", sem telefone).
+- (manter GRANTs do padrão do projeto)
+
+### 3. Lógica de captura no motor (`_shared/instagram-comment-automation.ts`)
+Dentro de `processCommentAutomation`, quando a regra tiver `action_capture_lead`:
+- modo `phone`: roda `extractBRPhone(text)`; se válido, chama `event-lead-capture` com `source: 'live_comment'`, `event_id: capture_event_id`, `name: '@username'`, `phone`, `metadata: { instagram, comment_id, raw_text }`; se inválido, fluxo de fallback (DM pedindo o número/“LIVE”).
+- modo `keyword`: dispara só o DM (Opção A), sem telefone.
+- Reaproveita o **cooldown por usuário** e o **envio de DM com botão VIP** que já existem.
+
+### 4. `event-lead-capture` aceitar a nova origem
+- Aceitar `source: 'live_comment'` e `instagram` em `metadata`; manter dedup `event_id+phone`. Marcar `vip_group_sent_at` quando o DM de convite for enviado.
+
+### 5. UI no Marketing (reuso de `InstagramCommentAutomation.tsx`)
+- Na regra de comentário, novo bloco "Captar lead para evento": toggle, seletor de **evento futuro**, escolha do modo (telefone / palavra-chave), texto do DM e botão do grupo VIP.
+- Em **Marketing > Leads** (`LeadsAnalyticsDashboard` / `marketing-leads-dashboard`): incluir `live_comment` como canal na quebra por origem.
+
+### 6. Operação da noite
+- Criar o evento futuro no módulo Eventos.
+- Criar a regra de comentário apontando para esse evento (modo telefone + fallback "LIVE").
+- Rodar o vídeo no OBS; os comentários entram pelo webhook e viram leads automaticamente, com convite VIP no Direct.
+
+---
+
+## Decisões em aberto (confirmar antes de executar)
+1. Quando o número vier inválido/ausente: **só ignorar** ou **responder no DM** pedindo para reenviar/digitar "LIVE"?
+2. O botão do grupo VIP no DM: link fixo do convite ou o redirecionador `/vip/{slug}` que já resolvemos hoje (recomendado, permite trocar o grupo sem reconfigurar)?
+3. Quer **confirmação double opt-in** (mostrar os últimos 4 dígitos) ou convite direto sem confirmação?
+
+Confirme esses 3 pontos (ou diga "pode seguir com os padrões recomendados") que eu executo.
