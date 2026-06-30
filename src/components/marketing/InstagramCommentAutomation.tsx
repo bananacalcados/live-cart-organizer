@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import {
   Instagram, Plus, Trash2, MessageSquare, Send, Zap, Save,
-  Edit, ChevronDown, ChevronUp, Image as ImageIcon, Loader2, Target, RefreshCw
+  Edit, ChevronDown, ChevronUp, Image as ImageIcon, Loader2, Target, RefreshCw, UserPlus
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
