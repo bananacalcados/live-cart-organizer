@@ -171,7 +171,9 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
     for (const o of orders) {
       if (isOrderMarkedPaid(o)) {
         paidList.push(o);
-      } else if (o.stage === "awaiting_payment") {
+      } else if (o.stage !== "cancelled" && o.stage !== "incomplete_order") {
+        // Todo pedido NÃO pago (e não cancelado/incompleto) está aguardando pagamento,
+        // independente do stage exato (contacted, new, awaiting_confirmation, awaiting_payment, no_response...).
         awaitingList.push(o);
       }
     }
