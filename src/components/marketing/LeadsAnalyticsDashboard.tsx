@@ -137,13 +137,13 @@ export function LeadsAnalyticsDashboard() {
             size="sm"
             onClick={() => setMode("purchased")}
           >
-            🛒 Leads que compraram no período
+            🛒 Todos os leads que compraram no período
           </Button>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
           {mode === "captured"
-            ? "Mostra leads CAPTADOS dentro do período selecionado e quanto eles já converteram (qualquer data)."
-            : "Mostra leads de TODOS os períodos cujas COMPRAS aconteceram dentro do período selecionado."}
+            ? "Considera os leads CAPTADOS (1ª vez) dentro do período selecionado e quantos deles compraram."
+            : "Considera TODOS os leads cadastrados (desde o início) e verifica quais COMPRARAM dentro do período selecionado."}
         </p>
 
         {/* Period + filters */}
