@@ -193,6 +193,10 @@ export default function InstagramCommentAutomation() {
       cooldown_minutes: rule.cooldown_minutes,
       target_media_id: rule.target_media_id || "",
       target_media_caption: rule.target_media_caption || "",
+      action_capture_lead: rule.action_capture_lead || false,
+      capture_event_id: rule.capture_event_id || "",
+      capture_mode: rule.capture_mode || "phone",
+      capture_fallback_dm_text: rule.capture_fallback_dm_text || "",
     });
     setShowDialog(true);
   }
