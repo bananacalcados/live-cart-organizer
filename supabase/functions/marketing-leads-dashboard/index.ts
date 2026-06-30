@@ -19,14 +19,38 @@ function normalizePhone(raw: string): string {
   return phone;
 }
 
-function classifyChannel(storeName?: string, isZoppy?: boolean): string {
-  if (isZoppy) return "Online (Site)";
-  const n = (storeName || "").toLowerCase();
-  if (n.includes("site") || n.includes("shopify") || n.includes("tiny")) return "Online (Site)";
-  if (n.includes("live")) return "Live";
-  if (!n) return "Não identificado";
-  return "Loja Física";
+// Real store UUIDs (from pos_stores).
+const STORE_PEROLA = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
+const STORE_CENTRO = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
+
+/**
+ * Classify the SALE channel into the 5 real channels.
+ * Order is critical:
+ *  a) sale_type='live'                 → "Live Shopping"  (BEFORE physical store)
+ *  b) Shopify site (external_source='shopify' OR any zoppy_sales) → "Shopify site"
+ *  c) sale_type='physical' → Loja Pérola / Loja Centro / Loja Física (outra)
+ *  d) sale_type='online' (not shopify) → "Online (link/checkout)"
+ *  e) anything else                    → "Não identificado"
+ */
+function classifyChannel(opts: { saleType?: string | null; externalSource?: string | null; storeId?: string | null; isZoppy?: boolean }): string {
+  const { saleType, externalSource, storeId, isZoppy } = opts;
+  // a) Live first — a live sale can live in the Pérola store, must win over physical.
+  if (saleType === "live") return "Live Shopping";
+  // b) Shopify site.
+  if (isZoppy) return "Shopify site";
+  if ((externalSource || "").toLowerCase() === "shopify") return "Shopify site";
+  // c) Physical stores.
+  if (saleType === "physical") {
+    if (storeId === STORE_PEROLA) return "Loja Pérola";
+    if (storeId === STORE_CENTRO) return "Loja Centro";
+    return "Loja Física (outra)";
+  }
+  // d) Online non-shopify (origin not trackable today — do NOT label WhatsApp).
+  if (saleType === "online") return "Online (link/checkout)";
+  // e) Rest.
+  return "Não identificado";
 }
+
 
 /**
  * Human-friendly grouping for lead ACQUISITION (capture) sources.
@@ -113,7 +137,7 @@ Deno.serve(async (req) => {
     while (true) {
       const { data } = await supabase
         .from("pos_sales")
-        .select("id, customer_id, total, created_at, store_id")
+        .select("id, customer_id, total, created_at, store_id, sale_type, external_source")
         .eq("status", "completed")
         .not("customer_id", "is", null)
         .range(off, off + 999);
@@ -123,7 +147,7 @@ Deno.serve(async (req) => {
           id: `pos:${s.id}`,
           total: Number(s.total || 0),
           date: new Date(s.created_at),
-          channel: classifyChannel(storeNames[s.store_id]),
+          channel: classifyChannel({ saleType: s.sale_type, externalSource: s.external_source, storeId: s.store_id }),
         });
       }
       if (data.length < 1000) break;
@@ -148,7 +172,7 @@ Deno.serve(async (req) => {
           id: `zoppy:${s.id}`,
           total: Number(s.total || 0),
           date: new Date(s.completed_at),
-          channel: classifyChannel(undefined, true),
+          channel: classifyChannel({ isZoppy: true }),
         });
       }
       if (data.length < 1000) break;
@@ -232,6 +256,10 @@ Deno.serve(async (req) => {
     const captureMap: Record<string, { channel: string; leads: number; converted: number; purchases: number; revenue: number; convertedRevenue: number }> = {};
     // Sale-channel aggregation (where the conversion sale happened) — for the monthly trend + future use
     const monthMap: Record<string, { month: string; purchases: number; revenue: number }> = {};
+    // NEW: conversion by SALE channel (channel of the conversionSale per converted lead).
+    const conversionChannelMap: Record<string, { channel: string; converted: number; valor_convertido: number }> = {};
+    // NEW: matrix capture-channel × sale-channel for converted leads.
+    const matrixMap: Record<string, { capture_channel: string; conversion_channel: string; converted: number; valor_convertido: number }> = {};
 
     for (const lead of Object.values(leadByPhone)) {
       const allSales = getAllSalesForPhone(lead.phone);
@@ -277,6 +305,7 @@ Deno.serve(async (req) => {
             id: qualifying[0].id,
             date: qualifying[0].date,
             total: qualifying[0].total,
+            channel: qualifying[0].channel,
             source: qualifying[0].id.startsWith("zoppy:") ? "zoppy" : "pos",
           }
         : null;
@@ -299,6 +328,18 @@ Deno.serve(async (req) => {
       // VALOR DE CONVERSÃO (métrica principal): apenas a 1ª compra (conversionSale).
       convertedRevenue += conversionSale.total;
       cap.convertedRevenue += conversionSale.total;
+
+      // NEW: conversion by SALE channel (channel of the 1st purchase).
+      const convCh = conversionSale.channel || "Não identificado";
+      const cc = (conversionChannelMap[convCh] ||= { channel: convCh, converted: 0, valor_convertido: 0 });
+      cc.converted++;
+      cc.valor_convertido += conversionSale.total;
+
+      // NEW: matrix capture-channel × sale-channel for this converted lead.
+      const mxKey = `${chKey}|||${convCh}`;
+      const mx = (matrixMap[mxKey] ||= { capture_channel: chKey, conversion_channel: convCh, converted: 0, valor_convertido: 0 });
+      mx.converted++;
+      mx.valor_convertido += conversionSale.total;
 
       // RECEITA TOTAL COM RECOMPRAS (métrica secundária): soma TODAS as qualifying.
       for (const s of qualifying) {
@@ -350,6 +391,26 @@ Deno.serve(async (req) => {
       .map(m => ({ ...m, revenue: Math.round(m.revenue * 100) / 100 }))
       .sort((a, b) => a.month.localeCompare(b.month));
 
+    // NEW: conversion by SALE channel (one of the 5 real channels).
+    const conversionChannels = Object.values(conversionChannelMap)
+      .map(c => ({
+        channel: c.channel,
+        converted: c.converted,
+        valor_convertido: Math.round(c.valor_convertido * 100) / 100,
+        ticket_medio_conversao: c.converted > 0 ? Math.round((c.valor_convertido / c.converted) * 100) / 100 : 0,
+      }))
+      .sort((a, b) => b.converted - a.converted);
+
+    // NEW: capture-channel × sale-channel matrix (converted leads only).
+    const captureXconversion = Object.values(matrixMap)
+      .map(m => ({
+        capture_channel: m.capture_channel,
+        conversion_channel: m.conversion_channel,
+        converted: m.converted,
+        valor_convertido: Math.round(m.valor_convertido * 100) / 100,
+      }))
+      .sort((a, b) => b.converted - a.converted);
+
     return new Response(JSON.stringify({
       mode,
       only_new_leads: onlyNewLeads,
@@ -378,6 +439,9 @@ Deno.serve(async (req) => {
       channels: captureChannels,
       sources,
       months,
+      // NEW: sale-channel breakdown of conversions + capture×conversion matrix
+      conversionChannels,
+      captureXconversion,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err: any) {
     console.error("leads-dashboard error:", err);
