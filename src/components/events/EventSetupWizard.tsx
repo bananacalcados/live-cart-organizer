@@ -411,7 +411,7 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
               <div key={s.key} className="flex flex-1 items-center">
                 <button
                   type="button"
-                  onClick={() => setStepIndex(i)}
+                  onClick={() => goToStep(i)}
                   className="flex flex-col items-center gap-1 flex-shrink-0"
                 >
                   <div
