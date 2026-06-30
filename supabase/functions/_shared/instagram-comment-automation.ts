@@ -316,6 +316,32 @@ export async function processCommentAutomation(
 
     if (!triggered) continue;
 
+    // ── Captação de lead pela Live (extração de telefone do comentário) ──
+    // captureEnabled exige a regra ligada + evento de destino definido.
+    const captureEnabled = !!(rule.action_capture_lead && rule.capture_event_id);
+    const captureMode = (rule.capture_mode || "phone").toLowerCase();
+    let extractedPhone: string | null = null;
+    let phoneLast4 = "";
+    let isCaptureFallback = false;
+
+    if (captureEnabled && captureMode === "phone") {
+      const ext = extractBRPhone(comment.text);
+      if (ext) {
+        extractedPhone = ext.phone;
+        phoneLast4 = ext.last4;
+      } else {
+        // Sem telefone válido: só seguimos (para mandar DM de fallback) quando
+        // a pessoa tentou digitar algo numérico E há texto de fallback configurado.
+        // Caso contrário, ignoramos sem gastar o cooldown — assim ela pode comentar
+        // o número correto depois sem ficar travada.
+        if (rule.capture_fallback_dm_text && textHasDigits(comment.text)) {
+          isCaptureFallback = true;
+        } else {
+          continue;
+        }
+      }
+    }
+
     // Reserve a per-user cooldown before calling Meta. This is intentionally
     // atomic (unique marker per cooldown bucket), so duplicate webhook deliveries
     // or multiple near-simultaneous comments cannot reply 4–5 times in parallel.
@@ -324,6 +350,54 @@ export async function processCommentAutomation(
     }
 
     const usernameClean = comment.username?.replace("@", "") || "";
+
+    // ── Captação: salva o lead no evento futuro (origem live_comment) ──
+    let leadSaved = false;
+    if (captureEnabled && captureMode === "phone" && extractedPhone) {
+      const actionId = await reserveRuleAction(supabase, comment.commentId, rule.id, "capture_lead");
+      if (actionId) {
+        try {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          const res = await fetch(`${supabaseUrl}/functions/v1/event-lead-capture`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${supabaseKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              event_id: rule.capture_event_id,
+              source: "live_comment",
+              name: comment.username || `@${usernameClean}` || extractedPhone,
+              phone: extractedPhone,
+              instagram: comment.username ? `@${usernameClean}` : null,
+              utm_source: "instagram",
+              utm_medium: "live_comment",
+              metadata: {
+                comment_id: comment.commentId,
+                raw_text: comment.text,
+                instagram: comment.username ? `@${usernameClean}` : null,
+                ig_user_id: comment.fromId,
+                rule_id: rule.id,
+              },
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          await finishReservedAction(supabase, actionId, res.ok ? "saved" : "error", res.ok ? null : JSON.stringify(data));
+          if (res.ok) {
+            leadSaved = true;
+            actions.push(`lead:${rule.name}`);
+            console.log(`✅ Lead da live capturado (${phoneLast4}) p/ evento ${rule.capture_event_id} via "${rule.name}"`);
+          } else {
+            console.error(`❌ Falha ao salvar lead da live para "${rule.name}":`, data);
+          }
+        } catch (e) {
+          console.error("Erro ao capturar lead da live:", e);
+          await finishReservedAction(supabase, actionId, "error", e instanceof Error ? e.message : String(e));
+        }
+      }
+    }
+
 
     // ── Action 1: Reply to comment publicly (com variações anti-spam) ──
     const replyTemplate = pickReplyText(rule);
