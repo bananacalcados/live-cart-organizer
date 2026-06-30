@@ -338,13 +338,17 @@ const Events = () => {
   };
 
   // Descarta o rascunho se o usuário fechar o wizard sem nomear o evento.
+  // Checa o estado REAL no banco (não o store local, que pode estar desatualizado
+  // porque o wizard persiste direto via supabase) para nunca apagar um evento já configurado.
   const discardDraftIfPristine = async () => {
-    if (!draftEventId) return;
-    const ev = useEventStore.getState().events.find((e) => e.id === draftEventId);
-    if (ev && (ev.name === EVENT_DRAFT_NAME || !ev.name?.trim())) {
-      await deleteEvent(draftEventId);
-    }
+    const id = draftEventId;
     setDraftEventId(null);
+    if (!id) return;
+    const { data } = await supabase.from("events").select("name").eq("id", id).maybeSingle();
+    const dbName = (data?.name || "").trim();
+    if (!dbName || dbName === EVENT_DRAFT_NAME) {
+      await deleteEvent(id);
+    }
   };
 
 
