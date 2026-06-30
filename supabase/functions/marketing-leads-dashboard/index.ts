@@ -339,7 +339,10 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       mode,
-      first_purchase_only: firstPurchaseOnly,
+      only_new_leads: onlyNewLeads,
+      include_existing_customers: includeExisting,
+      // legacy alias kept for any older client still reading this field
+      first_purchase_only: onlyNewLeads,
       summary: {
         leads_in_scope: leadsInScope,
         leads_converted: leadsConverted,
