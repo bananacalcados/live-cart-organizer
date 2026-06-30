@@ -438,7 +438,12 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       (data as any[]).forEach((row) => {
         const handles = keyToHandles.get(row.phone_key) || [];
         handles.forEach((h) =>
-          map.set(h, { thisEvent: !!row.this_event, otherEvent: !!row.other_event }),
+          map.set(h, {
+            thisEvent: !!row.this_event,
+            otherEvent: !!row.other_event,
+            otherEventName: row.other_event_name ?? null,
+            otherSource: row.other_source ?? null,
+          }),
         );
       });
       setLeadTagByHandle(map);
