@@ -806,9 +806,11 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               media_type: 'audio',
               media_url: mediaUrl,
               message_id: result.messageId || null,
+              whatsapp_number_id: effectiveNumberId || null,
               sender_user_id: currentUserId || null,
             });
             updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
+            await loadMessages();
           }
         } else {
           toast.error('Erro ao enviar áudio');
