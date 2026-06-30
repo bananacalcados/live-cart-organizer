@@ -364,6 +364,14 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     : 'Sem identificação';
   const currentStage = STAGES.find(s => s.id === order.stage);
 
+  const fichaOrder = {
+    id: order.id,
+    customer: {
+      instagram_handle: order.instagramHandle || "",
+      whatsapp: order.whatsapp || "",
+    },
+  } as unknown as DbOrder;
+
   // Normalize phone for database queries - ensures 9th digit is present
   const normalizedPhone = normalizeBRPhone(phone);
   const phoneVariations = buildPhoneVariations(phone);
