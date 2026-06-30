@@ -897,6 +897,17 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
         <ChatPixButton orderId={order.id} variant="icon-light" />
 
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-white hover:bg-white/10 h-8 w-8"
+          title="Ver dados do cliente"
+          onClick={() => setFichaOpen(true)}
+        >
+          <UserCog className="h-4 w-4" />
+        </Button>
+
+
         <CreateSupportTicketDialog
           phone={phone}
           customerName={contactName}
