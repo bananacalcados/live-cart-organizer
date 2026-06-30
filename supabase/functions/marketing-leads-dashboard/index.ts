@@ -224,10 +224,12 @@ Deno.serve(async (req) => {
     let wereCustomersBefore = 0;   // converted leads that already had purchases before becoming lead
     let firstTimeBuyers = 0;       // converted leads whose first ever purchase came after lead capture
     let totalPurchases = 0;
-    let totalRevenue = 0;
+    let totalRevenue = 0;          // receita_total_com_recompras: ALL qualifying purchases
+    let convertedRevenue = 0;      // valor_convertido: only the 1st purchase (conversionSale) per lead
 
     // Capture-channel aggregation (where the lead came in)
-    const captureMap: Record<string, { channel: string; leads: number; converted: number; purchases: number; revenue: number }> = {};
+    // revenue = receita com recompras (todas qualifying); convertedRevenue = só 1ª compra
+    const captureMap: Record<string, { channel: string; leads: number; converted: number; purchases: number; revenue: number; convertedRevenue: number }> = {};
     // Sale-channel aggregation (where the conversion sale happened) — for the monthly trend + future use
     const monthMap: Record<string, { month: string; purchases: number; revenue: number }> = {};
 
