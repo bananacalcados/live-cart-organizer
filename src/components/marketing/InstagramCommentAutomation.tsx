@@ -167,6 +167,10 @@ export default function InstagramCommentAutomation() {
       cooldown_minutes: 60,
       target_media_id: "",
       target_media_caption: "",
+      action_capture_lead: false,
+      capture_event_id: "",
+      capture_mode: "phone",
+      capture_fallback_dm_text: "",
     });
     setShowDialog(true);
   }
