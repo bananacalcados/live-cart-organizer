@@ -363,8 +363,15 @@ Deno.serve(async (req) => {
         were_customers_before: wereCustomersBefore,
         first_time_buyers: firstTimeBuyers,
         total_purchases: totalPurchases,
-        total_revenue: Math.round(totalRevenue * 100) / 100,
+        // VALOR DE CONVERSÃO (principal): soma só da 1ª compra de cada lead convertido.
+        valor_convertido: Math.round(convertedRevenue * 100) / 100,
+        ticket_medio_conversao: leadsConverted > 0 ? Math.round((convertedRevenue / leadsConverted) * 100) / 100 : 0,
+        // RECEITA TOTAL COM RECOMPRAS (secundária): soma de todas as compras qualifying.
+        receita_total_com_recompras: Math.round(totalRevenue * 100) / 100,
+        // alias legado: total_revenue agora reflete o valor_convertido (1ª compra).
+        total_revenue: Math.round(convertedRevenue * 100) / 100,
         avg_ticket: totalPurchases > 0 ? Math.round((totalRevenue / totalPurchases) * 100) / 100 : 0,
+        compras_por_lead: leadsConverted > 0 ? Math.round((totalPurchases / leadsConverted) * 100) / 100 : 0,
         avg_purchases_per_lead: leadsConverted > 0 ? Math.round((totalPurchases / leadsConverted) * 100) / 100 : 0,
       },
       // capture channels (where the lead came in)
