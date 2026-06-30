@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2 } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +31,8 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
+import { CustomerFichaDialog } from "./CustomerFichaDialog";
+import type { DbOrder } from "@/types/database";
 import { MessageStatusIcon } from "./chat/MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./chat/WhatsAppMediaAttachment";
 
@@ -109,6 +111,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [isSending, setIsSending] = useState(false);
   const [aiPaused, setAiPaused] = useState(false);
   const [togglingAiPause, setTogglingAiPause] = useState(false);
+  const [fichaOpen, setFichaOpen] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
   const { getTemplatesByStage, templates } = useTemplateStore();
   const { selectedNumberId, fetchNumbers, getSelectedNumber, numbers } = useWhatsAppNumberStore();
@@ -360,6 +363,14 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     ? (order.instagramHandle.startsWith('@') ? order.instagramHandle : `@${order.instagramHandle}`)
     : 'Sem identificação';
   const currentStage = STAGES.find(s => s.id === order.stage);
+
+  const fichaOrder = {
+    id: order.id,
+    customer: {
+      instagram_handle: order.instagramHandle || "",
+      whatsapp: order.whatsapp || "",
+    },
+  } as unknown as DbOrder;
 
   // Normalize phone for database queries - ensures 9th digit is present
   const normalizedPhone = normalizeBRPhone(phone);
@@ -886,6 +897,17 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
         <ChatPixButton orderId={order.id} variant="icon-light" />
 
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-white hover:bg-white/10 h-8 w-8"
+          title="Ver dados do cliente"
+          onClick={() => setFichaOpen(true)}
+        >
+          <UserCog className="h-4 w-4" />
+        </Button>
+
+
         <CreateSupportTicketDialog
           phone={phone}
           customerName={contactName}
@@ -1344,6 +1366,8 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           })()}
         </DialogContent>
       </Dialog>
+
+      <CustomerFichaDialog open={fichaOpen} onOpenChange={setFichaOpen} order={fichaOrder} />
     </div>
   );
 }

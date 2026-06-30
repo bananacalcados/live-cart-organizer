@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Send, Save, Copy } from "lucide-react";
+import { Loader2, Send, Save, Copy, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DbOrder } from "@/types/database";
@@ -48,6 +48,7 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const [fetchingCep, setFetchingCep] = useState(false);
 
   const paymentLink = `https://checkout.bananacalcados.com.br/checkout/order/${order.id}?step=3`;
 
@@ -112,6 +113,38 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
 
   const handleChange = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  const lookupCep = async (rawCep: string) => {
+    const digits = rawCep.replace(/\D/g, "");
+    if (digits.length !== 8) return;
+    setFetchingCep(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setForm((p) => ({
+          ...p,
+          address: data.logradouro || p.address,
+          neighborhood: data.bairro || p.neighborhood,
+          city: data.localidade || p.city,
+          state: data.uf || p.state,
+        }));
+      } else {
+        toast.error("CEP não encontrado");
+      }
+    } catch {
+      toast.error("Erro ao buscar CEP");
+    } finally {
+      setFetchingCep(false);
+    }
+  };
+
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setForm((p) => ({ ...p, cep: value }));
+    if (value.replace(/\D/g, "").length === 8) lookupCep(value);
+  };
+
 
   const handleSave = async () => {
     setSaving(true);
@@ -219,7 +252,18 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
             </div>
             <div>
               <Label>CEP</Label>
-              <Input value={form.cep} onChange={handleChange("cep")} />
+              <div className="relative">
+                <Input
+                  value={form.cep}
+                  onChange={handleCepChange}
+                  onBlur={(e) => lookupCep(e.target.value)}
+                  placeholder="00000-000"
+                  maxLength={9}
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  {fetchingCep ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </div>
+              </div>
             </div>
             <div>
               <Label>Cidade</Label>
