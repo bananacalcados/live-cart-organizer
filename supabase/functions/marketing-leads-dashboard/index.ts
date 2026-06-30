@@ -439,6 +439,9 @@ Deno.serve(async (req) => {
       channels: captureChannels,
       sources,
       months,
+      // NEW: sale-channel breakdown of conversions + capture×conversion matrix
+      conversionChannels,
+      captureXconversion,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err: any) {
     console.error("leads-dashboard error:", err);
