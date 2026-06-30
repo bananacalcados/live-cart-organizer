@@ -198,10 +198,16 @@ serve(async (req) => {
     await supabase.from('orders').update({ stage: 'contacted' }).eq('id', orderId);
 
     // ===== Branch: Meta WhatsApp Template (overrides 3-block send for WA) =====
+    // If the event's WhatsApp number is a Meta API instance AND a template is
+    // configured, always send via template — even when channel_preference wasn't
+    // explicitly set to "meta_whatsapp" (wizard saves the template without
+    // changing channel_preference). Outside the 24h window a plain session
+    // message would silently fail, so the template is the correct path here.
     const useMetaTemplate =
-      wantsMeta &&
+      (wantsMeta || !wantsInstagram) &&
       !!metaPhoneNumberId &&
       !!metaTemplateName;
+
 
     const resolveToken = (token: string): string => {
       switch (token) {
