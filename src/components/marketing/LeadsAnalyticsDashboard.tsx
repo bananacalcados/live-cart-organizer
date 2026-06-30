@@ -105,10 +105,11 @@ export function LeadsAnalyticsDashboard() {
     }
   }, [mode, preset, customFrom, customTo, firstPurchaseOnly]);
 
+  // Reload on mount and whenever the mode toggle changes (period/filters use "Aplicar")
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mode]);
 
   const s = data?.summary;
   const maxMonthRev = Math.max(1, ...(data?.months || []).map(m => m.revenue));
