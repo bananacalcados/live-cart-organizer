@@ -224,10 +224,12 @@ Deno.serve(async (req) => {
     let wereCustomersBefore = 0;   // converted leads that already had purchases before becoming lead
     let firstTimeBuyers = 0;       // converted leads whose first ever purchase came after lead capture
     let totalPurchases = 0;
-    let totalRevenue = 0;
+    let totalRevenue = 0;          // receita_total_com_recompras: ALL qualifying purchases
+    let convertedRevenue = 0;      // valor_convertido: only the 1st purchase (conversionSale) per lead
 
     // Capture-channel aggregation (where the lead came in)
-    const captureMap: Record<string, { channel: string; leads: number; converted: number; purchases: number; revenue: number }> = {};
+    // revenue = receita com recompras (todas qualifying); convertedRevenue = só 1ª compra
+    const captureMap: Record<string, { channel: string; leads: number; converted: number; purchases: number; revenue: number; convertedRevenue: number }> = {};
     // Sale-channel aggregation (where the conversion sale happened) — for the monthly trend + future use
     const monthMap: Record<string, { month: string; purchases: number; revenue: number }> = {};
 
@@ -282,7 +284,7 @@ Deno.serve(async (req) => {
       leadsInScope++;
 
       const chKey = prettySource(captureSource);
-      const cap = (captureMap[chKey] ||= { channel: chKey, leads: 0, converted: 0, purchases: 0, revenue: 0 });
+      const cap = (captureMap[chKey] ||= { channel: chKey, leads: 0, converted: 0, purchases: 0, revenue: 0, convertedRevenue: 0 });
       cap.leads++;
 
       // A lead is "converted" if it has >= 1 qualifying purchase. Subsequent
@@ -294,8 +296,11 @@ Deno.serve(async (req) => {
       cap.converted++;
       if (hadPriorSales) wereCustomersBefore++; else firstTimeBuyers++;
 
-      // NOTE: financial totals below still SUM ALL qualifying purchases of the
-      // lead (not just the conversion sale) — kept unchanged on purpose.
+      // VALOR DE CONVERSÃO (métrica principal): apenas a 1ª compra (conversionSale).
+      convertedRevenue += conversionSale.total;
+      cap.convertedRevenue += conversionSale.total;
+
+      // RECEITA TOTAL COM RECOMPRAS (métrica secundária): soma TODAS as qualifying.
       for (const s of qualifying) {
         totalPurchases++;
         totalRevenue += s.total;
@@ -319,7 +324,12 @@ Deno.serve(async (req) => {
         leads: c.leads,
         converted: c.converted,
         purchases: c.purchases,
-        revenue: Math.round(c.revenue * 100) / 100,
+        // valor_convertido (1ª compra) é o valor financeiro principal do canal.
+        valor_convertido: Math.round(c.convertedRevenue * 100) / 100,
+        receita_total_com_recompras: Math.round(c.revenue * 100) / 100,
+        // `revenue` mantido = valor_convertido para o gráfico principal.
+        revenue: Math.round(c.convertedRevenue * 100) / 100,
+        ticket_medio_conversao: c.converted > 0 ? Math.round((c.convertedRevenue / c.converted) * 100) / 100 : 0,
         conversion_rate: c.leads > 0 ? Math.round((c.converted / c.leads) * 10000) / 100 : 0,
       }))
       .sort((a, b) => b.leads - a.leads);
@@ -329,7 +339,10 @@ Deno.serve(async (req) => {
       leads: c.leads,
       converted: c.converted,
       purchases: c.purchases,
+      valor_convertido: c.valor_convertido,
+      receita_total_com_recompras: c.receita_total_com_recompras,
       revenue: c.revenue,
+      ticket_medio_conversao: c.ticket_medio_conversao,
       conversion_rate: c.conversion_rate,
     }));
 
@@ -350,8 +363,15 @@ Deno.serve(async (req) => {
         were_customers_before: wereCustomersBefore,
         first_time_buyers: firstTimeBuyers,
         total_purchases: totalPurchases,
-        total_revenue: Math.round(totalRevenue * 100) / 100,
+        // VALOR DE CONVERSÃO (principal): soma só da 1ª compra de cada lead convertido.
+        valor_convertido: Math.round(convertedRevenue * 100) / 100,
+        ticket_medio_conversao: leadsConverted > 0 ? Math.round((convertedRevenue / leadsConverted) * 100) / 100 : 0,
+        // RECEITA TOTAL COM RECOMPRAS (secundária): soma de todas as compras qualifying.
+        receita_total_com_recompras: Math.round(totalRevenue * 100) / 100,
+        // alias legado: total_revenue agora reflete o valor_convertido (1ª compra).
+        total_revenue: Math.round(convertedRevenue * 100) / 100,
         avg_ticket: totalPurchases > 0 ? Math.round((totalRevenue / totalPurchases) * 100) / 100 : 0,
+        compras_por_lead: leadsConverted > 0 ? Math.round((totalPurchases / leadsConverted) * 100) / 100 : 0,
         avg_purchases_per_lead: leadsConverted > 0 ? Math.round((totalPurchases / leadsConverted) * 100) / 100 : 0,
       },
       // capture channels (where the lead came in)
