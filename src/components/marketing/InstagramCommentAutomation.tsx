@@ -240,6 +240,10 @@ export default function InstagramCommentAutomation() {
       cooldown_minutes: form.cooldown_minutes,
       target_media_id: form.target_media_id || null,
       target_media_caption: form.target_media_id ? (form.target_media_caption || null) : null,
+      action_capture_lead: form.action_capture_lead,
+      capture_event_id: form.action_capture_lead ? (form.capture_event_id || null) : null,
+      capture_mode: form.capture_mode || "phone",
+      capture_fallback_dm_text: form.action_capture_lead ? (form.capture_fallback_dm_text || null) : null,
     };
 
     if (editingRule) {
