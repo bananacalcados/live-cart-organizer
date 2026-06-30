@@ -66,7 +66,12 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     // mode: "captured" = leads captured in period; "purchased" = leads (any period) that bought in period
     const mode: "captured" | "purchased" = body.mode === "purchased" ? "purchased" : "captured";
-    const firstPurchaseOnly: boolean = !!body.first_purchase_only;
+    // "Somente leads novos" (default ON): only people who were NOT customers when
+    // they entered as a lead (no sales before their first-ever capture).
+    // includeExisting = the explicit toggle "incluir quem já era cliente".
+    // Backwards-compat: a legacy `first_purchase_only:true` keeps new-only behavior.
+    const includeExisting: boolean = body.include_existing_customers === true;
+    const onlyNewLeads: boolean = !includeExisting;
     const dateFrom = body.date_from ? new Date(body.date_from) : null;
     const dateTo = body.date_to ? new Date(body.date_to) : null;
 
