@@ -66,7 +66,12 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     // mode: "captured" = leads captured in period; "purchased" = leads (any period) that bought in period
     const mode: "captured" | "purchased" = body.mode === "purchased" ? "purchased" : "captured";
-    const firstPurchaseOnly: boolean = !!body.first_purchase_only;
+    // "Somente leads novos" (default ON): only people who were NOT customers when
+    // they entered as a lead (no sales before their first-ever capture).
+    // includeExisting = the explicit toggle "incluir quem já era cliente".
+    // Backwards-compat: a legacy `first_purchase_only:true` keeps new-only behavior.
+    const includeExisting: boolean = body.include_existing_customers === true;
+    const onlyNewLeads: boolean = !includeExisting;
     const dateFrom = body.date_from ? new Date(body.date_from) : null;
     const dateTo = body.date_to ? new Date(body.date_to) : null;
 
@@ -248,21 +253,31 @@ Deno.serve(async (req) => {
       // Prior-customer status is judged against the EARLIEST-ever capture,
       // so the "1ª compra" semantics stay stable regardless of mode.
       const hadPriorSales = allSales.some(s => s.date < lead.firstEverDate);
-      if (firstPurchaseOnly && hadPriorSales) continue;
+      // Default behavior: analyze ONLY new leads (people who were not customers
+      // when they entered as a lead). Explicit toggle re-includes ex-customers.
+      if (onlyNewLeads && hadPriorSales) continue;
 
       if (!inScope) continue;
 
       // ── Qualifying purchases (define conversion) ──
-      // captured: sales inside the period AND after the in-period capture.
-      // purchased: any sale inside the period (regardless of capture date),
-      //   so we count all-time leads that converted within the window.
-      let qualifying: any[];
-      if (mode === "captured") {
-        const capDate = lead.firstInPeriodDate!;
-        qualifying = allSales.filter(s => inPeriod(s.date) && s.date > capDate);
-      } else {
-        qualifying = allSales.filter(s => inPeriod(s.date));
-      }
+      // A sale only qualifies as a conversion if it happened STRICTLY AFTER the
+      // lead's capture date — in BOTH modes. Purchases before/at capture are
+      // never conversions.
+      //   captured: capture date = first capture WITHIN the period.
+      //   purchased: capture date = earliest-ever capture (lead may predate window).
+      const capDate = mode === "captured" ? lead.firstInPeriodDate! : lead.firstEverDate;
+      const qualifying = allSales.filter(s => inPeriod(s.date) && s.date > capDate);
+
+      // Conversion event = the FIRST qualifying sale (oldest after capture).
+      // allSales is sorted ascending, so qualifying[0] is the earliest.
+      const conversionSale = qualifying.length > 0
+        ? {
+            id: qualifying[0].id,
+            date: qualifying[0].date,
+            total: qualifying[0].total,
+            source: qualifying[0].id.startsWith("zoppy:") ? "zoppy" : "pos",
+          }
+        : null;
 
       leadsInScope++;
 
@@ -270,13 +285,17 @@ Deno.serve(async (req) => {
       const cap = (captureMap[chKey] ||= { channel: chKey, leads: 0, converted: 0, purchases: 0, revenue: 0 });
       cap.leads++;
 
-      const converted = qualifying.length > 0;
+      // A lead is "converted" if it has >= 1 qualifying purchase. Subsequent
+      // purchases of the same lead do NOT create new conversions.
+      const converted = !!conversionSale;
       if (!converted) continue;
 
       leadsConverted++;
       cap.converted++;
       if (hadPriorSales) wereCustomersBefore++; else firstTimeBuyers++;
 
+      // NOTE: financial totals below still SUM ALL qualifying purchases of the
+      // lead (not just the conversion sale) — kept unchanged on purpose.
       for (const s of qualifying) {
         totalPurchases++;
         totalRevenue += s.total;
@@ -320,7 +339,10 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       mode,
-      first_purchase_only: firstPurchaseOnly,
+      only_new_leads: onlyNewLeads,
+      include_existing_customers: includeExisting,
+      // legacy alias kept for any older client still reading this field
+      first_purchase_only: onlyNewLeads,
       summary: {
         leads_in_scope: leadsInScope,
         leads_converted: leadsConverted,
