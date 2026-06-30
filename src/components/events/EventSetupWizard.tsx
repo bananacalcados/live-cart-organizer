@@ -366,7 +366,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       return;
     }
     setSaving(true);
-    const ok = await persistStep(currentStep.key);
+    const ok = await persistAll();
+
     if (ok) {
       const { error } = await supabase
         .from("events")
