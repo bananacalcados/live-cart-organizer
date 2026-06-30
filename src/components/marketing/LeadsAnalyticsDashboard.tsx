@@ -31,7 +31,7 @@ type DashboardData = {
   mode: string;
   first_purchase_only: boolean;
   summary: Summary;
-  channels: { channel: string; purchases: number; revenue: number; leads: number }[];
+  channels: { channel: string; leads: number; converted: number; purchases: number; revenue: number; conversion_rate: number }[];
   sources: { source: string; leads: number; converted: number; purchases: number; revenue: number; conversion_rate: number }[];
   months: { month: string; purchases: number; revenue: number }[];
 };
