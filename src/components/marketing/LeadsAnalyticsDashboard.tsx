@@ -105,10 +105,11 @@ export function LeadsAnalyticsDashboard() {
     }
   }, [mode, preset, customFrom, customTo, firstPurchaseOnly]);
 
+  // Reload on mount and whenever the mode toggle changes (period/filters use "Aplicar")
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mode]);
 
   const s = data?.summary;
   const maxMonthRev = Math.max(1, ...(data?.months || []).map(m => m.revenue));
@@ -136,13 +137,13 @@ export function LeadsAnalyticsDashboard() {
             size="sm"
             onClick={() => setMode("purchased")}
           >
-            🛒 Leads que compraram no período
+            🛒 Todos os leads que compraram no período
           </Button>
         </div>
         <p className="text-xs text-muted-foreground -mt-2">
           {mode === "captured"
-            ? "Mostra leads CAPTADOS dentro do período selecionado e quanto eles já converteram (qualquer data)."
-            : "Mostra leads de TODOS os períodos cujas COMPRAS aconteceram dentro do período selecionado."}
+            ? "Considera os leads CAPTADOS (1ª vez) dentro do período selecionado e quantos deles compraram."
+            : "Considera TODOS os leads cadastrados (desde o início) e verifica quais COMPRARAM dentro do período selecionado."}
         </p>
 
         {/* Period + filters */}
@@ -192,7 +193,7 @@ export function LeadsAnalyticsDashboard() {
           <>
             {/* KPI cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard icon={<Users className="h-4 w-4" />} label={mode === "captured" ? "Leads captados" : "Leads que compraram"} value={s.leads_in_scope.toLocaleString("pt-BR")} />
+              <KpiCard icon={<Users className="h-4 w-4" />} label="Leads captados" value={s.leads_in_scope.toLocaleString("pt-BR")} />
               <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Leads convertidos" value={s.leads_converted.toLocaleString("pt-BR")} sub={`${s.conversion_rate}% de conversão`} accent="emerald" />
               <KpiCard icon={<ShoppingBag className="h-4 w-4" />} label="Compras realizadas" value={s.total_purchases.toLocaleString("pt-BR")} sub={`${s.avg_purchases_per_lead} por lead`} />
               <KpiCard icon={<DollarSign className="h-4 w-4" />} label="Valor total convertido" value={fmtBRL(s.total_revenue)} sub={`Ticket ${fmtBRL(s.avg_ticket)}`} accent="emerald" />
