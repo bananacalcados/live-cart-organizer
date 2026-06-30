@@ -193,7 +193,7 @@ export function LeadsAnalyticsDashboard() {
           <>
             {/* KPI cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <KpiCard icon={<Users className="h-4 w-4" />} label={mode === "captured" ? "Leads captados" : "Leads que compraram"} value={s.leads_in_scope.toLocaleString("pt-BR")} />
+              <KpiCard icon={<Users className="h-4 w-4" />} label="Leads captados" value={s.leads_in_scope.toLocaleString("pt-BR")} />
               <KpiCard icon={<TrendingUp className="h-4 w-4" />} label="Leads convertidos" value={s.leads_converted.toLocaleString("pt-BR")} sub={`${s.conversion_rate}% de conversão`} accent="emerald" />
               <KpiCard icon={<ShoppingBag className="h-4 w-4" />} label="Compras realizadas" value={s.total_purchases.toLocaleString("pt-BR")} sub={`${s.avg_purchases_per_lead} por lead`} />
               <KpiCard icon={<DollarSign className="h-4 w-4" />} label="Valor total convertido" value={fmtBRL(s.total_revenue)} sub={`Ticket ${fmtBRL(s.avg_ticket)}`} accent="emerald" />
