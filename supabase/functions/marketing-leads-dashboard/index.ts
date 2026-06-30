@@ -284,7 +284,7 @@ Deno.serve(async (req) => {
       leadsInScope++;
 
       const chKey = prettySource(captureSource);
-      const cap = (captureMap[chKey] ||= { channel: chKey, leads: 0, converted: 0, purchases: 0, revenue: 0 });
+      const cap = (captureMap[chKey] ||= { channel: chKey, leads: 0, converted: 0, purchases: 0, revenue: 0, convertedRevenue: 0 });
       cap.leads++;
 
       // A lead is "converted" if it has >= 1 qualifying purchase. Subsequent
