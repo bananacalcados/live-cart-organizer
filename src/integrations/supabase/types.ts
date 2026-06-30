@@ -17854,6 +17854,8 @@ export type Database = {
         Args: { p_event_id: string; p_phones: string[] }
         Returns: {
           other_event: boolean
+          other_event_name: string
+          other_source: string
           phone_key: string
           this_event: boolean
         }[]
