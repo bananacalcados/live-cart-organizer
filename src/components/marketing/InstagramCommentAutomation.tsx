@@ -48,12 +48,22 @@ interface Rule {
   ai_prompt: string | null;
   target_media_id: string | null;
   target_media_caption: string | null;
+  action_capture_lead: boolean;
+  capture_event_id: string | null;
+  capture_mode: string | null;
+  capture_fallback_dm_text: string | null;
   created_at: string;
 }
 
 interface Flow {
   id: string;
   name: string;
+}
+
+interface EventOpt {
+  id: string;
+  name: string;
+  event_date: string | null;
 }
 
 interface MediaItem {
