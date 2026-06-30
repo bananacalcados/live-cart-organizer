@@ -792,10 +792,11 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
                       {stats && stats.openPast > 0 && (
                         <span
                           className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-black"
-                          title="Pedidos feitos em lives anteriores que nunca foram pagos"
+                          title={stats.openDates.length ? `Eventos: ${stats.openDates.join(" • ")}` : "Pedidos feitos em lives anteriores que nunca foram pagos"}
                         >
                           <AlertTriangle className="h-2.5 w-2.5" />
                           {stats.openPast} {stats.openPast === 1 ? "não finalizado" : "não finalizados"}
+                          {stats.openDates.length > 0 && ` (${stats.openDates.slice(0, 3).join(", ")}${stats.openDates.length > 3 ? "…" : ""})`}
                         </span>
                       )}
                       <span className="ml-auto text-[10px] text-muted-foreground">{timeLabel(c.created_at)}</span>
