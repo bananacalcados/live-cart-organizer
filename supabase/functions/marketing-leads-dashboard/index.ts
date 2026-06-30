@@ -19,14 +19,38 @@ function normalizePhone(raw: string): string {
   return phone;
 }
 
-function classifyChannel(storeName?: string, isZoppy?: boolean): string {
-  if (isZoppy) return "Online (Site)";
-  const n = (storeName || "").toLowerCase();
-  if (n.includes("site") || n.includes("shopify") || n.includes("tiny")) return "Online (Site)";
-  if (n.includes("live")) return "Live";
-  if (!n) return "Não identificado";
-  return "Loja Física";
+// Real store UUIDs (from pos_stores).
+const STORE_PEROLA = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
+const STORE_CENTRO = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
+
+/**
+ * Classify the SALE channel into the 5 real channels.
+ * Order is critical:
+ *  a) sale_type='live'                 → "Live Shopping"  (BEFORE physical store)
+ *  b) Shopify site (external_source='shopify' OR any zoppy_sales) → "Shopify site"
+ *  c) sale_type='physical' → Loja Pérola / Loja Centro / Loja Física (outra)
+ *  d) sale_type='online' (not shopify) → "Online (link/checkout)"
+ *  e) anything else                    → "Não identificado"
+ */
+function classifyChannel(opts: { saleType?: string | null; externalSource?: string | null; storeId?: string | null; isZoppy?: boolean }): string {
+  const { saleType, externalSource, storeId, isZoppy } = opts;
+  // a) Live first — a live sale can live in the Pérola store, must win over physical.
+  if (saleType === "live") return "Live Shopping";
+  // b) Shopify site.
+  if (isZoppy) return "Shopify site";
+  if ((externalSource || "").toLowerCase() === "shopify") return "Shopify site";
+  // c) Physical stores.
+  if (saleType === "physical") {
+    if (storeId === STORE_PEROLA) return "Loja Pérola";
+    if (storeId === STORE_CENTRO) return "Loja Centro";
+    return "Loja Física (outra)";
+  }
+  // d) Online non-shopify (origin not trackable today — do NOT label WhatsApp).
+  if (saleType === "online") return "Online (link/checkout)";
+  // e) Rest.
+  return "Não identificado";
 }
+
 
 /**
  * Human-friendly grouping for lead ACQUISITION (capture) sources.
