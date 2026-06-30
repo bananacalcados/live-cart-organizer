@@ -329,6 +329,18 @@ Deno.serve(async (req) => {
       convertedRevenue += conversionSale.total;
       cap.convertedRevenue += conversionSale.total;
 
+      // NEW: conversion by SALE channel (channel of the 1st purchase).
+      const convCh = conversionSale.channel || "Não identificado";
+      const cc = (conversionChannelMap[convCh] ||= { channel: convCh, converted: 0, valor_convertido: 0 });
+      cc.converted++;
+      cc.valor_convertido += conversionSale.total;
+
+      // NEW: matrix capture-channel × sale-channel for this converted lead.
+      const mxKey = `${chKey}|||${convCh}`;
+      const mx = (matrixMap[mxKey] ||= { capture_channel: chKey, conversion_channel: convCh, converted: 0, valor_convertido: 0 });
+      mx.converted++;
+      mx.valor_convertido += conversionSale.total;
+
       // RECEITA TOTAL COM RECOMPRAS (métrica secundária): soma TODAS as qualifying.
       for (const s of qualifying) {
         totalPurchases++;
