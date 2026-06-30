@@ -74,6 +74,11 @@ interface Rule {
   ai_generate_reply: boolean;
   ai_prompt: string | null;
   target_media_id: string | null;
+  // Captação de lead para evento (Live do Instagram)
+  action_capture_lead: boolean;
+  capture_event_id: string | null;
+  capture_mode: string | null; // 'phone' | 'keyword'
+  capture_fallback_dm_text: string | null;
 }
 
 function buildButtonPayload(ruleId: string, buttons: DmButton[]): any[] {
