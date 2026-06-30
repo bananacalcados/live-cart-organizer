@@ -655,7 +655,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         supabase
           .from("crm_customers_v")
           .select("id, first_name, last_name, phone, email")
-          .or(`phone.ilike.%${suffix}%`)
+          // Igualdade no sufixo indexado (phone_suffix8) em vez de ilike '%...%'
+          // — evita seq scan na tabela de ~177k clientes unificados.
+          .eq("phone_suffix8", suffix)
           .limit(1)
           .maybeSingle(),
         supabase
