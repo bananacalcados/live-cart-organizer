@@ -1346,7 +1346,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                   if (origin) {
                     rows.push(
                       <div key="origin" className="flex justify-between text-sm">
-                        <span className="text-gray-600 flex items-center gap-1"><Globe className="h-3 w-3" /> Origem do link</span>
+                        <span className="text-gray-600 flex items-center gap-1"><Globe className="h-3 w-3" /> Origem do pedido</span>
                         <span className="text-gray-900 font-medium">{origin}</span>
                       </div>
                     );
