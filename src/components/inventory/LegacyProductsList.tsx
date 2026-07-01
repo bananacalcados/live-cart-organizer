@@ -78,6 +78,7 @@ export function LegacyProductsList() {
   // expand
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [variants, setVariants] = useState<Record<string, VariantRow[] | "loading">>({});
+  const [editingVariant, setEditingVariant] = useState<{ masterId: string; v: VariantRow } | null>(null);
 
   // diálogo de unificação
   const [unifyOpen, setUnifyOpen] = useState(false);
