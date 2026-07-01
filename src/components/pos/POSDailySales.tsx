@@ -659,6 +659,7 @@ export function POSDailySales({ storeId }: Props) {
   // Calculations
   // Status filter for tabs
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'awaiting_payment' | 'not_approved'>('all');
+  const [sellerFilter, setSellerFilter] = useState<string>('all');
 
   // PAGO É PAGO: completedSales = somente vendas efetivamente pagas (completed/paid/pending_sync).
   // pending_pickup é "aguardando pagamento na retirada" e entra em awaitingPaymentSales.
