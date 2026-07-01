@@ -631,6 +631,10 @@ Deno.serve(async (req) => {
       // VALOR DE CONVERSÃO (métrica principal): apenas a 1ª compra (conversionSale).
       convertedRevenue += conversionSale.total;
       cap.convertedRevenue += conversionSale.total;
+      if (conversionSale.fallbackOnly) {
+        bonusFallbackConversions++;
+        bonusFallbackRevenue += conversionSale.total;
+      }
 
       // NEW: conversion by SALE channel (channel of the 1st purchase).
       const convCh = conversionSale.channel || "Não identificado";
