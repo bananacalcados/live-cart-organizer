@@ -43,7 +43,7 @@ serve(async (req) => {
   }
 
   try {
-    const { count_id, batch_size = 100, final = true } = await req.json();
+    const { count_id, batch_size = 100, final = true, prepare = false } = await req.json();
     if (!count_id) throw new Error('count_id is required');
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -56,6 +56,95 @@ serve(async (req) => {
     await supabase.from('inventory_counts').update({
       last_batch_at: new Date().toISOString(),
     }).eq('id', count_id);
+
+    // ── PREPARE mode (Total Inteligente "Salvar e corrigir bipados") ──
+    // Builds the correction queue SERVER-SIDE from the scanned items, so the
+    // client only makes ONE call (resilient on flaky store connections instead
+    // of chaining delete+insert+update from the browser, which was aborting and
+    // surfacing as "erro ao corrigir bipados: failed to fetch").
+    if (prepare) {
+      // Authoritative store comes from the count itself -> guarantees the
+      // correction hits the SAME store the balance was started for (ex.: Centro).
+      const { data: countRow, error: countErr } = await supabase
+        .from('inventory_counts')
+        .select('store_id, status')
+        .eq('id', count_id)
+        .maybeSingle();
+      if (countErr) throw countErr;
+      if (!countRow?.store_id) throw new Error('Contagem sem loja definida (store_id)');
+      const storeId = countRow.store_id as string;
+
+      // Load scanned items (paginate to bypass the 1000-row cap)
+      let scanned: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data: page, error: itErr } = await supabase
+          .from('inventory_count_items')
+          .select('id, product_id, product_name, sku, barcode, counted_quantity, current_stock, last_corrected_quantity')
+          .eq('count_id', count_id)
+          .gt('counted_quantity', 0)
+          .order('created_at', { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (itErr) throw itErr;
+        if (!page || page.length === 0) break;
+        scanned = scanned.concat(page);
+        if (page.length < pageSize) break;
+        from += pageSize;
+      }
+
+      // Only items whose counted qty changed since the last correction.
+      const toCorrect = scanned.filter((i) =>
+        i.last_corrected_quantity === null ||
+        i.last_corrected_quantity === undefined ||
+        i.last_corrected_quantity !== i.counted_quantity
+      );
+
+      // Clear any leftover queue for this count, then enqueue fresh rows.
+      await supabase.from('inventory_correction_queue').delete().eq('count_id', count_id);
+
+      if (toCorrect.length === 0) {
+        await supabase.from('inventory_counts').update({
+          status: final ? 'completed' : 'counting',
+          last_batch_at: new Date().toISOString(),
+          ...(final ? { completed_at: new Date().toISOString() } : {}),
+        }).eq('id', count_id);
+        return new Response(JSON.stringify({ success: true, prepared: 0, processed: 0, remaining: 0, done: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const queueRows = toCorrect.map((i) => ({
+        count_id,
+        count_item_id: i.id,
+        store_id: storeId,
+        product_id: String(i.product_id),
+        product_name: i.product_name || 'Unknown',
+        new_quantity: i.counted_quantity,
+        old_quantity: i.current_stock ?? null,
+      }));
+
+      const CHUNK = 200;
+      for (let i = 0; i < queueRows.length; i += CHUNK) {
+        const { error: insErr } = await supabase
+          .from('inventory_correction_queue')
+          .insert(queueRows.slice(i, i + CHUNK));
+        if (insErr) throw insErr;
+      }
+
+      // Mark the count as correcting so the UI shows progress.
+      await supabase.from('inventory_counts').update({
+        status: final ? 'correcting' : 'smart_correcting',
+        last_batch_at: new Date().toISOString(),
+      }).eq('id', count_id);
+
+      // Kick off the first processing batch in the background and return fast.
+      queueNextBatch(supabaseUrl, anonKey, { count_id, batch_size, final });
+
+      return new Response(JSON.stringify({ success: true, prepared: queueRows.length, done: false }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Get pending items
     const { data: items, error: fetchError } = await supabase

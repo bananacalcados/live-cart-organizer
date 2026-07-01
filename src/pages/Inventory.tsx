@@ -1068,7 +1068,8 @@ export default function Inventory() {
   const handleSmartCorrectScanned = async () => {
     if (!activeCount) return;
 
-    // Only scanned items whose counted quantity changed since last correction.
+    // Local pre-check just for UX (avoid a pointless call). The authoritative
+    // filtering happens server-side.
     const toCorrect = countItems.filter(i =>
       i.counted_quantity > 0 &&
       (i.last_corrected_quantity === null || i.last_corrected_quantity === undefined || i.last_corrected_quantity !== i.counted_quantity)
@@ -1079,43 +1080,45 @@ export default function Inventory() {
       return;
     }
 
+    setIsSmartCorrecting(true);
     toast.loading('Salvando e corrigindo bipados...', { id: 'smart-correct' });
+
+    // SINGLE resilient call: the edge function builds the queue server-side and
+    // processes it. Previously the browser chained delete+insert+update, and any
+    // aborted request on a store connection surfaced as "failed to fetch".
+    const callPrepare = async () => supabase.functions.invoke('inventory-correct-stock', {
+      body: { count_id: activeCount.id, batch_size: 10, final: false, prepare: true },
+    });
+
     try {
-      // Clean any leftover queue then enqueue the scanned items (absolute balance).
-      await supabase.from('inventory_correction_queue').delete().eq('count_id', activeCount.id);
+      let res = await callPrepare();
+      // Retry once on transient transport failure (flaky store network).
+      if (res.error) {
+        await new Promise(r => setTimeout(r, 1500));
+        res = await callPrepare();
+      }
+      if (res.error) throw res.error;
+      const data: any = res.data;
+      if (data && data.success === false) throw new Error(data.error || 'Falha ao preparar correção');
 
-      const rows = toCorrect.map(item => ({
-        count_id: activeCount.id,
-        count_item_id: item.id,
-        store_id: selectedStoreId,
-        product_id: item.product_id,
-        product_name: item.product_name,
-        new_quantity: item.counted_quantity,
-        old_quantity: item.current_stock,
-      }));
-
-      const CHUNK = 200;
-      for (let i = 0; i < rows.length; i += CHUNK) {
-        const { error } = await supabase.from('inventory_correction_queue').insert(rows.slice(i, i + CHUNK));
-        if (error) throw error;
+      const prepared = Number(data?.prepared ?? toCorrect.length);
+      if (prepared === 0) {
+        setIsSmartCorrecting(false);
+        toast.info('Nenhum item novo para corrigir desde a última correção.', { id: 'smart-correct' });
+        return;
       }
 
-      await supabase.from('inventory_counts').update({ status: 'smart_correcting' }).eq('id', activeCount.id);
+      // Reflect the correcting state; the polling effect takes over from here.
       setActiveCount({ ...activeCount, status: 'smart_correcting' } as unknown as InventoryCount);
-      setIsSmartCorrecting(true);
-      setSmartProgress({ processed: 0, total: toCorrect.length });
-
-      // Fire-and-forget incremental correction (final:false → returns to 'counting').
-      supabase.functions.invoke('inventory-correct-stock', {
-        body: { count_id: activeCount.id, batch_size: 10, final: false }
-      }).catch(e => console.error('Smart correct invoke error:', e));
-
-      toast.success(`Corrigindo ${toCorrect.length} bipados (balanço). Você pode continuar bipando.`, { id: 'smart-correct' });
+      setSmartProgress({ processed: 0, total: prepared });
+      toast.success(`Corrigindo ${prepared} bipados (balanço). Você pode continuar bipando.`, { id: 'smart-correct' });
     } catch (err: any) {
       console.error('handleSmartCorrectScanned error:', err);
-      toast.error('Erro ao corrigir bipados: ' + (err.message || 'desconhecido'), { id: 'smart-correct' });
+      setIsSmartCorrecting(false);
+      toast.error('Erro ao corrigir bipados: ' + (err?.message || 'desconhecido'), { id: 'smart-correct' });
     }
   };
+
 
   const handleStartCorrection = async () => {
     if (!activeCount) return;
