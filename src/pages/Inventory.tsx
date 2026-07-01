@@ -1133,7 +1133,11 @@ export default function Inventory() {
       // Reflect the correcting state; the polling effect takes over from here.
       setActiveCount({ ...activeCount, status: 'smart_correcting' } as unknown as InventoryCount);
       setSmartProgress({ processed: 0, total: prepared });
-      toast.success(`Corrigindo ${prepared} bipados (balanço). Você pode continuar bipando.`, { id: 'smart-correct' });
+      const zeroedSiblings = Number(data?.zeroed_siblings ?? 0);
+      const zeroMsg = zeroedSiblings > 0
+        ? ` (${zeroedSiblings} numeração(ões) do mesmo modelo zeradas por não terem sido bipadas)`
+        : '';
+      toast.success(`Corrigindo ${prepared} itens (balanço)${zeroMsg}. Você pode continuar bipando.`, { id: 'smart-correct' });
     } catch (err: any) {
       console.error('handleSmartCorrectScanned error:', err);
       setIsSmartCorrecting(false);
