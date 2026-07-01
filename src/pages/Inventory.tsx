@@ -2229,7 +2229,9 @@ export default function Inventory() {
           <DialogHeader>
             <DialogTitle>{activeCount?.scope === 'total_smart' ? 'Finalizar Balanço Inteligente?' : 'Finalizar Contagem?'}</DialogTitle>
             <DialogDescription>
-              {activeCount?.scope === 'total' || activeCount?.scope === 'total_smart'
+              {activeCount?.scope === 'total_smart'
+                ? `Balanço TOTAL INTELIGENTE: ${countItems.length} itens conferidos. Modelos que NÃO tiveram nenhuma numeração bipada serão ZERADOS por completo (esgotaram).`
+                : activeCount?.scope === 'total'
                 ? `Balanço TOTAL: ${countItems.length} produtos bipados. Todos os outros terão estoque ZERADO.`
                 : `Balanço PARCIAL: ${countItems.length} produtos bipados serão conferidos.`
               }
