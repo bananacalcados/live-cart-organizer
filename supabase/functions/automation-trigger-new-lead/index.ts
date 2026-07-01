@@ -25,29 +25,60 @@ serve(async (req) => {
       );
     }
 
-    // Persist lead to lp_leads for visibility in Marketing module
-    try {
-      const metadata: Record<string, unknown> = {};
-      if (recoveryUrl) metadata.recoveryUrl = recoveryUrl;
-      if (cartSummary) metadata.cartSummary = cartSummary;
-      if (totalAmount) metadata.totalAmount = totalAmount;
-      if (chosen_payment_method) metadata.chosen_payment_method = chosen_payment_method;
-      if (pix_code) metadata.pix_code = pix_code;
-      if (pix_expires_at) metadata.pix_expires_at = pix_expires_at;
+    // Persist lead to lp_leads for visibility in Marketing module.
+    // (A) Skip the insert when this call comes from the EVENT flow — the legit event
+    //     lead is already created by the trg_sync_event_lead_to_lp_leads trigger
+    //     (source='event_typebot'). Inserting here would create a duplicate "mirror".
+    //     Detection is unambiguous: only the event caller sends campaignTag
+    //     'event_lead:*' or metadata.event_id. The WhatsApp dispatch below still runs.
+    const isEventCall =
+      (typeof campaignTag === 'string' && campaignTag.startsWith('event_lead:')) ||
+      !!(extraMetadata && typeof extraMetadata === 'object' && (extraMetadata as Record<string, unknown>).event_id);
 
-      await supabase.from('lp_leads').insert({
-        phone: phone.replace(/\D/g, ''),
-        name: name || null,
-        email: email || null,
-        campaign_tag: campaignTag || 'lead-externo',
-        source: recoveryUrl ? 'abandoned_cart' : 'external_lead',
-        converted: false,
-        metadata: Object.keys(metadata).length > 0 ? metadata : null,
-      });
-      console.log(`Lead persisted to lp_leads: ${phone}, tag: ${campaignTag || 'lead-externo'}`);
-    } catch (leadErr) {
-      console.warn('Failed to persist lead (may be duplicate):', leadErr);
+    if (isEventCall) {
+      console.log(`Event-flow call detected (tag: ${campaignTag}) — skipping lp_leads insert (handled by trigger)`);
+    } else {
+      try {
+        const metadata: Record<string, unknown> = {};
+        if (recoveryUrl) metadata.recoveryUrl = recoveryUrl;
+        if (cartSummary) metadata.cartSummary = cartSummary;
+        if (totalAmount) metadata.totalAmount = totalAmount;
+        if (chosen_payment_method) metadata.chosen_payment_method = chosen_payment_method;
+        if (pix_code) metadata.pix_code = pix_code;
+        if (pix_expires_at) metadata.pix_expires_at = pix_expires_at;
+
+        const normalizedPhone = phone.replace(/\D/g, '');
+        const leadTag = campaignTag || 'lead-externo';
+
+        // (B) Idempotency guard — same key as the trigger (campaign_tag + phone).
+        //     Do NOT block the same person across DIFFERENT campaigns (grupo-vip vs
+        //     cupom-saida are two legit captures); only block the EXACT duplicate.
+        const { data: existing } = await supabase
+          .from('lp_leads')
+          .select('id')
+          .eq('campaign_tag', leadTag)
+          .eq('phone', normalizedPhone)
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          console.log(`Lead already exists (tag: ${leadTag}, phone: ${normalizedPhone}) — skipping duplicate insert`);
+        } else {
+          await supabase.from('lp_leads').insert({
+            phone: normalizedPhone,
+            name: name || null,
+            email: email || null,
+            campaign_tag: leadTag,
+            source: recoveryUrl ? 'abandoned_cart' : 'external_lead',
+            converted: false,
+            metadata: Object.keys(metadata).length > 0 ? metadata : null,
+          });
+          console.log(`Lead persisted to lp_leads: ${phone}, tag: ${leadTag}`);
+        }
+      } catch (leadErr) {
+        console.warn('Failed to persist lead (may be duplicate):', leadErr);
+      }
     }
+
 
     // Fetch flows: either by explicit flowIds (cross-trigger dispatch, e.g. event_lead_captured)
     // or by trigger_type='new_lead' (default behavior).
