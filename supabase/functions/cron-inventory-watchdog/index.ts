@@ -75,7 +75,7 @@ serve(async (req) => {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${anonKey}`,
           },
-          body: JSON.stringify({ count_id: count.id, batch_size: 10, final: isFinal }),
+          body: JSON.stringify({ count_id: count.id, batch_size: 50, final: isFinal }),
         }).then(async (r) => {
           const body = await r.text();
           console.log(`[watchdog] Re-triggered correction response: ${r.status} ${body.substring(0, 200)}`);

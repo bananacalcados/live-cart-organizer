@@ -67,12 +67,26 @@ serve(async (req) => {
       // correction hits the SAME store the balance was started for (ex.: Centro).
       const { data: countRow, error: countErr } = await supabase
         .from('inventory_counts')
-        .select('store_id, status')
+        .select('store_id, status, last_batch_at')
         .eq('id', count_id)
         .maybeSingle();
       if (countErr) throw countErr;
       if (!countRow?.store_id) throw new Error('Contagem sem loja definida (store_id)');
       const storeId = countRow.store_id as string;
+
+      // ── Concurrency guard ──
+      // If a correction run is already active with a RECENT heartbeat (<2min),
+      // do NOT delete/rebuild the queue mid-flight (that could drop rows a
+      // running batch is processing). Just re-kick processing and return.
+      const activeStatuses = ['correcting', 'smart_correcting'];
+      const lastBatchMs = countRow.last_batch_at ? new Date(countRow.last_batch_at).getTime() : 0;
+      const heartbeatFresh = Date.now() - lastBatchMs < 2 * 60 * 1000;
+      if (activeStatuses.includes(countRow.status) && heartbeatFresh) {
+        queueNextBatch(supabaseUrl, anonKey, { count_id, batch_size, final });
+        return new Response(JSON.stringify({ success: true, prepared: 0, alreadyRunning: true, done: false }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
       // Load scanned items (paginate to bypass the 1000-row cap)
       let scanned: any[] = [];
@@ -146,15 +160,12 @@ serve(async (req) => {
       });
     }
 
-    // Get pending items
+    // Atomically CLAIM a batch of pending items (marks them 'processing' and
+    // bumps attempts in a single SQL statement with FOR UPDATE SKIP LOCKED).
+    // This prevents two overlapping runs (e.g. a slow batch + a watchdog
+    // re-trigger) from grabbing the same rows and writing duplicate history.
     const { data: items, error: fetchError } = await supabase
-      .from('inventory_correction_queue')
-      .select('*')
-      .eq('count_id', count_id)
-      .in('status', ['pending', 'error'])
-      .lt('attempts', 5)
-      .order('created_at', { ascending: true })
-      .limit(batch_size);
+      .rpc('inventory_claim_correction_batch', { p_count_id: count_id, p_batch_size: batch_size });
 
     if (fetchError) throw fetchError;
     if (!items || items.length === 0) {
@@ -176,11 +187,8 @@ serve(async (req) => {
     let errors = 0;
 
     for (const item of items) {
-      // Mark as processing
-      await supabase.from('inventory_correction_queue').update({
-        status: 'processing', attempts: item.attempts + 1
-      }).eq('id', item.id);
-
+      // Item is already claimed (status='processing', attempts bumped) by the
+      // atomic RPC above — no per-row "mark processing" write needed.
       try {
         const nowIso = new Date().toISOString();
         const newQty = item.new_quantity;

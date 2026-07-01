@@ -1087,7 +1087,7 @@ export default function Inventory() {
     // processes it. Previously the browser chained delete+insert+update, and any
     // aborted request on a store connection surfaced as "failed to fetch".
     const callPrepare = async () => supabase.functions.invoke('inventory-correct-stock', {
-      body: { count_id: activeCount.id, batch_size: 10, final: false, prepare: true },
+      body: { count_id: activeCount.id, batch_size: 50, final: false, prepare: true },
     });
 
     try {
@@ -1168,7 +1168,7 @@ export default function Inventory() {
 
       // 4. Fire-and-forget: the edge function self-invokes until done
       supabase.functions.invoke('inventory-correct-stock', {
-        body: { count_id: activeCount.id, batch_size: 10 }
+        body: { count_id: activeCount.id, batch_size: 50 }
       }).catch(e => console.error('Initial correction invoke error:', e));
 
       // Refresh activeCount so polling useEffect kicks in
@@ -1216,7 +1216,7 @@ export default function Inventory() {
     
     // Fire-and-forget: server self-invokes
     supabase.functions.invoke('inventory-correct-stock', {
-      body: { count_id: activeCount.id, batch_size: 10 }
+      body: { count_id: activeCount.id, batch_size: 50 }
     }).catch(e => console.error('Retry invoke error:', e));
     
     toast.info(`Retentando ${errorItems.length} itens com erro... Processamento continua no servidor.`);

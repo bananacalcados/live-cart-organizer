@@ -17785,6 +17785,32 @@ export type Database = {
         Args: { message_id: string }
         Returns: undefined
       }
+      inventory_claim_correction_batch: {
+        Args: { p_batch_size: number; p_count_id: string }
+        Returns: {
+          attempts: number | null
+          count_id: string
+          count_item_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          max_attempts: number | null
+          new_quantity: number
+          old_quantity: number | null
+          processed_at: string | null
+          product_id: string
+          product_name: string
+          status: string
+          store_id: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "inventory_correction_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       is_sync_in_progress: { Args: never; Returns: boolean }
       is_unified_inventory_enabled: { Args: never; Returns: boolean }
       legacy_master_variants: {
