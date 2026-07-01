@@ -296,9 +296,13 @@ serve(async (req) => {
       await supabase.from('inventory_correction_queue').delete().eq('count_id', count_id);
 
       // ── Zerar irmãos (variações NÃO bipadas do mesmo produto-pai) ──
-      // Só no Balanço Total Inteligente. Ver .lovable/plan.md.
+      // CRÍTICO: só pode rodar na FINALIZAÇÃO do Balanço Total Inteligente
+      // (final === true). Nos salvamentos intermediários ("Salvar e corrigir
+      // bipados", final === false) NUNCA zeramos irmãos, porque numerações
+      // ainda-não-bipadas podem simplesmente não ter sido conferidas ainda —
+      // zerá-las no meio da contagem apaga estoque real. Ver .lovable/plan.md.
       let siblingZeroRows: Array<Record<string, unknown>> = [];
-      if (isSmartScope && scanned.length > 0) {
+      if (final && isSmartScope && scanned.length > 0) {
         try {
           siblingZeroRows = await buildSiblingZeroRows(supabase, count_id, storeId, scanned);
         } catch (e) {
@@ -307,6 +311,7 @@ serve(async (req) => {
           siblingZeroRows = [];
         }
       }
+
 
       if (toCorrect.length === 0 && siblingZeroRows.length === 0) {
         await supabase.from('inventory_counts').update({
