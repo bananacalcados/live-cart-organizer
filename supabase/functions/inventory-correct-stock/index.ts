@@ -72,12 +72,13 @@ serve(async (req) => {
       // correction hits the SAME store the balance was started for (ex.: Centro).
       const { data: countRow, error: countErr } = await supabase
         .from('inventory_counts')
-        .select('store_id, status, last_batch_at')
+        .select('store_id, status, last_batch_at, scope')
         .eq('id', count_id)
         .maybeSingle();
       if (countErr) throw countErr;
       if (!countRow?.store_id) throw new Error('Contagem sem loja definida (store_id)');
       const storeId = countRow.store_id as string;
+      const isSmartScope = countRow.scope === 'total_smart';
 
       // ── Concurrency guard ──
       // If a correction run is already active with a RECENT heartbeat (<2min),
