@@ -218,6 +218,67 @@ export function UnifiedProductsList() {
 
   const storeName = (id: string) => stores.find((s) => s.id === id)?.name || id.slice(0, 6);
 
+  // Todos os SKUs (todas as lojas) que pertencem a este grupo — usa a lista
+  // completa (posProducts), ignorando o filtro de loja, para excluir de fato tudo.
+  function groupSkuIds(g: GroupRow): string[] {
+    return posProducts
+      .filter((p) => (p.parent_sku || p.sku || p.barcode || p.id) === g.parent_sku)
+      .map((p) => p.id);
+  }
+
+  function variationSkuIds(g: GroupRow, color: string, size: string): string[] {
+    return posProducts
+      .filter(
+        (p) =>
+          (p.parent_sku || p.sku || p.barcode || p.id) === g.parent_sku &&
+          (p.color || p.variant || "—") === color &&
+          (p.size || "—") === size,
+      )
+      .map((p) => p.id);
+  }
+
+  async function deleteInChunks(ids: string[]) {
+    for (let i = 0; i < ids.length; i += 200) {
+      const { error } = await supabase.from("pos_products").delete().in("id", ids.slice(i, i + 200));
+      if (error) throw error;
+    }
+  }
+
+  async function deleteGroup(g: GroupRow) {
+    const label = g.master?.name || g.parent_sku;
+    if (!confirm(
+      `Excluir o cadastro "${label}"?\n\nRemove o produto do catálogo e TODAS as variações/estoque em todas as lojas. Esta ação não pode ser desfeita.`
+    )) return;
+    setBusy(true);
+    try {
+      await deleteInChunks(groupSkuIds(g));
+      if (g.master) {
+        const { error } = await supabase.from("product_master_data").delete().eq("parent_sku", g.parent_sku);
+        if (error) throw error;
+      }
+      toast.success("Cadastro excluído.");
+      await load();
+    } catch (err: any) {
+      toast.error("Erro ao excluir: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteVariation(g: GroupRow, color: string, size: string) {
+    if (!confirm(`Excluir a variação ${color} / ${size} em todas as lojas? Esta ação não pode ser desfeita.`)) return;
+    setBusy(true);
+    try {
+      await deleteInChunks(variationSkuIds(g, color, size));
+      toast.success("Variação excluída.");
+      await load();
+    } catch (err: any) {
+      toast.error("Erro ao excluir variação: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30">
