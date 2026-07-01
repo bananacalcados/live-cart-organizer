@@ -112,8 +112,11 @@ Deno.serve(async (req) => {
       for (const s of data || []) storeNames[s.id] = s.name;
     }
 
-    // ─── 2. pos_customers phone -> customerIds ───
+    // ─── 2. pos_customers phone maps (both directions) ───
+    // phoneToCustomerIds: phone -> [pos_customer ids]  (used to gather a lead's sales)
+    // posCustomerPhone:   pos_customer id -> phone      (used for fuzzy dedup lookup)
     const phoneToCustomerIds: Record<string, string[]> = {};
+    const posCustomerPhone: Record<string, string> = {};
     let off = 0;
     while (true) {
       const { data } = await supabase
@@ -124,37 +127,241 @@ Deno.serve(async (req) => {
       for (const c of data) {
         if (c.whatsapp) {
           const s = normalizePhone(c.whatsapp);
-          if (s) (phoneToCustomerIds[s] ||= []).push(c.id);
+          if (s) {
+            (phoneToCustomerIds[s] ||= []).push(c.id);
+            posCustomerPhone[c.id] = s;
+          }
         }
       }
       if (data.length < 1000) break;
       off += 1000;
     }
 
-    // ─── 3. pos_sales (completed) grouped by customer_id ───
-    const customerSales: Record<string, any[]> = {};
+    // ─── 2b. customers (live cards) id -> phone  &  events id -> channel ───
+    const cardCustomerPhone: Record<string, string> = {};
+    off = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("customers")
+        .select("id, whatsapp")
+        .range(off, off + 999);
+      if (!data || data.length === 0) break;
+      for (const c of data) {
+        if (c.whatsapp) {
+          const s = normalizePhone(c.whatsapp);
+          if (s) cardCustomerPhone[c.id] = s;
+        }
+      }
+      if (data.length < 1000) break;
+      off += 1000;
+    }
+
+    const eventChannel: Record<string, string> = {};
+    {
+      const { data } = await supabase.from("events").select("id, channel");
+      for (const e of data || []) eventChannel[e.id] = e.channel || "";
+    }
+    const CHANNEL_STORE_LABEL: Record<string, string> = {
+      site: "Site (Shopify)",
+      pos_perola: "Loja Pérola",
+      pos_centro: "Loja Centro",
+    };
+
+    // ─── 3. Load ALL pos_sales we may need (paid set + linkage lookups) ───
+    // We need every row referenced by a card (via pos_sale_id) to read its total,
+    // plus the full paid set for the non-live source. Load once, index by id.
+    const PAID_STATUSES = new Set(["completed", "paid", "pending_sync"]);
+    type PosSaleRow = {
+      id: string; customer_id: string | null; total: number;
+      created_at: string; paid_at: string | null; store_id: string | null;
+      sale_type: string | null; external_source: string | null;
+      external_order_id: string | null; source_order_id: string | null;
+      status: string | null;
+    };
+    const posSalesById: Record<string, PosSaleRow> = {};
     off = 0;
     while (true) {
       const { data } = await supabase
         .from("pos_sales")
-        .select("id, customer_id, total, created_at, store_id, sale_type, external_source")
-        .eq("status", "completed")
-        .not("customer_id", "is", null)
+        .select("id, customer_id, total, created_at, paid_at, store_id, sale_type, external_source, external_order_id, source_order_id, status")
         .range(off, off + 999);
       if (!data || data.length === 0) break;
-      for (const s of data) {
-        (customerSales[s.customer_id] ||= []).push({
-          id: `pos:${s.id}`,
-          total: Number(s.total || 0),
-          date: new Date(s.created_at),
-          channel: classifyChannel({ saleType: s.sale_type, externalSource: s.external_source, storeId: s.store_id }),
+      for (const s of data as PosSaleRow[]) posSalesById[s.id] = s;
+      if (data.length < 1000) break;
+      off += 1000;
+    }
+
+    // Which pos_sales rows count as "paid" for the non-live source:
+    //   completed | paid | pending_sync  → always
+    //   pending_pickup                   → only if paid_at IS NOT NULL
+    //   everything else (online_pending/pending/payment_failed/cancelled) → excluded
+    const isPaidPosSale = (s: PosSaleRow) => {
+      const st = (s.status || "").toLowerCase();
+      if (PAID_STATUSES.has(st)) return true;
+      if (st === "pending_pickup" && s.paid_at) return true;
+      return false;
+    };
+
+    // ─── 4. LIVE SOURCE — from orders (paid cards) ───
+    // Live confirmed sale = orders.is_paid = true AND stage <> 'cancelled'.
+    type OrderRow = {
+      id: string; event_id: string | null; customer_id: string | null;
+      paid_at: string | null; pos_sale_id: string | null; shopify_order_id: string | null;
+      products: any; discount_type: string | null; discount_value: number | null;
+    };
+    const paidCards: OrderRow[] = [];
+    off = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("orders")
+        .select("id, event_id, customer_id, paid_at, pos_sale_id, shopify_order_id, products, discount_type, discount_value, is_paid, stage")
+        .eq("is_paid", true)
+        .neq("stage", "cancelled")
+        .range(off, off + 999);
+      if (!data || data.length === 0) break;
+      for (const o of data as any[]) {
+        paidCards.push({
+          id: o.id, event_id: o.event_id, customer_id: o.customer_id,
+          paid_at: o.paid_at, pos_sale_id: o.pos_sale_id, shopify_order_id: o.shopify_order_id,
+          products: o.products, discount_type: o.discount_type, discount_value: o.discount_value,
         });
       }
       if (data.length < 1000) break;
       off += 1000;
     }
 
-    // ─── 4. zoppy_sales (online) grouped by normalized phone ───
+    // Card value: linked pos_sale total when present, else subtotal(products) − discount.
+    const cardSubtotal = (o: OrderRow): number => {
+      const products = Array.isArray(o.products) ? o.products : [];
+      const subtotal = products.reduce(
+        (s: number, p: any) => s + (Number(p?.price) || 0) * (Number(p?.quantity) || 0), 0);
+      const disc = o.discount_type && o.discount_value
+        ? (o.discount_type === "percentage" ? subtotal * (Number(o.discount_value) / 100) : Number(o.discount_value))
+        : 0;
+      return Math.max(0, subtotal - disc);
+    };
+    const cardValue = (o: OrderRow): number => {
+      if (o.pos_sale_id && posSalesById[o.pos_sale_id]) {
+        return Number(posSalesById[o.pos_sale_id].total || 0);
+      }
+      return cardSubtotal(o);
+    };
+
+    // Exclusion sets built from paid cards:
+    const paidCardIds = new Set<string>();                 // (ii) source_order_id target
+    const cardPosSaleIds = new Set<string>();              // (i) referenced pos_sale rows
+    const cardShopifyOrderIds = new Set<string>();         // (iii) shopify order ids
+    for (const o of paidCards) {
+      paidCardIds.add(o.id);
+      if (o.pos_sale_id) cardPosSaleIds.add(o.pos_sale_id);
+      if (o.shopify_order_id) cardShopifyOrderIds.add(String(o.shopify_order_id));
+    }
+
+    // Live sales grouped by normalized phone.
+    const livePhoneSales: Record<string, any[]> = {};
+    for (const o of paidCards) {
+      if (!o.customer_id) continue;
+      const phone = cardCustomerPhone[o.customer_id];
+      if (!phone) continue;
+      const storeLabel = CHANNEL_STORE_LABEL[eventChannel[o.event_id || ""] || ""] || null;
+      (livePhoneSales[phone] ||= []).push({
+        id: `order:${o.id}`,
+        total: cardValue(o),
+        date: new Date(o.paid_at || 0),
+        channel: "Live Shopping",
+        billing_store: storeLabel,
+      });
+    }
+
+    // ─── 5. NON-LIVE SOURCE — pos_sales after exclusion + fuzzy dedup ───
+    const audit = {
+      removed_i_pos_sale_id: 0,
+      removed_ii_source_order_id: 0,
+      removed_iii_shopify_order_id: 0,
+      removed_fuzzy: 0,
+      orphan_live_rows: 0,
+      orphan_live_value: 0,
+      fuzzy_pairs: [] as any[],
+    };
+
+    // 5a. First pass: keep only paid rows that are NOT already represented by a card,
+    // and NOT live/event orphans. Collect the surviving shopify rows as fuzzy candidates.
+    const excludedPosSaleIds = new Set<string>();
+    const survivingRows: PosSaleRow[] = [];
+    for (const s of Object.values(posSalesById)) {
+      if (!isPaidPosSale(s)) continue;
+      // (i) referenced directly by a paid card
+      if (cardPosSaleIds.has(s.id)) { audit.removed_i_pos_sale_id++; excludedPosSaleIds.add(s.id); continue; }
+      // (ii) re-routed: source_order_id points to a paid card
+      if (s.source_order_id && paidCardIds.has(s.source_order_id)) { audit.removed_ii_source_order_id++; excludedPosSaleIds.add(s.id); continue; }
+      // (iii) shares a shopify order id with a paid card
+      if (s.external_order_id && cardShopifyOrderIds.has(String(s.external_order_id))) { audit.removed_iii_shopify_order_id++; excludedPosSaleIds.add(s.id); continue; }
+      // Live/event orphans: live now sourced from orders → never count these via pos_sales.
+      if ((s.sale_type || "").toLowerCase() === "live") {
+        audit.orphan_live_rows++;
+        if (s.paid_at) audit.orphan_live_value += Number(s.total || 0);
+        excludedPosSaleIds.add(s.id);
+        continue;
+      }
+      survivingRows.push(s);
+    }
+
+    // 5b. Fuzzy dedup — cards without shopify_order_id (site channel) vs surviving
+    // shopify rows: same normalized phone, same value (±0.02), date within ±1 day.
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    const fuzzyCandidates = survivingRows.filter(
+      (s) => (s.external_source || "").toLowerCase() === "shopify" && s.customer_id
+    );
+    const usedCandidateIds = new Set<string>();
+    for (const o of paidCards) {
+      if (o.shopify_order_id) continue;                          // only cards without shopify id
+      if ((eventChannel[o.event_id || ""] || "") !== "site") continue; // site channel only
+      if (!o.customer_id) continue;
+      const phone = cardCustomerPhone[o.customer_id];
+      if (!phone) continue;
+      const val = cardValue(o);
+      const cardDate = new Date(o.paid_at || 0).getTime();
+      let best: { row: PosSaleRow; diff: number } | null = null;
+      for (const cand of fuzzyCandidates) {
+        if (usedCandidateIds.has(cand.id)) continue;
+        if (posCustomerPhone[cand.customer_id!] !== phone) continue;
+        if (Math.abs(Number(cand.total || 0) - val) > 0.02) continue;
+        const candDate = new Date(cand.paid_at || cand.created_at || 0).getTime();
+        const diff = Math.abs(candDate - cardDate);
+        if (diff > ONE_DAY) continue;
+        if (!best || diff < best.diff) best = { row: cand, diff };
+      }
+      if (best) {
+        usedCandidateIds.add(best.row.id);
+        excludedPosSaleIds.add(best.row.id);
+        audit.removed_fuzzy++;
+        audit.fuzzy_pairs.push({
+          dedup_reason: "fuzzy_live_match",
+          phone,
+          value: Math.round(val * 100) / 100,
+          card_id: o.id,
+          card_paid_at: o.paid_at,
+          pos_sale_id: best.row.id,
+          pos_sale_date: best.row.paid_at || best.row.created_at,
+          days_apart: Math.round((best.diff / ONE_DAY) * 100) / 100,
+        });
+      }
+    }
+
+    // 5c. Build the non-live sales grouped by pos_customer id (surviving, non-fuzzy).
+    const customerSales: Record<string, any[]> = {};
+    for (const s of survivingRows) {
+      if (excludedPosSaleIds.has(s.id)) continue;
+      if (!s.customer_id) continue;
+      (customerSales[s.customer_id] ||= []).push({
+        id: `pos:${s.id}`,
+        total: Number(s.total || 0),
+        date: new Date(s.paid_at || s.created_at),
+        channel: classifyChannel({ saleType: s.sale_type, externalSource: s.external_source, storeId: s.store_id }),
+      });
+    }
+
+    // ─── 6. zoppy_sales (legacy Shopify site — non-live) grouped by phone ───
     const zoppyPhoneSales: Record<string, any[]> = {};
     off = 0;
     while (true) {
@@ -179,9 +386,14 @@ Deno.serve(async (req) => {
       off += 1000;
     }
 
+    // Unified sales getter for a phone: LIVE (orders) + NON-LIVE (pos_sales) + zoppy.
+    // The same underlying sale never appears twice (exclusion/dedup guarantees this).
     function getAllSalesForPhone(phone: string): any[] {
       const sales: any[] = [];
       const seen = new Set<string>();
+      for (const s of (livePhoneSales[phone] || [])) {
+        if (!seen.has(s.id)) { seen.add(s.id); sales.push(s); }
+      }
       for (const cid of (phoneToCustomerIds[phone] || [])) {
         for (const s of (customerSales[cid] || [])) {
           if (!seen.has(s.id)) { seen.add(s.id); sales.push(s); }
