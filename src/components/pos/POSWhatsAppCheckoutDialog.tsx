@@ -150,6 +150,7 @@ export function POSWhatsAppCheckoutDialog({
         sale_type: "online",
         payment_gateway: "store-checkout",
         payment_details: {
+          link_origin: "whatsapp_chat",
           customer_name: customerName || null,
           customer_phone: phone,
           discount_amount: discountAmount,
