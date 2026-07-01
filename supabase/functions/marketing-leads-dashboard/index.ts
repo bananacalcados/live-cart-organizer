@@ -392,13 +392,16 @@ Deno.serve(async (req) => {
     const nonLivePhoneSales: Record<string, any[]> = {};
     for (const s of survivingRows) {
       if (excludedPosSaleIds.has(s.id)) continue;
-      const { phone } = getPosSalePhone(s);
+      const { phone, via } = getPosSalePhone(s);
       if (!phone) continue;
       (nonLivePhoneSales[phone] ||= []).push({
         id: `pos:${s.id}`,
         total: Number(s.total || 0),
         date: new Date(s.paid_at || s.created_at),
         channel: classifyChannel({ saleType: s.sale_type, externalSource: s.external_source, storeId: s.store_id }),
+        // BONUS diagnostic: this sale is only reachable because of the
+        // customer_phone fallback (customer_id was NULL).
+        fallbackOnly: via === "customer_phone" && !s.customer_id,
       });
     }
 
