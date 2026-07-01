@@ -437,6 +437,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
         stock_source_store_id: stockStore,
         payment_method_detail: gateway === "delivery" ? deliveryMethod : null,
         payment_details: {
+          link_origin: "online_hub",
           seller_name: sellerObj?.name || "",
           customer_name: linkedCustomer?.name || null,
           customer_phone: linkedCustomer?.whatsapp || null,
