@@ -187,11 +187,8 @@ serve(async (req) => {
     let errors = 0;
 
     for (const item of items) {
-      // Mark as processing
-      await supabase.from('inventory_correction_queue').update({
-        status: 'processing', attempts: item.attempts + 1
-      }).eq('id', item.id);
-
+      // Item is already claimed (status='processing', attempts bumped) by the
+      // atomic RPC above — no per-row "mark processing" write needed.
       try {
         const nowIso = new Date().toISOString();
         const newQty = item.new_quantity;
