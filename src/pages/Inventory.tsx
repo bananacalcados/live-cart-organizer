@@ -1074,7 +1074,14 @@ export default function Inventory() {
 
     // Fire-and-forget: the edge function self-invokes until done
     supabase.functions.invoke('inventory-verify-and-correct', {
-      body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
+      body: {
+        count_id: activeCount.id,
+        store_id: selectedStoreId,
+        batch_size: 20,
+        // Balanço Total Inteligente: já aplica a correção (zera modelos sem
+        // nenhuma bipagem) ao finalizar, sem exigir um clique extra.
+        also_correct: activeCount.scope === 'total_smart',
+      }
     }).catch(e => console.error('Initial verify invoke error:', e));
   };
 
@@ -1126,7 +1133,11 @@ export default function Inventory() {
       // Reflect the correcting state; the polling effect takes over from here.
       setActiveCount({ ...activeCount, status: 'smart_correcting' } as unknown as InventoryCount);
       setSmartProgress({ processed: 0, total: prepared });
-      toast.success(`Corrigindo ${prepared} bipados (balanço). Você pode continuar bipando.`, { id: 'smart-correct' });
+      const zeroedSiblings = Number(data?.zeroed_siblings ?? 0);
+      const zeroMsg = zeroedSiblings > 0
+        ? ` (${zeroedSiblings} numeração(ões) do mesmo modelo zeradas por não terem sido bipadas)`
+        : '';
+      toast.success(`Corrigindo ${prepared} itens (balanço)${zeroMsg}. Você pode continuar bipando.`, { id: 'smart-correct' });
     } catch (err: any) {
       console.error('handleSmartCorrectScanned error:', err);
       setIsSmartCorrecting(false);
@@ -1771,6 +1782,7 @@ export default function Inventory() {
                             variant="secondary"
                             size="sm"
                             className="gap-1"
+                            title="Corrige o estoque dos itens bipados e ZERA as outras numerações do mesmo modelo que não foram bipadas (esgotaram). Bipe todas as numerações que você tem de um modelo antes de salvar."
                             onPointerDown={() => { smartCorrectClickArmedRef.current = true; }}
                             onClick={(event) => {
                               if (!smartCorrectClickArmedRef.current) {
@@ -2218,7 +2230,9 @@ export default function Inventory() {
           <DialogHeader>
             <DialogTitle>{activeCount?.scope === 'total_smart' ? 'Finalizar Balanço Inteligente?' : 'Finalizar Contagem?'}</DialogTitle>
             <DialogDescription>
-              {activeCount?.scope === 'total' || activeCount?.scope === 'total_smart'
+              {activeCount?.scope === 'total_smart'
+                ? `Balanço TOTAL INTELIGENTE: ${countItems.length} itens conferidos. Modelos que NÃO tiveram nenhuma numeração bipada serão ZERADOS por completo (esgotaram).`
+                : activeCount?.scope === 'total'
                 ? `Balanço TOTAL: ${countItems.length} produtos bipados. Todos os outros terão estoque ZERADO.`
                 : `Balanço PARCIAL: ${countItems.length} produtos bipados serão conferidos.`
               }

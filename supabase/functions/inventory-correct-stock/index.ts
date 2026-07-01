@@ -32,6 +32,178 @@ function queueNextBatch(
 }
 
 /**
+ * Balanço Total Inteligente: monta linhas de fila para ZERAR as variações
+ * (irmãs) que NÃO foram bipadas dentro de um produto-pai que teve pelo menos
+ * uma variação bipada. Regra: bipou => tem estoque; não bipou => esgotou => 0.
+ *
+ * Segurança:
+ *  - Escopo estrito na loja da contagem (storeId).
+ *  - Nunca zera um código que foi bipado (sku/barcode presente no conjunto).
+ *  - Idempotente: só considera irmãos com estoque != 0 e pula os já zerados
+ *    (last_corrected_quantity === 0). Re-bipar restaura no ciclo seguinte.
+ *  - Cria um inventory_count_items (counted=0) para o irmão zerado, para
+ *    aparecer no relatório e permitir o re-bip por dedup de produto.
+ */
+async function buildSiblingZeroRows(
+  supabase: any,
+  count_id: string,
+  storeId: string,
+  scanned: Array<{ sku?: string | null; barcode?: string | null }>,
+): Promise<Array<Record<string, unknown>>> {
+  const IN_CHUNK = 150;
+
+  // 1) Conjunto de códigos bipados (sku + barcode) de TODA a contagem.
+  const scannedSkus = new Set<string>();
+  const scannedBarcodes = new Set<string>();
+  for (const s of scanned) {
+    if (s.sku) scannedSkus.add(String(s.sku).trim());
+    if (s.barcode) scannedBarcodes.add(String(s.barcode).trim());
+  }
+  const scannedIdents = [...new Set([...scannedSkus, ...scannedBarcodes])].filter(Boolean);
+  if (scannedIdents.length === 0) return [];
+
+  // 2) Produtos-pai (parent_sku) tocados a partir dos códigos bipados.
+  const parentSet = new Set<string>();
+  for (let i = 0; i < scannedIdents.length; i += IN_CHUNK) {
+    const chunk = scannedIdents.slice(i, i + IN_CHUNK);
+    const list = chunk.map((c) => `"${c.replace(/"/g, '')}"`).join(',');
+    const { data: prows } = await supabase
+      .from('pos_products')
+      .select('parent_sku')
+      .eq('store_id', storeId)
+      .not('parent_sku', 'is', null)
+      .or(`sku.in.(${list}),barcode.in.(${list})`);
+    for (const p of (prows || [])) {
+      if (p.parent_sku) parentSet.add(p.parent_sku);
+    }
+  }
+  const parents = [...parentSet];
+  if (parents.length === 0) return [];
+
+  // 3) Todas as variações desses pais na loja COM estoque != 0.
+  let siblings: any[] = [];
+  for (let i = 0; i < parents.length; i += IN_CHUNK) {
+    const chunk = parents.slice(i, i + IN_CHUNK);
+    let pfrom = 0;
+    while (true) {
+      const { data: page } = await supabase
+        .from('pos_products')
+        .select('tiny_id, sku, barcode, name, variant, stock')
+        .eq('store_id', storeId)
+        .in('parent_sku', chunk)
+        .neq('stock', 0)
+        .range(pfrom, pfrom + 999);
+      if (!page || page.length === 0) break;
+      siblings = siblings.concat(page);
+      if (page.length < 1000) break;
+      pfrom += 1000;
+    }
+  }
+  if (siblings.length === 0) return [];
+
+  // 4) Mantém só os NÃO bipados, dedup por código (sku|barcode).
+  const seen = new Set<string>();
+  const toZero: any[] = [];
+  for (const v of siblings) {
+    const vsku = v.sku ? String(v.sku).trim() : '';
+    const vbc = v.barcode ? String(v.barcode).trim() : '';
+    if (vsku && scannedSkus.has(vsku)) continue;
+    if (vbc && scannedBarcodes.has(vbc)) continue;
+    const key = vsku + '|' + vbc;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    toZero.push(v);
+  }
+  if (toZero.length === 0) return [];
+
+  // 5) count_items já existentes nesta contagem (indexados por código).
+  const existingByKey = new Map<string, any>();
+  {
+    let efrom = 0;
+    while (true) {
+      const { data: page } = await supabase
+        .from('inventory_count_items')
+        .select('id, sku, barcode, counted_quantity, last_corrected_quantity')
+        .eq('count_id', count_id)
+        .range(efrom, efrom + 999);
+      if (!page || page.length === 0) break;
+      for (const it of page) {
+        const k = (it.sku ? String(it.sku).trim() : '') + '|' + (it.barcode ? String(it.barcode).trim() : '');
+        existingByKey.set(k, it);
+      }
+      if (page.length < 1000) break;
+      efrom += 1000;
+    }
+  }
+
+  const rows: Array<Record<string, unknown>> = [];
+  const newCountItems: any[] = [];
+
+  for (const v of toZero) {
+    const vsku = v.sku ? String(v.sku).trim() : '';
+    const vbc = v.barcode ? String(v.barcode).trim() : '';
+    const key = vsku + '|' + vbc;
+    const stock = Number(v.stock) || 0;
+    const productId = v.tiny_id != null ? String(v.tiny_id) : (vsku || vbc || 'unknown');
+    const productName = (v.name || 'Unknown') + (v.variant ? ` - ${v.variant}` : '');
+    const ex = existingByKey.get(key);
+
+    if (ex) {
+      // Já bipado nesta contagem -> NUNCA zerar.
+      if ((ex.counted_quantity ?? 0) > 0) continue;
+      // Já zerado e corrigido antes -> idempotente, pula.
+      if (ex.last_corrected_quantity === 0) continue;
+      rows.push({
+        count_id,
+        count_item_id: ex.id,
+        store_id: storeId,
+        product_id: productId,
+        product_name: productName,
+        new_quantity: 0,
+        old_quantity: stock,
+      });
+    } else {
+      newCountItems.push({
+        count_id,
+        product_id: productId,
+        product_name: productName,
+        sku: v.sku || null,
+        barcode: v.barcode || null,
+        counted_quantity: 0,
+        current_stock: stock,
+        divergence: -stock,
+      });
+    }
+  }
+
+  // 6) Insere novos count_items zerados e captura ids para a fila.
+  const CHUNK = 200;
+  for (let i = 0; i < newCountItems.length; i += CHUNK) {
+    const chunk = newCountItems.slice(i, i + CHUNK);
+    const { data: inserted, error } = await supabase
+      .from('inventory_count_items')
+      .insert(chunk)
+      .select('id, product_id, product_name, current_stock');
+    if (error) throw error;
+    for (const it of (inserted || [])) {
+      rows.push({
+        count_id,
+        count_item_id: it.id,
+        store_id: storeId,
+        product_id: it.product_id != null ? String(it.product_id) : 'unknown',
+        product_name: it.product_name || 'Unknown',
+        new_quantity: 0,
+        old_quantity: it.current_stock ?? 0,
+      });
+    }
+  }
+
+  return rows;
+}
+
+
+
+/**
  * Aplica a correção do balanço de estoque 100% LOCAL.
  * Fonte da verdade: pos_products. NÃO grava no Tiny.
  * Processa a fila inventory_correction_queue gravando o saldo contado direto
@@ -72,12 +244,13 @@ serve(async (req) => {
       // correction hits the SAME store the balance was started for (ex.: Centro).
       const { data: countRow, error: countErr } = await supabase
         .from('inventory_counts')
-        .select('store_id, status, last_batch_at')
+        .select('store_id, status, last_batch_at, scope')
         .eq('id', count_id)
         .maybeSingle();
       if (countErr) throw countErr;
       if (!countRow?.store_id) throw new Error('Contagem sem loja definida (store_id)');
       const storeId = countRow.store_id as string;
+      const isSmartScope = countRow.scope === 'total_smart';
 
       // ── Concurrency guard ──
       // If a correction run is already active with a RECENT heartbeat (<2min),
@@ -122,18 +295,31 @@ serve(async (req) => {
       // Clear any leftover queue for this count, then enqueue fresh rows.
       await supabase.from('inventory_correction_queue').delete().eq('count_id', count_id);
 
-      if (toCorrect.length === 0) {
+      // ── Zerar irmãos (variações NÃO bipadas do mesmo produto-pai) ──
+      // Só no Balanço Total Inteligente. Ver .lovable/plan.md.
+      let siblingZeroRows: Array<Record<string, unknown>> = [];
+      if (isSmartScope && scanned.length > 0) {
+        try {
+          siblingZeroRows = await buildSiblingZeroRows(supabase, count_id, storeId, scanned);
+        } catch (e) {
+          // Falha ao montar irmãos NÃO deve derrubar a correção dos bipados.
+          console.error('[prepare] buildSiblingZeroRows error:', e);
+          siblingZeroRows = [];
+        }
+      }
+
+      if (toCorrect.length === 0 && siblingZeroRows.length === 0) {
         await supabase.from('inventory_counts').update({
           status: final ? 'completed' : 'counting',
           last_batch_at: new Date().toISOString(),
           ...(final ? { completed_at: new Date().toISOString() } : {}),
         }).eq('id', count_id);
-        return new Response(JSON.stringify({ success: true, prepared: 0, processed: 0, remaining: 0, done: true }), {
+        return new Response(JSON.stringify({ success: true, prepared: 0, processed: 0, remaining: 0, done: true, zeroed_siblings: 0 }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const queueRows = toCorrect.map((i) => ({
+      const scannedRows = toCorrect.map((i) => ({
         count_id,
         count_item_id: i.id,
         store_id: storeId,
@@ -142,6 +328,8 @@ serve(async (req) => {
         new_quantity: i.counted_quantity,
         old_quantity: i.current_stock ?? null,
       }));
+
+      const queueRows = [...scannedRows, ...siblingZeroRows];
 
       const CHUNK = 200;
       for (let i = 0; i < queueRows.length; i += CHUNK) {
@@ -160,10 +348,16 @@ serve(async (req) => {
       // Kick off the first processing batch in the background and return fast.
       queueNextBatch(supabaseUrl, anonKey, { count_id, batch_size, final });
 
-      return new Response(JSON.stringify({ success: true, prepared: queueRows.length, done: false }), {
+      return new Response(JSON.stringify({
+        success: true,
+        prepared: queueRows.length,
+        zeroed_siblings: siblingZeroRows.length,
+        done: false,
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     // Atomically CLAIM a batch of pending items (marks them 'processing' and
     // bumps attempts in a single SQL statement with FOR UPDATE SKIP LOCKED).
