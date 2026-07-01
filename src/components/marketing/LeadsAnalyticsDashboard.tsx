@@ -118,6 +118,31 @@ export function LeadsAnalyticsDashboard() {
   const maxMonthRev = Math.max(1, ...(data?.months || []).map(m => m.revenue));
   const maxChannelLeads = Math.max(1, ...(data?.channels || []).map(c => c.leads));
 
+  // --- Conversão por canal de VENDA (item 1) — só exibição de conversionChannels ---
+  const saleChannels = [...(data?.conversionChannels || [])]
+    .sort((a, b) => b.valor_convertido - a.valor_convertido);
+
+  // --- Matriz captação × venda (item 2) — só exibição de captureXconversion ---
+  const captureRows = (data?.sources || []).map(s => s.source); // mesma ordem da tabela de captação
+  const saleCols = saleChannels.map(c => c.channel);            // colunas = canais de venda (valor desc)
+  const matrixCell = new Map<string, { converted: number; valor_convertido: number }>();
+  for (const m of (data?.captureXconversion || [])) {
+    matrixCell.set(`${m.capture_channel}|||${m.conversion_channel}`, {
+      converted: m.converted, valor_convertido: m.valor_convertido,
+    });
+  }
+  const maxCellConverted = Math.max(1, ...(data?.captureXconversion || []).map(m => m.converted));
+  const rowTotals = (cap: string) => saleCols.reduce((acc, col) => {
+    const c = matrixCell.get(`${cap}|||${col}`);
+    return { converted: acc.converted + (c?.converted || 0), valor: acc.valor + (c?.valor_convertido || 0) };
+  }, { converted: 0, valor: 0 });
+  const colTotals = (col: string) => captureRows.reduce((acc, cap) => {
+    const c = matrixCell.get(`${cap}|||${col}`);
+    return { converted: acc.converted + (c?.converted || 0), valor: acc.valor + (c?.valor_convertido || 0) };
+  }, { converted: 0, valor: 0 });
+  const matrixGrandConverted = (data?.captureXconversion || []).reduce((n, m) => n + m.converted, 0);
+  const matrixInSync = !s || matrixGrandConverted === s.leads_converted;
+
   return (
     <Card className="border-primary/20">
       <CardHeader className="pb-3">
