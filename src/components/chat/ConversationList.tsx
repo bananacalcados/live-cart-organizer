@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
   Search, Users, MessageCircle, Wifi, CheckSquare, PhoneOff, Send,
-  Radio, Bell, Bot, CheckCircle2, Archive, Megaphone, Eye, PackageCheck
+  Radio, Bell, Bot, CheckCircle2, Archive, Megaphone, Eye, PackageCheck,
+  Globe, Loader2
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
