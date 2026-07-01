@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Search, Package, Loader2, Pencil, AlertCircle, Boxes, Save, Filter, ChevronDown, ChevronRight, Store as StoreIcon, Tag,
+  Search, Package, Loader2, Pencil, AlertCircle, Boxes, Save, Filter, ChevronDown, ChevronRight, Store as StoreIcon, Tag, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
@@ -120,8 +120,12 @@ export function UnifiedProductsList() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<MasterData | null>(null);
   const [editingSku, setEditingSku] = useState<PosSku | null>(null);
+  const [editingVariation, setEditingVariation] = useState<
+    { parentSku: string; productName: string; color: string; size: string; ids: string[] } | null
+  >(null);
   const [labelGroup, setLabelGroup] = useState<{ name: string; items: LabelItem[] } | null>(null);
   const [page, setPage] = useState(0);
+  const [busy, setBusy] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -213,6 +217,67 @@ export function UnifiedProductsList() {
   }
 
   const storeName = (id: string) => stores.find((s) => s.id === id)?.name || id.slice(0, 6);
+
+  // Todos os SKUs (todas as lojas) que pertencem a este grupo — usa a lista
+  // completa (posProducts), ignorando o filtro de loja, para excluir de fato tudo.
+  function groupSkuIds(g: GroupRow): string[] {
+    return posProducts
+      .filter((p) => (p.parent_sku || p.sku || p.barcode || p.id) === g.parent_sku)
+      .map((p) => p.id);
+  }
+
+  function variationSkuIds(g: GroupRow, color: string, size: string): string[] {
+    return posProducts
+      .filter(
+        (p) =>
+          (p.parent_sku || p.sku || p.barcode || p.id) === g.parent_sku &&
+          (p.color || p.variant || "—") === color &&
+          (p.size || "—") === size,
+      )
+      .map((p) => p.id);
+  }
+
+  async function deleteInChunks(ids: string[]) {
+    for (let i = 0; i < ids.length; i += 200) {
+      const { error } = await supabase.from("pos_products").delete().in("id", ids.slice(i, i + 200));
+      if (error) throw error;
+    }
+  }
+
+  async function deleteGroup(g: GroupRow) {
+    const label = g.master?.name || g.parent_sku;
+    if (!confirm(
+      `Excluir o cadastro "${label}"?\n\nRemove o produto do catálogo e TODAS as variações/estoque em todas as lojas. Esta ação não pode ser desfeita.`
+    )) return;
+    setBusy(true);
+    try {
+      await deleteInChunks(groupSkuIds(g));
+      if (g.master) {
+        const { error } = await supabase.from("product_master_data").delete().eq("parent_sku", g.parent_sku);
+        if (error) throw error;
+      }
+      toast.success("Cadastro excluído.");
+      await load();
+    } catch (err: any) {
+      toast.error("Erro ao excluir: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteVariation(g: GroupRow, color: string, size: string) {
+    if (!confirm(`Excluir a variação ${color} / ${size} em todas as lojas? Esta ação não pode ser desfeita.`)) return;
+    setBusy(true);
+    try {
+      await deleteInChunks(variationSkuIds(g, color, size));
+      toast.success("Variação excluída.");
+      await load();
+    } catch (err: any) {
+      toast.error("Erro ao excluir variação: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="space-y-3">
@@ -335,6 +400,14 @@ export function UnifiedProductsList() {
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
                   )}
+                  <Button
+                    size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive"
+                    title="Excluir cadastro (produto + todas as variações/estoque)"
+                    disabled={busy}
+                    onClick={() => deleteGroup(g)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
 
                 {expanded[g.parent_sku] && (() => {
@@ -375,6 +448,7 @@ export function UnifiedProductsList() {
                               </th>
                             ))}
                             <th className="text-right py-1 pl-2">Total</th>
+                            <th className="text-right py-1 pl-2 w-[70px]">Ações</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -404,12 +478,35 @@ export function UnifiedProductsList() {
                                 <td className={`py-1 pl-2 text-right font-bold ${total <= 0 ? "text-destructive" : ""}`}>
                                   {total}
                                 </td>
+                                <td className="py-1 pl-2 text-right whitespace-nowrap">
+                                  <Button
+                                    size="icon" variant="ghost" className="h-6 w-6"
+                                    title="Editar cor/tamanho desta variação (todas as lojas)"
+                                    onClick={() => setEditingVariation({
+                                      parentSku: g.parent_sku,
+                                      productName: g.master?.name || g.parent_sku,
+                                      color: v.color === "—" ? "" : v.color,
+                                      size: v.size === "—" ? "" : v.size,
+                                      ids: variationSkuIds(g, v.color, v.size),
+                                    })}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive"
+                                    title="Excluir esta variação (todas as lojas)"
+                                    disabled={busy}
+                                    onClick={() => deleteVariation(g, v.color, v.size)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </td>
                               </tr>
                             );
                           })}
                           {variations.length === 0 && (
                             <tr>
-                              <td colSpan={orderedStores.length + 3} className="text-xs text-muted-foreground py-2">
+                              <td colSpan={orderedStores.length + 4} className="text-xs text-muted-foreground py-2">
                                 Sem variações cadastradas no PDV.
                               </td>
                             </tr>
@@ -464,6 +561,13 @@ export function UnifiedProductsList() {
         storeName={editingSku ? storeName(editingSku.store_id) : ""}
       />
 
+      {/* Edit variation (color/size) dialog */}
+      <VariationEditDialog
+        data={editingVariation}
+        onClose={() => setEditingVariation(null)}
+        onSaved={() => { setEditingVariation(null); load(); }}
+      />
+
       {/* Print labels dialog */}
       <ProductLabelPrintDialog
         open={!!labelGroup}
@@ -472,6 +576,81 @@ export function UnifiedProductsList() {
         items={labelGroup?.items || []}
       />
     </div>
+  );
+}
+
+function VariationEditDialog({
+  data, onClose, onSaved,
+}: {
+  data: { parentSku: string; productName: string; color: string; size: string; ids: string[] } | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [color, setColor] = useState("");
+  const [size, setSize] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) { setColor(data.color); setSize(data.size); }
+  }, [data]);
+
+  async function save() {
+    if (!data) return;
+    setSaving(true);
+    try {
+      const variant = [color.trim(), size.trim()].filter(Boolean).join(" ");
+      for (let i = 0; i < data.ids.length; i += 200) {
+        const { error } = await supabase
+          .from("pos_products")
+          .update({
+            color: color.trim() || null,
+            size: size.trim() || null,
+            variant: variant || null,
+          })
+          .in("id", data.ids.slice(i, i + 200));
+        if (error) throw error;
+      }
+      toast.success("Variação atualizada.");
+      onSaved();
+    } catch (err: any) {
+      toast.error("Erro ao salvar: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!data} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar variação</DialogTitle>
+        </DialogHeader>
+        {data && (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {data.productName} · aplicado a {data.ids.length} SKU(s) em todas as lojas.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Cor</Label>
+                <Input value={color} onChange={(e) => setColor(e.target.value)} placeholder="Ex.: Preto" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Tamanho</Label>
+                <Input value={size} onChange={(e) => setSize(e.target.value)} placeholder="Ex.: 38" />
+              </div>
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

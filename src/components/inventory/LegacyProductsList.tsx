@@ -17,7 +17,7 @@ import {
 import {
   Plus, Search, Package, Store as StoreIcon, Loader2, Pencil, RefreshCw,
   Boxes, Tag, Unlink, MoreVertical, ChevronRight, ChevronDown, GitMerge,
-  ShoppingBag, Link2, FolderPlus,
+  ShoppingBag, Link2, FolderPlus, Trash2, Save,
 } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
@@ -78,6 +78,7 @@ export function LegacyProductsList() {
   // expand
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [variants, setVariants] = useState<Record<string, VariantRow[] | "loading">>({});
+  const [editingVariant, setEditingVariant] = useState<{ masterId: string; v: VariantRow } | null>(null);
 
   // diálogo de unificação
   const [unifyOpen, setUnifyOpen] = useState(false);
@@ -168,6 +169,50 @@ export function LegacyProductsList() {
       const { data } = await (supabase.rpc as any)("legacy_master_variants", { p_master_id: id });
       setVariants((p) => ({ ...p, [id]: (data || []) as VariantRow[] }));
     }
+  }
+
+  async function refreshVariants(masterId: string) {
+    const { data } = await (supabase.rpc as any)("legacy_master_variants", { p_master_id: masterId });
+    setVariants((p) => ({ ...p, [masterId]: (data || []) as VariantRow[] }));
+    const { data: sum } = await (supabase.rpc as any)("legacy_masters_summary", { p_master_ids: [masterId] });
+    if (sum && sum[0]) {
+      setSummary((prev) => ({
+        ...prev,
+        [masterId]: {
+          ...(prev[masterId] as any),
+          variant_count: toNumber(sum[0].variant_count),
+          total_stock: toNumber(sum[0].total_stock),
+        } as Summary,
+      }));
+    }
+  }
+
+  async function deleteMaster(m: Master) {
+    if (!confirm(
+      `Excluir o produto "${m.name}" e TODAS as suas variações?\n\nEsta ação não pode ser desfeita.`
+    )) return;
+    setSendingTo(m.id);
+    try {
+      const { error: vErr } = await supabase.from("product_variants").delete().eq("master_id", m.id);
+      if (vErr) throw vErr;
+      const { error } = await supabase.from("products_master").delete().eq("id", m.id);
+      if (error) throw error;
+      toast.success("Produto excluído.");
+      await load();
+    } catch (err: any) {
+      toast.error("Erro ao excluir: " + err.message);
+    } finally {
+      setSendingTo(null);
+    }
+  }
+
+  async function deleteVariant(masterId: string, v: VariantRow) {
+    const label = [v.size, v.color].filter(Boolean).join(" · ") || v.sku;
+    if (!confirm(`Excluir a variação ${label}? Esta ação não pode ser desfeita.`)) return;
+    const { error } = await supabase.from("product_variants").delete().eq("id", v.id);
+    if (error) { toast.error("Erro ao excluir variação: " + error.message); return; }
+    toast.success("Variação excluída.");
+    await refreshVariants(masterId);
   }
 
   function toggleSelect(id: string) {
@@ -495,6 +540,13 @@ export function LegacyProductsList() {
                               </DropdownMenuSubContent>
                             </DropdownMenuPortal>
                           </DropdownMenuSub>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => deleteMaster(p)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir produto
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -523,6 +575,20 @@ export function LegacyProductsList() {
                                 </span>
                                 <span className="text-[11px] text-muted-foreground font-mono">{v.gtin || v.sku}</span>
                                 <span className="ml-auto font-semibold">{toNumber(v.stock)} {toNumber(v.stock) === 1 ? "par" : "pares"}</span>
+                                <Button
+                                  size="icon" variant="ghost" className="h-6 w-6 shrink-0"
+                                  title="Editar cor/tamanho desta variação"
+                                  onClick={() => setEditingVariant({ masterId: p.id, v })}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="icon" variant="ghost" className="h-6 w-6 shrink-0 text-destructive hover:text-destructive"
+                                  title="Excluir esta variação"
+                                  onClick={() => deleteVariant(p.id, v)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
                               </div>
                             ))}
                           </div>
@@ -639,6 +705,97 @@ export function LegacyProductsList() {
       <ProductMasterForm open={showForm} onOpenChange={setShowForm} onCreated={() => load()} />
       <ProductEditDialog masterId={editingId} open={!!editingId} onOpenChange={(v) => !v && setEditingId(null)} onSaved={() => load()} />
       <ProductLabelPrintDialog masterId={labelPrintId} open={!!labelPrintId} onOpenChange={(v) => !v && setLabelPrintId(null)} />
+
+      <LegacyVariantEditDialog
+        data={editingVariant}
+        onClose={() => setEditingVariant(null)}
+        onSaved={async (masterId) => { setEditingVariant(null); await refreshVariants(masterId); }}
+      />
     </div>
+  );
+}
+
+function LegacyVariantEditDialog({
+  data, onClose, onSaved,
+}: {
+  data: { masterId: string; v: VariantRow } | null;
+  onClose: () => void;
+  onSaved: (masterId: string) => void;
+}) {
+  const [color, setColor] = useState("");
+  const [size, setSize] = useState("");
+  const [sku, setSku] = useState("");
+  const [gtin, setGtin] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setColor(data.v.color || "");
+      setSize(data.v.size || "");
+      setSku(data.v.sku || "");
+      setGtin(data.v.gtin || "");
+    }
+  }, [data]);
+
+  async function save() {
+    if (!data) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("product_variants")
+        .update({
+          color: color.trim() || null,
+          size: size.trim() || null,
+          sku: sku.trim() || null,
+          gtin: gtin.trim() || null,
+        })
+        .eq("id", data.v.id);
+      if (error) throw error;
+      toast.success("Variação atualizada.");
+      onSaved(data.masterId);
+    } catch (err: any) {
+      toast.error("Erro ao salvar: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!data} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar variação</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Cor</Label>
+              <Input value={color} onChange={(e) => setColor(e.target.value)} placeholder="Ex.: Preto" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Tamanho</Label>
+              <Input value={size} onChange={(e) => setSize(e.target.value)} placeholder="Ex.: 38" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">SKU</Label>
+              <Input value={sku} onChange={(e) => setSku(e.target.value)} className="font-mono" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">GTIN / Código de barras</Label>
+              <Input value={gtin} onChange={(e) => setGtin(e.target.value)} className="font-mono" />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={save} disabled={saving} className="gap-1">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
