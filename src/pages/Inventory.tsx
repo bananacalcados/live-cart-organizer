@@ -1074,7 +1074,14 @@ export default function Inventory() {
 
     // Fire-and-forget: the edge function self-invokes until done
     supabase.functions.invoke('inventory-verify-and-correct', {
-      body: { count_id: activeCount.id, store_id: selectedStoreId, batch_size: 20 }
+      body: {
+        count_id: activeCount.id,
+        store_id: selectedStoreId,
+        batch_size: 20,
+        // Balanço Total Inteligente: já aplica a correção (zera modelos sem
+        // nenhuma bipagem) ao finalizar, sem exigir um clique extra.
+        also_correct: activeCount.scope === 'total_smart',
+      }
     }).catch(e => console.error('Initial verify invoke error:', e));
   };
 
