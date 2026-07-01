@@ -561,6 +561,13 @@ export function UnifiedProductsList() {
         storeName={editingSku ? storeName(editingSku.store_id) : ""}
       />
 
+      {/* Edit variation (color/size) dialog */}
+      <VariationEditDialog
+        data={editingVariation}
+        onClose={() => setEditingVariation(null)}
+        onSaved={() => { setEditingVariation(null); load(); }}
+      />
+
       {/* Print labels dialog */}
       <ProductLabelPrintDialog
         open={!!labelGroup}
@@ -569,6 +576,81 @@ export function UnifiedProductsList() {
         items={labelGroup?.items || []}
       />
     </div>
+  );
+}
+
+function VariationEditDialog({
+  data, onClose, onSaved,
+}: {
+  data: { parentSku: string; productName: string; color: string; size: string; ids: string[] } | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [color, setColor] = useState("");
+  const [size, setSize] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) { setColor(data.color); setSize(data.size); }
+  }, [data]);
+
+  async function save() {
+    if (!data) return;
+    setSaving(true);
+    try {
+      const variant = [color.trim(), size.trim()].filter(Boolean).join(" ");
+      for (let i = 0; i < data.ids.length; i += 200) {
+        const { error } = await supabase
+          .from("pos_products")
+          .update({
+            color: color.trim() || null,
+            size: size.trim() || null,
+            variant: variant || null,
+          })
+          .in("id", data.ids.slice(i, i + 200));
+        if (error) throw error;
+      }
+      toast.success("Variação atualizada.");
+      onSaved();
+    } catch (err: any) {
+      toast.error("Erro ao salvar: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!data} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar variação</DialogTitle>
+        </DialogHeader>
+        {data && (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              {data.productName} · aplicado a {data.ids.length} SKU(s) em todas as lojas.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Cor</Label>
+                <Input value={color} onChange={(e) => setColor(e.target.value)} placeholder="Ex.: Preto" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Tamanho</Label>
+                <Input value={size} onChange={(e) => setSize(e.target.value)} placeholder="Ex.: 38" />
+              </div>
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
