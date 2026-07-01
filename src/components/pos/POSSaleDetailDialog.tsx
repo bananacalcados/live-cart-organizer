@@ -69,6 +69,7 @@ interface Sale {
   payment_gateway?: string | null;
   payment_link?: string | null;
   mercadopago_payment_id?: string | null;
+  external_source?: string | null;
   tracking_code?: string | null;
 }
 
