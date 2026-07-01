@@ -56,11 +56,17 @@ function classifyChannel(opts: { saleType?: string | null; externalSource?: stri
  * Human-friendly grouping for lead ACQUISITION (capture) sources.
  * The `source` column in lp_leads is mixed: some rows carry real channel codes,
  * others carry a person's first name (legacy XLS imports, e.g. "TYPEBOT março").
- * Anything not recognized as a channel code is bucketed as an import list.
+ *
+ * The `external_lead` bucket is NOT a channel — it is a mix of 4 distinct origins
+ * separated by campaign_tag (grupo-vip / cupom-saida / lead-externo / event_lead:*).
+ * The event_lead:* mirrors are discarded upstream (see event-mirror dedup), so they
+ * never reach here; the map below handles the remaining three real origins.
  */
-function prettySource(source?: string): string {
+function prettySource(source?: string, campaignTag?: string, metadata?: any): string {
   const raw = (source || "").trim();
   const s = raw.toLowerCase();
+  const tagL = (campaignTag || "").trim().toLowerCase();
+  const importFile = String(metadata?.import_file_name || "").toLowerCase();
   if (!s) return "Não informado";
   if (s.includes("organic_whatsapp")) return "WhatsApp Orgânico";
   if (s.includes("event_typebot")) return "Evento / Live (Typebot)";
@@ -69,7 +75,20 @@ function prettySource(source?: string): string {
   if (s.includes("whatsapp_ad") || s.includes("ia_ads")) return "Anúncios (Ads)";
   if (s.includes("abandoned_cart")) return "Carrinho Abandonado";
   if (s.includes("live_campaign")) return "Live";
-  if (s.includes("external_lead")) return "Importação Externa";
+  // ── external_lead: split the mixed bucket into its real capture channels ──
+  if (s.includes("external_lead")) {
+    if (tagL === "grupo-vip") return "Grupo VIP";
+    if (tagL === "cupom-saida") return "Cupom de Saída";
+    if (tagL === "lead-externo") return "Importação de Lista";
+    // event_lead:* mirrors are discarded upstream; if one still slips through,
+    // don't invent a channel for it — fold into the real event channel.
+    if (tagL.startsWith("event_lead:")) return "Evento / Live (Typebot)";
+    return "Externo (não classificado)";
+  }
+  // Historical one-off XLS import of 16/03 (source carries a person's name).
+  if (tagL === "typebot março" || tagL === "typebot marco" || importFile.includes("livesmarco2")) {
+    return "Importação Typebot (março)";
+  }
   // Known channel codes use snake_case; a value with letters/spaces only is a
   // legacy named import (a person's name), group them all together.
   if (/^[a-zà-ÿ][a-zà-ÿ .'-]*$/i.test(raw) && !raw.includes("_")) {
