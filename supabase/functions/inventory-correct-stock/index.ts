@@ -52,10 +52,15 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // ── Heartbeat: record that this batch is running ──
-    await supabase.from('inventory_counts').update({
-      last_batch_at: new Date().toISOString(),
-    }).eq('id', count_id);
+    // ── Heartbeat: record that this processing batch is running ──
+    // Important: do NOT refresh the heartbeat before PREPARE's concurrency
+    // guard reads it. Otherwise a stale smart_correcting run would look fresh
+    // forever and the queue could never be rebuilt/resumed correctly.
+    if (!prepare) {
+      await supabase.from('inventory_counts').update({
+        last_batch_at: new Date().toISOString(),
+      }).eq('id', count_id);
+    }
 
     // ── PREPARE mode (Total Inteligente "Salvar e corrigir bipados") ──
     // Builds the correction queue SERVER-SIDE from the scanned items, so the
@@ -169,6 +174,30 @@ serve(async (req) => {
 
     if (fetchError) throw fetchError;
     if (!items || items.length === 0) {
+      const staleCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+      const { count: activeProcessingCount } = await supabase
+        .from('inventory_correction_queue')
+        .select('*', { count: 'exact', head: true })
+        .eq('count_id', count_id)
+        .eq('status', 'processing')
+        .lt('attempts', 5)
+        .gte('updated_at', staleCutoff);
+
+      if ((activeProcessingCount || 0) > 0) {
+        // Another invocation already claimed the current batch and is still
+        // fresh. Do not mark the count as finished; just let that run complete.
+        return new Response(JSON.stringify({
+          success: true,
+          processed: 0,
+          remaining: activeProcessingCount || 0,
+          activeProcessing: true,
+          done: false,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       // All done. In FINAL mode the balance is closed (status=completed).
       // In incremental (smart) mode we return to 'counting' so the operator
       // keeps scanning/conferring the rest of the store.
