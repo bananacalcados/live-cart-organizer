@@ -385,12 +385,16 @@ Deno.serve(async (req) => {
     }
     audit.removed_fuzzy_value = Math.round(audit.removed_fuzzy_value * 100) / 100;
 
-    // 5c. Build the non-live sales grouped by pos_customer id (surviving, non-fuzzy).
-    const customerSales: Record<string, any[]> = {};
+    // 5c. Build the non-live sales grouped by NORMALIZED PHONE (surviving, non-fuzzy).
+    // Phone uses the same fallback as the dedup: pos_customers.whatsapp via
+    // customer_id, else pos_sales.customer_phone. This makes rows with customer_id
+    // NULL (which never matched a lead before) match leads correctly too.
+    const nonLivePhoneSales: Record<string, any[]> = {};
     for (const s of survivingRows) {
       if (excludedPosSaleIds.has(s.id)) continue;
-      if (!s.customer_id) continue;
-      (customerSales[s.customer_id] ||= []).push({
+      const { phone } = getPosSalePhone(s);
+      if (!phone) continue;
+      (nonLivePhoneSales[phone] ||= []).push({
         id: `pos:${s.id}`,
         total: Number(s.total || 0),
         date: new Date(s.paid_at || s.created_at),
