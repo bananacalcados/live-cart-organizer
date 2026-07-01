@@ -654,6 +654,8 @@ Deno.serve(async (req) => {
       // NEW: sale-channel breakdown of conversions + capture×conversion matrix
       conversionChannels,
       captureXconversion,
+      // Audit of the new sale-source model (live from orders, non-live from pos_sales).
+      _audit: audit,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err: any) {
     console.error("leads-dashboard error:", err);
