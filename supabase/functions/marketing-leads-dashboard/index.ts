@@ -505,44 +505,117 @@ Deno.serve(async (req) => {
       phone: string;
       firstEverDate: Date;
       firstEverSource: string;
+      firstEverTag: string;
+      firstEverMeta: any;
       firstInPeriodDate: Date | null;
       firstInPeriodSource: string;
+      firstInPeriodTag: string;
+      firstInPeriodMeta: any;
     };
-    const leadByPhone: Record<string, LeadAgg> = {};
+
+    // Load ALL raw lead rows first (we need a global view to detect event mirrors).
+    type LeadRow = { phone: string; source: string; campaign_tag: string; metadata: any; created: Date };
+    const allLeadRows: LeadRow[] = [];
     off = 0;
     while (true) {
       const { data } = await supabase
         .from("lp_leads")
-        .select("phone, source, created_at")
+        .select("phone, source, campaign_tag, metadata, created_at")
         .not("phone", "is", null)
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const l of data) {
         const p = normalizePhone(l.phone);
         if (!p) continue;
-        const created = new Date(l.created_at);
-        const src = l.source || "";
-        const agg = (leadByPhone[p] ||= {
+        allLeadRows.push({
           phone: p,
-          firstEverDate: created,
-          firstEverSource: src,
-          firstInPeriodDate: null,
-          firstInPeriodSource: "",
+          source: l.source || "",
+          campaign_tag: l.campaign_tag || "",
+          metadata: l.metadata || null,
+          created: new Date(l.created_at),
         });
-        if (created < agg.firstEverDate) {
-          agg.firstEverDate = created;
-          agg.firstEverSource = src;
-        }
-        if (inPeriod(created)) {
-          if (!agg.firstInPeriodDate || created < agg.firstInPeriodDate) {
-            agg.firstInPeriodDate = created;
-            agg.firstInPeriodSource = src;
-          }
-        }
       }
       if (data.length < 1000) break;
       off += 1000;
     }
+
+    // ── Item 1: EVENT-MIRROR DEDUP ──
+    // external_lead rows tagged `event_lead:<uuid>` are 100% mirrors of a real
+    // event_typebot capture (same phone + same event_id, created 1-3s later).
+    // The true capture is the event_typebot row (rich metadata). Discard the mirror
+    // from ALL counting; keep event_typebot intact.
+    const getEventId = (r: LeadRow): string => {
+      const tag = r.campaign_tag.trim();
+      if (tag.toLowerCase().startsWith("event_lead:")) return tag.slice("event_lead:".length).trim();
+      const metaEid = r.metadata?.event_id;
+      return metaEid ? String(metaEid).trim() : "";
+    };
+    // Index of real typebot captures: `${phone}|${event_id}`.
+    const typebotPairKey = new Set<string>();
+    for (const r of allLeadRows) {
+      if ((r.source || "").toLowerCase().includes("event_typebot")) {
+        const eid = getEventId(r);
+        if (eid) typebotPairKey.add(`${r.phone}|${eid}`);
+      }
+    }
+    const captureAudit = {
+      event_mirror_discarded: 0,       // mirrors with a matching event_typebot pair
+      event_mirror_orphans: 0,         // mirrors WITHOUT a typebot pair (need separate handling)
+      event_mirror_orphan_samples: [] as any[],
+      unclassified_external_tags: {} as Record<string, number>,
+    };
+    const keptLeadRows: LeadRow[] = [];
+    for (const r of allLeadRows) {
+      const isMirror = (r.source || "").toLowerCase().includes("external_lead")
+        && r.campaign_tag.trim().toLowerCase().startsWith("event_lead:");
+      if (isMirror) {
+        const eid = getEventId(r);
+        if (eid && typebotPairKey.has(`${r.phone}|${eid}`)) {
+          captureAudit.event_mirror_discarded++;   // dedup_reason = 'event_mirror'
+          continue;                                 // drop from all counting
+        }
+        // Orphan mirror: no event_typebot pair for this phone+event. Report & drop
+        // (never becomes a channel — item 2 excludes event_lead:* tags anyway).
+        captureAudit.event_mirror_orphans++;
+        if (captureAudit.event_mirror_orphan_samples.length < 20) {
+          captureAudit.event_mirror_orphan_samples.push({ phone: r.phone, event_id: eid, created: r.created });
+        }
+        continue;
+      }
+      keptLeadRows.push(r);
+    }
+
+    // Aggregate the surviving rows per phone.
+    const leadByPhone: Record<string, LeadAgg> = {};
+    for (const r of keptLeadRows) {
+      const created = r.created;
+      const agg = (leadByPhone[r.phone] ||= {
+        phone: r.phone,
+        firstEverDate: created,
+        firstEverSource: r.source,
+        firstEverTag: r.campaign_tag,
+        firstEverMeta: r.metadata,
+        firstInPeriodDate: null,
+        firstInPeriodSource: "",
+        firstInPeriodTag: "",
+        firstInPeriodMeta: null,
+      });
+      if (created < agg.firstEverDate) {
+        agg.firstEverDate = created;
+        agg.firstEverSource = r.source;
+        agg.firstEverTag = r.campaign_tag;
+        agg.firstEverMeta = r.metadata;
+      }
+      if (inPeriod(created)) {
+        if (!agg.firstInPeriodDate || created < agg.firstInPeriodDate) {
+          agg.firstInPeriodDate = created;
+          agg.firstInPeriodSource = r.source;
+          agg.firstInPeriodTag = r.campaign_tag;
+          agg.firstInPeriodMeta = r.metadata;
+        }
+      }
+    }
+
 
     // DEBUG: live-source diagnostics (temporary, for validation)
     {
