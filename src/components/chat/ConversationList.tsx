@@ -93,6 +93,43 @@ export function ConversationList({
   const [visibleLimit, setVisibleLimit] = useState(60);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
+  // Busca global no banco (todas as instâncias, inclusive finalizadas/arquivadas)
+  type GlobalResult = {
+    phone: string;
+    whatsapp_number_id: string | null;
+    instance_label: string | null;
+    sender_name: string | null;
+    last_message: string | null;
+    last_message_at: string | null;
+    message_count: number;
+    is_finished: boolean;
+    is_archived: boolean;
+  };
+  const [globalResults, setGlobalResults] = useState<GlobalResult[] | null>(null);
+  const [globalLoading, setGlobalLoading] = useState(false);
+
+  const runGlobalSearch = async () => {
+    const q = searchQuery.trim();
+    if (q.length < 3) return;
+    setGlobalLoading(true);
+    try {
+      const { data, error } = await supabase.rpc("search_all_conversations", { p_query: q });
+      if (error) throw error;
+      setGlobalResults((data || []) as GlobalResult[]);
+    } catch (e) {
+      console.error("Erro na busca global de conversas:", e);
+      setGlobalResults([]);
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  // Limpa resultados globais ao trocar o termo de busca
+  useEffect(() => {
+    setGlobalResults(null);
+  }, [searchQuery]);
+
+
   const formatConversationTime = (date: Date) => {
     if (isToday(date)) return format(date, 'HH:mm', { locale: ptBR });
     if (isYesterday(date)) return 'Ontem';
