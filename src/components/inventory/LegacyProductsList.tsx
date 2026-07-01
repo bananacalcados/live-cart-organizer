@@ -575,6 +575,20 @@ export function LegacyProductsList() {
                                 </span>
                                 <span className="text-[11px] text-muted-foreground font-mono">{v.gtin || v.sku}</span>
                                 <span className="ml-auto font-semibold">{toNumber(v.stock)} {toNumber(v.stock) === 1 ? "par" : "pares"}</span>
+                                <Button
+                                  size="icon" variant="ghost" className="h-6 w-6 shrink-0"
+                                  title="Editar cor/tamanho desta variação"
+                                  onClick={() => setEditingVariant({ masterId: p.id, v })}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  size="icon" variant="ghost" className="h-6 w-6 shrink-0 text-destructive hover:text-destructive"
+                                  title="Excluir esta variação"
+                                  onClick={() => deleteVariant(p.id, v)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
                               </div>
                             ))}
                           </div>
