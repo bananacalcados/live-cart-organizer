@@ -150,7 +150,7 @@ export function POSCustomLinkDialog({ storeId, sellers }: Props) {
     try {
       const sellerObj = sellers.find(s => s.id === selectedSeller);
       const payment_details: Record<string, unknown> = {
-        link_origin: "online_hub",
+        link_origin: "custom_link",
         is_custom_amount: true,
         free_shipping: true,
         shipping_amount: 0,
