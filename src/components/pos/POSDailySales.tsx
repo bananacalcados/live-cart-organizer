@@ -791,8 +791,14 @@ export function POSDailySales({ storeId }: Props) {
         ? completedSales
         : sales; // 'all' shows everything
 
+  const sellerFilteredSales = sellerFilter === 'all'
+    ? salesForStatusFilter
+    : sellerFilter === 'sem-vendedor'
+      ? salesForStatusFilter.filter(s => !s.seller_id)
+      : salesForStatusFilter.filter(s => s.seller_id === sellerFilter);
+
   const filteredSales = searchTerm.trim().length > 0
-    ? salesForStatusFilter.filter(sale => {
+    ? sellerFilteredSales.filter(sale => {
         if (!sale.customer_id) return false;
         const cust = customers.get(sale.customer_id);
         if (!cust) return false;
@@ -801,9 +807,16 @@ export function POSDailySales({ storeId }: Props) {
                (cust.cpf?.includes(term)) ||
                (cust.whatsapp?.includes(term));
       })
-    : salesForStatusFilter;
+    : sellerFilteredSales;
 
-  const displaySales = showGlobalResults ? globalResults : filteredSales;
+  const displaySales = showGlobalResults
+    ? (sellerFilter === 'all'
+        ? globalResults
+        : sellerFilter === 'sem-vendedor'
+          ? globalResults.filter(s => !s.seller_id)
+          : globalResults.filter(s => s.seller_id === sellerFilter))
+    : filteredSales;
+
 
   if (loading) {
     return (
