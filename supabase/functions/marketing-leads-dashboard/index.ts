@@ -173,6 +173,7 @@ Deno.serve(async (req) => {
     const PAID_STATUSES = new Set(["completed", "paid", "pending_sync"]);
     type PosSaleRow = {
       id: string; customer_id: string | null; total: number;
+      subtotal: number | null; customer_phone: string | null;
       created_at: string; paid_at: string | null; store_id: string | null;
       sale_type: string | null; external_source: string | null;
       external_order_id: string | null; source_order_id: string | null;
@@ -183,7 +184,7 @@ Deno.serve(async (req) => {
     while (true) {
       const { data } = await supabase
         .from("pos_sales")
-        .select("id, customer_id, total, created_at, paid_at, store_id, sale_type, external_source, external_order_id, source_order_id, status")
+        .select("id, customer_id, total, subtotal, customer_phone, created_at, paid_at, store_id, sale_type, external_source, external_order_id, source_order_id, status")
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const s of data as PosSaleRow[]) posSalesById[s.id] = s;
@@ -200,6 +201,20 @@ Deno.serve(async (req) => {
       if (PAID_STATUSES.has(st)) return true;
       if (st === "pending_pickup" && s.paid_at) return true;
       return false;
+    };
+
+    // Phone of a pos_sales row, with fallback:
+    //   (a) pos_customers.whatsapp via customer_id (when present)
+    //   (b) else pos_sales.customer_phone
+    // Result is normalized with the SAME E.164 rule used everywhere.
+    // Returns { phone, via } where via is "customer_id" | "customer_phone" | "".
+    const getPosSalePhone = (s: PosSaleRow): { phone: string; via: string } => {
+      if (s.customer_id && posCustomerPhone[s.customer_id]) {
+        return { phone: posCustomerPhone[s.customer_id], via: "customer_id" };
+      }
+      const fromField = normalizePhone(s.customer_phone || "");
+      if (fromField) return { phone: fromField, via: "customer_phone" };
+      return { phone: "", via: "" };
     };
 
     // ─── 4. LIVE SOURCE — from orders (paid cards) ───
@@ -279,6 +294,9 @@ Deno.serve(async (req) => {
       removed_ii_source_order_id: 0,
       removed_iii_shopify_order_id: 0,
       removed_fuzzy: 0,
+      removed_fuzzy_value: 0,
+      fuzzy_matched_via_customer_id: 0,
+      fuzzy_matched_via_customer_phone: 0,
       orphan_live_rows: 0,
       orphan_live_value: 0,
       fuzzy_pairs: [] as any[],
@@ -307,11 +325,19 @@ Deno.serve(async (req) => {
     }
 
     // 5b. Fuzzy dedup — cards without shopify_order_id (site channel) vs surviving
-    // shopify rows: same normalized phone, same value (±0.02), date within ±1 day.
+    // shopify rows. Match rule:
+    //   - HARD lock: same normalized phone (phone via customer_id OR customer_phone
+    //     fallback — the shopify duplicates have customer_id NULL);
+    //   - value: |card − pos_sales.subtotal| <= R$0,50 OR |card − pos_sales.total|
+    //     <= R$0,50 (the card carries discount/shipping apart);
+    //   - date within ±3 DAYS. On multiple matches, pick the closest date.
     const ONE_DAY = 24 * 60 * 60 * 1000;
-    const fuzzyCandidates = survivingRows.filter(
-      (s) => (s.external_source || "").toLowerCase() === "shopify" && s.customer_id
-    );
+    const THREE_DAYS = 3 * ONE_DAY;
+    // Pre-resolve phone (with fallback) for every surviving shopify candidate.
+    const fuzzyCandidates = survivingRows
+      .filter((s) => (s.external_source || "").toLowerCase() === "shopify")
+      .map((s) => ({ row: s, ...getPosSalePhone(s) }))
+      .filter((c) => c.phone);
     const usedCandidateIds = new Set<string>();
     for (const o of paidCards) {
       if (o.shopify_order_id) continue;                          // only cards without shopify id
@@ -321,43 +347,61 @@ Deno.serve(async (req) => {
       if (!phone) continue;
       const val = cardValue(o);
       const cardDate = new Date(o.paid_at || 0).getTime();
-      let best: { row: PosSaleRow; diff: number } | null = null;
+      let best: { cand: (typeof fuzzyCandidates)[number]; diff: number } | null = null;
       for (const cand of fuzzyCandidates) {
-        if (usedCandidateIds.has(cand.id)) continue;
-        if (posCustomerPhone[cand.customer_id!] !== phone) continue;
-        if (Math.abs(Number(cand.total || 0) - val) > 0.02) continue;
-        const candDate = new Date(cand.paid_at || cand.created_at || 0).getTime();
+        if (usedCandidateIds.has(cand.row.id)) continue;
+        if (cand.phone !== phone) continue;                      // HARD phone lock
+        const sub = Number(cand.row.subtotal ?? NaN);
+        const tot = Number(cand.row.total ?? NaN);
+        const subOk = !Number.isNaN(sub) && Math.abs(sub - val) <= 0.50;
+        const totOk = !Number.isNaN(tot) && Math.abs(tot - val) <= 0.50;
+        if (!subOk && !totOk) continue;
+        const candDate = new Date(cand.row.paid_at || cand.row.created_at || 0).getTime();
         const diff = Math.abs(candDate - cardDate);
-        if (diff > ONE_DAY) continue;
-        if (!best || diff < best.diff) best = { row: cand, diff };
+        if (diff > THREE_DAYS) continue;
+        if (!best || diff < best.diff) best = { cand, diff };
       }
       if (best) {
-        usedCandidateIds.add(best.row.id);
-        excludedPosSaleIds.add(best.row.id);
+        usedCandidateIds.add(best.cand.row.id);
+        excludedPosSaleIds.add(best.cand.row.id);
         audit.removed_fuzzy++;
+        audit.removed_fuzzy_value += Number(best.cand.row.total || 0);
+        if (best.cand.via === "customer_id") audit.fuzzy_matched_via_customer_id++;
+        else if (best.cand.via === "customer_phone") audit.fuzzy_matched_via_customer_phone++;
         audit.fuzzy_pairs.push({
           dedup_reason: "fuzzy_live_match",
           phone,
+          matched_via: best.cand.via,
           value: Math.round(val * 100) / 100,
           card_id: o.id,
           card_paid_at: o.paid_at,
-          pos_sale_id: best.row.id,
-          pos_sale_date: best.row.paid_at || best.row.created_at,
+          pos_sale_id: best.cand.row.id,
+          pos_sale_subtotal: best.cand.row.subtotal,
+          pos_sale_total: best.cand.row.total,
+          pos_sale_date: best.cand.row.paid_at || best.cand.row.created_at,
           days_apart: Math.round((best.diff / ONE_DAY) * 100) / 100,
         });
       }
     }
+    audit.removed_fuzzy_value = Math.round(audit.removed_fuzzy_value * 100) / 100;
 
-    // 5c. Build the non-live sales grouped by pos_customer id (surviving, non-fuzzy).
-    const customerSales: Record<string, any[]> = {};
+    // 5c. Build the non-live sales grouped by NORMALIZED PHONE (surviving, non-fuzzy).
+    // Phone uses the same fallback as the dedup: pos_customers.whatsapp via
+    // customer_id, else pos_sales.customer_phone. This makes rows with customer_id
+    // NULL (which never matched a lead before) match leads correctly too.
+    const nonLivePhoneSales: Record<string, any[]> = {};
     for (const s of survivingRows) {
       if (excludedPosSaleIds.has(s.id)) continue;
-      if (!s.customer_id) continue;
-      (customerSales[s.customer_id] ||= []).push({
+      const { phone, via } = getPosSalePhone(s);
+      if (!phone) continue;
+      (nonLivePhoneSales[phone] ||= []).push({
         id: `pos:${s.id}`,
         total: Number(s.total || 0),
         date: new Date(s.paid_at || s.created_at),
         channel: classifyChannel({ saleType: s.sale_type, externalSource: s.external_source, storeId: s.store_id }),
+        // BONUS diagnostic: this sale is only reachable because of the
+        // customer_phone fallback (customer_id was NULL).
+        fallbackOnly: via === "customer_phone" && !s.customer_id,
       });
     }
 
@@ -423,10 +467,8 @@ Deno.serve(async (req) => {
       for (const s of (livePhoneSales[phone] || [])) {
         if (!seen.has(s.id)) { seen.add(s.id); sales.push(s); }
       }
-      for (const cid of (phoneToCustomerIds[phone] || [])) {
-        for (const s of (customerSales[cid] || [])) {
-          if (!seen.has(s.id)) { seen.add(s.id); sales.push(s); }
-        }
+      for (const s of (nonLivePhoneSales[phone] || [])) {
+        if (!seen.has(s.id)) { seen.add(s.id); sales.push(s); }
       }
       for (const s of (zoppyPhoneSales[phone] || [])) {
         if (!seen.has(s.id)) { seen.add(s.id); sales.push(s); }
@@ -506,6 +548,10 @@ Deno.serve(async (req) => {
     let totalPurchases = 0;
     let totalRevenue = 0;          // receita_total_com_recompras: ALL qualifying purchases
     let convertedRevenue = 0;      // valor_convertido: only the 1st purchase (conversionSale) per lead
+    // BONUS: conversions whose 1st purchase is a pos_sales row only reachable via
+    // the customer_phone fallback (customer_id was NULL) — recovered by item 1.
+    let bonusFallbackConversions = 0;
+    let bonusFallbackRevenue = 0;
 
     // Capture-channel aggregation (where the lead came in)
     // revenue = receita com recompras (todas qualifying); convertedRevenue = só 1ª compra
@@ -562,6 +608,7 @@ Deno.serve(async (req) => {
             date: qualifying[0].date,
             total: qualifying[0].total,
             channel: qualifying[0].channel,
+            fallbackOnly: qualifying[0].fallbackOnly === true,
             source: qualifying[0].id.startsWith("zoppy:") ? "zoppy" : "pos",
           }
         : null;
@@ -584,6 +631,10 @@ Deno.serve(async (req) => {
       // VALOR DE CONVERSÃO (métrica principal): apenas a 1ª compra (conversionSale).
       convertedRevenue += conversionSale.total;
       cap.convertedRevenue += conversionSale.total;
+      if (conversionSale.fallbackOnly) {
+        bonusFallbackConversions++;
+        bonusFallbackRevenue += conversionSale.total;
+      }
 
       // NEW: conversion by SALE channel (channel of the 1st purchase).
       const convCh = conversionSale.channel || "Não identificado";
@@ -666,6 +717,20 @@ Deno.serve(async (req) => {
         valor_convertido: Math.round(m.valor_convertido * 100) / 100,
       }))
       .sort((a, b) => b.converted - a.converted);
+
+    // BONUS diagnostic: extra lead conversions recovered by the customer_phone fallback.
+    (audit as any).bonus_customer_phone_fallback = {
+      extra_conversions_recovered: bonusFallbackConversions,
+      extra_converted_revenue: Math.round(bonusFallbackRevenue * 100) / 100,
+      note: "Conversões cuja 1ª compra é uma linha pos_sales só alcançável pelo fallback customer_phone (customer_id NULL).",
+    };
+    // Matrix-vs-leads_converted leak check (sum of matrix must equal leads_converted).
+    const matrixSum = Object.values(matrixMap).reduce((n, m) => n + m.converted, 0);
+    (audit as any).matrix_leak_check = {
+      matrix_sum_converted: matrixSum,
+      leads_converted: leadsConverted,
+      leak: matrixSum - leadsConverted,
+    };
 
     return new Response(JSON.stringify({
       mode,
