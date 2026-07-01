@@ -1265,6 +1265,59 @@ export function POSDailySales({ storeId }: Props) {
               )}
             </div>
 
+            {/* Seller filter chips */}
+            {(() => {
+              const sourceSales = showGlobalResults ? globalResults : salesForStatusFilter;
+              const presentIds = new Set(sourceSales.map(s => s.seller_id || 'sem-vendedor'));
+              const options = sellers.filter(s => presentIds.has(s.id));
+              const hasNoSeller = presentIds.has('sem-vendedor');
+              if (options.length === 0 && !hasNoSeller) return null;
+              return (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5">
+                  <span className="text-[10px] uppercase tracking-wider text-pos-white/40 shrink-0 mr-0.5">Vendedora</span>
+                  <button
+                    onClick={() => setSellerFilter('all')}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 border",
+                      sellerFilter === 'all'
+                        ? "bg-pos-orange text-white border-pos-orange"
+                        : "bg-pos-white/5 text-pos-white/60 border-pos-orange/20 hover:bg-pos-white/10"
+                    )}
+                  >
+                    Todas
+                  </button>
+                  {options.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSellerFilter(s.id)}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 border",
+                        sellerFilter === s.id
+                          ? "bg-pos-orange text-white border-pos-orange"
+                          : "bg-pos-white/5 text-pos-white/60 border-pos-orange/20 hover:bg-pos-white/10"
+                      )}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                  {hasNoSeller && (
+                    <button
+                      onClick={() => setSellerFilter('sem-vendedor')}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 border",
+                        sellerFilter === 'sem-vendedor'
+                          ? "bg-pos-orange text-white border-pos-orange"
+                          : "bg-pos-white/5 text-pos-white/60 border-pos-orange/20 hover:bg-pos-white/10"
+                      )}
+                    >
+                      Sem vendedor
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+
             {showGlobalResults && (
               <div className="flex items-center gap-2">
                 <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
