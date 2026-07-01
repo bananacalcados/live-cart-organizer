@@ -345,9 +345,20 @@ export function ConversationList({
               placeholder="Pesquisar"
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') runGlobalSearch(); }}
               className="pl-9 h-8 sm:h-9 bg-white/80 dark:bg-[#0b1419] border-0 rounded-full text-sm"
             />
           </div>
+          {searchQuery.trim().length >= 3 && (
+            <button
+              onClick={runGlobalSearch}
+              disabled={globalLoading}
+              className="mt-1.5 w-full flex items-center justify-center gap-1.5 rounded-full bg-[#075e54] text-white text-[11px] font-semibold py-1.5 hover:bg-[#064a42] disabled:opacity-60 transition-colors"
+            >
+              {globalLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}
+              Buscar em todo o histórico (finalizadas e outras instâncias)
+            </button>
+          )}
         </div>
 
         {/* Native filter pills — single scrollable row on mobile, wraps on desktop */}
