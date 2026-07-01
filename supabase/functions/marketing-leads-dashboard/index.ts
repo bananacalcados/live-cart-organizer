@@ -833,6 +833,14 @@ Deno.serve(async (req) => {
       leads_converted: leadsConverted,
       leak: matrixSum - leadsConverted,
     };
+    // CAPTURE-axis reclassification audit (event-mirror dedup + external bucket split).
+    (audit as any).capture_reclassification = {
+      event_mirror_discarded: captureAudit.event_mirror_discarded,
+      event_mirror_orphans: captureAudit.event_mirror_orphans,
+      event_mirror_orphan_samples: captureAudit.event_mirror_orphan_samples,
+      unclassified_external_tags: captureAudit.unclassified_external_tags,
+      note: "external_lead:event_lead:* espelhos descartados (dedup_reason=event_mirror); balde external_lead separado em Grupo VIP / Cupom de Saída / Importação de Lista.",
+    };
 
     return new Response(JSON.stringify({
       mode,
