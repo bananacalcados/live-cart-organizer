@@ -608,6 +608,7 @@ Deno.serve(async (req) => {
             date: qualifying[0].date,
             total: qualifying[0].total,
             channel: qualifying[0].channel,
+            fallbackOnly: qualifying[0].fallbackOnly === true,
             source: qualifying[0].id.startsWith("zoppy:") ? "zoppy" : "pos",
           }
         : null;
