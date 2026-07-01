@@ -160,15 +160,12 @@ serve(async (req) => {
       });
     }
 
-    // Get pending items
+    // Atomically CLAIM a batch of pending items (marks them 'processing' and
+    // bumps attempts in a single SQL statement with FOR UPDATE SKIP LOCKED).
+    // This prevents two overlapping runs (e.g. a slow batch + a watchdog
+    // re-trigger) from grabbing the same rows and writing duplicate history.
     const { data: items, error: fetchError } = await supabase
-      .from('inventory_correction_queue')
-      .select('*')
-      .eq('count_id', count_id)
-      .in('status', ['pending', 'error'])
-      .lt('attempts', 5)
-      .order('created_at', { ascending: true })
-      .limit(batch_size);
+      .rpc('inventory_claim_correction_batch', { p_count_id: count_id, p_batch_size: batch_size });
 
     if (fetchError) throw fetchError;
     if (!items || items.length === 0) {
