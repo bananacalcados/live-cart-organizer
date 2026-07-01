@@ -203,6 +203,20 @@ Deno.serve(async (req) => {
       return false;
     };
 
+    // Phone of a pos_sales row, with fallback:
+    //   (a) pos_customers.whatsapp via customer_id (when present)
+    //   (b) else pos_sales.customer_phone
+    // Result is normalized with the SAME E.164 rule used everywhere.
+    // Returns { phone, via } where via is "customer_id" | "customer_phone" | "".
+    const getPosSalePhone = (s: PosSaleRow): { phone: string; via: string } => {
+      if (s.customer_id && posCustomerPhone[s.customer_id]) {
+        return { phone: posCustomerPhone[s.customer_id], via: "customer_id" };
+      }
+      const fromField = normalizePhone(s.customer_phone || "");
+      if (fromField) return { phone: fromField, via: "customer_phone" };
+      return { phone: "", via: "" };
+    };
+
     // ─── 4. LIVE SOURCE — from orders (paid cards) ───
     // Live confirmed sale = orders.is_paid = true AND stage <> 'cancelled'.
     type OrderRow = {
