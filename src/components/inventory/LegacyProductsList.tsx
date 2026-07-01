@@ -705,6 +705,97 @@ export function LegacyProductsList() {
       <ProductMasterForm open={showForm} onOpenChange={setShowForm} onCreated={() => load()} />
       <ProductEditDialog masterId={editingId} open={!!editingId} onOpenChange={(v) => !v && setEditingId(null)} onSaved={() => load()} />
       <ProductLabelPrintDialog masterId={labelPrintId} open={!!labelPrintId} onOpenChange={(v) => !v && setLabelPrintId(null)} />
+
+      <LegacyVariantEditDialog
+        data={editingVariant}
+        onClose={() => setEditingVariant(null)}
+        onSaved={async (masterId) => { setEditingVariant(null); await refreshVariants(masterId); }}
+      />
     </div>
+  );
+}
+
+function LegacyVariantEditDialog({
+  data, onClose, onSaved,
+}: {
+  data: { masterId: string; v: VariantRow } | null;
+  onClose: () => void;
+  onSaved: (masterId: string) => void;
+}) {
+  const [color, setColor] = useState("");
+  const [size, setSize] = useState("");
+  const [sku, setSku] = useState("");
+  const [gtin, setGtin] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setColor(data.v.color || "");
+      setSize(data.v.size || "");
+      setSku(data.v.sku || "");
+      setGtin(data.v.gtin || "");
+    }
+  }, [data]);
+
+  async function save() {
+    if (!data) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("product_variants")
+        .update({
+          color: color.trim() || null,
+          size: size.trim() || null,
+          sku: sku.trim() || null,
+          gtin: gtin.trim() || null,
+        })
+        .eq("id", data.v.id);
+      if (error) throw error;
+      toast.success("Variação atualizada.");
+      onSaved(data.masterId);
+    } catch (err: any) {
+      toast.error("Erro ao salvar: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!data} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar variação</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Cor</Label>
+              <Input value={color} onChange={(e) => setColor(e.target.value)} placeholder="Ex.: Preto" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Tamanho</Label>
+              <Input value={size} onChange={(e) => setSize(e.target.value)} placeholder="Ex.: 38" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">SKU</Label>
+              <Input value={sku} onChange={(e) => setSku(e.target.value)} className="font-mono" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">GTIN / Código de barras</Label>
+              <Input value={gtin} onChange={(e) => setGtin(e.target.value)} className="font-mono" />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+          <Button onClick={save} disabled={saving} className="gap-1">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Salvar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
