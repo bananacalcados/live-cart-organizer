@@ -1782,6 +1782,7 @@ export default function Inventory() {
                             variant="secondary"
                             size="sm"
                             className="gap-1"
+                            title="Corrige o estoque dos itens bipados e ZERA as outras numerações do mesmo modelo que não foram bipadas (esgotaram). Bipe todas as numerações que você tem de um modelo antes de salvar."
                             onPointerDown={() => { smartCorrectClickArmedRef.current = true; }}
                             onClick={(event) => {
                               if (!smartCorrectClickArmedRef.current) {
