@@ -659,6 +659,7 @@ export function POSDailySales({ storeId }: Props) {
   // Calculations
   // Status filter for tabs
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'awaiting_payment' | 'not_approved'>('all');
+  const [sellerFilter, setSellerFilter] = useState<string>('all');
 
   // PAGO É PAGO: completedSales = somente vendas efetivamente pagas (completed/paid/pending_sync).
   // pending_pickup é "aguardando pagamento na retirada" e entra em awaitingPaymentSales.
@@ -790,8 +791,14 @@ export function POSDailySales({ storeId }: Props) {
         ? completedSales
         : sales; // 'all' shows everything
 
+  const sellerFilteredSales = sellerFilter === 'all'
+    ? salesForStatusFilter
+    : sellerFilter === 'sem-vendedor'
+      ? salesForStatusFilter.filter(s => !s.seller_id)
+      : salesForStatusFilter.filter(s => s.seller_id === sellerFilter);
+
   const filteredSales = searchTerm.trim().length > 0
-    ? salesForStatusFilter.filter(sale => {
+    ? sellerFilteredSales.filter(sale => {
         if (!sale.customer_id) return false;
         const cust = customers.get(sale.customer_id);
         if (!cust) return false;
@@ -800,9 +807,16 @@ export function POSDailySales({ storeId }: Props) {
                (cust.cpf?.includes(term)) ||
                (cust.whatsapp?.includes(term));
       })
-    : salesForStatusFilter;
+    : sellerFilteredSales;
 
-  const displaySales = showGlobalResults ? globalResults : filteredSales;
+  const displaySales = showGlobalResults
+    ? (sellerFilter === 'all'
+        ? globalResults
+        : sellerFilter === 'sem-vendedor'
+          ? globalResults.filter(s => !s.seller_id)
+          : globalResults.filter(s => s.seller_id === sellerFilter))
+    : filteredSales;
+
 
   if (loading) {
     return (
@@ -1250,6 +1264,59 @@ export function POSDailySales({ storeId }: Props) {
                 </Button>
               )}
             </div>
+
+            {/* Seller filter chips */}
+            {(() => {
+              const sourceSales = showGlobalResults ? globalResults : salesForStatusFilter;
+              const presentIds = new Set(sourceSales.map(s => s.seller_id || 'sem-vendedor'));
+              const options = sellers.filter(s => presentIds.has(s.id));
+              const hasNoSeller = presentIds.has('sem-vendedor');
+              if (options.length === 0 && !hasNoSeller) return null;
+              return (
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-0.5 px-0.5">
+                  <span className="text-[10px] uppercase tracking-wider text-pos-white/40 shrink-0 mr-0.5">Vendedora</span>
+                  <button
+                    onClick={() => setSellerFilter('all')}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 border",
+                      sellerFilter === 'all'
+                        ? "bg-pos-orange text-white border-pos-orange"
+                        : "bg-pos-white/5 text-pos-white/60 border-pos-orange/20 hover:bg-pos-white/10"
+                    )}
+                  >
+                    Todas
+                  </button>
+                  {options.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSellerFilter(s.id)}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 border",
+                        sellerFilter === s.id
+                          ? "bg-pos-orange text-white border-pos-orange"
+                          : "bg-pos-white/5 text-pos-white/60 border-pos-orange/20 hover:bg-pos-white/10"
+                      )}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                  {hasNoSeller && (
+                    <button
+                      onClick={() => setSellerFilter('sem-vendedor')}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap transition-colors shrink-0 border",
+                        sellerFilter === 'sem-vendedor'
+                          ? "bg-pos-orange text-white border-pos-orange"
+                          : "bg-pos-white/5 text-pos-white/60 border-pos-orange/20 hover:bg-pos-white/10"
+                      )}
+                    >
+                      Sem vendedor
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
 
             {showGlobalResults && (
               <div className="flex items-center gap-2">
