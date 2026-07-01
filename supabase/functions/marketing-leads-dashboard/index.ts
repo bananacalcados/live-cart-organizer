@@ -454,7 +454,22 @@ Deno.serve(async (req) => {
       off += 1000;
     }
 
-    // ─── 6. Compute metrics ───
+    // DEBUG: live-source diagnostics (temporary, for validation)
+    {
+      const livePhones = Object.keys(livePhoneSales);
+      const liveSalesCount = livePhones.reduce((n, p) => n + livePhoneSales[p].length, 0);
+      const livePhonesInLeads = livePhones.filter((p) => leadByPhone[p]).length;
+      const liveValueTotal = livePhones.reduce(
+        (n, p) => n + livePhoneSales[p].reduce((a, s) => a + s.total, 0), 0);
+      (audit as any).debug_live = {
+        live_sales_count: liveSalesCount,
+        live_distinct_phones: livePhones.length,
+        live_phones_matching_a_lead: livePhonesInLeads,
+        live_value_total: Math.round(liveValueTotal * 100) / 100,
+        cards_paid_total: paidCards.length,
+      };
+    }
+
     let leadsInScope = 0;          // captured leads in period, or leads that bought in period
     let leadsConverted = 0;        // leads with >=1 qualifying purchase
     let wereCustomersBefore = 0;   // converted leads that already had purchases before becoming lead
