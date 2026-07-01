@@ -45,6 +45,10 @@ interface SaleSummary {
   customer_name?: string | null;
   checkout_step?: number | null;
   payment_details?: any;
+  payment_gateway?: string | null;
+  payment_link?: string | null;
+  mercadopago_payment_id?: string | null;
+  tracking_code?: string | null;
 }
 
 interface TinyOnlyOrder {
