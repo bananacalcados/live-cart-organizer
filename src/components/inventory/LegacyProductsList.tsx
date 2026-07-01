@@ -17,7 +17,7 @@ import {
 import {
   Plus, Search, Package, Store as StoreIcon, Loader2, Pencil, RefreshCw,
   Boxes, Tag, Unlink, MoreVertical, ChevronRight, ChevronDown, GitMerge,
-  ShoppingBag, Link2, FolderPlus,
+  ShoppingBag, Link2, FolderPlus, Trash2, Save,
 } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
