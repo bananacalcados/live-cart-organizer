@@ -295,18 +295,31 @@ serve(async (req) => {
       // Clear any leftover queue for this count, then enqueue fresh rows.
       await supabase.from('inventory_correction_queue').delete().eq('count_id', count_id);
 
-      if (toCorrect.length === 0) {
+      // ── Zerar irmãos (variações NÃO bipadas do mesmo produto-pai) ──
+      // Só no Balanço Total Inteligente. Ver .lovable/plan.md.
+      let siblingZeroRows: Array<Record<string, unknown>> = [];
+      if (isSmartScope && scanned.length > 0) {
+        try {
+          siblingZeroRows = await buildSiblingZeroRows(supabase, count_id, storeId, scanned);
+        } catch (e) {
+          // Falha ao montar irmãos NÃO deve derrubar a correção dos bipados.
+          console.error('[prepare] buildSiblingZeroRows error:', e);
+          siblingZeroRows = [];
+        }
+      }
+
+      if (toCorrect.length === 0 && siblingZeroRows.length === 0) {
         await supabase.from('inventory_counts').update({
           status: final ? 'completed' : 'counting',
           last_batch_at: new Date().toISOString(),
           ...(final ? { completed_at: new Date().toISOString() } : {}),
         }).eq('id', count_id);
-        return new Response(JSON.stringify({ success: true, prepared: 0, processed: 0, remaining: 0, done: true }), {
+        return new Response(JSON.stringify({ success: true, prepared: 0, processed: 0, remaining: 0, done: true, zeroed_siblings: 0 }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const queueRows = toCorrect.map((i) => ({
+      const scannedRows = toCorrect.map((i) => ({
         count_id,
         count_item_id: i.id,
         store_id: storeId,
@@ -315,6 +328,8 @@ serve(async (req) => {
         new_quantity: i.counted_quantity,
         old_quantity: i.current_stock ?? null,
       }));
+
+      const queueRows = [...scannedRows, ...siblingZeroRows];
 
       const CHUNK = 200;
       for (let i = 0; i < queueRows.length; i += CHUNK) {
@@ -333,10 +348,16 @@ serve(async (req) => {
       // Kick off the first processing batch in the background and return fast.
       queueNextBatch(supabaseUrl, anonKey, { count_id, batch_size, final });
 
-      return new Response(JSON.stringify({ success: true, prepared: queueRows.length, done: false }), {
+      return new Response(JSON.stringify({
+        success: true,
+        prepared: queueRows.length,
+        zeroed_siblings: siblingZeroRows.length,
+        done: false,
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
 
     // Atomically CLAIM a batch of pending items (marks them 'processing' and
     // bumps attempts in a single SQL statement with FOR UPDATE SKIP LOCKED).
