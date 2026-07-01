@@ -160,6 +160,8 @@ ${labels.map(l => `<div class="label">
 export default function Inventory() {
   const navigate = useNavigate();
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const smartCorrectClickArmedRef = useRef(false);
+  const smartCorrectRecoveryRef = useRef<Record<string, boolean>>({});
   const [stores, setStores] = useState<PosStore[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [activeCount, setActiveCount] = useState<InventoryCount | null>(null);
@@ -396,7 +398,20 @@ export default function Inventory() {
         setIsSmartCorrecting(false);
         setActiveCount(refreshed as unknown as InventoryCount);
         loadCountItems(activeCount.id);
+        smartCorrectRecoveryRef.current[activeCount.id] = false;
         toast.success('Bipados corrigidos! Pode continuar a contagem.');
+        setTimeout(() => barcodeInputRef.current?.focus(), 150);
+        return;
+      }
+
+      const total = totalCount || 0;
+      const done = doneCount || 0;
+      const looksDrained = total === 0 || (total > 0 && done >= total);
+      if (looksDrained && !smartCorrectRecoveryRef.current[activeCount.id]) {
+        smartCorrectRecoveryRef.current[activeCount.id] = true;
+        supabase.functions.invoke('inventory-correct-stock', {
+          body: { count_id: activeCount.id, batch_size: 50, final: false },
+        }).catch(e => console.error('Smart correction recovery invoke error:', e));
       }
     };
 
@@ -1751,7 +1766,23 @@ export default function Inventory() {
                     <div className="flex gap-2 flex-wrap">
                       {activeCount.scope === 'total_smart' ? (
                         <>
-                          <Button variant="secondary" size="sm" className="gap-1" onClick={handleSmartCorrectScanned} disabled={isSmartCorrecting}>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className="gap-1"
+                            onPointerDown={() => { smartCorrectClickArmedRef.current = true; }}
+                            onClick={(event) => {
+                              if (!smartCorrectClickArmedRef.current) {
+                                event.preventDefault();
+                                barcodeInputRef.current?.focus();
+                                return;
+                              }
+                              smartCorrectClickArmedRef.current = false;
+                              handleSmartCorrectScanned();
+                            }}
+                            disabled={isSmartCorrecting}
+                          >
                             {isSmartCorrecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                             Salvar e corrigir bipados
                           </Button>
