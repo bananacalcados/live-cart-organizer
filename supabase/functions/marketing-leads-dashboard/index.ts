@@ -361,7 +361,36 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ─── 6. zoppy_sales (legacy Shopify site — non-live) grouped by phone ───
+    // Global unified-universe totals (NOT lead-filtered) for the revenue-diff validation.
+    {
+      const liveValueAll = paidCards.reduce((n, o) => n + cardValue(o), 0);
+      let nonliveCount = 0, nonliveValue = 0;
+      for (const s of survivingRows) {
+        if (excludedPosSaleIds.has(s.id)) continue;
+        nonliveCount++; nonliveValue += Number(s.total || 0);
+      }
+      // "Old model" = full paid pos_sales set (no exclusions, no live cards) — what
+      // pos_sales alone would report before this change.
+      let oldCount = 0, oldValue = 0;
+      for (const s of Object.values(posSalesById)) {
+        if (!isPaidPosSale(s)) continue;
+        oldCount++; oldValue += Number(s.total || 0);
+      }
+      const newCount = paidCards.length + nonliveCount;
+      const newValue = liveValueAll + nonliveValue;
+      (audit as any).unified = {
+        live_sales_count: paidCards.length,
+        live_value: Math.round(liveValueAll * 100) / 100,
+        nonlive_sales_count: nonliveCount,
+        nonlive_value: Math.round(nonliveValue * 100) / 100,
+        new_model_total_sales: newCount,
+        new_model_total_value: Math.round(newValue * 100) / 100,
+        old_model_posonly_sales: oldCount,
+        old_model_posonly_value: Math.round(oldValue * 100) / 100,
+        diff_value: Math.round((newValue - oldValue) * 100) / 100,
+      };
+    }
+
     const zoppyPhoneSales: Record<string, any[]> = {};
     off = 0;
     while (true) {
