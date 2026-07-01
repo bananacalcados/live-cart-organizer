@@ -217,7 +217,7 @@ export function POSDailySales({ storeId }: Props) {
     try {
       const { start, end } = getDateRange();
 
-      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details, tracking_code, payment_gateway, payment_link, mercadopago_payment_id";
+      const selectFields = "id, created_at, paid_at, subtotal, discount, total, payment_method, seller_id, status, tiny_order_number, tiny_order_id, customer_id, sale_type, customer_name, checkout_step, payment_details, tracking_code, payment_gateway, payment_link, mercadopago_payment_id, external_source";
       
       // Query 1: Sales created in date range that NÃO foram pagas (pending/online_pending/failed/pending_pickup)
       //   - pending_pickup = aguardando pagamento na retirada (paid_at sempre null) → entra aqui pela data de criação
