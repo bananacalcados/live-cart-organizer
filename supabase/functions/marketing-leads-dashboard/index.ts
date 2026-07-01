@@ -325,11 +325,19 @@ Deno.serve(async (req) => {
     }
 
     // 5b. Fuzzy dedup — cards without shopify_order_id (site channel) vs surviving
-    // shopify rows: same normalized phone, same value (±0.02), date within ±1 day.
+    // shopify rows. Match rule:
+    //   - HARD lock: same normalized phone (phone via customer_id OR customer_phone
+    //     fallback — the shopify duplicates have customer_id NULL);
+    //   - value: |card − pos_sales.subtotal| <= R$0,50 OR |card − pos_sales.total|
+    //     <= R$0,50 (the card carries discount/shipping apart);
+    //   - date within ±3 DAYS. On multiple matches, pick the closest date.
     const ONE_DAY = 24 * 60 * 60 * 1000;
-    const fuzzyCandidates = survivingRows.filter(
-      (s) => (s.external_source || "").toLowerCase() === "shopify" && s.customer_id
-    );
+    const THREE_DAYS = 3 * ONE_DAY;
+    // Pre-resolve phone (with fallback) for every surviving shopify candidate.
+    const fuzzyCandidates = survivingRows
+      .filter((s) => (s.external_source || "").toLowerCase() === "shopify")
+      .map((s) => ({ row: s, ...getPosSalePhone(s) }))
+      .filter((c) => c.phone);
     const usedCandidateIds = new Set<string>();
     for (const o of paidCards) {
       if (o.shopify_order_id) continue;                          // only cards without shopify id
@@ -339,32 +347,43 @@ Deno.serve(async (req) => {
       if (!phone) continue;
       const val = cardValue(o);
       const cardDate = new Date(o.paid_at || 0).getTime();
-      let best: { row: PosSaleRow; diff: number } | null = null;
+      let best: { cand: (typeof fuzzyCandidates)[number]; diff: number } | null = null;
       for (const cand of fuzzyCandidates) {
-        if (usedCandidateIds.has(cand.id)) continue;
-        if (posCustomerPhone[cand.customer_id!] !== phone) continue;
-        if (Math.abs(Number(cand.total || 0) - val) > 0.02) continue;
-        const candDate = new Date(cand.paid_at || cand.created_at || 0).getTime();
+        if (usedCandidateIds.has(cand.row.id)) continue;
+        if (cand.phone !== phone) continue;                      // HARD phone lock
+        const sub = Number(cand.row.subtotal ?? NaN);
+        const tot = Number(cand.row.total ?? NaN);
+        const subOk = !Number.isNaN(sub) && Math.abs(sub - val) <= 0.50;
+        const totOk = !Number.isNaN(tot) && Math.abs(tot - val) <= 0.50;
+        if (!subOk && !totOk) continue;
+        const candDate = new Date(cand.row.paid_at || cand.row.created_at || 0).getTime();
         const diff = Math.abs(candDate - cardDate);
-        if (diff > ONE_DAY) continue;
-        if (!best || diff < best.diff) best = { row: cand, diff };
+        if (diff > THREE_DAYS) continue;
+        if (!best || diff < best.diff) best = { cand, diff };
       }
       if (best) {
-        usedCandidateIds.add(best.row.id);
-        excludedPosSaleIds.add(best.row.id);
+        usedCandidateIds.add(best.cand.row.id);
+        excludedPosSaleIds.add(best.cand.row.id);
         audit.removed_fuzzy++;
+        audit.removed_fuzzy_value += Number(best.cand.row.total || 0);
+        if (best.cand.via === "customer_id") audit.fuzzy_matched_via_customer_id++;
+        else if (best.cand.via === "customer_phone") audit.fuzzy_matched_via_customer_phone++;
         audit.fuzzy_pairs.push({
           dedup_reason: "fuzzy_live_match",
           phone,
+          matched_via: best.cand.via,
           value: Math.round(val * 100) / 100,
           card_id: o.id,
           card_paid_at: o.paid_at,
-          pos_sale_id: best.row.id,
-          pos_sale_date: best.row.paid_at || best.row.created_at,
+          pos_sale_id: best.cand.row.id,
+          pos_sale_subtotal: best.cand.row.subtotal,
+          pos_sale_total: best.cand.row.total,
+          pos_sale_date: best.cand.row.paid_at || best.cand.row.created_at,
           days_apart: Math.round((best.diff / ONE_DAY) * 100) / 100,
         });
       }
     }
+    audit.removed_fuzzy_value = Math.round(audit.removed_fuzzy_value * 100) / 100;
 
     // 5c. Build the non-live sales grouped by pos_customer id (surviving, non-fuzzy).
     const customerSales: Record<string, any[]> = {};
