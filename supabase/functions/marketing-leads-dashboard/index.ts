@@ -718,6 +718,20 @@ Deno.serve(async (req) => {
       }))
       .sort((a, b) => b.converted - a.converted);
 
+    // BONUS diagnostic: extra lead conversions recovered by the customer_phone fallback.
+    (audit as any).bonus_customer_phone_fallback = {
+      extra_conversions_recovered: bonusFallbackConversions,
+      extra_converted_revenue: Math.round(bonusFallbackRevenue * 100) / 100,
+      note: "Conversões cuja 1ª compra é uma linha pos_sales só alcançável pelo fallback customer_phone (customer_id NULL).",
+    };
+    // Matrix-vs-leads_converted leak check (sum of matrix must equal leads_converted).
+    const matrixSum = Object.values(matrixMap).reduce((n, m) => n + m.converted, 0);
+    (audit as any).matrix_leak_check = {
+      matrix_sum_converted: matrixSum,
+      leads_converted: leadsConverted,
+      leak: matrixSum - leadsConverted,
+    };
+
     return new Response(JSON.stringify({
       mode,
       only_new_leads: onlyNewLeads,
