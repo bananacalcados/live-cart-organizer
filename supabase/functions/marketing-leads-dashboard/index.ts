@@ -173,6 +173,7 @@ Deno.serve(async (req) => {
     const PAID_STATUSES = new Set(["completed", "paid", "pending_sync"]);
     type PosSaleRow = {
       id: string; customer_id: string | null; total: number;
+      subtotal: number | null; customer_phone: string | null;
       created_at: string; paid_at: string | null; store_id: string | null;
       sale_type: string | null; external_source: string | null;
       external_order_id: string | null; source_order_id: string | null;
@@ -183,7 +184,7 @@ Deno.serve(async (req) => {
     while (true) {
       const { data } = await supabase
         .from("pos_sales")
-        .select("id, customer_id, total, created_at, paid_at, store_id, sale_type, external_source, external_order_id, source_order_id, status")
+        .select("id, customer_id, total, subtotal, customer_phone, created_at, paid_at, store_id, sale_type, external_source, external_order_id, source_order_id, status")
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const s of data as PosSaleRow[]) posSalesById[s.id] = s;
