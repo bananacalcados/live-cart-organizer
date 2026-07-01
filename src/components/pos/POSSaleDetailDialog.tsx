@@ -65,6 +65,10 @@ interface Sale {
   customer_id: string | null;
   sale_type?: string | null;
   payment_details?: Record<string, any> | null;
+  paid_at?: string | null;
+  payment_gateway?: string | null;
+  payment_link?: string | null;
+  mercadopago_payment_id?: string | null;
   tracking_code?: string | null;
 }
 
