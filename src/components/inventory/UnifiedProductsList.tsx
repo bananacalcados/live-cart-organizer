@@ -448,6 +448,7 @@ export function UnifiedProductsList() {
                               </th>
                             ))}
                             <th className="text-right py-1 pl-2">Total</th>
+                            <th className="text-right py-1 pl-2 w-[70px]">Ações</th>
                           </tr>
                         </thead>
                         <tbody>
