@@ -540,6 +540,13 @@ export function LegacyProductsList() {
                               </DropdownMenuSubContent>
                             </DropdownMenuPortal>
                           </DropdownMenuSub>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => deleteMaster(p)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir produto
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
