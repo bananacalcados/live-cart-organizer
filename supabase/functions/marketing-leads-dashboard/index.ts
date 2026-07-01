@@ -77,8 +77,8 @@ function prettySource(source?: string, campaignTag?: string, metadata?: any): st
   if (s.includes("live_campaign")) return "Live";
   // ── external_lead: split the mixed bucket into its real capture channels ──
   if (s.includes("external_lead")) {
-    if (tagL === "grupo-vip") return "Grupo VIP";
-    if (tagL === "cupom-saida") return "Cupom de Saída";
+    if (tagL === "grupo-vip") return "POP-UP Grupo VIP";
+    if (tagL === "cupom-saida") return "POP-UP Cupom de Saída";
     if (tagL === "lead-externo") return "Importação de Lista";
     // event_lead:* mirrors are discarded upstream; if one still slips through,
     // don't invent a channel for it — fold into the real event channel.
