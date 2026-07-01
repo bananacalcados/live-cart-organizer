@@ -97,7 +97,30 @@ const LINK_ORIGIN_LABELS: Record<string, string> = {
   online_hub: "Online (Criar Link)",
   custom_link: "Online (Link Avulso)",
   whatsapp_chat: "Chat do WhatsApp",
+  pdv_venda: "PDV — Aba Venda",
 };
+
+// Resolve a origem da venda de forma robusta: usa o marcador explícito
+// (payment_details.link_origin) quando existir; caso contrário infere a partir
+// do tipo de venda / gateway / fonte externa (pedidos antigos sem marcador).
+function resolveSaleOrigin(sale: Sale): string | null {
+  const marked = sale.payment_details?.link_origin as string | undefined;
+  if (marked && LINK_ORIGIN_LABELS[marked]) return LINK_ORIGIN_LABELS[marked];
+  if (marked) return marked;
+
+  if (sale.sale_type === "live") return "Live / Evento";
+  if (sale.external_source === "shopify" || sale.payment_gateway === "shopify") return "Loja Online (Shopify)";
+  if (sale.payment_gateway === "point") return "Maquininha (Point)";
+  if (sale.sale_type === "online") {
+    // Online sem marcador: se tem gateway, veio de um link de pagamento (fluxo antigo);
+    // senão foi lançada manualmente pela aba Venda do PDV.
+    return sale.payment_gateway ? "Link de Pagamento" : "PDV — Aba Venda";
+  }
+  if (sale.sale_type === "pickup") return "PDV — Retirada";
+  if (sale.sale_type === "physical") return "PDV — Presencial";
+  return null;
+}
+
 
 
 
