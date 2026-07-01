@@ -496,7 +496,7 @@ export function ConversationList({
                     </div>
                     {r.last_message_at && (
                       <span className="text-[10px] text-[#475360] dark:text-[#667781] flex-shrink-0 self-start">
-                        {formatConversationTime(r.last_message_at)}
+                        {formatConversationTime(new Date(r.last_message_at))}
                       </span>
                     )}
                   </button>
