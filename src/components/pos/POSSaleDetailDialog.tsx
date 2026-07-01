@@ -1294,6 +1294,60 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     </Button>
                   </div>
                 )}
+
+                {(() => {
+                  const gw = gatewayLabel(sale.payment_gateway);
+                  const origin = sale.payment_details?.link_origin
+                    ? LINK_ORIGIN_LABELS[sale.payment_details.link_origin as string]
+                    : null;
+                  const txId = sale.mercadopago_payment_id
+                    || sale.payment_details?.transaction_id
+                    || sale.payment_details?.payment_id
+                    || null;
+                  const rows: JSX.Element[] = [];
+                  if (gw) {
+                    rows.push(
+                      <div key="gw" className="flex justify-between text-sm">
+                        <span className="text-gray-600 flex items-center gap-1"><CreditCard className="h-3 w-3" /> Gateway</span>
+                        <span className="text-gray-900 font-medium">{gw}</span>
+                      </div>
+                    );
+                  }
+                  if (sale.paid_at) {
+                    rows.push(
+                      <div key="paid" className="flex justify-between text-sm">
+                        <span className="text-gray-600 flex items-center gap-1"><Calendar className="h-3 w-3" /> Pago em</span>
+                        <span className="text-gray-900 font-medium">{format(new Date(sale.paid_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</span>
+                      </div>
+                    );
+                  }
+                  if (origin) {
+                    rows.push(
+                      <div key="origin" className="flex justify-between text-sm">
+                        <span className="text-gray-600 flex items-center gap-1"><Globe className="h-3 w-3" /> Origem do link</span>
+                        <span className="text-gray-900 font-medium">{origin}</span>
+                      </div>
+                    );
+                  }
+                  if (txId) {
+                    rows.push(
+                      <div key="tx" className="flex justify-between items-center text-sm gap-2">
+                        <span className="text-gray-600 flex items-center gap-1 shrink-0"><Hash className="h-3 w-3" /> ID transação</span>
+                        <button
+                          type="button"
+                          onClick={() => { navigator.clipboard?.writeText(String(txId)); toast.success("ID copiado"); }}
+                          className="text-gray-900 font-mono text-xs flex items-center gap-1 hover:text-blue-600 truncate"
+                          title="Copiar ID da transação"
+                        >
+                          <span className="truncate">{txId}</span>
+                          <Copy className="h-3 w-3 shrink-0" />
+                        </button>
+                      </div>
+                    );
+                  }
+                  return rows.length ? <div className="space-y-2">{rows}</div> : null;
+                })()}
+
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Subtotal</span>
                   <span className="text-gray-900">R$ {sale.subtotal.toFixed(2)}</span>
