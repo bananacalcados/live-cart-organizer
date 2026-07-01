@@ -548,6 +548,10 @@ Deno.serve(async (req) => {
     let totalPurchases = 0;
     let totalRevenue = 0;          // receita_total_com_recompras: ALL qualifying purchases
     let convertedRevenue = 0;      // valor_convertido: only the 1st purchase (conversionSale) per lead
+    // BONUS: conversions whose 1st purchase is a pos_sales row only reachable via
+    // the customer_phone fallback (customer_id was NULL) — recovered by item 1.
+    let bonusFallbackConversions = 0;
+    let bonusFallbackRevenue = 0;
 
     // Capture-channel aggregation (where the lead came in)
     // revenue = receita com recompras (todas qualifying); convertedRevenue = só 1ª compra
