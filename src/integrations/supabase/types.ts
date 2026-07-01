@@ -18120,6 +18120,20 @@ export type Database = {
         }
         Returns: string
       }
+      search_all_conversations: {
+        Args: { p_query: string }
+        Returns: {
+          instance_label: string
+          is_archived: boolean
+          is_finished: boolean
+          last_message: string
+          last_message_at: string
+          message_count: number
+          phone: string
+          sender_name: string
+          whatsapp_number_id: string
+        }[]
+      }
       search_products_unaccent: {
         Args: { p_store_id: string; search_term: string }
         Returns: {
