@@ -713,7 +713,11 @@ Deno.serve(async (req) => {
 
       leadsInScope++;
 
-      const chKey = prettySource(captureSource);
+      const chKey = prettySource(captureSource, captureTag, captureMeta);
+      if (chKey === "Externo (não classificado)") {
+        const t = (captureTag || "(vazio)").trim() || "(vazio)";
+        captureAudit.unclassified_external_tags[t] = (captureAudit.unclassified_external_tags[t] || 0) + 1;
+      }
       const cap = (captureMap[chKey] ||= { channel: chKey, leads: 0, converted: 0, purchases: 0, revenue: 0, convertedRevenue: 0 });
       cap.leads++;
 
