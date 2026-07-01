@@ -56,11 +56,17 @@ function classifyChannel(opts: { saleType?: string | null; externalSource?: stri
  * Human-friendly grouping for lead ACQUISITION (capture) sources.
  * The `source` column in lp_leads is mixed: some rows carry real channel codes,
  * others carry a person's first name (legacy XLS imports, e.g. "TYPEBOT março").
- * Anything not recognized as a channel code is bucketed as an import list.
+ *
+ * The `external_lead` bucket is NOT a channel — it is a mix of 4 distinct origins
+ * separated by campaign_tag (grupo-vip / cupom-saida / lead-externo / event_lead:*).
+ * The event_lead:* mirrors are discarded upstream (see event-mirror dedup), so they
+ * never reach here; the map below handles the remaining three real origins.
  */
-function prettySource(source?: string): string {
+function prettySource(source?: string, campaignTag?: string, metadata?: any): string {
   const raw = (source || "").trim();
   const s = raw.toLowerCase();
+  const tagL = (campaignTag || "").trim().toLowerCase();
+  const importFile = String(metadata?.import_file_name || "").toLowerCase();
   if (!s) return "Não informado";
   if (s.includes("organic_whatsapp")) return "WhatsApp Orgânico";
   if (s.includes("event_typebot")) return "Evento / Live (Typebot)";
@@ -69,7 +75,20 @@ function prettySource(source?: string): string {
   if (s.includes("whatsapp_ad") || s.includes("ia_ads")) return "Anúncios (Ads)";
   if (s.includes("abandoned_cart")) return "Carrinho Abandonado";
   if (s.includes("live_campaign")) return "Live";
-  if (s.includes("external_lead")) return "Importação Externa";
+  // ── external_lead: split the mixed bucket into its real capture channels ──
+  if (s.includes("external_lead")) {
+    if (tagL === "grupo-vip") return "Grupo VIP";
+    if (tagL === "cupom-saida") return "Cupom de Saída";
+    if (tagL === "lead-externo") return "Importação de Lista";
+    // event_lead:* mirrors are discarded upstream; if one still slips through,
+    // don't invent a channel for it — fold into the real event channel.
+    if (tagL.startsWith("event_lead:")) return "Evento / Live (Typebot)";
+    return "Externo (não classificado)";
+  }
+  // Historical one-off XLS import of 16/03 (source carries a person's name).
+  if (tagL === "typebot março" || tagL === "typebot marco" || importFile.includes("livesmarco2")) {
+    return "Importação Typebot (março)";
+  }
   // Known channel codes use snake_case; a value with letters/spaces only is a
   // legacy named import (a person's name), group them all together.
   if (/^[a-zà-ÿ][a-zà-ÿ .'-]*$/i.test(raw) && !raw.includes("_")) {
@@ -486,44 +505,117 @@ Deno.serve(async (req) => {
       phone: string;
       firstEverDate: Date;
       firstEverSource: string;
+      firstEverTag: string;
+      firstEverMeta: any;
       firstInPeriodDate: Date | null;
       firstInPeriodSource: string;
+      firstInPeriodTag: string;
+      firstInPeriodMeta: any;
     };
-    const leadByPhone: Record<string, LeadAgg> = {};
+
+    // Load ALL raw lead rows first (we need a global view to detect event mirrors).
+    type LeadRow = { phone: string; source: string; campaign_tag: string; metadata: any; created: Date };
+    const allLeadRows: LeadRow[] = [];
     off = 0;
     while (true) {
       const { data } = await supabase
         .from("lp_leads")
-        .select("phone, source, created_at")
+        .select("phone, source, campaign_tag, metadata, created_at")
         .not("phone", "is", null)
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const l of data) {
         const p = normalizePhone(l.phone);
         if (!p) continue;
-        const created = new Date(l.created_at);
-        const src = l.source || "";
-        const agg = (leadByPhone[p] ||= {
+        allLeadRows.push({
           phone: p,
-          firstEverDate: created,
-          firstEverSource: src,
-          firstInPeriodDate: null,
-          firstInPeriodSource: "",
+          source: l.source || "",
+          campaign_tag: l.campaign_tag || "",
+          metadata: l.metadata || null,
+          created: new Date(l.created_at),
         });
-        if (created < agg.firstEverDate) {
-          agg.firstEverDate = created;
-          agg.firstEverSource = src;
-        }
-        if (inPeriod(created)) {
-          if (!agg.firstInPeriodDate || created < agg.firstInPeriodDate) {
-            agg.firstInPeriodDate = created;
-            agg.firstInPeriodSource = src;
-          }
-        }
       }
       if (data.length < 1000) break;
       off += 1000;
     }
+
+    // ── Item 1: EVENT-MIRROR DEDUP ──
+    // external_lead rows tagged `event_lead:<uuid>` are 100% mirrors of a real
+    // event_typebot capture (same phone + same event_id, created 1-3s later).
+    // The true capture is the event_typebot row (rich metadata). Discard the mirror
+    // from ALL counting; keep event_typebot intact.
+    const getEventId = (r: LeadRow): string => {
+      const tag = r.campaign_tag.trim();
+      if (tag.toLowerCase().startsWith("event_lead:")) return tag.slice("event_lead:".length).trim();
+      const metaEid = r.metadata?.event_id;
+      return metaEid ? String(metaEid).trim() : "";
+    };
+    // Index of real typebot captures: `${phone}|${event_id}`.
+    const typebotPairKey = new Set<string>();
+    for (const r of allLeadRows) {
+      if ((r.source || "").toLowerCase().includes("event_typebot")) {
+        const eid = getEventId(r);
+        if (eid) typebotPairKey.add(`${r.phone}|${eid}`);
+      }
+    }
+    const captureAudit = {
+      event_mirror_discarded: 0,       // mirrors with a matching event_typebot pair
+      event_mirror_orphans: 0,         // mirrors WITHOUT a typebot pair (need separate handling)
+      event_mirror_orphan_samples: [] as any[],
+      unclassified_external_tags: {} as Record<string, number>,
+    };
+    const keptLeadRows: LeadRow[] = [];
+    for (const r of allLeadRows) {
+      const isMirror = (r.source || "").toLowerCase().includes("external_lead")
+        && r.campaign_tag.trim().toLowerCase().startsWith("event_lead:");
+      if (isMirror) {
+        const eid = getEventId(r);
+        if (eid && typebotPairKey.has(`${r.phone}|${eid}`)) {
+          captureAudit.event_mirror_discarded++;   // dedup_reason = 'event_mirror'
+          continue;                                 // drop from all counting
+        }
+        // Orphan mirror: no event_typebot pair for this phone+event. Report & drop
+        // (never becomes a channel — item 2 excludes event_lead:* tags anyway).
+        captureAudit.event_mirror_orphans++;
+        if (captureAudit.event_mirror_orphan_samples.length < 20) {
+          captureAudit.event_mirror_orphan_samples.push({ phone: r.phone, event_id: eid, created: r.created });
+        }
+        continue;
+      }
+      keptLeadRows.push(r);
+    }
+
+    // Aggregate the surviving rows per phone.
+    const leadByPhone: Record<string, LeadAgg> = {};
+    for (const r of keptLeadRows) {
+      const created = r.created;
+      const agg = (leadByPhone[r.phone] ||= {
+        phone: r.phone,
+        firstEverDate: created,
+        firstEverSource: r.source,
+        firstEverTag: r.campaign_tag,
+        firstEverMeta: r.metadata,
+        firstInPeriodDate: null,
+        firstInPeriodSource: "",
+        firstInPeriodTag: "",
+        firstInPeriodMeta: null,
+      });
+      if (created < agg.firstEverDate) {
+        agg.firstEverDate = created;
+        agg.firstEverSource = r.source;
+        agg.firstEverTag = r.campaign_tag;
+        agg.firstEverMeta = r.metadata;
+      }
+      if (inPeriod(created)) {
+        if (!agg.firstInPeriodDate || created < agg.firstInPeriodDate) {
+          agg.firstInPeriodDate = created;
+          agg.firstInPeriodSource = r.source;
+          agg.firstInPeriodTag = r.campaign_tag;
+          agg.firstInPeriodMeta = r.metadata;
+        }
+      }
+    }
+
 
     // DEBUG: live-source diagnostics (temporary, for validation)
     {
@@ -570,6 +662,12 @@ Deno.serve(async (req) => {
       const captureSource = mode === "captured"
         ? lead.firstInPeriodSource
         : lead.firstEverSource;
+      const captureTag = mode === "captured"
+        ? lead.firstInPeriodTag
+        : lead.firstEverTag;
+      const captureMeta = mode === "captured"
+        ? lead.firstInPeriodMeta
+        : lead.firstEverMeta;
 
       // ── Scope membership (the denominator = "Leads captados") ──
       // captured: only leads with a capture record inside the period.
@@ -615,7 +713,11 @@ Deno.serve(async (req) => {
 
       leadsInScope++;
 
-      const chKey = prettySource(captureSource);
+      const chKey = prettySource(captureSource, captureTag, captureMeta);
+      if (chKey === "Externo (não classificado)") {
+        const t = (captureTag || "(vazio)").trim() || "(vazio)";
+        captureAudit.unclassified_external_tags[t] = (captureAudit.unclassified_external_tags[t] || 0) + 1;
+      }
       const cap = (captureMap[chKey] ||= { channel: chKey, leads: 0, converted: 0, purchases: 0, revenue: 0, convertedRevenue: 0 });
       cap.leads++;
 
@@ -730,6 +832,14 @@ Deno.serve(async (req) => {
       matrix_sum_converted: matrixSum,
       leads_converted: leadsConverted,
       leak: matrixSum - leadsConverted,
+    };
+    // CAPTURE-axis reclassification audit (event-mirror dedup + external bucket split).
+    (audit as any).capture_reclassification = {
+      event_mirror_discarded: captureAudit.event_mirror_discarded,
+      event_mirror_orphans: captureAudit.event_mirror_orphans,
+      event_mirror_orphan_samples: captureAudit.event_mirror_orphan_samples,
+      unclassified_external_tags: captureAudit.unclassified_external_tags,
+      note: "external_lead:event_lead:* espelhos descartados (dedup_reason=event_mirror); balde external_lead separado em Grupo VIP / Cupom de Saída / Importação de Lista.",
     };
 
     return new Response(JSON.stringify({
