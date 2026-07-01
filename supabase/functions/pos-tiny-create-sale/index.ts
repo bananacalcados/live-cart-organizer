@@ -318,6 +318,7 @@ serve(async (req) => {
           tiny_order_id: tinyOrderId ? String(tinyOrderId) : null,
           tiny_order_number: tinyOrderNumber ? String(tinyOrderNumber) : null,
           status: tinyFailed ? 'pending_sync' : 'completed',
+          payment_details: { link_origin: 'pdv_venda' },
         })
         .select('id')
         .single();
