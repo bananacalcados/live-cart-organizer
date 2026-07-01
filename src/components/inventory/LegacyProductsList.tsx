@@ -170,6 +170,50 @@ export function LegacyProductsList() {
     }
   }
 
+  async function refreshVariants(masterId: string) {
+    const { data } = await (supabase.rpc as any)("legacy_master_variants", { p_master_id: masterId });
+    setVariants((p) => ({ ...p, [masterId]: (data || []) as VariantRow[] }));
+    const { data: sum } = await (supabase.rpc as any)("legacy_masters_summary", { p_master_ids: [masterId] });
+    if (sum && sum[0]) {
+      setSummary((prev) => ({
+        ...prev,
+        [masterId]: {
+          ...(prev[masterId] as any),
+          variant_count: toNumber(sum[0].variant_count),
+          total_stock: toNumber(sum[0].total_stock),
+        } as Summary,
+      }));
+    }
+  }
+
+  async function deleteMaster(m: Master) {
+    if (!confirm(
+      `Excluir o produto "${m.name}" e TODAS as suas variações?\n\nEsta ação não pode ser desfeita.`
+    )) return;
+    setSendingTo(m.id);
+    try {
+      const { error: vErr } = await supabase.from("product_variants").delete().eq("master_id", m.id);
+      if (vErr) throw vErr;
+      const { error } = await supabase.from("products_master").delete().eq("id", m.id);
+      if (error) throw error;
+      toast.success("Produto excluído.");
+      await load();
+    } catch (err: any) {
+      toast.error("Erro ao excluir: " + err.message);
+    } finally {
+      setSendingTo(null);
+    }
+  }
+
+  async function deleteVariant(masterId: string, v: VariantRow) {
+    const label = [v.size, v.color].filter(Boolean).join(" · ") || v.sku;
+    if (!confirm(`Excluir a variação ${label}? Esta ação não pode ser desfeita.`)) return;
+    const { error } = await supabase.from("product_variants").delete().eq("id", v.id);
+    if (error) { toast.error("Erro ao excluir variação: " + error.message); return; }
+    toast.success("Variação excluída.");
+    await refreshVariants(masterId);
+  }
+
   function toggleSelect(id: string) {
     setSelected((prev) => {
       const n = new Set(prev);
