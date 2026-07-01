@@ -478,12 +478,35 @@ export function UnifiedProductsList() {
                                 <td className={`py-1 pl-2 text-right font-bold ${total <= 0 ? "text-destructive" : ""}`}>
                                   {total}
                                 </td>
+                                <td className="py-1 pl-2 text-right whitespace-nowrap">
+                                  <Button
+                                    size="icon" variant="ghost" className="h-6 w-6"
+                                    title="Editar cor/tamanho desta variação (todas as lojas)"
+                                    onClick={() => setEditingVariation({
+                                      parentSku: g.parent_sku,
+                                      productName: g.master?.name || g.parent_sku,
+                                      color: v.color === "—" ? "" : v.color,
+                                      size: v.size === "—" ? "" : v.size,
+                                      ids: variationSkuIds(g, v.color, v.size),
+                                    })}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                  <Button
+                                    size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:text-destructive"
+                                    title="Excluir esta variação (todas as lojas)"
+                                    disabled={busy}
+                                    onClick={() => deleteVariation(g, v.color, v.size)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </td>
                               </tr>
                             );
                           })}
                           {variations.length === 0 && (
                             <tr>
-                              <td colSpan={orderedStores.length + 3} className="text-xs text-muted-foreground py-2">
+                              <td colSpan={orderedStores.length + 4} className="text-xs text-muted-foreground py-2">
                                 Sem variações cadastradas no PDV.
                               </td>
                             </tr>
