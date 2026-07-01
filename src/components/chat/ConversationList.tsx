@@ -448,6 +448,63 @@ export function ConversationList({
 
         {/* Conversations */}
         <ScrollArea className="flex-1 bg-[#e4e8eb] dark:bg-[#0b1419]" style={{ minHeight: 0 }}>
+          {/* Resultados da busca global no banco (todas as instâncias, inclusive finalizadas/arquivadas) */}
+          {globalResults !== null && (
+            <div className="border-b-2 border-[#075e54]/40">
+              <div className="px-3 py-1.5 bg-[#075e54]/10 dark:bg-[#075e54]/20 flex items-center gap-1.5 text-[11px] font-bold text-[#075e54] dark:text-[#00a884]">
+                <Globe className="h-3 w-3" />
+                Histórico completo — {globalResults.length} resultado(s)
+              </div>
+              {globalResults.length === 0 ? (
+                <div className="px-3 py-4 text-center text-[12px] text-[#3b4a52] dark:text-[#667781]">
+                  Nenhuma conversa encontrada no histórico para este número/nome.
+                </div>
+              ) : (
+                globalResults.map((r) => (
+                  <button
+                    key={`${r.phone}__${r.whatsapp_number_id || 'none'}`}
+                    onClick={() => onSelectConversation(r.phone, r.whatsapp_number_id)}
+                    className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-[#dde2e7] dark:hover:bg-[#202c33] transition-colors text-left border-b border-[#cfd6dc]/60 dark:border-[#1f2c34]"
+                  >
+                    <Avatar className="h-10 w-10 flex-shrink-0">
+                      {contactPhotos[r.phone] ? <AvatarImage src={contactPhotos[r.phone]} /> : null}
+                      <AvatarFallback className="bg-[#9aa6ad] text-white text-xs font-bold">
+                        {getInitials(r.sender_name || contactNames[r.phone] || r.phone)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="font-medium text-[14px] text-[#0b1419] dark:text-[#e9edef] truncate">
+                          {r.sender_name || contactNames[r.phone] || r.phone}
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-[#475360] dark:text-[#667781] truncate block">{r.phone}</span>
+                      <div className="flex items-center gap-1 flex-wrap mt-0.5">
+                        {r.instance_label && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded text-[9px] font-semibold bg-[#075e54]/15 text-[#075e54] dark:text-[#00a884]">
+                            <Wifi className="h-2.5 w-2.5" />{r.instance_label}
+                          </span>
+                        )}
+                        {r.is_finished && (
+                          <span className="px-1.5 py-[1px] rounded text-[9px] font-semibold bg-slate-400/25 text-slate-600 dark:text-slate-300">Finalizada</span>
+                        )}
+                        {r.is_archived && (
+                          <span className="px-1.5 py-[1px] rounded text-[9px] font-semibold bg-amber-400/25 text-amber-700 dark:text-amber-400">Arquivada</span>
+                        )}
+                        <span className="px-1.5 py-[1px] rounded text-[9px] font-semibold bg-[#00a884]/15 text-[#00a884]">{r.message_count} msg</span>
+                      </div>
+                    </div>
+                    {r.last_message_at && (
+                      <span className="text-[10px] text-[#475360] dark:text-[#667781] flex-shrink-0 self-start">
+                        {formatConversationTime(r.last_message_at)}
+                      </span>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+
           {filteredConversations.length === 0 ? (
             <div className="p-8 text-center text-[#3b4a52] dark:text-[#667781]">
               <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
