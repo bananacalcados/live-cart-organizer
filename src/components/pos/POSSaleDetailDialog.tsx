@@ -1321,9 +1321,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
 
                 {(() => {
                   const gw = gatewayLabel(sale.payment_gateway);
-                  const origin = sale.payment_details?.link_origin
-                    ? LINK_ORIGIN_LABELS[sale.payment_details.link_origin as string]
-                    : null;
+                  const origin = resolveSaleOrigin(sale);
                   const txId = sale.mercadopago_payment_id
                     || sale.payment_details?.transaction_id
                     || sale.payment_details?.payment_id
