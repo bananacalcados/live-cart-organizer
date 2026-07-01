@@ -662,6 +662,12 @@ Deno.serve(async (req) => {
       const captureSource = mode === "captured"
         ? lead.firstInPeriodSource
         : lead.firstEverSource;
+      const captureTag = mode === "captured"
+        ? lead.firstInPeriodTag
+        : lead.firstEverTag;
+      const captureMeta = mode === "captured"
+        ? lead.firstInPeriodMeta
+        : lead.firstEverMeta;
 
       // ── Scope membership (the denominator = "Leads captados") ──
       // captured: only leads with a capture record inside the period.
