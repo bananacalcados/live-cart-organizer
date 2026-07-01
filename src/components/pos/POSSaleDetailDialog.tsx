@@ -72,6 +72,35 @@ interface Sale {
   tracking_code?: string | null;
 }
 
+const GATEWAY_LABELS: Record<string, string> = {
+  mercadopago: "Mercado Pago",
+  pagarme: "Pagar.me",
+  appmax: "AppMax",
+  vindi: "Vindi",
+  yampi: "Yampi",
+  pix: "PIX",
+  "store-checkout": "Checkout da Loja",
+  shopify: "Shopify",
+  paypal: "PayPal",
+  point: "Maquininha (Point)",
+  pickup: "Retirada na Loja",
+};
+
+function gatewayLabel(gw?: string | null): string | null {
+  if (!gw) return null;
+  if (GATEWAY_LABELS[gw]) return GATEWAY_LABELS[gw];
+  if (gw.startsWith("delivery")) return "Pagamento na Entrega";
+  return gw.charAt(0).toUpperCase() + gw.slice(1);
+}
+
+const LINK_ORIGIN_LABELS: Record<string, string> = {
+  online_hub: "Online (Criar Link)",
+  custom_link: "Online (Link Avulso)",
+  whatsapp_chat: "Chat do WhatsApp",
+};
+
+
+
 interface Props {
   sale: Sale | null;
   onClose: () => void;
