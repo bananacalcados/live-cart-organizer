@@ -464,10 +464,8 @@ Deno.serve(async (req) => {
       for (const s of (livePhoneSales[phone] || [])) {
         if (!seen.has(s.id)) { seen.add(s.id); sales.push(s); }
       }
-      for (const cid of (phoneToCustomerIds[phone] || [])) {
-        for (const s of (customerSales[cid] || [])) {
-          if (!seen.has(s.id)) { seen.add(s.id); sales.push(s); }
-        }
+      for (const s of (nonLivePhoneSales[phone] || [])) {
+        if (!seen.has(s.id)) { seen.add(s.id); sales.push(s); }
       }
       for (const s of (zoppyPhoneSales[phone] || [])) {
         if (!seen.has(s.id)) { seen.add(s.id); sales.push(s); }
