@@ -741,31 +741,46 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
 
 
       {/* Ações */}
+      {ativa && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700">
+          Esta automação está <b>rodando</b>. Você pode trocar imagens dos cards e textos das variáveis —
+          depois clique em <b>Salvar alterações</b> para aplicar sem pausar o disparo.
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-end gap-2 pb-2">
-        <Button variant="outline" onClick={() => persist(false)} disabled={saving} className="gap-2">
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Salvar rascunho
-        </Button>
         {ativa ? (
-          <Button
-            onClick={async () => {
-              setSaving(true);
-              const { error } = await supabase.from("campanhas_auto").update({ ativa: false }).eq("id", editingId);
-              setSaving(false);
-              if (error) { toast.error("Erro ao pausar"); return; }
-              setAtiva(false);
-              toast.success("Automação pausada");
-            }}
-            disabled={saving || !editingId}
-            className="gap-2 bg-amber-500 hover:bg-amber-600"
-          >
-            <Pause className="h-4 w-4" /> Pausar automação
-          </Button>
+          <>
+            <Button
+              onClick={async () => {
+                setSaving(true);
+                const { error } = await supabase.from("campanhas_auto").update({ ativa: false }).eq("id", editingId);
+                setSaving(false);
+                if (error) { toast.error("Erro ao pausar"); return; }
+                setAtiva(false);
+                toast.success("Automação pausada");
+              }}
+              disabled={saving || !editingId}
+              variant="outline"
+              className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"
+            >
+              <Pause className="h-4 w-4" /> Pausar automação
+            </Button>
+            <Button onClick={() => persist(false)} disabled={saving} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar alterações
+            </Button>
+          </>
         ) : (
-          <Button onClick={() => persist(true)} disabled={saving} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            Iniciar automação
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => persist(false)} disabled={saving} className="gap-2">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar rascunho
+            </Button>
+            <Button onClick={() => persist(true)} disabled={saving} className="gap-2 bg-emerald-600 hover:bg-emerald-700">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              Iniciar automação
+            </Button>
+          </>
         )}
       </div>
     </div>
