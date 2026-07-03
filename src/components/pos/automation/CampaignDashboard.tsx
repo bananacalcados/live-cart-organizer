@@ -418,6 +418,15 @@ export function CampaignDashboard({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Visualizador da conversa no WhatsApp */}
+      <CampaignChatViewerDialog
+        open={!!chatRow}
+        onOpenChange={(o) => { if (!o) setChatRow(null); }}
+        phone={chatRow?.phone ?? null}
+        name={chatRow?.nome ?? null}
+        whatsappNumberId={instanceId}
+      />
     </div>
   );
 }
