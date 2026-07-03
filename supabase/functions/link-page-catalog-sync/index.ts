@@ -157,12 +157,13 @@ Deno.serve(async (req) => {
           const g = computeGrade(node);
           const hasImage = !!node.images?.edges?.[0]?.node?.url;
           const ok = hasImage && g.pct >= MIN_GRADE_PCT;
+          const pr = computePricing(node);
           await supabase.from("link_page_catalog_products").update({
             grade_total: g.total, grade_available: g.available, grade_pct: Number(g.pct.toFixed(3)),
             is_active: ok, last_synced_at: new Date().toISOString(),
             image_url: node.images?.edges?.[0]?.node?.url || null,
-            price: Number(node.priceRange?.minVariantPrice?.amount || 0),
-            compare_at_price: node.compareAtPriceRange?.minVariantPrice?.amount ? Number(node.compareAtPriceRange.minVariantPrice.amount) : null,
+            price: pr.price,
+            compare_at_price: pr.compareAtPrice,
           }).eq("id", row.id);
           ok ? activated++ : deactivated++;
         } catch (e) { console.error("manual eval", row.shopify_product_id, e); }
