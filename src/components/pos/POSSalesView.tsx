@@ -1549,6 +1549,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setSelectedSeller("");
     setSaleType(null);
     setShowSaleTypeModal(false);
+    setSiteExchange(null);
+    setShowSiteExchange(false);
     setStep("scan");
     setSaleResult(null);
     setNfceResult(null);
