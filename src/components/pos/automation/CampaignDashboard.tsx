@@ -275,6 +275,7 @@ export function CampaignDashboard({
                       <TableHead>Comprou?</TableHead>
                       <TableHead>Data da compra</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-center">Conversa</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
