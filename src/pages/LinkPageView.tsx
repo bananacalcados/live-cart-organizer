@@ -218,7 +218,7 @@ export default function LinkPageView() {
     return (
       <div key={item.id} className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <p className="text-white font-bold text-lg drop-shadow">{item.label || "Novidades"}</p>
+          <p className="lp-display text-white font-extrabold text-2xl drop-shadow">{item.label || "Novidades"}</p>
           <span className="text-xs text-white/60">{catalog.length} produtos</span>
         </div>
         <div className="grid grid-cols-2 gap-3">
