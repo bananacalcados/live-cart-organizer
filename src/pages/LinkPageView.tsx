@@ -230,6 +230,7 @@ export default function LinkPageView() {
         <div className="grid grid-cols-2 gap-3">
           {catalog.map((p: any) => {
             const discount = p.compare_at_price && p.compare_at_price > p.price;
+            const pct = discount ? Math.round((1 - p.price / p.compare_at_price) * 100) : 0;
             return (
               <a
                 key={p.id}
@@ -244,19 +245,32 @@ export default function LinkPageView() {
                     <span className="absolute top-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded-full text-white" style={{ background: accent }}>NOVO</span>
                   )}
                   {discount && (
-                    <span className="absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500 text-white">OFERTA</span>
+                    <span className="absolute top-2 right-2 text-[11px] font-black px-2 py-0.5 rounded-full bg-red-500 text-white shadow-md">-{pct}%</span>
                   )}
                 </div>
                 <div className="p-2.5">
                   <p className="text-xs font-semibold text-gray-800 truncate">{p.title}</p>
-                  <div className="flex items-baseline gap-1.5 mt-1">
-                    <span className="text-sm font-extrabold text-gray-900">{formatPrice(p.price)}</span>
-                    {discount && <span className="text-[10px] text-gray-400 line-through">{formatPrice(p.compare_at_price)}</span>}
-                  </div>
+                  {discount ? (
+                    <div className="mt-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-gray-400 line-through decoration-red-400/70">{formatPrice(p.compare_at_price)}</span>
+                        <span className="text-[9px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded-full">-{pct}%</span>
+                      </div>
+                      <div className="flex items-baseline gap-1 mt-0.5">
+                        <span className="text-[10px] font-semibold text-green-600">Por</span>
+                        <span className="text-base font-black text-green-600 leading-none">{formatPrice(p.price)}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-1.5">
+                      <span className="text-base font-black text-gray-900">{formatPrice(p.price)}</span>
+                    </div>
+                  )}
                 </div>
               </a>
             );
           })}
+
         </div>
       </div>
     );
