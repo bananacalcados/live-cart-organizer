@@ -7,10 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Loader2, ChevronDown, ChevronUp, CheckCircle2, XCircle,
   Clock, TrendingUp, DollarSign, Package, Percent, ShoppingBag, RefreshCw,
+  Calendar, User, CreditCard, Store, History,
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Stats {
   total: number;
@@ -44,10 +48,46 @@ interface EnvioRow {
   enviado_em: string | null;
   converteu: boolean;
   valor: number;
+  comprou_em: string | null;
+}
+
+interface BuyerSaleItem {
+  name: string | null;
+  variant: string | null;
+  size: string | null;
+  qty: number;
+  price: number;
+}
+
+interface BuyerSale {
+  id: string;
+  date: string;
+  total: number;
+  subtotal: number;
+  discount: number;
+  payment_method: string | null;
+  payment_gateway: string | null;
+  sale_type: string | null;
+  seller: string | null;
+  store: string | null;
+  items: BuyerSaleItem[];
+}
+
+interface BuyerDetail {
+  total_previous: number;
+  total_lifetime: number;
+  sales: BuyerSale[];
 }
 
 const brl = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const fmtDate = (v: string | null) =>
+  v
+    ? new Date(v).toLocaleString("pt-BR", {
+        day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+      })
+    : "—";
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   enviado: { label: "Enviado", cls: "bg-sky-100 text-sky-700" },
@@ -86,6 +126,20 @@ export function CampaignDashboard({
   const [showList, setShowList] = useState(false);
   const [rows, setRows] = useState<EnvioRow[]>([]);
   const [loadingRows, setLoadingRows] = useState(false);
+
+  const [selectedBuyer, setSelectedBuyer] = useState<EnvioRow | null>(null);
+  const [buyerDetail, setBuyerDetail] = useState<BuyerDetail | null>(null);
+  const [loadingBuyer, setLoadingBuyer] = useState(false);
+
+  const openBuyer = async (row: EnvioRow) => {
+    setSelectedBuyer(row);
+    setBuyerDetail(null);
+    setLoadingBuyer(true);
+    const { data, error } = await supabase.rpc("campaign_buyer_detail", { p_envio_id: row.envio_id });
+    if (error) toast.error("Erro ao carregar detalhes da compra");
+    setBuyerDetail((data as unknown as BuyerDetail) || null);
+    setLoadingBuyer(false);
+  };
 
   const loadStats = async () => {
     setLoading(true);
@@ -204,6 +258,7 @@ export function CampaignDashboard({
                       <TableHead>Telefone</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Comprou?</TableHead>
+                      <TableHead>Data da compra</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -211,8 +266,16 @@ export function CampaignDashboard({
                     {rows.map((r) => {
                       const sm = STATUS_META[r.status] || { label: r.status, cls: "bg-neutral-100 text-neutral-600" };
                       return (
-                        <TableRow key={r.envio_id}>
-                          <TableCell className="font-medium text-neutral-700">{r.nome || "—"}</TableCell>
+                        <TableRow
+                          key={r.envio_id}
+                          onClick={r.converteu ? () => openBuyer(r) : undefined}
+                          className={r.converteu ? "cursor-pointer hover:bg-emerald-50/60" : undefined}
+                        >
+                          <TableCell className="font-medium text-neutral-700">
+                            {r.converteu
+                              ? <span className="text-emerald-700 underline decoration-dotted underline-offset-2">{r.nome || "—"}</span>
+                              : (r.nome || "—")}
+                          </TableCell>
                           <TableCell className="text-neutral-600">{r.phone || "—"}</TableCell>
                           <TableCell>
                             <Badge className={`${sm.cls} text-[10px]`}>
@@ -230,6 +293,9 @@ export function CampaignDashboard({
                               ? <span className="flex items-center gap-1 text-emerald-600 text-xs font-semibold"><CheckCircle2 className="h-3.5 w-3.5" /> Sim</span>
                               : <span className="text-neutral-400 text-xs">Não</span>}
                           </TableCell>
+                          <TableCell className="text-neutral-600 text-xs whitespace-nowrap">
+                            {r.converteu ? fmtDate(r.comprou_em) : "—"}
+                          </TableCell>
                           <TableCell className="text-right font-medium text-neutral-700">
                             {r.converteu ? brl(r.valor) : "—"}
                           </TableCell>
@@ -243,6 +309,87 @@ export function CampaignDashboard({
           </div>
         )}
       </Card>
+
+      {/* Modal de detalhes da compra */}
+      <Dialog open={!!selectedBuyer} onOpenChange={(o) => { if (!o) { setSelectedBuyer(null); setBuyerDetail(null); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              {selectedBuyer?.nome || "Cliente"}
+            </DialogTitle>
+            <p className="text-xs text-neutral-500">{selectedBuyer?.phone || "—"}</p>
+          </DialogHeader>
+
+          {loadingBuyer ? (
+            <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-blue-500" /></div>
+          ) : !buyerDetail ? (
+            <p className="py-8 text-center text-sm text-neutral-400">Não foi possível carregar os detalhes.</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 rounded-lg bg-neutral-50 p-2.5 text-xs text-neutral-600">
+                <History className="h-4 w-4 text-neutral-400" />
+                <span>
+                  <b className="text-neutral-800">{buyerDetail.total_previous}</b> compra(s) anterior(es) ·{" "}
+                  <b className="text-neutral-800">{buyerDetail.total_lifetime}</b> no total
+                </span>
+              </div>
+
+              {buyerDetail.sales.length === 0 ? (
+                <p className="py-6 text-center text-sm text-neutral-400">Nenhum pedido encontrado na janela de conversão.</p>
+              ) : (
+                buyerDetail.sales.map((s) => (
+                  <Card key={s.id} className="p-3 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+                        <Calendar className="h-3.5 w-3.5" /> {fmtDate(s.date)}
+                      </span>
+                      <span className="text-sm font-bold text-emerald-600">{brl(s.total)}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <span className="flex items-center gap-1.5 text-neutral-600">
+                        <User className="h-3.5 w-3.5 text-neutral-400" /> {s.seller || "—"}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-neutral-600">
+                        <Store className="h-3.5 w-3.5 text-neutral-400" /> {s.store || "—"}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-neutral-600 col-span-2">
+                        <CreditCard className="h-3.5 w-3.5 text-neutral-400" />
+                        {s.payment_method || "—"}
+                        {s.payment_gateway && <span className="text-neutral-400">({s.payment_gateway})</span>}
+                      </span>
+                    </div>
+
+                    {s.discount > 0 && (
+                      <p className="text-[11px] text-neutral-400">
+                        Subtotal {brl(s.subtotal)} · Desconto {brl(s.discount)}
+                      </p>
+                    )}
+
+                    <div className="border-t pt-2 space-y-1.5">
+                      {s.items.map((it, i) => (
+                        <div key={i} className="flex items-start justify-between gap-2 text-xs">
+                          <div className="min-w-0">
+                            <p className="text-neutral-700 truncate">{it.name || "Produto"}</p>
+                            {(it.variant || it.size) && (
+                              <p className="text-[11px] text-neutral-400">
+                                {[it.variant, it.size].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
+                          </div>
+                          <span className="whitespace-nowrap text-neutral-600">
+                            {it.qty}× {brl(it.price)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

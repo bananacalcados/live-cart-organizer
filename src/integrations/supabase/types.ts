@@ -17323,6 +17323,7 @@ export type Database = {
       bc_phone_key: { Args: { p: string }; Returns: string }
       calculate_rfm_scores: { Args: never; Returns: Json }
       calculate_rfm_scores_unified: { Args: never; Returns: Json }
+      campaign_buyer_detail: { Args: { p_envio_id: string }; Returns: Json }
       campaign_daily_deficit: {
         Args: { p_campanha_id: string }
         Returns: number
@@ -17334,6 +17335,7 @@ export type Database = {
       campaign_envios_detail: {
         Args: { p_campanha_id: string }
         Returns: {
+          comprou_em: string
           converteu: boolean
           enviado_em: string
           envio_id: string
