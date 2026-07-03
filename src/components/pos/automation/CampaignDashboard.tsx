@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Loader2, ChevronDown, ChevronUp, CheckCircle2, XCircle,
   Clock, TrendingUp, DollarSign, Package, Percent, ShoppingBag, RefreshCw,
-  Calendar, User, CreditCard, Store, History,
+  Calendar, User, CreditCard, Store, History, MessageCircle,
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -15,6 +15,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { CampaignChatViewerDialog } from "./CampaignChatViewerDialog";
 
 interface Stats {
   total: number;
