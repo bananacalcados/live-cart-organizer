@@ -1046,6 +1046,63 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           } catch (e) { console.error('[online sale_type update]', e); }
         }
 
+        // 🔁 TROCA DO SITE: marca a venda como troca e cancela o pedido original
+        if (saleId && siteExchange) {
+          try {
+            // Tag visível na venda + vínculo com o pedido do site
+            await supabase.from('pos_sales').update({
+              notes: `🔁 Troca Site ${siteExchange.shopifyOrderName || ''} · Motivo: ${siteExchange.reason}`.trim(),
+              payment_details: {
+                link_origin: 'pdv_venda',
+                site_exchange: true,
+                exchange_reason: siteExchange.reason,
+                original_shopify_order_id: siteExchange.shopifyOrderId,
+                original_shopify_order_name: siteExchange.shopifyOrderName,
+              } as any,
+            } as any).eq('id', saleId);
+
+            // Itens que faltaram = itens originais que NÃO ficaram no carrinho final
+            const finalKeys = new Set(cart.flatMap((c) => [
+              (c.barcode || '').trim(), (c.sku || '').trim(),
+            ].filter(Boolean)));
+            const missingItems = siteExchange.originalItems
+              .filter((oi) => {
+                const bc = (oi.barcode || '').trim();
+                const sk = (oi.sku || '').trim();
+                const kept = (bc && finalKeys.has(bc)) || (sk && finalKeys.has(sk));
+                return !kept;
+              })
+              .map((oi) => ({ sku: oi.sku || '', barcode: oi.barcode || '' }));
+
+            const { data: exRes, error: exErr } = await supabase.functions.invoke('pos-site-exchange-finalize', {
+              body: {
+                new_pos_sale_id: saleId,
+                original_pos_sale_id: siteExchange.originalSaleId,
+                shopify_order_id: siteExchange.shopifyOrderId,
+                shopify_order_name: siteExchange.shopifyOrderName,
+                seller_id: selectedSeller || null,
+                seller_name: sellers.find((s) => s.id === selectedSeller)?.name || null,
+                store_id: storeId,
+                exchange_reason: siteExchange.reason,
+                original_items: siteExchange.originalItems,
+                missing_items: missingItems,
+              },
+            });
+            if (exErr) {
+              toast.error('Venda salva, mas houve falha ao cancelar o pedido do site. Verifique em Trocas.');
+              console.error('[site-exchange-finalize]', exErr);
+            } else if (exRes?.status === 'completed_with_warnings') {
+              toast.warning('Troca concluída com avisos: alguma etapa (cancelamento/estoque) precisa de conferência.');
+            } else {
+              toast.success('Troca do Site concluída: pedido cancelado e estoque ajustado.');
+            }
+          } catch (e) {
+            console.error('[site-exchange]', e);
+            toast.error('Venda salva, mas a troca do site não finalizou. Verifique manualmente.');
+          }
+        }
+
+
         // 🔥 Auto-emissão NFC-e (apenas vendas presenciais)
         try {
           if (saleId && saleType !== 'online') {
