@@ -7,10 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Loader2, ChevronDown, ChevronUp, CheckCircle2, XCircle,
   Clock, TrendingUp, DollarSign, Package, Percent, ShoppingBag, RefreshCw,
+  Calendar, User, CreditCard, Store, History,
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 interface Stats {
   total: number;
