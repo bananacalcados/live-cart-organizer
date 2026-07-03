@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Loader2, Save, Trash2, Plus, Upload, X, Package, Sparkles, Store as StoreIcon } from "lucide-react";
 import { toast } from "sonner";
-import { generateEan13 } from "@/lib/ean13";
+import { generateEan13, isValidEan13 } from "@/lib/ean13";
 
 interface VariantRow {
   id?: string;                 // existente
@@ -732,11 +732,35 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
-                        {(v.sku || v.gtin) && (
-                          <div className="col-span-12 text-[10px] font-mono text-muted-foreground -mt-1">
-                            {v.sku && <>SKU: {v.sku}</>}
-                            {v.sku && v.gtin && " · "}
-                            {v.gtin && <>GTIN: {v.gtin}</>}
+                        {v.id ? (
+                          (v.sku || v.gtin) && (
+                            <div className="col-span-12 text-[10px] font-mono text-muted-foreground -mt-1">
+                              {v.sku && <>SKU: {v.sku}</>}
+                              {v.sku && v.gtin && " · "}
+                              {v.gtin && <>GTIN: {v.gtin}</>}
+                            </div>
+                          )
+                        ) : (
+                          <div className="col-span-12 grid grid-cols-2 gap-2 -mt-1">
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">SKU (opcional)</Label>
+                              <Input
+                                className="h-8 font-mono text-xs"
+                                value={v.sku || ""}
+                                onChange={(e) => updateVariant(idx, { sku: e.target.value })}
+                                placeholder="Auto se vazio"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">GTIN / EAN-13 (opcional)</Label>
+                              <Input
+                                className="h-8 font-mono text-xs"
+                                value={v.gtin || ""}
+                                onChange={(e) => updateVariant(idx, { gtin: e.target.value.replace(/\D/g, "").slice(0, 13) })}
+                                placeholder="Auto se vazio"
+                                inputMode="numeric"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
