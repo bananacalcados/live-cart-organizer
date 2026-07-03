@@ -75,6 +75,29 @@ function computeGrade(node: any): { total: number; available: number; pct: numbe
   return { total, available, pct: total ? available / total : 0 };
 }
 
+// Preço REAL de venda (com desconto) + preço "de" (compare-at) a partir das variações.
+// variant.price = valor já com desconto; variant.compareAtPrice = valor original.
+function computePricing(node: any): { price: number; compareAtPrice: number | null } {
+  const variants = (node.variants?.edges || []).map((e: any) => e.node);
+  let candidates = variants.filter((v: any) => v.availableForSale);
+  if (!candidates.length) candidates = variants;
+  let price = Infinity;
+  let compareAtPrice: number | null = null;
+  for (const v of candidates) {
+    const p = Number(v.price?.amount || 0);
+    if (!p) continue;
+    if (p < price) {
+      price = p;
+      const cmp = v.compareAtPrice ? Number(v.compareAtPrice.amount || 0) : 0;
+      compareAtPrice = cmp > p ? cmp : null;
+    }
+  }
+  if (!Number.isFinite(price)) price = Number(node.priceRange?.minVariantPrice?.amount || 0);
+  return { price, compareAtPrice };
+}
+
+
+
 async function shopify(query: string, variables: Record<string, unknown>) {
   const r = await fetch(SHOPIFY_URL, {
     method: "POST",
