@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Loader2, Save, Trash2, Plus, Upload, X, Package, Sparkles, Store as StoreIcon } from "lucide-react";
 import { toast } from "sonner";
-import { generateEan13 } from "@/lib/ean13";
+import { generateEan13, isValidEan13 } from "@/lib/ean13";
 
 interface VariantRow {
   id?: string;                 // existente
@@ -267,6 +267,50 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       return;
     }
 
+    // Validação de SKU/GTIN manuais nas variações novas
+    const newRows = variants.filter((v) => !v.id && v.color && v.size);
+    const manualSkus = newRows.map((v) => (v.sku || "").trim()).filter(Boolean);
+    const manualGtins = newRows.map((v) => (v.gtin || "").trim()).filter(Boolean);
+
+    // formato GTIN
+    for (const g of manualGtins) {
+      if (!isValidEan13(g)) {
+        toast.error(`GTIN inválido: ${g}. Deve ser um EAN-13 válido (13 dígitos) ou deixe em branco para gerar automático.`);
+        return;
+      }
+    }
+    // duplicatas dentro do próprio lote
+    const dupSku = manualSkus.find((s, i) => manualSkus.indexOf(s) !== i);
+    if (dupSku) { toast.error(`SKU repetido nas novas variações: ${dupSku}`); return; }
+    const dupGtin = manualGtins.find((g, i) => manualGtins.indexOf(g) !== i);
+    if (dupGtin) { toast.error(`GTIN repetido nas novas variações: ${dupGtin}`); return; }
+
+    // colisão com o banco (product_variants e pos_products)
+    if (manualSkus.length || manualGtins.length) {
+      const conflicts: { field: string; value: string }[] = [];
+      if (manualSkus.length) {
+        const [pv, pp] = await Promise.all([
+          supabase.from("product_variants").select("sku").in("sku", manualSkus),
+          supabase.from("pos_products").select("sku").in("sku", manualSkus),
+        ]);
+        for (const r of (pv.data || []) as any[]) conflicts.push({ field: "SKU", value: r.sku });
+        for (const r of (pp.data || []) as any[]) conflicts.push({ field: "SKU", value: r.sku });
+      }
+      if (manualGtins.length) {
+        const [pv, pp] = await Promise.all([
+          supabase.from("product_variants").select("gtin").in("gtin", manualGtins),
+          supabase.from("pos_products").select("barcode").in("barcode", manualGtins),
+        ]);
+        for (const r of (pv.data || []) as any[]) conflicts.push({ field: "GTIN", value: r.gtin });
+        for (const r of (pp.data || []) as any[]) conflicts.push({ field: "GTIN", value: r.barcode });
+      }
+      if (conflicts.length) {
+        const first = conflicts[0];
+        toast.error(`${first.field} já cadastrado: ${first.value}. Use outro código ou deixe em branco para gerar automático.`);
+        return;
+      }
+    }
+
     setSaving(true);
     const newVariantIds: string[] = [];
     try {
@@ -358,15 +402,23 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
             } as any);
           }
         } else {
-          // nova: insert — gera SKU e GTIN ÚNICOS via banco (sem colisão)
+          // nova: insert — usa SKU/GTIN manuais se informados; senão gera ÚNICOS via banco
           if (!v.color || !v.size) continue;
-          const colorSlug = (v.color || "X").normalize("NFD").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 10) || "UN";
-          const sizeSlug = (v.size || "U").replace(/[^A-Za-z0-9]/g, "") || "U";
-          const baseSku = `${skuRoot}-${colorSlug}-${sizeSlug}`;
-          const { data: skuData } = await supabase.rpc("gen_unique_variant_sku", { p_base: baseSku });
-          const { data: gtinData } = await supabase.rpc("gen_unique_ean13");
-          const newSku = (skuData as string) || baseSku;
-          const newGtin = (gtinData as string) || generateEan13();
+          const manualSku = (v.sku || "").trim();
+          const manualGtin = (v.gtin || "").trim();
+          let newSku = manualSku;
+          let newGtin = manualGtin;
+          if (!newSku) {
+            const colorSlug = (v.color || "X").normalize("NFD").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 10) || "UN";
+            const sizeSlug = (v.size || "U").replace(/[^A-Za-z0-9]/g, "") || "U";
+            const baseSku = `${skuRoot}-${colorSlug}-${sizeSlug}`;
+            const { data: skuData } = await supabase.rpc("gen_unique_variant_sku", { p_base: baseSku });
+            newSku = (skuData as string) || baseSku;
+          }
+          if (!newGtin) {
+            const { data: gtinData } = await supabase.rpc("gen_unique_ean13");
+            newGtin = (gtinData as string) || generateEan13();
+          }
           const { data: ins, error: eIns } = await supabase
             .from("product_variants")
             .insert({
@@ -732,11 +784,35 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
-                        {(v.sku || v.gtin) && (
-                          <div className="col-span-12 text-[10px] font-mono text-muted-foreground -mt-1">
-                            {v.sku && <>SKU: {v.sku}</>}
-                            {v.sku && v.gtin && " · "}
-                            {v.gtin && <>GTIN: {v.gtin}</>}
+                        {v.id ? (
+                          (v.sku || v.gtin) && (
+                            <div className="col-span-12 text-[10px] font-mono text-muted-foreground -mt-1">
+                              {v.sku && <>SKU: {v.sku}</>}
+                              {v.sku && v.gtin && " · "}
+                              {v.gtin && <>GTIN: {v.gtin}</>}
+                            </div>
+                          )
+                        ) : (
+                          <div className="col-span-12 grid grid-cols-2 gap-2 -mt-1">
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">SKU (opcional)</Label>
+                              <Input
+                                className="h-8 font-mono text-xs"
+                                value={v.sku || ""}
+                                onChange={(e) => updateVariant(idx, { sku: e.target.value })}
+                                placeholder="Auto se vazio"
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-[10px] text-muted-foreground">GTIN / EAN-13 (opcional)</Label>
+                              <Input
+                                className="h-8 font-mono text-xs"
+                                value={v.gtin || ""}
+                                onChange={(e) => updateVariant(idx, { gtin: e.target.value.replace(/\D/g, "").slice(0, 13) })}
+                                placeholder="Auto se vazio"
+                                inputMode="numeric"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
