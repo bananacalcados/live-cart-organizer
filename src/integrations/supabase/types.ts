@@ -12295,6 +12295,63 @@ export type Database = {
           },
         ]
       }
+      pos_site_exchanges: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          error_message: string | null
+          exchange_reason: string | null
+          id: string
+          new_pos_sale_id: string | null
+          original_items: Json
+          original_pos_sale_id: string | null
+          seller_id: string | null
+          shopify_order_id: string
+          shopify_order_name: string | null
+          status: string
+          step_status: Json
+          store_id: string | null
+          updated_at: string
+          zeroed_barcodes: string[]
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          exchange_reason?: string | null
+          id?: string
+          new_pos_sale_id?: string | null
+          original_items?: Json
+          original_pos_sale_id?: string | null
+          seller_id?: string | null
+          shopify_order_id: string
+          shopify_order_name?: string | null
+          status?: string
+          step_status?: Json
+          store_id?: string | null
+          updated_at?: string
+          zeroed_barcodes?: string[]
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          error_message?: string | null
+          exchange_reason?: string | null
+          id?: string
+          new_pos_sale_id?: string | null
+          original_items?: Json
+          original_pos_sale_id?: string | null
+          seller_id?: string | null
+          shopify_order_id?: string
+          shopify_order_name?: string | null
+          status?: string
+          step_status?: Json
+          store_id?: string | null
+          updated_at?: string
+          zeroed_barcodes?: string[]
+        }
+        Relationships: []
+      }
       pos_stock_adjustments: {
         Row: {
           barcode: string | null
