@@ -143,13 +143,55 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
 
   const loadApproved = async (instanceId: string) => {
     if (!instanceId) { setTplByModel({}); return; }
+    // Load ALL locally-known carousel templates for this instance (not just the
+    // ones flagged aprovado). The local `aprovado` flag is only refreshed when
+    // someone clicks "Sincronizar status" in the admin panel, so freshly
+    // approved templates would otherwise never show up here. We instead check
+    // the LIVE Meta approval status and self-heal the flag.
     const { data } = await supabase
       .from("templates_carrossel")
-      .select("nome, qtd_cards, template_id, template_language")
-      .eq("whatsapp_number_id", instanceId)
-      .eq("aprovado", true);
+      .select("nome, qtd_cards, template_id, template_language, aprovado")
+      .eq("whatsapp_number_id", instanceId);
+    const rows = (data || []) as {
+      nome: string | null; qtd_cards: number; template_id: string;
+      template_language: string | null; aprovado: boolean | null;
+    }[];
+    if (rows.length === 0) { setTplByModel({}); return; }
+
+    // Fetch live status from Meta; fall back to the local flag if it fails.
+    let approvedByName: Map<string, boolean> | null = null;
+    try {
+      const { data: meta, error } = await supabase.functions.invoke("meta-whatsapp-get-templates", {
+        body: { whatsappNumberId: instanceId },
+      });
+      if (!error && meta?.templates) {
+        approvedByName = new Map(
+          (meta.templates as { name?: string; status?: string }[]).map(
+            (t) => [t.name || "", String(t.status).toUpperCase() === "APPROVED"],
+          ),
+        );
+      }
+    } catch {
+      approvedByName = null;
+    }
+
+    const isApproved = (r: { template_id: string; aprovado: boolean | null }) =>
+      approvedByName ? (approvedByName.get(r.template_id) ?? false) : !!r.aprovado;
+
+    // Self-heal: backfill the DB flag where Meta says approved but local is stale.
+    if (approvedByName) {
+      const toFix = rows.filter((r) => isApproved(r) && !r.aprovado).map((r) => r.template_id);
+      if (toFix.length) {
+        supabase.from("templates_carrossel")
+          .update({ aprovado: true, meta_status: "APPROVED" })
+          .eq("whatsapp_number_id", instanceId)
+          .in("template_id", toFix)
+          .then(() => {}, () => {});
+      }
+    }
+
     const byModel: Record<string, TplEntry[]> = {};
-    (data || []).forEach((r: { nome: string | null; qtd_cards: number; template_id: string; template_language: string | null }) => {
+    rows.filter(isApproved).forEach((r) => {
       const m = (r.nome || "Padrão").trim();
       (byModel[m] ||= []).push({ qtd: r.qtd_cards, templateId: r.template_id, language: r.template_language || "pt_BR" });
     });

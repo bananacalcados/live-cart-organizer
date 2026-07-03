@@ -1,0 +1,1 @@
+UPDATE public.templates_carrossel SET aprovado = true, meta_status = 'APPROVED' WHERE template_id IN ('carrossel_lanc_oferta_2cards','carrossel_lanc_oferta_3cards','carrossel_lanc_oferta_4cards','carrossel_lanc_oferta_5cards','carrossel_lanc_oferta_6cards') AND whatsapp_number_id = 'ae453235-50e1-4ef6-8a87-8c8a77b2b440';
