@@ -309,6 +309,87 @@ export function CampaignDashboard({
           </div>
         )}
       </Card>
+
+      {/* Modal de detalhes da compra */}
+      <Dialog open={!!selectedBuyer} onOpenChange={(o) => { if (!o) { setSelectedBuyer(null); setBuyerDetail(null); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              {selectedBuyer?.nome || "Cliente"}
+            </DialogTitle>
+            <p className="text-xs text-neutral-500">{selectedBuyer?.phone || "—"}</p>
+          </DialogHeader>
+
+          {loadingBuyer ? (
+            <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-blue-500" /></div>
+          ) : !buyerDetail ? (
+            <p className="py-8 text-center text-sm text-neutral-400">Não foi possível carregar os detalhes.</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 rounded-lg bg-neutral-50 p-2.5 text-xs text-neutral-600">
+                <History className="h-4 w-4 text-neutral-400" />
+                <span>
+                  <b className="text-neutral-800">{buyerDetail.total_previous}</b> compra(s) anterior(es) ·{" "}
+                  <b className="text-neutral-800">{buyerDetail.total_lifetime}</b> no total
+                </span>
+              </div>
+
+              {buyerDetail.sales.length === 0 ? (
+                <p className="py-6 text-center text-sm text-neutral-400">Nenhum pedido encontrado na janela de conversão.</p>
+              ) : (
+                buyerDetail.sales.map((s) => (
+                  <Card key={s.id} className="p-3 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+                        <Calendar className="h-3.5 w-3.5" /> {fmtDate(s.date)}
+                      </span>
+                      <span className="text-sm font-bold text-emerald-600">{brl(s.total)}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <span className="flex items-center gap-1.5 text-neutral-600">
+                        <User className="h-3.5 w-3.5 text-neutral-400" /> {s.seller || "—"}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-neutral-600">
+                        <Store className="h-3.5 w-3.5 text-neutral-400" /> {s.store || "—"}
+                      </span>
+                      <span className="flex items-center gap-1.5 text-neutral-600 col-span-2">
+                        <CreditCard className="h-3.5 w-3.5 text-neutral-400" />
+                        {s.payment_method || "—"}
+                        {s.payment_gateway && <span className="text-neutral-400">({s.payment_gateway})</span>}
+                      </span>
+                    </div>
+
+                    {s.discount > 0 && (
+                      <p className="text-[11px] text-neutral-400">
+                        Subtotal {brl(s.subtotal)} · Desconto {brl(s.discount)}
+                      </p>
+                    )}
+
+                    <div className="border-t pt-2 space-y-1.5">
+                      {s.items.map((it, i) => (
+                        <div key={i} className="flex items-start justify-between gap-2 text-xs">
+                          <div className="min-w-0">
+                            <p className="text-neutral-700 truncate">{it.name || "Produto"}</p>
+                            {(it.variant || it.size) && (
+                              <p className="text-[11px] text-neutral-400">
+                                {[it.variant, it.size].filter(Boolean).join(" · ")}
+                              </p>
+                            )}
+                          </div>
+                          <span className="whitespace-nowrap text-neutral-600">
+                            {it.qty}× {brl(it.price)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                ))
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
