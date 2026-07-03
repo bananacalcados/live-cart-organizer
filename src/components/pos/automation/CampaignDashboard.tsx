@@ -48,10 +48,46 @@ interface EnvioRow {
   enviado_em: string | null;
   converteu: boolean;
   valor: number;
+  comprou_em: string | null;
+}
+
+interface BuyerSaleItem {
+  name: string | null;
+  variant: string | null;
+  size: string | null;
+  qty: number;
+  price: number;
+}
+
+interface BuyerSale {
+  id: string;
+  date: string;
+  total: number;
+  subtotal: number;
+  discount: number;
+  payment_method: string | null;
+  payment_gateway: string | null;
+  sale_type: string | null;
+  seller: string | null;
+  store: string | null;
+  items: BuyerSaleItem[];
+}
+
+interface BuyerDetail {
+  total_previous: number;
+  total_lifetime: number;
+  sales: BuyerSale[];
 }
 
 const brl = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+const fmtDate = (v: string | null) =>
+  v
+    ? new Date(v).toLocaleString("pt-BR", {
+        day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+      })
+    : "—";
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   enviado: { label: "Enviado", cls: "bg-sky-100 text-sky-700" },
