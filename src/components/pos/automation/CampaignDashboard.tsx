@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft, Loader2, ChevronDown, ChevronUp, CheckCircle2, XCircle,
   Clock, TrendingUp, DollarSign, Package, Percent, ShoppingBag, RefreshCw,
-  Calendar, User, CreditCard, Store, History,
+  Calendar, User, CreditCard, Store, History, MessageCircle,
 } from "lucide-react";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -15,6 +15,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { CampaignChatViewerDialog } from "./CampaignChatViewerDialog";
 
 interface Stats {
   total: number;
@@ -131,6 +132,9 @@ export function CampaignDashboard({
   const [buyerDetail, setBuyerDetail] = useState<BuyerDetail | null>(null);
   const [loadingBuyer, setLoadingBuyer] = useState(false);
 
+  const [instanceId, setInstanceId] = useState<string | null>(null);
+  const [chatRow, setChatRow] = useState<EnvioRow | null>(null);
+
   const openBuyer = async (row: EnvioRow) => {
     setSelectedBuyer(row);
     setBuyerDetail(null);
@@ -158,6 +162,17 @@ export function CampaignDashboard({
   };
 
   useEffect(() => { loadStats(); }, [campanhaId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let active = true;
+    supabase
+      .from("campanhas_auto")
+      .select("whatsapp_number_id")
+      .eq("id", campanhaId)
+      .maybeSingle()
+      .then(({ data }) => { if (active) setInstanceId(data?.whatsapp_number_id ?? null); });
+    return () => { active = false; };
+  }, [campanhaId]);
 
   const toggleList = () => {
     const next = !showList;
@@ -260,6 +275,7 @@ export function CampaignDashboard({
                       <TableHead>Comprou?</TableHead>
                       <TableHead>Data da compra</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-center">Conversa</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -298,6 +314,18 @@ export function CampaignDashboard({
                           </TableCell>
                           <TableCell className="text-right font-medium text-neutral-700">
                             {r.converteu ? brl(r.valor) : "—"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 gap-1 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                              disabled={!r.phone}
+                              onClick={(e) => { e.stopPropagation(); setChatRow(r); }}
+                              title="Ver conversa no WhatsApp"
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" /> Abrir
+                            </Button>
                           </TableCell>
                         </TableRow>
                       );
@@ -390,6 +418,15 @@ export function CampaignDashboard({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Visualizador da conversa no WhatsApp */}
+      <CampaignChatViewerDialog
+        open={!!chatRow}
+        onOpenChange={(o) => { if (!o) setChatRow(null); }}
+        phone={chatRow?.phone ?? null}
+        name={chatRow?.nome ?? null}
+        whatsappNumberId={instanceId}
+      />
     </div>
   );
 }
