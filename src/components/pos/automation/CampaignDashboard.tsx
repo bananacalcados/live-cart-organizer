@@ -132,6 +132,9 @@ export function CampaignDashboard({
   const [buyerDetail, setBuyerDetail] = useState<BuyerDetail | null>(null);
   const [loadingBuyer, setLoadingBuyer] = useState(false);
 
+  const [instanceId, setInstanceId] = useState<string | null>(null);
+  const [chatRow, setChatRow] = useState<EnvioRow | null>(null);
+
   const openBuyer = async (row: EnvioRow) => {
     setSelectedBuyer(row);
     setBuyerDetail(null);
