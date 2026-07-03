@@ -11721,6 +11721,8 @@ export type Database = {
           appmax_order_id: string | null
           cash_register_id: string | null
           checkout_step: number | null
+          conditional_signed_at: string | null
+          conditional_status: string | null
           created_at: string
           crediario_due_date: string | null
           crediario_gateway: string | null
@@ -11745,6 +11747,7 @@ export type Database = {
           id: string
           invoice_number: string | null
           invoice_pdf_url: string | null
+          is_conditional: boolean
           mercadopago_payment_id: string | null
           mp_account_id: string | null
           nfce_key: string | null
@@ -11782,6 +11785,8 @@ export type Database = {
           appmax_order_id?: string | null
           cash_register_id?: string | null
           checkout_step?: number | null
+          conditional_signed_at?: string | null
+          conditional_status?: string | null
           created_at?: string
           crediario_due_date?: string | null
           crediario_gateway?: string | null
@@ -11806,6 +11811,7 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
+          is_conditional?: boolean
           mercadopago_payment_id?: string | null
           mp_account_id?: string | null
           nfce_key?: string | null
@@ -11843,6 +11849,8 @@ export type Database = {
           appmax_order_id?: string | null
           cash_register_id?: string | null
           checkout_step?: number | null
+          conditional_signed_at?: string | null
+          conditional_status?: string | null
           created_at?: string
           crediario_due_date?: string | null
           crediario_gateway?: string | null
@@ -11867,6 +11875,7 @@ export type Database = {
           id?: string
           invoice_number?: string | null
           invoice_pdf_url?: string | null
+          is_conditional?: boolean
           mercadopago_payment_id?: string | null
           mp_account_id?: string | null
           nfce_key?: string | null
@@ -18247,6 +18256,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      restore_pos_sale_item_stock: {
+        Args: { p_barcode: string; p_sale_id: string; p_sku: string }
+        Returns: undefined
       }
       sample_variant_normalization: {
         Args: { p_limit?: number }

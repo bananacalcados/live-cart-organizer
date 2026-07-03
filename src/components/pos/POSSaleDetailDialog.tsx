@@ -986,6 +986,11 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     <Store className="h-3 w-3" /> Loja
                   </Badge>
                 )}
+                {((sale.payment_details as any)?.conditional || sale.status === 'conditional') && (
+                  <Badge className="bg-emerald-100 text-emerald-700 border-emerald-300 font-bold text-xs flex items-center gap-1">
+                    📦 Condicional{sale.status === 'conditional' ? ' (enviado)' : ''}
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
