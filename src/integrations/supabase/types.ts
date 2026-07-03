@@ -11379,6 +11379,105 @@ export type Database = {
           },
         ]
       }
+      pos_products_dedup_backup: {
+        Row: {
+          age_group: string | null
+          auto_classified: boolean
+          backed_up_at: string
+          backup_id: string
+          barcode: string
+          brand: string | null
+          category: string | null
+          category_id: string | null
+          classification_confidence: number | null
+          color: string | null
+          cost_price: number | null
+          created_at: string
+          dedup_wave: string | null
+          gender: string | null
+          group_role: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean
+          name: string
+          parent_sku: string | null
+          price: number
+          price_tier_id: string | null
+          size: string | null
+          sku: string
+          stock: number
+          store_id: string
+          synced_at: string
+          tiny_id: number | null
+          updated_at: string
+          variant: string
+        }
+        Insert: {
+          age_group?: string | null
+          auto_classified?: boolean
+          backed_up_at?: string
+          backup_id?: string
+          barcode?: string
+          brand?: string | null
+          category?: string | null
+          category_id?: string | null
+          classification_confidence?: number | null
+          color?: string | null
+          cost_price?: number | null
+          created_at?: string
+          dedup_wave?: string | null
+          gender?: string | null
+          group_role?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          name: string
+          parent_sku?: string | null
+          price?: number
+          price_tier_id?: string | null
+          size?: string | null
+          sku?: string
+          stock?: number
+          store_id: string
+          synced_at?: string
+          tiny_id?: number | null
+          updated_at?: string
+          variant?: string
+        }
+        Update: {
+          age_group?: string | null
+          auto_classified?: boolean
+          backed_up_at?: string
+          backup_id?: string
+          barcode?: string
+          brand?: string | null
+          category?: string | null
+          category_id?: string | null
+          classification_confidence?: number | null
+          color?: string | null
+          cost_price?: number | null
+          created_at?: string
+          dedup_wave?: string | null
+          gender?: string | null
+          group_role?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean
+          name?: string
+          parent_sku?: string | null
+          price?: number
+          price_tier_id?: string | null
+          size?: string | null
+          sku?: string
+          stock?: number
+          store_id?: string
+          synced_at?: string
+          tiny_id?: number | null
+          updated_at?: string
+          variant?: string
+        }
+        Relationships: []
+      }
       pos_products_phantom_backup_20260513: {
         Row: {
           barcode: string | null
