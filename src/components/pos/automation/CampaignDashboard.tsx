@@ -315,6 +315,18 @@ export function CampaignDashboard({
                           <TableCell className="text-right font-medium text-neutral-700">
                             {r.converteu ? brl(r.valor) : "—"}
                           </TableCell>
+                          <TableCell className="text-center">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 gap-1 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                              disabled={!r.phone}
+                              onClick={(e) => { e.stopPropagation(); setChatRow(r); }}
+                              title="Ver conversa no WhatsApp"
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" /> Abrir
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
