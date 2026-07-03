@@ -180,13 +180,19 @@ export default function LinkPageView() {
   // ─── Lead capture gate ───
   if (!gatePassed) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6" style={{ background: page.background_value }}>
-        <div className="w-full max-w-sm bg-white/10 backdrop-blur-xl rounded-3xl p-7 border border-white/20 shadow-2xl">
+      <div className="min-h-screen flex items-center justify-center px-6 lp-body" style={{ background: page.background_value }}>
+        <style>{LP_STYLES}</style>
+        <div className="w-full max-w-sm bg-white/10 backdrop-blur-xl rounded-3xl p-7 border border-white/20 shadow-2xl lp-item" style={{ animationDelay: "0.05s" }}>
           {(page.logo_url || page.avatar_url) && (
-            <img src={page.logo_url || page.avatar_url} alt={page.title} className="h-20 mx-auto mb-4 object-contain drop-shadow-xl" />
+            <img src={page.logo_url || page.avatar_url} alt={page.title} className="h-20 mx-auto mb-4 object-contain drop-shadow-xl lp-logo" />
           )}
-          <h1 className="text-2xl font-extrabold text-white text-center">{page.title}</h1>
-          <p className="text-sm text-white/70 text-center mt-2 mb-6">
+          <h1
+            className="lp-display lp-title text-center font-black text-4xl leading-tight"
+            style={{ backgroundImage: `linear-gradient(100deg, #ffffff 0%, ${accent} 35%, #ffffff 55%, ${accent2} 78%, #ffffff 100%)` }}
+          >
+            {page.title}
+          </h1>
+          <p className="text-base text-white/75 text-center mt-3 mb-6 font-medium">
             {seller ? `Atendimento com ${seller.name} ✨` : "Preencha para continuar"}
           </p>
           <div className="space-y-3">
