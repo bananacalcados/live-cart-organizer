@@ -21,6 +21,7 @@ import { POSBarcodeScanner } from "./POSBarcodeScanner";
 import { POSSellerGate } from "./POSSellerGate";
 import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
+import { SiteExchangePicker, SiteExchangeResult } from "./SiteExchangePicker";
 
 import { POSPrizeWheel } from "./POSPrizeWheel";
 import { POSLoyaltyScreen } from "./POSLoyaltyScreen";
@@ -89,6 +90,9 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   // Tipo de venda (Presencial=NFC-e, Online=NF-e + Envios)
   const [saleType, setSaleType] = useState<SaleType | null>(null);
   const [showSaleTypeModal, setShowSaleTypeModal] = useState(false);
+  // Troca do Site: pedido do site puxado para virar venda da vendedora
+  const [showSiteExchange, setShowSiteExchange] = useState(false);
+  const [siteExchange, setSiteExchange] = useState<SiteExchangeResult | null>(null);
   // Lock pra evitar bip duplicado
   const lastScanRef = useRef<{ q: string; t: number }>({ q: "", t: 0 });
   const [barcodeInput, setBarcodeInput] = useState("");
@@ -1042,6 +1046,63 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           } catch (e) { console.error('[online sale_type update]', e); }
         }
 
+        // 🔁 TROCA DO SITE: marca a venda como troca e cancela o pedido original
+        if (saleId && siteExchange) {
+          try {
+            // Tag visível na venda + vínculo com o pedido do site
+            await supabase.from('pos_sales').update({
+              notes: `🔁 Troca Site ${siteExchange.shopifyOrderName || ''} · Motivo: ${siteExchange.reason}`.trim(),
+              payment_details: {
+                link_origin: 'pdv_venda',
+                site_exchange: true,
+                exchange_reason: siteExchange.reason,
+                original_shopify_order_id: siteExchange.shopifyOrderId,
+                original_shopify_order_name: siteExchange.shopifyOrderName,
+              } as any,
+            } as any).eq('id', saleId);
+
+            // Itens que faltaram = itens originais que NÃO ficaram no carrinho final
+            const finalKeys = new Set(cart.flatMap((c) => [
+              (c.barcode || '').trim(), (c.sku || '').trim(),
+            ].filter(Boolean)));
+            const missingItems = siteExchange.originalItems
+              .filter((oi) => {
+                const bc = (oi.barcode || '').trim();
+                const sk = (oi.sku || '').trim();
+                const kept = (bc && finalKeys.has(bc)) || (sk && finalKeys.has(sk));
+                return !kept;
+              })
+              .map((oi) => ({ sku: oi.sku || '', barcode: oi.barcode || '' }));
+
+            const { data: exRes, error: exErr } = await supabase.functions.invoke('pos-site-exchange-finalize', {
+              body: {
+                new_pos_sale_id: saleId,
+                original_pos_sale_id: siteExchange.originalSaleId,
+                shopify_order_id: siteExchange.shopifyOrderId,
+                shopify_order_name: siteExchange.shopifyOrderName,
+                seller_id: selectedSeller || null,
+                seller_name: sellers.find((s) => s.id === selectedSeller)?.name || null,
+                store_id: storeId,
+                exchange_reason: siteExchange.reason,
+                original_items: siteExchange.originalItems,
+                missing_items: missingItems,
+              },
+            });
+            if (exErr) {
+              toast.error('Venda salva, mas houve falha ao cancelar o pedido do site. Verifique em Trocas.');
+              console.error('[site-exchange-finalize]', exErr);
+            } else if (exRes?.status === 'completed_with_warnings') {
+              toast.warning('Troca concluída com avisos: alguma etapa (cancelamento/estoque) precisa de conferência.');
+            } else {
+              toast.success('Troca do Site concluída: pedido cancelado e estoque ajustado.');
+            }
+          } catch (e) {
+            console.error('[site-exchange]', e);
+            toast.error('Venda salva, mas a troca do site não finalizou. Verifique manualmente.');
+          }
+        }
+
+
         // 🔥 Auto-emissão NFC-e (apenas vendas presenciais)
         try {
           if (saleId && saleType !== 'online') {
@@ -1488,6 +1549,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setSelectedSeller("");
     setSaleType(null);
     setShowSaleTypeModal(false);
+    setSiteExchange(null);
+    setShowSiteExchange(false);
     setStep("scan");
     setSaleResult(null);
     setNfceResult(null);
@@ -1575,36 +1638,89 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   }
 
 
-  // Sale-type gate: depois de escolher vendedor, escolher Presencial vs Online
+  // Sale-type gate: depois de escolher vendedor, escolher Presencial / Online / Trocas Site
   if (selectedSeller && !saleType) {
     return (
-      <Dialog open={true} onOpenChange={() => {}}>
-        <DialogContent className="bg-pos-black border-pos-orange/40 max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 pt-2">
-            <button
-              onClick={() => { setSaleType('physical'); setShowSaleTypeModal(false); }}
-              className="rounded-2xl border-2 border-orange-400/40 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-400 p-6 flex flex-col items-center gap-3 transition-all"
-            >
-              <div className="h-16 w-16 rounded-full bg-orange-500/20 flex items-center justify-center text-3xl">🏬</div>
-              <p className="font-bold text-pos-white">Presencial</p>
-              <p className="text-xs text-pos-white/60 text-center">Cliente leva agora · NFC-e</p>
-            </button>
-            <button
-              onClick={() => { setSaleType('online'); setShowSaleTypeModal(false); }}
-              className="rounded-2xl border-2 border-blue-400/40 bg-blue-500/5 hover:bg-blue-500/15 hover:border-blue-400 p-6 flex flex-col items-center gap-3 transition-all"
-            >
-              <div className="h-16 w-16 rounded-full bg-blue-500/20 flex items-center justify-center text-3xl">🚚</div>
-              <p className="font-bold text-pos-white">Online</p>
-              <p className="text-xs text-pos-white/60 text-center">Entrega/Envio · NF-e + Aba Envios</p>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <>
+        <SiteExchangePicker
+          open={showSiteExchange}
+          onCancel={() => setShowSiteExchange(false)}
+          onConfirm={(result) => {
+            // Puxa o pedido do site como venda ONLINE da vendedora
+            setSiteExchange(result);
+            setSaleType('online');
+            setShowSiteExchange(false);
+            setShowSaleTypeModal(false);
+            // Prefill cliente
+            setSelectedCustomer(result.customer?.name || result.customer?.id ? {
+              id: result.customer.id || '',
+              name: result.customer.name || '',
+              cpf: result.customer.cpf,
+              email: result.customer.email,
+              whatsapp: result.customer.whatsapp,
+              address: result.customer.address,
+              address_number: result.customer.address_number,
+              complement: result.customer.complement,
+              neighborhood: result.customer.neighborhood,
+              cep: result.customer.cep,
+              city: result.customer.city,
+              state: result.customer.state,
+            } : null);
+            // Prefill carrinho com os itens do pedido do site
+            setCart(result.items.map((i) => ({
+              id: i.id,
+              tiny_id: i.tiny_id,
+              sku: i.sku,
+              name: i.name,
+              variant: i.variant,
+              size: i.size,
+              category: i.category,
+              price: i.price,
+              quantity: i.quantity,
+              barcode: i.barcode,
+              stock: i.stock,
+            })));
+            setStep('scan');
+            toast.success(`Pedido ${result.shopifyOrderName || ''} puxado. Troque o produto que faltou e finalize.`);
+          }}
+        />
+        <Dialog open={!showSiteExchange} onOpenChange={() => {}}>
+          <DialogContent className="bg-pos-black border-pos-orange/40 max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-3 gap-3 pt-2">
+              <button
+                onClick={() => { setSaleType('physical'); setShowSaleTypeModal(false); }}
+                className="rounded-2xl border-2 border-orange-400/40 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-orange-500/20 flex items-center justify-center text-2xl">🏬</div>
+                <p className="font-bold text-pos-white">Presencial</p>
+                <p className="text-xs text-pos-white/60 text-center">Cliente leva agora · NFC-e</p>
+              </button>
+              <button
+                onClick={() => { setSaleType('online'); setShowSaleTypeModal(false); }}
+                className="rounded-2xl border-2 border-blue-400/40 bg-blue-500/5 hover:bg-blue-500/15 hover:border-blue-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-blue-500/20 flex items-center justify-center text-2xl">🚚</div>
+                <p className="font-bold text-pos-white">Online</p>
+                <p className="text-xs text-pos-white/60 text-center">Entrega/Envio · NF-e + Aba Envios</p>
+              </button>
+              <button
+                onClick={() => setShowSiteExchange(true)}
+                className="rounded-2xl border-2 border-purple-400/40 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">🔁</div>
+                <p className="font-bold text-pos-white">Trocas Site</p>
+                <p className="text-xs text-pos-white/60 text-center">Puxar pedido do site e trocar</p>
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
     );
   }
+
 
   const totalNotifications = unreadWhatsApp + newWhatsApp + unreadTeamChat + pendingReturns;
 
@@ -1720,6 +1836,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 {saleType && (
                   <Badge className={cn("ml-2 text-[10px]", saleType === 'online' ? "bg-blue-500/20 text-blue-300 border-blue-500/40" : "bg-orange-500/20 text-orange-300 border-orange-500/40")}>
                     {saleType === 'online' ? '🚚 Online (NF-e)' : '🏬 Presencial (NFC-e)'}
+                  </Badge>
+                )}
+                {siteExchange && (
+                  <Badge className="ml-2 text-[10px] bg-purple-500/20 text-purple-300 border-purple-500/40">
+                    🔁 Troca Site {siteExchange.shopifyOrderName || ''}
                   </Badge>
                 )}
               </p>
