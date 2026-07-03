@@ -267,6 +267,55 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       return;
     }
 
+    // Validação de SKU/GTIN manuais nas variações novas
+    const newRows = variants.filter((v) => !v.id && v.color && v.size);
+    const manualSkus = newRows.map((v) => (v.sku || "").trim()).filter(Boolean);
+    const manualGtins = newRows.map((v) => (v.gtin || "").trim()).filter(Boolean);
+
+    // formato GTIN
+    for (const g of manualGtins) {
+      if (!isValidEan13(g)) {
+        toast.error(`GTIN inválido: ${g}. Deve ser um EAN-13 válido (13 dígitos) ou deixe em branco para gerar automático.`);
+        return;
+      }
+    }
+    // duplicatas dentro do próprio lote
+    const dupSku = manualSkus.find((s, i) => manualSkus.indexOf(s) !== i);
+    if (dupSku) { toast.error(`SKU repetido nas novas variações: ${dupSku}`); return; }
+    const dupGtin = manualGtins.find((g, i) => manualGtins.indexOf(g) !== i);
+    if (dupGtin) { toast.error(`GTIN repetido nas novas variações: ${dupGtin}`); return; }
+
+    // colisão com o banco (product_variants e pos_products)
+    if (manualSkus.length || manualGtins.length) {
+      const checks: Promise<{ field: string; value: string }[]>[] = [];
+      if (manualSkus.length) {
+        checks.push(
+          supabase.from("product_variants").select("sku").in("sku", manualSkus)
+            .then(({ data }) => (data || []).map((r: any) => ({ field: "SKU", value: r.sku }))),
+        );
+        checks.push(
+          supabase.from("pos_products").select("sku").in("sku", manualSkus)
+            .then(({ data }) => (data || []).map((r: any) => ({ field: "SKU", value: r.sku }))),
+        );
+      }
+      if (manualGtins.length) {
+        checks.push(
+          supabase.from("product_variants").select("gtin").in("gtin", manualGtins)
+            .then(({ data }) => (data || []).map((r: any) => ({ field: "GTIN", value: r.gtin }))),
+        );
+        checks.push(
+          supabase.from("pos_products").select("barcode").in("barcode", manualGtins)
+            .then(({ data }) => (data || []).map((r: any) => ({ field: "GTIN", value: r.barcode }))),
+        );
+      }
+      const results = (await Promise.all(checks)).flat();
+      if (results.length) {
+        const first = results[0];
+        toast.error(`${first.field} já cadastrado: ${first.value}. Use outro código ou deixe em branco para gerar automático.`);
+        return;
+      }
+    }
+
     setSaving(true);
     const newVariantIds: string[] = [];
     try {
