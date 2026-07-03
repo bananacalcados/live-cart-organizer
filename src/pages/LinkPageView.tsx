@@ -30,6 +30,34 @@ function formatPrice(v: number | null): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
+const LP_STYLES = `
+@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+.lp-display{font-family:'Unbounded',system-ui,-apple-system,sans-serif;}
+.lp-body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;}
+@keyframes lpFadeUp{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
+@keyframes lpGradient{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes lpFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes lpPop{0%{opacity:0;transform:scale(.9) translateY(20px)}60%{transform:scale(1.02)}100%{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes lpShine{0%{transform:translateX(-120%)}100%{transform:translateX(220%)}}
+.lp-title{
+  background-size:220% auto;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:lpGradient 6s ease infinite, lpFadeUp .8s cubic-bezier(.16,1,.3,1) both;
+}
+.lp-sub{animation:lpFadeUp .8s ease .15s both;}
+.lp-badge{animation:lpFadeUp .8s ease .3s both;}
+.lp-logo{animation:lpFloat 5s ease-in-out infinite, lpFadeUp .8s ease both;}
+.lp-item{opacity:0;animation:lpPop .6s cubic-bezier(.16,1,.3,1) forwards;}
+.lp-shine{position:relative;overflow:hidden;}
+.lp-shine::after{content:"";position:absolute;top:0;bottom:0;width:35%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);
+  transform:translateX(-120%);animation:lpShine 4.5s ease-in-out 1.2s infinite;}
+@media (prefers-reduced-motion: reduce){
+  .lp-title,.lp-sub,.lp-badge,.lp-logo,.lp-item{animation:none!important;opacity:1!important;transform:none!important;}
+  .lp-shine::after{display:none;}
+}
+`;
+
 export default function LinkPageView() {
   const { slug } = useParams<{ slug: string }>();
   const [searchParams] = useSearchParams();
