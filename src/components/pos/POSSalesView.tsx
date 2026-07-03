@@ -22,6 +22,8 @@ import { POSSellerGate } from "./POSSellerGate";
 import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import { SiteExchangePicker, SiteExchangeResult } from "./SiteExchangePicker";
+import { ConditionalFinalizePicker, ConditionalPickResult } from "./ConditionalFinalizePicker";
+import { printConditionalReceipt } from "@/lib/pos/conditionalReceipt";
 
 import { POSPrizeWheel } from "./POSPrizeWheel";
 import { POSLoyaltyScreen } from "./POSLoyaltyScreen";
@@ -55,7 +57,8 @@ interface CartItem {
   defectNote?: string;
 }
 
-type SaleType = 'physical' | 'online';
+type SaleType = 'physical' | 'online' | 'conditional';
+type ConditionalStage = 'new' | 'finalize';
 
 interface PaymentMethod {
   id: string;
@@ -93,6 +96,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   // Troca do Site: pedido do site puxado para virar venda da vendedora
   const [showSiteExchange, setShowSiteExchange] = useState(false);
   const [siteExchange, setSiteExchange] = useState<SiteExchangeResult | null>(null);
+  // Condicional: pedido enviado ao cliente para experimentar (2 etapas)
+  const [conditionalStage, setConditionalStage] = useState<ConditionalStage | null>(null);
+  const [showConditionalMenu, setShowConditionalMenu] = useState(false);
+  const [showConditionalPicker, setShowConditionalPicker] = useState(false);
+  const [conditionalSaleId, setConditionalSaleId] = useState<string | null>(null);
+  const [conditionalOriginalItems, setConditionalOriginalItems] = useState<
+    Array<{ sku: string; barcode: string; name: string; variant: string; quantity: number; unit_price: number }>
+  >([]);
   // Lock pra evitar bip duplicado
   const lastScanRef = useRef<{ q: string; t: number }>({ q: "", t: 0 });
   const [barcodeInput, setBarcodeInput] = useState("");
@@ -888,6 +899,131 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     }
   }, [storeId, hasOpenRegister]);
 
+
+  // ── CONDICIONAL ────────────────────────────────────────────────────────────
+  // Valida dados obrigatórios do cliente para condicional (todos obrigatórios).
+  const validateConditionalCustomer = (): string | null => {
+    const c: any = selectedCustomer;
+    if (!c) return "Selecione ou cadastre o cliente (dados obrigatórios no condicional).";
+    const miss: string[] = [];
+    if (!c.name?.trim()) miss.push("Nome");
+    if (!c.cpf?.trim()) miss.push("CPF");
+    if (!c.whatsapp?.trim()) miss.push("Telefone");
+    if (!c.email?.trim()) miss.push("Email");
+    if (!c.cep?.trim()) miss.push("CEP");
+    if (!c.address?.trim()) miss.push("Endereço");
+    if (!c.address_number?.trim()) miss.push("Número");
+    if (!c.city?.trim()) miss.push("Cidade");
+    if (!c.state?.trim()) miss.push("Estado");
+    return miss.length ? `Condicional exige dados completos do cliente. Faltam: ${miss.join(", ")}` : null;
+  };
+
+  // Etapa 1: cria o condicional (baixa estoque, NÃO fatura) + imprime comprovante.
+  const createConditional = async () => {
+    if (cart.length === 0) { toast.error("Adicione produtos ao condicional."); return; }
+    const err = validateConditionalCustomer();
+    if (err) { toast.error(err); setStep("customer"); return; }
+    setFinalizingSale(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-conditional-create", {
+        body: {
+          store_id: storeId,
+          seller_id: selectedSeller || undefined,
+          customer: selectedCustomer,
+          items: cart.map((item) => ({
+            tiny_id: item.tiny_id, sku: item.sku, name: item.name, variant: item.variant,
+            size: item.size, category: item.category, price: item.price, quantity: item.quantity,
+            barcode: item.barcode,
+          })),
+        },
+      });
+      if (error) throw new Error(error.message);
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const saleId = (data as any)?.sale_id;
+      setConditionalSaleId(saleId || null);
+      setSaleResult({ sale_id: saleId });
+      // Comprovante com assinaturas
+      try {
+        printConditionalReceipt({
+          storeName,
+          sellerName: sellers.find((s) => s.id === selectedSeller)?.name || "",
+          saleId,
+          items: cart.map((i) => ({ name: i.name, variant: i.variant, size: i.size, sku: i.sku, quantity: i.quantity, price: i.price })),
+          customer: selectedCustomer as any,
+        });
+      } catch (_) { /* impressão é best-effort */ }
+      setStep("invoice");
+      toast.success("Condicional gerado! Estoque reservado (não entra no faturamento).");
+    } catch (e: any) {
+      console.error("[createConditional]", e);
+      toast.error("Erro ao gerar condicional: " + (e?.message || "desconhecido"));
+    } finally {
+      setFinalizingSale(false);
+    }
+  };
+
+  // Etapa 2: finaliza o condicional — devolve itens removidos, cobra os mantidos, fatura.
+  const finalizeConditional = async () => {
+    if (!conditionalSaleId) { toast.error("Condicional inválido."); return; }
+    if (cart.length === 0) { toast.error("Nenhum item mantido no condicional."); return; }
+    const hasMulti = useMultiPayment && multiPayments.length > 0;
+    const hasSingle = !useMultiPayment && !!selectedPayment;
+    if (!hasMulti && !hasSingle) {
+      toast.error("Selecione uma forma de pagamento antes de finalizar o condicional.");
+      setStep("payment");
+      return;
+    }
+    if (useMultiPayment) {
+      const sumMulti = multiPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+      if (Math.abs(sumMulti - totalWithDiscount) > 0.01) {
+        toast.error(`Soma das formas de pagamento (R$ ${sumMulti.toFixed(2)}) não bate com o total (R$ ${totalWithDiscount.toFixed(2)}).`);
+        return;
+      }
+    }
+    setFinalizingSale(true);
+    try {
+      let paymentMethodName = "";
+      if (useMultiPayment && multiPayments.length > 0) {
+        paymentMethodName = multiPayments.map((p) => `${p.method_name} (R$${p.amount.toFixed(2)})`).join(" + ");
+      } else {
+        paymentMethodName = paymentMethods.find((m) => m.id === selectedPayment)?.name || "";
+      }
+
+      // Itens DEVOLVIDOS = originais que NÃO ficaram no carrinho final
+      const finalKeys = new Set(cart.flatMap((c) => [(c.barcode || "").trim(), (c.sku || "").trim()].filter(Boolean)));
+      const returnedItems = conditionalOriginalItems
+        .filter((oi) => {
+          const bc = (oi.barcode || "").trim();
+          const sk = (oi.sku || "").trim();
+          const kept = (bc && finalKeys.has(bc)) || (sk && finalKeys.has(sk));
+          return !kept;
+        })
+        .map((oi) => ({ sku: oi.sku || "", barcode: oi.barcode || "" }));
+
+      const { data, error } = await supabase.functions.invoke("pos-conditional-finalize", {
+        body: {
+          sale_id: conditionalSaleId,
+          returned_items: returnedItems,
+          payment_method: paymentMethodName,
+          payment_details: { link_origin: "pdv_venda", conditional: true },
+          discount: totalDiscount > 0 ? totalDiscount : 0,
+          cash_register_id: currentRegisterId || undefined,
+          seller_id: selectedSeller || undefined,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if ((data as any)?.error) throw new Error((data as any).error);
+      setSaleResult({ sale_id: conditionalSaleId });
+      setStep("invoice");
+      toast.success("Condicional finalizado! Venda registrada no faturamento da loja e da vendedora.");
+    } catch (e: any) {
+      console.error("[finalizeConditional]", e);
+      toast.error("Erro ao finalizar condicional: " + (e?.message || "desconhecido"));
+    } finally {
+      setFinalizingSale(false);
+    }
+  };
+
   const finalizeSale = async () => {
     if (cart.length === 0) return;
 
@@ -1551,6 +1687,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setShowSaleTypeModal(false);
     setSiteExchange(null);
     setShowSiteExchange(false);
+    setConditionalStage(null);
+    setShowConditionalMenu(false);
+    setShowConditionalPicker(false);
+    setConditionalSaleId(null);
+    setConditionalOriginalItems([]);
     setStep("scan");
     setSaleResult(null);
     setNfceResult(null);
@@ -1580,17 +1721,59 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setCouponCode("");
   };
 
-  const steps: { id: SaleStep; label: string; icon: typeof ScanBarcode }[] = [
-    { id: "scan", label: "Produtos", icon: ScanBarcode },
-    { id: "customer", label: "Cliente", icon: User },
-    { id: "payment", label: "Pagamento", icon: CreditCard },
-    { id: "invoice", label: "Nota Fiscal", icon: Receipt },
-  ];
+  const isNewConditional = saleType === 'conditional' && conditionalStage === 'new';
+  const isFinalizeConditional = saleType === 'conditional' && conditionalStage === 'finalize';
+
+  const steps: { id: SaleStep; label: string; icon: typeof ScanBarcode }[] = isNewConditional
+    ? [
+        { id: "scan", label: "Produtos", icon: ScanBarcode },
+        { id: "customer", label: "Cliente", icon: User },
+        { id: "invoice", label: "Condicional", icon: Receipt },
+      ]
+    : [
+        { id: "scan", label: "Produtos", icon: ScanBarcode },
+        { id: "customer", label: "Cliente", icon: User },
+        { id: "payment", label: "Pagamento", icon: CreditCard },
+        { id: "invoice", label: isFinalizeConditional ? "Concluído" : "Nota Fiscal", icon: Receipt },
+      ];
 
   const stepIndex = steps.findIndex(s => s.id === step);
   const selectedPaymentName = paymentMethods.find(m => m.id === selectedPayment)?.name || '';
   const cashChange = cashReceived ? Math.max(0, parseFloat(cashReceived) - totalWithDiscount) : 0;
   const multiPaymentsTotal = multiPayments.reduce((s, p) => s + p.amount, 0);
+
+  // Ação do botão principal (rodapé) — roteia por tipo de venda/etapa.
+  const primaryActionLabel = finalizingSale
+    ? (isNewConditional ? "Gerando..." : "Finalizando...")
+    : step === "invoice"
+      ? "Nova Venda"
+      : isNewConditional
+        ? (step === "customer" ? "Gerar Condicional" : "Avançar")
+        : isFinalizeConditional && step === "payment"
+          ? "Finalizar Condicional"
+          : step === "payment"
+            ? "Finalizar Venda"
+            : "Avançar";
+
+  const handlePrimaryAction = () => {
+    if (step === "invoice") { resetSale(); return; }
+    if (isNewConditional) {
+      if (step === "customer") { createConditional(); return; }
+      if (stepIndex < steps.length - 1) setStep(steps[stepIndex + 1].id);
+      return;
+    }
+    if (step === "payment") {
+      if (isFinalizeConditional) finalizeConditional();
+      else finalizeSale();
+      return;
+    }
+    if (step === "customer" && isFinalizeConditional) {
+      // sem validação extra: cliente já veio do condicional
+    }
+    if (stepIndex < steps.length - 1) setStep(steps[stepIndex + 1].id);
+  };
+
+
 
   // --- GATE: Cash register must be open ---
   if (checkingRegister) {
@@ -1684,12 +1867,83 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             toast.success(`Pedido ${result.shopifyOrderName || ''} puxado. Troque o produto que faltou e finalize.`);
           }}
         />
-        <Dialog open={!showSiteExchange} onOpenChange={() => {}}>
+        <ConditionalFinalizePicker
+          open={showConditionalPicker}
+          storeId={storeId}
+          onCancel={() => setShowConditionalPicker(false)}
+          onConfirm={(result: ConditionalPickResult) => {
+            setSaleType('conditional');
+            setConditionalStage('finalize');
+            setConditionalSaleId(result.saleId);
+            setConditionalOriginalItems(result.originalItems);
+            setShowConditionalPicker(false);
+            setShowConditionalMenu(false);
+            setShowSaleTypeModal(false);
+            setSelectedCustomer(result.customer?.name || result.customer?.id ? {
+              id: result.customer.id || '',
+              name: result.customer.name || '',
+              cpf: result.customer.cpf,
+              email: result.customer.email,
+              whatsapp: result.customer.whatsapp,
+              address: result.customer.address,
+              address_number: result.customer.address_number,
+              complement: result.customer.complement,
+              neighborhood: result.customer.neighborhood,
+              cep: result.customer.cep,
+              city: result.customer.city,
+              state: result.customer.state,
+            } : null);
+            setCart(result.items.map((i) => ({
+              id: i.id, tiny_id: i.tiny_id, sku: i.sku, name: i.name, variant: i.variant,
+              size: i.size, category: i.category, price: i.price, quantity: i.quantity,
+              barcode: i.barcode, stock: i.stock,
+            })));
+            setStep('scan');
+            toast.success('Condicional puxado. Remova os produtos DEVOLVIDOS e cobre os que ficaram.');
+          }}
+        />
+
+        {/* Submenu do Condicional: Novo x Finalizar */}
+        <Dialog open={showConditionalMenu} onOpenChange={(o) => { if (!o) setShowConditionalMenu(false); }}>
+          <DialogContent className="bg-pos-black border-emerald-500/40 max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-pos-white text-xl">📦 Condicional</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setSaleType('conditional');
+                  setConditionalStage('new');
+                  setConditionalSaleId(null);
+                  setConditionalOriginalItems([]);
+                  setShowConditionalMenu(false);
+                  setShowSaleTypeModal(false);
+                  setStep('scan');
+                }}
+                className="rounded-2xl border-2 border-emerald-400/40 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-emerald-500/20 flex items-center justify-center text-2xl">🆕</div>
+                <p className="font-bold text-pos-white">Novo condicional</p>
+                <p className="text-xs text-pos-white/60 text-center">Enviar produtos para o cliente experimentar</p>
+              </button>
+              <button
+                onClick={() => { setShowConditionalMenu(false); setShowConditionalPicker(true); }}
+                className="rounded-2xl border-2 border-emerald-400/40 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-emerald-500/20 flex items-center justify-center text-2xl">✅</div>
+                <p className="font-bold text-pos-white">Finalizar condicional</p>
+                <p className="text-xs text-pos-white/60 text-center">Cobrar o que ficou e devolver o resto</p>
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu} onOpenChange={() => {}}>
           <DialogContent className="bg-pos-black border-pos-orange/40 max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-3 gap-3 pt-2">
+            <div className="grid grid-cols-2 gap-3 pt-2">
               <button
                 onClick={() => { setSaleType('physical'); setShowSaleTypeModal(false); }}
                 className="rounded-2xl border-2 border-orange-400/40 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-400 p-5 flex flex-col items-center gap-3 transition-all"
@@ -1713,6 +1967,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">🔁</div>
                 <p className="font-bold text-pos-white">Trocas Site</p>
                 <p className="text-xs text-pos-white/60 text-center">Puxar pedido do site e trocar</p>
+              </button>
+              <button
+                onClick={() => setShowConditionalMenu(true)}
+                className="rounded-2xl border-2 border-emerald-400/40 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-emerald-500/20 flex items-center justify-center text-2xl">📦</div>
+                <p className="font-bold text-pos-white">Condicional</p>
+                <p className="text-xs text-pos-white/60 text-center">Enviar p/ experimentar · cobra depois</p>
               </button>
             </div>
           </DialogContent>
@@ -1833,9 +2095,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-pos-white">
                 Olá, <span className="text-pos-orange font-bold">{sellers.find(s => s.id === selectedSeller)?.name}</span>! Boas vendas! 🔥
-                {saleType && (
+                {saleType && saleType !== 'conditional' && (
                   <Badge className={cn("ml-2 text-[10px]", saleType === 'online' ? "bg-blue-500/20 text-blue-300 border-blue-500/40" : "bg-orange-500/20 text-orange-300 border-orange-500/40")}>
                     {saleType === 'online' ? '🚚 Online (NF-e)' : '🏬 Presencial (NFC-e)'}
+                  </Badge>
+                )}
+                {saleType === 'conditional' && (
+                  <Badge className="ml-2 text-[10px] bg-emerald-500/20 text-emerald-300 border-emerald-500/40">
+                    📦 Condicional {isNewConditional ? '(novo)' : 'p/ finalizar'}
                   </Badge>
                 )}
                 {siteExchange && (
@@ -2632,7 +2899,43 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             </div>
           )}
 
-          {step === "invoice" && (
+          {step === "invoice" && isNewConditional && (
+            <div className="p-6 space-y-6 overflow-auto">
+              <div className="rounded-xl border-2 border-emerald-500/50 bg-emerald-500/10 p-6 text-center space-y-4">
+                <div className="h-16 w-16 mx-auto rounded-full bg-emerald-500/20 flex items-center justify-center text-3xl">📦</div>
+                <div>
+                  <h3 className="text-xl font-bold text-pos-white">Condicional gerado!</h3>
+                  <p className="text-pos-white/50 mt-1">
+                    Produtos reservados (baixa de estoque). Ainda NÃO conta no faturamento —
+                    finalize depois em <span className="text-emerald-300 font-semibold">Condicional → Finalizar</span>.
+                  </p>
+                </div>
+                <div className="text-2xl font-bold text-emerald-400">R$ {totalWithDiscount.toFixed(2)}</div>
+              </div>
+              <Button
+                className="w-full h-14 gap-2 text-base border-2 border-emerald-500/30 bg-pos-white/5 text-emerald-300 hover:bg-emerald-500/10"
+                variant="outline"
+                onClick={() => {
+                  printConditionalReceipt({
+                    storeName,
+                    sellerName: sellers.find((s) => s.id === selectedSeller)?.name || "",
+                    saleId: conditionalSaleId || saleResult?.sale_id,
+                    items: cart.map((i) => ({ name: i.name, variant: i.variant, size: i.size, sku: i.sku, quantity: i.quantity, price: i.price })),
+                    customer: selectedCustomer as any,
+                  });
+                }}
+              >
+                <Receipt className="h-5 w-5" /> Reimprimir comprovante
+              </Button>
+              <Button
+                className="w-full h-14 gap-2 text-base bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
+                onClick={resetSale}
+              >
+                <ShoppingCart className="h-5 w-5" /> Nova venda
+              </Button>
+            </div>
+          )}
+          {step === "invoice" && !isNewConditional && (
             <div className="p-6 space-y-6 overflow-auto">
               <div className="rounded-xl border-2 border-pos-orange/50 bg-pos-orange/10 p-6 text-center space-y-4">
                 <div className="h-16 w-16 mx-auto rounded-full bg-pos-orange/20 flex items-center justify-center">
@@ -2921,24 +3224,16 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             <Button
               className="w-full h-10 text-sm gap-2 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
               disabled={cart.length === 0 || finalizingSale}
-              onClick={() => {
-                if (step === "payment") {
-                  finalizeSale();
-                } else if (step === "invoice") {
-                  resetSale();
-                } else if (stepIndex < steps.length - 1) {
-                  setStep(steps[stepIndex + 1].id);
-                }
-              }}
+              onClick={handlePrimaryAction}
             >
               {finalizingSale ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Finalizando...</>
-              ) : step === "payment" ? (
-                <><Check className="h-4 w-4" /> Finalizar Venda</>
+                <><Loader2 className="h-4 w-4 animate-spin" /> {primaryActionLabel}</>
               ) : step === "invoice" ? (
-                <><ShoppingCart className="h-4 w-4" /> Nova Venda</>
+                <><ShoppingCart className="h-4 w-4" /> {primaryActionLabel}</>
+              ) : (step === "payment" || (isNewConditional && step === "customer")) ? (
+                <><Check className="h-4 w-4" /> {primaryActionLabel}</>
               ) : (
-                <>Avançar <ChevronRight className="h-4 w-4" /></>
+                <>{primaryActionLabel} <ChevronRight className="h-4 w-4" /></>
               )}
             </Button>
           </div>
@@ -2961,24 +3256,16 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           <Button
             className="h-10 px-4 text-sm gap-1 bg-pos-orange text-pos-black hover:bg-pos-orange-muted font-bold"
             disabled={cart.length === 0 || finalizingSale}
-            onClick={() => {
-              if (step === "payment") {
-                finalizeSale();
-              } else if (step === "invoice") {
-                resetSale();
-              } else if (stepIndex < steps.length - 1) {
-                setStep(steps[stepIndex + 1].id);
-              }
-            }}
+            onClick={handlePrimaryAction}
           >
             {finalizingSale ? (
               <Loader2 className="h-4 w-4 animate-spin" />
-            ) : step === "payment" ? (
-              <><Check className="h-4 w-4" /> Finalizar</>
             ) : step === "invoice" ? (
-              <><ShoppingCart className="h-4 w-4" /> Nova</>
+              <><ShoppingCart className="h-4 w-4" /> {primaryActionLabel}</>
+            ) : (step === "payment" || (isNewConditional && step === "customer")) ? (
+              <><Check className="h-4 w-4" /> {primaryActionLabel}</>
             ) : (
-              <>Avançar <ChevronRight className="h-4 w-4" /></>
+              <>{primaryActionLabel} <ChevronRight className="h-4 w-4" /></>
             )}
           </Button>
         </div>

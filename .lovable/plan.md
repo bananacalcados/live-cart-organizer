@@ -1,88 +1,96 @@
-# Trocas Site — Puxar pedido do site e converter em venda da vendedora
+
+# Condicional no PDV (Frente de Caixa > Venda)
 
 ## Objetivo
-Acabar com a venda duplicada (uma no site + uma no PDV da vendedora) quando a vendedora converte um pedido do site que ficou sem estoque. A vendedora "puxa" o pedido do site, troca o produto, finaliza **uma única venda** (Online, com tag de troca) atribuída a ela, e o sistema **cancela o pedido original em todos os lugares** e **zera o estoque do produto que faltou** em todas as lojas.
+Adicionar a 4ª opção **"Condicional"** ao lado de Presencial / Online / Trocas Site. Um condicional é um pedido enviado à casa do cliente para experimentar; ele decide com quais fica. Duas etapas:
 
-## Como funciona hoje (auditoria)
+1. **Novo condicional** — seleciona produtos + cliente (dados **obrigatórios**) → gera **comprovante com assinaturas** → **baixa o estoque** (para não vender nos outros canais) → **NÃO entra no faturamento** da loja nem da vendedora → aparece na aba **Pedidos** com tag Condicional.
+2. **Finalizar condicional** — puxa um condicional já enviado → remove os itens **devolvidos** (estoque **restaurado**) → cobra os itens que ficaram (forma de pagamento etc.) → **entra no faturamento** da loja e da vendedora → tag **Condicional** permanente na venda.
 
-**Fluxo dos modais da aba Venda** (`src/components/pos/POSSalesView.tsx`):
-1. Seleção de vendedora — `POSSellerGate` (linha ~1562).
-2. Popup de tarefas da vendedora.
-3. Modal "Tipo de venda" com **2 opções**: Presencial (NFC-e) e Online (NF-e + Envios) — linhas 1579-1607. Define `saleType` = `'physical' | 'online'`.
-4. Fluxo de carrinho → cliente → conferência → pagamento → nota. Finalização chama a edge function `pos-tiny-create-sale` e grava em `pos_sales` / `pos_sale_items` / `pos_customers`. Venda online adiciona `sale_type='online'`, `expedition_status='pending'` e `shipping_address` (linhas 1011-1043).
+## Decisão de arquitetura (por que não quebra nada)
+Reutilizamos `pos_sales` com um novo `status = 'conditional'` em vez de criar um modelo paralelo. Isso porque a auditoria mostrou que:
+- Estoque só é baixado/estornado nos status `completed`/`paid`/`cancelled` (função idempotente `process_pos_sale_sale_event`, que evita baixa dupla por já existirem ajustes `sale_event='sale'`).
+- Faturamento (`pos_sale_to_faturamento`) e todos os dashboards **ignoram** qualquer status diferente de `paid`/`completed`.
 
-**Onde o pedido do site vive hoje** (o mesmo pedido aparece em 3 lugares):
-- `pos_sales` na "loja do site" (`store_id` = Tiny Shopify), com `external_source='shopify'`, `external_order_id`, `sale_type='online'`, `status='completed'` — criado por `shopify-sync-to-pos` (cron) e `shopify-webhook`.
-- `expedition_beta_orders` (`shopify_order_id`, `expedition_status`) — módulo Expedição Beta.
-- `orders` (`shopify_order_id`) — kanban de pedidos.
+Logo, um pedido com `status='conditional'`:
+- **não** gera lançamento de faturamento (a função já dá `RETURN` fora de paid/completed);
+- **não** aparece nas métricas de vendedora/loja (dashboards filtram `status='completed'`);
+- mas precisamos **forçar a baixa de estoque** nesse status (hoje o trigger só baixa em completed/paid).
 
-**Peças reutilizáveis já existentes:**
-- `shopify-pull-order-customer` — puxa cliente + endereço de um pedido Shopify (falta puxar itens).
-- `shopify-cancel-live-order` — cancela pedido na Shopify (padrão de auth admin/manager + update de tabelas de sync).
-- `shopify-mirror-stock` — faz SET absoluto do estoque na Shopify por barcode (soma de todas as lojas).
-- `pos-tiny-create-sale` — cria a venda no PDV.
-- Estoque compartilhado: `pos_products` por barcode é a fonte da verdade; zerar = `stock=0` em todas as lojas (produto vira inativo automaticamente pelo trigger de reativação).
+Na finalização, a transição `conditional → completed` faz o trigger rodar `process_pos_sale_sale_event` de novo — **idempotente**, então os itens mantidos NÃO são baixados em dobro; e o faturamento é criado normalmente.
 
-## O que vamos construir
+## Banco de dados (1 migration)
 
-### 1. Terceira opção no modal "Tipo de venda"
-Adicionar botão **"Trocas Site"** (🔁) ao lado de Presencial/Online em `POSSalesView.tsx`. Ao clicar, abre o fluxo de troca em vez de ir direto pro carrinho. A venda resultante é sempre `sale_type='online'` com tag de troca.
+**1. Ajustar `process_pos_sale_sale_event`** para também aceitar `status='conditional'` na guarda de entrada (`status IN ('completed','paid','conditional')`). A idempotência por `sale_event='sale'` já protege a etapa 2.
 
-### 2. Modal "Motivo da troca"
-Ao escolher Trocas Site, abre modal com motivos pré-definidos (e campo livre "Outro"):
-- Falta de tamanho
-- Falta de cor
-- Produto esgotado
-- Produto com defeito
-- Cliente preferiu outro modelo
-- Outro (texto livre)
+**2. Ajustar `apply_pos_sale_stock_movement`:**
+- INSERT com `status='conditional'` → chama `process_pos_sale_sale_event` (baixa todos os itens).
+- UPDATE `conditional → completed/paid` → chama `process_pos_sale_sale_event` (idempotente, não rebaixa mantidos).
+- (Cancelamento de condicional continua estornando via o ramo `cancelled` já existente.)
 
-### 3. Modal "Puxar pedido do site" (com paginação)
-Lista os pedidos do site do **mais recente para o mais antigo**, com paginação (não carrega tudo). Fonte de dados: os pedidos já sincronizados em `pos_sales` (loja do site, `external_source='shopify'`, ainda não cancelados/não trocados) — leve e rápido, com `range()` por página. Busca por nome/telefone/CPF/nº do pedido. Cada linha mostra nº do pedido, cliente, data, valor e itens resumidos.
+**3. Nova função `restore_pos_sale_item_stock(p_sale_id, p_sku, p_barcode)`** (SECURITY DEFINER): para cada item **devolvido** na finalização — soma de volta em `pos_products.stock`, grava ajuste `direction='in', sale_event='return'` (guard anti-duplo estorno) e dispara `shopify-mirror-stock`/`tiny-mirror-stock`. Espelha o padrão do ramo `cancelled`, mas por item.
 
-### 4. Puxar o pedido para o carrinho
-Ao selecionar um pedido:
-- Nova edge function `shopify-pull-order-full` (ou estender `shopify-pull-order-customer`) retorna **cliente + endereço + itens** do pedido Shopify.
-- Preenche automaticamente: cliente (nome, telefone, CPF, CEP, endereço, cidade, estado) e o carrinho com os itens originais.
-- A vendedora pode **remover/trocar** o item que faltou e **adicionar** novos produtos (bipando normalmente). O(s) item(ns) original(is) removido(s) ficam registrados como "produto que faltou" para o zeramento de estoque.
-- Segue para pagamento normal (a diferença de valor é cobrada/creditada como em qualquer venda).
+**4. Novas colunas em `pos_sales`** (nullable, sem impacto no existente):
+- `is_conditional boolean default false`
+- `conditional_status text` (`draft_sent` | `finalized`) — só para condicionais.
+- `conditional_signed_at timestamptz` (opcional, registro de assinatura na entrega).
 
-### 5. Finalização (a parte crítica — tudo ou nada, à prova de erros)
-Ao finalizar, uma nova edge function `pos-site-exchange-finalize` executa em ordem, com idempotência e trava:
-1. **Trava**: registra em nova tabela `pos_site_exchanges` (unique em `shopify_order_id`) para impedir que duas vendedoras convertam o mesmo pedido. Se já existir troca concluída → bloqueia.
-2. **Cria a venda** no PDV da vendedora via `pos-tiny-create-sale` com `sale_type='online'` e `payment_details` contendo `{ site_exchange: true, exchange_reason, original_shopify_order_id, original_items }`. Tag visível "🔁 Troca Site" nos cards/detalhes.
-3. **Cancela o pedido original** em todos os lugares:
-   - Shopify: cancela via API (reaproveitando padrão do `shopify-cancel-live-order`).
-   - `pos_sales` do site: `status='cancelled'` + nota "Convertido em troca #<nova venda>".
-   - `expedition_beta_orders`: `expedition_status='cancelled'`.
-   - `orders` (se existir para esse `shopify_order_id`): `stage='cancelled'`.
-4. **Zera o estoque do produto que faltou** em todas as lojas: `pos_products.stock=0` por barcode/GTIN dos itens originais removidos + `shopify-mirror-stock` para refletir 0 na Shopify (produto some da oferta). Cria também um registro em `pos_stock_adjustments` para auditoria.
-5. **Estoque dos novos itens** vendidos é abatido normalmente pelo trigger de venda existente.
+Faturamento/estoque continuam guiados por `status`. Índice parcial `where is_conditional`. GRANTs já cobertos pela policy `authenticated`/`service_role` existente da tabela.
 
-### 6. Tratamento de erros / bordas (garantir que nada quebra)
-- **Cada etapa é registrada** em `pos_site_exchanges` com status por etapa (`sale_created`, `shopify_cancelled`, `stock_zeroed`, `completed` / `failed_<etapa>`). Se uma etapa falhar depois da venda criada, a venda **não é perdida** — a tela mostra o que faltou e um botão "Repetir etapas pendentes" (idempotente).
-- **Pedido já cancelado na Shopify** (422) → tratado como sucesso (igual ao `shopify-cancel-live-order`).
-- **Pedido sem vínculo Shopify** → bloqueia com mensagem clara.
-- **NF-e/fiscal do pedido original**: cancelar pedido Shopify **não** cancela nota fiscal. Se o pedido do site já teve NF-e emitida, o sistema **avisa** a vendedora/gestor para cancelamento fiscal manual (não tentamos cancelar NF-e automaticamente).
-- **Duplo clique / reprocesso**: idempotência pela trava unique + verificação de status.
-- **Caixa fechado**: bloqueia como nas outras vendas.
-- **Cliente sem CPF/endereço** no pedido Shopify: usa o que houver; venda online segue exigindo endereço como hoje.
+> Observação: a tabela `pos_conditionals` atual (modelo "loan") **não** é usada aqui — fica intacta.
 
-## Alterações técnicas (resumo para o time)
+## Edge function
 
-**Banco (migration):**
-- Nova tabela `pos_site_exchanges`: `id`, `shopify_order_id` (unique), `shopify_order_name`, `original_pos_sale_id`, `new_pos_sale_id`, `seller_id`, `store_id`, `exchange_reason`, `original_items` (jsonb), `zeroed_barcodes` (text[]), `step_status` (jsonb), `status`, timestamps. RLS + GRANTs para `authenticated`/`service_role`.
+**`pos-conditional-finalize`** (idempotente, por etapa, com trava):
+Entrada: `sale_id` (condicional), `kept_items[]`, `returned_items[]`, `payment_method`, `payment_details`, `discount`, `seller_id`.
+1. Trava por status (`is_conditional && conditional_status='draft_sent'`; se já `finalized` → retorna sucesso sem repetir).
+2. Para cada `returned_item` → `restore_pos_sale_item_stock` + `DELETE` do `pos_sale_items`.
+3. Recalcula `subtotal/discount/total` a partir dos itens mantidos.
+4. Atualiza `payment_method`, `payment_details` (com `conditional: true`), `paid_at`, `cash_register_id`, `seller_id`, `conditional_status='finalized'`.
+5. Transição `status='conditional' → 'completed'` (trigger fatura + confirma baixa idempotente).
+Cada passo grava progresso; se algo falhar depois de restaurar estoque, a venda não se perde e o passo é reexecutável.
 
-**Edge functions:**
-- `shopify-list-site-orders` (opcional se optarmos por Shopify direto; por padrão listaremos de `pos_sales`).
-- `shopify-pull-order-full` — cliente + endereço + itens de um pedido.
-- `pos-site-exchange-finalize` — orquestra venda + cancelamentos + zeramento (idempotente, por etapa).
+## Frontend (`POSSalesView.tsx` + componentes novos)
 
-**Frontend (`POSSalesView.tsx` + novos componentes):**
-- 3º botão "Trocas Site" no modal de tipo de venda.
-- `SiteExchangeReasonDialog`, `SiteExchangePullOrderDialog` (paginado), integração no carrinho com itens pré-carregados e marcação do item que faltou.
-- Tag "🔁 Troca Site" nos detalhes/listagens (`POSSaleDetailDialog`, `POSSalesView`).
+**1. Modal "Tipo de venda"** → grid de 4 (hoje 3): adicionar botão **📦 Condicional** (cor distinta, ex. verde). Ao clicar abre submodal:
+- **Novo condicional**
+- **Finalizar condicional**
 
-## Fora de escopo (a confirmar depois)
-- Cancelamento fiscal automático da NF-e do pedido original (fica manual, com aviso).
-- Reembolso financeiro do pagamento original do site (a venda do site é cancelada; o acerto financeiro do que o cliente já pagou no site segue o processo atual da loja).
+**2. Fluxo "Novo condicional"** (`saleType='conditional'`, `conditionalStage='new'`):
+- Carrinho normal (bipar/adicionar produtos).
+- Cliente: seleção/cadastro com **validação obrigatória** de **nome, CPF, telefone, email, CEP e endereço completo** (bloqueia avanço se faltar — reforço no passo de cliente só quando é condicional/novo).
+- **Pula pagamento**. Botão final: **"Gerar condicional"** → cria `pos_sales` com `status='conditional'`, `is_conditional=true`, `conditional_status='draft_sent'`, `sale_type='online'` (para herdar aba Envios/endereço), tag nas notes `📦 Condicional`.
+- Abre **comprovante imprimível** (novo `src/lib/pos/conditionalReceipt.ts`, no padrão de `providerReceipt.ts`): cabeçalho Banana, dados do cliente/endereço, tabela de produtos com preços e total, **2 campos de assinatura**: "Conferência da vendedora" e "Assinatura da cliente (no recebimento)", data.
+
+**3. Fluxo "Finalizar condicional"** (`ConditionalFinalizePicker.tsx`, paginado, no padrão do `SiteExchangePicker`):
+- Lista condicionais `is_conditional && conditional_status='draft_sent'` (mais recentes primeiro, busca por nome/telefone/CPF/nº).
+- Ao escolher: carrega itens no carrinho; a vendedora **remove os devolvidos** e mantém os vendidos; pode ajustar quantidade.
+- Segue para **pagamento normal**. Botão final chama `pos-conditional-finalize` com kept/returned calculados por diff dos `pos_sale_items` originais x carrinho final.
+- Ao concluir: tag **Condicional** permanece; venda passa a contar no faturamento.
+
+**4. Tags e listagens:**
+- Badge **📦 Condicional** no header da venda (ao lado de Presencial/Online), como já feito para Troca Site.
+- Aba **Pedidos**: incluir condicionais (`is_conditional=true`) com selo Condicional e ação "Finalizar condicional". `POSSaleDetailDialog` mostra o selo e o estado (enviado/finalizado).
+
+## O que pode dar errado (e como prevenimos)
+- **Baixa dupla de estoque na finalização** → `process_pos_sale_sale_event` é idempotente por `sale_event='sale'`; itens mantidos não rebaixam.
+- **Estorno duplo de item devolvido** (duplo clique/reprocesso) → `restore_pos_sale_item_stock` checa ajuste `sale_event='return'` existente.
+- **Condicional entrando no faturamento cedo** → status `conditional` é ignorado por `pos_sale_to_faturamento` e pelos dashboards; só entra ao virar `completed`.
+- **Condicional aparecendo nas metas da vendedora** → dashboards filtram `status='completed'`; garantimos que o `seller_id` já esteja gravado para creditar corretamente **só na finalização**.
+- **Dois atendentes finalizando o mesmo condicional** → trava por `conditional_status='finalized'` (retorno idempotente).
+- **Cliente sem endereço/CPF** → validação obrigatória bloqueia a criação do condicional.
+- **NFC-e/NF-e** → **não** emitir fiscal na etapa 1 (não houve venda). Auto-emissão fiscal só na finalização (segue regra atual por `sale_type`). 
+- **Cancelar um condicional inteiro** (cliente devolveu tudo / desistiu) → mudar `status='cancelled'` estorna todo o estoque pelo ramo já existente; não fatura.
+- **Espelho de estoque Shopify/Tiny** → reutiliza as funções de mirror já usadas na venda/cancelamento (SET absoluto por soma de lojas), sem lógica nova de estoque compartilhado.
+
+## Fora de escopo (confirmar depois)
+- Vencimento/lembrete automático de devolução do condicional (due_date + follow-up WhatsApp).
+- Emissão fiscal automática na finalização além da regra atual.
+
+## Ordem de execução
+1. Migration (colunas + funções + trigger).
+2. Edge function `pos-conditional-finalize` (+ deploy).
+3. `conditionalReceipt.ts`, `ConditionalFinalizePicker.tsx`.
+4. Integração no `POSSalesView.tsx` (botão, submodal, validação, criação, finalização, badges).
+5. Selo Condicional em Pedidos e `POSSaleDetailDialog`.
+6. Teste com 1 condicional real de ponta a ponta antes de publicar.
