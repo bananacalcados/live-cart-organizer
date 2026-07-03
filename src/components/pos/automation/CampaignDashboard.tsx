@@ -127,6 +127,20 @@ export function CampaignDashboard({
   const [rows, setRows] = useState<EnvioRow[]>([]);
   const [loadingRows, setLoadingRows] = useState(false);
 
+  const [selectedBuyer, setSelectedBuyer] = useState<EnvioRow | null>(null);
+  const [buyerDetail, setBuyerDetail] = useState<BuyerDetail | null>(null);
+  const [loadingBuyer, setLoadingBuyer] = useState(false);
+
+  const openBuyer = async (row: EnvioRow) => {
+    setSelectedBuyer(row);
+    setBuyerDetail(null);
+    setLoadingBuyer(true);
+    const { data, error } = await supabase.rpc("campaign_buyer_detail", { p_envio_id: row.envio_id });
+    if (error) toast.error("Erro ao carregar detalhes da compra");
+    setBuyerDetail((data as unknown as BuyerDetail) || null);
+    setLoadingBuyer(false);
+  };
+
   const loadStats = async () => {
     setLoading(true);
     const { data, error } = await supabase.rpc("campaign_dashboard_stats", { p_campanha_id: campanhaId });
