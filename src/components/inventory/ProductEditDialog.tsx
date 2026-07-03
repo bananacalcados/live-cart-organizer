@@ -287,30 +287,25 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
 
     // colisão com o banco (product_variants e pos_products)
     if (manualSkus.length || manualGtins.length) {
-      const checks: Promise<{ field: string; value: string }[]>[] = [];
+      const conflicts: { field: string; value: string }[] = [];
       if (manualSkus.length) {
-        checks.push(
-          supabase.from("product_variants").select("sku").in("sku", manualSkus)
-            .then(({ data }) => (data || []).map((r: any) => ({ field: "SKU", value: r.sku }))),
-        );
-        checks.push(
-          supabase.from("pos_products").select("sku").in("sku", manualSkus)
-            .then(({ data }) => (data || []).map((r: any) => ({ field: "SKU", value: r.sku }))),
-        );
+        const [pv, pp] = await Promise.all([
+          supabase.from("product_variants").select("sku").in("sku", manualSkus),
+          supabase.from("pos_products").select("sku").in("sku", manualSkus),
+        ]);
+        for (const r of (pv.data || []) as any[]) conflicts.push({ field: "SKU", value: r.sku });
+        for (const r of (pp.data || []) as any[]) conflicts.push({ field: "SKU", value: r.sku });
       }
       if (manualGtins.length) {
-        checks.push(
-          supabase.from("product_variants").select("gtin").in("gtin", manualGtins)
-            .then(({ data }) => (data || []).map((r: any) => ({ field: "GTIN", value: r.gtin }))),
-        );
-        checks.push(
-          supabase.from("pos_products").select("barcode").in("barcode", manualGtins)
-            .then(({ data }) => (data || []).map((r: any) => ({ field: "GTIN", value: r.barcode }))),
-        );
+        const [pv, pp] = await Promise.all([
+          supabase.from("product_variants").select("gtin").in("gtin", manualGtins),
+          supabase.from("pos_products").select("barcode").in("barcode", manualGtins),
+        ]);
+        for (const r of (pv.data || []) as any[]) conflicts.push({ field: "GTIN", value: r.gtin });
+        for (const r of (pp.data || []) as any[]) conflicts.push({ field: "GTIN", value: r.barcode });
       }
-      const results = (await Promise.all(checks)).flat();
-      if (results.length) {
-        const first = results[0];
+      if (conflicts.length) {
+        const first = conflicts[0];
         toast.error(`${first.field} já cadastrado: ${first.value}. Use outro código ou deixe em branco para gerar automático.`);
         return;
       }
