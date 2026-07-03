@@ -1838,6 +1838,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                     {saleType === 'online' ? '🚚 Online (NF-e)' : '🏬 Presencial (NFC-e)'}
                   </Badge>
                 )}
+                {siteExchange && (
+                  <Badge className="ml-2 text-[10px] bg-purple-500/20 text-purple-300 border-purple-500/40">
+                    🔁 Troca Site {siteExchange.shopifyOrderName || ''}
+                  </Badge>
+                )}
               </p>
             </div>
             <div className="flex items-center gap-1.5 text-pos-orange">
