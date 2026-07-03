@@ -257,12 +257,13 @@ export default function LinkPageView() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: page.background_value }}>
-      <div className="max-w-lg mx-auto px-5 pt-10 pb-16">
+    <div className="min-h-screen lp-body" style={{ background: page.background_value }}>
+      <style>{LP_STYLES}</style>
+      <div className="max-w-lg mx-auto px-5 pt-12 pb-16">
         {/* Logo header with impact */}
-        <div className="flex flex-col items-center mb-8">
+        <div className="flex flex-col items-center mb-9">
           {(page.logo_url || page.avatar_url) && (
-            <div className="relative mb-4">
+            <div className="relative mb-5 lp-logo">
               <div className="absolute inset-0 blur-2xl opacity-60 rounded-full" style={{ background: `linear-gradient(135deg, ${accent}, ${accent2})` }} />
               <img
                 src={page.logo_url || page.avatar_url}
@@ -271,17 +272,26 @@ export default function LinkPageView() {
               />
             </div>
           )}
-          <h1 className="text-3xl font-black text-white text-center drop-shadow-lg tracking-tight">{page.title}</h1>
-          {page.subtitle && <p className="text-sm text-white/85 text-center mt-2 max-w-xs">{page.subtitle}</p>}
+          <h1
+            className="lp-display lp-title text-center font-black leading-[1.02] tracking-tight text-5xl sm:text-6xl"
+            style={{ backgroundImage: `linear-gradient(100deg, #ffffff 0%, ${accent} 30%, #ffffff 50%, ${accent2} 72%, #ffffff 100%)` }}
+          >
+            {page.title}
+          </h1>
+          {page.subtitle && (
+            <p className="lp-sub lp-body text-base sm:text-lg font-medium text-white/90 text-center mt-4 max-w-sm leading-relaxed">
+              {page.subtitle}
+            </p>
+          )}
           {seller && (
-            <div className="mt-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur text-white text-xs font-medium">
-              <Sparkles className="h-3.5 w-3.5" /> Atendimento com {seller.name}
+            <div className="lp-badge mt-5 flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/15 backdrop-blur text-white text-sm font-semibold border border-white/10">
+              <Sparkles className="h-4 w-4" style={{ color: accent }} /> Atendimento com {seller.name}
             </div>
           )}
         </div>
 
         <div className="space-y-3.5">
-          {items.map((item: any) => {
+          {items.map((item: any, itemIdx: number) => {
             if (item.item_type === "divider") return <hr key={item.id} className="border-white/15 my-2" />;
             if (item.item_type === "header") return (
               <p key={item.id} className="text-xs font-bold text-white/60 uppercase tracking-widest text-center mt-6 mb-1">{item.label}</p>
