@@ -309,20 +309,23 @@ export default function LinkPageView() {
                 <button
                   key={item.id}
                   onClick={() => handleClick(item)}
-                  className="w-full relative rounded-3xl overflow-hidden shadow-xl active:scale-[0.98] transition-transform min-h-[110px] flex items-end text-left"
-                  style={cover
-                    ? { backgroundImage: `url(${cover})`, backgroundSize: "cover", backgroundPosition: "center" }
-                    : { background: `linear-gradient(135deg, ${accent}, ${accent2})` }}
+                  className="lp-item lp-shine w-full relative rounded-3xl overflow-hidden shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-transform min-h-[118px] flex items-end text-left"
+                  style={{
+                    animationDelay: `${0.25 + itemIdx * 0.08}s`,
+                    ...(cover
+                      ? { backgroundImage: `url(${cover})`, backgroundSize: "cover", backgroundPosition: "center" }
+                      : { background: `linear-gradient(135deg, ${accent}, ${accent2})` }),
+                  }}
                 >
                   {cover && <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />}
                   <div className="relative p-5 w-full flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="h-11 w-11 rounded-2xl bg-white/25 backdrop-blur flex items-center justify-center flex-shrink-0">
-                        <Icon className="h-5 w-5 text-white" />
+                      <div className="h-12 w-12 rounded-2xl bg-white/25 backdrop-blur flex items-center justify-center flex-shrink-0">
+                        <Icon className="h-6 w-6 text-white" />
                       </div>
                       <div>
-                        <p className="text-white font-extrabold text-lg leading-tight drop-shadow">{item.label}</p>
-                        {item.description && <p className="text-white/85 text-xs mt-0.5">{item.description}</p>}
+                        <p className="lp-display text-white font-extrabold text-xl leading-tight drop-shadow">{item.label}</p>
+                        {item.description && <p className="text-white/85 text-sm mt-0.5">{item.description}</p>}
                       </div>
                     </div>
                     <ChevronRight className="h-5 w-5 text-white/80" />
@@ -336,14 +339,15 @@ export default function LinkPageView() {
               <button
                 key={item.id}
                 onClick={() => handleClick(item)}
-                className="w-full py-4 px-5 rounded-2xl flex items-center gap-3 bg-white/95 shadow-md active:scale-[0.98] transition-transform"
+                className="lp-item w-full py-4 px-5 rounded-2xl flex items-center gap-3 bg-white/95 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-transform"
+                style={{ animationDelay: `${0.25 + itemIdx * 0.08}s` }}
               >
-                <div className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accent}22` }}>
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accent}22` }}>
                   <Icon className="h-5 w-5" style={{ color: accent2 }} />
                 </div>
                 <div className="flex-1 text-left min-w-0">
-                  <p className="font-bold text-sm text-gray-900 truncate">{item.label}</p>
-                  {item.description && <p className="text-xs text-gray-500 truncate">{item.description}</p>}
+                  <p className="lp-display font-bold text-base text-gray-900 truncate">{item.label}</p>
+                  {item.description && <p className="text-sm text-gray-500 truncate">{item.description}</p>}
                 </div>
                 <ChevronRight className="h-4 w-4 text-gray-400 flex-shrink-0" />
               </button>
