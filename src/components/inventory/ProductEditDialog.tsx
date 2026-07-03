@@ -402,15 +402,23 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
             } as any);
           }
         } else {
-          // nova: insert — gera SKU e GTIN ÚNICOS via banco (sem colisão)
+          // nova: insert — usa SKU/GTIN manuais se informados; senão gera ÚNICOS via banco
           if (!v.color || !v.size) continue;
-          const colorSlug = (v.color || "X").normalize("NFD").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 10) || "UN";
-          const sizeSlug = (v.size || "U").replace(/[^A-Za-z0-9]/g, "") || "U";
-          const baseSku = `${skuRoot}-${colorSlug}-${sizeSlug}`;
-          const { data: skuData } = await supabase.rpc("gen_unique_variant_sku", { p_base: baseSku });
-          const { data: gtinData } = await supabase.rpc("gen_unique_ean13");
-          const newSku = (skuData as string) || baseSku;
-          const newGtin = (gtinData as string) || generateEan13();
+          const manualSku = (v.sku || "").trim();
+          const manualGtin = (v.gtin || "").trim();
+          let newSku = manualSku;
+          let newGtin = manualGtin;
+          if (!newSku) {
+            const colorSlug = (v.color || "X").normalize("NFD").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 10) || "UN";
+            const sizeSlug = (v.size || "U").replace(/[^A-Za-z0-9]/g, "") || "U";
+            const baseSku = `${skuRoot}-${colorSlug}-${sizeSlug}`;
+            const { data: skuData } = await supabase.rpc("gen_unique_variant_sku", { p_base: baseSku });
+            newSku = (skuData as string) || baseSku;
+          }
+          if (!newGtin) {
+            const { data: gtinData } = await supabase.rpc("gen_unique_ean13");
+            newGtin = (gtinData as string) || generateEan13();
+          }
           const { data: ins, error: eIns } = await supabase
             .from("product_variants")
             .insert({
