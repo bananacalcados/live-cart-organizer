@@ -163,6 +163,17 @@ export function CampaignDashboard({
 
   useEffect(() => { loadStats(); }, [campanhaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    let active = true;
+    supabase
+      .from("campanhas_auto")
+      .select("whatsapp_number_id")
+      .eq("id", campanhaId)
+      .maybeSingle()
+      .then(({ data }) => { if (active) setInstanceId(data?.whatsapp_number_id ?? null); });
+    return () => { active = false; };
+  }, [campanhaId]);
+
   const toggleList = () => {
     const next = !showList;
     setShowList(next);
