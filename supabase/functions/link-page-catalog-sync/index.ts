@@ -210,14 +210,15 @@ Deno.serve(async (req) => {
     // Upsert dos qualificados
     let order = 0;
     for (const { node, g } of qualified) {
+      const pr = computePricing(node);
       await supabase.from("link_page_catalog_products").upsert({
         page_id: pageId,
         shopify_product_id: node.id,
         handle: node.handle,
         title: node.title,
         image_url: node.images?.edges?.[0]?.node?.url || null,
-        price: Number(node.priceRange?.minVariantPrice?.amount || 0),
-        compare_at_price: node.compareAtPriceRange?.minVariantPrice?.amount ? Number(node.compareAtPriceRange.minVariantPrice.amount) : null,
+        price: pr.price,
+        compare_at_price: pr.compareAtPrice,
         product_type: node.productType,
         grade_total: g.total, grade_available: g.available, grade_pct: Number(g.pct.toFixed(3)),
         is_active: true, is_new_arrival: isNew, is_bestseller: isBest,
