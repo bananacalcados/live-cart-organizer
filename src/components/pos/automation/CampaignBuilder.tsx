@@ -417,16 +417,27 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
       return false;
     }
 
+    // Safety: when editing a campaign that already has a model selected but the
+    // approved template structure hasn't finished loading, saving would build
+    // EMPTY texts and wipe the stored top_body/card_body. Block until loaded.
+    if (editingId && modelo && selectedQtd && !tplStruct) {
+      toast.error("Aguarde o carregamento do template antes de salvar");
+      return false;
+    }
+
     setSaving(true);
     try {
       const texts = buildPersistTexts();
+      // Only overwrite the message texts when we actually have a parsed template,
+      // so a partial draft-save never erases previously stored content.
+      const textFields = tplStruct
+        ? { top_body: texts.top, card_body: texts.card, variaveis: texts.variaveis as unknown as never }
+        : {};
       const payload = {
         nome: nome.trim(),
         whatsapp_number_id: numberId || null,
         template_modelo: modelo || null,
-        top_body: texts.top,
-        card_body: texts.card,
-        variaveis: texts.variaveis as unknown as never,
+        ...textFields,
         publico_id: publicoId || null,
         qtd_por_dia: qtdPorDia,
         dias_semana: diasSemana,
