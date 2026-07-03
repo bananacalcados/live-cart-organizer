@@ -898,7 +898,7 @@ export function POSDailySales({ storeId }: Props) {
                 <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
                   Pendente Tiny
                 </Badge>
-              ) : sale.status !== 'online_pending' && sale.status !== 'payment_failed' && sale.status !== 'payment_declined' && sale.status !== 'cancelled' ? (
+              ) : sale.status !== 'online_pending' && sale.status !== 'payment_failed' && sale.status !== 'payment_declined' && sale.status !== 'cancelled' && sale.status !== 'conditional' ? (
                 <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">
                   Erro Tiny
                 </Badge>
