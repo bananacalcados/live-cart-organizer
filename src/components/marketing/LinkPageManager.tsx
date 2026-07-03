@@ -8,7 +8,7 @@ import {
   Type, Minus, BarChart3, MousePointer, Eye, Loader2, Upload, Users, Video,
   Star, Music2, QrCode, RefreshCw, Check, Search, Wifi, WifiOff
 } from "lucide-react";
-import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
+import { fetchProducts, computeProductPricing, ShopifyProduct } from "@/lib/shopify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
