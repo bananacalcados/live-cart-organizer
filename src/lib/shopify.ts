@@ -118,6 +118,35 @@ export function getVariantImage(
   return firstImage;
 }
 
+/**
+ * Calcula o preço REAL de venda (com desconto) e o preço "de" (compare-at) de um
+ * produto Shopify a partir de suas variações. A Shopify expõe o desconto de venda
+ * na variação: `variant.price` é o valor já com desconto e `variant.compareAtPrice`
+ * é o valor original (riscado). Usamos a variação disponível mais barata como
+ * "a partir de", garantindo que a Link Page sempre mostre o valor promocional.
+ */
+export function computeProductPricing(
+  node: ShopifyProduct["node"],
+): { price: number; compareAtPrice: number | null } {
+  const variants = (node.variants?.edges || []).map((e) => e.node);
+  let candidates = variants.filter((v) => v.availableForSale);
+  if (!candidates.length) candidates = variants;
+
+  let price = Infinity;
+  let compareAtPrice: number | null = null;
+  for (const v of candidates) {
+    const p = Number(v.price?.amount || 0);
+    if (!p) continue;
+    if (p < price) {
+      price = p;
+      const cmp = v.compareAtPrice ? Number(v.compareAtPrice.amount || 0) : 0;
+      compareAtPrice = cmp > p ? cmp : null;
+    }
+  }
+  if (!Number.isFinite(price)) price = Number(node.priceRange?.minVariantPrice?.amount || 0);
+  return { price, compareAtPrice };
+}
+
 
 const STOREFRONT_QUERY = `
   query GetProducts($first: Int!, $query: String) {

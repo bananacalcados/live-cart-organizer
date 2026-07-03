@@ -30,6 +30,34 @@ function formatPrice(v: number | null): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 }
 
+const LP_STYLES = `
+@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+.lp-display{font-family:'Unbounded',system-ui,-apple-system,sans-serif;}
+.lp-body{font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;}
+@keyframes lpFadeUp{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:translateY(0)}}
+@keyframes lpGradient{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+@keyframes lpFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+@keyframes lpPop{0%{opacity:0;transform:scale(.9) translateY(20px)}60%{transform:scale(1.02)}100%{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes lpShine{0%{transform:translateX(-120%)}100%{transform:translateX(220%)}}
+.lp-title{
+  background-size:220% auto;
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:lpGradient 6s ease infinite, lpFadeUp .8s cubic-bezier(.16,1,.3,1) both;
+}
+.lp-sub{animation:lpFadeUp .8s ease .15s both;}
+.lp-badge{animation:lpFadeUp .8s ease .3s both;}
+.lp-logo{animation:lpFloat 5s ease-in-out infinite, lpFadeUp .8s ease both;}
+.lp-item{opacity:0;animation:lpPop .6s cubic-bezier(.16,1,.3,1) forwards;}
+.lp-shine{position:relative;overflow:hidden;}
+.lp-shine::after{content:"";position:absolute;top:0;bottom:0;width:35%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.35),transparent);
+  transform:translateX(-120%);animation:lpShine 4.5s ease-in-out 1.2s infinite;}
+@media (prefers-reduced-motion: reduce){
+  .lp-title,.lp-sub,.lp-badge,.lp-logo,.lp-item{animation:none!important;opacity:1!important;transform:none!important;}
+  .lp-shine::after{display:none;}
+}
+`;
+
 export default function LinkPageView() {
   const { slug } = useParams<{ slug: string }>();
   const [searchParams] = useSearchParams();
@@ -152,13 +180,19 @@ export default function LinkPageView() {
   // ─── Lead capture gate ───
   if (!gatePassed) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-6" style={{ background: page.background_value }}>
-        <div className="w-full max-w-sm bg-white/10 backdrop-blur-xl rounded-3xl p-7 border border-white/20 shadow-2xl">
+      <div className="min-h-screen flex items-center justify-center px-6 lp-body" style={{ background: page.background_value }}>
+        <style>{LP_STYLES}</style>
+        <div className="w-full max-w-sm bg-white/10 backdrop-blur-xl rounded-3xl p-7 border border-white/20 shadow-2xl lp-item" style={{ animationDelay: "0.05s" }}>
           {(page.logo_url || page.avatar_url) && (
-            <img src={page.logo_url || page.avatar_url} alt={page.title} className="h-20 mx-auto mb-4 object-contain drop-shadow-xl" />
+            <img src={page.logo_url || page.avatar_url} alt={page.title} className="h-20 mx-auto mb-4 object-contain drop-shadow-xl lp-logo" />
           )}
-          <h1 className="text-2xl font-extrabold text-white text-center">{page.title}</h1>
-          <p className="text-sm text-white/70 text-center mt-2 mb-6">
+          <h1
+            className="lp-display lp-title text-center font-black text-4xl leading-tight"
+            style={{ backgroundImage: `linear-gradient(100deg, #ffffff 0%, ${accent} 35%, #ffffff 55%, ${accent2} 78%, #ffffff 100%)` }}
+          >
+            {page.title}
+          </h1>
+          <p className="text-base text-white/75 text-center mt-3 mb-6 font-medium">
             {seller ? `Atendimento com ${seller.name} ✨` : "Preencha para continuar"}
           </p>
           <div className="space-y-3">
@@ -190,7 +224,7 @@ export default function LinkPageView() {
     return (
       <div key={item.id} className="space-y-3">
         <div className="flex items-center justify-between px-1">
-          <p className="text-white font-bold text-lg drop-shadow">{item.label || "Novidades"}</p>
+          <p className="lp-display text-white font-extrabold text-2xl drop-shadow">{item.label || "Novidades"}</p>
           <span className="text-xs text-white/60">{catalog.length} produtos</span>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -229,12 +263,13 @@ export default function LinkPageView() {
   };
 
   return (
-    <div className="min-h-screen" style={{ background: page.background_value }}>
-      <div className="max-w-lg mx-auto px-5 pt-10 pb-16">
+    <div className="min-h-screen lp-body" style={{ background: page.background_value }}>
+      <style>{LP_STYLES}</style>
+      <div className="max-w-lg mx-auto px-5 pt-12 pb-16">
         {/* Logo header with impact */}
-        <div className="flex flex-col items-center mb-8">
+        <div className="flex flex-col items-center mb-9">
           {(page.logo_url || page.avatar_url) && (
-            <div className="relative mb-4">
+            <div className="relative mb-5 lp-logo">
               <div className="absolute inset-0 blur-2xl opacity-60 rounded-full" style={{ background: `linear-gradient(135deg, ${accent}, ${accent2})` }} />
               <img
                 src={page.logo_url || page.avatar_url}
@@ -243,17 +278,26 @@ export default function LinkPageView() {
               />
             </div>
           )}
-          <h1 className="text-3xl font-black text-white text-center drop-shadow-lg tracking-tight">{page.title}</h1>
-          {page.subtitle && <p className="text-sm text-white/85 text-center mt-2 max-w-xs">{page.subtitle}</p>}
+          <h1
+            className="lp-display lp-title text-center font-black leading-[1.02] tracking-tight text-5xl sm:text-6xl"
+            style={{ backgroundImage: `linear-gradient(100deg, #ffffff 0%, ${accent} 30%, #ffffff 50%, ${accent2} 72%, #ffffff 100%)` }}
+          >
+            {page.title}
+          </h1>
+          {page.subtitle && (
+            <p className="lp-sub lp-body text-base sm:text-lg font-medium text-white/90 text-center mt-4 max-w-sm leading-relaxed">
+              {page.subtitle}
+            </p>
+          )}
           {seller && (
-            <div className="mt-3 flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur text-white text-xs font-medium">
-              <Sparkles className="h-3.5 w-3.5" /> Atendimento com {seller.name}
+            <div className="lp-badge mt-5 flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-white/15 backdrop-blur text-white text-sm font-semibold border border-white/10">
+              <Sparkles className="h-4 w-4" style={{ color: accent }} /> Atendimento com {seller.name}
             </div>
           )}
         </div>
 
         <div className="space-y-3.5">
-          {items.map((item: any) => {
+          {items.map((item: any, itemIdx: number) => {
             if (item.item_type === "divider") return <hr key={item.id} className="border-white/15 my-2" />;
             if (item.item_type === "header") return (
               <p key={item.id} className="text-xs font-bold text-white/60 uppercase tracking-widest text-center mt-6 mb-1">{item.label}</p>
@@ -271,20 +315,23 @@ export default function LinkPageView() {
                 <button
                   key={item.id}
                   onClick={() => handleClick(item)}
-                  className="w-full relative rounded-3xl overflow-hidden shadow-xl active:scale-[0.98] transition-transform min-h-[110px] flex items-end text-left"
-                  style={cover
-                    ? { backgroundImage: `url(${cover})`, backgroundSize: "cover", backgroundPosition: "center" }
-                    : { background: `linear-gradient(135deg, ${accent}, ${accent2})` }}
+                  className="lp-item lp-shine w-full relative rounded-3xl overflow-hidden shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-transform min-h-[118px] flex items-end text-left"
+                  style={{
+                    animationDelay: `${0.25 + itemIdx * 0.08}s`,
+                    ...(cover
+                      ? { backgroundImage: `url(${cover})`, backgroundSize: "cover", backgroundPosition: "center" }
+                      : { background: `linear-gradient(135deg, ${accent}, ${accent2})` }),
+                  }}
                 >
                   {cover && <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />}
                   <div className="relative p-5 w-full flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="h-11 w-11 rounded-2xl bg-white/25 backdrop-blur flex items-center justify-center flex-shrink-0">
-                        <Icon className="h-5 w-5 text-white" />
+                      <div className="h-12 w-12 rounded-2xl bg-white/25 backdrop-blur flex items-center justify-center flex-shrink-0">
+                        <Icon className="h-6 w-6 text-white" />
                       </div>
                       <div>
-                        <p className="text-white font-extrabold text-lg leading-tight drop-shadow">{item.label}</p>
-                        {item.description && <p className="text-white/85 text-xs mt-0.5">{item.description}</p>}
+                        <p className="lp-display text-white font-extrabold text-xl leading-tight drop-shadow">{item.label}</p>
+                        {item.description && <p className="text-white/85 text-sm mt-0.5">{item.description}</p>}
                       </div>
                     </div>
                     <ChevronRight className="h-5 w-5 text-white/80" />
@@ -298,14 +345,15 @@ export default function LinkPageView() {
               <button
                 key={item.id}
                 onClick={() => handleClick(item)}
-                className="w-full py-4 px-5 rounded-2xl flex items-center gap-3 bg-white/95 shadow-md active:scale-[0.98] transition-transform"
+                className="lp-item w-full py-4 px-5 rounded-2xl flex items-center gap-3 bg-white/95 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-transform"
+                style={{ animationDelay: `${0.25 + itemIdx * 0.08}s` }}
               >
-                <div className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accent}22` }}>
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accent}22` }}>
                   <Icon className="h-5 w-5" style={{ color: accent2 }} />
                 </div>
                 <div className="flex-1 text-left min-w-0">
-                  <p className="font-bold text-sm text-gray-900 truncate">{item.label}</p>
-                  {item.description && <p className="text-xs text-gray-500 truncate">{item.description}</p>}
+                  <p className="lp-display font-bold text-base text-gray-900 truncate">{item.label}</p>
+                  {item.description && <p className="text-sm text-gray-500 truncate">{item.description}</p>}
                 </div>
                 <ChevronRight className="h-4 w-4 text-gray-400 flex-shrink-0" />
               </button>

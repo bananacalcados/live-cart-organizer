@@ -32,7 +32,7 @@ const QUERY = `
           images(first: 1) { edges { node { url } } }
           options { name values }
           variants(first: 100) {
-            edges { node { availableForSale selectedOptions { name value } } }
+            edges { node { availableForSale price { amount } compareAtPrice { amount } selectedOptions { name value } } }
           }
         }
       }
@@ -48,7 +48,7 @@ const SINGLE_QUERY = `
       compareAtPriceRange { minVariantPrice { amount } }
       images(first: 1) { edges { node { url } } }
       options { name values }
-      variants(first: 100) { edges { node { availableForSale selectedOptions { name value } } } }
+      variants(first: 100) { edges { node { availableForSale price { amount } compareAtPrice { amount } selectedOptions { name value } } } }
     }
   }
 `;
@@ -74,6 +74,29 @@ function computeGrade(node: any): { total: number; available: number; pct: numbe
   const available = variants.filter((v: any) => v.availableForSale).length;
   return { total, available, pct: total ? available / total : 0 };
 }
+
+// Preço REAL de venda (com desconto) + preço "de" (compare-at) a partir das variações.
+// variant.price = valor já com desconto; variant.compareAtPrice = valor original.
+function computePricing(node: any): { price: number; compareAtPrice: number | null } {
+  const variants = (node.variants?.edges || []).map((e: any) => e.node);
+  let candidates = variants.filter((v: any) => v.availableForSale);
+  if (!candidates.length) candidates = variants;
+  let price = Infinity;
+  let compareAtPrice: number | null = null;
+  for (const v of candidates) {
+    const p = Number(v.price?.amount || 0);
+    if (!p) continue;
+    if (p < price) {
+      price = p;
+      const cmp = v.compareAtPrice ? Number(v.compareAtPrice.amount || 0) : 0;
+      compareAtPrice = cmp > p ? cmp : null;
+    }
+  }
+  if (!Number.isFinite(price)) price = Number(node.priceRange?.minVariantPrice?.amount || 0);
+  return { price, compareAtPrice };
+}
+
+
 
 async function shopify(query: string, variables: Record<string, unknown>) {
   const r = await fetch(SHOPIFY_URL, {
@@ -134,12 +157,13 @@ Deno.serve(async (req) => {
           const g = computeGrade(node);
           const hasImage = !!node.images?.edges?.[0]?.node?.url;
           const ok = hasImage && g.pct >= MIN_GRADE_PCT;
+          const pr = computePricing(node);
           await supabase.from("link_page_catalog_products").update({
             grade_total: g.total, grade_available: g.available, grade_pct: Number(g.pct.toFixed(3)),
             is_active: ok, last_synced_at: new Date().toISOString(),
             image_url: node.images?.edges?.[0]?.node?.url || null,
-            price: Number(node.priceRange?.minVariantPrice?.amount || 0),
-            compare_at_price: node.compareAtPriceRange?.minVariantPrice?.amount ? Number(node.compareAtPriceRange.minVariantPrice.amount) : null,
+            price: pr.price,
+            compare_at_price: pr.compareAtPrice,
           }).eq("id", row.id);
           ok ? activated++ : deactivated++;
         } catch (e) { console.error("manual eval", row.shopify_product_id, e); }
@@ -186,14 +210,15 @@ Deno.serve(async (req) => {
     // Upsert dos qualificados
     let order = 0;
     for (const { node, g } of qualified) {
+      const pr = computePricing(node);
       await supabase.from("link_page_catalog_products").upsert({
         page_id: pageId,
         shopify_product_id: node.id,
         handle: node.handle,
         title: node.title,
         image_url: node.images?.edges?.[0]?.node?.url || null,
-        price: Number(node.priceRange?.minVariantPrice?.amount || 0),
-        compare_at_price: node.compareAtPriceRange?.minVariantPrice?.amount ? Number(node.compareAtPriceRange.minVariantPrice.amount) : null,
+        price: pr.price,
+        compare_at_price: pr.compareAtPrice,
         product_type: node.productType,
         grade_total: g.total, grade_available: g.available, grade_pct: Number(g.pct.toFixed(3)),
         is_active: true, is_new_arrival: isNew, is_bestseller: isBest,

@@ -8,7 +8,7 @@ import {
   Type, Minus, BarChart3, MousePointer, Eye, Loader2, Upload, Users, Video,
   Star, Music2, QrCode, RefreshCw, Check, Search, Wifi, WifiOff
 } from "lucide-react";
-import { fetchProducts, ShopifyProduct } from "@/lib/shopify";
+import { fetchProducts, computeProductPricing, ShopifyProduct } from "@/lib/shopify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -325,9 +325,10 @@ export function LinkPageManager() {
     for (const p of chosen) {
       const g = computeGradeClient(p.node);
       const img = p.node.images?.edges?.[0]?.node?.url || null;
+      const { price, compareAtPrice } = computeProductPricing(p.node);
       await supabase.from("link_page_catalog_products").upsert({
         page_id: selectedPage.id, shopify_product_id: p.node.id, handle: p.node.handle, title: p.node.title,
-        image_url: img, price: Number(p.node.priceRange?.minVariantPrice?.amount || 0),
+        image_url: img, price, compare_at_price: compareAtPrice,
         product_type: p.node.productType, grade_total: g.total, grade_available: g.available,
         grade_pct: Number(g.pct.toFixed(3)), is_active: !!img && g.pct >= 0.6, sort_order: order++,
         last_synced_at: new Date().toISOString(),
