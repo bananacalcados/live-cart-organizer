@@ -32,7 +32,7 @@ const QUERY = `
           images(first: 1) { edges { node { url } } }
           options { name values }
           variants(first: 100) {
-            edges { node { availableForSale selectedOptions { name value } } }
+            edges { node { availableForSale price { amount } compareAtPrice { amount } selectedOptions { name value } } }
           }
         }
       }
@@ -48,7 +48,7 @@ const SINGLE_QUERY = `
       compareAtPriceRange { minVariantPrice { amount } }
       images(first: 1) { edges { node { url } } }
       options { name values }
-      variants(first: 100) { edges { node { availableForSale selectedOptions { name value } } } }
+      variants(first: 100) { edges { node { availableForSale price { amount } compareAtPrice { amount } selectedOptions { name value } } } }
     }
   }
 `;
