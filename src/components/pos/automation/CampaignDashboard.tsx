@@ -258,6 +258,7 @@ export function CampaignDashboard({
                       <TableHead>Telefone</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Comprou?</TableHead>
+                      <TableHead>Data da compra</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -265,8 +266,16 @@ export function CampaignDashboard({
                     {rows.map((r) => {
                       const sm = STATUS_META[r.status] || { label: r.status, cls: "bg-neutral-100 text-neutral-600" };
                       return (
-                        <TableRow key={r.envio_id}>
-                          <TableCell className="font-medium text-neutral-700">{r.nome || "—"}</TableCell>
+                        <TableRow
+                          key={r.envio_id}
+                          onClick={r.converteu ? () => openBuyer(r) : undefined}
+                          className={r.converteu ? "cursor-pointer hover:bg-emerald-50/60" : undefined}
+                        >
+                          <TableCell className="font-medium text-neutral-700">
+                            {r.converteu
+                              ? <span className="text-emerald-700 underline decoration-dotted underline-offset-2">{r.nome || "—"}</span>
+                              : (r.nome || "—")}
+                          </TableCell>
                           <TableCell className="text-neutral-600">{r.phone || "—"}</TableCell>
                           <TableCell>
                             <Badge className={`${sm.cls} text-[10px]`}>
@@ -283,6 +292,9 @@ export function CampaignDashboard({
                             {r.converteu
                               ? <span className="flex items-center gap-1 text-emerald-600 text-xs font-semibold"><CheckCircle2 className="h-3.5 w-3.5" /> Sim</span>
                               : <span className="text-neutral-400 text-xs">Não</span>}
+                          </TableCell>
+                          <TableCell className="text-neutral-600 text-xs whitespace-nowrap">
+                            {r.converteu ? fmtDate(r.comprou_em) : "—"}
                           </TableCell>
                           <TableCell className="text-right font-medium text-neutral-700">
                             {r.converteu ? brl(r.valor) : "—"}
