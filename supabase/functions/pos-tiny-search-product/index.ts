@@ -121,36 +121,59 @@ serve(async (req) => {
       }
     }
 
-    // FASE 2 — Anti-fantasma: persistir no cache local (pos_products) os produtos
-    // que vieram da busca ao vivo do Tiny e ainda não existem nesta loja.
-    // Só INSERE novos (nunca sobrescreve estoque/dados de produto já cadastrado).
+    // FASE 2 — Anti-fantasma: persistir no cache local (pos_products) SOMENTE quando
+    // o produto (por código de barras) ainda não existe nesta loja.
+    // Dedup por (store_id, barcode) — NUNCA por variant — para não recriar duplicatas
+    // quando o Tiny devolve a grade vazia. Se o barcode já existe, não insere nada.
     try {
       for (const prod of products) {
         const sku = (prod.sku || '').trim();
-        if (!sku) continue;
+        const barcode = (prod.barcode || '').trim();
+        if (!sku && !barcode) continue;
+
+        // 1) Existe por código de barras nesta loja? Então já está cadastrado — não mexe.
+        if (barcode) {
+          const { data: byBarcode } = await supabase
+            .from('pos_products')
+            .select('id')
+            .eq('store_id', store_id)
+            .eq('barcode', barcode)
+            .limit(1);
+          if (byBarcode && byBarcode.length > 0) continue;
+        }
+
+        // 2) Fallback: existe por SKU nesta loja? Também não duplica.
+        if (sku) {
+          const { data: bySku } = await supabase
+            .from('pos_products')
+            .select('id')
+            .eq('store_id', store_id)
+            .eq('sku', sku)
+            .limit(1);
+          if (bySku && bySku.length > 0) continue;
+        }
+
+        // Deriva tamanho/cor a partir do nome quando não vier na grade.
+        // Formatos suportados: "NOME - COR - TAMANHO" e "NOME - TAMANHO - COR".
         const variant = prod.variant || '';
-
-        const { data: existing } = await supabase
-          .from('pos_products')
-          .select('id')
-          .eq('store_id', store_id)
-          .eq('sku', sku)
-          .eq('variant', variant)
-          .maybeSingle();
-
-        if (existing) continue; // já existe — não mexe (estoque é independente do Tiny)
-
-        // Deriva tamanho/cor a partir do nome quando não vier na grade
         let size = prod.size || null;
         let color: string | null = null;
         const parts = (prod.name || '').split(' - ').map((s: string) => s.trim());
         if (parts.length >= 3) {
-          if (!size) size = parts[parts.length - 1] || null;
-          color = parts[parts.length - 2] || null;
-          // formato comum: "NOME - COR - TAMANHO"
-          if (/^\d{1,2}$/.test(parts[parts.length - 1])) {
-            if (!size) size = parts[parts.length - 1];
-            color = parts[parts.length - 2] || null;
+          const last = parts[parts.length - 1];
+          const prev = parts[parts.length - 2];
+          const isNum = (s: string) => /^\d{1,2}([.,]\d)?$/.test(s);
+          if (isNum(last)) {
+            // "NOME - COR - TAMANHO"
+            if (!size) size = last;
+            color = prev || null;
+          } else if (isNum(prev)) {
+            // "NOME - TAMANHO - COR"
+            if (!size) size = prev;
+            color = last || null;
+          } else {
+            if (!size) size = last || null;
+            color = prev || null;
           }
         }
 
@@ -164,17 +187,18 @@ serve(async (req) => {
           color,
           category: prod.category || null,
           price: prod.price || 0,
-          barcode: prod.barcode || '',
+          barcode,
           stock: prod.stock || 0, // semente inicial vinda do Tiny; balanço passa a ser fonte da verdade
           is_active: true,
           synced_at: new Date().toISOString(),
         });
-        console.log('Fase2 anti-fantasma: produto persistido no cache', { sku, variant, name: prod.name });
+        console.log('Fase2 anti-fantasma: produto persistido no cache', { sku, barcode, name: prod.name });
       }
     } catch (persistErr) {
       // Nunca quebrar a venda por causa da persistência
       console.error('Fase2 persist error (ignorado):', persistErr);
     }
+
 
     return new Response(JSON.stringify({ success: true, products }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
