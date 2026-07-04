@@ -1180,16 +1180,10 @@ serve(async (req) => {
       ? `${combinedMessage}\n\n[ANÁLISE DO ANEXO]\n${attachmentAnalysis.analysis}`.trim()
       : combinedMessage;
 
-    // ─── 1. Load stores with Tiny tokens ────────────────────────────────
-    const { data: storesData } = await supabase
-      .from('pos_stores')
-      .select('id, name, tiny_token')
-      .eq('is_active', true)
-      .not('tiny_token', 'is', null);
-
-    const stores: StoreConfig[] = (storesData || [])
-      .filter((s: any) => s.tiny_token)
-      .map((s: any) => ({ id: s.id, name: s.name, token: s.tiny_token }));
+    // ─── 1. Tiny ERP desativado ─────────────────────────────────────────
+    // O sistema não usa mais o Tiny. Sem lojas com token => nenhuma busca de
+    // pedido/rastreio é feita no Tiny (helpers Tiny ficam inertes).
+    const stores: StoreConfig[] = [];
 
     // Reorder: Tiny Shopify first, then Centro, then Pérola
     stores.sort((a, b) => {
