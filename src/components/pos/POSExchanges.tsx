@@ -219,53 +219,7 @@ export function POSExchanges({ storeId }: Props) {
         }
       }
 
-      // 2. Search Tiny orders via edge function, then fetch detail for each
-      try {
-        const { data: tinyData } = await supabase.functions.invoke("pos-tiny-search-orders", {
-          body: { store_id: storeId, search_term: term },
-        });
-        if (tinyData?.success && tinyData?.orders) {
-          // Fetch details in parallel for up to 5 orders
-          const detailPromises = tinyData.orders.slice(0, 5).map(async (order: any) => {
-            try {
-              const { data: detailData } = await supabase.functions.invoke("pos-tiny-search-orders", {
-                body: { store_id: storeId, mode: "detail", tiny_order_id: order.tiny_order_id || order.id },
-              });
-              return detailData?.success ? detailData.detail : null;
-            } catch { return null; }
-          });
-          const details = await Promise.all(detailPromises);
 
-          for (let idx = 0; idx < tinyData.orders.length; idx++) {
-            const order = tinyData.orders[idx];
-            const detail = idx < details.length ? details[idx] : null;
-            const items = detail?.items || (order.itens || order.items || []).map((i: any) => ({
-              name: i.descricao || i.name || "",
-              sku: i.codigo || i.sku || "",
-              quantity: i.quantidade || i.quantity || 1,
-              price: parseFloat(i.valor_unitario || i.price || "0"),
-            }));
-            results.push({
-              id: String(order.tiny_order_id || order.id),
-              source: "tiny",
-              date: detail?.date || order.date || order.data_pedido || order.created_at || "",
-              customer_name: detail?.customer?.name || order.customer_name || null,
-              seller_name: detail?.seller_name || order.seller_name || null,
-              seller_id: null,
-              total: detail?.total ?? order.total ?? order.valor ?? 0,
-              tiny_order_number: detail?.tiny_order_number || order.tiny_order_number || null,
-              items: items.map((i: any) => ({
-                name: i.product_name || i.name || "",
-                sku: i.sku || "",
-                quantity: i.quantity || 1,
-                price: i.unit_price || i.price || 0,
-              })),
-            });
-          }
-        }
-      } catch (e) {
-        console.warn("Tiny search failed:", e);
-      }
 
       setSaleResults(results);
       if (results.length === 0) toast.info("Nenhum pedido encontrado");
