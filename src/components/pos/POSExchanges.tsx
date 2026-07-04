@@ -471,7 +471,7 @@ export function POSExchanges({ storeId }: Props) {
       }
 
       // Auto-adjust stock
-      await adjustStockInTiny(returnedItems, validNewItems);
+      await adjustStockInternal(returnedItems, validNewItems);
 
       toast.success("Troca registrada com sucesso!");
       setShowNew(false);
