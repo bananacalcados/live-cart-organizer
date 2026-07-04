@@ -283,3 +283,18 @@ verify_jwt = false
 
 [functions.carousel-campaign-run-now]
 verify_jwt = false
+
+[functions.pos-tiny-create-sale]
+verify_jwt = false
+
+[functions.pos-tiny-delete-sale]
+verify_jwt = false
+
+[functions.pos-tiny-payment-methods]
+verify_jwt = false
+
+[functions.pos-tiny-sellers]
+verify_jwt = false
+
+[functions.pos-tiny-sync-products]
+verify_jwt = false
