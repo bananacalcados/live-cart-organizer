@@ -790,20 +790,6 @@ export function POSDailySales({ storeId }: Props) {
               <p className="text-[10px] text-red-400">-R$ {sale.discount.toFixed(2)}</p>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs"
-            onClick={(e) => { e.stopPropagation(); resendToTiny(sale); }}
-            disabled={resending === sale.id}
-          >
-            {resending === sale.id ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Send className="h-3 w-3" />
-            )}
-            <span className="hidden sm:inline">{sale.tiny_order_id ? "Reenviar" : "Enviar"}</span>
-          </Button>
         </div>
       </div>
     );
