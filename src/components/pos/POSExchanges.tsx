@@ -345,16 +345,16 @@ export function POSExchanges({ storeId }: Props) {
     setFormStep("exchange_details");
   };
 
-  const adjustStockInTiny = async (returned: ExchangeItem[], given: ExchangeItem[]) => {
-    const stockItems: { tiny_id: number; product_name: string; quantity: number; direction: "in" | "out" }[] = [];
+  const adjustStockInternal = async (returned: ExchangeItem[], given: ExchangeItem[]) => {
+    const stockItems: { sku?: string; barcode?: string; product_name: string; quantity: number; direction: "in" | "out" }[] = [];
     for (const item of returned) {
-      if (item.tiny_id && item.quantity > 0) {
-        stockItems.push({ tiny_id: item.tiny_id, product_name: item.product_name, quantity: item.quantity, direction: "in" });
+      if ((item.sku || item.barcode) && item.quantity > 0) {
+        stockItems.push({ sku: item.sku, barcode: item.barcode, product_name: item.product_name, quantity: item.quantity, direction: "in" });
       }
     }
     for (const item of given) {
-      if (item.tiny_id && item.quantity > 0) {
-        stockItems.push({ tiny_id: item.tiny_id, product_name: item.product_name, quantity: item.quantity, direction: "out" });
+      if ((item.sku || item.barcode) && item.quantity > 0) {
+        stockItems.push({ sku: item.sku, barcode: item.barcode, product_name: item.product_name, quantity: item.quantity, direction: "out" });
       }
     }
     if (stockItems.length === 0) return;
@@ -363,7 +363,7 @@ export function POSExchanges({ storeId }: Props) {
         body: { store_id: storeId, items: stockItems },
       });
       if (error) throw error;
-      if (data?.success) toast.success("Estoque ajustado no Tiny!");
+      if (data?.success) toast.success("Estoque interno ajustado!");
     } catch (e: any) {
       console.error("Stock adjust error:", e);
       toast.error("Erro ao ajustar estoque: " + e.message);
