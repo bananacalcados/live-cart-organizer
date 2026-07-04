@@ -329,54 +329,10 @@ export function POSDailySales({ storeId }: Props) {
     setDetailCustomer(cust);
   };
 
-  const openTinyOrderDetail = async (order: TinyOnlyOrder) => {
-    setTinyDetailLoading(true);
-    setIsTinyOnlyDetail(true);
-    try {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-orders`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
-        },
-        body: JSON.stringify({ store_id: storeId, mode: "detail", tiny_order_id: order.tiny_order_id }),
-      });
-      const data = await resp.json();
-      if (data.success && data.detail) {
-        const d = data.detail;
-        const fakeSale: SaleSummary = {
-          id: `tiny-${d.tiny_order_id}`,
-          created_at: d.date ? new Date(d.date.split('/').reverse().join('-')).toISOString() : new Date().toISOString(),
-          subtotal: d.total + (d.discount || 0),
-          discount: d.discount || 0,
-          total: d.total,
-          payment_method: d.payment_method,
-          seller_id: null,
-          status: d.status || '',
-          tiny_order_number: d.tiny_order_number,
-          tiny_order_id: d.tiny_order_id,
-          customer_id: null,
-          sale_type: null,
-        };
-        setSelectedSale(fakeSale);
-        setDetailItems(d.items || []);
-        setDetailCustomer(d.customer || null);
-        // Store the Tiny seller name for display
-        if (d.seller_name) {
-          setTinySellerName(d.seller_name);
-        } else {
-          setTinySellerName(null);
-        }
-      } else {
-        toast.error("Erro ao buscar detalhes: " + (data.error || "Erro desconhecido"));
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error("Erro ao buscar detalhes do pedido Tiny");
-    } finally {
-      setTinyDetailLoading(false);
-    }
+  const openTinyOrderDetail = async (_order: TinyOnlyOrder) => {
+    // Tiny desativado — não há mais pedidos exclusivos do Tiny para detalhar.
+    setIsTinyOnlyDetail(false);
+    setTinyDetailLoading(false);
   };
 
   const searchAllPeriods = async () => {
@@ -432,23 +388,8 @@ export function POSDailySales({ storeId }: Props) {
           }
           return { sales: salesData || [], items, customers: custMap };
         })(),
-        (async () => {
-          try {
-            const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-orders`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                apikey: SUPABASE_KEY,
-                Authorization: `Bearer ${SUPABASE_KEY}`,
-              },
-              body: JSON.stringify({ store_id: storeId, search_term: searchTerm.trim() }),
-            });
-            const data = await resp.json();
-            return data.success ? (data.orders as TinyOnlyOrder[]) : [];
-          } catch {
-            return [];
-          }
-        })(),
+        (async () => [] as TinyOnlyOrder[])(),
+
       ]);
       setGlobalResults(localResult.sales);
       setGlobalResultItems(localResult.items);
@@ -466,86 +407,9 @@ export function POSDailySales({ storeId }: Props) {
     }
   };
 
-  const resendToTiny = async (sale: SaleSummary) => {
-    setResending(sale.id);
-    try {
-      const { data: items } = await supabase
-        .from("pos_sale_items")
-        .select("*")
-        .eq("sale_id", sale.id);
-      if (!items || items.length === 0) {
-        toast.error("Nenhum item encontrado para esta venda");
-        return;
-      }
-      let customer: any = undefined;
-      if (sale.customer_id) {
-        const { data: cust } = await supabase
-          .from("pos_customers")
-          .select("*")
-          .eq("id", sale.customer_id)
-          .maybeSingle();
-        if (cust) {
-          customer = {
-            id: cust.id, name: cust.name, cpf: cust.cpf,
-            email: cust.email, whatsapp: cust.whatsapp,
-            address: cust.address, cep: cust.cep, city: cust.city, state: cust.state,
-          };
-        }
-      }
-      let tinySellerId: string | undefined;
-      if (sale.seller_id) {
-        const { data: sellerData } = await supabase
-          .from("pos_sellers")
-          .select("tiny_seller_id")
-          .eq("id", sale.seller_id)
-          .maybeSingle();
-        tinySellerId = sellerData?.tiny_seller_id || undefined;
-      }
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-create-sale`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
-        },
-        body: JSON.stringify({
-          // Manual Tiny push: update the existing sale and actually send to Tiny.
-          sale_id: sale.id,
-          push_tiny: true,
-          store_id: storeId,
-          seller_id: sale.seller_id || undefined,
-          tiny_seller_id: tinySellerId,
-          customer,
-          items: items.map((item: any) => ({
-            tiny_id: item.tiny_product_id, sku: item.sku,
-            name: item.product_name, variant: item.variant_name,
-            size: item.size, category: item.category,
-            price: item.unit_price, quantity: item.quantity, barcode: item.barcode,
-          })),
-          payment_method_name: sale.payment_method || undefined,
-          discount: sale.discount > 0 ? sale.discount : undefined,
-        }),
-      });
-      const data = await resp.json();
-      if (data.success) {
-        toast.success(`Venda reenviada ao Tiny! Pedido #${data.tiny_order_number || data.tiny_order_id}`);
-        await supabase
-          .from("pos_sales")
-          .update({
-            tiny_order_id: String(data.tiny_order_id),
-            tiny_order_number: data.tiny_order_number ? String(data.tiny_order_number) : null,
-          })
-          .eq("id", sale.id);
-        loadData();
-      } else {
-        toast.error(data.error || "Erro ao reenviar ao Tiny");
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error("Erro ao reenviar venda");
-    } finally {
-      setResending(null);
-    }
+  const resendToTiny = async (_sale: SaleSummary) => {
+    // Integração Tiny removida — envio/reenvio ao Tiny desativado.
+    toast.info("Integração Tiny desativada.");
   };
 
   const recoverMissingCustomers = async () => {
@@ -926,20 +790,6 @@ export function POSDailySales({ storeId }: Props) {
               <p className="text-[10px] text-red-400">-R$ {sale.discount.toFixed(2)}</p>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1 border-pos-orange/30 text-pos-orange hover:bg-pos-orange/10 text-xs"
-            onClick={(e) => { e.stopPropagation(); resendToTiny(sale); }}
-            disabled={resending === sale.id}
-          >
-            {resending === sale.id ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Send className="h-3 w-3" />
-            )}
-            <span className="hidden sm:inline">{sale.tiny_order_id ? "Reenviar" : "Enviar"}</span>
-          </Button>
         </div>
       </div>
     );

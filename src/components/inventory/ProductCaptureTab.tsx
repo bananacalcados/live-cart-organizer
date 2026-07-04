@@ -287,42 +287,45 @@ export function ProductCaptureTab({ storeId, storeName }: Props) {
   const totalUnits = items.reduce((s, i) => s + toNumber(i.quantity), 0);
   const totalCost = items.reduce((s, i) => s + toNumber(i.cost_price) * toNumber(i.quantity), 0);
 
-  // Send to Tiny
+  // Salva no estoque interno (pos_products). NÃO usa mais o Tiny.
   const handleSendToTiny = async (parentCode: string) => {
     const group = grouped.find(g => g.parentCode === parentCode);
     if (!group) return;
 
     setSendingParent(parentCode);
     try {
-      const { data, error } = await supabase.functions.invoke("tiny-create-product-with-variations", {
-        body: {
+      const rows = group.items.map(i => {
+        const variant = [i.size, i.color].filter(Boolean).join(' ').trim();
+        return {
           store_id: storeId,
-          parent_code: group.parentCode,
-          product_name: group.productName,
-          items: group.items.map(i => ({
-            id: i.id,
-            barcode: i.barcode,
-            size: i.size,
-            color: i.color,
-            price: i.price,
-            quantity: i.quantity,
-          })),
-        },
+          sku: i.barcode,
+          name: group.productName,
+          variant,
+          size: i.size || null,
+          color: i.color || null,
+          price: Number(i.price) || 0,
+          barcode: i.barcode,
+          stock: Number(i.quantity) || 0,
+          parent_sku: group.parentCode || null,
+          is_active: true,
+          synced_at: new Date().toISOString(),
+        };
       });
 
+      const { error } = await supabase
+        .from("pos_products")
+        .upsert(rows, { onConflict: "store_id,sku,variant", ignoreDuplicates: false });
+
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
 
-      if (data?.tiny_product_id) {
-        const updatedItems = items.map(i =>
-          i.parent_code === parentCode ? { ...i, tiny_product_id: data.tiny_product_id } : i
-        );
-        setItems(updatedItems);
-      }
+      const updatedItems = items.map(i =>
+        i.parent_code === parentCode ? { ...i, tiny_product_id: 1 } : i
+      );
+      setItems(updatedItems);
 
-      toast.success(`${group.productName} criado no Tiny!`);
+      toast.success(`${group.productName} salvo no estoque!`);
     } catch (err: any) {
-      toast.error(`Erro ao criar ${group.productName}: ${err.message}`);
+      toast.error(`Erro ao salvar ${group.productName}: ${err.message}`);
     } finally {
       setSendingParent(null);
     }
@@ -612,7 +615,7 @@ th{background:#f5f5f5;font-weight:600}
                   className="gap-1"
                 >
                   {sendingAll ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                  Criar Todos no Tiny
+                  Salvar Todos no Estoque
                 </Button>
               </div>
             </CardTitle>
@@ -731,7 +734,7 @@ th{background:#f5f5f5;font-weight:600}
                             className="w-full gap-1 mt-2"
                           >
                             {isSending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-                            Criar "{group.productName}" no Tiny
+                            Salvar "{group.productName}" no Estoque
                           </Button>
                         )}
                       </div>

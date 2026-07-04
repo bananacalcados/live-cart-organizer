@@ -237,12 +237,19 @@ function AccountsPayableContent({ accountsPayable, stores, storeFilter, fmt, onR
     if (selectedIds.size === 0) return;
     setMarkingPaid(true);
     try {
-      const { data, error } = await supabase.functions.invoke('tiny-mark-account-paid', {
-        body: { account_ids: [...selectedIds] },
-      });
-      if (error) throw error;
-      const successes = (data?.results || []).filter((r: any) => r.status === 'success' || r.status === 'local_only').length;
-      toast.success(`${successes} contas marcadas como pagas`);
+      const today = new Date().toISOString().split('T')[0];
+      const ids = [...selectedIds];
+      for (const id of ids) {
+        const ap = openAP.find((a: any) => a.id === id) as any;
+        await supabase.from('tiny_accounts_payable').update({
+          situacao: 'pago',
+          data_pagamento: today,
+          valor_pago: ap?.valor ?? ap?.saldo ?? 0,
+          saldo: 0,
+          synced_at: new Date().toISOString(),
+        }).eq('id', id);
+      }
+      toast.success(`${ids.length} contas marcadas como pagas`);
       setSelectedIds(new Set());
       onRefresh();
     } catch (e: any) {
@@ -785,175 +792,8 @@ export default function Management() {
     setLoading(false);
   }, [dateRange]);
 
-  const runSyncWithResume = async (body: any) => {
-    setSyncing(true);
-    setSyncProgress({ currentDate: "Iniciando...", storeName: "", phase: body.stock_only ? "stock" : "orders" });
-
-    const pollInterval = setInterval(async () => {
-      const { data: logs } = await supabase
-        .from('tiny_management_sync_log')
-        .select('orders_synced, status, store_id, current_date_syncing, phase')
-        .in('status', ['running', 'partial'])
-        .order('started_at', { ascending: false })
-        .limit(1);
-      if (logs && logs.length > 0) {
-        const log = logs[0] as any;
-        const storeName = stores.find(s => s.id === log.store_id)?.name || "Loja";
-        setSyncProgress({ currentDate: log.current_date_syncing || "Processando...", storeName, phase: log.phase || 'orders' });
-      }
-    }, 1500);
-
-    try {
-      let totalSynced = 0;
-
-      const storesToSync = body.store_id
-        ? [body.store_id]
-        : stores.filter(s => Boolean(s.has_tiny_token)).map(s => s.id);
-
-      for (const sid of storesToSync) {
-        let currentBody = { ...body, store_id: sid };
-        let attempts = 0;
-        const MAX_ATTEMPTS = 30;
-
-        while (attempts < MAX_ATTEMPTS) {
-          attempts++;
-          const { data, error } = await supabase.functions.invoke('tiny-sync-management', { body: currentBody });
-          if (error) throw error;
-
-          const partialResults = data?.results || [];
-          totalSynced += partialResults.reduce((s: number, r: any) => s + (r.orders_synced || 0), 0);
-
-          const partial = partialResults.find((r: any) => r.status === 'partial');
-          if (partial) {
-            const stName = stores.find(s => s.id === sid)?.name || "Loja";
-            if (partial.resume_stock_page) {
-              toast.info(`Continuando estoque ${stName}... (pg ${partial.resume_stock_page})`);
-              currentBody = {
-                store_id: partial.store_id,
-                stock_only: true,
-                resume_stock_page: partial.resume_stock_page,
-                resume_log_id: partial.resume_log_id,
-              };
-            } else if (partial.resume_date) {
-              toast.info(`Continuando pedidos ${stName}... (${partial.resume_date})`);
-              currentBody = {
-                ...body,
-                store_id: partial.store_id,
-                resume_date: partial.resume_date,
-                resume_log_id: partial.resume_log_id,
-              };
-            }
-            await new Promise(r => setTimeout(r, 1000));
-            continue;
-          }
-
-          // Check if orders sync timed out (skipped store means it was cut short)
-          const skipped = partialResults.find((r: any) => r.status === 'skipped');
-          if (skipped) {
-            // Re-run for this store
-            await new Promise(r => setTimeout(r, 1000));
-            continue;
-          }
-
-          break;
-        }
-      }
-
-      toast.success(`Sincronização concluída: ${totalSynced} pedidos importados`);
-      fetchData();
-    } catch (e: any) {
-      toast.error(`Erro na sincronização: ${e.message}`);
-    } finally {
-      clearInterval(pollInterval);
-      setSyncing(false);
-      setSyncProgress(null);
-    }
-  };
-
-  const syncTinyOrders = () => {
-    const fromDate = format(dateRange.start, 'dd/MM/yyyy');
-    const toDate = format(dateRange.end, 'dd/MM/yyyy');
-    runSyncWithResume({ date_from: fromDate, date_to: toDate, sync_stock: false });
-  };
-
-  const syncTinyStock = async () => {
-    setSyncingStock(true);
-    setSyncProgress({ currentDate: "Estoque: Iniciando...", storeName: "", phase: "stock" });
-
-    const pollInterval = setInterval(async () => {
-      const { data: logs } = await supabase
-        .from('tiny_management_sync_log')
-        .select('orders_synced, status, store_id, current_date_syncing, phase')
-        .in('status', ['running', 'partial'])
-        .order('started_at', { ascending: false })
-        .limit(1);
-      if (logs && logs.length > 0) {
-        const log = logs[0] as any;
-        const storeName = stores.find(s => s.id === log.store_id)?.name || "Loja";
-        setSyncProgress({ currentDate: log.current_date_syncing || "Processando...", storeName, phase: 'stock' });
-      }
-    }, 1500);
-
-    try {
-      const storesToSync = stores.filter(s => Boolean(s.has_tiny_token)).map(s => s.id);
-      for (const sid of storesToSync) {
-        let currentBody: any = { stock_only: true, store_id: sid };
-        let attempts = 0;
-        const MAX_ATTEMPTS = 250;
-
-        while (attempts < MAX_ATTEMPTS) {
-          attempts++;
-          const { data, error } = await supabase.functions.invoke('tiny-sync-management', { body: currentBody });
-          if (error) throw error;
-
-          const partialResults = data?.results || [];
-          const partial = partialResults.find((r: any) => r.status === 'partial');
-          if (partial?.resume_stock_page) {
-            const stName = stores.find(s => s.id === sid)?.name || "Loja";
-            const pct = partial.stock_updated && partial.resume_stock_page ? `${Math.round((partial.stock_updated / 5900) * 100)}%` : `pg ${partial.resume_stock_page}`;
-            toast.info(`Continuando estoque ${stName}... (${pct})`);
-            currentBody = {
-              store_id: partial.store_id,
-              stock_only: true,
-              resume_stock_page: partial.resume_stock_page,
-              resume_log_id: partial.resume_log_id,
-            };
-            await new Promise(r => setTimeout(r, 500));
-            continue;
-          }
-          break;
-        }
-        const stName = stores.find(s => s.id === sid)?.name || "Loja";
-        toast.success(`Estoque ${stName} sincronizado`);
-      }
-      toast.success("Sincronização de estoque concluída!");
-      fetchData();
-    } catch (e: any) {
-      toast.error(`Erro na sincronização de estoque: ${e.message}`);
-    } finally {
-      clearInterval(pollInterval);
-      setSyncingStock(false);
-      setSyncProgress(null);
-    }
-  };
 
 
-  const syncAccountsPayable = async () => {
-    setSyncingAP(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('tiny-sync-accounts-payable', {
-        body: storeFilter !== 'all' ? { store_id: storeFilter } : {},
-      });
-      if (error) throw error;
-      const total = (data?.results || []).reduce((s: number, r: any) => s + (r.total_synced || 0), 0);
-      toast.success(`Contas a pagar sincronizadas: ${total} contas`);
-      fetchData();
-    } catch (e: any) {
-      toast.error(`Erro ao sincronizar contas a pagar: ${e.message}`);
-    } finally {
-      setSyncingAP(false);
-    }
-  };
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -961,44 +801,8 @@ export default function Management() {
     autoSyncKeyRef.current = null;
   }, [period, customFrom, customTo]);
 
-  useEffect(() => {
-    if (loading || syncing || stores.length === 0) return;
 
-    const now = new Date();
-    const periodIncludesToday = dateRange.end >= startOfDay(now);
-    if (!periodIncludesToday) return;
 
-    const latestOrderDate = tinyOrders.reduce<Date | null>((latest, order) => {
-      if (!order.order_date) return latest;
-      const orderDate = new Date(`${order.order_date}T12:00:00`);
-      if (Number.isNaN(orderDate.getTime())) return latest;
-      return !latest || orderDate > latest ? orderDate : latest;
-    }, null);
-
-    const todayStart = startOfDay(now);
-    const hasCurrentMonthGap = period === "month" && (!latestOrderDate || latestOrderDate < todayStart);
-
-    const latestSyncedAt = tinyOrders.reduce<Date | null>((latest, order) => {
-      if (!order.synced_at) return latest;
-      const syncedAt = new Date(order.synced_at);
-      if (Number.isNaN(syncedAt.getTime())) return latest;
-      return !latest || syncedAt > latest ? syncedAt : latest;
-    }, null);
-
-    const syncIsStale = !latestSyncedAt || latestSyncedAt < startOfDay(now);
-    if (!syncIsStale && !hasCurrentMonthGap) return;
-
-    const rangeKey = `${startOfDay(dateRange.start).toISOString()}::${startOfDay(dateRange.end).toISOString()}::${hasCurrentMonthGap ? 'gap' : 'stale'}`;
-    if (autoSyncKeyRef.current === rangeKey) return;
-
-    autoSyncKeyRef.current = rangeKey;
-    toast.info("Atualizando vendas online do Tiny para completar o período atual...");
-    runSyncWithResume({
-      date_from: format(dateRange.start, 'dd/MM/yyyy'),
-      date_to: format(dateRange.end, 'dd/MM/yyyy'),
-      sync_stock: false,
-    });
-  }, [loading, syncing, stores, tinyOrders, dateRange, period, customFrom, customTo]);
 
   // Auto-refresh every minute — pauses while user is interacting (typing, clicking forms, etc.)
   useEffect(() => {
@@ -1222,21 +1026,8 @@ export default function Management() {
                 </PopoverContent>
               </Popover>
             )}
-            <Button variant="outline" size="sm" onClick={syncTinyOrders} disabled={syncing || syncingStock} className="gap-1 h-8 text-xs bg-primary text-primary-foreground border-primary hover:bg-primary/90 hover:text-primary-foreground">
-              {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              {syncing && syncProgress
-                ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
-                : syncing ? "Iniciando..." : "Pedidos Tiny"}
-            </Button>
-            <Button variant="outline" size="sm" onClick={syncTinyStock} disabled={syncing || syncingStock} className="gap-1 h-8 text-xs bg-[hsl(25,90%,52%)] text-white border-[hsl(25,90%,52%)] hover:bg-[hsl(25,90%,45%)] max-w-[280px]">
-              {syncingStock ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Box className="h-3.5 w-3.5" />}
-              <span className="truncate">
-                {syncingStock && syncProgress
-                  ? `${syncProgress.storeName} — ${syncProgress.currentDate}`
-                  : syncingStock ? "Estoque..." : "Estoque"}
-              </span>
-            </Button>
             <ThemeToggle />
+
             <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1 h-8 text-[hsl(45,10%,90%)] hover:text-primary hover:bg-[hsl(0,0%,15%)]"><Home className="h-4 w-4" /></Button>
           </div>
         </div>
@@ -1437,16 +1228,7 @@ export default function Management() {
               {/* Contas a Pagar */}
               <TabsContent value="accounts_payable" className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold">Contas a Pagar — Todas as Contas Tiny</h3>
-                  <Button
-                    variant="outline" size="sm"
-                    onClick={syncAccountsPayable}
-                    disabled={syncingAP || syncing}
-                    className="gap-1 h-8 text-xs"
-                  >
-                    {syncingAP ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    {syncingAP ? "Sincronizando..." : "Sincronizar Contas"}
-                  </Button>
+                  <h3 className="text-sm font-semibold">Contas a Pagar</h3>
                 </div>
 
                 <AccountsPayableContent

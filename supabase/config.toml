@@ -3,21 +3,17 @@ project_id = "tqxhcyuxgqbzqwoidpie"
 [functions.backfill-payment-method]
 verify_jwt = false
 
-
-
 [functions.point-webhook]
 verify_jwt = false
 
 [functions.point-create-order]
 verify_jwt = false
 
-
 [functions.brasilnfe-webhook]
 verify_jwt = false
 
 [functions.yampi-lookup-sku]
 verify_jwt = false
-
 
 [functions.yampi-create-payment-link]
 verify_jwt = false
@@ -48,8 +44,6 @@ verify_jwt = false
 
 [functions.meta-whatsapp-upload-header]
 verify_jwt = false
-
-
 
 [functions.paypal-create-order]
 verify_jwt = false
@@ -93,31 +87,7 @@ verify_jwt = false
 [functions.pagarme-create-charge]
 verify_jwt = false
 
-[functions.pos-tiny-search-product]
-verify_jwt = false
-
-[functions.pos-tiny-sellers]
-verify_jwt = false
-
-[functions.pos-tiny-payment-methods]
-verify_jwt = false
-
-[functions.pos-tiny-create-sale]
-verify_jwt = false
-
-[functions.pos-tiny-emit-nfce]
-verify_jwt = false
-
-[functions.pos-tiny-sync-products]
-verify_jwt = false
-
-[functions.inventory-get-stock]
-verify_jwt = false
-
 [functions.inventory-correct-stock]
-verify_jwt = false
-
-[functions.inventory-fetch-all-stock]
 verify_jwt = false
 
 [functions.shopify-create-order]
@@ -126,16 +96,7 @@ verify_jwt = false
 [functions.shopify-create-live-order]
 verify_jwt = false
 
-[functions.tiny-sync-accounts-payable]
-verify_jwt = false
-
-[functions.tiny-mark-account-paid]
-verify_jwt = false
-
 [functions.automation-ai-respond]
-verify_jwt = false
-
-[functions.tiny-sync-management]
 verify_jwt = false
 
 [functions.expedition-fetch-label]
@@ -208,9 +169,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.meta-messenger-send]
-verify_jwt = false
-
-[functions.tiny-sync-categories]
 verify_jwt = false
 
 [functions.ai-classify-transactions]
@@ -324,4 +282,19 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.carousel-campaign-run-now]
+verify_jwt = false
+
+[functions.pos-tiny-create-sale]
+verify_jwt = false
+
+[functions.pos-tiny-delete-sale]
+verify_jwt = false
+
+[functions.pos-tiny-payment-methods]
+verify_jwt = false
+
+[functions.pos-tiny-sellers]
+verify_jwt = false
+
+[functions.pos-tiny-sync-products]
 verify_jwt = false

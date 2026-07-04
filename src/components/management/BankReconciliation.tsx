@@ -355,19 +355,6 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
     setClassifying(false);
   };
 
-  // Sync categories from Tiny
-  const syncCategories = async () => {
-    setSyncingCategories(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("tiny-sync-categories");
-      if (error) throw error;
-      toast.success(`${data.synced} categorias sincronizadas do Tiny`);
-      loadData();
-    } catch (e: any) {
-      toast.error(`Erro: ${e.message}`);
-    }
-    setSyncingCategories(false);
-  };
 
   // Confirm/change classification
   const confirmClassification = async (txId: string, categoryId: string) => {
@@ -679,10 +666,6 @@ export function BankReconciliation({ stores }: { stores: StoreRow[] }) {
           <Button variant="outline" size="sm" className="gap-1 h-8 text-xs" onClick={classifyTransactions} disabled={classifying || pendingCount === 0}>
             {classifying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Brain className="h-3.5 w-3.5" />}
             Classificar IA ({pendingCount})
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1 h-8 text-xs" onClick={syncCategories} disabled={syncingCategories}>
-            {syncingCategories ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            Sync Categorias
           </Button>
         </div>
       </div>

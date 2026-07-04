@@ -140,40 +140,6 @@ export function InventoryDashboard() {
     };
   }, [run?.status, loadSnapshot]);
 
-  const handleTriggerAudit = async () => {
-    if (!confirm("Disparar auditoria v2 do Tiny? Apenas atualiza produtos existentes (não cria novos). Pode levar ~30min.")) return;
-    setTriggering(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("inventory-audit-tiny", {
-        body: { update_only: true },
-      });
-      if (error) throw error;
-      toast.success("Auditoria v2 iniciada!");
-      console.log("audit response", data);
-      await loadRun();
-    } catch (e: any) {
-      toast.error(`Erro: ${e.message}`);
-    } finally {
-      setTriggering(false);
-    }
-  };
-
-  const handleIncrementalSync = async () => {
-    setSyncingIncremental(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("inventory-incremental-sync", {
-        body: { days: 2 },
-      });
-      if (error) throw error;
-      toast.success("Sync incremental disparado! Atualiza apenas SKUs movimentados nos últimos 2 dias (~5min).");
-      console.log("incremental response", data);
-      setTimeout(() => loadSnapshot(), 5000);
-    } catch (e: any) {
-      toast.error(`Erro: ${e.message}`);
-    } finally {
-      setSyncingIncremental(false);
-    }
-  };
 
   // ---- Cálculo de % verificado ----
   const perStore = (run?.per_store as any[]) || [];
@@ -243,32 +209,6 @@ export function InventoryDashboard() {
           >
             <RefreshCw className={cn("h-4 w-4 mr-1", loadingSnapshot && "animate-spin")} />
             Atualizar
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleIncrementalSync}
-            disabled={syncingIncremental}
-            title="Sincroniza apenas SKUs movimentados nos últimos 2 dias. Rápido (~5min)."
-          >
-            {syncingIncremental ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Zap className="h-4 w-4 mr-1" />
-            )}
-            Sync Incremental
-          </Button>
-          <Button
-            onClick={handleTriggerAudit}
-            disabled={triggering || run?.status === "running"}
-            size="sm"
-          >
-            {triggering ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4 mr-1" />
-            )}
-            {run?.status === "running" ? "Em andamento..." : "Auditoria Completa"}
           </Button>
         </div>
       </div>
