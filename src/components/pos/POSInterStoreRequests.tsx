@@ -194,16 +194,16 @@ export function POSInterStoreRequests({ storeId }: Props) {
       const { error } = await supabase.from("pos_inter_store_requests").update(update).eq("id", id);
       if (error) throw error;
 
-      // When confirmed, trigger automatic stock transfer in Tiny ERP
+      // When confirmed, trigger automatic internal stock transfer (pos_products)
       if (responseStatus === "confirmed") {
-        toast.info("Ajustando estoque no Tiny...");
+        toast.info("Ajustando estoque interno...");
         try {
           const { data: transferResult, error: transferError } = await supabase.functions.invoke("pos-inter-store-stock-transfer", {
             body: { request_id: id },
           });
           if (transferError) throw transferError;
           if (transferResult?.success) {
-            toast.success("Estoque transferido automaticamente no Tiny!");
+            toast.success("Estoque transferido automaticamente!");
           } else {
             const failedItems = transferResult?.results?.filter((r: any) => !r.success) || [];
             if (failedItems.length > 0) {
@@ -214,7 +214,7 @@ export function POSInterStoreRequests({ storeId }: Props) {
           }
         } catch (stockErr: any) {
           console.error("Stock transfer error:", stockErr);
-          toast.error("Erro ao transferir estoque no Tiny: " + stockErr.message);
+          toast.error("Erro ao transferir estoque: " + stockErr.message);
         }
       }
 
