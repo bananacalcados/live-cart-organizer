@@ -461,7 +461,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           .limit(10);
 
         if (data && data.length > 0) {
-          // Found in cache — use it but also fetch real-time stock from Tiny API in background
+          // Fonte da verdade = pos_products (cache local). NÃO consultamos mais o Tiny
+          // na venda: isso evitava recriar produtos-fantasma/duplicados a cada bipada.
           const products = data.map(mapDbProduct);
           if (products.length === 1) {
             addToCart(products[0]);
@@ -469,47 +470,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           } else {
             setSearchResults(products);
           }
-          // Fetch real-time stock in background for found products
-          fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-product`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-            body: JSON.stringify({ store_id: storeId, gtin: query }),
-          }).then(r => r.json()).then(apiData => {
-            if (apiData.success && apiData.products?.length > 0) {
-              // Update stock in cache
-              for (const ap of apiData.products) {
-                supabase.from('pos_products')
-                  .update({ stock: ap.stock, barcode: ap.barcode || query })
-                  .eq('store_id', storeId)
-                  .eq('sku', ap.sku)
-                  .then(() => {});
-              }
-              // Update cart with real stock
-              setCart(prev => prev.map(item => {
-                const match = apiData.products.find((ap: any) => ap.sku === item.sku);
-                return match ? { ...item, stock: match.stock } : item;
-              }));
-            }
-          }).catch(() => {});
         } else {
-          // Not in cache — fetch from Tiny API (returns stock)
-          const resp = await fetch(`${SUPABASE_URL}/functions/v1/pos-tiny-search-product`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` },
-            body: JSON.stringify({ store_id: storeId, gtin: query }),
-          });
-          const apiData = await resp.json();
-          if (apiData.success && apiData.products.length > 0) {
-            if (apiData.products.length === 1) {
-              addToCart(apiData.products[0]);
-              setBarcodeInput("");
-            } else {
-              setSearchResults(apiData.products);
-            }
-          } else {
-            toast.error("Produto não encontrado");
-          }
+          // Não está no cache local. Estoque é independente do Tiny — não buscamos lá.
+          toast.error("Produto não encontrado no estoque local");
         }
+
       } else {
         // Text search: use unaccent RPC for accent-insensitive search
         const { data } = await supabase
