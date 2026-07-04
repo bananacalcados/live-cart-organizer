@@ -140,40 +140,6 @@ export function InventoryDashboard() {
     };
   }, [run?.status, loadSnapshot]);
 
-  const handleTriggerAudit = async () => {
-    if (!confirm("Disparar auditoria v2 do Tiny? Apenas atualiza produtos existentes (não cria novos). Pode levar ~30min.")) return;
-    setTriggering(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("inventory-audit-tiny", {
-        body: { update_only: true },
-      });
-      if (error) throw error;
-      toast.success("Auditoria v2 iniciada!");
-      console.log("audit response", data);
-      await loadRun();
-    } catch (e: any) {
-      toast.error(`Erro: ${e.message}`);
-    } finally {
-      setTriggering(false);
-    }
-  };
-
-  const handleIncrementalSync = async () => {
-    setSyncingIncremental(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("inventory-incremental-sync", {
-        body: { days: 2 },
-      });
-      if (error) throw error;
-      toast.success("Sync incremental disparado! Atualiza apenas SKUs movimentados nos últimos 2 dias (~5min).");
-      console.log("incremental response", data);
-      setTimeout(() => loadSnapshot(), 5000);
-    } catch (e: any) {
-      toast.error(`Erro: ${e.message}`);
-    } finally {
-      setSyncingIncremental(false);
-    }
-  };
 
   // ---- Cálculo de % verificado ----
   const perStore = (run?.per_store as any[]) || [];
