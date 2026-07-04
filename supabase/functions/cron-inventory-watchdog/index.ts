@@ -85,49 +85,8 @@ serve(async (req) => {
       }
     }
 
-    const { data: auditRuns } = await supabase
-      .from('inventory_audit_runs')
-      .select('id, status, per_store, created_at')
-      .eq('status', 'running')
-      .order('created_at', { ascending: false })
-      .limit(3);
+    // Auditoria via Tiny removida (Tiny desativado). Nada a re-disparar aqui.
 
-    for (const run of auditRuns || []) {
-      const perStore = Array.isArray(run.per_store) ? run.per_store : [];
-      const unfinishedStores = perStore.filter((store: any) => store && !store.finished);
-      if (unfinishedStores.length === 0) continue;
-
-      const latestHeartbeat = unfinishedStores.reduce((latest: number, store: any) => {
-        const candidates = [store?.last_progress_at, store?.stage2_started_at, run.created_at]
-          .filter(Boolean)
-          .map((value) => new Date(value).getTime())
-          .filter((value) => Number.isFinite(value));
-        const storeLatest = candidates.length ? Math.max(...candidates) : 0;
-        return Math.max(latest, storeLatest);
-      }, 0);
-
-      const elapsed = now - latestHeartbeat;
-      if (elapsed < AUDIT_STALL_THRESHOLD_MS) {
-        actions.push(`audit=${run.id} running heartbeat=${Math.round(elapsed / 1000)}s ago — OK`);
-        continue;
-      }
-
-      console.log(`[watchdog] Re-triggering inventory audit ${run.id} (stalled ${Math.round(elapsed / 1000)}s)`);
-      const invokePromise = fetch(`${supabaseUrl}/functions/v1/inventory-audit-tiny`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${anonKey}`,
-        },
-        body: JSON.stringify({ run_id: run.id, update_only: true }),
-      }).then(async (r) => {
-        const body = await r.text();
-        console.log(`[watchdog] Re-triggered audit response: ${r.status} ${body.substring(0, 200)}`);
-      }).catch(e => console.error('[watchdog] Re-trigger audit failed:', e));
-
-      if (edgeRuntime?.waitUntil) edgeRuntime.waitUntil(invokePromise);
-      actions.push(`audit=${run.id} STALLED — re-triggered (${Math.round(elapsed / 1000)}s)`);
-    }
 
     console.log(`[watchdog] Actions: ${JSON.stringify(actions)}`);
 
