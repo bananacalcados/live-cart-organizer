@@ -51,7 +51,7 @@ const ReviewReferralPage = lazy(() => import("./pages/ReviewReferralPage"));
 const EventLandingView = lazy(() => import("./pages/public/EventLandingView"));
 const EventTypebotView = lazy(() => import("./pages/public/EventTypebotView"));
 const EventCaptureBuilder = lazy(() => import("./pages/events/EventCaptureBuilder"));
-const TinyFiscalImport = lazy(() => import("./pages/admin/TinyFiscalImport"));
+
 const Companies = lazy(() => import("./pages/admin/Companies"));
 const FiscalNumbering = lazy(() => import("./pages/admin/FiscalNumbering"));
 const FiscalOperations = lazy(() => import("./pages/admin/FiscalOperations"));
@@ -121,7 +121,7 @@ const App = () => (
               <Route path="/ai-agents" element={<ProtectedRoute requiredModule="admin"><AIAgents /></ProtectedRoute>} />
               <Route path="/presenter/:eventId" element={<ProtectedRoute requiredModule="events"><PresenterDashboard /></ProtectedRoute>} />
               <Route path="/livete-anotador" element={<ProtectedRoute requiredModule="events"><LiveteAnotadorDownload /></ProtectedRoute>} />
-              <Route path="/admin/tiny-fiscal-import" element={<ProtectedRoute requiredModule="admin"><TinyFiscalImport /></ProtectedRoute>} />
+              
               <Route path="/admin/companies" element={<ProtectedRoute requiredModule="admin"><Companies /></ProtectedRoute>} />
               <Route path="/admin/fiscal-numbering" element={<ProtectedRoute requiredModule="admin"><FiscalNumbering /></ProtectedRoute>} />
               <Route path="/admin/fiscal-operations" element={<ProtectedRoute requiredModule="admin"><FiscalOperations /></ProtectedRoute>} />
