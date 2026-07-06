@@ -87,6 +87,7 @@ interface ScheduledMessage {
 interface RedirectLink {
   id: string;
   slug: string;
+  label: string | null;
   is_deep_link: boolean;
   click_count: number;
   redirect_count: number;
