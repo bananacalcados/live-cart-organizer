@@ -320,6 +320,18 @@ export default function Marketing() {
     finally { setIsLoading(false); }
   }, []);
 
+  // Filtro de DDD no servidor (opção 2): ao mudar o DDD, mantém o ref sincronizado
+  // e recarrega os clientes com a contagem exata. Só refaz quando a aba de clientes
+  // já foi carregada uma vez (evita fetch duplicado no mount).
+  useEffect(() => {
+    dddFilterRef.current = dddFilter;
+    if (activeTab === 'customers' && loadedTabsRef.current.has('customers')) {
+      void fetchCustomers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dddFilter]);
+
+
   const fetchCampaigns = useCallback(async () => {
     try {
       const { data, error } = await supabase.from('marketing_campaigns').select('*').order('created_at', { ascending: false });
