@@ -2558,6 +2558,66 @@ function PosSaleTriggerConfig({ triggerConfig, onChange }: { triggerConfig: any;
   );
 }
 
+// ─── Event Lead Captured Config (select which event the lead registered for) ──
+function EventLeadCaptureConfig({ triggerConfig, onChange }: { triggerConfig: any; onChange: (c: any) => void }) {
+  const [events, setEvents] = useState<Array<{ id: string; name: string; created_at: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const selectedEventId: string = triggerConfig.event_id || "all";
+  const selectedSource: string = triggerConfig.source || "all";
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("events")
+        .select("id, name, created_at")
+        .order("created_at", { ascending: false })
+        .limit(200);
+      setEvents((data as any) || []);
+      setLoading(false);
+    })();
+  }, []);
+
+  return (
+    <div className="space-y-2 p-2 rounded-lg bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800">
+      <p className="text-[10px] text-purple-700 dark:text-purple-300">
+        <Users className="h-3 w-3 inline mr-1" />
+        Selecione o evento no qual a pessoa se cadastrou. Cada evento pode ter informações de cadastro diferentes.
+      </p>
+      <div className="space-y-1">
+        <Label className="text-xs">Evento</Label>
+        <Select
+          value={selectedEventId}
+          onValueChange={v => onChange({ ...triggerConfig, event_id: v === "all" ? null : v })}
+        >
+          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={loading ? "Carregando..." : "Todos os eventos"} /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os eventos</SelectItem>
+            {events.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground">
+          Crie um fluxo separado por evento para enviar mensagens específicas de cada cadastro.
+        </p>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Origem do cadastro (opcional)</Label>
+        <Select
+          value={selectedSource}
+          onValueChange={v => onChange({ ...triggerConfig, source: v === "all" ? null : v })}
+        >
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Qualquer origem</SelectItem>
+            <SelectItem value="landing_page">Landing Page (LP)</SelectItem>
+            <SelectItem value="typebot">Typebot</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+
 // ─── Flow Editor ──────────────────────────────────
 
 function FlowEditor({
