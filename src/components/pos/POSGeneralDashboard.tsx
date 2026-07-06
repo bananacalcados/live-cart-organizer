@@ -510,7 +510,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
 
       {/* Tabs: Visão Geral / Folha */}
       <div className="flex items-center gap-1 px-4 pt-3 border-b border-zinc-800">
-        {([["overview", "Visão Geral"], ["payroll", "Folha"]] as const).map(([id, label]) => (
+        {([["overview", "Visão Geral"], ["payroll", "Folha"], ["fiscal", "Fiscal"]] as const).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setView(id)}
