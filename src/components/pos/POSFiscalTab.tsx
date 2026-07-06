@@ -224,9 +224,14 @@ export function POSFiscalTab({ periodRange }: Props) {
             className="gap-2 bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Atualizar
           </Button>
+          <Button size="sm" onClick={exportPdf} disabled={loading || (!sales.length && !entradas.length)}
+            className="gap-2 bg-red-600 hover:bg-red-700 text-white">
+            <FileText className="h-3.5 w-3.5" /> Relatório PDF
+          </Button>
           <Button size="sm" onClick={() => setSintegraOpen(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white">
             <FileText className="h-3.5 w-3.5" /> Gerar Sintegra
           </Button>
+
         </div>
       </div>
 
