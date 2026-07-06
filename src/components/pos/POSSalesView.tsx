@@ -96,6 +96,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   // Troca do Site: pedido do site puxado para virar venda da vendedora
   const [showSiteExchange, setShowSiteExchange] = useState(false);
   const [siteExchange, setSiteExchange] = useState<SiteExchangeResult | null>(null);
+  // Trocas/Devolução: submenu de entrada (Troca do Site pré-faturamento / Nova / Finalizar)
+  const [showExchangeMenu, setShowExchangeMenu] = useState(false);
   // Condicional: pedido enviado ao cliente para experimentar (2 etapas)
   const [conditionalStage, setConditionalStage] = useState<ConditionalStage | null>(null);
   const [showConditionalMenu, setShowConditionalMenu] = useState(false);
