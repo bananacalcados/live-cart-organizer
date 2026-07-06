@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Lock, Loader2, Download, FileText, RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { format } from "date-fns";
 import { downloadCsv, brlCell, dateCell } from "@/lib/fiscal/exportFiscalReport";
+import { generateFiscalPdf } from "@/lib/fiscal/exportFiscalPdf";
 import { SintegraExportDialog } from "@/components/fiscal/SintegraExportDialog";
 
 const FISCAL_PASSWORD = "joey102030";
@@ -151,6 +152,32 @@ export function POSFiscalTab({ periodRange }: Props) {
       ["Data", "CNPJ fornecedor", "Fornecedor", "Série/Número", "Chave", "Produtos", "Impostos", "Total"], rows);
   };
 
+  const exportPdf = () => {
+    if (!sales.length && !entradas.length) {
+      toast.error("Não há dados no período para gerar o PDF.");
+      return;
+    }
+    const companyFilterLabel = companyId === "all"
+      ? "Todas as empresas"
+      : `${nameById.get(companyId) || "—"} — ${cnpjById.get(companyId) || ""}`;
+    generateFiscalPdf({
+      periodLabel: periodRange.label,
+      companyFilterLabel,
+      sales: sales.map((s) => ({
+        modelo: s.modelo, serie: s.serie, numero: s.numero, valor_total: s.valor_total,
+        nome_destinatario: s.nome_destinatario, cpf_destinatario: s.cpf_destinatario,
+        chave_acesso: s.chave_acesso, data_autorizacao: s.data_autorizacao,
+        companyName: nameById.get(s.company_id) || "—", companyCnpj: cnpjById.get(s.company_id) || "—",
+      })),
+      entradas: entradas.map((e) => ({
+        invoice_number: e.invoice_number, invoice_series: e.invoice_series, nfe_key: e.nfe_key,
+        supplier_name: e.supplier_name, supplier_cnpj: e.supplier_cnpj, emission_date: e.emission_date,
+        total_value: e.total_value, total_products: e.total_products, total_taxes: e.total_taxes,
+      })),
+    });
+    toast.success("Relatório PDF gerado.");
+  };
+
   // ---- Gate ----
   if (!unlocked) {
     return (
@@ -197,9 +224,14 @@ export function POSFiscalTab({ periodRange }: Props) {
             className="gap-2 bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700">
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Atualizar
           </Button>
+          <Button size="sm" onClick={exportPdf} disabled={loading || (!sales.length && !entradas.length)}
+            className="gap-2 bg-red-600 hover:bg-red-700 text-white">
+            <FileText className="h-3.5 w-3.5" /> Relatório PDF
+          </Button>
           <Button size="sm" onClick={() => setSintegraOpen(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white">
             <FileText className="h-3.5 w-3.5" /> Gerar Sintegra
           </Button>
+
         </div>
       </div>
 
