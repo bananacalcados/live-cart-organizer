@@ -3,11 +3,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Store, Loader2, CheckCircle, AlertTriangle } from "lucide-react";
+import { Store, Loader2, CheckCircle, AlertTriangle, Radio } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DbOrder } from "@/types/database";
 import { Badge } from "@/components/ui/badge";
+import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 
 interface SendToPOSDialogProps {
   open: boolean;
@@ -20,17 +21,25 @@ const STORES = [
   { id: "4ade7b44-5043-4ab1-a124-7a6ab5468e29", name: "Loja Centro" },
 ];
 
-// Vendedor "Live Shopping" fixo por loja (vendedor virtual da live)
+// Vendedor "Live Shopping" fixo por loja (vendedor virtual da live) — usado como
+// fallback quando nenhuma vendedora real é escolhida (ex.: retirada de site).
 const LIVE_SELLER_BY_STORE: Record<string, string> = {
   "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2": "bec7d0b3-a1fd-4611-a165-6cd49f185a0a",
   "4ade7b44-5043-4ab1-a124-7a6ab5468e29": "559b9848-4e76-4942-9c58-b9987c479111",
 };
+
+interface SellerOption { id: string; name: string }
 
 export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogProps) {
   const [selectedStore, setSelectedStore] = useState<string>("");
   const [isSending, setIsSending] = useState(false);
   const [success, setSuccess] = useState(false);
   const [eventChannel, setEventChannel] = useState<string>("site");
+  const [manualRouting, setManualRouting] = useState(false);
+  const [storeOptions, setStoreOptions] = useState<{ id: string; name: string }[]>(STORES);
+  const [sellers, setSellers] = useState<SellerOption[]>([]);
+  const [selectedSeller, setSelectedSeller] = useState<string>("");
+  const [loadingSellers, setLoadingSellers] = useState(false);
   const [customerData, setCustomerData] = useState<any>(null);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
 
