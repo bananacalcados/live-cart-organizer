@@ -46,6 +46,7 @@ export function POSFiscalTab({ periodRange }: Props) {
   const [sales, setSales] = useState<SaleDoc[]>([]);
   const [entradas, setEntradas] = useState<Entrada[]>([]);
   const [sintegraOpen, setSintegraOpen] = useState(false);
+  const [xmlLoading, setXmlLoading] = useState(false);
 
   const startIso = periodRange.start.toISOString();
   const endIso = useMemo(() => new Date(periodRange.end.getTime() + 86399999).toISOString(), [periodRange.end]);
