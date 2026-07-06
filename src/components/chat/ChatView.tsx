@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply, Play, Pause, Ban, ShieldCheck, Camera, Video } from "lucide-react";
+import { Send, Tag, X, Plus, Mic, Square, ChevronLeft, Image, Paperclip, PhoneOff, HeadphonesIcon, Trash2, Pencil, MoreVertical, Clock, Reply, Play, Pause, Ban, ShieldCheck, Camera, Video, FileText } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { CreateSupportTicketDialog } from "../CreateSupportTicketDialog";
+import { ExportConversationDialog } from "./ExportConversationDialog";
 import { MessageStatusIcon } from "./MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./WhatsAppMediaAttachment";
 import { CarouselMessageBubble, type CarouselTemplatePayload } from "./CarouselMessageBubble";
@@ -161,6 +162,7 @@ export function ChatView({
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockLoading, setBlockLoading] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   /** Instância vinculada à conversa: usa a da conversa ou a última mensagem trocada. */
   const blockNumberId = useMemo(() => {
@@ -631,6 +633,18 @@ export function ChatView({
             phone={conversation?.phone}
             customerName={conversation?.customerName}
           />
+          {conversation && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowExportDialog(true)}
+              className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-primary"
+              title="Exportar conversa em PDF"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Exportar PDF
+            </Button>
+          )}
           {onFinish && (
             <Button
               variant="ghost"
@@ -1281,6 +1295,14 @@ export function ChatView({
       </AlertDialog>
 
       <StatusViewerDialog data={statusViewer} onOpenChange={(o) => !o && setStatusViewer(null)} />
+
+      {conversation && (
+        <ExportConversationDialog
+          conversation={conversation}
+          open={showExportDialog}
+          onOpenChange={setShowExportDialog}
+        />
+      )}
     </div>
   );
 }
