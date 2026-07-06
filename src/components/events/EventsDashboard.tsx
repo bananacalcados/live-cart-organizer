@@ -4,7 +4,7 @@ import { DbOrderProduct, DiscountType } from "@/types/database";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import {
   DollarSign, TrendingUp, Package, ShoppingCart, Receipt,
-  CheckCircle, AlertCircle, BarChart3, Calendar as CalendarIcon
+  CheckCircle, AlertCircle, BarChart3, Calendar as CalendarIcon, Store
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
