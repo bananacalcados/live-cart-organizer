@@ -41,6 +41,19 @@ function extractDdd(phone?: string | null): string | null {
 }
 
 /**
+ * Chave de deduplicação por pessoa: DDD (2 díg.) + sufixo de 8 díg.
+ * Normaliza variações de formato (com/sem 9º dígito, com/sem 55) mantendo
+ * DDDs distintos separados (mesmo sufixo em DDDs diferentes = pessoas diferentes).
+ * Se não for possível extrair o DDD, cai no número completo (não colapsa por engano).
+ */
+function dedupKey(phone?: string | null): string {
+  const digits = (phone || '').replace(/\D/g, '');
+  const ddd = extractDdd(digits);
+  const suffix = digits.slice(-8);
+  return ddd ? `${ddd}${suffix}` : digits;
+}
+
+/**
  * Determina a região efetiva (loja física x online) de um cliente CRM.
  *
  * Regras:
@@ -715,8 +728,9 @@ export function MassTemplateDispatcher() {
           const q = searchQuery.toLowerCase();
           if (!(c.name || '').toLowerCase().includes(q) && !phone.includes(q)) continue;
         }
-        if (addedPhones.has(phone)) continue;
-        addedPhones.add(phone);
+        const dk = dedupKey(phone);
+        if (addedPhones.has(dk)) continue;
+        addedPhones.add(dk);
         const fullName = (c.name || '').trim();
         list.push({
           phone,
@@ -766,8 +780,9 @@ export function MassTemplateDispatcher() {
             const name = `${c.first_name || ''} ${c.last_name || ''}`.toLowerCase();
             if (!name.includes(q) && !phone.includes(q)) continue;
           }
-          if (addedPhones.has(phone)) continue;
-          addedPhones.add(phone);
+          const dk = dedupKey(phone);
+          if (addedPhones.has(dk)) continue;
+          addedPhones.add(dk);
           list.push({
             phone,
             name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || phone,
@@ -788,8 +803,9 @@ export function MassTemplateDispatcher() {
           const phone = l.phone.replace(/\D/g, '');
           if (!phone || phone.length < 8) continue;
           if (leadCampaignFilter !== 'all' && l.campaign_tag !== leadCampaignFilter) continue;
-          if (addedPhones.has(phone)) continue;
-          addedPhones.add(phone);
+          const dk = dedupKey(phone);
+          if (addedPhones.has(dk)) continue;
+          addedPhones.add(dk);
           const leadName = l.name || phone;
           const leadFirstName = leadName.split(' ')[0];
           list.push({
