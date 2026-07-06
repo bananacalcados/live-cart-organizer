@@ -728,8 +728,9 @@ export function MassTemplateDispatcher() {
           const q = searchQuery.toLowerCase();
           if (!(c.name || '').toLowerCase().includes(q) && !phone.includes(q)) continue;
         }
-        if (addedPhones.has(phone)) continue;
-        addedPhones.add(phone);
+        const dk = dedupKey(phone);
+        if (addedPhones.has(dk)) continue;
+        addedPhones.add(dk);
         const fullName = (c.name || '').trim();
         list.push({
           phone,
