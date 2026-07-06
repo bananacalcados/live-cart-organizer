@@ -412,7 +412,7 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSending}>
               Cancelar
             </Button>
-            <Button onClick={handleSend} disabled={isSending || !selectedStore}>
+            <Button onClick={handleSend} disabled={isSending || !selectedStore || (manualRouting && !selectedSeller)}>
               {isSending ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
               ) : (
