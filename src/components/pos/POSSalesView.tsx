@@ -22,6 +22,7 @@ import { POSSellerGate } from "./POSSellerGate";
 import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import { SiteExchangePicker, SiteExchangeResult } from "./SiteExchangePicker";
+import { NewExchangePicker } from "./NewExchangePicker";
 import { ConditionalFinalizePicker, ConditionalPickResult } from "./ConditionalFinalizePicker";
 import { printConditionalReceipt } from "@/lib/pos/conditionalReceipt";
 
