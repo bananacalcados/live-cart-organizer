@@ -1295,6 +1295,14 @@ export function ChatView({
       </AlertDialog>
 
       <StatusViewerDialog data={statusViewer} onOpenChange={(o) => !o && setStatusViewer(null)} />
+
+      {conversation && (
+        <ExportConversationDialog
+          conversation={conversation}
+          open={showExportDialog}
+          onOpenChange={setShowExportDialog}
+        />
+      )}
     </div>
   );
 }
