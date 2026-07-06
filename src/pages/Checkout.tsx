@@ -256,7 +256,7 @@ function PixPaymentSection({
   const handleCopyPix = async () => {
     if (!pixData?.qrCode) return;
     try {
-      await navigator.clipboard.writeText(pixData.qrCode);
+      await navigator.clipboard.writeText(pixData.qrCode.trim());
       setCopied(true);
       toast.success("Código PIX copiado!");
       setTimeout(() => setCopied(false), 3000);
