@@ -365,13 +365,13 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
             </div>
 
             <div className="space-y-2">
-              <Label>Loja para retirada</Label>
+              <Label>{manualRouting ? "Loja da venda" : "Loja para retirada"}</Label>
               <Select value={selectedStore} onValueChange={setSelectedStore}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a loja..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {STORES.map((store) => (
+                  {storeOptions.map((store) => (
                     <SelectItem key={store.id} value={store.id}>
                       {store.name}
                     </SelectItem>
@@ -379,6 +379,31 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Vendedora que realizou a venda (obrigatória no envio manual multi-loja) */}
+            {manualRouting && (
+              <div className="space-y-2">
+                <Label>Vendedora da venda *</Label>
+                <Select value={selectedSeller} onValueChange={setSelectedSeller} disabled={!selectedStore || loadingSellers}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      !selectedStore ? "Escolha a loja primeiro..."
+                      : loadingSellers ? "Carregando vendedoras..."
+                      : sellers.length === 0 ? "Nenhuma vendedora cadastrada"
+                      : "Selecione a vendedora..."
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sellers.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  A venda entra em Pedidos com a tag Live e o nome da vendedora, contando como Faturamento Live da loja.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
