@@ -1,57 +1,87 @@
-# Eventos multi-loja + roteamento manual de pedido pago
+# Plano — Módulo Fiscal (Relatórios + Sintegra)
 
 ## Objetivo
-Permitir que um evento seja atribuído a **duas lojas físicas ao mesmo tempo**. Nesses eventos, o pedido pago **não** vai automaticamente pro PDV: aparece um **botão no card** onde se escolhe **qual loja** e **qual vendedora** (vendedoras reais da loja física) fez a venda. A venda entra na aba **PEDIDOS** com tag **Live** + nome da vendedora, conta no faturamento da loja como **Faturamento Live** e no faturamento da vendedora — **sem somar em dobro**.
+Adicionar uma aba **Fiscal** no Dashboard Geral do frente de caixa com:
+1. Relatório de **vendas** (saídas) por CNPJ, separado por NF-e (mod. 55) e NFC-e (mod. 65).
+2. Relatório de **entradas** por CNPJ (notas de mercadoria puxadas do módulo Estoque).
+3. Geração do arquivo **Sintegra** no padrão fiscal, com formulário para dados da empresa/responsável.
+4. Exportação em **CSV/Excel** de todos os relatórios.
 
-## Como funciona hoje (auditoria)
-- `events` guarda **uma** loja em `default_store_id` + `channel` (`site` / `pos_perola` / `pos_centro`). Config em `src/pages/Events.tsx` e `src/components/events/EventSetupWizard.tsx` via mapa `STORE_BY_CHANNEL`.
-- Ao pagar, o trigger `trg_route_paid_event_order_to_pos` (migration `20260520194043`) chama a edge function `event-order-route-to-pos`, que cria a venda em `pos_sales` **automaticamente** usando uma vendedora virtual fixa (`LIVE_SELLER_BY_STORE`).
-- `SendToPOSDialog.tsx` já é um envio manual, mas usa loja única e a **mesma vendedora virtual fixa**.
-- Dashboard (`POSGeneralDashboard.tsx`): o faturamento da loja é a **soma de cada linha `pos_sales` uma única vez**. Ou seja, uma venda de live vinculada a loja+vendedora conta **uma vez** naturalmente. "Faturamento Live" e "por vendedora" são apenas recortes das mesmas linhas.
-- Folha (`src/lib/pos/payroll.ts`): vendas `sale_type='live'` hoje são **rateadas** entre participantes por loja (ignoram `seller_id`). Precisa passar a atribuir direto quando houver vendedora real escolhida.
+Tudo somente de **leitura** sobre dados já existentes — nada na emissão, no estoque ou no banco é alterado.
 
-## Mudanças
+## O que já temos (fontes de dados)
+- **Saídas:** `fiscal_documents` (721 notas autorizadas). Cabeçalho completo em todas (empresa, modelo, série, número, chave, valor, data, CPF/nome destinatário). XML por item em ~367.
+- **Entradas:** `purchase_invoices` + `purchase_invoice_items` (fornecedor, CNPJ, NCM, CFOP, quantidade, custo) — importadas pelo módulo Estoque.
+- **Empresa:** `companies` (CNPJ, IE, endereço, regime, CRT, CNAE, cidade IBGE).
 
-### 1. Banco (migration)
-- Adicionar em `events`:
-  - `store_ids uuid[]` — lista de lojas do evento (multi-loja).
-  - `manual_pos_routing boolean default false` — quando true, desliga o auto-route.
-- Atualizar o trigger `trg_route_paid_event_order_to_pos` para **`RETURN NEW` imediatamente quando `manual_pos_routing = true`** (eventos multi-loja não auto-roteiam). Eventos de loja única continuam idênticos.
+## Pontos de atenção (limitações honestas)
+1. **Notas de prestadores de serviço (NFS-e):** não existem em nenhum módulo hoje. O relatório de entradas cobrirá as notas de **mercadoria** de `purchase_invoices`. Para incluir serviço, seria preciso uma fonte (importação manual ou uso do módulo de manifestação, hoje vazio) — fica fora desta entrega, mas o relatório é preparado para receber essa fonte no futuro.
+2. **Sintegra por item (registros 54/75):** dependem do XML. ~354 vendas não têm XML salvo. Solução: usar o `fiscal-backfill-danfe` para recuperar XML sob demanda antes de gerar o Sintegra, e sinalizar quais notas ficaram sem detalhe.
+3. **Cadastro de empresa incompleto:** 2 das 3 empresas estão sem IE/endereço. O gerador do Sintegra exige esses campos, então haverá validação + formulário de complemento antes de gerar.
 
-### 2. Configuração do evento (multi-loja)
-Em `src/pages/Events.tsx` e `src/components/events/EventSetupWizard.tsx`:
-- Trocar o `Select` único de "Canal de venda" por opção de escolher **Site** OU **uma/duas lojas físicas** (checkboxes: Loja Pérola, Loja Centro).
-- Ao salvar:
-  - 1 loja física → comportamento atual (`default_store_id` setado, `manual_pos_routing=false`).
-  - 2 lojas físicas → `store_ids = [pérola, centro]`, `default_store_id = null`, `manual_pos_routing=true`, `channel` marcado como físico (não `site`).
-  - Site → como hoje.
+## Fase 1 — Relatórios (entrega imediata)
 
-### 3. Card do pedido (roteamento manual)
-Em `src/components/OrderCardDb.tsx`:
-- Detectar evento multi-loja (`manual_pos_routing` / `store_ids.length > 1`).
-- Nesses casos, em vez do texto "vai automaticamente para o PDV", mostrar botão destacado **"Enviar Pedido Pago ao PDV"** que abre o dialog abaixo (habilitado quando pago).
+### 1.1 Nova aba "Fiscal"
+- Em `POSGeneralDashboard.tsx`, adicionar `"fiscal"` ao estado `view` e ao array de tabs (`Visão Geral | Folha | Fiscal`).
+- Renderizar novo componente `POSFiscalTab` recebendo o `periodRange` já existente (reaproveita o seletor de período do dashboard).
+- Proteção por senha, igual à aba Folha (fiscal é sensível).
 
-Em `src/components/SendToPOSDialog.tsx` (evoluir):
-- **Loja**: restringir as opções às lojas do evento (`store_ids`).
-- **Vendedora**: novo `Select` carregado de `pos_sellers` (`store_id = loja escolhida`, `is_active`, excluindo vendedoras virtuais via `isVirtualSeller`). Recarrega ao trocar de loja.
-- Ao enviar: criar `pos_sales` com `store_id` = loja escolhida, `seller_id` = **vendedora real escolhida**, `sale_type='live'`, `revenue_attribution='store'`, `status='paid'` + `paid_at` (pedido já pago), `event_id`, `source_order_id`, `notes` com tag Live + nome da vendedora; setar `orders.pos_sale_id`. O pedido passa a aparecer na aba PEDIDOS com origem Live e a vendedora vinculada.
+### 1.2 Componente `POSFiscalTab.tsx`
+Filtros: **empresa (CNPJ)**, **período** e **modelo** (NF-e / NFC-e / ambos).
 
-### 4. Dashboard sem dupla contagem
-- **Total da loja**: nenhuma mudança — como é 1 linha em `pos_sales`, já entra **uma única vez** no total da loja.
-- Adicionar em `POSGeneralDashboard.tsx` um card/recorte **"Faturamento Live"** = soma de linhas `sale_type='live'` da loja (é um recorte do total, **não** soma por cima).
-- **Folha** (`payroll.ts`): ajustar `computePayroll` para que vendas `live` **com vendedora real mapeada** sejam atribuídas **direto** à vendedora (canal `live_perola`/`live_centro`) e **removidas do pool** de rateio. Vendas `live` sem vendedora real (virtual) seguem no rateio/participantes como hoje. Assim a venda da Valéria conta 1x pra ela e não é rateada de novo. Atualizar `src/test/payroll.test.ts`.
+Sub-seção **Vendas (saídas)**:
+- Consulta `fiscal_documents` por `company_id` + `data_autorizacao` no período, status autorizado.
+- Agrupa por CNPJ e por modelo, exibindo: quantidade de notas, valor total, ticket médio, canceladas.
+- Tabela detalhada (data, modelo, série/número, chave, destinatário, valor, status).
 
-## Garantias / não quebrar nada
-- Eventos de loja única e de site: fluxo inalterado (auto-route e Shopify seguem iguais).
-- Uma linha `pos_sales` por pedido → total da loja sempre conta 1x; "Faturamento Live" e "por vendedora" são recortes.
-- Dedup do pool na folha evita contar a live 2x.
+Sub-seção **Entradas**:
+- Consulta `purchase_invoices` por `emission_date` no período.
+- Agrupa por `supplier_cnpj`: quantidade de notas, valor total, total de produtos/impostos.
+- Tabela detalhada (data, fornecedor, CNPJ, número/série, chave, valor).
 
-## Detalhes técnicos
-- IDs de loja: Pérola `1c08a9d8-...e9f2`, Centro `4ade7b44-...468e29`.
-- `pos_sellers`: colunas `store_id`, `is_active`, `name` (filtrar virtuais com `isVirtualSeller`).
-- Regenerar `types.ts` após a migration antes de usar `store_ids`/`manual_pos_routing` no código.
+### 1.3 Exportação CSV/Excel
+- Função utilitária `src/lib/fiscal/exportFiscalReport.ts` gera CSV (UTF-8 com BOM) para cada relatório.
+- Botões "Exportar CSV" em cada sub-seção.
 
-## Validação
-- Criar evento com 2 lojas → confirmar que pedido pago **não** cria `pos_sales` sozinho.
-- Usar o botão no card → escolher loja + vendedora → confirmar venda em PEDIDOS com tag Live + vendedora, e `pos_sale_id` no pedido.
-- Dashboard da loja: faturamento sobe **uma vez**, aparece em "Faturamento Live"; folha credita a vendedora sem duplicar.
+## Fase 2 — Arquivo Sintegra
+
+### 2.1 Formulário de geração
+Dialog `SintegraExportDialog.tsx`:
+- Seleção de **empresa (CNPJ)** e **período (mês/ano)**.
+- Campos da empresa pré-preenchidos de `companies`, editáveis, com validação obrigatória: razão social, CNPJ, IE, endereço completo, cidade/IBGE, UF, CEP.
+- Campos do **responsável** (nome, telefone/e-mail) e **finalidade** do arquivo (normal/retificação) e natureza das operações.
+
+### 2.2 Geração do arquivo (`src/lib/fiscal/sintegra.ts`)
+Monta o `.txt` de largura fixa (Convênio ICMS 57/95):
+- **Registro 10** — mestre do estabelecimento (CNPJ, IE, nome, município, UF, período, códigos de convenência/natureza/finalidade).
+- **Registro 11** — dados complementares (endereço, responsável).
+- **Registro 50** — cabeçalho das **NF-e (mod. 55)** de saída: CNPJ/IE destinatário, data, modelo, série, número, CFOP, valor, base ICMS, situação.
+- **Registro 54** — itens das NF-e (do XML): NCM, CFOP, quantidade, valor, base/valor ICMS.
+- **Registro 75** — cadastro de produtos/serviços referenciados nos 54.
+- **Registro 60 (60M/60A/60D)** — resumo das **NFC-e (mod. 65)** por dia/equipamento/alíquota (modelo de cupom fiscal).
+- **Registro 90** — totalização e controle.
+- Também emitir registros 50/54 para as **entradas** (`purchase_invoices` + itens) quando a empresa for destinatária.
+- Codificação e quebras de linha conforme padrão (ASCII, CRLF).
+
+### 2.3 Onde roda
+- Geração **client-side** (arquivo texto puro, sem dependências pesadas), com download direto.
+- Antes de gerar, chamar `fiscal-backfill-danfe` para notas sem XML e listar as que não puderam ser detalhadas (aviso ao usuário para não gerar arquivo incompleto sem saber).
+
+### 2.4 Validação
+- Bloquear geração se faltar IE/endereço/IBGE da empresa.
+- Relatório de conferência na tela (totais por registro) antes do download, para comparar com a contabilidade.
+
+## Arquivos afetados
+- `src/components/pos/POSGeneralDashboard.tsx` — adiciona aba (edição pontual).
+- `src/components/pos/POSFiscalTab.tsx` — novo.
+- `src/components/fiscal/SintegraExportDialog.tsx` — novo.
+- `src/lib/fiscal/sintegra.ts` — novo (montagem do arquivo).
+- `src/lib/fiscal/exportFiscalReport.ts` — novo (CSV/Excel).
+
+Nenhuma migração de banco é necessária. Nenhuma função de emissão é tocada.
+
+## Sugestão de execução
+Entregar a **Fase 1** primeiro (relatórios + CSV), validar os números com sua contabilidade, e em seguida a **Fase 2** (Sintegra), que é a parte mais sensível e precisa de conferência campo a campo com um contador antes de valer para o fisco.
+
+## Recomendação importante
+O layout exato do Sintegra tem variações por estado (MG, no seu caso). Antes de considerar o arquivo "oficial", ele deve ser validado no **validador Sintegra da SEFAZ/MG** e conferido por seu contador. O gerador seguirá o padrão nacional 57/95, mas a homologação final é contábil.
