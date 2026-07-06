@@ -1519,7 +1519,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                     const status = String(fiscalDoc?.status || '').toLowerCase();
                     const isAuthorized = ['authorized','autorizada','autorizado'].includes(status);
                     const isPending = status === 'pending' || status === 'pending_sefaz';
-                    const tipoEmitido = fiscalDoc?.numero ? (isRemoteSale ? 'NF-e' : 'NFC-e') : '';
+                    const tipoEmitido = fiscalDoc?.numero ? fiscalTipoLabel : '';
 
                     if (isAuthorized || isPending) {
                       return (
