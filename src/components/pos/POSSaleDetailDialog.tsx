@@ -475,7 +475,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     setSendingNfeWa(true);
     try {
       const greeting = currentCustomer?.name ? `Oi, ${String(currentCustomer.name).split(' ')[0]}!` : 'Oi!';
-      const message = `${greeting} 🧾\nSegue a ${isRemoteSale ? 'NF-e' : 'NFC-e'} do seu pedido.\n\n*DANFE:* ${fiscalDoc.danfe_url}${fiscalDoc.chave_acesso ? `\n*Chave:* ${fiscalDoc.chave_acesso}` : ''}`;
+      const message = `${greeting} 🧾\nSegue a ${fiscalTipoLabel} do seu pedido.\n\n*DANFE:* ${fiscalDoc.danfe_url}${fiscalDoc.chave_acesso ? `\n*Chave:* ${fiscalDoc.chave_acesso}` : ''}`;
       const { data: num } = await supabase
         .from('whatsapp_numbers_safe')
         .select('provider')
