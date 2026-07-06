@@ -289,14 +289,15 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
       if (!isSending) {
         setSuccess(false);
         setSelectedStore("");
+        setSelectedSeller("");
         onOpenChange(v);
       }
     }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Store className="h-5 w-5" />
-            Enviar ao PDV - Retirada na Loja
+            {manualRouting ? <Radio className="h-5 w-5 text-fuchsia-500" /> : <Store className="h-5 w-5" />}
+            {manualRouting ? "Enviar Pedido Pago ao PDV" : "Enviar ao PDV - Retirada na Loja"}
           </DialogTitle>
         </DialogHeader>
 
