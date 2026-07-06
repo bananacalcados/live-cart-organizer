@@ -41,6 +41,19 @@ function extractDdd(phone?: string | null): string | null {
 }
 
 /**
+ * Chave de deduplicação por pessoa: DDD (2 díg.) + sufixo de 8 díg.
+ * Normaliza variações de formato (com/sem 9º dígito, com/sem 55) mantendo
+ * DDDs distintos separados (mesmo sufixo em DDDs diferentes = pessoas diferentes).
+ * Se não for possível extrair o DDD, cai no número completo (não colapsa por engano).
+ */
+function dedupKey(phone?: string | null): string {
+  const digits = (phone || '').replace(/\D/g, '');
+  const ddd = extractDdd(digits);
+  const suffix = digits.slice(-8);
+  return ddd ? `${ddd}${suffix}` : digits;
+}
+
+/**
  * Determina a região efetiva (loja física x online) de um cliente CRM.
  *
  * Regras:
