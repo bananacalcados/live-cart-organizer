@@ -500,6 +500,28 @@ export function POSGeneralDashboard({ onBack }: Props) {
         </Button>
       </div>
 
+      {/* Tabs: Visão Geral / Folha */}
+      <div className="flex items-center gap-1 px-4 pt-3 border-b border-zinc-800">
+        {([["overview", "Visão Geral"], ["payroll", "Folha"]] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setView(id)}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              view === id
+                ? "bg-zinc-800 text-white border border-zinc-700 border-b-transparent"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "payroll" ? (
+        <ScrollArea className="flex-1">
+          <POSPayrollTab periodRange={{ start: periodRange.start, end: periodRange.end, label: periodRange.label }} />
+        </ScrollArea>
+      ) : (
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
           {/* TOTALS KPIs */}
