@@ -286,6 +286,8 @@ const Events = () => {
         const updates: any = {
           channel,
           default_store_id: defaultStoreId,
+          store_ids: storeIds,
+          manual_pos_routing: manualPosRouting,
           channel_preference: primaryChannel,
           channel_preferences: channelPreferences,
           automation_enabled: automationEnabled,
