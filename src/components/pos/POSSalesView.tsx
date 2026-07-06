@@ -1928,12 +1928,12 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <p className="text-xs text-pos-white/60 text-center">Entrega/Envio · NF-e + Aba Envios</p>
               </button>
               <button
-                onClick={() => setShowSiteExchange(true)}
+                onClick={() => setShowExchangeMenu(true)}
                 className="rounded-2xl border-2 border-purple-400/40 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-400 p-5 flex flex-col items-center gap-3 transition-all"
               >
                 <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">🔁</div>
-                <p className="font-bold text-pos-white">Trocas Site</p>
-                <p className="text-xs text-pos-white/60 text-center">Puxar pedido do site e trocar</p>
+                <p className="font-bold text-pos-white">Trocas/Devolução</p>
+                <p className="text-xs text-pos-white/60 text-center">Troca do site, troca e devolução</p>
               </button>
               <button
                 onClick={() => setShowConditionalMenu(true)}
