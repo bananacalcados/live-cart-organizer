@@ -8,8 +8,9 @@ import {
   ArrowLeft, Plus, Play, Clock, CheckCircle, XCircle, Loader2,
   Trash2, Users, Send, Link as LinkIcon, Copy, Edit, Calendar as CalendarIcon,
   Variable, Settings, ChevronLeft, ChevronRight, Search, RefreshCw,
-  UserPlus, UserMinus, Percent, BarChart3, AlertTriangle
+  UserPlus, UserMinus, Percent, BarChart3, AlertTriangle, QrCode, Download
 } from "lucide-react";
+import QRCode from "react-qr-code";
 import { Button } from "@/components/ui/button";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
