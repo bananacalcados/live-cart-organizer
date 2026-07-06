@@ -13,6 +13,8 @@
 //   - Tudo roda em try/catch: NUNCA pode derrubar o processamento do webhook.
 // ════════════════════════════════════════════════════════════════════
 
+import { captureVipGroupJoins } from "./vip-group-lead-capture.ts";
+
 type AnyObj = Record<string, unknown>;
 
 function asString(v: unknown): string | null {
