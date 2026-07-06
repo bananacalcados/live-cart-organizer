@@ -435,68 +435,99 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ---------- 3) EXECUTE: insere clientes em lotes ----------
-    push(`💾 Iniciando gravação em customers_unified...`);
+    // ---------- 3) EXECUTE: UPSERT IDEMPOTENTE em customers_unified ----------
+    // NUNCA faz INSERT cego. Cada registro passa pelo RPC unify_upsert_customers,
+    // que resolve a identidade canônica (CPF/telefone BR/e-mail/Instagram) via
+    // find_or_create_unified_customer — com a blindagem de grupos/IG/LID — e só
+    // então complementa lacunas. Rodar de novo NÃO clona a base: encontra o
+    // mesmo registro e apenas reenriquece. Se estourar o tempo, pode ser
+    // re-executado com segurança (idempotente) para continuar de onde parou.
+    push(`💾 Iniciando UPSERT idempotente em customers_unified...`);
     const ids = [...unifiedById.keys()];
-    const idMap = new Map<string, string>(); // tmp-id → uuid real
-    const BATCH = 500;
+    const originToId = new Map<string, string>(); // source_origins[0] → uuid real
+    const BATCH = 200;
+    const startedAt = Date.now();
+    const TIME_BUDGET_MS = 130_000; // margem antes do timeout do edge runtime
+    let processed = 0;
+    let skippedNoIdentity = 0;
+    let partial = false;
 
     for (let i = 0; i < ids.length; i += BATCH) {
+      if (Date.now() - startedAt > TIME_BUDGET_MS) {
+        partial = true;
+        push(`⏱️ Orçamento de tempo atingido em ${processed}/${ids.length}. Re-execute { "mode": "execute" } para continuar (idempotente).`);
+        break;
+      }
       const slice = ids.slice(i, i + BATCH);
-      const payload = slice.map((tmp) => {
+      const records = slice.map((tmp) => {
         const u = unifiedById.get(tmp)!;
         return {
-          name: u.name,
-          cpf: u.cpf,
-          email: u.email,
-          birth_date: u.birth_date,
-          gender: u.gender,
-          phone_e164: u.phone,
-          instagram_handle: u.instagram_handle,
-          instagram_user_id: u.instagram_user_id,
-          cep: u.cep, address: u.address, address_number: u.address_number,
-          complement: u.complement, neighborhood: u.neighborhood, city: u.city, state: u.state,
-          shoe_size: u.shoe_size, preferred_style: u.preferred_style, age_range: u.age_range,
-          has_children: u.has_children || false, children_age_range: u.children_age_range,
-          total_orders: u.total_orders || 0,
-          total_spent: u.total_spent || 0,
-          avg_ticket: u.avg_ticket || 0,
-          first_purchase_at: u.first_purchase_at,
-          last_purchase_at: u.last_purchase_at,
-          rfm_segment: u.rfm_segment, rfm_r: u.rfm_r, rfm_f: u.rfm_f, rfm_m: u.rfm_m, rfm_total: u.rfm_total,
-          region_type: u.region_type, ddd: u.ddd,
-          tags: u.tags || [],
-          is_banned: u.is_banned || false, ban_reason: u.ban_reason,
-          live_cancellation_count: u.live_cancellation_count || 0,
-          cashback_balance: u.cashback_balance || 0,
-          cashback_expires_at: u.cashback_expires_at,
+          name: u.name ?? null,
+          cpf: u.cpf ?? null,
+          email: u.email ?? null,
+          birth_date: u.birth_date ?? null,
+          gender: u.gender ?? null,
+          phone_e164: u.phone ?? null,
+          instagram_handle: u.instagram_handle ?? null,
+          instagram_user_id: u.instagram_user_id ?? null,
+          cep: u.cep ?? null, address: u.address ?? null, address_number: u.address_number ?? null,
+          complement: u.complement ?? null, neighborhood: u.neighborhood ?? null, city: u.city ?? null, state: u.state ?? null,
+          shoe_size: u.shoe_size ?? null, preferred_style: u.preferred_style ?? null, age_range: u.age_range ?? null,
+          has_children: u.has_children ?? null, children_age_range: u.children_age_range ?? null,
+          total_orders: u.total_orders ?? null,
+          total_spent: u.total_spent ?? null,
+          avg_ticket: u.avg_ticket ?? null,
+          first_purchase_at: u.first_purchase_at ?? null,
+          last_purchase_at: u.last_purchase_at ?? null,
+          rfm_segment: u.rfm_segment ?? null, rfm_r: u.rfm_r ?? null, rfm_f: u.rfm_f ?? null, rfm_m: u.rfm_m ?? null, rfm_total: u.rfm_total ?? null,
+          region_type: u.region_type ?? null, ddd: u.ddd ?? null,
+          tags: u.tags ?? [],
+          is_banned: u.is_banned ?? null, ban_reason: u.ban_reason ?? null,
+          live_cancellation_count: u.live_cancellation_count ?? null,
+          cashback_balance: u.cashback_balance ?? null,
+          cashback_expires_at: u.cashback_expires_at ?? null,
           source_origins: u._origins,
         };
       });
-      const { data, error } = await supabase.from("customers_unified").insert(payload).select("id");
+
+      const { data, error } = await supabase.rpc("unify_upsert_customers", { p_records: records });
       if (error) {
         push(`❌ Lote ${i}: ${error.message}`);
         return new Response(JSON.stringify({ ok: false, error: error.message, log }, null, 2), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      data!.forEach((row, idx) => idMap.set(slice[idx], row.id));
-      push(`  inseridos ${i + slice.length}/${ids.length}`);
+      const mapped: { origin: string; id: string }[] = Array.isArray(data) ? data : [];
+      for (const m of mapped) if (m?.origin && m?.id) originToId.set(m.origin, m.id);
+      skippedNoIdentity += slice.length - mapped.length;
+      processed += slice.length;
+      push(`  processados ${Math.min(processed, ids.length)}/${ids.length}`);
     }
 
-    // Memberships
+    // Memberships (idempotente via UNIQUE customer_id+list_id).
     const memberships: { customer_id: string; list_id: string }[] = [];
-    for (const [tmp, u] of unifiedById.entries()) {
-      const realId = idMap.get(tmp);
-      if (!realId) continue;
+    for (const u of unifiedById.values()) {
+      const realId = originToId.get(u._origins[0]);
+      if (!realId) continue; // não resolvido (sem identidade) ou ainda não processado
       for (const list_id of u._list_ids) memberships.push({ customer_id: realId, list_id });
     }
-    for (let i = 0; i < memberships.length; i += BATCH) {
-      const slice = memberships.slice(i, i + BATCH);
-      const { error } = await supabase.from("customer_list_memberships").insert(slice);
+    for (let i = 0; i < memberships.length; i += 500) {
+      const slice = memberships.slice(i, i + 500);
+      const { error } = await supabase
+        .from("customer_list_memberships")
+        .upsert(slice, { onConflict: "customer_id,list_id", ignoreDuplicates: true });
       if (error) push(`⚠️ memberships lote ${i}: ${error.message}`);
     }
-    push(`🔗 ${memberships.length} vínculos cliente↔lista gravados`);
+    push(`🔗 ${memberships.length} vínculos cliente↔lista garantidos`);
+    push(`✅ Upsert concluído | processados=${processed} | sem_identidade_ignorados=${skippedNoIdentity} | parcial=${partial}`);
+
+    (report as Record<string, unknown>).execute = {
+      processed,
+      skipped_no_identity: skippedNoIdentity,
+      partial,
+      memberships: memberships.length,
+    };
+
 
     return new Response(JSON.stringify({ ok: true, report, log }, null, 2), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
