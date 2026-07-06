@@ -180,6 +180,32 @@ export function POSFiscalTab({ periodRange }: Props) {
     toast.success("Relatório PDF gerado.");
   };
 
+  const exportXmls = async () => {
+    setXmlLoading(true);
+    const t = toast.loading("Preparando pacote de XMLs…");
+    try {
+      const res = await exportFiscalXmlZip({
+        startIso,
+        endIso,
+        companyId,
+        onProgress: (msg) => toast.loading(msg, { id: t }),
+      });
+      if (res.saidas === 0 && res.entradas === 0) {
+        toast.error("Nenhum XML encontrado no período.", { id: t });
+        return;
+      }
+      const extra = (res.saidasSemXml + res.entradasSemXml) > 0
+        ? ` (${res.saidasSemXml + res.entradasSemXml} nota(s) sem XML foram ignoradas)`
+        : "";
+      toast.success(`ZIP gerado: ${res.saidas} de saída + ${res.entradas} de entrada${extra}.`, { id: t });
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao gerar o pacote de XMLs.", { id: t });
+    } finally {
+      setXmlLoading(false);
+    }
+  };
+
+
   // ---- Gate ----
   if (!unlocked) {
     return (
