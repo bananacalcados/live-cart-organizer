@@ -155,16 +155,18 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
   // Detect if order belongs to a physical-store event (auto-routes to POS; should NOT create Shopify order)
   useEffect(() => {
-    if (!order.event_id) { setIsPhysicalEvent(false); return; }
+    if (!order.event_id) { setIsPhysicalEvent(false); setIsManualRoutingEvent(false); return; }
     let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from('events')
-        .select('channel, default_store_id')
+        .select('channel, default_store_id, manual_pos_routing')
         .eq('id', order.event_id)
         .maybeSingle();
       if (cancelled) return;
-      const physical = !!(data?.default_store_id) && (data?.channel ?? 'site') !== 'site';
+      const manual = !!(data as any)?.manual_pos_routing;
+      const physical = manual || (!!(data?.default_store_id) && (data?.channel ?? 'site') !== 'site');
+      setIsManualRoutingEvent(manual);
       setIsPhysicalEvent(physical);
     })();
     return () => { cancelled = true; };
