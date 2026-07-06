@@ -1942,7 +1942,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           </DialogContent>
         </Dialog>
 
-        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu} onOpenChange={() => {}}>
+        <NewExchangePicker
+          open={showNewExchange}
+          sellerId={selectedSeller || undefined}
+          onCancel={() => setShowNewExchange(false)}
+          onDone={() => { setShowNewExchange(false); onCloseSalesView(); }}
+        />
+
+        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu && !showNewExchange} onOpenChange={() => {}}>
           <DialogContent className="bg-pos-black border-pos-orange/40 max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
