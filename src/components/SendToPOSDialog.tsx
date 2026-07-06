@@ -61,12 +61,21 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
         if (order.event_id) {
           const { data: ev } = await supabase
             .from("events")
-            .select("channel, default_store_id")
+            .select("channel, default_store_id, store_ids, manual_pos_routing")
             .eq("id", order.event_id)
             .maybeSingle();
           if (ev) {
             setEventChannel((ev as any).channel || "site");
-            // Pré-seleciona loja default se evento for físico
+            const isManual = !!(ev as any).manual_pos_routing;
+            setManualRouting(isManual);
+            // Multi-loja: restringe as opções às lojas do evento
+            const evStoreIds = ((ev as any).store_ids as string[] | null) || null;
+            if (evStoreIds && evStoreIds.length > 0) {
+              setStoreOptions(STORES.filter((s) => evStoreIds.includes(s.id)));
+            } else {
+              setStoreOptions(STORES);
+            }
+            // Pré-seleciona loja default se evento for físico de loja única
             if ((ev as any).default_store_id && !selectedStore) {
               setSelectedStore((ev as any).default_store_id);
             }
@@ -87,6 +96,31 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
     })();
   }, [open, order.event_id, order.customer_id]);
 
+  // Carrega vendedoras REAIS da loja selecionada (exclui vendedoras virtuais)
+  useEffect(() => {
+    if (!open || !selectedStore) { setSellers([]); return; }
+    let cancelled = false;
+    (async () => {
+      setLoadingSellers(true);
+      try {
+        const { data } = await supabase
+          .from("pos_sellers")
+          .select("id, name")
+          .eq("store_id", selectedStore)
+          .eq("is_active", true)
+          .order("name");
+        if (cancelled) return;
+        const real = (data || []).filter((s: any) => !isVirtualSeller(s.name));
+        setSellers(real);
+        // limpa vendedora se não pertence mais à loja
+        setSelectedSeller((prev) => (real.some((s) => s.id === prev) ? prev : ""));
+      } finally {
+        if (!cancelled) setLoadingSellers(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, selectedStore]);
+
   const isSiteChannel = eventChannel === "site";
 
   const handleSend = async () => {
@@ -94,6 +128,11 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
       toast.error("Selecione uma loja");
       return;
     }
+    if (manualRouting && !selectedSeller) {
+      toast.error("Selecione a vendedora que fez a venda");
+      return;
+    }
+
 
     setIsSending(true);
     try {
