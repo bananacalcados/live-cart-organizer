@@ -22,6 +22,7 @@ import { POSSellerGate } from "./POSSellerGate";
 import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import { SiteExchangePicker, SiteExchangeResult } from "./SiteExchangePicker";
+import { NewExchangePicker } from "./NewExchangePicker";
 import { ConditionalFinalizePicker, ConditionalPickResult } from "./ConditionalFinalizePicker";
 import { printConditionalReceipt } from "@/lib/pos/conditionalReceipt";
 
@@ -98,6 +99,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [siteExchange, setSiteExchange] = useState<SiteExchangeResult | null>(null);
   // Trocas/Devolução: submenu de entrada (Troca do Site pré-faturamento / Nova / Finalizar)
   const [showExchangeMenu, setShowExchangeMenu] = useState(false);
+  const [showNewExchange, setShowNewExchange] = useState(false);
   // Condicional: pedido enviado ao cliente para experimentar (2 etapas)
   const [conditionalStage, setConditionalStage] = useState<ConditionalStage | null>(null);
   const [showConditionalMenu, setShowConditionalMenu] = useState(false);
@@ -1921,7 +1923,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <p className="text-[11px] text-pos-white/60 text-center">Pré-faturamento · pedido do site sem nota</p>
               </button>
               <button
-                onClick={() => { toast.info("Nova Troca/Devolução chega na próxima fase."); }}
+                onClick={() => { setShowExchangeMenu(false); setShowNewExchange(true); }}
                 className="rounded-2xl border-2 border-purple-400/40 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-400 p-5 flex flex-col items-center gap-3 transition-all"
               >
                 <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">🆕</div>
@@ -1940,7 +1942,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           </DialogContent>
         </Dialog>
 
-        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu} onOpenChange={() => {}}>
+        <NewExchangePicker
+          open={showNewExchange}
+          sellerId={selectedSeller || undefined}
+          onCancel={() => setShowNewExchange(false)}
+          onDone={() => { setShowNewExchange(false); onCloseSalesView?.(); }}
+        />
+
+        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu && !showNewExchange} onOpenChange={() => {}}>
           <DialogContent className="bg-pos-black border-pos-orange/40 max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
