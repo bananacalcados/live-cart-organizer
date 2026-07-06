@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import QRCode from "react-qr-code";
 import {
   Link as LinkIcon, Copy, RefreshCw, Loader2, MousePointerClick,
-  LogIn, UserPlus, Crown, QrCode, Download, Info, TrendingUp,
+  LogIn, UserPlus, Crown, QrCode, Download, Info, TrendingUp, Printer,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
