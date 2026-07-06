@@ -230,12 +230,19 @@ const Events = () => {
     
     const shippingValue = shippingCost ? parseFloat(shippingCost) : undefined;
     const whatsappId = selectedWhatsAppId && selectedWhatsAppId !== 'none' ? selectedWhatsAppId : null;
+    const PEROLA_ID = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
+    const CENTRO_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
     const STORE_BY_CHANNEL: Record<string, string | null> = {
       site: null,
-      pos_perola: "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2",
-      pos_centro: "4ade7b44-5043-4ab1-a124-7a6ab5468e29",
+      pos_perola: PEROLA_ID,
+      pos_centro: CENTRO_ID,
+      pos_multi: null,
     };
     const defaultStoreId = STORE_BY_CHANNEL[channel] ?? null;
+    // Multi-loja → envio manual (sem auto-route); guarda as lojas candidatas.
+    const isMulti = channel === "pos_multi";
+    const storeIds = isMulti ? [PEROLA_ID, CENTRO_ID] : null;
+    const manualPosRouting = isMulti;
     
     const hasMeta = channelPreferences.includes("meta_whatsapp");
     const metaTemplateFields = hasMeta
