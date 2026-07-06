@@ -18539,6 +18539,7 @@ export type Database = {
         }
         Returns: Json
       }
+      unify_upsert_customers: { Args: { p_records: Json }; Returns: Json }
       update_lead_recovery: {
         Args: {
           p_disparo: number
