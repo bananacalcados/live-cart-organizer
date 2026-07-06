@@ -94,7 +94,7 @@ const PAYMENT_STYLE: Record<string, { icon: any; gradient: string }> = {
 
 export function POSGeneralDashboard({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"overview" | "payroll">("overview");
+  const [view, setView] = useState<"overview" | "payroll" | "fiscal">("overview");
   const [syncing, setSyncing] = useState(false);
   const [period, setPeriod] = useState<Period>("month");
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
