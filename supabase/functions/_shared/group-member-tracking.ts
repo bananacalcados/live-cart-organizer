@@ -13,6 +13,8 @@
 //   - Tudo roda em try/catch: NUNCA pode derrubar o processamento do webhook.
 // ════════════════════════════════════════════════════════════════════
 
+import { captureVipGroupJoins } from "./vip-group-lead-capture.ts";
+
 type AnyObj = Record<string, unknown>;
 
 function asString(v: unknown): string | null {
@@ -202,6 +204,27 @@ export async function processGroupMembershipEvent(
         .from("whatsapp_group_members")
         .upsert(base, { onConflict: "group_id,phone" });
       if (error) console.error("[group-member-tracking] upsert member:", error.message);
+    }
+
+    // ── 3) Captação VIP: ENTRADAS (joins) viram lead OU tagueiam cliente.
+    //    Fonte de verdade = evento de entrada do webhook (não o clique no link).
+    try {
+      const joins = changes
+        .filter((c) => c.type === "joined" && !isInternal(c.phone))
+        .map((c) => {
+          const cust = customerOf(c.phone);
+          return {
+            phone: c.phone,
+            displayName: cust?.name ?? senderName ?? null,
+            isCustomer: !!cust?.id,
+            customerId: cust?.id ?? null,
+          };
+        });
+      if (joins.length > 0) {
+        await captureVipGroupJoins(supabase, groupId, joins);
+      }
+    } catch (e) {
+      console.error("[group-member-tracking] captação VIP:", (e as Error).message);
     }
   } catch (e) {
     console.error("[group-member-tracking] erro geral:", (e as Error).message);

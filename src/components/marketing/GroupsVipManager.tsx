@@ -28,6 +28,7 @@ import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { GroupMembersDialog } from "./GroupMembersDialog";
 import { VipGroupsAnalyticsDashboard } from "./VipGroupsAnalyticsDashboard";
+import { VipLinksManager } from "./VipLinksManager";
 
 interface WhatsAppGroup {
   id: string;
@@ -346,8 +347,14 @@ export function GroupsVipManager() {
         <TabsList>
           <TabsTrigger value="campaigns" className="gap-1"><Send className="h-3.5 w-3.5" />Campanhas</TabsTrigger>
           <TabsTrigger value="groups" className="gap-1"><Users className="h-3.5 w-3.5" />Grupos</TabsTrigger>
+          <TabsTrigger value="links" className="gap-1"><LinkIcon className="h-3.5 w-3.5" />Links</TabsTrigger>
           <TabsTrigger value="dashboard" className="gap-1"><BarChart3 className="h-3.5 w-3.5" />Dashboard</TabsTrigger>
         </TabsList>
+
+        {/* LINKS TAB */}
+        <TabsContent value="links" className="space-y-4">
+          <VipLinksManager />
+        </TabsContent>
 
         {/* DASHBOARD TAB */}
         <TabsContent value="dashboard" className="space-y-4">
