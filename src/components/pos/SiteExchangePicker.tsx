@@ -260,7 +260,7 @@ export function SiteExchangePicker({ open, onCancel, onConfirm }: Props) {
         state: (full as any)?.customer_state || addr.state || undefined,
       };
 
-      onConfirm({
+      const proceed = () => onConfirm({
         reason,
         originalSaleId: sale.id,
         shopifyOrderId: String(sale.external_order_id),
@@ -269,6 +269,27 @@ export function SiteExchangePicker({ open, onCancel, onConfirm }: Props) {
         items: cartItems,
         originalItems,
       });
+
+      // Aviso silencioso (não bloqueante): venda já tem NF emitida?
+      const { data: fdoc } = await supabase
+        .from("fiscal_documents")
+        .select("chave_acesso")
+        .eq("pos_sale_id", sale.id)
+        .not("chave_acesso", "is", null)
+        .neq("chave_acesso", "")
+        .limit(1)
+        .maybeSingle();
+
+      if (fdoc?.chave_acesso) {
+        toast("Essa venda já tem nota fiscal emitida. Confirma que é uma troca pré-faturamento?", {
+          duration: Infinity,
+          action: { label: "Confirmar", onClick: () => proceed() },
+          cancel: { label: "Cancelar", onClick: () => {} },
+        });
+        return;
+      }
+
+      proceed();
     } catch (e: any) {
       console.error("[SiteExchangePicker] selectOrder", e);
       toast.error("Erro ao puxar o pedido do site");
