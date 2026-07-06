@@ -3,11 +3,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Store, Loader2, CheckCircle, AlertTriangle } from "lucide-react";
+import { Store, Loader2, CheckCircle, AlertTriangle, Radio } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DbOrder } from "@/types/database";
 import { Badge } from "@/components/ui/badge";
+import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 
 interface SendToPOSDialogProps {
   open: boolean;
@@ -20,17 +21,25 @@ const STORES = [
   { id: "4ade7b44-5043-4ab1-a124-7a6ab5468e29", name: "Loja Centro" },
 ];
 
-// Vendedor "Live Shopping" fixo por loja (vendedor virtual da live)
+// Vendedor "Live Shopping" fixo por loja (vendedor virtual da live) — usado como
+// fallback quando nenhuma vendedora real é escolhida (ex.: retirada de site).
 const LIVE_SELLER_BY_STORE: Record<string, string> = {
   "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2": "bec7d0b3-a1fd-4611-a165-6cd49f185a0a",
   "4ade7b44-5043-4ab1-a124-7a6ab5468e29": "559b9848-4e76-4942-9c58-b9987c479111",
 };
+
+interface SellerOption { id: string; name: string }
 
 export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogProps) {
   const [selectedStore, setSelectedStore] = useState<string>("");
   const [isSending, setIsSending] = useState(false);
   const [success, setSuccess] = useState(false);
   const [eventChannel, setEventChannel] = useState<string>("site");
+  const [manualRouting, setManualRouting] = useState(false);
+  const [storeOptions, setStoreOptions] = useState<{ id: string; name: string }[]>(STORES);
+  const [sellers, setSellers] = useState<SellerOption[]>([]);
+  const [selectedSeller, setSelectedSeller] = useState<string>("");
+  const [loadingSellers, setLoadingSellers] = useState(false);
   const [customerData, setCustomerData] = useState<any>(null);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
 
@@ -52,12 +61,21 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
         if (order.event_id) {
           const { data: ev } = await supabase
             .from("events")
-            .select("channel, default_store_id")
+            .select("channel, default_store_id, store_ids, manual_pos_routing")
             .eq("id", order.event_id)
             .maybeSingle();
           if (ev) {
             setEventChannel((ev as any).channel || "site");
-            // Pré-seleciona loja default se evento for físico
+            const isManual = !!(ev as any).manual_pos_routing;
+            setManualRouting(isManual);
+            // Multi-loja: restringe as opções às lojas do evento
+            const evStoreIds = ((ev as any).store_ids as string[] | null) || null;
+            if (evStoreIds && evStoreIds.length > 0) {
+              setStoreOptions(STORES.filter((s) => evStoreIds.includes(s.id)));
+            } else {
+              setStoreOptions(STORES);
+            }
+            // Pré-seleciona loja default se evento for físico de loja única
             if ((ev as any).default_store_id && !selectedStore) {
               setSelectedStore((ev as any).default_store_id);
             }
@@ -78,6 +96,31 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
     })();
   }, [open, order.event_id, order.customer_id]);
 
+  // Carrega vendedoras REAIS da loja selecionada (exclui vendedoras virtuais)
+  useEffect(() => {
+    if (!open || !selectedStore) { setSellers([]); return; }
+    let cancelled = false;
+    (async () => {
+      setLoadingSellers(true);
+      try {
+        const { data } = await supabase
+          .from("pos_sellers")
+          .select("id, name")
+          .eq("store_id", selectedStore)
+          .eq("is_active", true)
+          .order("name");
+        if (cancelled) return;
+        const real = (data || []).filter((s: any) => !isVirtualSeller(s.name));
+        setSellers(real);
+        // limpa vendedora se não pertence mais à loja
+        setSelectedSeller((prev) => (real.some((s) => s.id === prev) ? prev : ""));
+      } finally {
+        if (!cancelled) setLoadingSellers(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, selectedStore]);
+
   const isSiteChannel = eventChannel === "site";
 
   const handleSend = async () => {
@@ -85,6 +128,11 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
       toast.error("Selecione uma loja");
       return;
     }
+    if (manualRouting && !selectedSeller) {
+      toast.error("Selecione a vendedora que fez a venda");
+      return;
+    }
+
 
     setIsSending(true);
     try {
@@ -132,7 +180,9 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
         }
       }
 
-      const sellerId = LIVE_SELLER_BY_STORE[selectedStore] || null;
+      // Vendedora REAL escolhida (multi-loja) ou fallback pro vendedor virtual da live.
+      const sellerId = selectedSeller || LIVE_SELLER_BY_STORE[selectedStore] || null;
+      const sellerName = sellers.find((s) => s.id === selectedSeller)?.name || null;
 
       const shippingAddress = customerData ? {
         full_name: customerData.full_name,
@@ -148,6 +198,12 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
         state: customerData.state,
       } : null;
 
+      // Pedido já pago (Live) → entra como receita ('paid' + paid_at) e conta como
+      // Faturamento Live da loja. Só entra 1x na loja pois é UMA linha em pos_sales.
+      const alreadyPaid = !!(order.is_paid || (order as any).paid_externally);
+      const saleStatus = alreadyPaid ? "paid" : "pending_pickup";
+      const paidAt = alreadyPaid ? new Date().toISOString() : null;
+
       // 2) Create the POS sale record
       const { data: sale, error: saleError } = await supabase
         .from("pos_sales")
@@ -161,16 +217,19 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
           subtotal: totalValue,
           discount: discountAmount,
           total: finalValue,
-          status: "pending_pickup",
+          status: saleStatus,
+          paid_at: paidAt,
           sale_type: "live",
           source_order_id: order.id,
           event_id: order.event_id,
           // Site = retirada na loja, NÃO conta no faturamento da loja física
           revenue_attribution: isSiteChannel ? "site_pickup_only" : "store",
-          notes: `Venda da Live - ${order.customer?.instagram_handle || ""}. Pedido CRM: ${order.id.slice(0, 8)}${isSiteChannel ? " (Retirada Site)" : ""}`,
+          notes: `Venda da Live${sellerName ? ` - Vendedora: ${sellerName}` : ""} - ${order.customer?.instagram_handle || ""}. Pedido CRM: ${order.id.slice(0, 8)}${isSiteChannel ? " (Retirada Site)" : ""}`,
           payment_details: {
             source: "live_event",
             event_channel: eventChannel,
+            manual_pos_routing: manualRouting,
+            seller_name: sellerName,
             customer_instagram: order.customer?.instagram_handle,
             customer_whatsapp: whatsapp,
           },
@@ -212,6 +271,7 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
       setTimeout(() => {
         setSuccess(false);
         setSelectedStore("");
+        setSelectedSeller("");
         onOpenChange(false);
       }, 1500);
     } catch (error) {
@@ -229,14 +289,15 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
       if (!isSending) {
         setSuccess(false);
         setSelectedStore("");
+        setSelectedSeller("");
         onOpenChange(v);
       }
     }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Store className="h-5 w-5" />
-            Enviar ao PDV - Retirada na Loja
+            {manualRouting ? <Radio className="h-5 w-5 text-fuchsia-500" /> : <Store className="h-5 w-5" />}
+            {manualRouting ? "Enviar Pedido Pago ao PDV" : "Enviar ao PDV - Retirada na Loja"}
           </DialogTitle>
         </DialogHeader>
 
@@ -304,13 +365,13 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
             </div>
 
             <div className="space-y-2">
-              <Label>Loja para retirada</Label>
+              <Label>{manualRouting ? "Loja da venda" : "Loja para retirada"}</Label>
               <Select value={selectedStore} onValueChange={setSelectedStore}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a loja..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {STORES.map((store) => (
+                  {storeOptions.map((store) => (
                     <SelectItem key={store.id} value={store.id}>
                       {store.name}
                     </SelectItem>
@@ -318,6 +379,31 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Vendedora que realizou a venda (obrigatória no envio manual multi-loja) */}
+            {manualRouting && (
+              <div className="space-y-2">
+                <Label>Vendedora da venda *</Label>
+                <Select value={selectedSeller} onValueChange={setSelectedSeller} disabled={!selectedStore || loadingSellers}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={
+                      !selectedStore ? "Escolha a loja primeiro..."
+                      : loadingSellers ? "Carregando vendedoras..."
+                      : sellers.length === 0 ? "Nenhuma vendedora cadastrada"
+                      : "Selecione a vendedora..."
+                    } />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sellers.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  A venda entra em Pedidos com a tag Live e o nome da vendedora, contando como Faturamento Live da loja.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -326,7 +412,7 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSending}>
               Cancelar
             </Button>
-            <Button onClick={handleSend} disabled={isSending || !selectedStore}>
+            <Button onClick={handleSend} disabled={isSending || !selectedStore || (manualRouting && !selectedSeller)}>
               {isSending ? (
                 <><Loader2 className="h-4 w-4 animate-spin" /> Enviando...</>
               ) : (

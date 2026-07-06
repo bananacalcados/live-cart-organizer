@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings, CalendarIcon, ClipboardList, QrCode } from "lucide-react";
+import { ArrowLeft, Store, TrendingUp, ShoppingBag, DollarSign, Package, Target, Loader2, RefreshCw, Download, CreditCard, Banknote, Wallet, Receipt, TrendingDown, Settings, CalendarIcon, ClipboardList, QrCode, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -257,6 +257,14 @@ export function POSGeneralDashboard({ onBack }: Props) {
       itemsPerSale: sales > 0 ? items / sales : 0,
     };
   }, [storeData]);
+
+  // Faturamento Live = recorte das vendas sale_type='live'. É um SUBCONJUNTO do
+  // Faturamento total (mesmas linhas de pos_sales) — não soma por cima.
+  const liveRevenue = useMemo(
+    () => salesRows.filter(r => (r.sale_type || "").toLowerCase() === "live")
+      .reduce((a, r) => a + Number(r.total || 0), 0),
+    [salesRows]
+  );
 
   // Payment buckets
   const paymentBuckets = useMemo(() => {
@@ -525,13 +533,17 @@ export function POSGeneralDashboard({ onBack }: Props) {
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
           {/* TOTALS KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             <SilverKpi label="Faturamento" value={BRL(totals.revenue)} icon={DollarSign} accent="emerald" />
+            <SilverKpi label="Faturamento Live" value={BRL(liveRevenue)} icon={Radio} accent="fuchsia" />
             <SilverKpi label="Nº de vendas" value={totals.sales.toString()} icon={ShoppingBag} accent="orange" />
             <SilverKpi label="Itens vendidos" value={totals.items.toString()} icon={Package} accent="blue" />
             <SilverKpi label="Ticket médio" value={BRL(totals.ticket)} icon={DollarSign} accent="fuchsia" />
             <SilverKpi label="Itens / venda" value={totals.itemsPerSale.toFixed(2)} icon={Package} accent="indigo" />
           </div>
+          <p className="text-[11px] text-zinc-500 -mt-2">
+            Faturamento Live já está incluído no Faturamento total (não é somado por cima).
+          </p>
 
           {/* SELLER TASK PROGRESS */}
           <Panel title="Progresso de tarefas das vendedoras" icon={ClipboardList}>

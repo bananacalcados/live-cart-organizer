@@ -230,12 +230,19 @@ const Events = () => {
     
     const shippingValue = shippingCost ? parseFloat(shippingCost) : undefined;
     const whatsappId = selectedWhatsAppId && selectedWhatsAppId !== 'none' ? selectedWhatsAppId : null;
+    const PEROLA_ID = "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2";
+    const CENTRO_ID = "4ade7b44-5043-4ab1-a124-7a6ab5468e29";
     const STORE_BY_CHANNEL: Record<string, string | null> = {
       site: null,
-      pos_perola: "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2",
-      pos_centro: "4ade7b44-5043-4ab1-a124-7a6ab5468e29",
+      pos_perola: PEROLA_ID,
+      pos_centro: CENTRO_ID,
+      pos_multi: null,
     };
     const defaultStoreId = STORE_BY_CHANNEL[channel] ?? null;
+    // Multi-loja → envio manual (sem auto-route); guarda as lojas candidatas.
+    const isMulti = channel === "pos_multi";
+    const storeIds = isMulti ? [PEROLA_ID, CENTRO_ID] : null;
+    const manualPosRouting = isMulti;
     
     const hasMeta = channelPreferences.includes("meta_whatsapp");
     const metaTemplateFields = hasMeta
@@ -267,6 +274,8 @@ const Events = () => {
         channel_preferences: channelPreferences,
         automation_enabled: automationEnabled,
         default_store_id: defaultStoreId,
+        store_ids: storeIds,
+        manual_pos_routing: manualPosRouting,
         initial_message_enabled: initialMessageEnabled,
         initial_message_blocks: initialMessageBlocks,
         ...metaTemplateFields,
@@ -277,6 +286,8 @@ const Events = () => {
         const updates: any = {
           channel,
           default_store_id: defaultStoreId,
+          store_ids: storeIds,
+          manual_pos_routing: manualPosRouting,
           channel_preference: primaryChannel,
           channel_preferences: channelPreferences,
           automation_enabled: automationEnabled,
@@ -511,11 +522,14 @@ const Events = () => {
                          <SelectItem value="site">🌐 Site (Shopify) — venda online</SelectItem>
                          <SelectItem value="pos_perola">🏬 Loja Pérola — venda física</SelectItem>
                          <SelectItem value="pos_centro">🏬 Loja Centro — venda física</SelectItem>
+                         <SelectItem value="pos_multi">🏬🏬 Duas lojas (Pérola + Centro) — envio manual</SelectItem>
                        </SelectContent>
                      </Select>
                      <p className="text-xs text-muted-foreground">
                        {channel === "site"
                          ? "Pedidos vão pra Shopify. Se cliente pedir retirada, vai à aba Retiradas (sem contar no faturamento da loja)."
+                         : channel === "pos_multi"
+                         ? "Pedido pago NÃO é enviado automático. No card de cada pedido você escolhe a loja e a vendedora que fez a venda. Conta como Faturamento Live da loja escolhida."
                          : "TODOS os pedidos pagos serão roteados automaticamente à aba Pedidos da loja escolhida e contam como venda dela."}
                      </p>
                    </div>

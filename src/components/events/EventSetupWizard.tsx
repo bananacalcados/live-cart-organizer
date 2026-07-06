@@ -251,7 +251,12 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.start_date = startDate || null;
       updates.end_date = endDate || null;
       updates.channel = channel;
+      const isMulti = channel === "pos_multi";
       updates.default_store_id = STORE_BY_CHANNEL[channel] ?? null;
+      updates.store_ids = isMulti
+        ? ["1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2", "4ade7b44-5043-4ab1-a124-7a6ab5468e29"]
+        : null;
+      updates.manual_pos_routing = isMulti;
     } else if (key === "shipping") {
       updates.default_shipping_cost = toNum(shippingCost);
       updates.free_shipping_threshold = toNum(freeThreshold);
@@ -512,11 +517,14 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                     <SelectItem value="site">🌐 Site (Shopify) — venda online</SelectItem>
                     <SelectItem value="pos_perola">🏬 Loja Pérola — venda física</SelectItem>
                     <SelectItem value="pos_centro">🏬 Loja Centro — venda física</SelectItem>
+                    <SelectItem value="pos_multi">🏬🏬 Duas lojas (Pérola + Centro) — envio manual</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {channel === "site"
                     ? "Pedidos vão para a Shopify (venda online)."
+                    : channel === "pos_multi"
+                    ? "Pedido pago NÃO é enviado automático. No card você escolhe a loja e a vendedora que fez a venda. Conta como Faturamento Live da loja."
                     : "Pedidos pagos são roteados para a aba Pedidos da loja escolhida e contam como venda dela."}
                 </p>
               </div>

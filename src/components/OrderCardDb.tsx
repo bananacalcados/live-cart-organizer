@@ -34,7 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Link2Off, RefreshCw, Trash } from "lucide-react";
+import { Link2Off, RefreshCw, Trash, Radio } from "lucide-react";
 
 interface OrderCardDbProps {
   order: DbOrder;
@@ -76,6 +76,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [shopifyOrderName, setShopifyOrderName] = useState<string | null>(null);
   const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
   const [isPhysicalEvent, setIsPhysicalEvent] = useState(false);
+  const [isManualRoutingEvent, setIsManualRoutingEvent] = useState(false);
   const [showUnlinkDialog, setShowUnlinkDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
@@ -155,16 +156,18 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
   // Detect if order belongs to a physical-store event (auto-routes to POS; should NOT create Shopify order)
   useEffect(() => {
-    if (!order.event_id) { setIsPhysicalEvent(false); return; }
+    if (!order.event_id) { setIsPhysicalEvent(false); setIsManualRoutingEvent(false); return; }
     let cancelled = false;
     (async () => {
       const { data } = await supabase
         .from('events')
-        .select('channel, default_store_id')
+        .select('channel, default_store_id, manual_pos_routing')
         .eq('id', order.event_id)
         .maybeSingle();
       if (cancelled) return;
-      const physical = !!(data?.default_store_id) && (data?.channel ?? 'site') !== 'site';
+      const manual = !!(data as any)?.manual_pos_routing;
+      const physical = manual || (!!(data?.default_store_id) && (data?.channel ?? 'site') !== 'site');
+      setIsManualRoutingEvent(manual);
       setIsPhysicalEvent(physical);
     })();
     return () => { cancelled = true; };
@@ -985,7 +988,27 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
       {/* Registration link / Shopify order button */}
       {order.products.length > 0 && (
         <div className="mt-2 space-y-1.5">
-          {isPhysicalEvent ? (
+          {isManualRoutingEvent ? (
+            <>
+              <Button
+                variant="default"
+                size="sm"
+                className="w-full text-xs gap-1 bg-fuchsia-600 hover:bg-fuchsia-700 text-white"
+                onClick={(e) => { e.stopPropagation(); setShowPOSDialog(true); }}
+                disabled={!(order.is_paid || order.paid_externally)}
+              >
+                <Radio className="h-3 w-3" />
+                {order.pos_sale_id ? "Reenviar Pedido ao PDV" : "Enviar Pedido Pago ao PDV"}
+              </Button>
+              <p className="text-[10px] text-center text-muted-foreground">
+                {order.pos_sale_id
+                  ? "Já enviado ao PDV."
+                  : (order.is_paid || order.paid_externally)
+                    ? "Escolha a loja e a vendedora que fez a venda."
+                    : "Disponível após o pagamento."}
+              </p>
+            </>
+          ) : isPhysicalEvent ? (
             <div className="w-full text-[11px] text-center text-muted-foreground bg-secondary/40 rounded-md py-1.5 px-2">
               Evento de loja física — pedido vai automaticamente para o PDV ao ser pago.
             </div>
@@ -1023,18 +1046,20 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               Copiar Link de Cadastro
             </Button>
            )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-xs gap-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowPOSDialog(true);
-            }}
-          >
-            <Store className="h-3 w-3" />
-            Enviar ao PDV (Retirada)
-          </Button>
+          {!isManualRoutingEvent && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowPOSDialog(true);
+              }}
+            >
+              <Store className="h-3 w-3" />
+              Enviar ao PDV (Retirada)
+            </Button>
+          )}
 
           {/* Fulfillment buttons for paid orders */}
           {(order.is_paid || order.paid_externally) && order.stage === 'paid' && (

@@ -87,4 +87,33 @@ describe("computePayroll — divisão de live", () => {
     expect(jessica.channels.live_all).toBe(15000);
     expect(jessica.total).toBe(15000);
   });
+
+  it("live com vendedora REAL mapeada credita direto à vendedora e sai do rateio (sem dupla contagem)", () => {
+    const sales = [
+      // Live atribuída manualmente à Viviane (vendedora real) — R$ 300, sem frete
+      { id: "LM1", store_id: "st-perola", seller_id: "sl-viviane", sale_type: "live", total: 300, shipping_cost: 0, payment_details: null },
+      // Live "genérica" (vendedor virtual) — deve ir pro pool/rateio
+      { id: "LP1", store_id: "st-perola", seller_id: "sl-live", sale_type: "live", total: 1000, shipping_cost: 0, payment_details: null },
+    ];
+    const res = computePayroll({
+      sales, sellers, stores, people, peopleSellers,
+      liveParticipants: [
+        { person_id: "p-viviane", store_id: "st-perola" },
+        { person_id: "p-emilly", store_id: "st-perola" },
+      ],
+      scale, goals: [],
+    });
+
+    // Pool só contém a live genérica (1000), rateada entre 2 → 500 cada
+    const live = res.liveByStore.find((l) => l.storeKey === "perola")!;
+    expect(live.net).toBe(1000);
+    expect(live.quota).toBe(500);
+
+    // Viviane: 300 direto + 500 de cota = 800 (a venda dela conta UMA vez, direto)
+    const viviane = res.people.find((p) => p.personId === "p-viviane")!;
+    expect(viviane.channels.live_perola).toBe(800);
+    // Emilly só recebe a cota do pool
+    const emilly = res.people.find((p) => p.personId === "p-emilly")!;
+    expect(emilly.channels.live_perola).toBe(500);
+  });
 });
