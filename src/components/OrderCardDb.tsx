@@ -34,7 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Link2Off, RefreshCw, Trash } from "lucide-react";
+import { Link2Off, RefreshCw, Trash, Radio } from "lucide-react";
 
 interface OrderCardDbProps {
   order: DbOrder;
