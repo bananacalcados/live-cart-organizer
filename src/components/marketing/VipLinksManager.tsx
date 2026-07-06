@@ -285,10 +285,16 @@ export function VipLinksManager() {
                   <Button variant="outline" size="sm" className="flex-1 gap-1" onClick={() => copy(qrFor.slug)}>
                     <Copy className="h-3.5 w-3.5" /> Copiar
                   </Button>
-                  <Button size="sm" className="flex-1 gap-1" onClick={() => downloadQr(qrFor.slug)}>
-                    <Download className="h-3.5 w-3.5" /> Baixar
+                  <Button variant="outline" size="sm" className="flex-1 gap-1" onClick={() => downloadQr(qrFor.slug)}>
+                    <Download className="h-3.5 w-3.5" /> PNG
                   </Button>
                 </div>
+                <Button size="sm" className="w-full gap-1" onClick={() => downloadBadgePdf(qrFor)}>
+                  <Printer className="h-3.5 w-3.5" /> Imprimir crachá (PDF)
+                </Button>
+                <p className="text-[10px] text-muted-foreground text-center">
+                  PDF em alta qualidade, tamanho de crachá (54 × 86 mm).
+                </p>
               </div>
             )}
           </DialogContent>
