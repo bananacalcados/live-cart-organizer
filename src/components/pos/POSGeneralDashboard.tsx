@@ -18,6 +18,7 @@ import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
 import { POSSellerTaskProgress } from "./POSSellerTaskProgress";
 import { POSSellerLinkPageProgress } from "./POSSellerLinkPageProgress";
+import { POSPayrollTab } from "./POSPayrollTab";
 
 
 
@@ -93,6 +94,7 @@ const PAYMENT_STYLE: Record<string, { icon: any; gradient: string }> = {
 
 export function POSGeneralDashboard({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<"overview" | "payroll">("overview");
   const [syncing, setSyncing] = useState(false);
   const [period, setPeriod] = useState<Period>("month");
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
@@ -498,6 +500,28 @@ export function POSGeneralDashboard({ onBack }: Props) {
         </Button>
       </div>
 
+      {/* Tabs: Visão Geral / Folha */}
+      <div className="flex items-center gap-1 px-4 pt-3 border-b border-zinc-800">
+        {([["overview", "Visão Geral"], ["payroll", "Folha"]] as const).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setView(id)}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+              view === id
+                ? "bg-zinc-800 text-white border border-zinc-700 border-b-transparent"
+                : "text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "payroll" ? (
+        <ScrollArea className="flex-1">
+          <POSPayrollTab periodRange={{ start: periodRange.start, end: periodRange.end, label: periodRange.label }} />
+        </ScrollArea>
+      ) : (
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
           {/* TOTALS KPIs */}
@@ -684,6 +708,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
           </Panel>
         </div>
       </ScrollArea>
+      )}
 
       <POSGoalsManagerDialog open={goalsDialogOpen} onClose={() => setGoalsDialogOpen(false)} onSaved={load} />
       <POSTaskManagerDialog open={taskDialogOpen} onClose={() => setTaskDialogOpen(false)} stores={stores} />

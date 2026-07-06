@@ -1,96 +1,69 @@
+# Plano — Dashboard de Eventos + Aba FOLHA (Comissionamento)
 
-# Condicional no PDV (Frente de Caixa > Venda)
+## Parte 1 — Dashboard de EVENTOS (novos filtros)
+Arquivo: `src/components/events/EventsDashboard.tsx`
 
-## Objetivo
-Adicionar a 4ª opção **"Condicional"** ao lado de Presencial / Online / Trocas Site. Um condicional é um pedido enviado à casa do cliente para experimentar; ele decide com quais fica. Duas etapas:
+Hoje os eventos já têm o campo `channel` (`site` | `pos_perola` | `pos_centro`), então dá pra filtrar por loja sem alterar dados.
 
-1. **Novo condicional** — seleciona produtos + cliente (dados **obrigatórios**) → gera **comprovante com assinaturas** → **baixa o estoque** (para não vender nos outros canais) → **NÃO entra no faturamento** da loja nem da vendedora → aparece na aba **Pedidos** com tag Condicional.
-2. **Finalizar condicional** — puxa um condicional já enviado → remove os itens **devolvidos** (estoque **restaurado**) → cobra os itens que ficaram (forma de pagamento etc.) → **entra no faturamento** da loja e da vendedora → tag **Condicional** permanente na venda.
+1. **Filtro "Faturamento por loja"**: nova barra de botões `Todas · Site · Loja Pérola · Loja Centro`. Ao selecionar, filtra os eventos carregados por `channel` antes de buscar os pedidos. Não altera o gráfico "Faturamento por Live" (que continua por evento) — só reduz o conjunto.
+2. **Card "Recebido (sem frete)"**: novo KPI. Hoje o `receivedValue` soma só produtos (subtotal − desconto), mas vou tornar explícito subtraindo `shipping_cost` quando estiver embutido, e adicionar `shipping_cost`/`free_shipping` ao `select` de `orders`. Adiciono também um card "Frete recebido" para transparência.
 
-## Decisão de arquitetura (por que não quebra nada)
-Reutilizamos `pos_sales` com um novo `status = 'conditional'` em vez de criar um modelo paralelo. Isso porque a auditoria mostrou que:
-- Estoque só é baixado/estornado nos status `completed`/`paid`/`cancelled` (função idempotente `process_pos_sale_sale_event`, que evita baixa dupla por já existirem ajustes `sale_event='sale'`).
-- Faturamento (`pos_sale_to_faturamento`) e todos os dashboards **ignoram** qualquer status diferente de `paid`/`completed`.
+Nada de backend muda nesta parte.
 
-Logo, um pedido com `status='conditional'`:
-- **não** gera lançamento de faturamento (a função já dá `RETURN` fora de paid/completed);
-- **não** aparece nas métricas de vendedora/loja (dashboards filtram `status='completed'`);
-- mas precisamos **forçar a baixa de estoque** nesse status (hoje o trigger só baixa em completed/paid).
+## Parte 2 — Aba FOLHA no Dashboard Geral do PDV
+Local: `src/components/pos/POSGeneralDashboard.tsx` (o "Dashboard Geral — Todas as Lojas", que já concentra metas e lojas).
 
-Na finalização, a transição `conditional → completed` faz o trigger rodar `process_pos_sale_sale_event` de novo — **idempotente**, então os itens mantidos NÃO são baixados em dobro; e o faturamento é criado normalmente.
+### 2.1 Estrutura de abas + senha
+- Adiciono uma barra de abas no topo: **Visão Geral** (conteúdo atual, intacto) e **Folha**.
+- **Folha** abre um gate de senha (`joey102030`), no mesmo padrão do PIN de Config (estado em memória da sessão, sem persistir senha). Sem a senha, o conteúdo não monta.
+- Novo componente: `src/components/pos/POSPayrollTab.tsx`. Recebe o `periodRange`, lojas e metas já carregados pelo dashboard (reuso, sem duplicar queries onde possível).
 
-## Banco de dados (1 migration)
+### 2.2 O problema da identidade da vendedora
+Hoje os registros em `pos_sellers` são fragmentados por canal/loja (ex.: "Viviane físico", "Viviane Oline", "Vitória Online", "Jéssica Fisico", "Jessica Online"), e as lives caem numa vendedora virtual "Live Shopping". Para comissionar por pessoa e detectar venda em mais de uma loja, preciso de um mapeamento canônico explícito (nomes não batem sozinhos).
 
-**1. Ajustar `process_pos_sale_sale_event`** para também aceitar `status='conditional'` na guarda de entrada (`status IN ('completed','paid','conditional')`). A idempotência por `sale_event='sale'` já protege a etapa 2.
+**Novas tabelas (migração):**
+- `pos_commission_people`: pessoa canônica — `name`, `is_active`, `receives_all_lives` (bool, para a híbrida Jéssica).
+- `pos_commission_people_sellers`: liga cada `pos_sellers.id` a uma pessoa (`seller_id` único). Configurável na própria aba.
+- `pos_commission_live_participants`: quem divide o recebido das lives, por `store_id` + `period_start`/`period_end` (seleção mensal e por loja).
+- `pos_commission_scale`: escala editável de comissionamento (`achievement_percent`, `commission_percent`), semeada com: 80→0,5% · 90→0,7% · 100→1% · 110→1,2% · 120→1,5%.
 
-**2. Ajustar `apply_pos_sale_stock_movement`:**
-- INSERT com `status='conditional'` → chama `process_pos_sale_sale_event` (baixa todos os itens).
-- UPDATE `conditional → completed/paid` → chama `process_pos_sale_sale_event` (idempotente, não rebaixa mantidos).
-- (Cancelamento de condicional continua estornando via o ramo `cancelled` já existente.)
+Todas com `GRANT` para `authenticated`/`service_role`, RLS habilitada e políticas para usuários autenticados (dado interno de gestão). `updated_at` com trigger.
 
-**3. Nova função `restore_pos_sale_item_stock(p_sale_id, p_sku, p_barcode)`** (SECURITY DEFINER): para cada item **devolvido** na finalização — soma de volta em `pos_products.stock`, grava ajuste `direction='in', sale_event='return'` (guard anti-duplo estorno) e dispara `shopify-mirror-stock`/`tiny-mirror-stock`. Espelha o padrão do ramo `cancelled`, mas por item.
+### 2.3 Cálculo do faturamento por vendedora (aba Folha)
+Para o período selecionado, busco `pos_sales` pagas (`status` in completed/paid/pending_sync, mesma regra do dashboard) das lojas reais (Pérola/Centro) e:
 
-**4. Novas colunas em `pos_sales`** (nullable, sem impacto no existente):
-- `is_conditional boolean default false`
-- `conditional_status text` (`draft_sent` | `finalized`) — só para condicionais.
-- `conditional_signed_at timestamptz` (opcional, registro de assinatura na entrega).
+1. **Valor por venda = recebido sem frete** = `total − frete` (frete de `shipping_cost` ou `payment_details.shipping_amount`).
+2. **Classificação por canal** de cada venda: `sale_type` (physical/online/live) × loja (Pérola/Centro) → buckets: **Física Pérola, Física Centro, Online Pérola, Online Centro, Live Pérola, Live Centro**.
+3. **Agrupamento por pessoa canônica** via o mapeamento da 2.2. Detecta e discrimina quando a mesma pessoa vendeu em mais de uma loja (mostra os valores separados por loja/canal).
 
-Faturamento/estoque continuam guiados por `status`. Índice parcial `where is_conditional`. GRANTs já cobertos pela policy `authenticated`/`service_role` existente da tabela.
+### 2.4 Divisão do recebido das lives
+- Para cada loja, somo o **recebido (sem frete) das vendas de live** daquela loja.
+- Divido igualmente pelo nº de participantes selecionados em `pos_commission_live_participants` (a gestora escolhe quais vendedoras entram, por loja/mês — não precisa ser todas).
+- A cota entra no faturamento de cada participante no bucket **Live Pérola/Centro** (ex.: 17.000 ÷ 3 = 5.666,66 para cada uma das 3).
 
-> Observação: a tabela `pos_conditionals` atual (modelo "loan") **não** é usada aqui — fica intacta.
+### 2.5 Vendedora híbrida (Jéssica)
+- Pessoas com `receives_all_lives = true` recebem o **total de TODAS as lives** (Pérola + Centro, recebido sem frete) somado ao faturamento delas, num bucket "Todas as Lives".
+- É uma flag por pessoa (uma ou mais), independente da divisão da 2.4.
 
-## Edge function
+### 2.6 Meta e comissão
+- Puxo a meta individual do período em `pos_goals` (`goal_type='seller_revenue'`, `seller_id`), casada por qualquer `seller_id` mapeado à pessoa; se a pessoa tiver várias lojas, somo as metas das lojas onde ela atua (configurável). Fallback: se não houver meta individual, mostro alerta "sem meta definida" e não calcula %.
+- **Atingimento** = faturamento total da pessoa (loja física + online + lives aplicáveis) ÷ meta.
+- **% de comissão** pela escala (2.5): aplico o degrau atingido (ex.: 96% → usa 90%; 100% → 1%; ≥120% → 1,5%; <80% → 0%). Escala editável.
+- **Comissão (R$)** = faturamento × %.
 
-**`pos-conditional-finalize`** (idempotente, por etapa, com trava):
-Entrada: `sale_id` (condicional), `kept_items[]`, `returned_items[]`, `payment_method`, `payment_details`, `discount`, `seller_id`.
-1. Trava por status (`is_conditional && conditional_status='draft_sent'`; se já `finalized` → retorna sucesso sem repetir).
-2. Para cada `returned_item` → `restore_pos_sale_item_stock` + `DELETE` do `pos_sale_items`.
-3. Recalcula `subtotal/discount/total` a partir dos itens mantidos.
-4. Atualiza `payment_method`, `payment_details` (com `conditional: true`), `paid_at`, `cash_register_id`, `seller_id`, `conditional_status='finalized'`.
-5. Transição `status='conditional' → 'completed'` (trigger fatura + confirma baixa idempotente).
-Cada passo grava progresso; se algo falhar depois de restaurar estoque, a venda não se perde e o passo é reexecutável.
+### 2.7 UI da aba Folha
+- Reusa o seletor de período do dashboard.
+- Tabela por vendedora: nome, colunas por canal (Física Pérola/Centro, Online Pérola/Centro, Live Pérola/Centro, cota de live, total lives se híbrida), **Faturamento total**, **Meta**, **% atingido**, **% comissão**, **Comissão R$**.
+- Painéis de configuração (dentro da aba): mapear registros `pos_sellers` → pessoa; marcar híbridas; selecionar participantes da divisão de live por loja/mês; editar a escala.
+- Botão exportar CSV do fechamento.
 
-## Frontend (`POSSalesView.tsx` + componentes novos)
+## Notas técnicas
+- Nada existente é removido: a "Visão Geral" atual continua igual; a Folha é aditiva.
+- `pos_seller_commission_tiers`/`pos_seller_commissions` (hoje dormentes no front) ficam intactas; uso tabelas novas dedicadas para não colidir com semânticas antigas.
+- Após a migração, o `types.ts` é regenerado e só então escrevo o código que lê as novas tabelas.
+- Regenerar tipos exige aprovar a migração primeiro; implemento o front na sequência.
 
-**1. Modal "Tipo de venda"** → grid de 4 (hoje 3): adicionar botão **📦 Condicional** (cor distinta, ex. verde). Ao clicar abre submodal:
-- **Novo condicional**
-- **Finalizar condicional**
-
-**2. Fluxo "Novo condicional"** (`saleType='conditional'`, `conditionalStage='new'`):
-- Carrinho normal (bipar/adicionar produtos).
-- Cliente: seleção/cadastro com **validação obrigatória** de **nome, CPF, telefone, email, CEP e endereço completo** (bloqueia avanço se faltar — reforço no passo de cliente só quando é condicional/novo).
-- **Pula pagamento**. Botão final: **"Gerar condicional"** → cria `pos_sales` com `status='conditional'`, `is_conditional=true`, `conditional_status='draft_sent'`, `sale_type='online'` (para herdar aba Envios/endereço), tag nas notes `📦 Condicional`.
-- Abre **comprovante imprimível** (novo `src/lib/pos/conditionalReceipt.ts`, no padrão de `providerReceipt.ts`): cabeçalho Banana, dados do cliente/endereço, tabela de produtos com preços e total, **2 campos de assinatura**: "Conferência da vendedora" e "Assinatura da cliente (no recebimento)", data.
-
-**3. Fluxo "Finalizar condicional"** (`ConditionalFinalizePicker.tsx`, paginado, no padrão do `SiteExchangePicker`):
-- Lista condicionais `is_conditional && conditional_status='draft_sent'` (mais recentes primeiro, busca por nome/telefone/CPF/nº).
-- Ao escolher: carrega itens no carrinho; a vendedora **remove os devolvidos** e mantém os vendidos; pode ajustar quantidade.
-- Segue para **pagamento normal**. Botão final chama `pos-conditional-finalize` com kept/returned calculados por diff dos `pos_sale_items` originais x carrinho final.
-- Ao concluir: tag **Condicional** permanece; venda passa a contar no faturamento.
-
-**4. Tags e listagens:**
-- Badge **📦 Condicional** no header da venda (ao lado de Presencial/Online), como já feito para Troca Site.
-- Aba **Pedidos**: incluir condicionais (`is_conditional=true`) com selo Condicional e ação "Finalizar condicional". `POSSaleDetailDialog` mostra o selo e o estado (enviado/finalizado).
-
-## O que pode dar errado (e como prevenimos)
-- **Baixa dupla de estoque na finalização** → `process_pos_sale_sale_event` é idempotente por `sale_event='sale'`; itens mantidos não rebaixam.
-- **Estorno duplo de item devolvido** (duplo clique/reprocesso) → `restore_pos_sale_item_stock` checa ajuste `sale_event='return'` existente.
-- **Condicional entrando no faturamento cedo** → status `conditional` é ignorado por `pos_sale_to_faturamento` e pelos dashboards; só entra ao virar `completed`.
-- **Condicional aparecendo nas metas da vendedora** → dashboards filtram `status='completed'`; garantimos que o `seller_id` já esteja gravado para creditar corretamente **só na finalização**.
-- **Dois atendentes finalizando o mesmo condicional** → trava por `conditional_status='finalized'` (retorno idempotente).
-- **Cliente sem endereço/CPF** → validação obrigatória bloqueia a criação do condicional.
-- **NFC-e/NF-e** → **não** emitir fiscal na etapa 1 (não houve venda). Auto-emissão fiscal só na finalização (segue regra atual por `sale_type`). 
-- **Cancelar um condicional inteiro** (cliente devolveu tudo / desistiu) → mudar `status='cancelled'` estorna todo o estoque pelo ramo já existente; não fatura.
-- **Espelho de estoque Shopify/Tiny** → reutiliza as funções de mirror já usadas na venda/cancelamento (SET absoluto por soma de lojas), sem lógica nova de estoque compartilhado.
-
-## Fora de escopo (confirmar depois)
-- Vencimento/lembrete automático de devolução do condicional (due_date + follow-up WhatsApp).
-- Emissão fiscal automática na finalização além da regra atual.
-
-## Ordem de execução
-1. Migration (colunas + funções + trigger).
-2. Edge function `pos-conditional-finalize` (+ deploy).
-3. `conditionalReceipt.ts`, `ConditionalFinalizePicker.tsx`.
-4. Integração no `POSSalesView.tsx` (botão, submodal, validação, criação, finalização, badges).
-5. Selo Condicional em Pedidos e `POSSaleDetailDialog`.
-6. Teste com 1 condicional real de ponta a ponta antes de publicar.
+## Pontos que preciso confirmar com você
+1. **Meta da pessoa com 2 lojas**: somar as metas das lojas onde ela atua, ou definir uma meta única por pessoa na Folha?
+2. **Base do atingimento**: incluir a cota/total de lives no faturamento que conta para bater a meta, ou a meta é só sobre venda física+online?
+3. **Frete**: confirmo usar `total − shipping_cost` (com fallback em `payment_details.shipping_amount`) como "recebido sem frete" em todo o cálculo?

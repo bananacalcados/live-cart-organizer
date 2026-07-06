@@ -4,7 +4,7 @@ import { DbOrderProduct, DiscountType } from "@/types/database";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import {
   DollarSign, TrendingUp, Package, ShoppingCart, Receipt,
-  CheckCircle, AlertCircle, BarChart3, Calendar as CalendarIcon
+  CheckCircle, AlertCircle, BarChart3, Calendar as CalendarIcon, Store
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
 } from "recharts";
 
 type PeriodFilter = "day" | "week" | "month" | "quarter" | "semester" | "year" | "custom";
+type StoreFilter = "all" | "site" | "pos_perola" | "pos_centro";
 
 interface OrderRow {
   id: string;
@@ -31,9 +32,17 @@ interface OrderRow {
   stage: string;
   discount_type: DiscountType | null;
   discount_value: number | null;
+  shipping_cost: number | null;
+  free_shipping: boolean | null;
   created_at: string;
   event_name: string;
 }
+
+// Freight received on a paid order (0 when free shipping).
+const calculateOrderFreight = (order: OrderRow) => {
+  if (order.free_shipping) return 0;
+  return Number(order.shipping_cost || 0);
+};
 
 const calculateOrderValue = (order: OrderRow) => {
   const subtotal = order.products.reduce((s, p) => s + p.price * p.quantity, 0);
@@ -76,8 +85,16 @@ const PERIOD_LABELS: Record<PeriodFilter, string> = {
   custom: "Período",
 };
 
+const STORE_LABELS: Record<StoreFilter, string> = {
+  all: "Todas as lojas",
+  site: "Site",
+  pos_perola: "Loja Pérola",
+  pos_centro: "Loja Centro",
+};
+
 export function EventsDashboard() {
   const [period, setPeriod] = useState<PeriodFilter>("month");
+  const [store, setStore] = useState<StoreFilter>("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -89,12 +106,14 @@ export function EventsDashboard() {
       setLoading(true);
       const [from, to] = getDateRange(period, customFrom, customTo);
 
-      // Fetch events in range
-      const { data: eventsData } = await supabase
+      // Fetch events in range (filter by store channel when set)
+      let eventsQuery = supabase
         .from("events")
-        .select("id, name, created_at")
+        .select("id, name, channel, created_at")
         .gte("created_at", from.toISOString())
         .lte("created_at", to.toISOString());
+      if (store !== "all") eventsQuery = eventsQuery.eq("channel", store);
+      const { data: eventsData } = await eventsQuery;
 
       const eventIds = (eventsData || []).map((e) => e.id);
       const eventNameMap = Object.fromEntries((eventsData || []).map((e) => [e.id, e.name]));
@@ -108,7 +127,7 @@ export function EventsDashboard() {
 
       const { data: ordersData } = await supabase
         .from("orders")
-        .select("id, event_id, products, is_paid, paid_externally, paid_at, stage, discount_type, discount_value, created_at")
+        .select("id, event_id, products, is_paid, paid_externally, paid_at, stage, discount_type, discount_value, shipping_cost, free_shipping, created_at")
         .in("event_id", eventIds);
 
       const parsed = (ordersData || []).map((o: any) => ({
@@ -122,7 +141,7 @@ export function EventsDashboard() {
       setLoading(false);
     };
     fetchData();
-  }, [period, customFrom, customTo]);
+  }, [period, store, customFrom, customTo]);
 
   const metrics = useMemo(() => {
     const total = orders.length;
@@ -132,6 +151,9 @@ export function EventsDashboard() {
 
     const totalValue = orders.reduce((s, o) => s + calculateOrderValue(o), 0);
     const receivedValue = paid.reduce((s, o) => s + calculateOrderValue(o), 0);
+    // "Recebido (sem frete)" = valor de produtos recebido, descontando o frete pago.
+    const freightReceived = paid.reduce((s, o) => s + calculateOrderFreight(o), 0);
+    const receivedNoFreight = Math.max(0, receivedValue - freightReceived);
 
     const totalItems = orders.reduce((s, o) => s + calculateItemCount(o), 0);
     const avgTicket = total > 0 ? totalValue / total : 0;
@@ -151,7 +173,7 @@ export function EventsDashboard() {
     }
     const chartData = Object.values(byEvent).sort((a, b) => b.total - a.total);
 
-    return { total, paidCount, unpaidCount, totalValue, receivedValue, avgTicket, avgItems, totalItems, conversion, chartData };
+    return { total, paidCount, unpaidCount, totalValue, receivedValue, receivedNoFreight, freightReceived, avgTicket, avgItems, totalItems, conversion, chartData };
   }, [orders]);
 
   const kpis = [
@@ -161,6 +183,8 @@ export function EventsDashboard() {
     { label: "Não Pagos", value: metrics.unpaidCount, icon: AlertCircle, color: "text-stage-awaiting", bg: "bg-stage-awaiting/10" },
     { label: "Faturamento Total", value: `R$ ${metrics.totalValue.toFixed(2)}`, icon: Receipt, color: "text-accent", bg: "bg-accent/10" },
     { label: "Faturamento Recebido", value: `R$ ${metrics.receivedValue.toFixed(2)}`, icon: DollarSign, color: "text-stage-paid", bg: "bg-stage-paid/10" },
+    { label: "Recebido s/ frete", value: `R$ ${metrics.receivedNoFreight.toFixed(2)}`, icon: DollarSign, color: "text-stage-paid", bg: "bg-stage-paid/10" },
+    { label: "Frete Recebido", value: `R$ ${metrics.freightReceived.toFixed(2)}`, icon: Receipt, color: "text-muted-foreground", bg: "bg-muted" },
     { label: "Ticket Médio", value: `R$ ${metrics.avgTicket.toFixed(2)}`, icon: ShoppingCart, color: "text-primary", bg: "bg-primary/10" },
     { label: "Itens / Venda", value: metrics.avgItems.toFixed(1), icon: TrendingUp, color: "text-accent", bg: "bg-accent/10" },
     { label: "Total de Itens", value: metrics.totalItems, icon: BarChart3, color: "text-primary", bg: "bg-primary/10" },
@@ -180,6 +204,24 @@ export function EventsDashboard() {
             className={period === p ? "btn-accent" : ""}
           >
             {PERIOD_LABELS[p]}
+          </Button>
+        ))}
+      </div>
+
+      {/* Store Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-1">
+          <Store className="h-3.5 w-3.5" /> Loja:
+        </div>
+        {(Object.keys(STORE_LABELS) as StoreFilter[]).map((s) => (
+          <Button
+            key={s}
+            variant={store === s ? "default" : "outline"}
+            size="sm"
+            onClick={() => setStore(s)}
+            className={store === s ? "btn-accent" : ""}
+          >
+            {STORE_LABELS[s]}
           </Button>
         ))}
       </div>
