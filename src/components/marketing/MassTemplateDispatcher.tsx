@@ -28,6 +28,35 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
 
+/**
+ * Extrai o DDD (2 dígitos) de um telefone em qualquer formato.
+ * Considera o prefixo 55 (DDI Brasil) quando presente.
+ */
+function extractDdd(phone?: string | null): string | null {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return null;
+  if (digits.startsWith('55') && digits.length >= 12) return digits.slice(2, 4);
+  if (digits.length >= 10) return digits.slice(0, 2);
+  return null;
+}
+
+/**
+ * Determina a região efetiva (loja física x online) de um cliente CRM.
+ *
+ * Regras:
+ *  - region_type === 'local'  → loja física (dado explícito).
+ *  - region_type === 'online' → online (dado explícito, minúsculo).
+ *  - Qualquer outro valor ('Online' maiúsculo = indefinido pela view, null, etc.)
+ *    → região desconhecida: decide pelo DDD. DDD 33 (Gov. Valadares) = loja física;
+ *      qualquer outro DDD = online (mora fora, improvável frequentar a loja).
+ */
+function effectiveRegion(regionType?: string | null, phone?: string | null, ddd?: string | null): 'local' | 'online' {
+  if (regionType === 'local') return 'local';
+  if (regionType === 'online') return 'online';
+  const effectiveDdd = ddd || extractDdd(phone);
+  return effectiveDdd === '33' ? 'local' : 'online';
+}
+
 interface MetaTemplate {
   id: string;
   name: string;
