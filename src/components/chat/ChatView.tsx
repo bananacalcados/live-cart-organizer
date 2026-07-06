@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { CreateSupportTicketDialog } from "../CreateSupportTicketDialog";
+import { ExportConversationDialog } from "./ExportConversationDialog";
 import { MessageStatusIcon } from "./MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./WhatsAppMediaAttachment";
 import { CarouselMessageBubble, type CarouselTemplatePayload } from "./CarouselMessageBubble";
