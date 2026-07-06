@@ -426,7 +426,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
         toast.error(msg, { duration: 12000 });
         return;
       }
-      if (data?.ok) toast.success(`${isRemoteSale ? 'NF-e' : 'NFC-e'} autorizada em PRODUÇÃO!`);
+      if (data?.ok) toast.success(`${fiscalTipoLabel} autorizada em PRODUÇÃO!`);
       else if (data?.contingencia) toast.info('SEFAZ indisponível — em contingência.');
       else toast.error(data?.error || data?.rejection_message || 'Erro ao re-emitir nota fiscal', { duration: 12000 });
     } catch (e: any) {
