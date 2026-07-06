@@ -209,6 +209,11 @@ export default function Marketing() {
   const [regionFilter, setRegionFilter] = useState<string>("all");
   const [rfmFilter, setRfmFilter] = useState<string>("all");
   const [dddFilter, setDddFilter] = useState<string>("all");
+  // Lista completa de DDDs disponíveis (carregada uma vez, sem filtro) para popular o dropdown
+  // mesmo quando o filtro de DDD é aplicado no servidor.
+  const [availableDdds, setAvailableDdds] = useState<string[]>([]);
+  // Ref para o fetch ler o DDD atual sem recriar o callback (evita quebrar loadTabData).
+  const dddFilterRef = useRef<string>("all");
   const [sortField, setSortField] = useState<string>("total_spent");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -265,18 +270,25 @@ export default function Marketing() {
   const fetchCustomers = useCallback(async () => {
     setIsLoading(true);
     try {
-      // Fetch up to 10000 customers in batches to bypass the 1000-row default limit
+      // DDD atual: quando selecionado, filtramos NO SERVIDOR (opção 2) — contagem
+      // sempre exata independente do volume total da base.
+      const activeDdd = dddFilterRef.current;
+      // Fetch em lotes. Teto ampliado (opção 1) para cobrir toda a base de compradores
+      // (64k+) e evitar que clientes de menor gasto fiquem de fora do carregamento.
       let allCustomers: any[] = [];
       let from = 0;
       const batchSize = 1000;
+      const SAFETY_CAP = 200000;
       let keepFetching = true;
       while (keepFetching) {
-        const { data, error } = await supabase
+        let query = supabase
           // Fonte única: base unificada de clientes (deduplicada), via view compatível.
           .from('crm_customers_v')
           // Apenas compradores (matriz RFM real de vendas).
           .select('id, zoppy_id, first_name, last_name, phone, email, city, state, region_type, ddd, rfm_recency_score, rfm_frequency_score, rfm_monetary_score, rfm_total_score, rfm_segment, total_orders, total_spent, avg_ticket, last_purchase_at, first_purchase_at, tags, opt_out_mass_dispatch, purchased_brands, purchased_categories, purchased_sizes')
-          .gte('total_orders', 1)
+          .gte('total_orders', 1);
+        if (activeDdd && activeDdd !== 'all') query = query.eq('ddd', activeDdd);
+        const { data, error } = await query
           .order('total_spent', { ascending: false, nullsFirst: false })
           .order('id', { ascending: true }) // tie-breaker para paginação estável
           .range(from, from + batchSize - 1);
@@ -288,7 +300,7 @@ export default function Marketing() {
         } else {
           keepFetching = false;
         }
-        if (allCustomers.length >= 50000) keepFetching = false; // safety cap
+        if (allCustomers.length >= SAFETY_CAP) keepFetching = false; // safety cap
       }
       // Defesa extra: dedup por id caso ainda exista alguma duplicata residual
       const seen = new Set<string>();
@@ -297,10 +309,28 @@ export default function Marketing() {
         seen.add(c.id);
         return true;
       });
+      // Popula a lista de DDDs disponíveis apenas quando carregamos a base completa
+      // (sem filtro), para o dropdown nunca "encolher" após filtrar no servidor.
+      if (!activeDdd || activeDdd === 'all') {
+        const ddds = [...new Set(allCustomers.map((c: any) => c.ddd).filter(Boolean))].sort() as string[];
+        setAvailableDdds(ddds);
+      }
       setCustomers(allCustomers as ZoppyCustomer[]);
     } catch (err) { console.error(err); toast.error("Erro ao carregar clientes"); }
     finally { setIsLoading(false); }
   }, []);
+
+  // Filtro de DDD no servidor (opção 2): ao mudar o DDD, mantém o ref sincronizado
+  // e recarrega os clientes com a contagem exata. Só refaz quando a aba de clientes
+  // já foi carregada uma vez (evita fetch duplicado no mount).
+  useEffect(() => {
+    dddFilterRef.current = dddFilter;
+    if (activeTab === 'customers' && loadedTabsRef.current.has('customers')) {
+      void fetchCustomers();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dddFilter]);
+
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -1085,7 +1115,9 @@ export default function Marketing() {
   }, {} as Record<string, number>);
 
   const regionCounts = customers.reduce((acc, c) => { acc[c.region_type] = (acc[c.region_type] || 0) + 1; return acc; }, {} as Record<string, number>);
-  const uniqueDdds = [...new Set(customers.map(c => c.ddd).filter(Boolean))].sort();
+  // Usa a lista completa de DDDs (carregada sem filtro) quando disponível, para o dropdown
+  // não encolher após aplicar o filtro de DDD no servidor.
+  const uniqueDdds = availableDdds.length ? availableDdds : [...new Set(customers.map(c => c.ddd).filter(Boolean))].sort();
   const uniqueTags = [...new Set(customers.flatMap(c => c.tags || []).filter(Boolean))].sort();
   const uniqueBrands = [...new Set(customers.flatMap(c => c.purchased_brands || []).filter(Boolean))].sort();
   const uniqueCategories = [...new Set(customers.flatMap(c => c.purchased_categories || []).filter(Boolean))].sort();
