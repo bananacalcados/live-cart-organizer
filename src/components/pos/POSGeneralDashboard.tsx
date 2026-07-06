@@ -258,6 +258,14 @@ export function POSGeneralDashboard({ onBack }: Props) {
     };
   }, [storeData]);
 
+  // Faturamento Live = recorte das vendas sale_type='live'. É um SUBCONJUNTO do
+  // Faturamento total (mesmas linhas de pos_sales) — não soma por cima.
+  const liveRevenue = useMemo(
+    () => salesRows.filter(r => (r.sale_type || "").toLowerCase() === "live")
+      .reduce((a, r) => a + Number(r.total || 0), 0),
+    [salesRows]
+  );
+
   // Payment buckets
   const paymentBuckets = useMemo(() => {
     const map = new Map<string, { revenue: number; sales: number }>();
