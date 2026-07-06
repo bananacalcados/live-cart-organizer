@@ -803,8 +803,9 @@ export function MassTemplateDispatcher() {
           const phone = l.phone.replace(/\D/g, '');
           if (!phone || phone.length < 8) continue;
           if (leadCampaignFilter !== 'all' && l.campaign_tag !== leadCampaignFilter) continue;
-          if (addedPhones.has(phone)) continue;
-          addedPhones.add(phone);
+          const dk = dedupKey(phone);
+          if (addedPhones.has(dk)) continue;
+          addedPhones.add(dk);
           const leadName = l.name || phone;
           const leadFirstName = leadName.split(' ')[0];
           list.push({
