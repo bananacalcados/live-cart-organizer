@@ -708,6 +708,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
           </Panel>
         </div>
       </ScrollArea>
+      )}
 
       <POSGoalsManagerDialog open={goalsDialogOpen} onClose={() => setGoalsDialogOpen(false)} onSaved={load} />
       <POSTaskManagerDialog open={taskDialogOpen} onClose={() => setTaskDialogOpen(false)} stores={stores} />
