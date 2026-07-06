@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Lock, Loader2, Download, FileText, RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { Lock, Loader2, Download, FileText, RefreshCw, ArrowDownToLine, ArrowUpFromLine, FileArchive } from "lucide-react";
 import { format } from "date-fns";
 import { downloadCsv, brlCell, dateCell } from "@/lib/fiscal/exportFiscalReport";
 import { generateFiscalPdf } from "@/lib/fiscal/exportFiscalPdf";
+import { exportFiscalXmlZip } from "@/lib/fiscal/exportFiscalXml";
 import { SintegraExportDialog } from "@/components/fiscal/SintegraExportDialog";
 
 const FISCAL_PASSWORD = "joey102030";
