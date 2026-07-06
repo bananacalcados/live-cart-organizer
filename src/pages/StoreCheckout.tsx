@@ -742,7 +742,7 @@ function PixPaymentForm({ saleId, storeId, amount, form, onPaid }: { saleId: str
       <div className="relative">
         <div className="p-3 bg-secondary/50 rounded-lg text-xs font-mono break-all max-h-20 overflow-y-auto">{pixData.qrCode}</div>
         <Button size="sm" variant="outline" className="mt-2 w-full" onClick={async () => {
-          try { await navigator.clipboard.writeText(pixData.qrCode); setCopied(true); toast.success("Copiado!"); setTimeout(() => setCopied(false), 3000); } catch {}
+          try { await navigator.clipboard.writeText(pixData.qrCode.trim()); setCopied(true); toast.success("Copiado!"); setTimeout(() => setCopied(false), 3000); } catch {}
         }}>
           {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
           {copied ? "Copiado!" : "Copiar código PIX"}
