@@ -473,7 +473,8 @@ export function MassTemplateDispatcher() {
           from += 1000;
           if (data.length < 1000) keepFetching = false;
         } else keepFetching = false;
-        if (allCustomers.length >= 25000) keepFetching = false;
+        // Sem teto: carrega TODA a base de clientes com telefone para que as
+        // contagens de região/DDD reflitam o total real (antes cortava em 25k).
       }
       setCrmCustomers(allCustomers);
       // Extract unique tags from CRM customers
