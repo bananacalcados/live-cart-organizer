@@ -219,7 +219,7 @@ export function POSWhatsAppPixDialog({
               <div className="p-3 bg-muted/50 rounded-lg text-xs font-mono break-all max-h-20 overflow-y-auto">{pixCode}</div>
               <div className="flex gap-2 mt-2">
                 <Button variant="outline" size="sm" className="flex-1" onClick={async () => {
-                  await navigator.clipboard.writeText(pixCode);
+                  await navigator.clipboard.writeText(pixCode.trim());
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}>
