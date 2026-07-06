@@ -151,6 +151,9 @@ export function EventsDashboard() {
 
     const totalValue = orders.reduce((s, o) => s + calculateOrderValue(o), 0);
     const receivedValue = paid.reduce((s, o) => s + calculateOrderValue(o), 0);
+    // "Recebido (sem frete)" = valor de produtos recebido, descontando o frete pago.
+    const freightReceived = paid.reduce((s, o) => s + calculateOrderFreight(o), 0);
+    const receivedNoFreight = Math.max(0, receivedValue - freightReceived);
 
     const totalItems = orders.reduce((s, o) => s + calculateItemCount(o), 0);
     const avgTicket = total > 0 ? totalValue / total : 0;
@@ -170,7 +173,7 @@ export function EventsDashboard() {
     }
     const chartData = Object.values(byEvent).sort((a, b) => b.total - a.total);
 
-    return { total, paidCount, unpaidCount, totalValue, receivedValue, avgTicket, avgItems, totalItems, conversion, chartData };
+    return { total, paidCount, unpaidCount, totalValue, receivedValue, receivedNoFreight, freightReceived, avgTicket, avgItems, totalItems, conversion, chartData };
   }, [orders]);
 
   const kpis = [
@@ -180,6 +183,8 @@ export function EventsDashboard() {
     { label: "Não Pagos", value: metrics.unpaidCount, icon: AlertCircle, color: "text-stage-awaiting", bg: "bg-stage-awaiting/10" },
     { label: "Faturamento Total", value: `R$ ${metrics.totalValue.toFixed(2)}`, icon: Receipt, color: "text-accent", bg: "bg-accent/10" },
     { label: "Faturamento Recebido", value: `R$ ${metrics.receivedValue.toFixed(2)}`, icon: DollarSign, color: "text-stage-paid", bg: "bg-stage-paid/10" },
+    { label: "Recebido s/ frete", value: `R$ ${metrics.receivedNoFreight.toFixed(2)}`, icon: DollarSign, color: "text-stage-paid", bg: "bg-stage-paid/10" },
+    { label: "Frete Recebido", value: `R$ ${metrics.freightReceived.toFixed(2)}`, icon: Receipt, color: "text-muted-foreground", bg: "bg-muted" },
     { label: "Ticket Médio", value: `R$ ${metrics.avgTicket.toFixed(2)}`, icon: ShoppingCart, color: "text-primary", bg: "bg-primary/10" },
     { label: "Itens / Venda", value: metrics.avgItems.toFixed(1), icon: TrendingUp, color: "text-accent", bg: "bg-accent/10" },
     { label: "Total de Itens", value: metrics.totalItems, icon: BarChart3, color: "text-primary", bg: "bg-primary/10" },
