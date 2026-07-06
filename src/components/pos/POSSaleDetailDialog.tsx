@@ -177,6 +177,10 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [sendingTracking, setSendingTracking] = useState(false);
   const [showDeliveryCost, setShowDeliveryCost] = useState(false);
   const isRemoteSale = sale?.sale_type === 'online' || sale?.sale_type === 'live';
+  // Rótulo derivado do modelo REAL do documento (55=NF-e, 65=NFC-e); fallback pelo tipo de venda.
+  const fiscalTipoLabel = fiscalDoc?.modelo === 55 ? 'NF-e'
+    : fiscalDoc?.modelo === 65 ? 'NFC-e'
+    : (isRemoteSale ? 'NF-e' : 'NFC-e');
 
   useEffect(() => {
     setCurrentItems(items);
