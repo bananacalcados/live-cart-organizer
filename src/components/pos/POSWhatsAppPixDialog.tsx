@@ -141,20 +141,36 @@ export function POSWhatsAppPixDialog({
     if (!pixCode) return;
     setSending(true);
     try {
-      const message = `💰 *PIX - R$ ${parseFloat(amount).toFixed(2)}*\n${description ? `📝 ${description}\n` : ''}\nCopie o código abaixo para pagar:\n\n${pixCode}`;
-      const messageId = await posSendText({ provider: sendVia, phone, message, numberId: selectedNumberId });
-      await supabase.from("whatsapp_messages").insert({
-        phone, message, direction: "outgoing", status: "sent",
-        message_id: messageId,
-        whatsapp_number_id: selectedNumberId || null,
-      });
-      toast.success("PIX enviado!");
+      // Código copia e cola PURO, sem emojis/markdown/whitespace ao redor.
+      // Bancos rejeitam o Copia e Cola se vier junto de texto (precisa começar em "0002...").
+      const code = pixCode.trim();
+
+      // 1ª mensagem: contexto (valor + descrição) apontando que o código vem a seguir.
+      const intro = `💰 *PIX - R$ ${parseFloat(amount).toFixed(2)}*${description ? `\n📝 ${description}` : ''}\n\n👇 O código *copia e cola* vem na *próxima mensagem*. Toque nela, copie tudo e cole no app do seu banco.`;
+      await posSendText({ provider: sendVia, phone, message: intro, numberId: selectedNumberId });
+
+      // 2ª mensagem: SOMENTE o código PIX, isolado, para copiar sem lixo em volta.
+      const messageId = await posSendText({ provider: sendVia, phone, message: code, numberId: selectedNumberId });
+
+      await supabase.from("whatsapp_messages").insert([
+        {
+          phone, message: intro, direction: "outgoing", status: "sent",
+          whatsapp_number_id: selectedNumberId || null,
+        },
+        {
+          phone, message: code, direction: "outgoing", status: "sent",
+          message_id: messageId,
+          whatsapp_number_id: selectedNumberId || null,
+        },
+      ]);
+      toast.success("PIX enviado (código isolado p/ copiar)!");
     } catch {
       toast.error("Erro ao enviar");
     } finally {
       setSending(false);
     }
   };
+
 
   const handleReset = () => {
     if (pollingRef.current) clearInterval(pollingRef.current);
@@ -203,7 +219,7 @@ export function POSWhatsAppPixDialog({
               <div className="p-3 bg-muted/50 rounded-lg text-xs font-mono break-all max-h-20 overflow-y-auto">{pixCode}</div>
               <div className="flex gap-2 mt-2">
                 <Button variant="outline" size="sm" className="flex-1" onClick={async () => {
-                  await navigator.clipboard.writeText(pixCode);
+                  await navigator.clipboard.writeText(pixCode.trim());
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
                 }}>

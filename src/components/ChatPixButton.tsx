@@ -65,9 +65,9 @@ export function ChatPixButton({ orderId, variant = "icon-light", className }: Ch
   };
 
   const copyAgain = () => {
-    navigator.clipboard.writeText(pixCode)
+    navigator.clipboard.writeText(pixCode.trim())
       .then(() => toast.success("Código PIX copiado!"))
-      .catch(() => window.prompt("Copie o código PIX:", pixCode));
+      .catch(() => window.prompt("Copie o código PIX:", pixCode.trim()));
   };
 
   return (
