@@ -1115,7 +1115,9 @@ export default function Marketing() {
   }, {} as Record<string, number>);
 
   const regionCounts = customers.reduce((acc, c) => { acc[c.region_type] = (acc[c.region_type] || 0) + 1; return acc; }, {} as Record<string, number>);
-  const uniqueDdds = [...new Set(customers.map(c => c.ddd).filter(Boolean))].sort();
+  // Usa a lista completa de DDDs (carregada sem filtro) quando disponível, para o dropdown
+  // não encolher após aplicar o filtro de DDD no servidor.
+  const uniqueDdds = availableDdds.length ? availableDdds : [...new Set(customers.map(c => c.ddd).filter(Boolean))].sort();
   const uniqueTags = [...new Set(customers.flatMap(c => c.tags || []).filter(Boolean))].sort();
   const uniqueBrands = [...new Set(customers.flatMap(c => c.purchased_brands || []).filter(Boolean))].sort();
   const uniqueCategories = [...new Set(customers.flatMap(c => c.purchased_categories || []).filter(Boolean))].sort();
