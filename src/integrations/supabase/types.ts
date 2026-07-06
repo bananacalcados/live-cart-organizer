@@ -18105,6 +18105,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      is_generic_email: { Args: { raw: string }; Returns: boolean }
       is_sync_in_progress: { Args: never; Returns: boolean }
       is_unified_inventory_enabled: { Args: never; Returns: boolean }
       legacy_master_variants: {
