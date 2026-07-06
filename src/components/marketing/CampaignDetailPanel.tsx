@@ -1350,19 +1350,29 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
           {/* LINKS TAB */}
           <TabsContent value="links" className="space-y-3">
             <p className="text-xs font-medium text-muted-foreground">LINKS DE REDIRECIONAMENTO</p>
-            <div className="flex gap-2">
-              <Input placeholder="slug-do-link" value={newSlug} onChange={e => setNewSlug(e.target.value)} className="flex-1" />
-              <Button size="sm" onClick={createLink} disabled={isCreatingLink} className="gap-1">
-                {isCreatingLink ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LinkIcon className="h-3.5 w-3.5" />}
-                Criar
-              </Button>
+            <p className="text-[10px] text-muted-foreground -mt-2">
+              Vários links podem apontar pro mesmo grupo (atribuição por origem). Cada link gera um QR Code.
+            </p>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input placeholder="slug-do-link" value={newSlug} onChange={e => setNewSlug(e.target.value)} className="flex-1" />
+                <Button size="sm" onClick={createLink} disabled={isCreatingLink} className="gap-1">
+                  {isCreatingLink ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LinkIcon className="h-3.5 w-3.5" />}
+                  Criar
+                </Button>
+              </div>
+              <Input placeholder="Origem/rótulo (opcional, ex: Instagram Bio)" value={newLinkLabel}
+                onChange={e => setNewLinkLabel(e.target.value)} className="text-xs" />
             </div>
             {links.map(link => (
               <Card key={link.id}>
                 <CardContent className="p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">/{link.slug}</p>
+                      <p className="text-xs font-medium truncate flex items-center gap-1.5">
+                        /{link.slug}
+                        {link.label && <Badge variant="secondary" className="text-[9px]">{link.label}</Badge>}
+                      </p>
                       <p className="text-[10px] text-muted-foreground">
                         {link.click_count} cliques · {link.redirect_count} redirecionamentos
                       </p>
@@ -1372,6 +1382,9 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                         <Label className="text-[10px]">Deep Link</Label>
                         <Switch checked={link.is_deep_link} onCheckedChange={v => toggleDeepLink(link.id, v)} />
                       </div>
+                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => setQrLinkSlug(link.slug)} title="QR Code">
+                        <QrCode className="h-3 w-3" />
+                      </Button>
                       <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => copyLink(link.slug)}>
                         <Copy className="h-3 w-3" />
                       </Button>
@@ -1384,6 +1397,26 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               </Card>
             ))}
           </TabsContent>
+
+          {/* QR CODE DIALOG */}
+          <Dialog open={!!qrLinkSlug} onOpenChange={o => !o && setQrLinkSlug(null)}>
+            <DialogContent className="max-w-xs">
+              <DialogHeader><DialogTitle className="text-sm">QR Code · /vip/{qrLinkSlug}</DialogTitle></DialogHeader>
+              {qrLinkSlug && (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="bg-white p-4 rounded-lg">
+                    <QRCode value={`${window.location.origin}/vip/${qrLinkSlug}`} size={200} />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground break-all text-center">
+                    {window.location.origin}/vip/{qrLinkSlug}
+                  </p>
+                  <Button size="sm" className="w-full gap-1" onClick={() => copyLink(qrLinkSlug)}>
+                    <Copy className="h-3.5 w-3.5" /> Copiar link
+                  </Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </Tabs>
       </ScrollArea>
 
