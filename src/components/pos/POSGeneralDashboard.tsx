@@ -19,6 +19,7 @@ import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
 import { POSSellerTaskProgress } from "./POSSellerTaskProgress";
 import { POSSellerLinkPageProgress } from "./POSSellerLinkPageProgress";
 import { POSPayrollTab } from "./POSPayrollTab";
+import { POSFiscalTab } from "./POSFiscalTab";
 
 
 
