@@ -1905,7 +1905,42 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           </DialogContent>
         </Dialog>
 
-        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu} onOpenChange={() => {}}>
+        {/* Submenu Trocas/Devolução: Troca do Site (pré-faturamento) / Nova / Finalizar */}
+        <Dialog open={showExchangeMenu} onOpenChange={(o) => { if (!o) setShowExchangeMenu(false); }}>
+          <DialogContent className="bg-pos-black border-purple-500/40 max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-pos-white text-xl">🔁 Trocas / Devolução</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-3 gap-3 pt-2">
+              <button
+                onClick={() => { setShowExchangeMenu(false); setShowSiteExchange(true); }}
+                className="rounded-2xl border-2 border-purple-400/40 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">🌐</div>
+                <p className="font-bold text-pos-white text-center">Troca do Site</p>
+                <p className="text-[11px] text-pos-white/60 text-center">Pré-faturamento · pedido do site sem nota</p>
+              </button>
+              <button
+                onClick={() => { toast.info("Nova Troca/Devolução chega na próxima fase."); }}
+                className="rounded-2xl border-2 border-purple-400/40 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">🆕</div>
+                <p className="font-bold text-pos-white text-center">Nova Troca/Devolução</p>
+                <p className="text-[11px] text-pos-white/60 text-center">Troca/devolução de venda faturada</p>
+              </button>
+              <button
+                onClick={() => { toast.info("Finalizar Troca/Devolução chega na próxima fase."); }}
+                className="rounded-2xl border-2 border-purple-400/40 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">✅</div>
+                <p className="font-bold text-pos-white text-center">Finalizar Troca/Devolução</p>
+                <p className="text-[11px] text-pos-white/60 text-center">Concluir a troca/devolução iniciada</p>
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu} onOpenChange={() => {}}>
           <DialogContent className="bg-pos-black border-pos-orange/40 max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
