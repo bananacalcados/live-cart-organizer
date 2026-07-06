@@ -28,6 +28,7 @@ import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { GroupMembersDialog } from "./GroupMembersDialog";
 import { VipGroupsAnalyticsDashboard } from "./VipGroupsAnalyticsDashboard";
+import { VipLinksManager } from "./VipLinksManager";
 
 interface WhatsAppGroup {
   id: string;
