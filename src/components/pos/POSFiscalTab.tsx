@@ -152,6 +152,32 @@ export function POSFiscalTab({ periodRange }: Props) {
       ["Data", "CNPJ fornecedor", "Fornecedor", "Série/Número", "Chave", "Produtos", "Impostos", "Total"], rows);
   };
 
+  const exportPdf = () => {
+    if (!sales.length && !entradas.length) {
+      toast.error("Não há dados no período para gerar o PDF.");
+      return;
+    }
+    const companyFilterLabel = companyId === "all"
+      ? "Todas as empresas"
+      : `${nameById.get(companyId) || "—"} — ${cnpjById.get(companyId) || ""}`;
+    generateFiscalPdf({
+      periodLabel: periodRange.label,
+      companyFilterLabel,
+      sales: sales.map((s) => ({
+        modelo: s.modelo, serie: s.serie, numero: s.numero, valor_total: s.valor_total,
+        nome_destinatario: s.nome_destinatario, cpf_destinatario: s.cpf_destinatario,
+        chave_acesso: s.chave_acesso, data_autorizacao: s.data_autorizacao,
+        companyName: nameById.get(s.company_id) || "—", companyCnpj: cnpjById.get(s.company_id) || "—",
+      })),
+      entradas: entradas.map((e) => ({
+        invoice_number: e.invoice_number, invoice_series: e.invoice_series, nfe_key: e.nfe_key,
+        supplier_name: e.supplier_name, supplier_cnpj: e.supplier_cnpj, emission_date: e.emission_date,
+        total_value: e.total_value, total_products: e.total_products, total_taxes: e.total_taxes,
+      })),
+    });
+    toast.success("Relatório PDF gerado.");
+  };
+
   // ---- Gate ----
   if (!unlocked) {
     return (
