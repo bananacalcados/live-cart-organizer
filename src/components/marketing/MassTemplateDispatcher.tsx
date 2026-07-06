@@ -741,7 +741,7 @@ export function MassTemplateDispatcher() {
           if (cityFilter !== 'all' && c.city !== cityFilter) continue;
           if (dddFilter !== 'all' && c.ddd !== dddFilter) continue;
           if (crmTagFilter !== 'all' && !(c.tags || []).includes(crmTagFilter)) continue;
-          if (regionFilter !== 'all' && c.region_type !== regionFilter) continue;
+          if (regionFilter !== 'all' && effectiveRegion(c.region_type, c.phone, c.ddd) !== regionFilter) continue;
 
           // Store/seller filters via mapping
           const phoneSuffix = phone.slice(-8);
