@@ -255,12 +255,12 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     if (!sale?.id) { setFiscalDoc(null); return; }
     let cancelled = false;
     const loadDoc = async () => {
-      const expectedModel = isRemoteSale ? 55 : 65;
+      // NÃO filtra por modelo: a NF pode ter sido emitida como NF-e (55) ou NFC-e (65)
+      // em qualquer tipo de venda. Prioriza sempre o documento AUTORIZADO da venda.
       const { data: authd } = await supabase
         .from('fiscal_documents')
-        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
+        .select('id, status, modelo, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
         .eq('pos_sale_id', sale.id)
-        .eq('modelo', expectedModel)
         .in('status', ['authorized', 'autorizada', 'autorizado'])
         .order('created_at', { ascending: false })
         .limit(1)
@@ -280,9 +280,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
       }
       const { data } = await supabase
         .from('fiscal_documents')
-        .select('id, status, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
+        .select('id, status, modelo, danfe_url, xml_url, xml_content, chave_acesso, numero, serie, qrcode_url, ambiente, rejection_message, rejection_code')
         .eq('pos_sale_id', sale.id)
-        .eq('modelo', expectedModel)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
