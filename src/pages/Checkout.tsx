@@ -261,7 +261,7 @@ function PixPaymentSection({
       toast.success("Código PIX copiado!");
       setTimeout(() => setCopied(false), 3000);
     } catch {
-      window.prompt("Copie o código PIX:", pixData.qrCode);
+      window.prompt("Copie o código PIX:", pixData.qrCode.trim());
     }
   };
 
