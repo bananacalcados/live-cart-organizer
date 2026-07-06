@@ -251,7 +251,12 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.start_date = startDate || null;
       updates.end_date = endDate || null;
       updates.channel = channel;
+      const isMulti = channel === "pos_multi";
       updates.default_store_id = STORE_BY_CHANNEL[channel] ?? null;
+      updates.store_ids = isMulti
+        ? ["1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2", "4ade7b44-5043-4ab1-a124-7a6ab5468e29"]
+        : null;
+      updates.manual_pos_routing = isMulti;
     } else if (key === "shipping") {
       updates.default_shipping_cost = toNum(shippingCost);
       updates.free_shipping_threshold = toNum(freeThreshold);
