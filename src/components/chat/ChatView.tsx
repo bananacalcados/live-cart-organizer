@@ -633,6 +633,18 @@ export function ChatView({
             phone={conversation?.phone}
             customerName={conversation?.customerName}
           />
+          {conversation && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowExportDialog(true)}
+              className="h-7 px-2 text-xs gap-1 text-muted-foreground hover:text-primary"
+              title="Exportar conversa em PDF"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Exportar PDF
+            </Button>
+          )}
           {onFinish && (
             <Button
               variant="ghost"
