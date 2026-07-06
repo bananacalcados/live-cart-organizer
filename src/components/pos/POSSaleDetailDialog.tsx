@@ -1578,7 +1578,7 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
 
                 {fiscalDoc?.status === 'pending_sefaz' && (
                   <div className="rounded-md border border-yellow-300 bg-yellow-50 p-2.5 text-[11px] text-yellow-900">
-                    ⏳ SEFAZ indisponível. A {isRemoteSale ? 'NF-e' : 'NFC-e'} será emitida automaticamente quando voltar.
+                    ⏳ SEFAZ indisponível. A {fiscalTipoLabel} será emitida automaticamente quando voltar.
                   </div>
                 )}
 
