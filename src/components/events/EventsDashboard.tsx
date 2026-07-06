@@ -208,6 +208,24 @@ export function EventsDashboard() {
         ))}
       </div>
 
+      {/* Store Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-1">
+          <Store className="h-3.5 w-3.5" /> Loja:
+        </div>
+        {(Object.keys(STORE_LABELS) as StoreFilter[]).map((s) => (
+          <Button
+            key={s}
+            variant={store === s ? "default" : "outline"}
+            size="sm"
+            onClick={() => setStore(s)}
+            className={store === s ? "btn-accent" : ""}
+          >
+            {STORE_LABELS[s]}
+          </Button>
+        ))}
+      </div>
+
       {period === "custom" && (
         <div className="flex items-end gap-3">
           <div className="space-y-1">
