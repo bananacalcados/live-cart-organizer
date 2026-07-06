@@ -20,6 +20,7 @@ import {
 } from "recharts";
 
 type PeriodFilter = "day" | "week" | "month" | "quarter" | "semester" | "year" | "custom";
+type StoreFilter = "all" | "site" | "pos_perola" | "pos_centro";
 
 interface OrderRow {
   id: string;
@@ -31,9 +32,17 @@ interface OrderRow {
   stage: string;
   discount_type: DiscountType | null;
   discount_value: number | null;
+  shipping_cost: number | null;
+  free_shipping: boolean | null;
   created_at: string;
   event_name: string;
 }
+
+// Freight received on a paid order (0 when free shipping).
+const calculateOrderFreight = (order: OrderRow) => {
+  if (order.free_shipping) return 0;
+  return Number(order.shipping_cost || 0);
+};
 
 const calculateOrderValue = (order: OrderRow) => {
   const subtotal = order.products.reduce((s, p) => s + p.price * p.quantity, 0);
