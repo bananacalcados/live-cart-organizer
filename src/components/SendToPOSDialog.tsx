@@ -180,7 +180,9 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
         }
       }
 
-      const sellerId = LIVE_SELLER_BY_STORE[selectedStore] || null;
+      // Vendedora REAL escolhida (multi-loja) ou fallback pro vendedor virtual da live.
+      const sellerId = selectedSeller || LIVE_SELLER_BY_STORE[selectedStore] || null;
+      const sellerName = sellers.find((s) => s.id === selectedSeller)?.name || null;
 
       const shippingAddress = customerData ? {
         full_name: customerData.full_name,
@@ -196,6 +198,12 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
         state: customerData.state,
       } : null;
 
+      // Pedido já pago (Live) → entra como receita ('paid' + paid_at) e conta como
+      // Faturamento Live da loja. Só entra 1x na loja pois é UMA linha em pos_sales.
+      const alreadyPaid = !!(order.is_paid || (order as any).paid_externally);
+      const saleStatus = alreadyPaid ? "paid" : "pending_pickup";
+      const paidAt = alreadyPaid ? new Date().toISOString() : null;
+
       // 2) Create the POS sale record
       const { data: sale, error: saleError } = await supabase
         .from("pos_sales")
@@ -209,16 +217,19 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
           subtotal: totalValue,
           discount: discountAmount,
           total: finalValue,
-          status: "pending_pickup",
+          status: saleStatus,
+          paid_at: paidAt,
           sale_type: "live",
           source_order_id: order.id,
           event_id: order.event_id,
           // Site = retirada na loja, NÃO conta no faturamento da loja física
           revenue_attribution: isSiteChannel ? "site_pickup_only" : "store",
-          notes: `Venda da Live - ${order.customer?.instagram_handle || ""}. Pedido CRM: ${order.id.slice(0, 8)}${isSiteChannel ? " (Retirada Site)" : ""}`,
+          notes: `Venda da Live${sellerName ? ` - Vendedora: ${sellerName}` : ""} - ${order.customer?.instagram_handle || ""}. Pedido CRM: ${order.id.slice(0, 8)}${isSiteChannel ? " (Retirada Site)" : ""}`,
           payment_details: {
             source: "live_event",
             event_channel: eventChannel,
+            manual_pos_routing: manualRouting,
+            seller_name: sellerName,
             customer_instagram: order.customer?.instagram_handle,
             customer_whatsapp: whatsapp,
           },
