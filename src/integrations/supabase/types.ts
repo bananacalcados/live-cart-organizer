@@ -6649,6 +6649,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_deep_link: boolean
+          label: string | null
           redirect_count: number
           slug: string
         }
@@ -6661,6 +6662,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_deep_link?: boolean
+          label?: string | null
           redirect_count?: number
           slug: string
         }
@@ -6673,6 +6675,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_deep_link?: boolean
+          label?: string | null
           redirect_count?: number
           slug?: string
         }
@@ -18481,6 +18484,24 @@ export type Database = {
           reactions: number
           source_origins: Json
           total_activities: number
+        }[]
+      }
+      vip_link_funnel: {
+        Args: { p_days?: number }
+        Returns: {
+          campaign_clicks: number
+          campaign_id: string
+          campaign_name: string
+          clicks: number
+          customers_tagged: number
+          estimated_entries: number
+          group_entries: number
+          group_names: string[]
+          label: string
+          leads_created: number
+          link_id: string
+          redirect_count: number
+          slug: string
         }[]
       }
       wa_status_rank: { Args: { s: string }; Returns: number }
