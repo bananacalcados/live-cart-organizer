@@ -19,6 +19,7 @@ import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
 import { POSSellerTaskProgress } from "./POSSellerTaskProgress";
 import { POSSellerLinkPageProgress } from "./POSSellerLinkPageProgress";
 import { POSPayrollTab } from "./POSPayrollTab";
+import { POSFiscalTab } from "./POSFiscalTab";
 
 
 
@@ -94,7 +95,7 @@ const PAYMENT_STYLE: Record<string, { icon: any; gradient: string }> = {
 
 export function POSGeneralDashboard({ onBack }: Props) {
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"overview" | "payroll">("overview");
+  const [view, setView] = useState<"overview" | "payroll" | "fiscal">("overview");
   const [syncing, setSyncing] = useState(false);
   const [period, setPeriod] = useState<Period>("month");
   const [customRange, setCustomRange] = useState<DateRange | undefined>(undefined);
@@ -510,7 +511,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
 
       {/* Tabs: Visão Geral / Folha */}
       <div className="flex items-center gap-1 px-4 pt-3 border-b border-zinc-800">
-        {([["overview", "Visão Geral"], ["payroll", "Folha"]] as const).map(([id, label]) => (
+        {([["overview", "Visão Geral"], ["payroll", "Folha"], ["fiscal", "Fiscal"]] as const).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setView(id)}
@@ -528,6 +529,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
       {view === "payroll" ? (
         <ScrollArea className="flex-1">
           <POSPayrollTab periodRange={{ start: periodRange.start, end: periodRange.end, label: periodRange.label }} />
+        </ScrollArea>
+      ) : view === "fiscal" ? (
+        <ScrollArea className="flex-1">
+          <POSFiscalTab periodRange={{ start: periodRange.start, end: periodRange.end, label: periodRange.label }} />
         </ScrollArea>
       ) : (
       <ScrollArea className="flex-1">
