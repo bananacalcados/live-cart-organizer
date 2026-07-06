@@ -288,10 +288,10 @@ export function generateFiscalPdf(input: FiscalPdfInput): void {
   // ---------- Detalhamento das saídas ----------
   if (input.sales.length) {
     const detCols: Col[] = [
-      { title: "Data", width: contentW * 0.1 },
-      { title: "Tipo", width: contentW * 0.08 },
+      { title: "Data", width: contentW * 0.13 },
+      { title: "Tipo", width: contentW * 0.07 },
       { title: "Série/Nº", width: contentW * 0.1 },
-      { title: "Destinatário", width: contentW * 0.24 },
+      { title: "Destinatário", width: contentW * 0.22 },
       { title: "Chave de acesso", width: contentW * 0.36 },
       { title: "Valor", width: contentW * 0.12, align: "right" },
     ];
