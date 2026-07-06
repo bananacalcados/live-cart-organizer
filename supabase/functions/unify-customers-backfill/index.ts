@@ -1,5 +1,10 @@
 // Backfill de unificação de clientes — Fase 2
 // Modo padrão: dry-run (apenas relatório). Para gravar: { mode: "execute" }
+//
+// ⚠️ NUNCA agendar em cron. É uma ferramenta MANUAL de backfill/reconciliação.
+// A gravação é IDEMPOTENTE: cada registro passa pelo RPC unify_upsert_customers
+// (resolve identidade canônica + blindagem de grupos/IG/LID e só complementa
+// lacunas). Re-executar não clona a base — encontra o mesmo registro e reenriquece.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
