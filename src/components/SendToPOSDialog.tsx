@@ -271,6 +271,7 @@ export function SendToPOSDialog({ open, onOpenChange, order }: SendToPOSDialogPr
       setTimeout(() => {
         setSuccess(false);
         setSelectedStore("");
+        setSelectedSeller("");
         onOpenChange(false);
       }, 1500);
     } catch (error) {
