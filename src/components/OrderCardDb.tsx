@@ -1046,18 +1046,20 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
               Copiar Link de Cadastro
             </Button>
            )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-xs gap-1"
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowPOSDialog(true);
-            }}
-          >
-            <Store className="h-3 w-3" />
-            Enviar ao PDV (Retirada)
-          </Button>
+          {!isManualRoutingEvent && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowPOSDialog(true);
+              }}
+            >
+              <Store className="h-3 w-3" />
+              Enviar ao PDV (Retirada)
+            </Button>
+          )}
 
           {/* Fulfillment buttons for paid orders */}
           {(order.is_paid || order.paid_externally) && order.stage === 'paid' && (
