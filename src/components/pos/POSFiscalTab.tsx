@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Lock, Loader2, Download, FileText, RefreshCw, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { Lock, Loader2, Download, FileText, RefreshCw, ArrowDownToLine, ArrowUpFromLine, FileArchive } from "lucide-react";
 import { format } from "date-fns";
 import { downloadCsv, brlCell, dateCell } from "@/lib/fiscal/exportFiscalReport";
 import { generateFiscalPdf } from "@/lib/fiscal/exportFiscalPdf";
+import { exportFiscalXmlZip } from "@/lib/fiscal/exportFiscalXml";
 import { SintegraExportDialog } from "@/components/fiscal/SintegraExportDialog";
 
 const FISCAL_PASSWORD = "joey102030";
@@ -45,6 +46,7 @@ export function POSFiscalTab({ periodRange }: Props) {
   const [sales, setSales] = useState<SaleDoc[]>([]);
   const [entradas, setEntradas] = useState<Entrada[]>([]);
   const [sintegraOpen, setSintegraOpen] = useState(false);
+  const [xmlLoading, setXmlLoading] = useState(false);
 
   const startIso = periodRange.start.toISOString();
   const endIso = useMemo(() => new Date(periodRange.end.getTime() + 86399999).toISOString(), [periodRange.end]);
@@ -178,6 +180,32 @@ export function POSFiscalTab({ periodRange }: Props) {
     toast.success("Relatório PDF gerado.");
   };
 
+  const exportXmls = async () => {
+    setXmlLoading(true);
+    const t = toast.loading("Preparando pacote de XMLs…");
+    try {
+      const res = await exportFiscalXmlZip({
+        startIso,
+        endIso,
+        companyId,
+        onProgress: (msg) => toast.loading(msg, { id: t }),
+      });
+      if (res.saidas === 0 && res.entradas === 0) {
+        toast.error("Nenhum XML encontrado no período.", { id: t });
+        return;
+      }
+      const extra = (res.saidasSemXml + res.entradasSemXml) > 0
+        ? ` (${res.saidasSemXml + res.entradasSemXml} nota(s) sem XML foram ignoradas)`
+        : "";
+      toast.success(`ZIP gerado: ${res.saidas} de saída + ${res.entradas} de entrada${extra}.`, { id: t });
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao gerar o pacote de XMLs.", { id: t });
+    } finally {
+      setXmlLoading(false);
+    }
+  };
+
+
   // ---- Gate ----
   if (!unlocked) {
     return (
@@ -227,6 +255,10 @@ export function POSFiscalTab({ periodRange }: Props) {
           <Button size="sm" onClick={exportPdf} disabled={loading || (!sales.length && !entradas.length)}
             className="gap-2 bg-red-600 hover:bg-red-700 text-white">
             <FileText className="h-3.5 w-3.5" /> Relatório PDF
+          </Button>
+          <Button size="sm" onClick={exportXmls} disabled={loading || xmlLoading}
+            className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
+            {xmlLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileArchive className="h-3.5 w-3.5" />} Baixar XMLs
           </Button>
           <Button size="sm" onClick={() => setSintegraOpen(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white">
             <FileText className="h-3.5 w-3.5" /> Gerar Sintegra
