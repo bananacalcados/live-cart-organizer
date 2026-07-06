@@ -60,15 +60,16 @@ export function generateFiscalPdf(input: FiscalPdfInput): void {
   const contentW = pageW - margin * 2;
   let y = margin;
 
+  let pageCount = 1;
   const ensureSpace = (needed: number) => {
     if (y + needed > pageH - margin - 20) {
       addFooter();
       doc.addPage();
+      pageCount++;
       y = margin;
     }
   };
 
-  let pageCount = 1;
   const addFooter = () => {
     doc.setFontSize(7.5);
     doc.setTextColor(...GRAY);
