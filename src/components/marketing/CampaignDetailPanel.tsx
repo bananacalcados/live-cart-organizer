@@ -590,6 +590,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     const { error } = await supabase.from('group_redirect_links').insert({
       campaign_id: campaignId,
       slug: newSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
+      label: newLinkLabel.trim() || null,
       is_deep_link: false,
     });
     if (error) {
@@ -597,6 +598,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     } else {
       toast.success("Link criado!");
       setNewSlug("");
+      setNewLinkLabel("");
       fetchLinks();
     }
     setIsCreatingLink(false);
