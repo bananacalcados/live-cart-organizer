@@ -162,6 +162,7 @@ export function ChatView({
   const [isBlocked, setIsBlocked] = useState(false);
   const [blockLoading, setBlockLoading] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   /** Instância vinculada à conversa: usa a da conversa ou a última mensagem trocada. */
   const blockNumberId = useMemo(() => {
