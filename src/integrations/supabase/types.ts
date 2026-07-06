@@ -11876,6 +11876,9 @@ export type Database = {
           invoice_pdf_url: string | null
           is_conditional: boolean
           mercadopago_payment_id: string | null
+          motivo_cancelamento:
+            | Database["public"]["Enums"]["pedido_motivo_cancelamento"]
+            | null
           mp_account_id: string | null
           nfce_key: string | null
           nfce_number: string | null
@@ -11897,6 +11900,7 @@ export type Database = {
           shipping_notes: string | null
           source_order_id: string | null
           status: string
+          status_cancelamento: Database["public"]["Enums"]["pedido_status_cancelamento"]
           stock_source_store_id: string | null
           store_id: string
           subtotal: number
@@ -11940,6 +11944,9 @@ export type Database = {
           invoice_pdf_url?: string | null
           is_conditional?: boolean
           mercadopago_payment_id?: string | null
+          motivo_cancelamento?:
+            | Database["public"]["Enums"]["pedido_motivo_cancelamento"]
+            | null
           mp_account_id?: string | null
           nfce_key?: string | null
           nfce_number?: string | null
@@ -11961,6 +11968,7 @@ export type Database = {
           shipping_notes?: string | null
           source_order_id?: string | null
           status?: string
+          status_cancelamento?: Database["public"]["Enums"]["pedido_status_cancelamento"]
           stock_source_store_id?: string | null
           store_id: string
           subtotal?: number
@@ -12004,6 +12012,9 @@ export type Database = {
           invoice_pdf_url?: string | null
           is_conditional?: boolean
           mercadopago_payment_id?: string | null
+          motivo_cancelamento?:
+            | Database["public"]["Enums"]["pedido_motivo_cancelamento"]
+            | null
           mp_account_id?: string | null
           nfce_key?: string | null
           nfce_number?: string | null
@@ -12025,6 +12036,7 @@ export type Database = {
           shipping_notes?: string | null
           source_order_id?: string | null
           status?: string
+          status_cancelamento?: Database["public"]["Enums"]["pedido_status_cancelamento"]
           stock_source_store_id?: string | null
           store_id?: string
           subtotal?: number
@@ -15920,6 +15932,163 @@ export type Database = {
           },
         ]
       }
+      trocas_devolucoes: {
+        Row: {
+          chave_acesso_original: string | null
+          chave_devolucao: string | null
+          cliente_id: string | null
+          codigo_devolucao: string | null
+          codigo_postagem_reversa: string | null
+          created_at: string
+          id: string
+          loja_origem_id: string | null
+          modo_expedicao: Database["public"]["Enums"]["td_modo_expedicao"]
+          motivo: Database["public"]["Enums"]["td_motivo"]
+          origem_canal: Database["public"]["Enums"]["td_origem_canal"]
+          pedido_novo_id: string | null
+          pedido_original_id: string | null
+          status: Database["public"]["Enums"]["td_status"]
+          tipo: Database["public"]["Enums"]["td_tipo"]
+          updated_at: string
+          vendedora_troca_id: string | null
+        }
+        Insert: {
+          chave_acesso_original?: string | null
+          chave_devolucao?: string | null
+          cliente_id?: string | null
+          codigo_devolucao?: string | null
+          codigo_postagem_reversa?: string | null
+          created_at?: string
+          id?: string
+          loja_origem_id?: string | null
+          modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
+          motivo: Database["public"]["Enums"]["td_motivo"]
+          origem_canal: Database["public"]["Enums"]["td_origem_canal"]
+          pedido_novo_id?: string | null
+          pedido_original_id?: string | null
+          status?: Database["public"]["Enums"]["td_status"]
+          tipo: Database["public"]["Enums"]["td_tipo"]
+          updated_at?: string
+          vendedora_troca_id?: string | null
+        }
+        Update: {
+          chave_acesso_original?: string | null
+          chave_devolucao?: string | null
+          cliente_id?: string | null
+          codigo_devolucao?: string | null
+          codigo_postagem_reversa?: string | null
+          created_at?: string
+          id?: string
+          loja_origem_id?: string | null
+          modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
+          motivo?: Database["public"]["Enums"]["td_motivo"]
+          origem_canal?: Database["public"]["Enums"]["td_origem_canal"]
+          pedido_novo_id?: string | null
+          pedido_original_id?: string | null
+          status?: Database["public"]["Enums"]["td_status"]
+          tipo?: Database["public"]["Enums"]["td_tipo"]
+          updated_at?: string
+          vendedora_troca_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trocas_devolucoes_loja_origem_id_fkey"
+            columns: ["loja_origem_id"]
+            isOneToOne: false
+            referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_novo_id_fkey"
+            columns: ["pedido_novo_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_pedido_original_id_fkey"
+            columns: ["pedido_original_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_vendedora_troca_id_fkey"
+            columns: ["vendedora_troca_id"]
+            isOneToOne: false
+            referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trocas_devolucoes_itens: {
+        Row: {
+          barcode: string | null
+          created_at: string
+          direcao: Database["public"]["Enums"]["td_item_direcao"]
+          estado_estoque:
+            | Database["public"]["Enums"]["td_estado_estoque"]
+            | null
+          id: string
+          produto_id: string | null
+          produto_nome: string | null
+          quantidade: number
+          repoe_estoque: boolean
+          sku: string | null
+          tamanho: string | null
+          troca_devolucao_id: string
+          updated_at: string
+          valor_unitario: number
+          variacao_id: string | null
+        }
+        Insert: {
+          barcode?: string | null
+          created_at?: string
+          direcao: Database["public"]["Enums"]["td_item_direcao"]
+          estado_estoque?:
+            | Database["public"]["Enums"]["td_estado_estoque"]
+            | null
+          id?: string
+          produto_id?: string | null
+          produto_nome?: string | null
+          quantidade?: number
+          repoe_estoque?: boolean
+          sku?: string | null
+          tamanho?: string | null
+          troca_devolucao_id: string
+          updated_at?: string
+          valor_unitario?: number
+          variacao_id?: string | null
+        }
+        Update: {
+          barcode?: string | null
+          created_at?: string
+          direcao?: Database["public"]["Enums"]["td_item_direcao"]
+          estado_estoque?:
+            | Database["public"]["Enums"]["td_estado_estoque"]
+            | null
+          id?: string
+          produto_id?: string | null
+          produto_nome?: string | null
+          quantidade?: number
+          repoe_estoque?: boolean
+          sku?: string | null
+          tamanho?: string | null
+          troca_devolucao_id?: string
+          updated_at?: string
+          valor_unitario?: number
+          variacao_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trocas_devolucoes_itens_troca_devolucao_id_fkey"
+            columns: ["troca_devolucao_id"]
+            isOneToOne: false
+            referencedRelation: "trocas_devolucoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       uazapi_contact_backfill_state: {
         Row: {
           created_at: string
@@ -16132,6 +16301,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      vouchers: {
+        Row: {
+          cliente_id: string | null
+          codigo: string | null
+          created_at: string
+          id: string
+          saldo: number
+          status: Database["public"]["Enums"]["voucher_status"]
+          troca_devolucao_id: string | null
+          updated_at: string
+          validade: string | null
+          valor: number
+        }
+        Insert: {
+          cliente_id?: string | null
+          codigo?: string | null
+          created_at?: string
+          id?: string
+          saldo?: number
+          status?: Database["public"]["Enums"]["voucher_status"]
+          troca_devolucao_id?: string | null
+          updated_at?: string
+          validade?: string | null
+          valor?: number
+        }
+        Update: {
+          cliente_id?: string | null
+          codigo?: string | null
+          created_at?: string
+          id?: string
+          saldo?: number
+          status?: Database["public"]["Enums"]["voucher_status"]
+          troca_devolucao_id?: string | null
+          updated_at?: string
+          validade?: string | null
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vouchers_troca_devolucao_id_fkey"
+            columns: ["troca_devolucao_id"]
+            isOneToOne: false
+            referencedRelation: "trocas_devolucoes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_events_raw: {
         Row: {
@@ -18652,12 +18868,36 @@ export type Database = {
         | "recusado"
         | "cancelado"
       ledger_book: "faturamento" | "realidade"
+      pedido_motivo_cancelamento: "troca" | "devolucao"
+      pedido_status_cancelamento: "ativo" | "cancelado"
       pos_revenue_attribution: "store" | "site_pickup_only"
       regime_tributario:
         | "simples_nacional"
         | "lucro_presumido"
         | "lucro_real"
         | "mei"
+      td_estado_estoque:
+        | "reservado"
+        | "despachado"
+        | "retornado_vendavel"
+        | "retornado_avaria"
+      td_item_direcao: "devolvido" | "reposicao"
+      td_modo_expedicao: "aguarda_retorno" | "despacho_antecipado"
+      td_motivo:
+        | "defeito_avaria"
+        | "tamanho"
+        | "arrependimento"
+        | "erro_expedicao"
+        | "outro"
+      td_origem_canal: "fisica" | "site"
+      td_status:
+        | "iniciada"
+        | "aguardando_retorno"
+        | "recebido_conferencia"
+        | "concluida"
+        | "cancelada"
+      td_tipo: "troca" | "devolucao"
+      voucher_status: "ativo" | "usado" | "expirado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -18806,6 +19046,8 @@ export const Constants = {
         "cancelado",
       ],
       ledger_book: ["faturamento", "realidade"],
+      pedido_motivo_cancelamento: ["troca", "devolucao"],
+      pedido_status_cancelamento: ["ativo", "cancelado"],
       pos_revenue_attribution: ["store", "site_pickup_only"],
       regime_tributario: [
         "simples_nacional",
@@ -18813,6 +19055,31 @@ export const Constants = {
         "lucro_real",
         "mei",
       ],
+      td_estado_estoque: [
+        "reservado",
+        "despachado",
+        "retornado_vendavel",
+        "retornado_avaria",
+      ],
+      td_item_direcao: ["devolvido", "reposicao"],
+      td_modo_expedicao: ["aguarda_retorno", "despacho_antecipado"],
+      td_motivo: [
+        "defeito_avaria",
+        "tamanho",
+        "arrependimento",
+        "erro_expedicao",
+        "outro",
+      ],
+      td_origem_canal: ["fisica", "site"],
+      td_status: [
+        "iniciada",
+        "aguardando_retorno",
+        "recebido_conferencia",
+        "concluida",
+        "cancelada",
+      ],
+      td_tipo: ["troca", "devolucao"],
+      voucher_status: ["ativo", "usado", "expirado"],
     },
   },
 } as const
