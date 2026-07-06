@@ -517,11 +517,14 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                     <SelectItem value="site">🌐 Site (Shopify) — venda online</SelectItem>
                     <SelectItem value="pos_perola">🏬 Loja Pérola — venda física</SelectItem>
                     <SelectItem value="pos_centro">🏬 Loja Centro — venda física</SelectItem>
+                    <SelectItem value="pos_multi">🏬🏬 Duas lojas (Pérola + Centro) — envio manual</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {channel === "site"
                     ? "Pedidos vão para a Shopify (venda online)."
+                    : channel === "pos_multi"
+                    ? "Pedido pago NÃO é enviado automático. No card você escolhe a loja e a vendedora que fez a venda. Conta como Faturamento Live da loja."
                     : "Pedidos pagos são roteados para a aba Pedidos da loja escolhida e contam como venda dela."}
                 </p>
               </div>
