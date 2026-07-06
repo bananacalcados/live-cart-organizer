@@ -529,6 +529,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
         <ScrollArea className="flex-1">
           <POSPayrollTab periodRange={{ start: periodRange.start, end: periodRange.end, label: periodRange.label }} />
         </ScrollArea>
+      ) : view === "fiscal" ? (
+        <ScrollArea className="flex-1">
+          <POSFiscalTab periodRange={{ start: periodRange.start, end: periodRange.end, label: periodRange.label }} />
+        </ScrollArea>
       ) : (
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
