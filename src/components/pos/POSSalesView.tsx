@@ -1946,7 +1946,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           open={showNewExchange}
           sellerId={selectedSeller || undefined}
           onCancel={() => setShowNewExchange(false)}
-          onDone={() => { setShowNewExchange(false); onCloseSalesView(); }}
+          onDone={() => { setShowNewExchange(false); onCloseSalesView?.(); }}
         />
 
         <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu && !showNewExchange} onOpenChange={() => {}}>
