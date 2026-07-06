@@ -188,6 +188,25 @@ export function computePayroll(input: ComputeInput): PayrollResult {
     const tKey = saleTypeKey(sale);
 
     if (tKey === "live") {
+      // Live com vendedora REAL mapeada (evento multi-loja / envio manual):
+      // credita direto à vendedora e NÃO entra no rateio, evitando dupla contagem.
+      const liveSeller = sale.seller_id ? sellerById.get(sale.seller_id) : undefined;
+      if (liveSeller && !isVirtualSeller(liveSeller.name)) {
+        const personId = personBySeller.get(liveSeller.id);
+        if (personId && rows.has(personId)) {
+          const row = rows.get(personId)!;
+          const chan = (`live_${sKey}`) as ChannelKey;
+          if (CHANNEL_KEYS.includes(chan)) row.channels[chan] += net;
+          if (sKey !== "other" && !row.stores.includes(sKey)) row.stores.push(sKey);
+          continue;
+        }
+        // vendedora real mas não mapeada a uma pessoa → registra como não-mapeada
+        const cur = unmappedMap.get(liveSeller.id) || { id: liveSeller.id, name: liveSeller.name, net: 0 };
+        cur.net += net;
+        unmappedMap.set(liveSeller.id, cur);
+        continue;
+      }
+      // Live sem vendedora real (virtual) → mantém o rateio por participantes.
       const prev = liveNetByStoreKey.get(sKey) || { net: 0, storeId: sale.store_id || "" };
       prev.net += net;
       if (sale.store_id) prev.storeId = sale.store_id;
