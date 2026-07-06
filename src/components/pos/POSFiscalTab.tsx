@@ -256,6 +256,10 @@ export function POSFiscalTab({ periodRange }: Props) {
             className="gap-2 bg-red-600 hover:bg-red-700 text-white">
             <FileText className="h-3.5 w-3.5" /> Relatório PDF
           </Button>
+          <Button size="sm" onClick={exportXmls} disabled={loading || xmlLoading}
+            className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
+            {xmlLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileArchive className="h-3.5 w-3.5" />} Baixar XMLs
+          </Button>
           <Button size="sm" onClick={() => setSintegraOpen(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white">
             <FileText className="h-3.5 w-3.5" /> Gerar Sintegra
           </Button>
