@@ -3161,6 +3161,11 @@ function FlowEditor({
                     </div>
                   </div>
                 )}
+                {triggerType === "event_lead_captured" && (
+                  <EventLeadCaptureConfig triggerConfig={triggerConfig} onChange={setTriggerConfig} />
+                )}
+
+
 
                 {/* Instance selector for all triggers */}
                 <div className="mt-3">
