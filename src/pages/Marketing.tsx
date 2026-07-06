@@ -209,6 +209,11 @@ export default function Marketing() {
   const [regionFilter, setRegionFilter] = useState<string>("all");
   const [rfmFilter, setRfmFilter] = useState<string>("all");
   const [dddFilter, setDddFilter] = useState<string>("all");
+  // Lista completa de DDDs disponíveis (carregada uma vez, sem filtro) para popular o dropdown
+  // mesmo quando o filtro de DDD é aplicado no servidor.
+  const [availableDdds, setAvailableDdds] = useState<string[]>([]);
+  // Ref para o fetch ler o DDD atual sem recriar o callback (evita quebrar loadTabData).
+  const dddFilterRef = useRef<string>("all");
   const [sortField, setSortField] = useState<string>("total_spent");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
