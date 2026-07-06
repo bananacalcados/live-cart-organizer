@@ -274,6 +274,8 @@ const Events = () => {
         channel_preferences: channelPreferences,
         automation_enabled: automationEnabled,
         default_store_id: defaultStoreId,
+        store_ids: storeIds,
+        manual_pos_routing: manualPosRouting,
         initial_message_enabled: initialMessageEnabled,
         initial_message_blocks: initialMessageBlocks,
         ...metaTemplateFields,
