@@ -4,8 +4,9 @@ import { toast } from "sonner";
 import QRCode from "react-qr-code";
 import {
   Link as LinkIcon, Copy, RefreshCw, Loader2, MousePointerClick,
-  LogIn, UserPlus, Crown, QrCode, Download, Info, TrendingUp,
+  LogIn, UserPlus, Crown, QrCode, Download, Info, TrendingUp, Printer,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -82,6 +83,85 @@ export function VipLinksManager() {
       a.click();
     };
     img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(xml)));
+  };
+
+  /** Renderiza o SVG do QR em PNG de alta resolução (para impressão nítida). */
+  const qrToHiResPng = (slug: string, px = 1200): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const svg = document.getElementById(`qr-${slug}`);
+      if (!svg) return reject(new Error("QR não encontrado"));
+      const xml = new XMLSerializer().serializeToString(svg);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = px; canvas.height = px;
+        const ctx = canvas.getContext("2d")!;
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, px, px);
+        ctx.drawImage(img, 0, 0, px, px);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = reject;
+      img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(xml)));
+    });
+
+  /** Gera um PDF de alta qualidade no tamanho de um crachá (54 × 86 mm, retrato). */
+  const downloadBadgePdf = async (row: FunnelRow) => {
+    try {
+      const png = await qrToHiResPng(row.slug, 1200);
+
+      // Crachá padrão CR80 vertical: 54mm × 86mm.
+      const W = 54, H = 86;
+      const doc = new jsPDF({ unit: "mm", format: [W, H], orientation: "portrait" });
+
+      // Moldura sutil.
+      doc.setDrawColor(210);
+      doc.setLineWidth(0.4);
+      doc.roundedRect(2, 2, W - 4, H - 4, 3, 3, "S");
+
+      // Título / marca.
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(20);
+      doc.text("GRUPO VIP", W / 2, 12, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(110);
+      doc.text("Banana Calcados", W / 2, 17, { align: "center" });
+
+      // QR centralizado grande.
+      const qrSize = 40;
+      const qrX = (W - qrSize) / 2;
+      const qrY = 22;
+      doc.addImage(png, "PNG", qrX, qrY, qrSize, qrSize, undefined, "FAST");
+
+      // Chamada para acao.
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(20);
+      doc.text("Aponte a camera", W / 2, qrY + qrSize + 8, { align: "center" });
+      doc.text("e entre no grupo", W / 2, qrY + qrSize + 13, { align: "center" });
+
+      // Label opcional.
+      if (row.label) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(110);
+        doc.text(String(row.label), W / 2, qrY + qrSize + 19, { align: "center" });
+      }
+
+      // URL no rodape.
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.setTextColor(140);
+      doc.text(linkUrl(row.slug), W / 2, H - 5, { align: "center", maxWidth: W - 8 });
+
+      doc.save(`cracha-vip-${row.slug}.pdf`);
+      toast.success("PDF do crachá gerado!");
+    } catch (e: any) {
+      toast.error("Erro ao gerar PDF: " + (e?.message || e));
+    }
   };
 
   return (
@@ -205,10 +285,16 @@ export function VipLinksManager() {
                   <Button variant="outline" size="sm" className="flex-1 gap-1" onClick={() => copy(qrFor.slug)}>
                     <Copy className="h-3.5 w-3.5" /> Copiar
                   </Button>
-                  <Button size="sm" className="flex-1 gap-1" onClick={() => downloadQr(qrFor.slug)}>
-                    <Download className="h-3.5 w-3.5" /> Baixar
+                  <Button variant="outline" size="sm" className="flex-1 gap-1" onClick={() => downloadQr(qrFor.slug)}>
+                    <Download className="h-3.5 w-3.5" /> PNG
                   </Button>
                 </div>
+                <Button size="sm" className="w-full gap-1" onClick={() => downloadBadgePdf(qrFor)}>
+                  <Printer className="h-3.5 w-3.5" /> Imprimir crachá (PDF)
+                </Button>
+                <p className="text-[10px] text-muted-foreground text-center">
+                  PDF em alta qualidade, tamanho de crachá (54 × 86 mm).
+                </p>
               </div>
             )}
           </DialogContent>
