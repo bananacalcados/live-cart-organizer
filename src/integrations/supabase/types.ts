@@ -10319,6 +10319,124 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_commission_live_participants: {
+        Row: {
+          created_at: string
+          id: string
+          period_end: string
+          period_start: string
+          person_id: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          period_end: string
+          period_start: string
+          person_id: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          period_end?: string
+          period_start?: string
+          person_id?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_commission_live_participants_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "pos_commission_people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_commission_people: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          manual_goal_value: number | null
+          name: string
+          receives_all_lives: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          manual_goal_value?: number | null
+          name: string
+          receives_all_lives?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          manual_goal_value?: number | null
+          name?: string
+          receives_all_lives?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pos_commission_people_sellers: {
+        Row: {
+          created_at: string
+          id: string
+          person_id: string
+          seller_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          person_id: string
+          seller_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          person_id?: string
+          seller_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_commission_people_sellers_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "pos_commission_people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_commission_scale: {
+        Row: {
+          achievement_percent: number
+          commission_percent: number
+          created_at: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          achievement_percent: number
+          commission_percent: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          achievement_percent?: number
+          commission_percent?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pos_conditionals: {
         Row: {
           conditional_type: string
