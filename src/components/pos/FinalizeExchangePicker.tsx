@@ -60,11 +60,15 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
   const [reposicoes, setReposicoes] = useState<TdItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Fase 6: resolução da diferença a favor do cliente
+  const [resolucao, setResolucao] = useState<"voucher" | "estorno_financeiro">("voucher");
+  const [estornoForma, setEstornoForma] = useState<"pix" | "cartao" | "dinheiro">("pix");
 
   useEffect(() => {
     if (open) {
       setPhase("list"); setSearch(""); setSelected(null);
       setDevolvidos([]); setReposicoes([]);
+      setResolucao("voucher"); setEstornoForma("pix");
     }
   }, [open]);
 
@@ -151,6 +155,18 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
     }
   };
 
+  // Fase 6 — duas camadas de valor
+  const valorDevolvido = devolvidos
+    .filter((d) => d.confirmado)
+    .reduce((s, d) => s + Number(d.item.valor_unitario || 0) * d.quantidade, 0);
+  const valorReposicao = reposicoes
+    .reduce((s, r) => s + Number(r.valor_unitario || 0) * Number(r.quantidade || 1), 0);
+  const diferenca = Number((valorReposicao - valorDevolvido).toFixed(2));
+  const isSite = selected?.origem_canal === "site";
+  const faturamentoVendedoraTroca = !isSite && diferenca > 0 ? diferenca : 0;
+
+
+
   const finalize = async () => {
     if (!selected) return;
     const confirmados = devolvidos.filter((d) => d.confirmado);
@@ -182,6 +198,13 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
         sellerId: sellerId || null,
         conferidos,
         reposicaoItemIds: reposicoes.map((r) => r.id),
+        origem_canal: selected.origem_canal,
+        cliente_id: selected.cliente_id,
+        valor_devolvido: valorDevolvido,
+        valor_reposicao: valorReposicao,
+        resolucao_diferenca: diferenca < -0.009 ? resolucao : undefined,
+        estorno_forma: diferenca < -0.009 && resolucao === "estorno_financeiro" ? estornoForma : null,
+        codigo_devolucao: selected.codigo_devolucao,
       });
 
       const dev = result.devolucao;
@@ -221,9 +244,31 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
         { duration: 7000 },
       );
 
-      if (selected.tipo === "troca") {
-        toast.info("Nova NF-e de venda (valor cheio) será emitida na Fase 6.", { duration: 6000 });
+      // Fase 6: feedback da atribuição de faturamento / crédito ao cliente.
+      const attr = result.atribuicao;
+      if (attr) {
+        if (attr.resolucao === "cliente_paga") {
+          toast.info(
+            `Cliente paga a diferença de R$ ${attr.diferenca.toFixed(2)}.` +
+            (attr.faturamento_vendedora_troca > 0
+              ? ` Faturamento da troca (R$ ${attr.faturamento_vendedora_troca.toFixed(2)}) creditado à vendedora.`
+              : isSite ? " Canal site: sem vendedora." : ""),
+            { duration: 8000 },
+          );
+        } else if (attr.resolucao === "voucher") {
+          toast.success(
+            `Voucher ${attr.voucher_codigo || ""} de R$ ${Math.abs(attr.diferenca).toFixed(2)} gerado para o cliente.`,
+            { duration: 8000 },
+          );
+        } else if (attr.resolucao === "estorno_financeiro") {
+          toast.success(
+            `Estorno financeiro de R$ ${(attr.estorno_valor || 0).toFixed(2)} registrado (${estornoForma}).`,
+            { duration: 8000 },
+          );
+        }
       }
+
+
 
       onDone();
     } catch (e: any) {
@@ -388,6 +433,75 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
                   </div>
                 </div>
               )}
+
+              {/* Fase 6 — Atribuição de faturamento (duas camadas) */}
+              <div className="rounded-xl border border-emerald-400/20 bg-pos-white/5 p-3 space-y-2">
+                <p className="text-xs font-semibold text-pos-white/70">Faturamento / crédito</p>
+                <div className="flex items-center justify-between text-[12px] text-pos-white/70">
+                  <span>Valor devolvido</span>
+                  <span className="font-mono">R$ {valorDevolvido.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between text-[12px] text-pos-white/70">
+                  <span>Valor da reposição (cheio)</span>
+                  <span className="font-mono">R$ {valorReposicao.toFixed(2)}</span>
+                </div>
+                <div className="h-px bg-pos-white/10" />
+
+                {Math.abs(diferenca) < 0.01 ? (
+                  <p className="text-[12px] text-pos-white/60">Sem diferença de valor.</p>
+                ) : diferenca > 0 ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[13px]">
+                      <span className="text-pos-white">Cliente paga a diferença</span>
+                      <span className="font-mono font-bold text-emerald-300">R$ {diferenca.toFixed(2)}</span>
+                    </div>
+                    <p className="text-[11px] text-pos-white/50">
+                      {isSite
+                        ? "Canal site: sem vendedora (equipe de expedição)."
+                        : `Faturamento da troca (R$ ${faturamentoVendedoraTroca.toFixed(2)}) vai para ${sellerName || "a vendedora da troca"}. A venda original permanece com a vendedora original.`}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-[13px]">
+                      <span className="text-pos-white">Diferença a favor do cliente</span>
+                      <span className="font-mono font-bold text-amber-300">R$ {Math.abs(diferenca).toFixed(2)}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setResolucao("voucher")}
+                        className={cn("rounded-lg border-2 p-2 text-[11px] font-medium transition-all",
+                          resolucao === "voucher" ? "border-emerald-400 bg-emerald-500/15 text-pos-white" : "border-pos-white/10 bg-pos-white/5 text-pos-white/60")}
+                      >
+                        Gerar voucher
+                      </button>
+                      <button
+                        onClick={() => setResolucao("estorno_financeiro")}
+                        className={cn("rounded-lg border-2 p-2 text-[11px] font-medium transition-all",
+                          resolucao === "estorno_financeiro" ? "border-amber-400 bg-amber-500/15 text-pos-white" : "border-pos-white/10 bg-pos-white/5 text-pos-white/60")}
+                      >
+                        Estorno financeiro
+                      </button>
+                    </div>
+                    {resolucao === "estorno_financeiro" && (
+                      <div className="grid grid-cols-3 gap-2">
+                        {(["pix", "cartao", "dinheiro"] as const).map((f) => (
+                          <button
+                            key={f}
+                            onClick={() => setEstornoForma(f)}
+                            className={cn("rounded-lg border p-1.5 text-[11px] capitalize transition-all",
+                              estornoForma === f ? "border-amber-400 bg-amber-500/15 text-pos-white" : "border-pos-white/10 bg-pos-white/5 text-pos-white/60")}
+                          >
+                            {f === "cartao" ? "Cartão" : f}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+
 
               <div className="flex items-center justify-between pt-2">
                 <Button variant="ghost" className="text-pos-white/70" onClick={() => setPhase("list")}>Voltar</Button>

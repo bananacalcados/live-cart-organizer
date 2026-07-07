@@ -47,6 +47,25 @@ export interface FinalizeExchangeParams {
   /** Emitir NF-e de devolução (padrão true). */
   emitirDevolucao?: boolean;
   ambiente?: "homologacao" | "producao";
+
+  // ── Fase 6: Atribuição de faturamento (duas camadas) ──
+  /** Canal da venda original: 'site' não tem vendedora (equipe de expedição). */
+  origem_canal?: Database["public"]["Enums"]["td_origem_canal"];
+  /** Cliente para emissão de voucher / estorno. */
+  cliente_id?: string | null;
+  /** Valor total dos itens devolvidos (confirmados). */
+  valor_devolvido: number;
+  /** Valor cheio dos produtos de reposição. */
+  valor_reposicao: number;
+  /**
+   * Resolução quando a diferença é a favor do cliente (reposição < devolução):
+   * 'voucher' gera crédito; 'estorno_financeiro' devolve o dinheiro.
+   * Ignorada quando a diferença é zero ou o cliente é quem paga a mais.
+   */
+  resolucao_diferenca?: "voucher" | "estorno_financeiro";
+  /** Forma do estorno financeiro (quando resolucao_diferenca = 'estorno_financeiro'). */
+  estorno_forma?: "pix" | "cartao" | "dinheiro" | null;
+  codigo_devolucao?: string | null;
 }
 
 export type DevolucaoStatus =
@@ -66,6 +85,16 @@ export interface FinalizeExchangeResult {
     chave?: string | null;
     documentId?: string | null;
     error?: string | null;
+  };
+  /** Fase 6: atribuição de faturamento (só preenchida quando concluído). */
+  atribuicao?: {
+    valor_devolvido: number;
+    valor_reposicao: number;
+    diferenca: number;
+    faturamento_vendedora_troca: number;
+    resolucao: "cliente_paga" | "voucher" | "estorno_financeiro" | "sem_diferenca";
+    voucher_codigo?: string | null;
+    estorno_valor?: number | null;
   };
 }
 
@@ -117,6 +146,8 @@ export async function finalizeExchange(
     eventId, tipo, loja_origem_id, pedido_original_id, modo_expedicao,
     motivo_cancelamento, sellerName, sellerId, conferidos, reposicaoItemIds,
     emitirDevolucao = true, ambiente,
+    origem_canal, cliente_id, valor_devolvido, valor_reposicao,
+    resolucao_diferenca, estorno_forma, codigo_devolucao,
   } = params;
 
   let restocked = 0;
@@ -124,11 +155,12 @@ export async function finalizeExchange(
   // Estado atual do evento (guardas de reprocessamento).
   const { data: evtRow } = await supabase
     .from("trocas_devolucoes")
-    .select("estoque_movimentado, pedido_ajustado, devolucao_doc_id")
+    .select("estoque_movimentado, pedido_ajustado, devolucao_doc_id, resolucao_diferenca")
     .eq("id", eventId)
     .maybeSingle();
   const jaMovimentouEstoque = !!(evtRow as any)?.estoque_movimentado;
   const jaAjustouPedido = !!(evtRow as any)?.pedido_ajustado;
+  const jaAtribuiuFaturamento = !!(evtRow as any)?.resolucao_diferenca;
 
   // ── 1) Conferência: grava estado/condição de cada item devolvido (sempre segura) ──
   for (const it of conferidos) {
@@ -241,6 +273,97 @@ export async function finalizeExchange(
     totalReturn = false;
   }
 
+  // ── 5) Fase 6: Atribuição de faturamento (duas camadas) — só após fiscalOk ──
+  // Layer 1 (documento fiscal) sai sempre pelo valor cheio (já emitido/gancho).
+  // Layer 2 (faturamento/comissão interna):
+  //   • Venda original permanece com a vendedora original (não estornamos aqui).
+  //   • Diferença a mais numa troca → creditada à vendedora que fez a troca.
+  //   • Canal site → sem vendedora (equipe de expedição dedicada).
+  //   • Diferença a favor do cliente → voucher OU estorno financeiro.
+  let atribuicao: FinalizeExchangeResult["atribuicao"] | undefined;
+  if (fiscalOk && !jaAtribuiuFaturamento) {
+    const valDev = Number(valor_devolvido || 0);
+    const valRep = Number(valor_reposicao || 0);
+    const diferenca = Number((valRep - valDev).toFixed(2));
+    const isSite = origem_canal === "site";
+
+    // Só há faturamento extra da vendedora da troca quando o cliente paga a mais.
+    const faturamentoVendedoraTroca = !isSite && diferenca > 0 ? diferenca : 0;
+
+    let resolucao: NonNullable<FinalizeExchangeResult["atribuicao"]>["resolucao"];
+    let voucher_codigo: string | null = null;
+    let estorno_valor: number | null = null;
+    let voucherId: string | null = null;
+
+    if (diferenca > 0.009) {
+      resolucao = "cliente_paga";
+    } else if (diferenca < -0.009) {
+      const favorCliente = Math.abs(diferenca);
+      if (resolucao_diferenca === "estorno_financeiro") {
+        resolucao = "estorno_financeiro";
+        estorno_valor = favorCliente;
+        // Movimento financeiro (NÃO faturamento).
+        try {
+          await supabase.from("cash_flow_entries").insert({
+            store_id: loja_origem_id || null,
+            entry_date: new Date().toISOString().slice(0, 10),
+            direction: "out",
+            amount: favorCliente,
+            payment_method: estorno_forma || null,
+            description: `Estorno troca/devolução ${codigo_devolucao || eventId}`,
+            source: "troca_devolucao",
+            source_ref_id: eventId,
+          } as any);
+        } catch (e) {
+          console.error("[finalizeExchange] estorno financeiro falhou", e);
+        }
+      } else {
+        // Padrão / explícito: gerar voucher de crédito.
+        resolucao = "voucher";
+        try {
+          const { data: v } = await supabase
+            .from("vouchers")
+            .insert({
+              cliente_id: cliente_id || null,
+              valor: favorCliente,
+              saldo: favorCliente,
+              validade: new Date(Date.now() + 180 * 864e5).toISOString().slice(0, 10),
+              status: "ativo",
+              troca_devolucao_id: eventId,
+            } as any)
+            .select("id, codigo")
+            .single();
+          voucherId = (v as any)?.id || null;
+          voucher_codigo = (v as any)?.codigo || null;
+        } catch (e) {
+          console.error("[finalizeExchange] geração de voucher falhou", e);
+        }
+      }
+    } else {
+      resolucao = "sem_diferenca";
+    }
+
+    await supabase.from("trocas_devolucoes").update({
+      valor_devolvido: valDev,
+      valor_reposicao: valRep,
+      diferenca,
+      faturamento_vendedora_troca: faturamentoVendedoraTroca,
+      resolucao_diferenca: resolucao,
+      estorno_forma: resolucao === "estorno_financeiro" ? (estorno_forma || null) : null,
+      voucher_id: voucherId,
+    } as any).eq("id", eventId);
+
+    atribuicao = {
+      valor_devolvido: valDev,
+      valor_reposicao: valRep,
+      diferenca,
+      faturamento_vendedora_troca: faturamentoVendedoraTroca,
+      resolucao,
+      voucher_codigo,
+      estorno_valor,
+    };
+  }
+
   // ── Conclusão: só quando a parte fiscal está resolvida (autorizada/sem nota). ──
   const concluded = fiscalOk;
   if (concluded) {
@@ -259,5 +382,5 @@ export async function finalizeExchange(
       .eq("id", eventId);
   }
 
-  return { totalReturn, restocked, concluded, devolucao };
+  return { totalReturn, restocked, concluded, devolucao, atribuicao };
 }
