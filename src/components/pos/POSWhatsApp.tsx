@@ -1992,6 +1992,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         />
       )}
 
+      {/* Exportar conversa em PDF */}
+      {selectedConversation && (
+        <ExportConversationDialog
+          conversation={selectedConversation}
+          open={showExportDialog}
+          onOpenChange={setShowExportDialog}
+        />
+      )}
+
+
+
       {/* PIX Dialog */}
       {selectedPhone && (
         <POSWhatsAppPixDialog
