@@ -32,6 +32,8 @@ interface ConversationListProps {
   statusFilter: ConversationStatusFilter;
   onStatusFilterChange: (filter: ConversationStatusFilter) => void;
   metaNumbers: WhatsAppNumber[];
+  /** Map whatsapp_number_id -> @username da conta de Instagram (para rotular DMs) */
+  igUsernameById?: Record<string, string>;
   contactPhotos?: Record<string, string>;
   contactNames?: Record<string, string>;
   selectedPhone?: string | null;
