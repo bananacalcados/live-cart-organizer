@@ -150,7 +150,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ success: true, account: saved }), {
+    // Conta PRINCIPAL: vincula o histórico de DMs de Instagram que ainda estava
+    // sem instância (whatsapp_number_id NULL) a esta instância recém-criada, para
+    // que as conversas antigas passem a exibir o @username correto no chat.
+    let backfilled = 0;
+    if (useGlobalToken && saved?.id) {
+      const { data: updated, error: bfErr } = await supabase
+        .from("whatsapp_messages")
+        .update({ whatsapp_number_id: saved.id })
+        .eq("channel", "instagram")
+        .is("whatsapp_number_id", null)
+        .select("id");
+      if (bfErr) {
+        console.error("[ig-account-connect] backfill error:", bfErr.message);
+      } else {
+        backfilled = updated?.length || 0;
+      }
+    }
+
+    return new Response(JSON.stringify({ success: true, account: saved, backfilled }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e: any) {
