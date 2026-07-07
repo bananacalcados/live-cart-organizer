@@ -1297,11 +1297,34 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const handleEditMessage = async (msg: any, newText: string) => {
     if (!msg.message_id || !selectedPhone) throw new Error('No message_id');
-    const res = await supabase.functions.invoke("zapi-edit-message", {
-      body: { phone: selectedPhone, messageId: msg.message_id, newMessage: newText, dbMessageId: msg.id, whatsapp_number_id: msg.whatsapp_number_id || selectedSendNumberId },
-    });
+    const numberId = msg.whatsapp_number_id || selectedSendNumber?.id || selectedSendNumberId || null;
+    const numberRec =
+      metaNumbers.find((n) => n.id === numberId) ||
+      storeNumbers.find((n) => n.id === numberId) ||
+      selectedSendNumber ||
+      null;
+    const provider = (numberRec?.provider as string) || 'zapi';
+
+    let res: { error?: unknown; data?: any };
+    if (provider === 'uazapi') {
+      res = await supabase.functions.invoke('uazapi-message-actions', {
+        body: { action: 'edit', whatsapp_number_id: numberId, msgId: msg.message_id, text: newText },
+      });
+    } else if (provider === 'wasender') {
+      res = await supabase.functions.invoke('wasender-message-actions', {
+        body: { action: 'edit', whatsapp_number_id: numberId, msgId: msg.message_id, text: newText },
+      });
+    } else {
+      res = await supabase.functions.invoke('zapi-edit-message', {
+        body: { phone: selectedPhone, messageId: msg.message_id, newMessage: newText, dbMessageId: msg.id, whatsapp_number_id: numberId },
+      });
+    }
     if (res.error) throw res.error;
     if (res.data?.error) throw new Error(res.data.error);
+    // Provider functions (uazapi/wasender) don't update the DB — persist the edit locally.
+    if (provider === 'uazapi' || provider === 'wasender') {
+      await supabase.from('whatsapp_messages').update({ message: newText }).eq('id', msg.id);
+    }
     loadMessages(selectedPhone, selectedConvNumberId);
   };
 
