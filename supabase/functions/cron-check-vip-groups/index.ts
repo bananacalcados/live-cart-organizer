@@ -140,14 +140,14 @@ serve(async (req) => {
 
       if (!groups || groups.length === 0) continue;
 
-      // ─── 3. Refrescar participant_count de cada grupo via Z-API ───
+      // ─── 3. Refrescar participant_count de cada grupo (provider-aware) ───
       for (const group of groups) {
         const creds = await getCreds(group.instance_id);
         if (!creds) {
-          console.warn(`Sem credenciais Z-API pro grupo ${group.name}`);
+          console.warn(`Sem credenciais pro grupo ${group.name}`);
           continue;
         }
-        const fresh = await fetchGroupParticipantCount(creds.instance, creds.token, creds.clientToken, group.group_id);
+        const fresh = await fetchGroupParticipantCount(creds, group.group_id);
         if (fresh === null) continue;
 
         const max = group.max_participants || 1024;
