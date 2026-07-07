@@ -1678,9 +1678,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               )}
 
               {/* Instância da conversa */}
-              {selectedChannel === "instagram" ? (
-                <Badge variant="secondary" className="text-[10px] px-2 py-0.5 flex-shrink-0">📷 Instagram</Badge>
-              ) : selectedChannel === "messenger" ? (
+              {selectedChannel === "instagram" ? (() => {
+                const igUser = messageBoundNumberId ? igUsernameById[messageBoundNumberId] : null;
+                return (
+                  <Badge variant="secondary" className="text-[10px] px-2 py-0.5 flex-shrink-0 max-w-[160px] truncate" title={igUser ? `Instagram @${igUser}` : 'Instagram'}>
+                    📷 {igUser ? `@${igUser}` : 'Instagram'}
+                  </Badge>
+                );
+              })() : selectedChannel === "messenger" ? (
                 <Badge variant="secondary" className="text-[10px] px-2 py-0.5 flex-shrink-0">💬 Messenger</Badge>
               ) : conversationBoundNumber ? (
                 <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium flex-shrink-0" title="Instância da conversa">
