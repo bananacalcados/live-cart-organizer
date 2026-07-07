@@ -1951,7 +1951,15 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           onDone={() => { setShowNewExchange(false); onCloseSalesView?.(); }}
         />
 
-        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu && !showNewExchange} onOpenChange={() => {}}>
+        <FinalizeExchangePicker
+          open={showFinalizeExchange}
+          sellerId={selectedSeller || undefined}
+          sellerName={sellers.find((s) => s.id === selectedSeller)?.name || undefined}
+          onCancel={() => setShowFinalizeExchange(false)}
+          onDone={() => { setShowFinalizeExchange(false); onCloseSalesView?.(); }}
+        />
+
+        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu && !showNewExchange && !showFinalizeExchange} onOpenChange={() => {}}>
           <DialogContent className="bg-pos-black border-pos-orange/40 max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
