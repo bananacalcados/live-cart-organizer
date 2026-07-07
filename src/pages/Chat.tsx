@@ -240,6 +240,17 @@ export default function ChatPage() {
 
   // ── Fetch numbers and contacts on mount ──
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
+
+  // Map whatsapp_number_id -> @username das contas de Instagram (rotula cada DM).
+  const igUsernameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const n of numbers) {
+      if (n.provider === 'instagram' && n.instagram_username) {
+        map[n.id] = n.instagram_username;
+      }
+    }
+    return map;
+  }, [numbers]);
   
   useEffect(() => {
     const loadContacts = async () => {
