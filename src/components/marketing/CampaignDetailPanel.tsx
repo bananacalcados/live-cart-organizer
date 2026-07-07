@@ -595,6 +595,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       slug: newSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
       label: newLinkLabel.trim() || null,
       is_deep_link: false,
+      forced_group_id: newLinkGroup === "auto" ? null : newLinkGroup,
     });
     if (error) {
       toast.error(error.message.includes('unique') ? "Slug já existe" : "Erro ao criar link");
@@ -602,6 +603,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       toast.success("Link criado!");
       setNewSlug("");
       setNewLinkLabel("");
+      setNewLinkGroup("auto");
       fetchLinks();
     }
     setIsCreatingLink(false);
@@ -609,6 +611,18 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
   const toggleDeepLink = async (linkId: string, val: boolean) => {
     await supabase.from('group_redirect_links').update({ is_deep_link: val }).eq('id', linkId);
+    fetchLinks();
+  };
+
+  const setForcedGroup = async (linkId: string, val: string) => {
+    await supabase.from('group_redirect_links')
+      .update({ forced_group_id: val === "auto" ? null : val })
+      .eq('id', linkId);
+    fetchLinks();
+  };
+
+  const toggleForcedStrict = async (linkId: string, val: boolean) => {
+    await supabase.from('group_redirect_links').update({ forced_strict: val }).eq('id', linkId);
     fetchLinks();
   };
 
