@@ -1933,7 +1933,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <p className="text-[11px] text-pos-white/60 text-center">Troca/devolução de venda faturada</p>
               </button>
               <button
-                onClick={() => { toast.info("Finalizar Troca/Devolução chega na próxima fase."); }}
+                onClick={() => { setShowExchangeMenu(false); setShowFinalizeExchange(true); }}
                 className="rounded-2xl border-2 border-purple-400/40 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-400 p-5 flex flex-col items-center gap-3 transition-all"
               >
                 <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">✅</div>
