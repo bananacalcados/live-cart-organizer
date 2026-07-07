@@ -93,28 +93,34 @@ serve(async (req) => {
       });
     }
 
-    // ─── 2. Cache de credenciais Z-API por instance_id ───
-    const credsCache = new Map<string, { instance: string; token: string; clientToken: string } | null>();
+    // ─── 2. Cache de credenciais por instance_id (multi-provedor) ───
+    const credsCache = new Map<string, GroupCreds | null>();
     const fallbackInstance = Deno.env.get('ZAPI_INSTANCE_ID') || '';
     const fallbackToken = Deno.env.get('ZAPI_TOKEN') || '';
     const fallbackClient = Deno.env.get('ZAPI_CLIENT_TOKEN') || '';
 
-    async function getCreds(instanceUuid: string | null) {
+    async function getCreds(instanceUuid: string | null): Promise<GroupCreds | null> {
       const key = instanceUuid || '__default__';
       if (credsCache.has(key)) return credsCache.get(key)!;
-      let creds: { instance: string; token: string; clientToken: string } | null = null;
+      let creds: GroupCreds | null = null;
       if (instanceUuid) {
         const { data: wn } = await supabase
           .from('whatsapp_numbers')
-          .select('zapi_instance_id, zapi_token, zapi_client_token')
+          .select('provider, zapi_instance_id, zapi_token, zapi_client_token, uazapi_token, wasender_api_key')
           .eq('id', instanceUuid)
           .maybeSingle();
-        if (wn?.zapi_instance_id && wn?.zapi_token && wn?.zapi_client_token) {
-          creds = { instance: wn.zapi_instance_id, token: wn.zapi_token, clientToken: wn.zapi_client_token };
+        if (wn) {
+          if (wn.provider === 'uazapi' && wn.uazapi_token) {
+            creds = { provider: 'uazapi', token: wn.uazapi_token };
+          } else if (wn.provider === 'wasender' && wn.wasender_api_key) {
+            creds = { provider: 'wasender', apiKey: wn.wasender_api_key };
+          } else if (wn.zapi_instance_id && wn.zapi_token && wn.zapi_client_token) {
+            creds = { provider: 'zapi', instance: wn.zapi_instance_id, token: wn.zapi_token, clientToken: wn.zapi_client_token };
+          }
         }
       }
       if (!creds && fallbackInstance && fallbackToken && fallbackClient) {
-        creds = { instance: fallbackInstance, token: fallbackToken, clientToken: fallbackClient };
+        creds = { provider: 'zapi', instance: fallbackInstance, token: fallbackToken, clientToken: fallbackClient };
       }
       credsCache.set(key, creds);
       return creds;
