@@ -184,17 +184,46 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
         reposicaoItemIds: reposicoes.map((r) => r.id),
       });
 
+      const dev = result.devolucao;
+
+      // Rejeição/erro fiscal → NÃO concluiu. Pedido original preservado. Reprocessável.
+      if (!result.concluded && dev.status !== "pending_sefaz") {
+        toast.error(
+          `NF-e de devolução ${dev.status === "rejected" ? "rejeitada" : "falhou"}: ${dev.error || "erro desconhecido"}. ` +
+          "O pedido original NÃO foi cancelado. Corrija e clique em Finalizar novamente para reemitir.",
+          { duration: 9000 },
+        );
+        loadEvents(); // reflete o estado intermediário (fase2_erro)
+        return; // mantém o diálogo aberto para reprocessar
+      }
+
+      // Contingência: estoque movimentado, mas devolução ainda em fila (SEFAZ offline).
+      if (dev.status === "pending_sefaz") {
+        toast.warning(
+          `${selected.codigo_devolucao}: SEFAZ indisponível — devolução em fila de contingência. ` +
+          "O pedido original só será cancelado quando a nota for autorizada. Reprocesse depois em Finalizar.",
+          { duration: 9000 },
+        );
+        onDone();
+        return;
+      }
+
+      // Sucesso (autorizada ou venda sem nota original).
+      const fiscalMsg =
+        dev.status === "authorized"
+          ? " · NF-e de devolução autorizada"
+          : dev.status === "skipped"
+            ? " · sem estorno fiscal (venda sem nota)"
+            : "";
       toast.success(
-        `${selected.codigo_devolucao} concluída. ${result.restocked} item(ns) devolvido(s) ao estoque${result.totalReturn ? " · pedido original cancelado" : ""}.`,
+        `${selected.codigo_devolucao} concluída. ${result.restocked} item(ns) ao estoque` +
+        `${result.totalReturn ? " · pedido original cancelado" : ""}${fiscalMsg}.`,
+        { duration: 7000 },
       );
 
-      // Ganchos fiscais (Fases 5 e 6): emissão de NF-e ainda não implementada.
-      toast.info(
-        selected.tipo === "troca"
-          ? "NF-e de devolução (entrada) e nova NF-e de venda serão emitidas nas Fases 5 e 6."
-          : "NF-e de devolução (entrada) será emitida na Fase 5.",
-        { duration: 6000 },
-      );
+      if (selected.tipo === "troca") {
+        toast.info("Nova NF-e de venda (valor cheio) será emitida na Fase 6.", { duration: 6000 });
+      }
 
       onDone();
     } catch (e: any) {
