@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CreateSupportTicketDialog } from "@/components/CreateSupportTicketDialog";
+import { ExportConversationDialog } from "@/components/chat/ExportConversationDialog";
 import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
@@ -122,6 +123,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showOrdersModal, setShowOrdersModal] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [showPix, setShowPix] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
@@ -1711,6 +1713,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   <Package className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Aguarda</span>
                 </Button>
+                {selectedConversation && (
+                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-primary" onClick={() => setShowExportDialog(true)} title="Exportar conversa em PDF">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">Exportar PDF</span>
+                  </Button>
+                )}
                 {selectedSendNumber?.provider === 'meta' && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
                   <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-violet-600 hover:text-violet-500" onClick={() => setShowSendTemplate(true)} title="Enviar Template Meta">
                     <FileText className="h-3.5 w-3.5" />
@@ -1983,6 +1991,17 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
         />
       )}
+
+      {/* Exportar conversa em PDF */}
+      {selectedConversation && (
+        <ExportConversationDialog
+          conversation={selectedConversation}
+          open={showExportDialog}
+          onOpenChange={setShowExportDialog}
+        />
+      )}
+
+
 
       {/* PIX Dialog */}
       {selectedPhone && (
