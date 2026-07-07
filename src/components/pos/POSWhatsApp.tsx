@@ -1713,6 +1713,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   <Package className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Aguarda</span>
                 </Button>
+                {selectedConversation && (
+                  <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-muted-foreground hover:text-primary" onClick={() => setShowExportDialog(true)} title="Exportar conversa em PDF">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span className="hidden xl:inline">Exportar PDF</span>
+                  </Button>
+                )}
                 {selectedSendNumber?.provider === 'meta' && selectedChannel !== 'instagram' && selectedChannel !== 'messenger' && (
                   <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-violet-600 hover:text-violet-500" onClick={() => setShowSendTemplate(true)} title="Enviar Template Meta">
                     <FileText className="h-3.5 w-3.5" />
