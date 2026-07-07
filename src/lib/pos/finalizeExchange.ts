@@ -86,6 +86,16 @@ export interface FinalizeExchangeResult {
     documentId?: string | null;
     error?: string | null;
   };
+  /** Fase 6: atribuição de faturamento (só preenchida quando concluído). */
+  atribuicao?: {
+    valor_devolvido: number;
+    valor_reposicao: number;
+    diferenca: number;
+    faturamento_vendedora_troca: number;
+    resolucao: "cliente_paga" | "voucher" | "estorno_financeiro" | "sem_diferenca";
+    voucher_codigo?: string | null;
+    estorno_valor?: number | null;
+  };
 }
 
 /** Chama a edge function de emissão da devolução e normaliza o resultado. */
