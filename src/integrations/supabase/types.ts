@@ -15960,8 +15960,11 @@ export type Database = {
           codigo_postagem_reversa: string | null
           created_at: string
           devolucao_doc_id: string | null
+          diferenca: number
           estoque_movimentado: boolean
+          estorno_forma: string | null
           fase2_erro: string | null
+          faturamento_vendedora_troca: number
           id: string
           loja_origem_id: string | null
           modo_expedicao: Database["public"]["Enums"]["td_modo_expedicao"]
@@ -15970,11 +15973,15 @@ export type Database = {
           pedido_ajustado: boolean
           pedido_novo_id: string | null
           pedido_original_id: string | null
+          resolucao_diferenca: string | null
           status: Database["public"]["Enums"]["td_status"]
           tipo: Database["public"]["Enums"]["td_tipo"]
           updated_at: string
+          valor_devolvido: number
+          valor_reposicao: number
           venda_nova_doc_id: string | null
           vendedora_troca_id: string | null
+          voucher_id: string | null
         }
         Insert: {
           chave_acesso_original?: string | null
@@ -15984,8 +15991,11 @@ export type Database = {
           codigo_postagem_reversa?: string | null
           created_at?: string
           devolucao_doc_id?: string | null
+          diferenca?: number
           estoque_movimentado?: boolean
+          estorno_forma?: string | null
           fase2_erro?: string | null
+          faturamento_vendedora_troca?: number
           id?: string
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
@@ -15994,11 +16004,15 @@ export type Database = {
           pedido_ajustado?: boolean
           pedido_novo_id?: string | null
           pedido_original_id?: string | null
+          resolucao_diferenca?: string | null
           status?: Database["public"]["Enums"]["td_status"]
           tipo: Database["public"]["Enums"]["td_tipo"]
           updated_at?: string
+          valor_devolvido?: number
+          valor_reposicao?: number
           venda_nova_doc_id?: string | null
           vendedora_troca_id?: string | null
+          voucher_id?: string | null
         }
         Update: {
           chave_acesso_original?: string | null
@@ -16008,8 +16022,11 @@ export type Database = {
           codigo_postagem_reversa?: string | null
           created_at?: string
           devolucao_doc_id?: string | null
+          diferenca?: number
           estoque_movimentado?: boolean
+          estorno_forma?: string | null
           fase2_erro?: string | null
+          faturamento_vendedora_troca?: number
           id?: string
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
@@ -16018,11 +16035,15 @@ export type Database = {
           pedido_ajustado?: boolean
           pedido_novo_id?: string | null
           pedido_original_id?: string | null
+          resolucao_diferenca?: string | null
           status?: Database["public"]["Enums"]["td_status"]
           tipo?: Database["public"]["Enums"]["td_tipo"]
           updated_at?: string
+          valor_devolvido?: number
+          valor_reposicao?: number
           venda_nova_doc_id?: string | null
           vendedora_troca_id?: string | null
+          voucher_id?: string | null
         }
         Relationships: [
           {
@@ -16065,6 +16086,13 @@ export type Database = {
             columns: ["vendedora_troca_id"]
             isOneToOne: false
             referencedRelation: "pos_sellers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_voucher_id_fkey"
+            columns: ["voucher_id"]
+            isOneToOne: false
+            referencedRelation: "vouchers"
             referencedColumns: ["id"]
           },
         ]
