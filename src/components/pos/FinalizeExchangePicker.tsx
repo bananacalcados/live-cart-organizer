@@ -60,11 +60,15 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
   const [reposicoes, setReposicoes] = useState<TdItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Fase 6: resolução da diferença a favor do cliente
+  const [resolucao, setResolucao] = useState<"voucher" | "estorno_financeiro">("voucher");
+  const [estornoForma, setEstornoForma] = useState<"pix" | "cartao" | "dinheiro">("pix");
 
   useEffect(() => {
     if (open) {
       setPhase("list"); setSearch(""); setSelected(null);
       setDevolvidos([]); setReposicoes([]);
+      setResolucao("voucher"); setEstornoForma("pix");
     }
   }, [open]);
 
