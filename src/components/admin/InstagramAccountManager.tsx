@@ -157,9 +157,12 @@ export function InstagramAccountManager() {
               Conecte uma ou mais contas do Instagram para receber e responder DMs no chat.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div class="flex gap-2" className="flex gap-2">
             <Button variant="outline" size="sm" onClick={fetchAccounts}>
               <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleRegisterPrimary} disabled={saving} title="Registra a conta que já estava conectada internamente (via token global) como uma instância identificável">
+              <Instagram className="h-3.5 w-3.5 mr-1" /> Registrar conta principal
             </Button>
             <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
               <DialogTrigger asChild>
