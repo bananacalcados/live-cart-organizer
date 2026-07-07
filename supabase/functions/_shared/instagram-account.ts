@@ -75,11 +75,14 @@ export async function resolveIgAccountByNumberId(
 
   const { data } = await supabase
     .from("whatsapp_numbers")
-    .select("id, access_token, instagram_username, instagram_account_id")
+    .select("id, provider, access_token, instagram_username, instagram_account_id")
     .eq("id", numberId)
     .maybeSingle();
 
-  if (data?.access_token) {
+  // Só usa o token da linha se ela for de fato uma conta de Instagram.
+  // (Se for uma instância de WhatsApp travada por engano numa conversa nova,
+  //  o token não serve para DMs de IG → melhor cair no token global.)
+  if (data?.provider === "instagram" && data?.access_token) {
     return {
       numberId: data.id,
       accessToken: data.access_token,
