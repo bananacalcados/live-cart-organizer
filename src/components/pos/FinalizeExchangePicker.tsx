@@ -186,6 +186,13 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
         sellerId: sellerId || null,
         conferidos,
         reposicaoItemIds: reposicoes.map((r) => r.id),
+        origem_canal: selected.origem_canal,
+        cliente_id: selected.cliente_id,
+        valor_devolvido: valorDevolvido,
+        valor_reposicao: valorReposicao,
+        resolucao_diferenca: diferenca < -0.009 ? resolucao : undefined,
+        estorno_forma: diferenca < -0.009 && resolucao === "estorno_financeiro" ? estornoForma : null,
+        codigo_devolucao: selected.codigo_devolucao,
       });
 
       const dev = result.devolucao;
