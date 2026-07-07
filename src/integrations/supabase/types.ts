@@ -5938,6 +5938,7 @@ export type Database = {
           danfe_url: string | null
           data_autorizacao: string | null
           events: Json | null
+          finalidade: number
           id: string
           last_retry_at: string | null
           modelo: number
@@ -5948,11 +5949,14 @@ export type Database = {
           pos_sale_id: string | null
           protocolo: string | null
           qrcode_url: string | null
+          ref_chave_acesso: string | null
           rejection_code: string | null
           rejection_message: string | null
           retry_count: number
           serie: number
           status: string
+          tipo_operacao: string
+          troca_devolucao_id: string | null
           updated_at: string
           valor_total: number | null
           xml_content: string | null
@@ -5974,6 +5978,7 @@ export type Database = {
           danfe_url?: string | null
           data_autorizacao?: string | null
           events?: Json | null
+          finalidade?: number
           id?: string
           last_retry_at?: string | null
           modelo: number
@@ -5984,11 +5989,14 @@ export type Database = {
           pos_sale_id?: string | null
           protocolo?: string | null
           qrcode_url?: string | null
+          ref_chave_acesso?: string | null
           rejection_code?: string | null
           rejection_message?: string | null
           retry_count?: number
           serie: number
           status?: string
+          tipo_operacao?: string
+          troca_devolucao_id?: string | null
           updated_at?: string
           valor_total?: number | null
           xml_content?: string | null
@@ -6010,6 +6018,7 @@ export type Database = {
           danfe_url?: string | null
           data_autorizacao?: string | null
           events?: Json | null
+          finalidade?: number
           id?: string
           last_retry_at?: string | null
           modelo?: number
@@ -6020,11 +6029,14 @@ export type Database = {
           pos_sale_id?: string | null
           protocolo?: string | null
           qrcode_url?: string | null
+          ref_chave_acesso?: string | null
           rejection_code?: string | null
           rejection_message?: string | null
           retry_count?: number
           serie?: number
           status?: string
+          tipo_operacao?: string
+          troca_devolucao_id?: string | null
           updated_at?: string
           valor_total?: number | null
           xml_content?: string | null
@@ -6043,6 +6055,13 @@ export type Database = {
             columns: ["pos_sale_id"]
             isOneToOne: false
             referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fiscal_documents_troca_devolucao_id_fkey"
+            columns: ["troca_devolucao_id"]
+            isOneToOne: false
+            referencedRelation: "trocas_devolucoes"
             referencedColumns: ["id"]
           },
         ]
@@ -15940,16 +15959,21 @@ export type Database = {
           codigo_devolucao: string | null
           codigo_postagem_reversa: string | null
           created_at: string
+          devolucao_doc_id: string | null
+          estoque_movimentado: boolean
+          fase2_erro: string | null
           id: string
           loja_origem_id: string | null
           modo_expedicao: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo: Database["public"]["Enums"]["td_motivo"]
           origem_canal: Database["public"]["Enums"]["td_origem_canal"]
+          pedido_ajustado: boolean
           pedido_novo_id: string | null
           pedido_original_id: string | null
           status: Database["public"]["Enums"]["td_status"]
           tipo: Database["public"]["Enums"]["td_tipo"]
           updated_at: string
+          venda_nova_doc_id: string | null
           vendedora_troca_id: string | null
         }
         Insert: {
@@ -15959,16 +15983,21 @@ export type Database = {
           codigo_devolucao?: string | null
           codigo_postagem_reversa?: string | null
           created_at?: string
+          devolucao_doc_id?: string | null
+          estoque_movimentado?: boolean
+          fase2_erro?: string | null
           id?: string
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo: Database["public"]["Enums"]["td_motivo"]
           origem_canal: Database["public"]["Enums"]["td_origem_canal"]
+          pedido_ajustado?: boolean
           pedido_novo_id?: string | null
           pedido_original_id?: string | null
           status?: Database["public"]["Enums"]["td_status"]
           tipo: Database["public"]["Enums"]["td_tipo"]
           updated_at?: string
+          venda_nova_doc_id?: string | null
           vendedora_troca_id?: string | null
         }
         Update: {
@@ -15978,19 +16007,31 @@ export type Database = {
           codigo_devolucao?: string | null
           codigo_postagem_reversa?: string | null
           created_at?: string
+          devolucao_doc_id?: string | null
+          estoque_movimentado?: boolean
+          fase2_erro?: string | null
           id?: string
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo?: Database["public"]["Enums"]["td_motivo"]
           origem_canal?: Database["public"]["Enums"]["td_origem_canal"]
+          pedido_ajustado?: boolean
           pedido_novo_id?: string | null
           pedido_original_id?: string | null
           status?: Database["public"]["Enums"]["td_status"]
           tipo?: Database["public"]["Enums"]["td_tipo"]
           updated_at?: string
+          venda_nova_doc_id?: string | null
           vendedora_troca_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "trocas_devolucoes_devolucao_doc_id_fkey"
+            columns: ["devolucao_doc_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "trocas_devolucoes_loja_origem_id_fkey"
             columns: ["loja_origem_id"]
@@ -16010,6 +16051,13 @@ export type Database = {
             columns: ["pedido_original_id"]
             isOneToOne: false
             referencedRelation: "pos_sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_venda_nova_doc_id_fkey"
+            columns: ["venda_nova_doc_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
             referencedColumns: ["id"]
           },
           {
