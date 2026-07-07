@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveIgAccountByNumberId, globalIgToken } from "../_shared/instagram-account.ts";
 
 
 const corsHeaders = {
@@ -17,16 +18,26 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const token = Deno.env.get("META_PAGE_ACCESS_TOKEN");
+    const body = await req.json();
+    const { username, message, eventId, fallbackCommentId, fallbackCommentIds, mediaType, whatsapp_number_id } = body;
+    let { mediaUrl } = body;
+
+    // Token por conta: se a conversa estiver vinculada a uma instância de
+    // Instagram, usa o token daquela conta; senão cai no token global.
+    let token = globalIgToken();
+    if (whatsapp_number_id) {
+      try {
+        const acct = await resolveIgAccountByNumberId(supabase, whatsapp_number_id);
+        if (acct.accessToken) token = acct.accessToken;
+      } catch (e) {
+        console.error("[ig-dm-send] erro ao resolver token da conta, usando global:", e);
+      }
+    }
     if (!token) {
       return new Response(JSON.stringify({ error: "META_PAGE_ACCESS_TOKEN not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const body = await req.json();
-    const { username, message, eventId, fallbackCommentId, fallbackCommentIds, mediaType } = body;
-    let { mediaUrl } = body;
 
     // Lista de comment_ids candidatos para private_reply (mais recentes primeiro).
     // Um comentário de Live só aceita UM private_reply e pode ficar inelegível;

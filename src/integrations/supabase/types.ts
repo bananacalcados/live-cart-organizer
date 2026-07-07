@@ -17044,6 +17044,8 @@ export type Database = {
           has_zapi_token: boolean | null
           health_check_error: string | null
           id: string
+          instagram_account_id: string | null
+          instagram_username: string | null
           is_active: boolean
           is_default: boolean
           is_online: boolean | null
@@ -17082,6 +17084,8 @@ export type Database = {
           has_zapi_token?: boolean | null
           health_check_error?: string | null
           id?: string
+          instagram_account_id?: string | null
+          instagram_username?: string | null
           is_active?: boolean
           is_default?: boolean
           is_online?: boolean | null
@@ -17120,6 +17124,8 @@ export type Database = {
           has_zapi_token?: boolean | null
           health_check_error?: string | null
           id?: string
+          instagram_account_id?: string | null
+          instagram_username?: string | null
           is_active?: boolean
           is_default?: boolean
           is_online?: boolean | null
@@ -17727,6 +17733,8 @@ export type Database = {
           business_account_id: string | null
           created_at: string | null
           id: string | null
+          instagram_account_id: string | null
+          instagram_username: string | null
           is_active: boolean | null
           is_default: boolean | null
           is_online: boolean | null
@@ -17751,6 +17759,8 @@ export type Database = {
           business_account_id?: string | null
           created_at?: string | null
           id?: string | null
+          instagram_account_id?: string | null
+          instagram_username?: string | null
           is_active?: boolean | null
           is_default?: boolean | null
           is_online?: boolean | null
@@ -17775,6 +17785,8 @@ export type Database = {
           business_account_id?: string | null
           created_at?: string | null
           id?: string | null
+          instagram_account_id?: string | null
+          instagram_username?: string | null
           is_active?: boolean | null
           is_default?: boolean | null
           is_online?: boolean | null

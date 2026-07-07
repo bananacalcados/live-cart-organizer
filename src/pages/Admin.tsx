@@ -23,10 +23,11 @@ import { SecretaryChat } from "@/components/admin/SecretaryChat";
 import { AiErrorLogs } from "@/components/admin/AiErrorLogs";
 import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccountsManager";
 import { PointTerminalsPanel } from "@/components/admin/PointTerminalsPanel";
+import { InstagramAccountManager } from "@/components/admin/InstagramAccountManager";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
-  FileText, Building2, Hash, Settings, Download, ChevronRight, AlertCircle,
+  FileText, Building2, Hash, Settings, Download, ChevronRight, AlertCircle, Instagram,
 } from "lucide-react";
 
 const ALL_MODULES = [

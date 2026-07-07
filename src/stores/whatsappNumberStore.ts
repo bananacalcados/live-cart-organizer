@@ -11,6 +11,8 @@ export interface WhatsAppNumber {
   is_active: boolean;
   provider?: string;
   is_online?: boolean | null;
+  instagram_account_id?: string | null;
+  instagram_username?: string | null;
 }
 
 interface WhatsAppNumberStore {
@@ -34,7 +36,7 @@ export const useWhatsAppNumberStore = create<WhatsAppNumberStore>((set, get) => 
     set({ isLoading: true });
     const { data, error } = await supabase
       .from('whatsapp_numbers_safe')
-      .select('id, label, phone_display, phone_number_id, business_account_id, is_default, is_active, provider, is_online')
+      .select('id, label, phone_display, phone_number_id, business_account_id, is_default, is_active, provider, is_online, instagram_account_id, instagram_username')
       .eq('is_active', true)
       .order('is_default', { ascending: false });
 
@@ -47,9 +49,12 @@ export const useWhatsAppNumberStore = create<WhatsAppNumberStore>((set, get) => 
     const numbers = (data || []) as WhatsAppNumber[];
     const savedId = get().selectedNumberId;
     const savedExists = savedId && numbers.some(n => n.id === savedId);
-    const defaultNum = numbers.find(n => n.is_default);
-    
-    const resolvedId = savedExists ? savedId : (defaultNum?.id || numbers[0]?.id || null);
+    // O seletor GLOBAL é de WhatsApp — nunca auto-seleciona uma conta de
+    // Instagram como padrão (essas são resolvidas por conversa).
+    const nonIg = numbers.filter(n => (n.provider || 'meta') !== 'instagram');
+    const defaultNum = nonIg.find(n => n.is_default);
+
+    const resolvedId = savedExists ? savedId : (defaultNum?.id || nonIg[0]?.id || null);
     
     set({
       numbers,

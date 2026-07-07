@@ -42,8 +42,9 @@ export function WhatsAppNumberSelector({
     if (allowedProviders && allowedProviders.length > 0) {
       return numbers.filter(n => allowedProviders.includes(n.provider || 'meta'));
     }
-    if (!filterProvider) return numbers;
-    return numbers.filter(n => (n.provider || 'meta') === filterProvider);
+    if (filterProvider) return numbers.filter(n => (n.provider || 'meta') === filterProvider);
+    // Sem filtro explícito: este é um seletor de WhatsApp — oculta contas de Instagram.
+    return numbers.filter(n => (n.provider || 'meta') !== 'instagram');
   }, [numbers, filterProvider, allowedProviders]);
 
   const currentValue = value ?? selectedNumberId;

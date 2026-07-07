@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { fetchInstagramSenderUsername } from "../_shared/meta-instagram-profile.ts";
 import { routeMessage, isOperatorCooldownActive } from "../_shared/message-router.ts";
 import { processCommentAutomation, processStoryReplyAutomation, handleCommentButtonPostback } from "../_shared/instagram-comment-automation.ts";
+import { resolveIgAccountByAccountId, globalIgToken } from "../_shared/instagram-account.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,7 +16,7 @@ function normalizeIgUsername(value: string | null | undefined): string {
   return (value || '').replace(/^@+/, '').trim().toLowerCase();
 }
 
-function isOwnInstagramUsername(username: string | null | undefined): boolean {
+function isOwnInstagramUsername(username: string | null | undefined, extra: string[] = []): boolean {
   const normalized = normalizeIgUsername(username);
   if (!normalized) return false;
 
@@ -23,6 +24,7 @@ function isOwnInstagramUsername(username: string | null | undefined): boolean {
     Deno.env.get('META_INSTAGRAM_USERNAME'),
     Deno.env.get('INSTAGRAM_USERNAME'),
     Deno.env.get('IG_USERNAME'),
+    ...extra,
     ...DEFAULT_OWN_IG_USERNAMES,
   ].map(normalizeIgUsername).filter(Boolean);
 
@@ -54,7 +56,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const pageAccessToken = Deno.env.get('META_PAGE_ACCESS_TOKEN') || '';
+    const globalPageToken = Deno.env.get('META_PAGE_ACCESS_TOKEN') || '';
 
     const body = await req.json();
     console.log('Messenger webhook payload:', JSON.stringify(body).slice(0, 1000));
@@ -69,6 +71,16 @@ serve(async (req) => {
     const channel = body.object === 'instagram' ? 'instagram' : 'messenger';
 
     for (const entry of body.entry || []) {
+      // ── Resolve QUAL conta de Instagram recebeu este evento ──
+      // entry.id é o ID profissional do IG. Buscamos a instância cadastrada
+      // (provider='instagram') para usar o token correto e marcar a conversa
+      // com a instância certa. Fallback: token global (conta original).
+      const igAccount = channel === 'instagram'
+        ? await resolveIgAccountByAccountId(supabase, entry.id)
+        : { numberId: null as string | null, accessToken: globalPageToken, username: null as string | null, accountId: null as string | null };
+      const pageAccessToken = igAccount.accessToken || globalPageToken;
+      const entryNumberId = igAccount.numberId;
+      const ownExtraUsernames = igAccount.username ? [igAccount.username] : [];
       // ── Handle messaging events (DMs) ──
       for (const event of entry.messaging || []) {
         const senderId = event.sender?.id;
@@ -162,6 +174,7 @@ serve(async (req) => {
             media_url: attUrl,
             channel,
             is_group: false,
+            whatsapp_number_id: entryNumberId,
           });
 
           if (insertEchoError) {
@@ -347,6 +360,7 @@ serve(async (req) => {
           channel,
           sender_name: senderName,
           referral: referralData,
+          whatsapp_number_id: entryNumberId,
         });
 
         if (error) {
@@ -443,12 +457,12 @@ serve(async (req) => {
                       await fetch(`${supabaseUrl}/functions/v1/meta-messenger-send`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ recipientId: senderId, message: aiData.reply, channel: 'instagram' }),
+                        body: JSON.stringify({ recipientId: senderId, message: aiData.reply, channel: 'instagram', whatsapp_number_id: entryNumberId }),
                       });
 
                       await supabase.from('whatsapp_messages').insert({
                         phone: senderId, message: `[IA] ${aiData.reply}`, direction: 'outgoing',
-                        status: 'sent', channel: 'instagram',
+                        status: 'sent', channel: 'instagram', whatsapp_number_id: entryNumberId,
                       });
 
                       const newCount = (route.session.messages_sent || 0) + 1;
@@ -486,7 +500,7 @@ serve(async (req) => {
           const isLiveComment = change.field === 'live_comments' || mediaType === 'LIVE';
 
           if (!fromId) continue;
-          if (fromId === entry.id || isOwnInstagramUsername(username)) {
+          if (fromId === entry.id || isOwnInstagramUsername(username, ownExtraUsernames)) {
             console.log(`Skipping own Instagram comment webhook from ${username || fromId}`);
             continue;
           }
@@ -509,6 +523,7 @@ serve(async (req) => {
             is_group: false,
             channel: 'instagram',
             sender_name: senderName,
+            whatsapp_number_id: entryNumberId,
           });
 
           if (error) {
