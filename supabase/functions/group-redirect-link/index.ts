@@ -35,7 +35,7 @@ serve(async (req) => {
     // Single query: fetch link with cached URL
     const { data: link, error: linkErr } = await supabase
       .from('group_redirect_links')
-      .select('id, slug, campaign_id, click_count, redirect_count, is_active, is_deep_link, cached_invite_url, cached_at, group_campaigns!inner(target_groups, is_deep_link)')
+      .select('id, slug, campaign_id, click_count, redirect_count, is_active, is_deep_link, cached_invite_url, cached_at, forced_group_id, forced_strict, group_campaigns!inner(target_groups, is_deep_link)')
       .eq('slug', slug)
       .eq('is_active', true)
       .single();
