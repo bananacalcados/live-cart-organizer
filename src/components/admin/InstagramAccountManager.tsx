@@ -157,7 +157,7 @@ export function InstagramAccountManager() {
               Conecte uma ou mais contas do Instagram para receber e responder DMs no chat.
             </p>
           </div>
-          <div class="flex gap-2" className="flex gap-2">
+          <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={fetchAccounts}>
               <RefreshCw className="h-3.5 w-3.5" />
             </Button>
