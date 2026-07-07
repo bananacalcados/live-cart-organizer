@@ -219,25 +219,41 @@ export function AttendantNudgeCard({
   }
 
   return (
-    <div className="pointer-events-auto absolute top-3 right-3 z-30 w-72 max-w-[calc(100%-1.5rem)] rounded-xl border-2 border-primary/30 bg-card/98 shadow-xl ring-2 ring-primary/10 backdrop-blur">
-      <button
-        type="button"
-        onClick={() => setCollapsed((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-t-xl bg-gradient-to-r from-primary/15 to-transparent px-3 py-2.5 text-left"
-      >
-        <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary">
-          <Bell className="h-4 w-4" />
+    <div
+      className="pointer-events-auto absolute top-3 right-3 z-30 w-72 max-w-[calc(100%-1.5rem)] rounded-xl border-2 border-primary/30 bg-card/98 shadow-xl ring-2 ring-primary/10 backdrop-blur"
+      style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
+    >
+      <div className="flex items-center rounded-t-xl bg-gradient-to-r from-primary/15 to-transparent">
+        <span
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="flex h-full cursor-grab touch-none items-center py-2.5 pl-2 pr-1 text-muted-foreground active:cursor-grabbing"
+          title="Arraste para mover"
+        >
+          <GripVertical className="h-4 w-4" />
         </span>
-        <span className="flex-1 text-sm font-bold">Sua fila</span>
-        <span className="flex h-7 min-w-[28px] items-center justify-center rounded-full bg-primary px-2 text-sm font-black text-primary-foreground">
-          {total}
-        </span>
-        {collapsed ? (
-          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        )}
-      </button>
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex flex-1 items-center gap-2 py-2.5 pr-3 text-left"
+        >
+          <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary">
+            <Bell className="h-4 w-4" />
+          </span>
+          <span className="flex-1 text-sm font-bold">Sua fila</span>
+          <span className="flex h-7 min-w-[28px] items-center justify-center rounded-full bg-primary px-2 text-sm font-black text-primary-foreground">
+            {total}
+          </span>
+          {collapsed ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+      </div>
+
 
       {!collapsed && (
         <div className="flex flex-col gap-1.5 px-2 pb-2">
