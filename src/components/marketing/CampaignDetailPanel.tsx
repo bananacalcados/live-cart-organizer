@@ -126,6 +126,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [dispatchRefreshKey, setDispatchRefreshKey] = useState(0);
   const [newSlug, setNewSlug] = useState("");
   const [newLinkLabel, setNewLinkLabel] = useState("");
+  const [newLinkGroup, setNewLinkGroup] = useState<string>("auto");
   const [qrLinkSlug, setQrLinkSlug] = useState<string | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [newVarName, setNewVarName] = useState("");
