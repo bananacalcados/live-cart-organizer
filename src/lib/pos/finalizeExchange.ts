@@ -146,6 +146,8 @@ export async function finalizeExchange(
     eventId, tipo, loja_origem_id, pedido_original_id, modo_expedicao,
     motivo_cancelamento, sellerName, sellerId, conferidos, reposicaoItemIds,
     emitirDevolucao = true, ambiente,
+    origem_canal, cliente_id, valor_devolvido, valor_reposicao,
+    resolucao_diferenca, estorno_forma, codigo_devolucao,
   } = params;
 
   let restocked = 0;
@@ -153,11 +155,12 @@ export async function finalizeExchange(
   // Estado atual do evento (guardas de reprocessamento).
   const { data: evtRow } = await supabase
     .from("trocas_devolucoes")
-    .select("estoque_movimentado, pedido_ajustado, devolucao_doc_id")
+    .select("estoque_movimentado, pedido_ajustado, devolucao_doc_id, resolucao_diferenca")
     .eq("id", eventId)
     .maybeSingle();
   const jaMovimentouEstoque = !!(evtRow as any)?.estoque_movimentado;
   const jaAjustouPedido = !!(evtRow as any)?.pedido_ajustado;
+  const jaAtribuiuFaturamento = !!(evtRow as any)?.resolucao_diferenca;
 
   // ── 1) Conferência: grava estado/condição de cada item devolvido (sempre segura) ──
   for (const it of conferidos) {
