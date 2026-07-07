@@ -1917,7 +1917,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             <DialogHeader>
               <DialogTitle className="text-pos-white text-xl">🔁 Trocas / Devolução</DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-3 gap-3 pt-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
               <button
                 onClick={() => { setShowExchangeMenu(false); setShowSiteExchange(true); }}
                 className="rounded-2xl border-2 border-purple-400/40 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-400 p-5 flex flex-col items-center gap-3 transition-all"
@@ -1941,6 +1941,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">✅</div>
                 <p className="font-bold text-pos-white text-center">Finalizar Troca/Devolução</p>
                 <p className="text-[11px] text-pos-white/60 text-center">Concluir a troca/devolução iniciada</p>
+              </button>
+              <button
+                onClick={() => { setShowExchangeMenu(false); setShowExchangeSearch(true); }}
+                className="rounded-2xl border-2 border-purple-400/40 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">🔎</div>
+                <p className="font-bold text-pos-white text-center">Consultar</p>
+                <p className="text-[11px] text-pos-white/60 text-center">Buscar/acompanhar trocas e devoluções</p>
               </button>
             </div>
           </DialogContent>
