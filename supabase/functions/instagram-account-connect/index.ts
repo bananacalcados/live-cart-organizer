@@ -42,8 +42,14 @@ Deno.serve(async (req) => {
     const accessToken = String(body.accessToken || "").trim();
     const isDefault = Boolean(body.isDefault);
     const rowId: string | null = body.id ? String(body.id) : null;
+    // Registrar a conta PRINCIPAL (a que já estava conectada via token global,
+    // sem token cadastrado no admin). Descobre o account_id/@username usando o
+    // token global e cria a instância SEM guardar token próprio — ela continua
+    // usando o token global, mas passa a ter uma instância identificável.
+    const useGlobalToken = Boolean(body.useGlobalToken);
+    const globalToken = Deno.env.get("META_PAGE_ACCESS_TOKEN") || "";
 
-    if (!accessToken && !rowId) {
+    if (!accessToken && !rowId && !useGlobalToken) {
       return new Response(JSON.stringify({ error: "accessToken é obrigatório" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -52,9 +58,18 @@ Deno.serve(async (req) => {
     let accountId: string | null = null;
     let username: string | null = null;
 
-    // Descobre account_id + username via Graph API (só quando um token novo é enviado)
-    if (accessToken) {
-      const url = `https://graph.instagram.com/v23.0/me?fields=user_id,username,id&access_token=${encodeURIComponent(accessToken)}`;
+    // Descobre account_id + username via Graph API.
+    // - token novo (accessToken) → conta secundária (guarda o token)
+    // - useGlobalToken → conta principal (usa o token global, não guarda token)
+    const discoverToken = accessToken || (useGlobalToken ? globalToken : "");
+    if (discoverToken && !rowId) {
+      if (useGlobalToken && !globalToken) {
+        return new Response(
+          JSON.stringify({ error: "Nenhum token global (META_PAGE_ACCESS_TOKEN) configurado." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+      const url = `https://graph.instagram.com/v23.0/me?fields=user_id,username,id&access_token=${encodeURIComponent(discoverToken)}`;
       const res = await fetch(url);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -81,7 +96,13 @@ Deno.serve(async (req) => {
     if (label) payload.label = label;
     if (typeof body.isDefault === "boolean") payload.is_default = isDefault;
     if (accessToken) {
+      // Conta secundária: guarda o token próprio.
       payload.access_token = accessToken;
+      payload.instagram_account_id = accountId;
+      payload.instagram_username = username;
+      payload.phone_display = username ? `@${username}` : (label || "Instagram");
+    } else if (useGlobalToken && accountId) {
+      // Conta principal: NÃO guarda token (usa o global), só identifica a conta.
       payload.instagram_account_id = accountId;
       payload.instagram_username = username;
       payload.phone_display = username ? `@${username}` : (label || "Instagram");
