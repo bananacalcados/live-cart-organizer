@@ -1563,6 +1563,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
             metaNumbers={storeNumbers}
+            igUsernameById={igUsernameById}
             contactPhotos={contactPhotos}
             contactNames={chatContacts}
             selectedPhone={selectedPhone}
