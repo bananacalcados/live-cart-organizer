@@ -155,6 +155,18 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
     }
   };
 
+  // Fase 6 — duas camadas de valor
+  const valorDevolvido = devolvidos
+    .filter((d) => d.confirmado)
+    .reduce((s, d) => s + Number(d.item.valor_unitario || 0) * d.quantidade, 0);
+  const valorReposicao = reposicoes
+    .reduce((s, r) => s + Number(r.valor_unitario || 0) * Number(r.quantidade || 1), 0);
+  const diferenca = Number((valorReposicao - valorDevolvido).toFixed(2));
+  const isSite = selected?.origem_canal === "site";
+  const faturamentoVendedoraTroca = !isSite && diferenca > 0 ? diferenca : 0;
+
+
+
   const finalize = async () => {
     if (!selected) return;
     const confirmados = devolvidos.filter((d) => d.confirmado);
