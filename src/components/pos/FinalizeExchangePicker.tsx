@@ -74,7 +74,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
       const { data, error } = await supabase
         .from("trocas_devolucoes")
         .select("*")
-        .in("status", OPEN_STATUSES as unknown as string[])
+        .in("status", OPEN_STATUSES)
         .order("created_at", { ascending: false })
         .limit(100);
       if (error) throw error;
