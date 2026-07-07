@@ -1108,11 +1108,14 @@ export default function ChatPage() {
                         <span className="text-[#e9edef] font-medium text-[15px] truncate">
                           {conv.customerName || conv.phone}
                         </span>
-                        {conv.channel === 'instagram' && (
-                          <span className="text-[8px] px-1 py-0 rounded flex-shrink-0 font-medium bg-pink-500/20 text-pink-400">
-                            📷 Instagram
-                          </span>
-                        )}
+                        {conv.channel === 'instagram' && (() => {
+                          const igUser = conv.whatsapp_number_id ? igUsernameById[conv.whatsapp_number_id] : null;
+                          return (
+                            <span className="text-[8px] px-1 py-0 rounded flex-shrink-0 font-medium bg-pink-500/20 text-pink-400 max-w-[120px] truncate" title={igUser ? `Instagram @${igUser}` : 'Instagram'}>
+                              📷 {igUser ? `@${igUser}` : 'Instagram'}
+                            </span>
+                          );
+                        })()}
                         {conv.channel === 'messenger' && (
                           <span className="text-[8px] px-1 py-0 rounded flex-shrink-0 font-medium bg-blue-500/20 text-blue-400">
                             💬 Messenger
