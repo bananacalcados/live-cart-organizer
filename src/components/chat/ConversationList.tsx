@@ -73,6 +73,7 @@ export function ConversationList({
   statusFilter,
   onStatusFilterChange,
   metaNumbers,
+  igUsernameById = {},
   contactPhotos = {},
   contactNames = {},
   selectedPhone,
