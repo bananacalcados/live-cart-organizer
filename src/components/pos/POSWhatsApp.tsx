@@ -1236,28 +1236,60 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const handleDeleteMessage = async (msg: any) => {
     if (!selectedPhone) throw new Error('No phone selected');
-    // If we have a Z-API message_id, try to delete from WhatsApp first
-    if (msg.message_id) {
-      const res = await supabase.functions.invoke("zapi-delete-message", {
-        body: { phone: selectedPhone, messageId: msg.message_id, dbMessageId: msg.id, whatsapp_number_id: msg.whatsapp_number_id || selectedSendNumberId },
-      });
-      // If Z-API delete failed (e.g., outside the 7min window), fall back to local-only removal
-      if (res.error || res.data?.error) {
-        console.warn('[delete] Z-API delete failed, removing locally:', res.error || res.data?.error);
-        await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
-        toast.warning('Apagada apenas no sistema', {
-          description: 'O WhatsApp não permitiu apagar para o cliente (passou de ~7min). A mensagem ainda aparece no celular dele.',
-        });
-      } else {
-        toast.success('Apagada para todos', {
-          description: 'A mensagem foi removida também do WhatsApp do cliente.',
-        });
-      }
-    } else {
-      // No external message_id (e.g., older audio sent before tracking) — remove only from local history
+
+    // Resolve which provider owns this conversation/message so we call the correct API.
+    const numberId = msg.whatsapp_number_id || selectedSendNumber?.id || selectedSendNumberId || null;
+    const numberRec =
+      metaNumbers.find((n) => n.id === numberId) ||
+      storeNumbers.find((n) => n.id === numberId) ||
+      selectedSendNumber ||
+      null;
+    const provider = (numberRec?.provider as string) || 'zapi';
+
+    // No external message id (older messages) — local-only removal.
+    if (!msg.message_id) {
       await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
       toast.warning('Apagada apenas no sistema', {
         description: 'Esta mensagem não tem identificador do WhatsApp e não pode ser apagada no celular do cliente.',
+      });
+      loadMessages(selectedPhone, selectedConvNumberId);
+      return;
+    }
+
+    let res: { error?: unknown; data?: any };
+    if (provider === 'uazapi') {
+      res = await supabase.functions.invoke('uazapi-message-actions', {
+        body: { action: 'delete', whatsapp_number_id: numberId, msgId: msg.message_id, phone: selectedPhone },
+      });
+    } else if (provider === 'wasender') {
+      res = await supabase.functions.invoke('wasender-message-actions', {
+        body: { action: 'delete', whatsapp_number_id: numberId, msgId: msg.message_id },
+      });
+    } else if (provider === 'meta' || provider === 'instagram' || provider === 'messenger') {
+      // Meta Cloud API / social channels don't support deleting a sent message — local-only.
+      await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+      toast.warning('Apagada apenas no sistema', {
+        description: 'Este canal não permite apagar a mensagem no aparelho do cliente.',
+      });
+      loadMessages(selectedPhone, selectedConvNumberId);
+      return;
+    } else {
+      res = await supabase.functions.invoke('zapi-delete-message', {
+        body: { phone: selectedPhone, messageId: msg.message_id, dbMessageId: msg.id, whatsapp_number_id: numberId },
+      });
+    }
+
+    if (res.error || res.data?.error) {
+      console.warn('[delete] provider delete failed, removing locally:', res.error || res.data?.error);
+      await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+      toast.warning('Apagada apenas no sistema', {
+        description: 'O WhatsApp não permitiu apagar para o cliente (provavelmente passou do tempo limite). A mensagem ainda aparece no celular dele.',
+      });
+    } else {
+      // Provider-specific functions (uazapi/wasender) don't touch the DB — remove locally.
+      await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
+      toast.success('Apagada para todos', {
+        description: 'A mensagem foi removida também do WhatsApp do cliente.',
       });
     }
     loadMessages(selectedPhone, selectedConvNumberId);
@@ -1265,11 +1297,34 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
   const handleEditMessage = async (msg: any, newText: string) => {
     if (!msg.message_id || !selectedPhone) throw new Error('No message_id');
-    const res = await supabase.functions.invoke("zapi-edit-message", {
-      body: { phone: selectedPhone, messageId: msg.message_id, newMessage: newText, dbMessageId: msg.id, whatsapp_number_id: msg.whatsapp_number_id || selectedSendNumberId },
-    });
+    const numberId = msg.whatsapp_number_id || selectedSendNumber?.id || selectedSendNumberId || null;
+    const numberRec =
+      metaNumbers.find((n) => n.id === numberId) ||
+      storeNumbers.find((n) => n.id === numberId) ||
+      selectedSendNumber ||
+      null;
+    const provider = (numberRec?.provider as string) || 'zapi';
+
+    let res: { error?: unknown; data?: any };
+    if (provider === 'uazapi') {
+      res = await supabase.functions.invoke('uazapi-message-actions', {
+        body: { action: 'edit', whatsapp_number_id: numberId, msgId: msg.message_id, text: newText },
+      });
+    } else if (provider === 'wasender') {
+      res = await supabase.functions.invoke('wasender-message-actions', {
+        body: { action: 'edit', whatsapp_number_id: numberId, msgId: msg.message_id, text: newText },
+      });
+    } else {
+      res = await supabase.functions.invoke('zapi-edit-message', {
+        body: { phone: selectedPhone, messageId: msg.message_id, newMessage: newText, dbMessageId: msg.id, whatsapp_number_id: numberId },
+      });
+    }
     if (res.error) throw res.error;
     if (res.data?.error) throw new Error(res.data.error);
+    // Provider functions (uazapi/wasender) don't update the DB — persist the edit locally.
+    if (provider === 'uazapi' || provider === 'wasender') {
+      await supabase.from('whatsapp_messages').update({ message: newText }).eq('id', msg.id);
+    }
     loadMessages(selectedPhone, selectedConvNumberId);
   };
 
