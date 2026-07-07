@@ -82,7 +82,6 @@ Deno.serve(async (req) => {
     if (typeof body.isDefault === "boolean") payload.is_default = isDefault;
     if (accessToken) {
       payload.access_token = accessToken;
-      payload.has_meta_token = true;
       payload.instagram_account_id = accountId;
       payload.instagram_username = username;
       payload.phone_display = username ? `@${username}` : (label || "Instagram");
