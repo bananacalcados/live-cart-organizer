@@ -24,6 +24,7 @@ import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import { SiteExchangePicker, SiteExchangeResult } from "./SiteExchangePicker";
 import { NewExchangePicker } from "./NewExchangePicker";
 import { FinalizeExchangePicker } from "./FinalizeExchangePicker";
+import { ExchangeSearchList } from "./ExchangeSearchList";
 import { ConditionalFinalizePicker, ConditionalPickResult } from "./ConditionalFinalizePicker";
 import { printConditionalReceipt } from "@/lib/pos/conditionalReceipt";
 
@@ -102,6 +103,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [showExchangeMenu, setShowExchangeMenu] = useState(false);
   const [showNewExchange, setShowNewExchange] = useState(false);
   const [showFinalizeExchange, setShowFinalizeExchange] = useState(false);
+  const [showExchangeSearch, setShowExchangeSearch] = useState(false);
   // Condicional: pedido enviado ao cliente para experimentar (2 etapas)
   const [conditionalStage, setConditionalStage] = useState<ConditionalStage | null>(null);
   const [showConditionalMenu, setShowConditionalMenu] = useState(false);
