@@ -151,6 +151,30 @@ serve(async (req) => {
 });
 
 // ─── Helper: resolve the WhatsApp invite URL from campaign groups ───
+
+// Margem de segurança: trata o grupo como "cheio" alguns lugares antes do limite
+// real, para evitar estourar a lotação em picos de clique dentro da janela de cache.
+const CAPACITY_MARGIN = 10;
+
+function hasCapacity(group: any): boolean {
+  const max = group.max_participants || 1024;
+  return (group.participant_count || 0) < (max - CAPACITY_MARGIN);
+}
+
+// Busca/gera o invite de um único grupo, salvando para uso futuro.
+async function inviteForGroup(supabase: any, group: any): Promise<string | null> {
+  if (group.invite_link) return group.invite_link;
+  const inviteLink = await fetchInviteLink(supabase, group);
+  if (inviteLink) {
+    supabase.from('whatsapp_groups')
+      .update({ invite_link: inviteLink })
+      .eq('id', group.id)
+      .then(() => {});
+    return inviteLink;
+  }
+  return null;
+}
+
 async function resolveGroupUrl(
   supabase: any,
   link: any,
@@ -159,6 +183,25 @@ async function resolveGroupUrl(
 ): Promise<string | null> {
   const campaign = link.group_campaigns as any;
   const targetGroupIds = campaign?.target_groups || [];
+
+  // ─── MODO FIXO: link aponta para um grupo específico ───
+  if (link.forced_group_id) {
+    const { data: forced } = await supabase
+      .from('whatsapp_groups')
+      .select('id, group_id, name, invite_link, is_full, participant_count, max_participants, instance_id')
+      .eq('id', link.forced_group_id)
+      .maybeSingle();
+
+    if (forced) {
+      const forcedHasRoom = !forced.is_full && hasCapacity(forced);
+      // Usa o grupo fixo quando tem vaga, OU quando é estrito (mantém mesmo cheio).
+      if (forcedHasRoom || link.forced_strict) {
+        const invite = await inviteForGroup(supabase, forced);
+        if (invite) return invite;
+      }
+      // Se não é estrito e o grupo lotou, cai para a rotação automática abaixo.
+    }
+  }
 
   if (!targetGroupIds.length) return null;
 
@@ -169,11 +212,8 @@ async function resolveGroupUrl(
     .eq('is_full', false)
     .order('participant_count', { ascending: false });
 
-  // Real-time capacity check (não confia só no flag is_full — ele pode estar atrasado)
-  const groups = (groupsRaw || []).filter((g: any) => {
-    const max = g.max_participants || 1024;
-    return (g.participant_count || 0) < max;
-  });
+  // Real-time capacity check com margem (não confia só no flag is_full — ele pode estar atrasado)
+  const groups = (groupsRaw || []).filter((g: any) => hasCapacity(g));
 
   if (!groups || groups.length === 0) {
     return await tryAutoCreate(supabaseUrl, supabaseKey, link.campaign_id);
