@@ -1,30 +1,62 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { isAuthorizedCron, unauthorizedResponse } from "../_shared/cron-guard.ts";
+import { uazapiInstance } from "../_shared/uazapi-credentials.ts";
 
 const PROACTIVE_THRESHOLD = 950;  // criar standby quando algum grupo atingir este número
 const STANDBY_MAX_COUNT = 50;     // grupos com menos que isso são considerados "standby"
 
-// Busca metadata fresca de um grupo na Z-API e devolve participant_count atual
-async function fetchGroupParticipantCount(
-  instanceId: string,
-  token: string,
-  clientToken: string,
-  groupPhone: string
-): Promise<number | null> {
+type GroupCreds =
+  | { provider: 'zapi'; instance: string; token: string; clientToken: string }
+  | { provider: 'uazapi'; token: string }
+  | { provider: 'wasender'; apiKey: string };
+
+function normalizeGroupJid(raw: string): string {
+  if (!raw) return raw;
+  if (raw.includes('@')) return raw;
+  return `${raw.replace(/\D/g, '')}@g.us`;
+}
+
+function countFromPayload(data: any): number | null {
+  if (!data) return null;
+  if (Array.isArray(data?.participants)) return data.participants.length;
+  if (Array.isArray(data?.Participants)) return data.Participants.length;
+  if (typeof data?.participantsCount === 'number') return data.participantsCount;
+  if (typeof data?.size === 'number') return data.size;
+  if (Array.isArray(data?.data?.participants)) return data.data.participants.length;
+  if (typeof data?.data?.participantsCount === 'number') return data.data.participantsCount;
+  return null;
+}
+
+// Busca metadata fresca de um grupo respeitando o provedor real da instância.
+async function fetchGroupParticipantCount(creds: GroupCreds, groupId: string): Promise<number | null> {
   try {
-    const url = `https://api.z-api.io/instances/${instanceId}/token/${token}/light-group-metadata/${groupPhone}`;
-    const res = await fetch(url, { headers: { 'Client-Token': clientToken } });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data?.participants && Array.isArray(data.participants)) return data.participants.length;
-    if (typeof data?.participantsCount === 'number') return data.participantsCount;
+    if (creds.provider === 'zapi') {
+      const url = `https://api.z-api.io/instances/${creds.instance}/token/${creds.token}/light-group-metadata/${groupId}`;
+      const res = await fetch(url, { headers: { 'Client-Token': creds.clientToken } });
+      if (!res.ok) return null;
+      return countFromPayload(await res.json());
+    }
+    if (creds.provider === 'uazapi') {
+      const jid = normalizeGroupJid(groupId);
+      const r = await uazapiInstance('/group/info', creds.token, { method: 'POST', body: { groupjid: jid } });
+      return r.ok ? countFromPayload(r.data) : null;
+    }
+    if (creds.provider === 'wasender') {
+      const jid = normalizeGroupJid(groupId);
+      const res = await fetch(`https://wasenderapi.com/api/groups/${encodeURIComponent(jid)}/metadata`, {
+        headers: { Authorization: `Bearer ${creds.apiKey}`, 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) return null;
+      return countFromPayload(await res.json().catch(() => null));
+    }
     return null;
   } catch (e) {
-    console.error('Z-API metadata error:', e);
+    console.error('metadata error:', e);
     return null;
   }
 }
+
 
 serve(async (req) => {
   if (!(await isAuthorizedCron(req))) return unauthorizedResponse({});
