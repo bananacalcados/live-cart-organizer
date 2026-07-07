@@ -49,10 +49,14 @@ export async function resolveIgAccountByAccountId(
     .eq("is_active", true)
     .maybeSingle();
 
-  if (data?.access_token) {
+  // Conta encontrada: sempre devolvemos o numberId (para ROTULAR a conversa),
+  // mesmo quando a linha NÃO guarda token próprio — nesse caso é a "conta
+  // principal", que continua usando o token global. Assim as DMs da conta
+  // original também ficam vinculadas a uma instância identificável no chat.
+  if (data?.id) {
     return {
       numberId: data.id,
-      accessToken: data.access_token,
+      accessToken: data.access_token || globalIgToken(),
       username: data.instagram_username ?? null,
       accountId: data.instagram_account_id ?? String(accountId),
     };

@@ -113,6 +113,27 @@ export function InstagramAccountManager() {
     }
   };
 
+  const handleRegisterPrimary = async () => {
+    if (!confirm("Registrar a conta principal (a que já estava conectada internamente via token global)? As DMs antigas do Instagram serão vinculadas a ela.")) return;
+    setSaving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-account-connect", {
+        body: { useGlobalToken: true },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.details?.error?.message || data.error);
+      toast({
+        title: "Conta principal registrada",
+        description: `${data?.account?.instagram_username ? "@" + data.account.instagram_username : "Conta"} vinculada. ${data?.backfilled || 0} conversas antigas atualizadas.`,
+      });
+      fetchAccounts();
+    } catch (e: any) {
+      toast({ title: "Erro", description: e?.message || "Falha ao registrar a conta principal.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDelete = async (acc: IgAccount) => {
     if (!confirm(`Remover a conta ${acc.instagram_username ? "@" + acc.instagram_username : acc.label}?`)) return;
     const { error } = await supabase.from("whatsapp_numbers").delete().eq("id", acc.id);
@@ -139,6 +160,9 @@ export function InstagramAccountManager() {
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={fetchAccounts}>
               <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleRegisterPrimary} disabled={saving} title="Registra a conta que já estava conectada internamente (via token global) como uma instância identificável">
+              <Instagram className="h-3.5 w-3.5 mr-1" /> Registrar conta principal
             </Button>
             <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) resetForm(); }}>
               <DialogTrigger asChild>

@@ -457,6 +457,19 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     return metaNumbers.filter(n => storeNumberIds.includes(n.id));
   }, [metaNumbers, storeNumberIds]);
 
+  // Map whatsapp_number_id -> @username das contas de Instagram (para rotular
+  // cada DM com a conta correta no chat). Usa o store completo, pois contas de
+  // IG não ficam atreladas às instâncias de WhatsApp da loja.
+  const igUsernameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const n of metaNumbers) {
+      if (n.provider === 'instagram' && n.instagram_username) {
+        map[n.id] = n.instagram_username;
+      }
+    }
+    return map;
+  }, [metaNumbers]);
+
   // Resolve the instance this conversation already belongs to. Prefer the id set
   // on selection, but fall back to the instance stamped on the loaded messages so
   // a conversation with history NEVER shows the "choose instance" selector — it's
@@ -1550,6 +1563,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
             metaNumbers={storeNumbers}
+            igUsernameById={igUsernameById}
             contactPhotos={contactPhotos}
             contactNames={chatContacts}
             selectedPhone={selectedPhone}
@@ -1664,9 +1678,14 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               )}
 
               {/* Instância da conversa */}
-              {selectedChannel === "instagram" ? (
-                <Badge variant="secondary" className="text-[10px] px-2 py-0.5 flex-shrink-0">📷 Instagram</Badge>
-              ) : selectedChannel === "messenger" ? (
+              {selectedChannel === "instagram" ? (() => {
+                const igUser = messageBoundNumberId ? igUsernameById[messageBoundNumberId] : null;
+                return (
+                  <Badge variant="secondary" className="text-[10px] px-2 py-0.5 flex-shrink-0 max-w-[160px] truncate" title={igUser ? `Instagram @${igUser}` : 'Instagram'}>
+                    📷 {igUser ? `@${igUser}` : 'Instagram'}
+                  </Badge>
+                );
+              })() : selectedChannel === "messenger" ? (
                 <Badge variant="secondary" className="text-[10px] px-2 py-0.5 flex-shrink-0">💬 Messenger</Badge>
               ) : conversationBoundNumber ? (
                 <Badge className="text-[10px] px-2 py-0.5 bg-[#00a884] text-white font-medium flex-shrink-0" title="Instância da conversa">
