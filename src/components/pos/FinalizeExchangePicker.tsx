@@ -20,7 +20,9 @@ import type { Database } from "@/integrations/supabase/types";
 type TdEvent = Database["public"]["Tables"]["trocas_devolucoes"]["Row"];
 type TdItem = Database["public"]["Tables"]["trocas_devolucoes_itens"]["Row"];
 
-const OPEN_STATUSES = ["iniciada", "aguardando_retorno", "recebido_conferencia"] as const;
+const OPEN_STATUSES: Database["public"]["Enums"]["td_status"][] = [
+  "iniciada", "aguardando_retorno", "recebido_conferencia",
+];
 
 const STORE_NAMES: Record<string, string> = {
   "4ade7b44-5043-4ab1-a124-7a6ab5468e29": "Loja Centro",
