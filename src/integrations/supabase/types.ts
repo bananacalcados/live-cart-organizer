@@ -6671,6 +6671,8 @@ export type Database = {
           campaign_id: string
           click_count: number
           created_at: string
+          forced_group_id: string | null
+          forced_strict: boolean
           id: string
           is_active: boolean
           is_deep_link: boolean
@@ -6684,6 +6686,8 @@ export type Database = {
           campaign_id: string
           click_count?: number
           created_at?: string
+          forced_group_id?: string | null
+          forced_strict?: boolean
           id?: string
           is_active?: boolean
           is_deep_link?: boolean
@@ -6697,6 +6701,8 @@ export type Database = {
           campaign_id?: string
           click_count?: number
           created_at?: string
+          forced_group_id?: string | null
+          forced_strict?: boolean
           id?: string
           is_active?: boolean
           is_deep_link?: boolean
