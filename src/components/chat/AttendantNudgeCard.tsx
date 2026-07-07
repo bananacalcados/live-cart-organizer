@@ -61,6 +61,54 @@ export function AttendantNudgeCard({
   } = useAttendantWorkload(conversations);
   const [collapsed, setCollapsed] = useState(false);
 
+  // Posição arrastável do card flutuante (offset em px a partir do canto padrão).
+  const STORAGE_KEY = "attendant-nudge-pos";
+  const [pos, setPos] = useState<{ x: number; y: number }>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {
+      /* ignore */
+    }
+    return { x: 0, y: 0 };
+  });
+  const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(
+    null
+  );
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      dragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        baseX: pos.x,
+        baseY: pos.y,
+      };
+    },
+    [pos]
+  );
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    setPos({ x: dragRef.current.baseX + dx, y: dragRef.current.baseY + dy });
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
+    } catch {
+      /* ignore */
+    }
+  }, [pos]);
+
   const total =
     (showAwaiting ? awaitingCount : 0) + (showFollowups ? followupCount : 0) + arrivedCount;
 
