@@ -244,9 +244,31 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
         { duration: 7000 },
       );
 
-      if (selected.tipo === "troca") {
-        toast.info("Nova NF-e de venda (valor cheio) será emitida na Fase 6.", { duration: 6000 });
+      // Fase 6: feedback da atribuição de faturamento / crédito ao cliente.
+      const attr = result.atribuicao;
+      if (attr) {
+        if (attr.resolucao === "cliente_paga") {
+          toast.info(
+            `Cliente paga a diferença de R$ ${attr.diferenca.toFixed(2)}.` +
+            (attr.faturamento_vendedora_troca > 0
+              ? ` Faturamento da troca (R$ ${attr.faturamento_vendedora_troca.toFixed(2)}) creditado à vendedora.`
+              : isSite ? " Canal site: sem vendedora." : ""),
+            { duration: 8000 },
+          );
+        } else if (attr.resolucao === "voucher") {
+          toast.success(
+            `Voucher ${attr.voucher_codigo || ""} de R$ ${Math.abs(attr.diferenca).toFixed(2)} gerado para o cliente.`,
+            { duration: 8000 },
+          );
+        } else if (attr.resolucao === "estorno_financeiro") {
+          toast.success(
+            `Estorno financeiro de R$ ${(attr.estorno_valor || 0).toFixed(2)} registrado (${estornoForma}).`,
+            { duration: 8000 },
+          );
+        }
       }
+
+
 
       onDone();
     } catch (e: any) {
