@@ -206,6 +206,36 @@ export async function processGroupMembershipEvent(
       if (error) console.error("[group-member-tracking] upsert member:", error.message);
     }
 
+    // ── 2b) Mantém participant_count/is_full de whatsapp_groups em tempo real.
+    //    Evita a defasagem de até 5 min do cron e reduz risco de redirecionar
+    //    gente para grupo já cheio.
+    try {
+      const joinedCount = changes.filter((c) => c.type === "joined").length;
+      const leftCount = changes.filter((c) => c.type === "left").length;
+      const delta = joinedCount - leftCount;
+      if (delta !== 0) {
+        const { data: grp } = await supabase
+          .from("whatsapp_groups")
+          .select("id, participant_count, max_participants")
+          .eq("group_id", groupId)
+          .maybeSingle();
+        if (grp) {
+          const next = Math.max(0, (grp.participant_count || 0) + delta);
+          const max = grp.max_participants || 1024;
+          await supabase
+            .from("whatsapp_groups")
+            .update({
+              participant_count: next,
+              is_full: next >= max,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", grp.id);
+        }
+      }
+    } catch (e) {
+      console.error("[group-member-tracking] contagem tempo real:", (e as Error).message);
+    }
+
     // ── 3) Captação VIP: ENTRADAS (joins) viram lead OU tagueiam cliente.
     //    Fonte de verdade = evento de entrada do webhook (não o clique no link).
     try {

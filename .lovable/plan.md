@@ -1,87 +1,62 @@
-# Plano — Módulo Fiscal (Relatórios + Sintegra)
+# Plano — Seleção manual de grupo no link VIP + reforço anti-grupo-cheio
 
 ## Objetivo
-Adicionar uma aba **Fiscal** no Dashboard Geral do frente de caixa com:
-1. Relatório de **vendas** (saídas) por CNPJ, separado por NF-e (mod. 55) e NFC-e (mod. 65).
-2. Relatório de **entradas** por CNPJ (notas de mercadoria puxadas do módulo Estoque).
-3. Geração do arquivo **Sintegra** no padrão fiscal, com formulário para dados da empresa/responsável.
-4. Exportação em **CSV/Excel** de todos os relatórios.
+Permitir que, ao criar/editar um link de redirecionamento dentro de uma campanha, você possa **opcionalmente fixar um grupo VIP específico** para onde aquele link sempre manda. Quando nenhum for fixado, o comportamento automático atual (rotação por capacidade) continua igual. De quebra, corrigir as brechas que hoje deixam mandar gente pra grupo cheio.
 
-Tudo somente de **leitura** sobre dados já existentes — nada na emissão, no estoque ou no banco é alterado.
+## Parte 1 — Seleção manual do grupo (funcionalidade pedida)
 
-## O que já temos (fontes de dados)
-- **Saídas:** `fiscal_documents` (721 notas autorizadas). Cabeçalho completo em todas (empresa, modelo, série, número, chave, valor, data, CPF/nome destinatário). XML por item em ~367.
-- **Entradas:** `purchase_invoices` + `purchase_invoice_items` (fornecedor, CNPJ, NCM, CFOP, quantidade, custo) — importadas pelo módulo Estoque.
-- **Empresa:** `companies` (CNPJ, IE, endereço, regime, CRT, CNAE, cidade IBGE).
+### 1.1 Banco de dados
+- Nova coluna `forced_group_id uuid null` em `group_redirect_links` (FK lógica para `whatsapp_groups.id`).
+- `null` = modo automático (atual). Preenchido = link fixo naquele grupo.
+- Migration com a coluna; sem novos GRANTs (a tabela já é acessada por service role nas edge functions).
 
-## Pontos de atenção (limitações honestas)
-1. **Notas de prestadores de serviço (NFS-e):** não existem em nenhum módulo hoje. O relatório de entradas cobrirá as notas de **mercadoria** de `purchase_invoices`. Para incluir serviço, seria preciso uma fonte (importação manual ou uso do módulo de manifestação, hoje vazio) — fica fora desta entrega, mas o relatório é preparado para receber essa fonte no futuro.
-2. **Sintegra por item (registros 54/75):** dependem do XML. ~354 vendas não têm XML salvo. Solução: usar o `fiscal-backfill-danfe` para recuperar XML sob demanda antes de gerar o Sintegra, e sinalizar quais notas ficaram sem detalhe.
-3. **Cadastro de empresa incompleto:** 2 das 3 empresas estão sem IE/endereço. O gerador do Sintegra exige esses campos, então haverá validação + formulário de complemento antes de gerar.
+### 1.2 Edge function `group-redirect-link`
+- Ao carregar o link, passar a selecionar também `forced_group_id`.
+- Em `resolveGroupUrl`: se `forced_group_id` estiver definido, buscar **só aquele grupo** e devolver o invite dele.
+- Regra de segurança no modo fixo: se o grupo fixado estiver cheio (`is_full` ou `participant_count >= max_participants`), decidir o comportamento (ver 1.4). Por padrão, **cair no modo automático** para não travar entradas.
 
-## Fase 1 — Relatórios (entrega imediata)
+### 1.3 UI — aba "Links" do `CampaignDetailPanel.tsx`
+- No formulário de criar link e na linha de cada link, adicionar um `Select` "Grupo de destino":
+  - Opção `Automático (rotação por capacidade)` — padrão.
+  - Lista dos grupos de `campaign.target_groups` com nome + contagem atual (`ex: "Vips GV #3 · 209/1000"`).
+- Badge no card do link indicando `🔒 Fixo: <nome>` quando houver `forced_group_id`.
+- Atualização do `RedirectLink` interface e das queries de insert/update.
 
-### 1.1 Nova aba "Fiscal"
-- Em `POSGeneralDashboard.tsx`, adicionar `"fiscal"` ao estado `view` e ao array de tabs (`Visão Geral | Folha | Fiscal`).
-- Renderizar novo componente `POSFiscalTab` recebendo o `periodRange` já existente (reaproveita o seletor de período do dashboard).
-- Proteção por senha, igual à aba Folha (fiscal é sensível).
+### 1.4 Comportamento quando o grupo fixo enche (decisão de produto)
+Duas opções — escolher uma:
+- **A) Fallback automático (recomendado):** grupo fixo cheio → volta a rotacionar pelos demais da campanha. Nunca deixa cliente sem grupo.
+- **B) Fixo estrito:** mantém sempre o grupo escolhido, mesmo cheio (útil p/ grupo exclusivo/segmentado). Mostra aviso na UI de que pode recusar entradas.
+Sugestão: implementar **A** como padrão, com um checkbox opcional "manter mesmo cheio" para habilitar B por link.
 
-### 1.2 Componente `POSFiscalTab.tsx`
-Filtros: **empresa (CNPJ)**, **período** e **modelo** (NF-e / NFC-e / ambos).
+## Parte 2 — Reforço anti-grupo-cheio (corrige os riscos achados)
 
-Sub-seção **Vendas (saídas)**:
-- Consulta `fiscal_documents` por `company_id` + `data_autorizacao` no período, status autorizado.
-- Agrupa por CNPJ e por modelo, exibindo: quantidade de notas, valor total, ticket médio, canceladas.
-- Tabela detalhada (data, modelo, série/número, chave, destinatário, valor, status).
+### 2.1 Cron multi-provedor (`cron-check-vip-groups`)
+- Hoje só refresca via Z‑API. Ajustar para, conforme o `provider` da instância, chamar:
+  - uazapi → metadata/participantes uazapi
+  - wasender → metadata wasender
+  - z-api → endpoint atual
+- Assim grupos uazapi/wasender param de ficar com contagem congelada.
 
-Sub-seção **Entradas**:
-- Consulta `purchase_invoices` por `emission_date` no período.
-- Agrupa por `supplier_cnpj`: quantidade de notas, valor total, total de produtos/impostos.
-- Tabela detalhada (data, fornecedor, CNPJ, número/série, chave, valor).
+### 2.2 Atualizar contagem em tempo real via webhook
+- Em `_shared/group-member-tracking.ts`, ao registrar entrada/saída de membro, também **incrementar/decrementar `participant_count`** e recalcular `is_full` na `whatsapp_groups`.
+- Elimina a janela de defasagem de até 5 min entre ciclos do cron.
 
-### 1.3 Exportação CSV/Excel
-- Função utilitária `src/lib/fiscal/exportFiscalReport.ts` gera CSV (UTF-8 com BOM) para cada relatório.
-- Botões "Exportar CSV" em cada sub-seção.
-
-## Fase 2 — Arquivo Sintegra
-
-### 2.1 Formulário de geração
-Dialog `SintegraExportDialog.tsx`:
-- Seleção de **empresa (CNPJ)** e **período (mês/ano)**.
-- Campos da empresa pré-preenchidos de `companies`, editáveis, com validação obrigatória: razão social, CNPJ, IE, endereço completo, cidade/IBGE, UF, CEP.
-- Campos do **responsável** (nome, telefone/e-mail) e **finalidade** do arquivo (normal/retificação) e natureza das operações.
-
-### 2.2 Geração do arquivo (`src/lib/fiscal/sintegra.ts`)
-Monta o `.txt` de largura fixa (Convênio ICMS 57/95):
-- **Registro 10** — mestre do estabelecimento (CNPJ, IE, nome, município, UF, período, códigos de convenência/natureza/finalidade).
-- **Registro 11** — dados complementares (endereço, responsável).
-- **Registro 50** — cabeçalho das **NF-e (mod. 55)** de saída: CNPJ/IE destinatário, data, modelo, série, número, CFOP, valor, base ICMS, situação.
-- **Registro 54** — itens das NF-e (do XML): NCM, CFOP, quantidade, valor, base/valor ICMS.
-- **Registro 75** — cadastro de produtos/serviços referenciados nos 54.
-- **Registro 60 (60M/60A/60D)** — resumo das **NFC-e (mod. 65)** por dia/equipamento/alíquota (modelo de cupom fiscal).
-- **Registro 90** — totalização e controle.
-- Também emitir registros 50/54 para as **entradas** (`purchase_invoices` + itens) quando a empresa for destinatária.
-- Codificação e quebras de linha conforme padrão (ASCII, CRLF).
-
-### 2.3 Onde roda
-- Geração **client-side** (arquivo texto puro, sem dependências pesadas), com download direto.
-- Antes de gerar, chamar `fiscal-backfill-danfe` para notas sem XML e listar as que não puderam ser detalhadas (aviso ao usuário para não gerar arquivo incompleto sem saber).
-
-### 2.4 Validação
-- Bloquear geração se faltar IE/endereço/IBGE da empresa.
-- Relatório de conferência na tela (totais por registro) antes do download, para comparar com a contabilidade.
+### 2.3 Margem de segurança na capacidade
+- No `group-redirect-link`, tratar como "cheio" quando `participant_count >= max_participants - MARGEM` (ex.: MARGEM = 10). Evita estourar 1000 em picos dentro da janela de cache.
+- Opcional: reduzir o cache (`CACHE_TTL_MS`) de 2 min para ~30s nos grupos que estão perto do limite.
 
 ## Arquivos afetados
-- `src/components/pos/POSGeneralDashboard.tsx` — adiciona aba (edição pontual).
-- `src/components/pos/POSFiscalTab.tsx` — novo.
-- `src/components/fiscal/SintegraExportDialog.tsx` — novo.
-- `src/lib/fiscal/sintegra.ts` — novo (montagem do arquivo).
-- `src/lib/fiscal/exportFiscalReport.ts` — novo (CSV/Excel).
+- `supabase/migrations/*` (nova coluna `forced_group_id`).
+- `supabase/functions/group-redirect-link/index.ts` (modo fixo + margem de segurança).
+- `supabase/functions/cron-check-vip-groups/index.ts` (refresh multi-provedor).
+- `supabase/functions/_shared/group-member-tracking.ts` (contagem em tempo real).
+- `src/components/marketing/CampaignDetailPanel.tsx` (UI de seleção + interface + queries).
 
-Nenhuma migração de banco é necessária. Nenhuma função de emissão é tocada.
+## Fora de escopo
+- Não altera a estratégia de "encher um grupo antes do próximo" no modo automático.
+- Não mexe na criação automática de grupos (`auto-create-vip-group`), só é acionada como fallback.
 
-## Sugestão de execução
-Entregar a **Fase 1** primeiro (relatórios + CSV), validar os números com sua contabilidade, e em seguida a **Fase 2** (Sintegra), que é a parte mais sensível e precisa de conferência campo a campo com um contador antes de valer para o fisco.
-
-## Recomendação importante
-O layout exato do Sintegra tem variações por estado (MG, no seu caso). Antes de considerar o arquivo "oficial", ele deve ser validado no **validador Sintegra da SEFAZ/MG** e conferido por seu contador. O gerador seguirá o padrão nacional 57/95, mas a homologação final é contábil.
+## Decisões que preciso confirmar antes de executar
+1. Comportamento do grupo fixo cheio: **A (fallback)**, **B (estrito)** ou os dois via checkbox?
+2. Fazer também a Parte 2 (segurança) junto, ou só a Parte 1 (seleção manual) agora?
+3. Valor da margem de segurança (sugiro 10 vagas).

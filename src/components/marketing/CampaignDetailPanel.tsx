@@ -92,6 +92,8 @@ interface RedirectLink {
   click_count: number;
   redirect_count: number;
   is_active: boolean;
+  forced_group_id: string | null;
+  forced_strict: boolean;
 }
 
 interface CampaignVariable {
@@ -124,6 +126,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
   const [dispatchRefreshKey, setDispatchRefreshKey] = useState(0);
   const [newSlug, setNewSlug] = useState("");
   const [newLinkLabel, setNewLinkLabel] = useState("");
+  const [newLinkGroup, setNewLinkGroup] = useState<string>("auto");
   const [qrLinkSlug, setQrLinkSlug] = useState<string | null>(null);
   const [isCreatingLink, setIsCreatingLink] = useState(false);
   const [newVarName, setNewVarName] = useState("");
@@ -592,6 +595,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       slug: newSlug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-'),
       label: newLinkLabel.trim() || null,
       is_deep_link: false,
+      forced_group_id: newLinkGroup === "auto" ? null : newLinkGroup,
     });
     if (error) {
       toast.error(error.message.includes('unique') ? "Slug já existe" : "Erro ao criar link");
@@ -599,6 +603,7 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
       toast.success("Link criado!");
       setNewSlug("");
       setNewLinkLabel("");
+      setNewLinkGroup("auto");
       fetchLinks();
     }
     setIsCreatingLink(false);
@@ -606,6 +611,18 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
 
   const toggleDeepLink = async (linkId: string, val: boolean) => {
     await supabase.from('group_redirect_links').update({ is_deep_link: val }).eq('id', linkId);
+    fetchLinks();
+  };
+
+  const setForcedGroup = async (linkId: string, val: string) => {
+    await supabase.from('group_redirect_links')
+      .update({ forced_group_id: val === "auto" ? null : val })
+      .eq('id', linkId);
+    fetchLinks();
+  };
+
+  const toggleForcedStrict = async (linkId: string, val: boolean) => {
+    await supabase.from('group_redirect_links').update({ forced_strict: val }).eq('id', linkId);
     fetchLinks();
   };
 
@@ -1363,15 +1380,34 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               </div>
               <Input placeholder="Origem/rótulo (opcional, ex: Instagram Bio)" value={newLinkLabel}
                 onChange={e => setNewLinkLabel(e.target.value)} className="text-xs" />
+              <div>
+                <Label className="text-[10px] text-muted-foreground">Grupo de destino</Label>
+                <Select value={newLinkGroup} onValueChange={setNewLinkGroup}>
+                  <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">🔄 Automático (rotação por capacidade)</SelectItem>
+                    {campaignGroups.map(g => (
+                      <SelectItem key={g.id} value={g.id}>
+                        {g.name} · {g.participant_count ?? 0}/{g.max_participants || 1024}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {links.map(link => (
               <Card key={link.id}>
-                <CardContent className="p-3">
+                <CardContent className="p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium truncate flex items-center gap-1.5">
                         /{link.slug}
                         {link.label && <Badge variant="secondary" className="text-[9px]">{link.label}</Badge>}
+                        {link.forced_group_id && (
+                          <Badge variant="outline" className="text-[9px] gap-0.5">
+                            🔒 {campaignGroups.find(g => g.id === link.forced_group_id)?.name || "Fixo"}
+                          </Badge>
+                        )}
                       </p>
                       <p className="text-[10px] text-muted-foreground">
                         {link.click_count} cliques · {link.redirect_count} redirecionamentos
@@ -1393,6 +1429,30 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
                       </Button>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Select value={link.forced_group_id || "auto"} onValueChange={v => setForcedGroup(link.id, v)}>
+                      <SelectTrigger className="h-7 text-[11px] flex-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">🔄 Automático (rotação por capacidade)</SelectItem>
+                        {campaignGroups.map(g => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name} · {g.participant_count ?? 0}/{g.max_participants || 1024}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {link.forced_group_id && (
+                      <div className="flex items-center gap-1 shrink-0" title="Manter este grupo mesmo quando cheio (pode recusar entradas)">
+                        <Label className="text-[10px]">Manter cheio</Label>
+                        <Switch checked={link.forced_strict} onCheckedChange={v => toggleForcedStrict(link.id, v)} />
+                      </div>
+                    )}
+                  </div>
+                  {link.forced_group_id && !link.forced_strict && (
+                    <p className="text-[9px] text-muted-foreground">
+                      Se este grupo lotar, o link volta a rotacionar automaticamente entre os outros grupos da campanha.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             ))}
