@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Bell,
   Clock,
@@ -8,6 +8,7 @@ import {
   Timer,
   Gauge,
   PackageCheck,
+  GripVertical,
 } from "lucide-react";
 import { useAttendantWorkload } from "@/hooks/useAttendantWorkload";
 
@@ -59,6 +60,54 @@ export function AttendantNudgeCard({
     enabled,
   } = useAttendantWorkload(conversations);
   const [collapsed, setCollapsed] = useState(false);
+
+  // Posição arrastável do card flutuante (offset em px a partir do canto padrão).
+  const STORAGE_KEY = "attendant-nudge-pos";
+  const [pos, setPos] = useState<{ x: number; y: number }>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {
+      /* ignore */
+    }
+    return { x: 0, y: 0 };
+  });
+  const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(
+    null
+  );
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+      dragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        baseX: pos.x,
+        baseY: pos.y,
+      };
+    },
+    [pos]
+  );
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    setPos({ x: dragRef.current.baseX + dx, y: dragRef.current.baseY + dy });
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
+    } catch {
+      /* ignore */
+    }
+  }, [pos]);
 
   const total =
     (showAwaiting ? awaitingCount : 0) + (showFollowups ? followupCount : 0) + arrivedCount;
@@ -170,25 +219,41 @@ export function AttendantNudgeCard({
   }
 
   return (
-    <div className="pointer-events-auto absolute top-3 right-3 z-30 w-72 max-w-[calc(100%-1.5rem)] rounded-xl border-2 border-primary/30 bg-card/98 shadow-xl ring-2 ring-primary/10 backdrop-blur">
-      <button
-        type="button"
-        onClick={() => setCollapsed((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-t-xl bg-gradient-to-r from-primary/15 to-transparent px-3 py-2.5 text-left"
-      >
-        <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary">
-          <Bell className="h-4 w-4" />
+    <div
+      className="pointer-events-auto absolute top-3 right-3 z-30 w-72 max-w-[calc(100%-1.5rem)] rounded-xl border-2 border-primary/30 bg-card/98 shadow-xl ring-2 ring-primary/10 backdrop-blur"
+      style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
+    >
+      <div className="flex items-center rounded-t-xl bg-gradient-to-r from-primary/15 to-transparent">
+        <span
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="flex h-full cursor-grab touch-none items-center py-2.5 pl-2 pr-1 text-muted-foreground active:cursor-grabbing"
+          title="Arraste para mover"
+        >
+          <GripVertical className="h-4 w-4" />
         </span>
-        <span className="flex-1 text-sm font-bold">Sua fila</span>
-        <span className="flex h-7 min-w-[28px] items-center justify-center rounded-full bg-primary px-2 text-sm font-black text-primary-foreground">
-          {total}
-        </span>
-        {collapsed ? (
-          <ChevronUp className="h-4 w-4 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        )}
-      </button>
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex flex-1 items-center gap-2 py-2.5 pr-3 text-left"
+        >
+          <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-primary">
+            <Bell className="h-4 w-4" />
+          </span>
+          <span className="flex-1 text-sm font-bold">Sua fila</span>
+          <span className="flex h-7 min-w-[28px] items-center justify-center rounded-full bg-primary px-2 text-sm font-black text-primary-foreground">
+            {total}
+          </span>
+          {collapsed ? (
+            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          )}
+        </button>
+      </div>
+
 
       {!collapsed && (
         <div className="flex flex-col gap-1.5 px-2 pb-2">
