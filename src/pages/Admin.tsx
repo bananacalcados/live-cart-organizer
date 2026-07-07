@@ -428,6 +428,10 @@ export default function Admin() {
             <UazapiInstanceManager />
           </TabsContent>
 
+          <TabsContent value="instagram" className="mt-4">
+            <InstagramAccountManager />
+          </TabsContent>
+
           <TabsContent value="knowledge" className="mt-4 space-y-6">
             <AiTestPanel />
             <AiKnowledgeBase />
