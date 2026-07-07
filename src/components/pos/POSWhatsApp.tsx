@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CreateSupportTicketDialog } from "@/components/CreateSupportTicketDialog";
+import { ExportConversationDialog } from "@/components/chat/ExportConversationDialog";
 import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
