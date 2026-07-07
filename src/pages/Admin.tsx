@@ -23,10 +23,11 @@ import { SecretaryChat } from "@/components/admin/SecretaryChat";
 import { AiErrorLogs } from "@/components/admin/AiErrorLogs";
 import { MercadoPagoAccountsManager } from "@/components/admin/MercadoPagoAccountsManager";
 import { PointTerminalsPanel } from "@/components/admin/PointTerminalsPanel";
+import { InstagramAccountManager } from "@/components/admin/InstagramAccountManager";
 import {
   Banana, Home, Plus, Pencil, Trash2, Shield, ArrowLeft, Brain, Sparkles, AlertTriangle,
   LayoutDashboard, Calendar, MessageSquare, Megaphone, Truck, Store, Package, BarChart3, Smartphone, CreditCard,
-  FileText, Building2, Hash, Settings, Download, ChevronRight, AlertCircle,
+  FileText, Building2, Hash, Settings, Download, ChevronRight, AlertCircle, Instagram,
 } from "lucide-react";
 
 const ALL_MODULES = [
@@ -223,6 +224,7 @@ export default function Admin() {
             <TabsTrigger value="meta" className="gap-1.5"><Smartphone className="h-3.5 w-3.5" /> Instâncias Meta</TabsTrigger>
             <TabsTrigger value="wasender" className="gap-1.5"><Smartphone className="h-3.5 w-3.5" /> Instâncias WaSender</TabsTrigger>
             <TabsTrigger value="uazapi" className="gap-1.5"><Smartphone className="h-3.5 w-3.5" /> Instâncias uazapi</TabsTrigger>
+            <TabsTrigger value="instagram" className="gap-1.5"><Instagram className="h-3.5 w-3.5" /> Instagram</TabsTrigger>
             <TabsTrigger value="knowledge" className="gap-1.5"><Brain className="h-3.5 w-3.5" /> Livete IA</TabsTrigger>
             <TabsTrigger value="secretary" className="gap-1.5"><Sparkles className="h-3.5 w-3.5" /> Secretária IA</TabsTrigger>
             <TabsTrigger value="errors" className="gap-1.5"><AlertTriangle className="h-3.5 w-3.5" /> Erros IA</TabsTrigger>
@@ -424,6 +426,10 @@ export default function Admin() {
 
           <TabsContent value="uazapi" className="mt-4">
             <UazapiInstanceManager />
+          </TabsContent>
+
+          <TabsContent value="instagram" className="mt-4">
+            <InstagramAccountManager />
           </TabsContent>
 
           <TabsContent value="knowledge" className="mt-4 space-y-6">

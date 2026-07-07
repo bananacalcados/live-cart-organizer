@@ -212,7 +212,7 @@ export function useChatSender() {
           direction: 'outgoing',
           status: 'sent',
           message_id: providerMessageId,
-          whatsapp_number_id: isMessenger ? null : route.numberId,
+          whatsapp_number_id: route.channel === 'messenger' ? null : route.numberId,
           channel: isMessenger ? route.channel : 'whatsapp',
           quoted_message_id: quotedMessageId || null,
           sender_user_id: senderUserId || null,

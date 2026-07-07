@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveIgAccountByNumberId, globalIgToken } from "../_shared/instagram-account.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,7 +22,7 @@ serve(async (req) => {
   }
 
   try {
-    const { recipientId, message, channel = 'instagram', type = 'text', mediaUrl }: SendMessengerRequest = await req.json();
+    const { recipientId, message, channel = 'instagram', type = 'text', mediaUrl, whatsapp_number_id }: SendMessengerRequest = await req.json();
 
     if (!recipientId) {
       return new Response(
@@ -30,9 +31,22 @@ serve(async (req) => {
       );
     }
 
-    // For Instagram/Messenger, always use META_PAGE_ACCESS_TOKEN
-    // (WhatsApp Business tokens from whatsapp_numbers table don't work for Instagram DMs)
-    const pageAccessToken = Deno.env.get('META_PAGE_ACCESS_TOKEN');
+    // Token por conta: quando a conversa está vinculada a uma instância de
+    // Instagram (whatsapp_number_id), usamos o token daquela conta específica.
+    // Fallback: token global META_PAGE_ACCESS_TOKEN (conta original).
+    let pageAccessToken = globalIgToken();
+    if (channel === 'instagram' && whatsapp_number_id) {
+      try {
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        );
+        const acct = await resolveIgAccountByNumberId(supabase, whatsapp_number_id);
+        if (acct.accessToken) pageAccessToken = acct.accessToken;
+      } catch (e) {
+        console.error('Error resolving IG account token, falling back to global:', e);
+      }
+    }
 
     if (!pageAccessToken) {
       return new Response(
