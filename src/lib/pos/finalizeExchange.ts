@@ -47,6 +47,25 @@ export interface FinalizeExchangeParams {
   /** Emitir NF-e de devolução (padrão true). */
   emitirDevolucao?: boolean;
   ambiente?: "homologacao" | "producao";
+
+  // ── Fase 6: Atribuição de faturamento (duas camadas) ──
+  /** Canal da venda original: 'site' não tem vendedora (equipe de expedição). */
+  origem_canal?: Database["public"]["Enums"]["td_origem_canal"];
+  /** Cliente para emissão de voucher / estorno. */
+  cliente_id?: string | null;
+  /** Valor total dos itens devolvidos (confirmados). */
+  valor_devolvido: number;
+  /** Valor cheio dos produtos de reposição. */
+  valor_reposicao: number;
+  /**
+   * Resolução quando a diferença é a favor do cliente (reposição < devolução):
+   * 'voucher' gera crédito; 'estorno_financeiro' devolve o dinheiro.
+   * Ignorada quando a diferença é zero ou o cliente é quem paga a mais.
+   */
+  resolucao_diferenca?: "voucher" | "estorno_financeiro";
+  /** Forma do estorno financeiro (quando resolucao_diferenca = 'estorno_financeiro'). */
+  estorno_forma?: "pix" | "cartao" | "dinheiro" | null;
+  codigo_devolucao?: string | null;
 }
 
 export type DevolucaoStatus =
