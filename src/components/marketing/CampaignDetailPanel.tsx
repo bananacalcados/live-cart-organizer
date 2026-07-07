@@ -92,6 +92,8 @@ interface RedirectLink {
   click_count: number;
   redirect_count: number;
   is_active: boolean;
+  forced_group_id: string | null;
+  forced_strict: boolean;
 }
 
 interface CampaignVariable {
