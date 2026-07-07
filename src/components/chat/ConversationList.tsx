@@ -603,11 +603,14 @@ export function ConversationList({
                             🤖 IA transferiu
                           </Badge>
                         )}
-                        {conv.channel === 'instagram' && (
-                          <Badge className="text-[8px] px-1 py-0 leading-tight bg-pink-500/20 text-pink-600 dark:text-pink-400 border-pink-400/30 hover:bg-pink-500/30">
-                            📷 Instagram
-                          </Badge>
-                        )}
+                        {conv.channel === 'instagram' && (() => {
+                          const igUser = conv.whatsapp_number_id ? igUsernameById[conv.whatsapp_number_id] : null;
+                          return (
+                            <Badge className="text-[8px] px-1 py-0 leading-tight bg-pink-500/20 text-pink-600 dark:text-pink-400 border-pink-400/30 hover:bg-pink-500/30 max-w-[130px] truncate" title={igUser ? `Instagram @${igUser}` : 'Instagram'}>
+                              📷 {igUser ? `@${igUser}` : 'Instagram'}
+                            </Badge>
+                          );
+                        })()}
                         {conv.channel === 'messenger' && (
                           <Badge className="text-[8px] px-1 py-0 leading-tight bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-400/30 hover:bg-blue-500/30">
                             💬 Messenger
