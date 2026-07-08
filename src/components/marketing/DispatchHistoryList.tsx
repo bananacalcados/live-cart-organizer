@@ -330,6 +330,38 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
           }
         }
         setRecipientStats(statusMap);
+
+        // Aggregate real per-recipient statuses into the summary cards
+        // (Lidas / Não lidas / Taxa de Entrega / Taxa de Leitura). Uses the
+        // same source as the recipients table: live status from
+        // whatsapp_messages (statusMap) falling back to dispatch_recipients.status.
+        const agg = { read: 0, delivered: 0, sent: 0, failed: 0 };
+        for (const r of allRecipients) {
+          let p = r.phone.replace(/\D/g, '');
+          if (!p.startsWith('55')) p = '55' + p;
+          const live = statusMap[p] || r.status || 'sent';
+          if (live === 'read') agg.read++;
+          else if (live === 'delivered') agg.delivered++;
+          else if (live === 'failed') agg.failed++;
+          else agg.sent++;
+        }
+        setSelectedDispatch(prev =>
+          prev && prev.id === dispatch.id
+            ? {
+                ...prev,
+                stats: {
+                  ...(prev.stats || ({} as any)),
+                  read: agg.read,
+                  delivered: agg.delivered,
+                  sent: agg.sent,
+                  failed: agg.failed || prev.stats?.failed || 0,
+                  dispatched: prev.stats?.dispatched || prev.sent_count || allRecipients.length,
+                  interactions: prev.stats?.interactions || 0,
+                  total: prev.stats?.total || allRecipients.length,
+                },
+              }
+            : prev
+        );
       }
     } catch (err) {
       console.error('Error loading recipients:', err);
