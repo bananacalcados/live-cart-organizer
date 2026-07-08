@@ -272,6 +272,7 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
   const openDetail = async (dispatch: DispatchRecord) => {
     setSelectedDispatch(dispatch);
     setIsLoadingDetail(true);
+    setRecipientStats({});
     try {
       // Fetch ALL recipients (up to 50k) using pagination
       let allRecipients: RecipientRow[] = [];
@@ -293,48 +294,11 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
 
       setRecipients(allRecipients);
 
-      // Get live statuses
-      if (allRecipients.length > 0) {
-        const phones = allRecipients.map((r: any) => {
-          let p = r.phone.replace(/\D/g, '');
-          if (!p.startsWith('55')) p = '55' + p;
-          return p;
-        });
+      const statusRank: Record<string, number> = { failed: 0, sent: 1, delivered: 2, read: 3 };
 
-        // FIX: Use created_at instead of started_at for time window
-        const startTime = new Date(dispatch.created_at);
-        startTime.setMinutes(startTime.getMinutes() - 2);
-        const endTime = dispatch.completed_at
-          ? new Date(new Date(dispatch.completed_at).getTime() + 24 * 60 * 60 * 1000)
-          : new Date();
-
-        const statusMap: Record<string, string> = {};
-        const statusRank: Record<string, number> = { failed: 0, sent: 1, delivered: 2, read: 3 };
-
-        for (let i = 0; i < phones.length; i += 100) {
-          const batch = phones.slice(i, i + 100);
-          const { data: msgs } = await supabase
-            .from('whatsapp_messages')
-            .select('phone, status')
-            .eq('direction', 'outgoing')
-            .in('phone', batch)
-            .gte('created_at', startTime.toISOString())
-            .lte('created_at', endTime.toISOString());
-          if (msgs) {
-            for (const msg of msgs) {
-              const current = statusMap[msg.phone];
-              if (!current || (statusRank[msg.status] || 0) > (statusRank[current] || 0)) {
-                statusMap[msg.phone] = msg.status;
-              }
-            }
-          }
-        }
-        setRecipientStats(statusMap);
-
-        // Aggregate real per-recipient statuses into the summary cards
-        // (Lidas / Não lidas / Taxa de Entrega / Taxa de Leitura). Uses the
-        // same source as the recipients table: live status from
-        // whatsapp_messages (statusMap) falling back to dispatch_recipients.status.
+      // Aggregate the summary cards (Lidas / Não lidas / Entrega / Leitura) from a
+      // status map, using dispatch_recipients.status as the fast, live source.
+      const aggregateAndSet = (statusMap: Record<string, string>) => {
         const agg = { read: 0, delivered: 0, sent: 0, failed: 0 };
         for (const r of allRecipients) {
           let p = r.phone.replace(/\D/g, '');
@@ -362,6 +326,76 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
               }
             : prev
         );
+      };
+
+      // STEP 1 — show numbers INSTANTLY from dispatch_recipients.status. The Meta
+      // webhook already updates this column per recipient (via message_wamid), so
+      // it is the live source of truth. No extra query needed to display the cards.
+      aggregateAndSet({});
+      setIsLoadingDetail(false);
+
+      // STEP 2 — background enrichment. Only for recipients that are NOT already at
+      // the terminal "read" status, in case a status update landed in
+      // whatsapp_messages but the dispatch_recipients row wasn't linked. Runs in
+      // PARALLEL (not a sequential loop) so it never blocks the UI for minutes.
+      if (allRecipients.length > 0) {
+        const pending = allRecipients.filter(r => (r.status || 'sent') !== 'read');
+        if (pending.length === 0) return;
+
+        const phones = Array.from(new Set(pending.map((r: any) => {
+          let p = r.phone.replace(/\D/g, '');
+          if (!p.startsWith('55')) p = '55' + p;
+          return p;
+        })));
+
+        const startTime = new Date(dispatch.created_at);
+        startTime.setMinutes(startTime.getMinutes() - 2);
+        const endTime = dispatch.completed_at
+          ? new Date(new Date(dispatch.completed_at).getTime() + 24 * 60 * 60 * 1000)
+          : new Date();
+
+        const chunks: string[][] = [];
+        for (let i = 0; i < phones.length; i += 200) chunks.push(phones.slice(i, i + 200));
+
+        const results = await Promise.all(
+          chunks.map(batch =>
+            supabase
+              .from('whatsapp_messages')
+              .select('phone, status')
+              .eq('direction', 'outgoing')
+              .in('phone', batch)
+              .gte('created_at', startTime.toISOString())
+              .lte('created_at', endTime.toISOString())
+              .then(res => res.data || [])
+          )
+        );
+
+        // Seed the map with the live dispatch_recipients status so enrichment can
+        // only UPGRADE (never downgrade) a recipient's status.
+        const statusMap: Record<string, string> = {};
+        for (const r of allRecipients) {
+          let p = r.phone.replace(/\D/g, '');
+          if (!p.startsWith('55')) p = '55' + p;
+          const s = r.status || '';
+          if (s && (!statusMap[p] || (statusRank[s] || 0) > (statusRank[statusMap[p]] || 0))) {
+            statusMap[p] = s;
+          }
+        }
+        let changed = false;
+        for (const rows of results) {
+          for (const msg of rows) {
+            const current = statusMap[msg.phone];
+            if (!current || (statusRank[msg.status] || 0) > (statusRank[current] || 0)) {
+              statusMap[msg.phone] = msg.status;
+              changed = true;
+            }
+          }
+        }
+
+        if (changed) {
+          setRecipientStats(statusMap);
+          aggregateAndSet(statusMap);
+        }
       }
     } catch (err) {
       console.error('Error loading recipients:', err);
@@ -369,6 +403,7 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
       setIsLoadingDetail(false);
     }
   };
+
 
   const getStatusBadge = (status: string) => {
     switch (status) {
