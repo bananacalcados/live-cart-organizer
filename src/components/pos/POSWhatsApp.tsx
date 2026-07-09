@@ -689,7 +689,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         // Vendas do PDV / Live / Online registradas em pos_sales (independe do Tiny)
         supabase
           .from("pos_sales")
-          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at")
+          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at, store_id")
           .ilike("customer_phone", `%${suffix}%`)
           .order("created_at", { ascending: false })
           .limit(20),
