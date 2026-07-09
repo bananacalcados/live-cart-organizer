@@ -305,6 +305,14 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               <KPICard icon={Package} label="Itens/Venda" value={avgItemsPerSale.toFixed(1)} sub={periodLabel} trend="wave" />
             </div>
 
+            {/* Metas da Loja (Dia / Semana / Mês) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-center">
+                <h3 className="text-sm font-bold tracking-[0.2em] uppercase text-black/70">Progresso das Metas</h3>
+              </div>
+              <POSStoreGoalCards storeId={storeId} />
+            </div>
+
             {/* Vendas por Canal */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2 text-black/70">
