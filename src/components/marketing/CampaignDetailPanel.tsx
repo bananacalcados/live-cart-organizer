@@ -634,6 +634,93 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
     toast.success("Link copiado!");
   };
 
+  /** Renderiza o SVG do QR (dialog) em PNG de alta resolução — nítido para impressão. */
+  const qrToHiResPng = (slug: string, px = 2000): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const svg = document.getElementById(`qr-campaign-${slug}`);
+      if (!svg) return reject(new Error("QR não encontrado"));
+      const xml = new XMLSerializer().serializeToString(svg);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = px;
+        canvas.height = px;
+        const ctx = canvas.getContext("2d")!;
+        // QR precisa de módulos nítidos — sem suavização e fundo branco sólido.
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, px, px);
+        ctx.drawImage(img, 0, 0, px, px);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = reject;
+      img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(xml)));
+    });
+
+  /** Baixa o QR como PNG de alta qualidade (2000×2000) para uso em artes. */
+  const downloadQrPng = async (slug: string) => {
+    try {
+      const png = await qrToHiResPng(slug, 2000);
+      const a = document.createElement("a");
+      a.href = png;
+      a.download = `qr-vip-${slug}.png`;
+      a.click();
+      toast.success("PNG de alta qualidade baixado!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Falha ao gerar PNG");
+    }
+  };
+
+  /** Gera um PDF A4 com o QR grande e nítido, pronto para artes e impressão. */
+  const downloadQrPdf = async (slug: string) => {
+    try {
+      const png = await qrToHiResPng(slug, 2000);
+      const url = `${window.location.origin}/vip/${slug}`;
+
+      // A4 retrato (210 × 297 mm).
+      const W = 210, H = 297;
+      const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+
+      // Título / marca.
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(30);
+      doc.setTextColor(20);
+      doc.text("GRUPO VIP", W / 2, 40, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(14);
+      doc.setTextColor(110);
+      doc.text("Banana Calcados", W / 2, 50, { align: "center" });
+
+      // QR grande e centralizado (150 mm) — margem de silêncio garantida pelo canvas branco.
+      const qrSize = 150;
+      const qrX = (W - qrSize) / 2;
+      const qrY = 70;
+      doc.addImage(png, "PNG", qrX, qrY, qrSize, qrSize, undefined, "FAST");
+
+      // Chamada para ação.
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(22);
+      doc.setTextColor(20);
+      doc.text("Aponte a camera do celular", W / 2, qrY + qrSize + 22, { align: "center" });
+      doc.text("e entre no nosso grupo!", W / 2, qrY + qrSize + 33, { align: "center" });
+
+      // URL no rodapé.
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(140);
+      doc.text(url, W / 2, H - 20, { align: "center", maxWidth: W - 20 });
+
+      doc.save(`qr-vip-${slug}.pdf`);
+      toast.success("PDF para impressão gerado!");
+    } catch (e) {
+      console.error(e);
+      toast.error("Falha ao gerar PDF");
+    }
+  };
+
+
   const addVariable = async () => {
     if (!newVarName.trim()) { toast.error("Nome obrigatório"); return; }
     const { error } = await supabase.from('campaign_variables').upsert({
