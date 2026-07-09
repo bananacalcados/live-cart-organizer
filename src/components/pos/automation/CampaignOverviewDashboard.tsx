@@ -305,8 +305,8 @@ export function CampaignOverviewDashboard({ onClose }: { onClose: () => void }) 
                     </TableHeader>
                     <TableBody>
                       {sales.map((v) => (
-                        <>
-                          <TableRow key={v.id} className="cursor-pointer" onClick={() => toggleRow(v.id)}>
+                        <Fragment key={v.id}>
+                          <TableRow className="cursor-pointer" onClick={() => toggleRow(v.id)}>
                             <TableCell>
                               {expanded.has(v.id)
                                 ? <ChevronUp className="h-4 w-4 text-neutral-400" />
