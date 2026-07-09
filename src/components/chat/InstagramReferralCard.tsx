@@ -32,7 +32,18 @@ export function InstagramReferralCard({ referral }: Props) {
         />
       )}
       {referral.video_url && !referral.media_url && (
-        <video src={referral.video_url} className="w-full max-h-[150px] object-cover" muted />
+        <div className="relative">
+          <video
+            src={referral.video_url}
+            className="w-full max-h-[150px] object-cover"
+            muted
+            playsInline
+            preload="metadata"
+          />
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white text-sm">▶</span>
+          </div>
+        </div>
       )}
       <div className="px-2.5 py-1.5">
         <span className={cn("text-[10px] font-semibold uppercase tracking-wide", style.color)}>
