@@ -15,7 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { POSGoalProgress } from "./POSGoalProgress";
+
 import { POSSellerPrivatePanel } from "./POSSellerPrivatePanel";
 import { POSTaskWhatsAppDialog } from "./POSTaskWhatsAppDialog";
 import { POSMetaPixelCard } from "./POSMetaPixelCard";
