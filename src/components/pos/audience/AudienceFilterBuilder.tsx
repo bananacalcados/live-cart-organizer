@@ -88,6 +88,15 @@ const LAST_PURCHASE_OPTS: { value: LastPurchaseOp; label: string }[] = [
   { value: "between", label: "Comprou entre duas datas" },
 ];
 
+const FIRST_PURCHASE_OPTS: { value: LastPurchaseOp; label: string }[] = [
+  { value: "", label: "Sem filtro de período" },
+  { value: "gt_days", label: "Cliente há mais de N dias (mais antigo)" },
+  { value: "lt_days", label: "Cliente há menos de N dias (mais recente)" },
+  { value: "after", label: "Primeira compra depois de uma data" },
+  { value: "before", label: "Primeira compra antes de uma data" },
+  { value: "between", label: "Primeira compra entre duas datas" },
+];
+
 export const emptyAudienceFilter = (): AudienceFilter => ({ include: {}, exclude: {} });
 
 interface BlockProps {
