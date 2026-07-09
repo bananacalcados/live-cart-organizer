@@ -21,6 +21,7 @@ import { POSTaskWhatsAppDialog } from "./POSTaskWhatsAppDialog";
 import { POSMetaPixelCard } from "./POSMetaPixelCard";
 import { POSStoreScaledGoals } from "./POSStoreScaledGoals";
 import { POSStoreGoalCards } from "./POSStoreGoalCards";
+import { POSChannelSalesModal, type ChannelSale } from "./POSChannelSalesModal";
 
 import type { DateRange } from "react-day-picker";
 
@@ -71,6 +72,11 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [physicalSalesCount, setPhysicalSalesCount] = useState(0);
   const [liveRevenue, setLiveRevenue] = useState(0);
   const [liveSalesCount, setLiveSalesCount] = useState(0);
+
+  const [physicalSales, setPhysicalSales] = useState<ChannelSale[]>([]);
+  const [onlineSales, setOnlineSales] = useState<ChannelSale[]>([]);
+  const [liveSales, setLiveSales] = useState<ChannelSale[]>([]);
+  const [activeChannel, setActiveChannel] = useState<"physical" | "online" | "live" | null>(null);
 
   const [sellerMetrics, setSellerMetrics] = useState<SellerMetric[]>([]);
 
@@ -132,7 +138,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       const { start, end } = getPeriodRange(period, customRange);
       const { data: sales } = await supabase
         .from("pos_sales")
-        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at, revenue_attribution, event_id")
+        .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at, revenue_attribution, event_id, customer_name, customer_phone, payment_method, customer_cpf")
         .eq("store_id", storeId)
         .in("status", revenueStatuses)
         .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
@@ -150,14 +156,17 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       setOnlineSalesCount(online.length);
       setPhysicalRevenue(physical.reduce((sum, s) => sum + (s.total || 0), 0));
       setPhysicalSalesCount(physical.length);
+      setOnlineSales(online as ChannelSale[]);
+      setPhysicalSales(physical as ChannelSale[]);
 
       // Faturamento Live: vendas pagas vinculadas a um evento.
       // `completedSales` já está filtrado pelos status pagos (completed/paid/pending_sync),
       // então não precisamos exigir paid_at aqui — pedidos `completed` legados sem paid_at
       // também são vendas pagas legítimas.
-      const liveSales = completedSales.filter((s: any) => s.event_id);
-      setLiveRevenue(liveSales.reduce((sum, s) => sum + (s.total || 0), 0));
-      setLiveSalesCount(liveSales.length);
+      const liveList = completedSales.filter((s: any) => s.event_id);
+      setLiveRevenue(liveList.reduce((sum, s) => sum + (s.total || 0), 0));
+      setLiveSalesCount(liveList.length);
+      setLiveSales(liveList as ChannelSale[]);
 
       if (completedSales.length > 0) {
         const saleIds = completedSales.map((s) => s.id);
@@ -324,22 +333,26 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                   title="Loja Física"
                   value={`R$ ${physicalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
                   sub={`${physicalSalesCount} venda${physicalSalesCount !== 1 ? "s" : ""}${totalRevenue > 0 ? ` (${Math.round(physicalRevenue / totalRevenue * 100)}%)` : ""}`}
+                  onClick={() => setActiveChannel("physical")}
                 />
                 <ChannelCard
                   type="online"
                   title="Online"
                   value={`R$ ${onlineRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
                   sub={`${onlineSalesCount} venda${onlineSalesCount !== 1 ? "s" : ""}`}
+                  onClick={() => setActiveChannel("online")}
                 />
                 <ChannelCard
                   type="store"
                   title="Faturamento Live"
                   value={`R$ ${liveRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
                   sub={`${liveSalesCount} venda${liveSalesCount !== 1 ? "s" : ""}${totalRevenue > 0 ? ` (${Math.round(liveRevenue / totalRevenue * 100)}%)` : ""} · vindas de eventos`}
+                  onClick={() => setActiveChannel("live")}
                 />
               </div>
 
             </div>
+
 
 
 
@@ -451,6 +464,14 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         storeId={storeId}
         customerPhone={taskWhatsAppPhone || undefined}
       />
+
+      <POSChannelSalesModal
+        open={activeChannel !== null}
+        onClose={() => setActiveChannel(null)}
+        title={activeChannel === "physical" ? "Vendas — Loja Física" : activeChannel === "online" ? "Vendas — Online" : "Vendas — Faturamento Live (Eventos)"}
+        channel={activeChannel ?? "physical"}
+        sales={activeChannel === "physical" ? physicalSales : activeChannel === "online" ? onlineSales : activeChannel === "live" ? liveSales : []}
+      />
     </div>
   );
 }
@@ -503,10 +524,12 @@ function KPICard({ icon: Icon, label, value, sub, trend }: { icon: typeof Dollar
   );
 }
 
-function ChannelCard({ type, title, value, sub }: { type: "store" | "online"; title: string; value: string; sub: string }) {
+function ChannelCard({ type, title, value, sub, onClick }: { type: "store" | "online"; title: string; value: string; sub: string; onClick?: () => void }) {
   return (
-    <div
-      className="relative p-5 rounded-2xl overflow-hidden flex items-center gap-4 border border-black/[0.04]"
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative p-5 rounded-2xl overflow-hidden flex items-center gap-4 border border-black/[0.04] text-left w-full hover:-translate-y-0.5 hover:border-black/15 transition-all cursor-pointer"
       style={{ background: "var(--gradient-pos-silver)", boxShadow: "var(--shadow-pos-card), var(--shadow-pos-inset)" }}
     >
       {/* Visual icon side */}
@@ -523,14 +546,11 @@ function ChannelCard({ type, title, value, sub }: { type: "store" | "online"; ti
         <p className="text-xl md:text-2xl font-bold text-black/85 mt-0.5 truncate">{value}</p>
         <p className="text-[11px] text-black/45 mt-0.5">{sub}</p>
       </div>
-      {type === "store" ? (
-        <ShoppingCart className="h-8 w-8 text-black/25 flex-shrink-0" strokeWidth={1.3} />
-      ) : (
-        <Globe className="h-8 w-8 text-black/25 flex-shrink-0" strokeWidth={1.3} />
-      )}
-    </div>
+      <ChevronRight className="h-6 w-6 text-black/25 flex-shrink-0" strokeWidth={1.5} />
+    </button>
   );
 }
+
 
 function AlertCard({ icon: Icon, label, count, detail, onClick }: { icon: typeof MessageSquare; label: string; count: number; detail: string; onClick: () => void }) {
   const hasAlert = count > 0;
