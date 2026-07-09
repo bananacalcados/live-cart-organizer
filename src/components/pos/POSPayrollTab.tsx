@@ -228,7 +228,6 @@ export function POSPayrollTab({ periodRange }: Props) {
   }
 
   const mappedSellerIds = new Set(peopleSellers.map((p) => p.seller_id));
-  const unmappedSellers = sellers.filter((s) => !mappedSellerIds.has(s.id));
 
   return (
     <div className="p-4 space-y-4">
@@ -282,47 +281,68 @@ export function POSPayrollTab({ periodRange }: Props) {
           {/* Config panel */}
           {showConfig && (
             <div className="space-y-4 border border-zinc-700 rounded-lg p-4 bg-zinc-900/60">
-              {/* Unmapped sellers */}
+              {/* Seller ↔ person links (editable) */}
               <div>
                 <h4 className="text-sm font-semibold text-zinc-200 mb-2">Vincular registros de vendedor às pessoas</h4>
-                {people.filter((p) => p.is_active).length === 0 && unmappedSellers.length > 0 && (
+                {people.filter((p) => p.is_active).length === 0 && sellers.length > 0 && (
                   <p className="text-[11px] text-amber-400/90 mb-2">
                     Nenhuma pessoa cadastrada ainda. Comece clicando em <strong>"+ Criar pessoa"</strong> ao lado de cada vendedora. Depois, use <strong>"Escolher pessoa"</strong> para juntar os outros registros da mesma pessoa.
                   </p>
                 )}
-                {unmappedSellers.length === 0 ? (
-                  <p className="text-[12px] text-emerald-400">Todos os vendedores estão vinculados ✓</p>
+                {sellers.length === 0 ? (
+                  <p className="text-[12px] text-zinc-500">Nenhum registro de vendedor ativo.</p>
                 ) : (
                   <div className="space-y-1.5">
-                    {unmappedSellers.map((s) => {
-                      const store = stores.find((st) => st.id === s.store_id);
-                      const activePeople = people.filter((p) => p.is_active);
-                      return (
-                        <div key={s.id} className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[12px] text-zinc-300 w-48 truncate">
-                            {s.name} <span className="text-zinc-500">· {store?.name || "—"}</span>
-                          </span>
-                          <Select onValueChange={(v) => mapSellerToPerson(s.id, v)}>
-                            <SelectTrigger className="w-52 h-8 bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
-                              <SelectValue placeholder={activePeople.length === 0 ? "Nenhuma pessoa — crie primeiro" : "Escolher pessoa"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {activePeople.length === 0 ? (
-                                <div className="px-2 py-1.5 text-xs text-zinc-500">Crie uma pessoa primeiro →</div>
-                              ) : (
-                                activePeople.map((p) => (
-                                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <Button size="sm" variant="outline" onClick={() => createPersonFromSeller(s)} disabled={saving}
-                            className="h-8 gap-1 bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700 text-xs">
-                            <Plus className="h-3 w-3" /> Criar pessoa
-                          </Button>
-                        </div>
-                      );
-                    })}
+                    {[...sellers]
+                      .sort((a, b) => {
+                        // não vinculados primeiro, depois por nome
+                        const am = mappedSellerIds.has(a.id) ? 1 : 0;
+                        const bm = mappedSellerIds.has(b.id) ? 1 : 0;
+                        if (am !== bm) return am - bm;
+                        return a.name.localeCompare(b.name);
+                      })
+                      .map((s) => {
+                        const store = stores.find((st) => st.id === s.store_id);
+                        const activePeople = people.filter((p) => p.is_active);
+                        const currentPersonId = peopleSellers.find((ps) => ps.seller_id === s.id)?.person_id;
+                        return (
+                          <div key={s.id} className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[12px] text-zinc-300 w-48 truncate">
+                              {s.name} <span className="text-zinc-500">· {store?.name || "—"}</span>
+                            </span>
+                            <Select
+                              value={currentPersonId ?? "__none__"}
+                              onValueChange={(v) => mapSellerToPerson(s.id, v)}
+                            >
+                              <SelectTrigger className="w-52 h-8 bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
+                                <SelectValue placeholder={activePeople.length === 0 ? "Nenhuma pessoa — crie primeiro" : "Escolher pessoa"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__none__">
+                                  <span className="text-zinc-400">Sem vínculo</span>
+                                </SelectItem>
+                                {activePeople.length === 0 ? (
+                                  <div className="px-2 py-1.5 text-xs text-zinc-500">Crie uma pessoa primeiro →</div>
+                                ) : (
+                                  activePeople.map((p) => (
+                                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                            {currentPersonId ? (
+                              <Badge variant="outline" className="h-8 flex items-center border-emerald-700 text-emerald-400 text-[10px]">
+                                vinculado
+                              </Badge>
+                            ) : (
+                              <Button size="sm" variant="outline" onClick={() => createPersonFromSeller(s)} disabled={saving}
+                                className="h-8 gap-1 bg-zinc-800 border-zinc-700 text-zinc-200 hover:bg-zinc-700 text-xs">
+                                <Plus className="h-3 w-3" /> Criar pessoa
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>
