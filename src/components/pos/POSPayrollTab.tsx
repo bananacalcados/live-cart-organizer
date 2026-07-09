@@ -228,7 +228,6 @@ export function POSPayrollTab({ periodRange }: Props) {
   }
 
   const mappedSellerIds = new Set(peopleSellers.map((p) => p.seller_id));
-  const unmappedSellers = sellers.filter((s) => !mappedSellerIds.has(s.id));
 
   return (
     <div className="p-4 space-y-4">
