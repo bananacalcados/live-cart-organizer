@@ -18,6 +18,69 @@ function asString(v: unknown): string | null {
   return String(v);
 }
 
+/**
+ * Procura recursivamente por um objeto `externalAdReply` (miniatura do anúncio
+ * Click-to-WhatsApp) dentro do payload da uazapi. O provedor pode aninhar esse
+ * bloco em diferentes níveis (message.content, contextInfo, etc.), então
+ * varremos a árvore inteira até encontrá-lo.
+ */
+function findExternalAdReply(node: unknown, depth = 0): Record<string, unknown> | null {
+  if (depth > 8 || node == null) return null;
+  // Alguns campos vêm como JSON serializado (ex.: message.content). Tenta parsear.
+  if (typeof node === "string") {
+    const s = node.trim();
+    if (s.length > 2 && (s[0] === "{" || s[0] === "[") && /adreply/i.test(s)) {
+      try {
+        return findExternalAdReply(JSON.parse(s), depth + 1);
+      } catch { /* não era JSON */ }
+    }
+    return null;
+  }
+  if (typeof node !== "object") return null;
+  const obj = node as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    if (key.toLowerCase() === "externaladreply" && obj[key] && typeof obj[key] === "object") {
+      return obj[key] as Record<string, unknown>;
+    }
+  }
+  for (const key of Object.keys(obj)) {
+    const found = findExternalAdReply(obj[key], depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Monta o card de referral (anúncio CTWA) a partir de um externalAdReply. */
+function buildAdReferral(ext: Record<string, unknown>): Record<string, unknown> | null {
+  if (!ext) return null;
+  const thumbUrl =
+    asString(ext.thumbnailUrl) ||
+    asString(ext.thumbnail_url) ||
+    asString(ext.mediaUrl) ||
+    asString(ext.imageUrl);
+  const thumbB64 = asString(ext.thumbnail); // pode vir como base64 puro
+  const media_url =
+    thumbUrl ||
+    (thumbB64 && !thumbB64.startsWith("http") ? `data:image/jpeg;base64,${thumbB64}` : thumbB64) ||
+    null;
+  const referral: Record<string, unknown> = {
+    source_type: asString(ext.sourceType) || "ad",
+    source_url: asString(ext.sourceUrl) || asString(ext.source_url),
+    source_id: asString(ext.sourceId) || asString(ext.ctwaClid) || asString(ext.source_id),
+    headline: asString(ext.title) || asString(ext.headline),
+    body: asString(ext.body) || asString(ext.description),
+    media_url,
+  };
+  // Normaliza para os tipos conhecidos do card. CTWA sempre vira "ad".
+  const st = String(referral.source_type || "").toLowerCase();
+  if (!["ad", "comment", "story_reply", "story_mention", "reel", "shared_post"].includes(st)) {
+    referral.source_type = "ad";
+  }
+  // Só vale a pena guardar se houver algo para exibir.
+  if (!referral.media_url && !referral.headline && !referral.body && !referral.source_url) return null;
+  return referral;
+}
+
 /** Mapeia o mediaType da uazapi para o tipo genérico do sistema. */
 function mapMediaType(t: string | null): string | null {
   switch ((t || "").toLowerCase()) {
@@ -557,6 +620,28 @@ serve(async (req) => {
         ? normalizeJid(asString(message.sender_pn) || asString(message.sender)).phone || null
         : null;
 
+    // Miniatura do anúncio Click-to-WhatsApp (CTWA). Só em conversa individual.
+    let adReferral: Record<string, unknown> | null = null;
+    if (!isGroup) {
+      const ext = findExternalAdReply(message) || findExternalAdReply(payload);
+      if (ext) {
+        adReferral = buildAdReferral(ext);
+        if (adReferral) {
+          console.log(`[uazapi-webhook] Ad referral (CTWA) detectado para ${phone}:`, JSON.stringify(adReferral));
+        }
+      } else {
+        // Diagnóstico: se o payload parece conter dados de anúncio mas não
+        // conseguimos extrair, logamos a mensagem crua para ajustar o parser.
+        try {
+          const raw = JSON.stringify(message);
+          if (/adreply|ctwa|sourceurl|source_url|sourcetype/i.test(raw)) {
+            console.log(`[uazapi-webhook] Payload de anúncio não reconhecido para ${phone}:`, raw.slice(0, 4000));
+          }
+        } catch { /* ignore */ }
+      }
+    }
+
+
     const { data: insertedIncoming, error: insErr } = await supabase.from("whatsapp_messages").insert({
       phone,
       message: displayMessage,
@@ -568,6 +653,7 @@ serve(async (req) => {
       sender_phone: rawParticipant,
       whatsapp_number_id: numberId,
       quoted_message_id: quotedId,
+      ...(adReferral ? { referral: adReferral } : {}),
       ...(sysMediaType ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
     }).select("id").maybeSingle();
 
