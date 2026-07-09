@@ -186,6 +186,16 @@ export function CampaignList() {
                   {` · ${r.qtd_por_dia}/dia`}
                   {` · ${(r.dias_semana || []).map((d) => DAY_LABEL[d]).join(" ")}`}
                 </p>
+                {periods[r.id]?.enviados ? (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-indigo-500">
+                    <CalendarClock className="h-3 w-3 shrink-0" />
+                    Rodou de {fmtPeriodDate(periods[r.id].primeiro)} a {fmtPeriodDate(periods[r.id].ultimo)} · {periods[r.id].enviados} enviadas
+                  </p>
+                ) : (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-300">
+                    <CalendarClock className="h-3 w-3 shrink-0" /> Ainda não disparou
+                  </p>
+                )}
               </button>
               <Switch checked={r.ativa} onCheckedChange={() => toggleActive(r)} />
               <Button
