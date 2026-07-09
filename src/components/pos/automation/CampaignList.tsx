@@ -4,9 +4,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Plus, Trash2, Zap, Pencil, BarChart3, Rocket, Flame } from "lucide-react";
+import { Loader2, Plus, Trash2, Zap, Pencil, BarChart3, Rocket, Flame, LineChart, CalendarClock } from "lucide-react";
 import { CampaignBuilder } from "./CampaignBuilder";
 import { CampaignDashboard } from "./CampaignDashboard";
+import { CampaignOverviewDashboard } from "./CampaignOverviewDashboard";
 
 interface Row {
   id: string;
@@ -21,10 +22,13 @@ interface Row {
 
 const DAY_LABEL: Record<number, string> = { 0: "Dom", 1: "Seg", 2: "Ter", 3: "Qua", 4: "Qui", 5: "Sex", 6: "Sáb" };
 
+const fmtPeriodDate = (v: string) =>
+  new Date(v).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+
 export function CampaignList() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"list" | "builder" | "dashboard">("list");
+  const [view, setView] = useState<"list" | "builder" | "dashboard" | "overview">("list");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dashId, setDashId] = useState<string | null>(null);
   const [dashNome, setDashNome] = useState("");
@@ -32,6 +36,7 @@ export function CampaignList() {
   const [publicoLabels, setPublicoLabels] = useState<Record<string, string>>({});
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
   const [runningId, setRunningId] = useState<string | null>(null);
+  const [periods, setPeriods] = useState<Record<string, { primeiro: string; ultimo: string; enviados: number }>>({});
 
   const load = async () => {
     setLoading(true);
@@ -43,10 +48,11 @@ export function CampaignList() {
     const list = (data as Row[]) || [];
     setRows(list);
 
-    const [{ data: nums }, { data: pubs }, { data: cards }] = await Promise.all([
+    const [{ data: nums }, { data: pubs }, { data: cards }, { data: periodRows }] = await Promise.all([
       supabase.from("whatsapp_numbers").select("id, label, phone_display"),
       supabase.from("campanha_publicos").select("id, nome"),
       supabase.from("campanha_cards").select("campanha_id").eq("status", "ok"),
+      supabase.rpc("campaign_run_periods"),
     ]);
     const nl: Record<string, string> = {};
     (nums || []).forEach((n: { id: string; label: string | null; phone_display: string | null }) => {
@@ -59,6 +65,10 @@ export function CampaignList() {
     const cc: Record<string, number> = {};
     (cards || []).forEach((c: { campanha_id: string }) => { cc[c.campanha_id] = (cc[c.campanha_id] || 0) + 1; });
     setCardCounts(cc);
+    const pp: Record<string, { primeiro: string; ultimo: string; enviados: number }> = {};
+    (periodRows as Array<{ campanha_id: string; primeiro: string; ultimo: string; enviados: number }> | null || [])
+      .forEach((p) => { pp[p.campanha_id] = { primeiro: p.primeiro, ultimo: p.ultimo, enviados: p.enviados }; });
+    setPeriods(pp);
     setLoading(false);
   };
 
@@ -129,6 +139,10 @@ export function CampaignList() {
     return <CampaignDashboard campanhaId={dashId} nome={dashNome} onClose={() => { setDashId(null); setView("list"); }} />;
   }
 
+  if (view === "overview") {
+    return <CampaignOverviewDashboard onClose={() => setView("list")} />;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -138,10 +152,16 @@ export function CampaignList() {
             Configure o template, as imagens, o público, os limites e inicie os disparos automáticos.
           </p>
         </div>
-        <Button onClick={() => { setEditingId(null); setView("builder"); }} className="gap-2 bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4" /> Nova automação
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setView("overview")} className="gap-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50">
+            <LineChart className="h-4 w-4" /> Painel geral
+          </Button>
+          <Button onClick={() => { setEditingId(null); setView("builder"); }} className="gap-2 bg-blue-600 hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> Nova automação
+          </Button>
+        </div>
       </div>
+
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-blue-500" /></div>
@@ -169,6 +189,16 @@ export function CampaignList() {
                   {` · ${r.qtd_por_dia}/dia`}
                   {` · ${(r.dias_semana || []).map((d) => DAY_LABEL[d]).join(" ")}`}
                 </p>
+                {periods[r.id]?.enviados ? (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-indigo-500">
+                    <CalendarClock className="h-3 w-3 shrink-0" />
+                    Rodou de {fmtPeriodDate(periods[r.id].primeiro)} a {fmtPeriodDate(periods[r.id].ultimo)} · {periods[r.id].enviados} enviadas
+                  </p>
+                ) : (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-neutral-300">
+                    <CalendarClock className="h-3 w-3 shrink-0" /> Ainda não disparou
+                  </p>
+                )}
               </button>
               <Switch checked={r.ativa} onCheckedChange={() => toggleActive(r)} />
               <Button
