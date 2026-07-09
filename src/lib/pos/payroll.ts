@@ -315,6 +315,7 @@ export function computePayroll(input: ComputeInput): PayrollResult {
     row.achievementPct = row.goal > 0 ? (row.total / row.goal) * 100 : 0;
     row.commissionPct = row.goal > 0 ? commissionPctForAchievement(row.achievementPct, scale) : 0;
     row.commissionValue = row.total * (row.commissionPct / 100);
+    row.tiers = buildGoalTiers(row.goal, row.total, scale);
   }
 
   return {
