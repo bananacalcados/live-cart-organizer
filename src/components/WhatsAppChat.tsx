@@ -19,6 +19,7 @@ import { uploadMediaToStorage } from "./MediaAttachmentPicker";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { toast } from "sonner";
+import { extractDeleteFailureReason } from "@/lib/edgeFunctionError";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -625,10 +626,12 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       });
 
       if (res.error || res.data?.error) {
-        console.warn('[events-chat/delete] external delete failed, removing locally:', res.error || res.data?.error);
+        const reason = await extractDeleteFailureReason(res);
+        console.warn('[events-chat/delete] external delete failed, removing locally. Reason:', reason, res.error || res.data?.error);
         await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
         toast.warning('Apagada apenas no sistema', {
-          description: 'O WhatsApp não permitiu apagar para o cliente (passou de ~7min). A mensagem ainda aparece no celular dele.',
+          description: `O WhatsApp não apagou no celular do cliente. Motivo: ${reason}`,
+          duration: 10000,
         });
       } else {
         toast.success('Apagada para todos', {

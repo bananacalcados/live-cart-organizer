@@ -28,6 +28,7 @@ import { POSLiveOrderPanel } from "./POSLiveOrderPanel";
 import { NewConversationDialog } from "./NewConversationDialog";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { toast } from "sonner";
+import { extractDeleteFailureReason } from "@/lib/edgeFunctionError";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CreateSupportTicketDialog } from "@/components/CreateSupportTicketDialog";
@@ -1280,10 +1281,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
     }
 
     if (res.error || res.data?.error) {
-      console.warn('[delete] provider delete failed, removing locally:', res.error || res.data?.error);
+      const reason = await extractDeleteFailureReason(res);
+      console.warn('[delete] provider delete failed, removing locally. Reason:', reason, res.error || res.data?.error);
       await supabase.from('whatsapp_messages').delete().eq('id', msg.id);
       toast.warning('Apagada apenas no sistema', {
-        description: 'O WhatsApp não permitiu apagar para o cliente (provavelmente passou do tempo limite). A mensagem ainda aparece no celular dele.',
+        description: `O WhatsApp não apagou no celular do cliente. Motivo: ${reason}`,
+        duration: 10000,
       });
     } else {
       // Provider-specific functions (uazapi/wasender) don't touch the DB — remove locally.
