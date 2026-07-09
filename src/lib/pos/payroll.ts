@@ -206,6 +206,7 @@ export function computePayroll(input: ComputeInput): PayrollResult {
       achievementPct: 0,
       commissionPct: 0,
       commissionValue: 0,
+      tiers: [],
       stores: [],
     });
   }
