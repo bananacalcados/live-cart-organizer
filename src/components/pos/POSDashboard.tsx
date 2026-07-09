@@ -15,11 +15,12 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { POSGoalProgress } from "./POSGoalProgress";
+
 import { POSSellerPrivatePanel } from "./POSSellerPrivatePanel";
 import { POSTaskWhatsAppDialog } from "./POSTaskWhatsAppDialog";
 import { POSMetaPixelCard } from "./POSMetaPixelCard";
 import { POSStoreScaledGoals } from "./POSStoreScaledGoals";
+import { POSStoreGoalCards } from "./POSStoreGoalCards";
 
 import type { DateRange } from "react-day-picker";
 
@@ -304,6 +305,14 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               <KPICard icon={Package} label="Itens/Venda" value={avgItemsPerSale.toFixed(1)} sub={periodLabel} trend="wave" />
             </div>
 
+            {/* Metas da Loja (Dia / Semana / Mês) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-center">
+                <h3 className="text-sm font-bold tracking-[0.2em] uppercase text-black/70">Progresso das Metas</h3>
+              </div>
+              <POSStoreGoalCards storeId={storeId} />
+            </div>
+
             {/* Vendas por Canal */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2 text-black/70">
@@ -332,26 +341,8 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
             </div>
 
-            {/* Progresso das Metas */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-center">
-                <h3 className="text-sm font-bold tracking-[0.2em] uppercase text-black/70">Progresso das Metas</h3>
-              </div>
-              <div
-                className="rounded-2xl p-5 border border-black/5"
-                style={{ background: "var(--gradient-pos-silver)", boxShadow: "var(--shadow-pos-card), var(--shadow-pos-inset)" }}
-              >
-                <POSGoalProgress
-                  storeId={storeId}
-                  totalRevenue={totalRevenue}
-                  avgTicket={avgTicket}
-                  avgItemsPerSale={avgItemsPerSale}
-                  salesCount={salesCount}
-                  period={period}
-                  sellerMetrics={sellerMetrics.map(s => ({ ...s, sellerId: s.sellerId }))}
-                />
-              </div>
-            </div>
+
+
 
             {/* Metas Escalonadas (espelho da aba Folha, filtrado pela loja) */}
             <div className="space-y-3">
