@@ -141,6 +141,28 @@ export function commissionPctForAchievement(achievementPct: number, scale: Payro
   return pct;
 }
 
+/**
+ * Constrói as metas escalonadas (degraus da escala) para uma pessoa.
+ * meta100 é o valor da meta (100%). Cada degrau vira um alvo de faturamento
+ * (meta100 * degrau/100), com quanto falta e a comissão projetada ao atingi-lo.
+ */
+export function buildGoalTiers(meta100: number, total: number, scale: PayrollScaleRow[]): GoalTier[] {
+  if (meta100 <= 0) return [];
+  return [...scale]
+    .sort((a, b) => a.achievement_percent - b.achievement_percent)
+    .map((row) => {
+      const targetRevenue = meta100 * (row.achievement_percent / 100);
+      return {
+        achievementPercent: row.achievement_percent,
+        targetRevenue,
+        commissionPercent: row.commission_percent,
+        reached: total >= targetRevenue,
+        missing: Math.max(0, targetRevenue - total),
+        commissionValue: targetRevenue * (row.commission_percent / 100),
+      };
+    });
+}
+
 interface ComputeInput {
   sales: PayrollSale[];
   sellers: PayrollSeller[];
