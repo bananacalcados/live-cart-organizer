@@ -136,6 +136,10 @@ export function CampaignList() {
     return <CampaignDashboard campanhaId={dashId} nome={dashNome} onClose={() => { setDashId(null); setView("list"); }} />;
   }
 
+  if (view === "overview") {
+    return <CampaignOverviewDashboard onClose={() => setView("list")} />;
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
