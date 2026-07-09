@@ -489,7 +489,7 @@ export function POSPayrollTab({ periodRange }: Props) {
                         </td>
                       </tr>
                     )}
-                    </>
+                    </Fragment>
                     );
                   })}
                   {result.people.length === 0 && (
