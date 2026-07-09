@@ -464,6 +464,14 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         storeId={storeId}
         customerPhone={taskWhatsAppPhone || undefined}
       />
+
+      <POSChannelSalesModal
+        open={activeChannel !== null}
+        onClose={() => setActiveChannel(null)}
+        title={activeChannel === "physical" ? "Vendas — Loja Física" : activeChannel === "online" ? "Vendas — Online" : "Vendas — Faturamento Live (Eventos)"}
+        channel={activeChannel ?? "physical"}
+        sales={activeChannel === "physical" ? physicalSales : activeChannel === "online" ? onlineSales : activeChannel === "live" ? liveSales : []}
+      />
     </div>
   );
 }
