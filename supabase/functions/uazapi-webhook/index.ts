@@ -609,6 +609,18 @@ serve(async (req) => {
         ? normalizeJid(asString(message.sender_pn) || asString(message.sender)).phone || null
         : null;
 
+    // Miniatura do anúncio Click-to-WhatsApp (CTWA). Só em conversa individual.
+    let adReferral: Record<string, unknown> | null = null;
+    if (!isGroup) {
+      const ext = findExternalAdReply(message) || findExternalAdReply(payload);
+      if (ext) {
+        adReferral = buildAdReferral(ext);
+        if (adReferral) {
+          console.log(`[uazapi-webhook] Ad referral (CTWA) detectado para ${phone}:`, JSON.stringify(adReferral));
+        }
+      }
+    }
+
     const { data: insertedIncoming, error: insErr } = await supabase.from("whatsapp_messages").insert({
       phone,
       message: displayMessage,
@@ -620,6 +632,7 @@ serve(async (req) => {
       sender_phone: rawParticipant,
       whatsapp_number_id: numberId,
       quoted_message_id: quotedId,
+      ...(adReferral ? { referral: adReferral } : {}),
       ...(sysMediaType ? { media_type: sysMediaType, media_url: mediaUrl } : {}),
     }).select("id").maybeSingle();
 
