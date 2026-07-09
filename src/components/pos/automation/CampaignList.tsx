@@ -45,10 +45,11 @@ export function CampaignList() {
     const list = (data as Row[]) || [];
     setRows(list);
 
-    const [{ data: nums }, { data: pubs }, { data: cards }] = await Promise.all([
+    const [{ data: nums }, { data: pubs }, { data: cards }, { data: periodRows }] = await Promise.all([
       supabase.from("whatsapp_numbers").select("id, label, phone_display"),
       supabase.from("campanha_publicos").select("id, nome"),
       supabase.from("campanha_cards").select("campanha_id").eq("status", "ok"),
+      supabase.rpc("campaign_run_periods"),
     ]);
     const nl: Record<string, string> = {};
     (nums || []).forEach((n: { id: string; label: string | null; phone_display: string | null }) => {
