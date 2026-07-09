@@ -16,6 +16,42 @@ function normalizeIgUsername(value: string | null | undefined): string {
   return (value || '').replace(/^@+/, '').trim().toLowerCase();
 }
 
+/**
+ * A mídia do story (reply/menção) vem de `lookaside.fbsbx.com/ig_messaging_cdn`,
+ * que expira em poucas horas e pode ser VÍDEO (mp4) — o card renderiza como <img>
+ * e falha silenciosamente. Aqui baixamos e re-hospedamos no bucket público
+ * `whatsapp-media`, devolvendo URL permanente + se é vídeo. Fallback: URL original.
+ */
+async function rehostStoryMedia(
+  supabase: ReturnType<typeof createClient>,
+  tempUrl: string,
+): Promise<{ url: string; isVideo: boolean } | null> {
+  try {
+    const res = await fetch(tempUrl);
+    if (!res.ok) return { url: tempUrl, isVideo: false };
+    const contentType = res.headers.get('content-type') || 'application/octet-stream';
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.byteLength === 0) return { url: tempUrl, isVideo: false };
+
+    const isVideo = contentType.startsWith('video/');
+    let ext = contentType.split('/')[1]?.split(';')[0]?.replace(/[^a-z0-9]/gi, '') || (isVideo ? 'mp4' : 'jpg');
+
+    const path = `instagram/story/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage
+      .from('whatsapp-media')
+      .upload(path, buf, { contentType, upsert: false });
+    if (error) {
+      console.error('[rehostStoryMedia] upload falhou:', error.message);
+      return { url: tempUrl, isVideo };
+    }
+    const { data } = supabase.storage.from('whatsapp-media').getPublicUrl(path);
+    return { url: data?.publicUrl || tempUrl, isVideo };
+  } catch (e) {
+    console.error('[rehostStoryMedia] erro:', (e as Error).message);
+    return { url: tempUrl, isVideo: false };
+  }
+}
+
 function isOwnInstagramUsername(username: string | null | undefined, extra: string[] = []): boolean {
   const normalized = normalizeIgUsername(username);
   if (!normalized) return false;
