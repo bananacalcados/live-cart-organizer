@@ -285,12 +285,18 @@ export function POSPayrollTab({ periodRange }: Props) {
               {/* Unmapped sellers */}
               <div>
                 <h4 className="text-sm font-semibold text-zinc-200 mb-2">Vincular registros de vendedor às pessoas</h4>
+                {people.filter((p) => p.is_active).length === 0 && unmappedSellers.length > 0 && (
+                  <p className="text-[11px] text-amber-400/90 mb-2">
+                    Nenhuma pessoa cadastrada ainda. Comece clicando em <strong>"+ Criar pessoa"</strong> ao lado de cada vendedora. Depois, use <strong>"Escolher pessoa"</strong> para juntar os outros registros da mesma pessoa.
+                  </p>
+                )}
                 {unmappedSellers.length === 0 ? (
                   <p className="text-[12px] text-emerald-400">Todos os vendedores estão vinculados ✓</p>
                 ) : (
                   <div className="space-y-1.5">
                     {unmappedSellers.map((s) => {
                       const store = stores.find((st) => st.id === s.store_id);
+                      const activePeople = people.filter((p) => p.is_active);
                       return (
                         <div key={s.id} className="flex items-center gap-2 flex-wrap">
                           <span className="text-[12px] text-zinc-300 w-48 truncate">
@@ -298,12 +304,16 @@ export function POSPayrollTab({ periodRange }: Props) {
                           </span>
                           <Select onValueChange={(v) => mapSellerToPerson(s.id, v)}>
                             <SelectTrigger className="w-52 h-8 bg-zinc-800 border-zinc-700 text-zinc-200 text-xs">
-                              <SelectValue placeholder="Escolher pessoa" />
+                              <SelectValue placeholder={activePeople.length === 0 ? "Nenhuma pessoa — crie primeiro" : "Escolher pessoa"} />
                             </SelectTrigger>
                             <SelectContent>
-                              {people.filter((p) => p.is_active).map((p) => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                              ))}
+                              {activePeople.length === 0 ? (
+                                <div className="px-2 py-1.5 text-xs text-zinc-500">Crie uma pessoa primeiro →</div>
+                              ) : (
+                                activePeople.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                                ))
+                              )}
                             </SelectContent>
                           </Select>
                           <Button size="sm" variant="outline" onClick={() => createPersonFromSeller(s)} disabled={saving}
@@ -316,6 +326,7 @@ export function POSPayrollTab({ periodRange }: Props) {
                   </div>
                 )}
               </div>
+
 
               {/* People config */}
               {people.length > 0 && (
