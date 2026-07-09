@@ -443,10 +443,22 @@ export function POSPayrollTab({ periodRange }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {result.people.map((p) => (
-                    <tr key={p.personId} className="border-t border-zinc-800 hover:bg-zinc-800/40">
+                  {result.people.map((p) => {
+                    const isOpen = expanded.has(p.personId);
+                    return (
+                    <>
+                    <tr
+                      key={p.personId}
+                      className="border-t border-zinc-800 hover:bg-zinc-800/40 cursor-pointer"
+                      onClick={() => p.goal > 0 && toggleExpanded(p.personId)}
+                    >
                       <td className="p-2 text-zinc-100 sticky left-0 bg-zinc-900">
-                        {p.name}
+                        <span className="inline-flex items-center gap-1">
+                          {p.goal > 0 ? (
+                            isOpen ? <ChevronDown className="h-3.5 w-3.5 text-zinc-500" /> : <ChevronRight className="h-3.5 w-3.5 text-zinc-500" />
+                          ) : <span className="w-3.5 inline-block" />}
+                          {p.name}
+                        </span>
                         {p.stores.length > 1 && (
                           <Badge variant="outline" className="ml-1 text-[9px] border-amber-600 text-amber-400">2 lojas</Badge>
                         )}
@@ -457,10 +469,29 @@ export function POSPayrollTab({ periodRange }: Props) {
                       <td className="p-2 text-right font-bold text-emerald-400">{BRL(p.total)}</td>
                       <td className="p-2 text-right text-zinc-300">{p.goal > 0 ? BRL(p.goal) : "—"}</td>
                       <td className="p-2 text-right text-zinc-300">{p.goal > 0 ? `${p.achievementPct.toFixed(0)}%` : "s/ meta"}</td>
-                      <td className="p-2 text-right text-zinc-300">{p.commissionPct.toFixed(2)}%</td>
+                      <td className="p-2 text-right text-zinc-300">
+                        {p.goal > 0 ? (
+                          <>
+                            {p.commissionPct.toLocaleString("pt-BR", { minimumFractionDigits: 1 })}%
+                            <span className="block text-[9px] text-zinc-500">100% = {(p.tiers.find((t) => t.achievementPercent === 100)?.commissionPercent ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 1 })}%</span>
+                          </>
+                        ) : "—"}
+                      </td>
                       <td className="p-2 text-right font-bold text-orange-400">{BRL(p.commissionValue)}</td>
                     </tr>
-                  ))}
+                    {isOpen && p.goal > 0 && (
+                      <tr key={p.personId + "-tiers"} className="bg-zinc-900/60">
+                        <td colSpan={CHANNEL_KEYS.length + 6} className="p-3">
+                          <div className="text-[11px] uppercase tracking-wide text-zinc-400 font-semibold mb-1.5">
+                            Metas escalonadas — {p.name}
+                          </div>
+                          <ScaledGoalTiers goal={p.goal} total={p.total} tiers={p.tiers} variant="dark" />
+                        </td>
+                      </tr>
+                    )}
+                    </>
+                    );
+                  })}
                   {result.people.length === 0 && (
                     <tr><td colSpan={CHANNEL_KEYS.length + 6} className="p-6 text-center text-zinc-500">Cadastre as pessoas em "Configurar"</td></tr>
                   )}
