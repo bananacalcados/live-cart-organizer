@@ -149,10 +149,16 @@ export function CampaignList() {
             Configure o template, as imagens, o público, os limites e inicie os disparos automáticos.
           </p>
         </div>
-        <Button onClick={() => { setEditingId(null); setView("builder"); }} className="gap-2 bg-blue-600 hover:bg-blue-700">
-          <Plus className="h-4 w-4" /> Nova automação
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setView("overview")} className="gap-2 border-indigo-300 text-indigo-700 hover:bg-indigo-50">
+            <LineChart className="h-4 w-4" /> Painel geral
+          </Button>
+          <Button onClick={() => { setEditingId(null); setView("builder"); }} className="gap-2 bg-blue-600 hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> Nova automação
+          </Button>
+        </div>
       </div>
+
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-blue-500" /></div>
