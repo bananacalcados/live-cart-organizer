@@ -80,6 +80,10 @@ interface CrmCustomerData {
     trackingCode?: string;
     totalPrice?: number;
     createdAt?: string;
+    storeName?: string;
+    channelLabel?: string;
+    modality?: "Presencial" | "Online";
+    items?: { name: string; variant?: string; size?: string; quantity?: number }[];
   }[];
 }
 
