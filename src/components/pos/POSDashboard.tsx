@@ -72,6 +72,11 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
   const [liveRevenue, setLiveRevenue] = useState(0);
   const [liveSalesCount, setLiveSalesCount] = useState(0);
 
+  const [physicalSales, setPhysicalSales] = useState<ChannelSale[]>([]);
+  const [onlineSales, setOnlineSales] = useState<ChannelSale[]>([]);
+  const [liveSales, setLiveSales] = useState<ChannelSale[]>([]);
+  const [activeChannel, setActiveChannel] = useState<"physical" | "online" | "live" | null>(null);
+
   const [sellerMetrics, setSellerMetrics] = useState<SellerMetric[]>([]);
 
   const [whatsappAwaiting, setWhatsappAwaiting] = useState(0);
