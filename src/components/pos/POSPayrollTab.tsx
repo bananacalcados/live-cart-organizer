@@ -446,7 +446,7 @@ export function POSPayrollTab({ periodRange }: Props) {
                   {result.people.map((p) => {
                     const isOpen = expanded.has(p.personId);
                     return (
-                    <>
+                    <Fragment key={p.personId}>
                     <tr
                       key={p.personId}
                       className="border-t border-zinc-800 hover:bg-zinc-800/40 cursor-pointer"
