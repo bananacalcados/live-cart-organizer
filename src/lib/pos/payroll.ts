@@ -93,6 +93,16 @@ export const CHANNEL_LABELS: Record<ChannelKey, string> = {
   live_all: "Todas as Lives",
 };
 
+/** Meta escalonada de uma pessoa (um degrau da escala aplicado sobre a meta base 100%). */
+export interface GoalTier {
+  achievementPercent: number; // 80, 90, 100, 110, 120...
+  targetRevenue: number;      // faturamento necessário = meta100 * achievementPercent/100
+  commissionPercent: number;  // % de comissão nesse degrau
+  reached: boolean;           // já atingiu esse degrau?
+  missing: number;            // quanto falta para atingir (0 se já atingiu)
+  commissionValue: number;    // comissão projetada AO atingir exatamente esse degrau
+}
+
 export interface PersonRow {
   personId: string;
   name: string;
@@ -102,6 +112,7 @@ export interface PersonRow {
   achievementPct: number; // 0-100+
   commissionPct: number; // % aplicado
   commissionValue: number;
+  tiers: GoalTier[]; // metas escalonadas (80/90/100/110/120) da escala
   stores: StoreKey[]; // lojas onde teve venda direta (para detectar multi-loja)
 }
 
