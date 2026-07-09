@@ -25,7 +25,18 @@ function asString(v: unknown): string | null {
  * varremos a árvore inteira até encontrá-lo.
  */
 function findExternalAdReply(node: unknown, depth = 0): Record<string, unknown> | null {
-  if (!node || typeof node !== "object" || depth > 8) return null;
+  if (depth > 8 || node == null) return null;
+  // Alguns campos vêm como JSON serializado (ex.: message.content). Tenta parsear.
+  if (typeof node === "string") {
+    const s = node.trim();
+    if (s.length > 2 && (s[0] === "{" || s[0] === "[") && /adreply/i.test(s)) {
+      try {
+        return findExternalAdReply(JSON.parse(s), depth + 1);
+      } catch { /* não era JSON */ }
+    }
+    return null;
+  }
+  if (typeof node !== "object") return null;
   const obj = node as Record<string, unknown>;
   for (const key of Object.keys(obj)) {
     if (key.toLowerCase() === "externaladreply" && obj[key] && typeof obj[key] === "object") {
