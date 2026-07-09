@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store } from "lucide-react";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,10 @@ interface CrmCustomerData {
     trackingCode?: string;
     totalPrice?: number;
     createdAt?: string;
+    storeName?: string;
+    channelLabel?: string;
+    modality?: "Presencial" | "Online";
+    items?: { name: string; variant?: string; size?: string; quantity?: number }[];
   }[];
 }
 
@@ -685,7 +689,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         // Vendas do PDV / Live / Online registradas em pos_sales (independe do Tiny)
         supabase
           .from("pos_sales")
-          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at")
+          .select("id, sale_type, status, total, tracking_code, tiny_order_number, nfce_number, invoice_number, customer_cpf, created_at, store_id")
           .ilike("customer_phone", `%${suffix}%`)
           .order("created_at", { ascending: false })
           .limit(20),
@@ -745,7 +749,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
       const resolvedEmail = posCustomer?.email || zoppyCustomer?.email || lead?.email || undefined;
 
-      // Pedidos de expedição (site/envios)
+      // Pedidos de expedição (site/envios) — sempre canal Online
       const expeditionOrders = (expOrders || []).map((o: any) => ({
         id: o.id,
         orderName: o.shopify_order_name || undefined,
@@ -753,13 +757,48 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         trackingCode: o.freight_tracking_code || undefined,
         totalPrice: o.total_price || undefined,
         createdAt: o.shopify_created_at || undefined,
+        storeName: "Site (Online)",
+        channelLabel: "Site",
+        modality: "Online" as const,
+        items: [] as { name: string; variant?: string; size?: string; quantity?: number }[],
       }));
+
+      // Nomes das lojas + itens das vendas do PDV
+      const saleIds = posSales.map((s) => s.id);
+      const storeIds = Array.from(new Set(posSales.map((s) => s.store_id).filter(Boolean)));
+      const [storesRes, itemsRes] = await Promise.all([
+        storeIds.length
+          ? supabase.from("pos_stores").select("id, name").in("id", storeIds)
+          : Promise.resolve({ data: [] as any[] }),
+        saleIds.length
+          ? supabase
+              .from("pos_sale_items")
+              .select("sale_id, product_name, variant_name, size, quantity")
+              .in("sale_id", saleIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const storeNameById = new Map<string, string>(
+        (storesRes.data || []).map((st: any) => [st.id, st.name]),
+      );
+      const itemsBySale = new Map<string, { name: string; variant?: string; size?: string; quantity?: number }[]>();
+      for (const it of (itemsRes.data || []) as any[]) {
+        const arr = itemsBySale.get(it.sale_id) || [];
+        arr.push({
+          name: it.product_name || "Produto",
+          variant: it.variant_name || undefined,
+          size: it.size || undefined,
+          quantity: it.quantity || undefined,
+        });
+        itemsBySale.set(it.sale_id, arr);
+      }
 
       // Vendas registradas no PDV (PDV / Live / Online)
       const saleTypeLabels: Record<string, string> = { live: "Live", pos: "PDV", online: "Online" };
       const posOrders = posSales.map((s) => {
         const ref = s.tiny_order_number || s.nfce_number || s.invoice_number;
         const typeLabel = saleTypeLabels[s.sale_type] || (s.sale_type ? String(s.sale_type) : "Venda");
+        // PDV = venda presencial na loja; Live e Online = canais online
+        const modality: "Presencial" | "Online" = s.sale_type === "pos" ? "Presencial" : "Online";
         return {
           id: s.id,
           orderName: ref ? `${typeLabel} #${ref}` : typeLabel,
@@ -767,6 +806,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
           trackingCode: s.tracking_code || undefined,
           totalPrice: s.total != null ? Number(s.total) : undefined,
           createdAt: s.created_at || undefined,
+          storeName: (s.store_id && storeNameById.get(s.store_id)) || undefined,
+          channelLabel: typeLabel,
+          modality,
+          items: itemsBySale.get(s.id) || [],
         };
       });
 
@@ -1969,15 +2012,55 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     {crmData?.orders && crmData.orders.length > 0 ? (
                       <div className="space-y-2">
                         {crmData.orders.map((o) => (
-                          <div key={o.id} className="flex items-center gap-3 rounded-xl border bg-card p-3.5 shadow-sm">
+                          <div key={o.id} className="flex items-start gap-3 rounded-xl border bg-card p-3.5 shadow-sm">
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-pos-orange/15 text-pos-orange">
                               <Package className="h-5 w-5" />
                             </span>
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 space-y-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-mono font-bold text-sm">{o.orderName || "—"}</span>
                                 <Badge variant="outline" className="text-[10px]">{statusLabels[o.status || ""] || o.status}</Badge>
+                                {o.modality && (
+                                  <Badge
+                                    className={`text-[10px] border-0 ${o.modality === "Presencial" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400" : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"}`}
+                                  >
+                                    {o.modality}
+                                  </Badge>
+                                )}
                               </div>
+                              {/* Data + Loja/Canal */}
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                                {o.createdAt && (
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {new Date(o.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                                    {" "}
+                                    {new Date(o.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                )}
+                                {(o.storeName || o.channelLabel) && (
+                                  <span className="flex items-center gap-1">
+                                    <Store className="h-3 w-3" />
+                                    {o.storeName || o.channelLabel}
+                                  </span>
+                                )}
+                              </div>
+                              {/* Produtos comprados */}
+                              {o.items && o.items.length > 0 && (
+                                <ul className="mt-1 space-y-0.5">
+                                  {o.items.map((it, idx) => (
+                                    <li key={idx} className="text-xs text-foreground/80 flex items-start gap-1">
+                                      <span className="text-pos-orange">•</span>
+                                      <span className="min-w-0">
+                                        {it.quantity && it.quantity > 1 ? `${it.quantity}x ` : ""}
+                                        {it.name}
+                                        {it.variant ? ` — ${it.variant}` : ""}
+                                        {it.size ? ` (${it.size})` : ""}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
                               {o.trackingCode && (
                                 <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                                   <Truck className="h-3 w-3" /> {o.trackingCode}
