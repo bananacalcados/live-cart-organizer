@@ -21,6 +21,7 @@ import { POSTaskWhatsAppDialog } from "./POSTaskWhatsAppDialog";
 import { POSMetaPixelCard } from "./POSMetaPixelCard";
 import { POSStoreScaledGoals } from "./POSStoreScaledGoals";
 import { POSStoreGoalCards } from "./POSStoreGoalCards";
+import { POSChannelSalesModal, type ChannelSale } from "./POSChannelSalesModal";
 
 import type { DateRange } from "react-day-picker";
 
