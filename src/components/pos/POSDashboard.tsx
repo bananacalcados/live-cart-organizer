@@ -341,26 +341,8 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
 
             </div>
 
-            {/* Progresso das Metas */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-center">
-                <h3 className="text-sm font-bold tracking-[0.2em] uppercase text-black/70">Progresso das Metas</h3>
-              </div>
-              <div
-                className="rounded-2xl p-5 border border-black/5"
-                style={{ background: "var(--gradient-pos-silver)", boxShadow: "var(--shadow-pos-card), var(--shadow-pos-inset)" }}
-              >
-                <POSGoalProgress
-                  storeId={storeId}
-                  totalRevenue={totalRevenue}
-                  avgTicket={avgTicket}
-                  avgItemsPerSale={avgItemsPerSale}
-                  salesCount={salesCount}
-                  period={period}
-                  sellerMetrics={sellerMetrics.map(s => ({ ...s, sellerId: s.sellerId }))}
-                />
-              </div>
-            </div>
+
+
 
             {/* Metas Escalonadas (espelho da aba Folha, filtrado pela loja) */}
             <div className="space-y-3">
