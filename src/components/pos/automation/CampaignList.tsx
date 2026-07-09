@@ -62,6 +62,10 @@ export function CampaignList() {
     const cc: Record<string, number> = {};
     (cards || []).forEach((c: { campanha_id: string }) => { cc[c.campanha_id] = (cc[c.campanha_id] || 0) + 1; });
     setCardCounts(cc);
+    const pp: Record<string, { primeiro: string; ultimo: string; enviados: number }> = {};
+    (periodRows as Array<{ campanha_id: string; primeiro: string; ultimo: string; enviados: number }> | null || [])
+      .forEach((p) => { pp[p.campanha_id] = { primeiro: p.primeiro, ultimo: p.ultimo, enviados: p.enviados }; });
+    setPeriods(pp);
     setLoading(false);
   };
 
