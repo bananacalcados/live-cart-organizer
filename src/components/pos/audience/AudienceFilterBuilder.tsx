@@ -30,6 +30,10 @@ export interface AudienceFilterBlock {
   last_purchase_days?: string;
   last_purchase_from?: string;
   last_purchase_to?: string;
+  first_purchase_op?: LastPurchaseOp;
+  first_purchase_days?: string;
+  first_purchase_from?: string;
+  first_purchase_to?: string;
 }
 
 export interface AudienceFilter {
@@ -84,6 +88,15 @@ const LAST_PURCHASE_OPTS: { value: LastPurchaseOp; label: string }[] = [
   { value: "between", label: "Comprou entre duas datas" },
 ];
 
+const FIRST_PURCHASE_OPTS: { value: LastPurchaseOp; label: string }[] = [
+  { value: "", label: "Sem filtro de período" },
+  { value: "gt_days", label: "Cliente há mais de N dias (mais antigo)" },
+  { value: "lt_days", label: "Cliente há menos de N dias (mais recente)" },
+  { value: "after", label: "Primeira compra depois de uma data" },
+  { value: "before", label: "Primeira compra antes de uma data" },
+  { value: "between", label: "Primeira compra entre duas datas" },
+];
+
 export const emptyAudienceFilter = (): AudienceFilter => ({ include: {}, exclude: {} });
 
 interface BlockProps {
@@ -98,6 +111,7 @@ function FilterBlock({ tone, block, options, onChange }: BlockProps) {
     onChange({ ...block, [key]: value });
 
   const op = (block.last_purchase_op || "") as LastPurchaseOp;
+  const firstOp = (block.first_purchase_op || "") as LastPurchaseOp;
   const rfmOpts = options.rfm_segments.map((s) => ({ value: s, label: RFM_LABELS[s] || s }));
 
   return (
@@ -188,6 +202,46 @@ function FilterBlock({ tone, block, options, onChange }: BlockProps) {
           </div>
         )}
       </div>
+
+      {/* Período da primeira compra */}
+      <div className="space-y-1.5 rounded-lg border border-neutral-200 bg-white/60 p-2.5">
+        <label className="text-xs font-medium text-neutral-600">Período da primeira compra</label>
+        <Select value={firstOp} onValueChange={(v) => set("first_purchase_op", v === "none" ? "" : v)}>
+          <SelectTrigger className="h-9 text-xs bg-white">
+            <SelectValue placeholder="Sem filtro de período" />
+          </SelectTrigger>
+          <SelectContent>
+            {FIRST_PURCHASE_OPTS.map((o) => (
+              <SelectItem key={o.value || "none"} value={o.value || "none"}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {(firstOp === "gt_days" || firstOp === "lt_days") && (
+          <div className="flex items-center gap-2 pt-1">
+            <Input type="number" inputMode="numeric" placeholder="dias" className="h-9 text-xs bg-white w-28"
+              value={block.first_purchase_days || ""} onChange={(e) => set("first_purchase_days", e.target.value)} />
+            <span className="text-neutral-400 text-xs">dias</span>
+          </div>
+        )}
+        {firstOp === "after" && (
+          <Input type="date" className="h-9 text-xs bg-white mt-1"
+            value={block.first_purchase_from || ""} onChange={(e) => set("first_purchase_from", e.target.value)} />
+        )}
+        {firstOp === "before" && (
+          <Input type="date" className="h-9 text-xs bg-white mt-1"
+            value={block.first_purchase_to || ""} onChange={(e) => set("first_purchase_to", e.target.value)} />
+        )}
+        {firstOp === "between" && (
+          <div className="flex items-center gap-2 pt-1">
+            <Input type="date" className="h-9 text-xs bg-white"
+              value={block.first_purchase_from || ""} onChange={(e) => set("first_purchase_from", e.target.value)} />
+            <span className="text-neutral-400 text-xs">a</span>
+            <Input type="date" className="h-9 text-xs bg-white"
+              value={block.first_purchase_to || ""} onChange={(e) => set("first_purchase_to", e.target.value)} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -219,6 +273,22 @@ export function cleanAudienceFilter(f: AudienceFilter): AudienceFilter {
       delete out.last_purchase_op;
     } else if (op === "between" && (!out.last_purchase_from || !out.last_purchase_to)) {
       delete out.last_purchase_op;
+    }
+    // Same cleanup for the first-purchase period filter.
+    const fop = out.first_purchase_op;
+    if (!fop) {
+      delete out.first_purchase_op;
+      delete out.first_purchase_days;
+      delete out.first_purchase_from;
+      delete out.first_purchase_to;
+    } else if ((fop === "gt_days" || fop === "lt_days") && !out.first_purchase_days) {
+      delete out.first_purchase_op;
+    } else if (fop === "after" && !out.first_purchase_from) {
+      delete out.first_purchase_op;
+    } else if (fop === "before" && !out.first_purchase_to) {
+      delete out.first_purchase_op;
+    } else if (fop === "between" && (!out.first_purchase_from || !out.first_purchase_to)) {
+      delete out.first_purchase_op;
     }
     return out;
   };
