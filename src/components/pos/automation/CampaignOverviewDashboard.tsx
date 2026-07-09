@@ -356,7 +356,7 @@ export function CampaignOverviewDashboard({ onClose }: { onClose: () => void }) 
                               </TableCell>
                             </TableRow>
                           )}
-                        </>
+                        </Fragment>
                       ))}
                     </TableBody>
                   </Table>
