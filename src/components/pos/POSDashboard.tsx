@@ -19,6 +19,7 @@ import { POSGoalProgress } from "./POSGoalProgress";
 import { POSSellerPrivatePanel } from "./POSSellerPrivatePanel";
 import { POSTaskWhatsAppDialog } from "./POSTaskWhatsAppDialog";
 import { POSMetaPixelCard } from "./POSMetaPixelCard";
+import { POSStoreScaledGoals } from "./POSStoreScaledGoals";
 
 import type { DateRange } from "react-day-picker";
 
@@ -351,6 +352,26 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                 />
               </div>
             </div>
+
+            {/* Metas Escalonadas (espelho da aba Folha, filtrado pela loja) */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold tracking-[0.2em] uppercase text-black/70 flex items-center gap-2 justify-center">
+                <Trophy className="h-4 w-4 text-orange-500" /> Metas Escalonadas & Comissão
+              </h3>
+              <div
+                className="rounded-2xl p-5 border border-black/5"
+                style={{ background: "var(--gradient-pos-silver)", boxShadow: "var(--shadow-pos-card), var(--shadow-pos-inset)" }}
+              >
+                <POSStoreScaledGoals
+                  storeId={storeId}
+                  periodStart={getPeriodRange(period, customRange).start}
+                  periodEnd={getPeriodRange(period, customRange).end}
+                  periodLabel={periodLabel}
+                />
+              </div>
+            </div>
+
+
 
             {/* Seller Metrics */}
             {sellerMetrics.length > 0 && (

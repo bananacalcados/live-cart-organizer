@@ -117,3 +117,36 @@ describe("computePayroll — divisão de live", () => {
     expect(emilly.channels.live_perola).toBe(500);
   });
 });
+
+import { buildGoalTiers } from "@/lib/pos/payroll";
+
+describe("buildGoalTiers — metas escalonadas", () => {
+  it("calcula faturamento, falta e comissão por degrau (exemplo meta 31700)", () => {
+    const tiers = buildGoalTiers(31700, 45000, scale);
+    const t80 = tiers.find((t) => t.achievementPercent === 80)!;
+    const t100 = tiers.find((t) => t.achievementPercent === 100)!;
+    const t120 = tiers.find((t) => t.achievementPercent === 120)!;
+
+    expect(t80.targetRevenue).toBeCloseTo(25360, 2);
+    expect(t100.targetRevenue).toBeCloseTo(31700, 2);
+    expect(t120.targetRevenue).toBeCloseTo(38040, 2);
+
+    // com faturamento de 45k, todos os degraus foram atingidos
+    expect(t120.reached).toBe(true);
+    expect(t120.missing).toBe(0);
+    // comissão projetada no degrau 120% = 38040 * 1.5%
+    expect(t120.commissionValue).toBeCloseTo(570.6, 1);
+    expect(t100.commissionPercent).toBe(1.0);
+  });
+
+  it("mostra quanto falta quando abaixo do degrau", () => {
+    const tiers = buildGoalTiers(31700, 20000, scale);
+    const t80 = tiers.find((t) => t.achievementPercent === 80)!;
+    expect(t80.reached).toBe(false);
+    expect(t80.missing).toBeCloseTo(5360, 2); // 25360 - 20000
+  });
+
+  it("retorna vazio sem meta", () => {
+    expect(buildGoalTiers(0, 5000, scale)).toEqual([]);
+  });
+});

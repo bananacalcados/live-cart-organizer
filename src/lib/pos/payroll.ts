@@ -93,6 +93,16 @@ export const CHANNEL_LABELS: Record<ChannelKey, string> = {
   live_all: "Todas as Lives",
 };
 
+/** Meta escalonada de uma pessoa (um degrau da escala aplicado sobre a meta base 100%). */
+export interface GoalTier {
+  achievementPercent: number; // 80, 90, 100, 110, 120...
+  targetRevenue: number;      // faturamento necessário = meta100 * achievementPercent/100
+  commissionPercent: number;  // % de comissão nesse degrau
+  reached: boolean;           // já atingiu esse degrau?
+  missing: number;            // quanto falta para atingir (0 se já atingiu)
+  commissionValue: number;    // comissão projetada AO atingir exatamente esse degrau
+}
+
 export interface PersonRow {
   personId: string;
   name: string;
@@ -102,6 +112,7 @@ export interface PersonRow {
   achievementPct: number; // 0-100+
   commissionPct: number; // % aplicado
   commissionValue: number;
+  tiers: GoalTier[]; // metas escalonadas (80/90/100/110/120) da escala
   stores: StoreKey[]; // lojas onde teve venda direta (para detectar multi-loja)
 }
 
@@ -128,6 +139,28 @@ export function commissionPctForAchievement(achievementPct: number, scale: Payro
     if (achievementPct >= row.achievement_percent) pct = row.commission_percent;
   }
   return pct;
+}
+
+/**
+ * Constrói as metas escalonadas (degraus da escala) para uma pessoa.
+ * meta100 é o valor da meta (100%). Cada degrau vira um alvo de faturamento
+ * (meta100 * degrau/100), com quanto falta e a comissão projetada ao atingi-lo.
+ */
+export function buildGoalTiers(meta100: number, total: number, scale: PayrollScaleRow[]): GoalTier[] {
+  if (meta100 <= 0) return [];
+  return [...scale]
+    .sort((a, b) => a.achievement_percent - b.achievement_percent)
+    .map((row) => {
+      const targetRevenue = meta100 * (row.achievement_percent / 100);
+      return {
+        achievementPercent: row.achievement_percent,
+        targetRevenue,
+        commissionPercent: row.commission_percent,
+        reached: total >= targetRevenue,
+        missing: Math.max(0, targetRevenue - total),
+        commissionValue: targetRevenue * (row.commission_percent / 100),
+      };
+    });
 }
 
 interface ComputeInput {
@@ -173,6 +206,7 @@ export function computePayroll(input: ComputeInput): PayrollResult {
       achievementPct: 0,
       commissionPct: 0,
       commissionValue: 0,
+      tiers: [],
       stores: [],
     });
   }
@@ -281,6 +315,7 @@ export function computePayroll(input: ComputeInput): PayrollResult {
     row.achievementPct = row.goal > 0 ? (row.total / row.goal) * 100 : 0;
     row.commissionPct = row.goal > 0 ? commissionPctForAchievement(row.achievementPct, scale) : 0;
     row.commissionValue = row.total * (row.commissionPct / 100);
+    row.tiers = buildGoalTiers(row.goal, row.total, scale);
   }
 
   return {
