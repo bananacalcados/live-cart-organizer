@@ -22,6 +22,9 @@ interface Row {
 
 const DAY_LABEL: Record<number, string> = { 0: "Dom", 1: "Seg", 2: "Ter", 3: "Qua", 4: "Qui", 5: "Sex", 6: "Sáb" };
 
+const fmtPeriodDate = (v: string) =>
+  new Date(v).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+
 export function CampaignList() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
