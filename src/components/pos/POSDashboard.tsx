@@ -20,6 +20,7 @@ import { POSSellerPrivatePanel } from "./POSSellerPrivatePanel";
 import { POSTaskWhatsAppDialog } from "./POSTaskWhatsAppDialog";
 import { POSMetaPixelCard } from "./POSMetaPixelCard";
 import { POSStoreScaledGoals } from "./POSStoreScaledGoals";
+import { POSStoreGoalCards } from "./POSStoreGoalCards";
 
 import type { DateRange } from "react-day-picker";
 
