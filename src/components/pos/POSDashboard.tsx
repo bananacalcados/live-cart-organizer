@@ -333,22 +333,26 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
                   title="Loja Física"
                   value={`R$ ${physicalRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
                   sub={`${physicalSalesCount} venda${physicalSalesCount !== 1 ? "s" : ""}${totalRevenue > 0 ? ` (${Math.round(physicalRevenue / totalRevenue * 100)}%)` : ""}`}
+                  onClick={() => setActiveChannel("physical")}
                 />
                 <ChannelCard
                   type="online"
                   title="Online"
                   value={`R$ ${onlineRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
                   sub={`${onlineSalesCount} venda${onlineSalesCount !== 1 ? "s" : ""}`}
+                  onClick={() => setActiveChannel("online")}
                 />
                 <ChannelCard
                   type="store"
                   title="Faturamento Live"
                   value={`R$ ${liveRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
                   sub={`${liveSalesCount} venda${liveSalesCount !== 1 ? "s" : ""}${totalRevenue > 0 ? ` (${Math.round(liveRevenue / totalRevenue * 100)}%)` : ""} · vindas de eventos`}
+                  onClick={() => setActiveChannel("live")}
                 />
               </div>
 
             </div>
+
 
 
 
