@@ -111,6 +111,7 @@ function FilterBlock({ tone, block, options, onChange }: BlockProps) {
     onChange({ ...block, [key]: value });
 
   const op = (block.last_purchase_op || "") as LastPurchaseOp;
+  const firstOp = (block.first_purchase_op || "") as LastPurchaseOp;
   const rfmOpts = options.rfm_segments.map((s) => ({ value: s, label: RFM_LABELS[s] || s }));
 
   return (
