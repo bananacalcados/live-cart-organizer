@@ -36,6 +36,12 @@ interface Store { id: string; name: string; }
 export function POSPayrollTab({ periodRange }: Props) {
   const [unlocked, setUnlocked] = useState(false);
   const [pw, setPw] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = (id: string) => setExpanded((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
