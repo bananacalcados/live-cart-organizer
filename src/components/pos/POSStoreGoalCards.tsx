@@ -170,7 +170,9 @@ export function POSStoreGoalCards({ storeId }: Props) {
   const cards = useMemo(() => {
     if (!state) return [];
     const dailyGoal = state.monthlyGoal / state.businessDaysInMonth;
-    const weeklyGoal = state.monthlyGoal / state.weeksInMonth;
+    // Meta da semana = meta diária × dias úteis da SEMANA corrente. Assim
+    // semanas curtas (início/fim de mês) não recebem meta inflada.
+    const weeklyGoal = dailyGoal * state.businessDaysInWeek;
 
     // Ritmo: quanto já deveríamos ter faturado até agora em cada período.
     const todayContribution = state.isTodayBusinessDay ? state.dayFraction : 0;
@@ -197,7 +199,7 @@ export function POSStoreGoalCards({ storeId }: Props) {
         goal: weeklyGoal,
         done: state.weekDone,
         expected: weekExpected,
-        hint: `meta mensal ÷ ${state.weeksInMonth} semanas`,
+        hint: `meta diária × ${state.businessDaysInWeek} dias úteis da semana`,
       },
       {
         key: "month",
