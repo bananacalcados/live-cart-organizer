@@ -202,6 +202,46 @@ function FilterBlock({ tone, block, options, onChange }: BlockProps) {
           </div>
         )}
       </div>
+
+      {/* Período da primeira compra */}
+      <div className="space-y-1.5 rounded-lg border border-neutral-200 bg-white/60 p-2.5">
+        <label className="text-xs font-medium text-neutral-600">Período da primeira compra</label>
+        <Select value={firstOp} onValueChange={(v) => set("first_purchase_op", v === "none" ? "" : v)}>
+          <SelectTrigger className="h-9 text-xs bg-white">
+            <SelectValue placeholder="Sem filtro de período" />
+          </SelectTrigger>
+          <SelectContent>
+            {FIRST_PURCHASE_OPTS.map((o) => (
+              <SelectItem key={o.value || "none"} value={o.value || "none"}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {(firstOp === "gt_days" || firstOp === "lt_days") && (
+          <div className="flex items-center gap-2 pt-1">
+            <Input type="number" inputMode="numeric" placeholder="dias" className="h-9 text-xs bg-white w-28"
+              value={block.first_purchase_days || ""} onChange={(e) => set("first_purchase_days", e.target.value)} />
+            <span className="text-neutral-400 text-xs">dias</span>
+          </div>
+        )}
+        {firstOp === "after" && (
+          <Input type="date" className="h-9 text-xs bg-white mt-1"
+            value={block.first_purchase_from || ""} onChange={(e) => set("first_purchase_from", e.target.value)} />
+        )}
+        {firstOp === "before" && (
+          <Input type="date" className="h-9 text-xs bg-white mt-1"
+            value={block.first_purchase_to || ""} onChange={(e) => set("first_purchase_to", e.target.value)} />
+        )}
+        {firstOp === "between" && (
+          <div className="flex items-center gap-2 pt-1">
+            <Input type="date" className="h-9 text-xs bg-white"
+              value={block.first_purchase_from || ""} onChange={(e) => set("first_purchase_from", e.target.value)} />
+            <span className="text-neutral-400 text-xs">a</span>
+            <Input type="date" className="h-9 text-xs bg-white"
+              value={block.first_purchase_to || ""} onChange={(e) => set("first_purchase_to", e.target.value)} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
