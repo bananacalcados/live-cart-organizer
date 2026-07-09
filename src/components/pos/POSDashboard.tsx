@@ -516,10 +516,12 @@ function KPICard({ icon: Icon, label, value, sub, trend }: { icon: typeof Dollar
   );
 }
 
-function ChannelCard({ type, title, value, sub }: { type: "store" | "online"; title: string; value: string; sub: string }) {
+function ChannelCard({ type, title, value, sub, onClick }: { type: "store" | "online"; title: string; value: string; sub: string; onClick?: () => void }) {
   return (
-    <div
-      className="relative p-5 rounded-2xl overflow-hidden flex items-center gap-4 border border-black/[0.04]"
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative p-5 rounded-2xl overflow-hidden flex items-center gap-4 border border-black/[0.04] text-left w-full hover:-translate-y-0.5 hover:border-black/15 transition-all cursor-pointer"
       style={{ background: "var(--gradient-pos-silver)", boxShadow: "var(--shadow-pos-card), var(--shadow-pos-inset)" }}
     >
       {/* Visual icon side */}
@@ -536,14 +538,11 @@ function ChannelCard({ type, title, value, sub }: { type: "store" | "online"; ti
         <p className="text-xl md:text-2xl font-bold text-black/85 mt-0.5 truncate">{value}</p>
         <p className="text-[11px] text-black/45 mt-0.5">{sub}</p>
       </div>
-      {type === "store" ? (
-        <ShoppingCart className="h-8 w-8 text-black/25 flex-shrink-0" strokeWidth={1.3} />
-      ) : (
-        <Globe className="h-8 w-8 text-black/25 flex-shrink-0" strokeWidth={1.3} />
-      )}
-    </div>
+      <ChevronRight className="h-6 w-6 text-black/25 flex-shrink-0" strokeWidth={1.5} />
+    </button>
   );
 }
+
 
 function AlertCard({ icon: Icon, label, count, detail, onClick }: { icon: typeof MessageSquare; label: string; count: number; detail: string; onClick: () => void }) {
   const hasAlert = count > 0;
