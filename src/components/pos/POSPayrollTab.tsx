@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
-  Lock, Loader2, RefreshCw, Users, Settings, Download, Plus, Trophy, Radio,
+  Lock, Loader2, RefreshCw, Users, Settings, Download, Plus, Trophy, Radio, ChevronRight, ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScaledGoalTiers } from "./ScaledGoalTiers";
 import {
   computePayroll, CHANNEL_KEYS, CHANNEL_LABELS, storeKeyFromName,
   type PayrollScaleRow, type StoreKey,
