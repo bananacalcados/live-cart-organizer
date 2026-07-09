@@ -1553,16 +1553,25 @@ export function CampaignDetailPanel({ campaignId, onBack }: CampaignDetailPanelP
               {qrLinkSlug && (
                 <div className="flex flex-col items-center gap-3">
                   <div className="bg-white p-4 rounded-lg">
-                    <QRCode value={`${window.location.origin}/vip/${qrLinkSlug}`} size={200} />
+                    <QRCode id={`qr-campaign-${qrLinkSlug}`} value={`${window.location.origin}/vip/${qrLinkSlug}`} size={200} />
                   </div>
                   <p className="text-[11px] text-muted-foreground break-all text-center">
                     {window.location.origin}/vip/{qrLinkSlug}
                   </p>
+                  <div className="grid grid-cols-2 gap-2 w-full">
+                    <Button variant="outline" size="sm" className="gap-1" onClick={() => downloadQrPng(qrLinkSlug)}>
+                      <Download className="h-3.5 w-3.5" /> PNG alta qualidade
+                    </Button>
+                    <Button variant="outline" size="sm" className="gap-1" onClick={() => downloadQrPdf(qrLinkSlug)}>
+                      <Download className="h-3.5 w-3.5" /> PDF impressão
+                    </Button>
+                  </div>
                   <Button size="sm" className="w-full gap-1" onClick={() => copyLink(qrLinkSlug)}>
                     <Copy className="h-3.5 w-3.5" /> Copiar link
                   </Button>
                 </div>
               )}
+
             </DialogContent>
           </Dialog>
         </Tabs>
