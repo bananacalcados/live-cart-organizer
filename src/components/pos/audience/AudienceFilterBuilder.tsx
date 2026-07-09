@@ -30,6 +30,10 @@ export interface AudienceFilterBlock {
   last_purchase_days?: string;
   last_purchase_from?: string;
   last_purchase_to?: string;
+  first_purchase_op?: LastPurchaseOp;
+  first_purchase_days?: string;
+  first_purchase_from?: string;
+  first_purchase_to?: string;
 }
 
 export interface AudienceFilter {
