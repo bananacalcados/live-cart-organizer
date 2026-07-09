@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, CalendarRange, CalendarClock, Loader2 } from "lucide-react";
+import { CalendarDays, CalendarRange, CalendarClock, Loader2, ChevronDown, ChevronRight, CheckCircle2, Circle, TrendingUp, TrendingDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getBrazilianHolidays, countBusinessDays, parseLocalDate } from "@/lib/businessDays";
+import { getBrazilianHolidays, countBusinessDays, parseLocalDate, formatDateKey } from "@/lib/businessDays";
 
 const BRL = (v: number) =>
   `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
 
 const REVENUE_STATUSES = ["completed", "pending_sync", "paid"];
+
+// Degraus de meta escalonada exibidos em cada card.
+const TIER_PERCENTS = [80, 90, 100, 110, 120];
+
+// Janela de expediente usada para estimar o "ritmo" do dia corrente.
+const WORK_START_HOUR = 9;
+const WORK_END_HOUR = 19;
 
 interface Props {
   storeId: string;
@@ -19,6 +26,12 @@ interface StoreGoalState {
   monthDone: number;
   businessDaysInMonth: number;
   weeksInMonth: number;
+  // Pacing (quanto já deveríamos ter faturado até agora)
+  businessDaysElapsedMonth: number; // dias úteis já COMPLETOS antes de hoje no mês
+  businessDaysInWeek: number;
+  businessDaysElapsedWeek: number; // dias úteis já COMPLETOS antes de hoje na semana
+  dayFraction: number; // 0-1 fração do expediente já decorrida hoje
+  isTodayBusinessDay: boolean;
 }
 
 /** Número de semanas (linhas de calendário, domingo→sábado) que o mês ocupa. */
@@ -40,16 +53,26 @@ function startOfCurrentWeek(ref: Date): Date {
   return d;
 }
 
+/** Fração do expediente (9h-19h) já decorrida no momento atual (0-1). */
+function currentDayFraction(now: Date): number {
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const start = WORK_START_HOUR * 60;
+  const end = WORK_END_HOUR * 60;
+  if (mins <= start) return 0;
+  if (mins >= end) return 1;
+  return (mins - start) / (end - start);
+}
+
 /**
  * Painel de metas da LOJA no topo do dashboard, no mesmo padrão visual dos KPIs.
  * Mostra três metas — Dia, Semana e Mês — com o quanto já foi feito, quanto
- * falta e a porcentagem. As metas Dia/Semana derivam da meta MENSAL da loja:
- *   - Meta do dia  = meta mensal ÷ dias úteis do mês (seg-sáb, sem feriados)
- *   - Meta da semana = meta mensal ÷ nº de semanas do mês corrente
+ * falta (com destaque) e quanto já deveríamos ter faturado (ritmo). Cada card
+ * pode ser expandido para mostrar as metas escalonadas (80/90/100/110/120%).
  */
 export function POSStoreGoalCards({ storeId }: Props) {
   const [loading, setLoading] = useState(true);
   const [state, setState] = useState<StoreGoalState | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +124,25 @@ export function POSStoreGoalCards({ storeId }: Props) {
         }
 
         const holidays = getBrazilianHolidays(now.getFullYear());
-        const bizDays = countBusinessDays(monthStart, new Date(now.getFullYear(), now.getMonth() + 1, 0), holidays) || 1;
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const bizDays = countBusinessDays(monthStart, monthEnd, holidays) || 1;
+
+        // Semana corrente: seg→sáb (recorta ao intervalo do mês exibido não é
+        // necessário; a meta semanal usa dias úteis da própria semana).
+        const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 5); // sábado
+        const bizDaysWeek = countBusinessDays(weekStart, weekEnd, holidays) || 1;
+
+        // Dias úteis JÁ COMPLETOS (antes de hoje) no mês e na semana.
+        const yesterday = new Date(todayStart); yesterday.setDate(yesterday.getDate() - 1);
+        const bizElapsedMonth = todayStart > monthStart
+          ? countBusinessDays(monthStart, yesterday, holidays)
+          : 0;
+        const bizElapsedWeek = todayStart > weekStart
+          ? countBusinessDays(weekStart, yesterday, holidays)
+          : 0;
+
+        const isTodayBusinessDay = now.getDay() !== 0 && !holidays.has(formatDateKey(now));
+        const dayFraction = isTodayBusinessDay ? currentDayFraction(now) : 1;
 
         if (!cancelled) {
           setState({
@@ -111,6 +152,11 @@ export function POSStoreGoalCards({ storeId }: Props) {
             monthDone,
             businessDaysInMonth: bizDays,
             weeksInMonth: weeksInMonth(now) || 1,
+            businessDaysElapsedMonth: bizElapsedMonth,
+            businessDaysInWeek: bizDaysWeek,
+            businessDaysElapsedWeek: bizElapsedWeek,
+            dayFraction,
+            isTodayBusinessDay,
           });
         }
       } finally {
@@ -125,6 +171,15 @@ export function POSStoreGoalCards({ storeId }: Props) {
     if (!state) return [];
     const dailyGoal = state.monthlyGoal / state.businessDaysInMonth;
     const weeklyGoal = state.monthlyGoal / state.weeksInMonth;
+
+    // Ritmo: quanto já deveríamos ter faturado até agora em cada período.
+    const todayContribution = state.isTodayBusinessDay ? state.dayFraction : 0;
+    const dayExpected = dailyGoal * state.dayFraction;
+    const weekExpected = weeklyGoal *
+      Math.min(1, (state.businessDaysElapsedWeek + todayContribution) / state.businessDaysInWeek);
+    const monthExpected = state.monthlyGoal *
+      Math.min(1, (state.businessDaysElapsedMonth + todayContribution) / state.businessDaysInMonth);
+
     return [
       {
         key: "day",
@@ -132,6 +187,7 @@ export function POSStoreGoalCards({ storeId }: Props) {
         label: "Meta do Dia",
         goal: dailyGoal,
         done: state.dayDone,
+        expected: dayExpected,
         hint: `meta mensal ÷ ${state.businessDaysInMonth} dias úteis`,
       },
       {
@@ -140,6 +196,7 @@ export function POSStoreGoalCards({ storeId }: Props) {
         label: "Meta da Semana",
         goal: weeklyGoal,
         done: state.weekDone,
+        expected: weekExpected,
         hint: `meta mensal ÷ ${state.weeksInMonth} semanas`,
       },
       {
@@ -148,10 +205,17 @@ export function POSStoreGoalCards({ storeId }: Props) {
         label: "Meta do Mês",
         goal: state.monthlyGoal,
         done: state.monthDone,
+        expected: monthExpected,
         hint: "acumulado do mês",
       },
     ];
   }, [state]);
+
+  const toggle = (key: string) => setExpanded((prev) => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
 
   if (loading) {
     return (
@@ -176,6 +240,12 @@ export function POSStoreGoalCards({ storeId }: Props) {
         const missing = Math.max(0, c.goal - c.done);
         const reached = missing <= 0;
         const Icon = c.icon;
+        const isOpen = expanded.has(c.key);
+
+        // Diferença vs. ritmo esperado (adiantado/atrasado).
+        const paceDiff = c.done - c.expected;
+        const ahead = paceDiff >= 0;
+
         return (
           <div
             key={c.key}
@@ -206,12 +276,88 @@ export function POSStoreGoalCards({ storeId }: Props) {
               />
             </div>
 
-            <div className="flex items-center justify-between mt-1.5">
-              <span className={`text-[11px] font-semibold ${reached ? "text-emerald-600" : "text-black/70"}`}>
-                {reached ? "✅ Meta atingida" : `Falta ${BRL(missing)}`}
-              </span>
-              <span className="text-[9px] text-black/35">{c.hint}</span>
+            {/* DESTAQUE: quanto falta pra bater a meta */}
+            <div className={`mt-3 rounded-xl px-3 py-2.5 ${reached ? "bg-emerald-500/10" : "bg-red-500/[0.07]"}`}>
+              {reached ? (
+                <p className="text-sm font-extrabold text-emerald-600">✅ Meta atingida</p>
+              ) : (
+                <>
+                  <p className="text-[9px] uppercase tracking-wider font-semibold text-black/45">Falta pra bater a meta</p>
+                  <p className="text-xl font-extrabold tracking-tight text-red-500 leading-tight">{BRL(missing)}</p>
+                </>
+              )}
             </div>
+
+            {/* Ritmo esperado até agora */}
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[9px] uppercase tracking-wider font-semibold text-black/40">Deveríamos ter</p>
+                <p className="text-sm font-bold text-black/70">{BRL(c.expected)}</p>
+              </div>
+              <div className={`flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-lg ${ahead ? "bg-emerald-500/10 text-emerald-600" : "bg-red-500/10 text-red-500"}`}>
+                {ahead ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
+                <span>{ahead ? "+" : "−"}{BRL(Math.abs(paceDiff)).replace("R$ ", "")}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-2">
+              <span className="text-[9px] text-black/35">{c.hint}</span>
+              <button
+                onClick={() => toggle(c.key)}
+                className="flex items-center gap-1 text-[11px] font-semibold text-orange-600 hover:text-orange-700 transition-colors"
+              >
+                {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                Metas escalonadas
+              </button>
+            </div>
+
+            {/* Metas escalonadas 80/90/100/110/120% */}
+            {isOpen && (
+              <div className="mt-2 pt-2 border-t border-black/10">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="text-black/45 uppercase tracking-wide">
+                      <th className="text-left py-1 pr-2 font-semibold">Meta</th>
+                      <th className="text-right py-1 px-1 font-semibold">Alvo</th>
+                      <th className="text-right py-1 pl-2 font-semibold">Falta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {TIER_PERCENTS.map((p) => {
+                      const target = c.goal * (p / 100);
+                      const tierReached = c.done >= target;
+                      const tierMissing = Math.max(0, target - c.done);
+                      return (
+                        <tr key={p} className={`border-t border-black/5 ${tierReached ? "bg-emerald-500/10" : ""}`}>
+                          <td className="py-1 pr-2">
+                            <span className="inline-flex items-center gap-1.5">
+                              {tierReached ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                              ) : (
+                                <Circle className="h-3.5 w-3.5 text-black/30" />
+                              )}
+                              <span className="font-semibold text-black/80">{p}%</span>
+                              {p === 100 && <span className="text-[9px] text-black/40">(base)</span>}
+                            </span>
+                          </td>
+                          <td className="text-right py-1 px-1 text-black/75">{BRL(target)}</td>
+                          <td className={`text-right py-1 pl-2 font-semibold ${tierReached ? "text-emerald-600" : "text-red-500"}`}>
+                            {tierReached ? "atingida" : BRL(tierMissing)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-black/10">
+                      <td colSpan={3} className="py-1 text-black/45">
+                        Feito: <span className="font-semibold text-emerald-600">{BRL(c.done)}</span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </div>
         );
       })}
