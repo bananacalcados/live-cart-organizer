@@ -2012,15 +2012,55 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     {crmData?.orders && crmData.orders.length > 0 ? (
                       <div className="space-y-2">
                         {crmData.orders.map((o) => (
-                          <div key={o.id} className="flex items-center gap-3 rounded-xl border bg-card p-3.5 shadow-sm">
+                          <div key={o.id} className="flex items-start gap-3 rounded-xl border bg-card p-3.5 shadow-sm">
                             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-pos-orange/15 text-pos-orange">
                               <Package className="h-5 w-5" />
                             </span>
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 space-y-1">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-mono font-bold text-sm">{o.orderName || "—"}</span>
                                 <Badge variant="outline" className="text-[10px]">{statusLabels[o.status || ""] || o.status}</Badge>
+                                {o.modality && (
+                                  <Badge
+                                    className={`text-[10px] border-0 ${o.modality === "Presencial" ? "bg-blue-500/15 text-blue-600 dark:text-blue-400" : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"}`}
+                                  >
+                                    {o.modality}
+                                  </Badge>
+                                )}
                               </div>
+                              {/* Data + Loja/Canal */}
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                                {o.createdAt && (
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {new Date(o.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                                    {" "}
+                                    {new Date(o.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                                  </span>
+                                )}
+                                {(o.storeName || o.channelLabel) && (
+                                  <span className="flex items-center gap-1">
+                                    <Store className="h-3 w-3" />
+                                    {o.storeName || o.channelLabel}
+                                  </span>
+                                )}
+                              </div>
+                              {/* Produtos comprados */}
+                              {o.items && o.items.length > 0 && (
+                                <ul className="mt-1 space-y-0.5">
+                                  {o.items.map((it, idx) => (
+                                    <li key={idx} className="text-xs text-foreground/80 flex items-start gap-1">
+                                      <span className="text-pos-orange">•</span>
+                                      <span className="min-w-0">
+                                        {it.quantity && it.quantity > 1 ? `${it.quantity}x ` : ""}
+                                        {it.name}
+                                        {it.variant ? ` — ${it.variant}` : ""}
+                                        {it.size ? ` (${it.size})` : ""}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
                               {o.trackingCode && (
                                 <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                                   <Truck className="h-3 w-3" /> {o.trackingCode}
