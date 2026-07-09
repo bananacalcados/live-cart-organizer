@@ -156,14 +156,17 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
       setOnlineSalesCount(online.length);
       setPhysicalRevenue(physical.reduce((sum, s) => sum + (s.total || 0), 0));
       setPhysicalSalesCount(physical.length);
+      setOnlineSales(online as ChannelSale[]);
+      setPhysicalSales(physical as ChannelSale[]);
 
       // Faturamento Live: vendas pagas vinculadas a um evento.
       // `completedSales` já está filtrado pelos status pagos (completed/paid/pending_sync),
       // então não precisamos exigir paid_at aqui — pedidos `completed` legados sem paid_at
       // também são vendas pagas legítimas.
-      const liveSales = completedSales.filter((s: any) => s.event_id);
-      setLiveRevenue(liveSales.reduce((sum, s) => sum + (s.total || 0), 0));
-      setLiveSalesCount(liveSales.length);
+      const liveList = completedSales.filter((s: any) => s.event_id);
+      setLiveRevenue(liveList.reduce((sum, s) => sum + (s.total || 0), 0));
+      setLiveSalesCount(liveList.length);
+      setLiveSales(liveList as ChannelSale[]);
 
       if (completedSales.length > 0) {
         const saleIds = completedSales.map((s) => s.id);
