@@ -355,9 +355,29 @@ serve(async (req) => {
           continue;
         }
 
+        // Re-hospeda a miniatura do story (foto/vídeo) para URL permanente e
+        // roteia vídeos para `video_url` (o card renderiza <img> por padrão).
+        if (
+          referralData &&
+          (referralData.source_type === 'story_reply' || referralData.source_type === 'story_mention') &&
+          typeof referralData.media_url === 'string' &&
+          (referralData.media_url as string).includes('lookaside.fbsbx.com')
+        ) {
+          const rehosted = await rehostStoryMedia(supabase, referralData.media_url as string);
+          if (rehosted) {
+            if (rehosted.isVideo) {
+              referralData.video_url = rehosted.url;
+              referralData.media_url = null;
+            } else {
+              referralData.media_url = rehosted.url;
+            }
+          }
+        }
+
         if (referralData) {
           console.log(`Instagram referral for ${senderId}:`, JSON.stringify(referralData));
         }
+
 
         // Get sender profile name (use Instagram-specific fields)
         let senderName: string | null = null;
