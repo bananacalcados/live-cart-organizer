@@ -17,6 +17,7 @@ import { useConversationEnrichment } from "@/hooks/useConversationEnrichment";
 import { useSupportPhones } from "@/hooks/useSupportPhones";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { toast } from "sonner";
+import { extractDeleteFailureReason } from "@/lib/edgeFunctionError";
 
 export function GlobalWhatsAppChat() {
   const [isOpen, setIsOpen] = useState(false);
