@@ -199,7 +199,7 @@ export function POSStoreGoalCards({ storeId }: Props) {
         goal: weeklyGoal,
         done: state.weekDone,
         expected: weekExpected,
-        hint: `meta mensal ÷ ${state.weeksInMonth} semanas`,
+        hint: `meta diária × ${state.businessDaysInWeek} dias úteis da semana`,
       },
       {
         key: "month",
