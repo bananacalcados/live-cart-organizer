@@ -28,6 +28,7 @@ import { POSLiveOrderPanel } from "./POSLiveOrderPanel";
 import { NewConversationDialog } from "./NewConversationDialog";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
 import { toast } from "sonner";
+import { extractDeleteFailureReason } from "@/lib/edgeFunctionError";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CreateSupportTicketDialog } from "@/components/CreateSupportTicketDialog";
