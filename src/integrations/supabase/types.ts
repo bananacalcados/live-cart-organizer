@@ -17387,21 +17387,6 @@ export type Database = {
         }
         Relationships: []
       }
-      zoppy_first_purchase_import: {
-        Row: {
-          first_dt: string
-          suffix: string
-        }
-        Insert: {
-          first_dt: string
-          suffix: string
-        }
-        Update: {
-          first_dt?: string
-          suffix?: string
-        }
-        Relationships: []
-      }
       zoppy_sales: {
         Row: {
           completed_at: string | null

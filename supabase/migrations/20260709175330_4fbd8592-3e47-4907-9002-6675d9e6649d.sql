@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS public.zoppy_first_purchase_import;
