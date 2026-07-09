@@ -11,6 +11,7 @@ import {
   UserPlus, UserMinus, Percent, BarChart3, AlertTriangle, QrCode, Download
 } from "lucide-react";
 import QRCode from "react-qr-code";
+import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui/button";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
