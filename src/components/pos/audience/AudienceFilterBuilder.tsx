@@ -274,6 +274,22 @@ export function cleanAudienceFilter(f: AudienceFilter): AudienceFilter {
     } else if (op === "between" && (!out.last_purchase_from || !out.last_purchase_to)) {
       delete out.last_purchase_op;
     }
+    // Same cleanup for the first-purchase period filter.
+    const fop = out.first_purchase_op;
+    if (!fop) {
+      delete out.first_purchase_op;
+      delete out.first_purchase_days;
+      delete out.first_purchase_from;
+      delete out.first_purchase_to;
+    } else if ((fop === "gt_days" || fop === "lt_days") && !out.first_purchase_days) {
+      delete out.first_purchase_op;
+    } else if (fop === "after" && !out.first_purchase_from) {
+      delete out.first_purchase_op;
+    } else if (fop === "before" && !out.first_purchase_to) {
+      delete out.first_purchase_op;
+    } else if (fop === "between" && (!out.first_purchase_from || !out.first_purchase_to)) {
+      delete out.first_purchase_op;
+    }
     return out;
   };
   return { include: clean(f.include), exclude: clean(f.exclude) };
