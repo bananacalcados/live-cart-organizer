@@ -618,8 +618,18 @@ serve(async (req) => {
         if (adReferral) {
           console.log(`[uazapi-webhook] Ad referral (CTWA) detectado para ${phone}:`, JSON.stringify(adReferral));
         }
+      } else {
+        // Diagnóstico: se o payload parece conter dados de anúncio mas não
+        // conseguimos extrair, logamos a mensagem crua para ajustar o parser.
+        try {
+          const raw = JSON.stringify(message);
+          if (/adreply|ctwa|sourceurl|source_url|sourcetype/i.test(raw)) {
+            console.log(`[uazapi-webhook] Payload de anúncio não reconhecido para ${phone}:`, raw.slice(0, 4000));
+          }
+        } catch { /* ignore */ }
       }
     }
+
 
     const { data: insertedIncoming, error: insErr } = await supabase.from("whatsapp_messages").insert({
       phone,
