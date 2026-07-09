@@ -19,6 +19,7 @@ import { uploadMediaToStorage } from "./MediaAttachmentPicker";
 import { WhatsAppNumberSelector } from "./WhatsAppNumberSelector";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { toast } from "sonner";
+import { extractDeleteFailureReason } from "@/lib/edgeFunctionError";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
