@@ -17948,6 +17948,23 @@ export type Database = {
           valor: number
         }[]
       }
+      campaign_run_periods: {
+        Args: never
+        Returns: {
+          campanha_id: string
+          enviados: number
+          primeiro: string
+          ultimo: string
+        }[]
+      }
+      campaigns_overview_conversions: {
+        Args: { p_end: string; p_start: string }
+        Returns: Json
+      }
+      campaigns_overview_stats: {
+        Args: { p_end: string; p_start: string }
+        Returns: Json
+      }
       check_chargeback_risk: {
         Args: {
           p_address_cep?: string
