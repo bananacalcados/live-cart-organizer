@@ -33,6 +33,7 @@ export function CampaignList() {
   const [publicoLabels, setPublicoLabels] = useState<Record<string, string>>({});
   const [cardCounts, setCardCounts] = useState<Record<string, number>>({});
   const [runningId, setRunningId] = useState<string | null>(null);
+  const [periods, setPeriods] = useState<Record<string, { primeiro: string; ultimo: string; enviados: number }>>({});
 
   const load = async () => {
     setLoading(true);
