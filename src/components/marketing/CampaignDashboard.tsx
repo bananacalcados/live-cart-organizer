@@ -120,11 +120,24 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
     if (data) setLiveLinks(data);
   }, [campaignId]);
 
+  // Fetch campaign start date to scope snapshot deltas to this campaign's window
+  const [campaignStart, setCampaignStart] = useState<number | null>(null);
+  const fetchCampaignStart = useCallback(async () => {
+    if (!campaignId) return;
+    const { data } = await supabase
+      .from('group_campaigns')
+      .select('created_at')
+      .eq('id', campaignId)
+      .maybeSingle();
+    if (data?.created_at) setCampaignStart(new Date(data.created_at).getTime());
+  }, [campaignId]);
+
   // Initial sync: fetch group participant counts from WhatsApp on mount
   const initialSyncDone = useRef(false);
   useEffect(() => {
     fetchSnapshots();
     fetchLinkStats();
+    fetchCampaignStart();
     fetchGroupsFromDb();
     // Auto-sync group participants on first load
     if (!initialSyncDone.current && campaignGroups.length > 0) {
@@ -143,7 +156,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
       };
       syncParticipants();
     }
-  }, [fetchSnapshots, fetchLinkStats, fetchGroupsFromDb, campaignGroups, onRefreshGroups]);
+  }, [fetchSnapshots, fetchLinkStats, fetchCampaignStart, fetchGroupsFromDb, campaignGroups, onRefreshGroups]);
 
   // Auto-refresh polling every 30s
   useEffect(() => {
@@ -174,23 +187,17 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
     return () => { supabase.removeChannel(channel); };
   }, [campaignId, fetchLinkStats]);
 
-  // Calculate deltas from snapshots
+  // Calculate deltas per target group.
+  // For each group we prefer snapshots recorded WITHIN this campaign's window
+  // (>= campaignStart). If a group has no valid in-window snapshots (e.g. brand
+  // new group, or a recycled group whose only snapshots are from old campaigns),
+  // we fall back to participant_count - previous_participant_count so its real
+  // entries are never dropped from the totals.
   const getDeltas = () => {
-    if (snapshots.length === 0) {
-      let entered = 0;
-      let exited = 0;
-      campaignGroups.forEach(g => {
-        const prev = g.previous_participant_count || 0;
-        const current = g.participant_count || 0;
-        const delta = current - prev;
-        if (delta > 0) entered += delta;
-        else if (delta < 0) exited += Math.abs(delta);
-      });
-      return { entered, exited };
-    }
-
+    // Group in-window snapshots by group_id (already ordered ascending by recorded_at)
     const byGroup = new Map<string, any[]>();
     snapshots.forEach(s => {
+      if (campaignStart != null && new Date(s.recorded_at).getTime() < campaignStart) return;
       const arr = byGroup.get(s.group_id) || [];
       arr.push(s);
       byGroup.set(s.group_id, arr);
@@ -198,17 +205,24 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
 
     let entered = 0;
     let exited = 0;
-    byGroup.forEach(snaps => {
-      if (snaps.length < 2) return;
-      const first = snaps[0].participant_count;
-      const last = snaps[snaps.length - 1].participant_count;
-      const delta = last - first;
+
+    campaignGroups.forEach(g => {
+      const snaps = byGroup.get(g.id) || [];
+      let delta: number;
+      if (snaps.length >= 2) {
+        // Use snapshot movement within the campaign window
+        delta = (snaps[snaps.length - 1].participant_count || 0) - (snaps[0].participant_count || 0);
+      } else {
+        // Fallback: compare current vs previous participant count
+        delta = (g.participant_count || 0) - (g.previous_participant_count || 0);
+      }
       if (delta > 0) entered += delta;
       else if (delta < 0) exited += Math.abs(delta);
     });
 
     return { entered, exited };
   };
+
 
   const { entered, exited } = getDeltas();
   const entryRate = totalParticipants > 0 ? ((entered / (entered + exited || 1)) * 100).toFixed(1) : '0';
