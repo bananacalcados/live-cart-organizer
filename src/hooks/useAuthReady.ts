@@ -8,29 +8,32 @@ export function useAuthReady() {
 
   useEffect(() => {
     let mounted = true;
+    let readyFallback: number | undefined;
 
     // onAuthStateChange fires INITIAL_SESSION with the persisted session
     // almost immediately (no network wait), plus SIGNED_IN / TOKEN_REFRESHED /
-    // SIGNED_OUT afterwards. Driving readiness from here avoids depending on a
-    // potentially slow getSession() (which may do a network token refresh) and
-    // is self-correcting: state always reflects the latest known session.
+    // SIGNED_OUT afterwards. Do not call getSession() here: auth methods share
+    // the same browser lock, and a slow/stale getSession can block password
+    // login from resolving on production.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!mounted) return;
+      if (readyFallback) window.clearTimeout(readyFallback);
       setSession(nextSession);
       setIsReady(true);
     });
 
-    // Fallback in case the initial event is missed for any reason.
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+    // Safety fallback only marks the hook as ready; it intentionally avoids any
+    // Supabase auth call so login cannot be held behind a pending session read.
+    readyFallback = window.setTimeout(() => {
       if (!mounted) return;
-      setSession(initialSession);
       setIsReady(true);
-    });
+    }, 4000);
 
     return () => {
       mounted = false;
+      if (readyFallback) window.clearTimeout(readyFallback);
       subscription.unsubscribe();
     };
   }, []);

@@ -24,7 +24,7 @@ interface PollOption {
 export function TeamChat() {
   const location = useLocation();
   const p = location.pathname;
-  const shouldHide = p === '/pos' || p === '/expedition' || p.startsWith('/expedition') || p === '/live' || p === '/live-consumidor' || p.startsWith('/live-ortopedicos') || p.startsWith('/banana-') || p.startsWith('/lp/') || p.startsWith('/cat/') || p.startsWith('/evento/') || p.startsWith('/checkout') || p.startsWith('/checkout-loja/') || p.startsWith('/vip/') || p.startsWith('/dose-tripla') || p.startsWith('/catalogo/') || p.startsWith('/l/') || p.startsWith('/register/') || p.startsWith('/live/') || p.startsWith('/typebot/') || p.startsWith('/r/');
+  const shouldHide = p === '/login' || p === '/pos' || p === '/expedition' || p.startsWith('/expedition') || p === '/live' || p === '/live-consumidor' || p.startsWith('/live-ortopedicos') || p.startsWith('/banana-') || p.startsWith('/lp/') || p.startsWith('/cat/') || p.startsWith('/evento/') || p.startsWith('/checkout') || p.startsWith('/checkout-loja/') || p.startsWith('/vip/') || p.startsWith('/dose-tripla') || p.startsWith('/catalogo/') || p.startsWith('/l/') || p.startsWith('/register/') || p.startsWith('/live/') || p.startsWith('/typebot/') || p.startsWith('/r/');
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
