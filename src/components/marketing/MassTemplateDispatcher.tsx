@@ -538,7 +538,28 @@ export function MassTemplateDispatcher() {
         ravFrom += 1000;
       }
       setRavenaCustomers(allRavena);
+
+      // Fetch VIP orphan contacts (base de órfãos — não são clientes nem leads)
+      const allOrphans: any[] = [];
+      let orphFrom = 0;
+      while (true) {
+        const { data: orphPage, error: orphErr } = await supabase
+          .from('vip_orphan_contacts')
+          .select('id, phone, display_name, group_names, status, opted_out')
+          .eq('status', 'orphan')
+          .eq('opted_out', false)
+          .range(orphFrom, orphFrom + 999);
+        if (orphErr || !orphPage || orphPage.length === 0) break;
+        allOrphans.push(...orphPage);
+        if (orphPage.length < 1000) break;
+        orphFrom += 1000;
+      }
+      setOrphanContacts(allOrphans);
+      const orphGroups: string[] = [...new Set(allOrphans.flatMap((o: any) => o.group_names || []).filter(Boolean))].sort();
+      setOrphanGroupNames(orphGroups);
+
       setAudienceLoaded(true);
+
     } catch (err) { console.error(err); toast.error("Erro ao carregar audiência"); }
     finally { setIsLoadingAudience(false); }
   };
