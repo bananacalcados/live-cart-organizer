@@ -145,12 +145,16 @@ export function MassTemplateDispatcher() {
   const [variables, setVariables] = useState<Record<string, { mode: string; staticValue: string }>>({});
 
   // Audience
-  const [audienceSource, setAudienceSource] = useState<'crm' | 'leads' | 'both' | 'ravena'>('crm');
+  const [audienceSource, setAudienceSource] = useState<'crm' | 'leads' | 'both' | 'ravena' | 'orphans'>('crm');
   const [crmCustomers, setCrmCustomers] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [ravenaCustomers, setRavenaCustomers] = useState<any[]>([]);
+  const [orphanContacts, setOrphanContacts] = useState<any[]>([]);
+  const [orphanGroupFilter, setOrphanGroupFilter] = useState<string>("all");
+  const [orphanGroupNames, setOrphanGroupNames] = useState<string[]>([]);
   const [isLoadingAudience, setIsLoadingAudience] = useState(false);
   const [audienceLoaded, setAudienceLoaded] = useState(false);
+
 
   // CRM Filters (same as RFM tab)
   const [rfmFilter, setRfmFilter] = useState<string>("all");
