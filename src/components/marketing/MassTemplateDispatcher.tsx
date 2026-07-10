@@ -1927,6 +1927,16 @@ export function MassTemplateDispatcher() {
                   </SelectContent>
                 </Select>
               )}
+              {audienceSource === 'orphans' && (
+                <Select value={orphanGroupFilter} onValueChange={v => { setOrphanGroupFilter(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                  <SelectTrigger className="w-[220px] h-8 text-xs"><Crown className="h-3 w-3 mr-1" /><SelectValue placeholder="Grupo VIP" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os grupos</SelectItem>
+                    {orphanGroupNames.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+
               <Input
                 className="w-[200px] h-8 text-xs"
                 placeholder="Buscar nome ou telefone..."
