@@ -241,8 +241,8 @@ Deno.serve(async (req) => {
             BaseCalculo: vBase,
             ValorIcms: round2(vBase * aliqIcms / 100),
           },
-          PIS:    { CodSituacaoTributaria: String(oi?.cst_pis || "07"),    Aliquota: Number(oi?.aliq_pis || 0),    BaseCalculo: vBase },
-          COFINS: { CodSituacaoTributaria: String(oi?.cst_cofins || "07"), Aliquota: Number(oi?.aliq_cofins || 0), BaseCalculo: vBase },
+          PIS:    (() => { const m = cstEntradaPisCofins(oi?.cst_pis,    Number(oi?.aliq_pis || 0),    vBase); return { CodSituacaoTributaria: m.cst, Aliquota: m.aliq, BaseCalculo: m.base }; })(),
+          COFINS: (() => { const m = cstEntradaPisCofins(oi?.cst_cofins, Number(oi?.aliq_cofins || 0), vBase); return { CodSituacaoTributaria: m.cst, Aliquota: m.aliq, BaseCalculo: m.base }; })(),
         },
       });
     }
