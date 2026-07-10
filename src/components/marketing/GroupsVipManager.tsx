@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Users, RefreshCw, Send, Plus, Search, Star, Loader2,
   Settings, CheckCircle, XCircle, Crown, Link as LinkIcon,
-  MapPin, AlertTriangle, Smartphone, Trash2, Pencil, BarChart3
+  MapPin, AlertTriangle, Smartphone, Trash2, Pencil, BarChart3, UserX
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { GroupMembersDialog } from "./GroupMembersDialog";
 import { VipGroupsAnalyticsDashboard } from "./VipGroupsAnalyticsDashboard";
 import { VipLinksManager } from "./VipLinksManager";
+import { OrphanBaseManager } from "./OrphanBaseManager";
 
 interface WhatsAppGroup {
   id: string;
@@ -348,8 +349,14 @@ export function GroupsVipManager() {
           <TabsTrigger value="campaigns" className="gap-1"><Send className="h-3.5 w-3.5" />Campanhas</TabsTrigger>
           <TabsTrigger value="groups" className="gap-1"><Users className="h-3.5 w-3.5" />Grupos</TabsTrigger>
           <TabsTrigger value="links" className="gap-1"><LinkIcon className="h-3.5 w-3.5" />Links</TabsTrigger>
+          <TabsTrigger value="orphans" className="gap-1"><UserX className="h-3.5 w-3.5" />Base de Órfãos</TabsTrigger>
           <TabsTrigger value="dashboard" className="gap-1"><BarChart3 className="h-3.5 w-3.5" />Dashboard</TabsTrigger>
         </TabsList>
+
+        {/* BASE DE ÓRFÃOS TAB */}
+        <TabsContent value="orphans" className="space-y-4">
+          <OrphanBaseManager />
+        </TabsContent>
 
         {/* LINKS TAB */}
         <TabsContent value="links" className="space-y-4">

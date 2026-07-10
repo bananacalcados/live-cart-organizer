@@ -1,62 +1,71 @@
-# Plano — Seleção manual de grupo no link VIP + reforço anti-grupo-cheio
+# Base de Órfãos de Grupos VIP — Captura, Disparo e ROAS
 
-## Objetivo
-Permitir que, ao criar/editar um link de redirecionamento dentro de uma campanha, você possa **opcionalmente fixar um grupo VIP específico** para onde aquele link sempre manda. Quando nenhum for fixado, o comportamento automático atual (rotação por capacidade) continua igual. De quebra, corrigir as brechas que hoje deixam mandar gente pra grupo cheio.
+## Contexto / problema descoberto
+- O typebot da Live grava leads em **`event_leads`** (não em `lp_leads`). O cruzamento antigo ignorava essa tabela, gerando "órfãos" falsos.
+- Hoje não existe um lugar único e confiável que responda: "quantos membros tem cada grupo VIP" e "quem entrou no grupo mas não é cliente nem lead".
+- Precisamos preservar esses contatos (nome + telefone + grupo) e poder disparar para eles depois, medindo se o disparo gera venda (ROAS).
 
-## Parte 1 — Seleção manual do grupo (funcionalidade pedida)
+## Objetivos
+1. Saber exatamente quantos membros há em cada grupo VIP, classificados (cliente / lead / órfão).
+2. Nunca perder contato de quem entrou no grupo sem se cadastrar.
+3. Disparar em massa via WhatsApp API para a base de órfãos.
+4. Medir vendas geradas por esses disparos (ROAS).
 
-### 1.1 Banco de dados
-- Nova coluna `forced_group_id uuid null` em `group_redirect_links` (FK lógica para `whatsapp_groups.id`).
-- `null` = modo automático (atual). Preenchido = link fixo naquele grupo.
-- Migration com a coluna; sem novos GRANTs (a tabela já é acessada por service role nas edge functions).
+---
 
-### 1.2 Edge function `group-redirect-link`
-- Ao carregar o link, passar a selecionar também `forced_group_id`.
-- Em `resolveGroupUrl`: se `forced_group_id` estiver definido, buscar **só aquele grupo** e devolver o invite dele.
-- Regra de segurança no modo fixo: se o grupo fixado estiver cheio (`is_full` ou `participant_count >= max_participants`), decidir o comportamento (ver 1.4). Por padrão, **cair no modo automático** para não travar entradas.
+## 1. Classificação correta (fim dos falsos órfãos)
+Padronizar o cruzamento para bater contra TODAS as bases de contato por telefone (últimos 8 dígitos):
+`customers_unified`, `event_leads`, `lp_leads`, `ad_leads`, `link_page_leads`.
 
-### 1.3 UI — aba "Links" do `CampaignDetailPanel.tsx`
-- No formulário de criar link e na linha de cada link, adicionar um `Select` "Grupo de destino":
-  - Opção `Automático (rotação por capacidade)` — padrão.
-  - Lista dos grupos de `campaign.target_groups` com nome + contagem atual (`ex: "Vips GV #3 · 209/1000"`).
-- Badge no card do link indicando `🔒 Fixo: <nome>` quando houver `forced_group_id`.
-- Atualização do `RedirectLink` interface e das queries de insert/update.
+Criar função SQL `classify_group_member(phone)` → retorna `customer` | `lead` | `orphan`, reutilizada em toda a lógica.
 
-### 1.4 Comportamento quando o grupo fixo enche (decisão de produto)
-Duas opções — escolher uma:
-- **A) Fallback automático (recomendado):** grupo fixo cheio → volta a rotacionar pelos demais da campanha. Nunca deixa cliente sem grupo.
-- **B) Fixo estrito:** mantém sempre o grupo escolhido, mesmo cheio (útil p/ grupo exclusivo/segmentado). Mostra aviso na UI de que pode recusar entradas.
-Sugestão: implementar **A** como padrão, com um checkbox opcional "manter mesmo cheio" para habilitar B por link.
+## 2. Nova tabela: base de órfãos (persistente)
+`vip_orphan_contacts` — um registro por pessoa única (telefone E.164), nunca some mesmo que a lista do grupo mude:
+- `phone` (único), `phone_suffix8`, `display_name`
+- `group_ids text[]`, `group_names text[]` (todos os grupos VIP onde apareceu)
+- `first_seen_at`, `last_seen_at`
+- `status`: `orphan` | `promoted` (virou cliente/lead depois) | `opted_out`
+- `opted_out` bool (respeita bloqueios / descadastro)
+- `metadata jsonb`
+- timestamps + GRANTs + RLS + trigger updated_at.
 
-## Parte 2 — Reforço anti-grupo-cheio (corrige os riscos achados)
+## 3. Função de atualização + contagem por grupo
+- `refresh_vip_orphans()`: recomputa a partir de `whatsapp_group_members` vs. todas as bases; faz UPSERT na `vip_orphan_contacts`, marca como `promoted` quem virou cliente/lead, acumula grupos. Idempotente.
+- View `vip_group_membership_stats`: por grupo → total, clientes, leads, órfãos, % (fonte única para o painel).
+- Acionada por botão "Atualizar base" no painel e opcionalmente por cron diário.
 
-### 2.1 Cron multi-provedor (`cron-check-vip-groups`)
-- Hoje só refresca via Z‑API. Ajustar para, conforme o `provider` da instância, chamar:
-  - uazapi → metadata/participantes uazapi
-  - wasender → metadata wasender
-  - z-api → endpoint atual
-- Assim grupos uazapi/wasender param de ficar com contagem congelada.
+## 4. Disparo em massa (WhatsApp API)
+Reutiliza a infra e regras anti-ban já existentes (throttling, cooldown, claim atômico — ver memórias de dispatch).
+- `mass_dispatch_campaigns`: nome, mensagem/template, filtros de público (grupo, tem nome, não opt-out), status, contadores, janela de atribuição (dias), criado_em.
+- `mass_dispatch_targets`: campanha × contato, status (`pending`/`sent`/`failed`), `sent_at`, `message_id`, telefone.
+- Edge function `vip-orphan-dispatch`: processa em lote, roteia pelo provider real (uazapi/wasender) respeitando instância, delays humanos e supressão de contatos bloqueados. Grava opt-out quando o contato pede saída.
 
-### 2.2 Atualizar contagem em tempo real via webhook
-- Em `_shared/group-member-tracking.ts`, ao registrar entrada/saída de membro, também **incrementar/decrementar `participant_count`** e recalcular `is_full` na `whatsapp_groups`.
-- Elimina a janela de defasagem de até 5 min entre ciclos do cron.
+## 5. Análise de ROAS
+- View `mass_dispatch_roas`: junta `mass_dispatch_targets` → vendas (`pos_sales` / `orders`) pelo sufixo de 8 dígitos, dentro da janela de atribuição da campanha.
+- Métricas por campanha: enviados, entregues, compradores atribuídos, receita, ticket médio, taxa de conversão. (Custo de mídia = 0; ROAS = receita atribuída; opcional campo de custo manual.)
 
-### 2.3 Margem de segurança na capacidade
-- No `group-redirect-link`, tratar como "cheio" quando `participant_count >= max_participants - MARGEM` (ex.: MARGEM = 10). Evita estourar 1000 em picos dentro da janela de cache.
-- Opcional: reduzir o cache (`CACHE_TTL_MS`) de 2 min para ~30s nos grupos que estão perto do limite.
+## 6. UI — nova sub-aba em Marketing → Grupos VIP
+- **Dashboard de Membros**: contagem por grupo (cliente/lead/órfão) usando `vip_group_membership_stats`; botão "Atualizar base".
+- **Base de Órfãos**: lista (nome, telefone, grupos), busca/filtros, exportar Excel/CSV, status opt-out.
+- **Disparos**: criar campanha (mensagem/template + público), disparar, acompanhar progresso.
+- **ROAS**: painel por campanha (enviados → compradores → receita).
 
-## Arquivos afetados
-- `supabase/migrations/*` (nova coluna `forced_group_id`).
-- `supabase/functions/group-redirect-link/index.ts` (modo fixo + margem de segurança).
-- `supabase/functions/cron-check-vip-groups/index.ts` (refresh multi-provedor).
-- `supabase/functions/_shared/group-member-tracking.ts` (contagem em tempo real).
-- `src/components/marketing/CampaignDetailPanel.tsx` (UI de seleção + interface + queries).
+---
 
-## Fora de escopo
-- Não altera a estratégia de "encher um grupo antes do próximo" no modo automático.
-- Não mexe na criação automática de grupos (`auto-create-vip-group`), só é acionada como fallback.
+## Detalhes técnicos
+- Chave de identidade: telefone E.164 com 9º dígito (padrão do projeto); match por DDD + 8 últimos dígitos.
+- Toda tabela nova em `public`: `CREATE TABLE` → `GRANT` (`authenticated` + `service_role`) → `ENABLE RLS` → policies → trigger `updated_at`.
+- Órfão que vira cliente/lead é marcado `promoted` e excluído automaticamente dos disparos.
+- Respeitar `blocked_contacts` e opt-out em todo disparo.
+- Sem dependência do Tiny; base 100% local.
 
-## Decisões que preciso confirmar antes de executar
-1. Comportamento do grupo fixo cheio: **A (fallback)**, **B (estrito)** ou os dois via checkbox?
-2. Fazer também a Parte 2 (segurança) junto, ou só a Parte 1 (seleção manual) agora?
-3. Valor da margem de segurança (sugiro 10 vagas).
+## Fora de escopo (por ora)
+- Fluxos de automação/nurture multi-etapa (só disparo único inicialmente).
+- Cobrança/custo de mídia detalhado no ROAS (campo manual opcional).
+
+## Ordem de implementação
+1. Função `classify_group_member` + view `vip_group_membership_stats`.
+2. Tabela `vip_orphan_contacts` + `refresh_vip_orphans()`.
+3. UI Dashboard de Membros + Base de Órfãos (leitura + export).
+4. Tabelas de campanha + edge function de disparo.
+5. View + painel de ROAS.
