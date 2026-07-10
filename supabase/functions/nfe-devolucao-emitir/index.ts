@@ -40,6 +40,24 @@ const sanitize = (s: string) => String(s ?? "")
   .replace(/[^A-Za-z0-9 ]/g, " ")
   .replace(/\s+/g, " ").trim();
 
+// CST de PIS/COFINS: converte o código da nota de SAÍDA (grupo 01–09) para um
+// código válido em nota de ENTRADA (grupo 50–99). Sem isso a SEFAZ rejeita a
+// devolução com "CST do PIS/COFINS inválido para nota fiscal de entrada".
+//   • 01/02 com alíquota > 0 (tributado, gera crédito) → 50 (mantém base/alíquota)
+//   • demais (isenta, alíquota zero, monofásico, sem crédito, Simples) → 98
+//     "Outras Operações de Entrada" com alíquota e base zeradas.
+function cstEntradaPisCofins(
+  cstSaida: any,
+  aliq: number,
+  vBase: number,
+): { cst: string; aliq: number; base: number } {
+  const c = String(cstSaida ?? "").replace(/\D/g, "").padStart(2, "0");
+  if ((c === "01" || c === "02") && aliq > 0) {
+    return { cst: "50", aliq, base: vBase };
+  }
+  return { cst: "98", aliq: 0, base: 0 };
+}
+
 function buildRenderableDanfeUrl(url: string | null | undefined) {
   if (!url || !/\.html(?:$|[?#])/i.test(url)) return url || null;
   const endpoint = new URL("/functions/v1/fiscal-render-document", Deno.env.get("SUPABASE_URL")!);
