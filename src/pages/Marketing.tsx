@@ -40,7 +40,7 @@ import { AttendanceRulesSettings } from "@/components/settings/AttendanceRulesSe
 import { GroupsVipManager } from "@/components/marketing/GroupsVipManager";
 import { LiveSessionManager } from "@/components/LiveSessionManager";
 import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispatcher";
-import { OrphanDispatchPanel } from "@/components/marketing/OrphanDispatchPanel";
+
 import { PrizeManager } from "@/components/marketing/PrizeManager";
 import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLandingPageCreator";
 import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
