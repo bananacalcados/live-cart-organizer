@@ -98,7 +98,7 @@ interface Recipient {
   name: string;
   firstName: string;
   lastName: string;
-  source: 'crm' | 'lead' | 'ravena';
+  source: 'crm' | 'lead' | 'ravena' | 'orphan';
   segment?: string;
   city?: string;
   state?: string;
