@@ -1336,6 +1336,8 @@ export function MassTemplateDispatcher() {
     } catch (err) {
       console.error('Error saving scheduled dispatch:', err);
       toast.error("Erro ao salvar disparo");
+    } finally {
+      savingScheduledRef.current = false;
     }
   };
 
