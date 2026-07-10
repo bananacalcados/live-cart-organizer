@@ -6406,6 +6406,13 @@ export type Database = {
             foreignKeyName: "group_campaign_messages_group_id_fkey"
             columns: ["group_id"]
             isOneToOne: false
+            referencedRelation: "vip_group_membership_stats"
+            referencedColumns: ["group_id"]
+          },
+          {
+            foreignKeyName: "group_campaign_messages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
             referencedRelation: "whatsapp_groups"
             referencedColumns: ["id"]
           },
@@ -8969,6 +8976,124 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "marketing_contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mass_dispatch_campaigns: {
+        Row: {
+          attribution_days: number
+          audience_filters: Json
+          completed_at: string | null
+          created_at: string
+          failed_count: number
+          id: string
+          message: string | null
+          name: string
+          sent_count: number
+          started_at: string | null
+          status: string
+          total_targets: number
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          attribution_days?: number
+          audience_filters?: Json
+          completed_at?: string | null
+          created_at?: string
+          failed_count?: number
+          id?: string
+          message?: string | null
+          name: string
+          sent_count?: number
+          started_at?: string | null
+          status?: string
+          total_targets?: number
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          attribution_days?: number
+          audience_filters?: Json
+          completed_at?: string | null
+          created_at?: string
+          failed_count?: number
+          id?: string
+          message?: string | null
+          name?: string
+          sent_count?: number
+          started_at?: string | null
+          status?: string
+          total_targets?: number
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: []
+      }
+      mass_dispatch_targets: {
+        Row: {
+          campaign_id: string
+          contact_id: string | null
+          created_at: string
+          display_name: string | null
+          error: string | null
+          id: string
+          message_id: string | null
+          phone: string
+          phone_suffix8: string
+          sent_at: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          contact_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          error?: string | null
+          id?: string
+          message_id?: string | null
+          phone: string
+          phone_suffix8: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          contact_id?: string | null
+          created_at?: string
+          display_name?: string | null
+          error?: string | null
+          id?: string
+          message_id?: string | null
+          phone?: string
+          phone_suffix8?: string
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mass_dispatch_targets_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mass_dispatch_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mass_dispatch_targets_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "mass_dispatch_roas"
+            referencedColumns: ["campaign_id"]
+          },
+          {
+            foreignKeyName: "mass_dispatch_targets_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "vip_orphan_contacts"
             referencedColumns: ["id"]
           },
         ]
@@ -16384,6 +16509,54 @@ export type Database = {
         }
         Relationships: []
       }
+      vip_orphan_contacts: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          first_seen_at: string
+          group_ids: string[]
+          group_names: string[]
+          id: string
+          last_seen_at: string
+          metadata: Json
+          opted_out: boolean
+          phone: string
+          phone_suffix8: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          first_seen_at?: string
+          group_ids?: string[]
+          group_names?: string[]
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          opted_out?: boolean
+          phone: string
+          phone_suffix8: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          first_seen_at?: string
+          group_ids?: string[]
+          group_names?: string[]
+          id?: string
+          last_seen_at?: string
+          metadata?: Json
+          opted_out?: boolean
+          phone?: string
+          phone_suffix8?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vouchers: {
         Row: {
           cliente_id: string | null
@@ -16787,6 +16960,13 @@ export type Database = {
           recorded_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "whatsapp_group_snapshots_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "vip_group_membership_stats"
+            referencedColumns: ["group_id"]
+          },
           {
             foreignKeyName: "whatsapp_group_snapshots_group_id_fkey"
             columns: ["group_id"]
@@ -17610,6 +17790,18 @@ export type Database = {
         }
         Relationships: []
       }
+      mass_dispatch_roas: {
+        Row: {
+          attributed_revenue: number | null
+          avg_ticket: number | null
+          buyers: number | null
+          campaign_id: string | null
+          conversion_rate: number | null
+          name: string | null
+          sent_count: number | null
+        }
+        Relationships: []
+      }
       product_master_stock: {
         Row: {
           master_id: string | null
@@ -17705,6 +17897,17 @@ export type Database = {
           sku_count: number | null
           total_stock: number | null
           updated_at: string | null
+        }
+        Relationships: []
+      }
+      vip_group_membership_stats: {
+        Row: {
+          customers: number | null
+          group_id: string | null
+          group_name: string | null
+          leads: number | null
+          orphans: number | null
+          total_members: number | null
         }
         Relationships: []
       }
@@ -18029,6 +18232,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      classify_group_member: { Args: { _phone: string }; Returns: string }
       cleanup_webhook_routing_log: { Args: never; Returns: undefined }
       clear_event_live_active: {
         Args: { p_event_id: string }
@@ -18617,6 +18821,7 @@ export type Database = {
         Args: { p_dispatch_id: string }
         Returns: undefined
       }
+      refresh_vip_orphans: { Args: never; Returns: Json }
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
