@@ -26,17 +26,33 @@ if (typeof Node !== 'undefined') {
   };
 }
 
-// PWA: guard service worker registration in iframes / preview hosts
+// PWA: remove legacy app-cache service workers that can serve stale published
+// bundles. Keep push notification workers intact on production.
 const isInIframe = (() => {
   try { return window.self !== window.top; } catch { return true; }
 })();
 const isPreviewHost =
   window.location.hostname.includes("id-preview--") ||
   window.location.hostname.includes("lovableproject.com");
-if (isPreviewHost || isInIframe) {
-  navigator.serviceWorker?.getRegistrations().then((regs) =>
-    regs.forEach((r) => r.unregister())
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) =>
+    regs.forEach((registration) => {
+      const scriptURL =
+        registration.active?.scriptURL ||
+        registration.waiting?.scriptURL ||
+        registration.installing?.scriptURL ||
+        "";
+      const isLegacyAppWorker = scriptURL.endsWith("/sw.js");
+
+      if (isPreviewHost || isInIframe || isLegacyAppWorker) {
+        registration.unregister();
+      }
+    })
   );
+}
+
+if ((isPreviewHost || isInIframe) && "caches" in window) {
+  caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
 }
 
 createRoot(document.getElementById("root")!).render(<App />);

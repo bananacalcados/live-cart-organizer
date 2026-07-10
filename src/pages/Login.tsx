@@ -18,6 +18,20 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const withTimeout = async <T,>(promise: Promise<T>, ms: number): Promise<T> => {
+    let timer: number | undefined;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timer = window.setTimeout(() => reject(new Error("timeout")), ms);
+        }),
+      ]);
+    } finally {
+      if (timer) window.clearTimeout(timer);
+    }
+  };
+
   useEffect(() => {
     if (isReady && session) {
       navigate("/", { replace: true });
@@ -27,22 +41,36 @@ export default function Login() {
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
+    try {
+      const { error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        25000
+      );
+      if (error) {
+        toast({
+          title: "Erro ao entrar",
+          description:
+            error.message === "Invalid login credentials"
+              ? "Email ou senha incorretos."
+              : error.message === "Email not confirmed"
+                ? "Verifique seu email antes de entrar."
+                : error.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      navigate("/", { replace: true });
+    } catch (err: any) {
       toast({
         title: "Erro ao entrar",
-        description:
-          error.message === "Invalid login credentials"
-            ? "Email ou senha incorretos."
-            : error.message === "Email not confirmed"
-              ? "Verifique seu email antes de entrar."
-              : error.message,
+        description: err?.message === "timeout"
+          ? "O login demorou demais. Recarregue a página e tente novamente."
+          : err?.message || "Erro desconhecido",
         variant: "destructive",
       });
-      return;
+    } finally {
+      setLoading(false);
     }
-    navigate("/", { replace: true });
   };
 
   const handleGoogleLogin = async () => {
