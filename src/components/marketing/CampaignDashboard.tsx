@@ -137,6 +137,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
   useEffect(() => {
     fetchSnapshots();
     fetchLinkStats();
+    fetchCampaignStart();
     fetchGroupsFromDb();
     // Auto-sync group participants on first load
     if (!initialSyncDone.current && campaignGroups.length > 0) {
