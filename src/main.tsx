@@ -1,6 +1,20 @@
 import { createRoot } from "react-dom/client";
-import App from "./App.tsx";
 import "./index.css";
+
+// Auth hotfix: some browsers can keep Supabase Auth's Navigator Web Lock
+// orphaned, which makes signInWithPassword/getSession hang indefinitely.
+// This must run before App imports the Supabase client, so App is loaded
+// dynamically at the bottom of this file.
+if (typeof navigator !== "undefined" && "locks" in navigator) {
+  try {
+    Object.defineProperty(navigator, "locks", {
+      configurable: true,
+      get: () => undefined,
+    });
+  } catch {
+    // If the browser refuses the override, continue with the native behavior.
+  }
+}
 
 // Patch DOM methods to prevent crashes from browser extensions
 // that modify React-managed DOM nodes (e.g. translation, Grammarly, ad blockers)
@@ -55,4 +69,8 @@ if ((isPreviewHost || isInIframe) && "caches" in window) {
   caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+const root = createRoot(document.getElementById("root")!);
+
+import("./App.tsx").then(({ default: App }) => {
+  root.render(<App />);
+});
