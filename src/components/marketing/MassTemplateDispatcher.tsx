@@ -1811,6 +1811,8 @@ export function MassTemplateDispatcher() {
                 { value: 'leads' as const, label: 'Leads Captados', icon: FileSpreadsheet },
                 { value: 'both' as const, label: 'Ambos', icon: Zap },
                 { value: 'ravena' as const, label: '🌸 Ravena', icon: Store },
+                { value: 'orphans' as const, label: '👥 Base Órfãos', icon: Crown },
+
               ].map(s => (
                 <Button
                   key={s.value}
