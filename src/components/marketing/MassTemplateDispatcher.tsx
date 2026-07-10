@@ -1403,7 +1403,7 @@ export function MassTemplateDispatcher() {
 
     // Set audience source & filters
     if (data.audience_source) {
-      setAudienceSource(data.audience_source as 'crm' | 'leads' | 'both' | 'ravena');
+      setAudienceSource(data.audience_source as 'crm' | 'leads' | 'both' | 'ravena' | 'orphans');
     }
     if (data.audience_filters) {
       const f = data.audience_filters;
