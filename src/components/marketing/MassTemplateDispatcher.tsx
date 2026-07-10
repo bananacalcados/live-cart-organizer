@@ -1154,9 +1154,14 @@ export function MassTemplateDispatcher() {
           status: 'pending',
         }));
         for (let i = 0; i < recipientRows.length; i += 500) {
+          // upsert + ignoreDuplicates: guarded by the unique index
+          // (dispatch_id, phone). A re-run/retry can never duplicate a recipient.
           const { error: insErr } = await supabase
             .from('dispatch_recipients')
-            .insert(recipientRows.slice(i, i + 500));
+            .upsert(recipientRows.slice(i, i + 500), {
+              onConflict: 'dispatch_id,phone',
+              ignoreDuplicates: true,
+            });
           if (insErr) throw insErr;
         }
 
