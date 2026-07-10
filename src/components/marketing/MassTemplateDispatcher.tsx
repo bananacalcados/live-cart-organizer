@@ -195,6 +195,9 @@ export function MassTemplateDispatcher() {
   // Tracks the highest sent/failed seen for the dispatch currently being polled so
   // the displayed progress can never visually regress (defense against any backend race).
   const progressGuardRef = useRef<{ id: string | null; sent: number; failed: number }>({ id: null, sent: 0, failed: 0 });
+  // Re-entrancy guard: prevents a double-click / double-invoke from saving the
+  // same scheduled dispatch twice (which previously duplicated recipients).
+  const savingScheduledRef = useRef(false);
   const [testPhone, setTestPhone] = useState("");
   const [isTesting, setIsTesting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
