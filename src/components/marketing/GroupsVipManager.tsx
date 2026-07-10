@@ -29,6 +29,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { GroupMembersDialog } from "./GroupMembersDialog";
 import { VipGroupsAnalyticsDashboard } from "./VipGroupsAnalyticsDashboard";
 import { VipLinksManager } from "./VipLinksManager";
+import { OrphanBaseManager } from "./OrphanBaseManager";
 
 interface WhatsAppGroup {
   id: string;
