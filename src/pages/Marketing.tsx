@@ -40,7 +40,7 @@ import { AttendanceRulesSettings } from "@/components/settings/AttendanceRulesSe
 import { GroupsVipManager } from "@/components/marketing/GroupsVipManager";
 import { LiveSessionManager } from "@/components/LiveSessionManager";
 import { MassTemplateDispatcher } from "@/components/marketing/MassTemplateDispatcher";
-import { OrphanDispatchPanel } from "@/components/marketing/OrphanDispatchPanel";
+
 import { PrizeManager } from "@/components/marketing/PrizeManager";
 import { CatalogLandingPageCreator } from "@/components/marketing/CatalogLandingPageCreator";
 import { MarketingCalendar } from "@/components/marketing/MarketingCalendar";
@@ -1744,19 +1744,9 @@ export default function Marketing() {
 
           {/* ── DISPAROS ── */}
           <TabsContent value="disparos" className="space-y-4">
-            <Tabs defaultValue="mass" className="space-y-4">
-              <TabsList>
-                <TabsTrigger value="mass" className="gap-1"><Send className="h-3.5 w-3.5" />Templates em Massa</TabsTrigger>
-                <TabsTrigger value="orphans" className="gap-1"><Users className="h-3.5 w-3.5" />Base de Órfãos & ROAS</TabsTrigger>
-              </TabsList>
-              <TabsContent value="mass" className="space-y-4">
-                <MassTemplateDispatcher />
-              </TabsContent>
-              <TabsContent value="orphans" className="space-y-4">
-                <OrphanDispatchPanel />
-              </TabsContent>
-            </Tabs>
+            <MassTemplateDispatcher />
           </TabsContent>
+
 
 
           {/* ── AUTOMAÇÕES ── */}

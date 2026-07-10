@@ -98,7 +98,7 @@ interface Recipient {
   name: string;
   firstName: string;
   lastName: string;
-  source: 'crm' | 'lead' | 'ravena';
+  source: 'crm' | 'lead' | 'ravena' | 'orphan';
   segment?: string;
   city?: string;
   state?: string;
@@ -145,12 +145,16 @@ export function MassTemplateDispatcher() {
   const [variables, setVariables] = useState<Record<string, { mode: string; staticValue: string }>>({});
 
   // Audience
-  const [audienceSource, setAudienceSource] = useState<'crm' | 'leads' | 'both' | 'ravena'>('crm');
+  const [audienceSource, setAudienceSource] = useState<'crm' | 'leads' | 'both' | 'ravena' | 'orphans'>('crm');
   const [crmCustomers, setCrmCustomers] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
   const [ravenaCustomers, setRavenaCustomers] = useState<any[]>([]);
+  const [orphanContacts, setOrphanContacts] = useState<any[]>([]);
+  const [orphanGroupFilter, setOrphanGroupFilter] = useState<string>("all");
+  const [orphanGroupNames, setOrphanGroupNames] = useState<string[]>([]);
   const [isLoadingAudience, setIsLoadingAudience] = useState(false);
   const [audienceLoaded, setAudienceLoaded] = useState(false);
+
 
   // CRM Filters (same as RFM tab)
   const [rfmFilter, setRfmFilter] = useState<string>("all");
@@ -534,7 +538,28 @@ export function MassTemplateDispatcher() {
         ravFrom += 1000;
       }
       setRavenaCustomers(allRavena);
+
+      // Fetch VIP orphan contacts (base de órfãos — não são clientes nem leads)
+      const allOrphans: any[] = [];
+      let orphFrom = 0;
+      while (true) {
+        const { data: orphPage, error: orphErr } = await supabase
+          .from('vip_orphan_contacts')
+          .select('id, phone, display_name, group_names, status, opted_out')
+          .eq('status', 'orphan')
+          .eq('opted_out', false)
+          .range(orphFrom, orphFrom + 999);
+        if (orphErr || !orphPage || orphPage.length === 0) break;
+        allOrphans.push(...orphPage);
+        if (orphPage.length < 1000) break;
+        orphFrom += 1000;
+      }
+      setOrphanContacts(allOrphans);
+      const orphGroups: string[] = [...new Set(allOrphans.flatMap((o: any) => o.group_names || []).filter(Boolean))].sort();
+      setOrphanGroupNames(orphGroups);
+
       setAudienceLoaded(true);
+
     } catch (err) { console.error(err); toast.error("Erro ao carregar audiência"); }
     finally { setIsLoadingAudience(false); }
   };
@@ -747,7 +772,31 @@ export function MassTemplateDispatcher() {
           email: c.email || undefined,
         });
       }
+    } else if (audienceSource === 'orphans') {
+      // Base de órfãos VIP — isolada, filtra por grupo e busca
+      for (const o of orphanContacts) {
+        if (!o.phone) continue;
+        const phone = (o.phone || '').replace(/\D/g, '');
+        if (!phone || phone.length < 8) continue;
+        if (orphanGroupFilter !== 'all' && !(o.group_names || []).includes(orphanGroupFilter)) continue;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          if (!(o.display_name || '').toLowerCase().includes(q) && !phone.includes(q)) continue;
+        }
+        const dk = dedupKey(phone);
+        if (addedPhones.has(dk)) continue;
+        addedPhones.add(dk);
+        const fullName = (o.display_name || '').trim();
+        list.push({
+          phone,
+          name: fullName || phone,
+          firstName: fullName.split(' ')[0] || '',
+          lastName: fullName.split(' ').slice(1).join(' '),
+          source: 'orphan',
+        });
+      }
     } else {
+
       if (audienceSource === 'crm' || audienceSource === 'both') {
         for (const c of crmCustomers) {
           if (!c.phone) continue;
@@ -826,7 +875,7 @@ export function MassTemplateDispatcher() {
     const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
 
     return finalList;
-  }, [crmCustomers, leads, ravenaCustomers, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter]);
+  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter]);
 
   // Recipients after applying cooldown exclusion (suffix-based to catch same person with different DDDs)
   const filteredRecipients = useMemo((): Recipient[] => {
@@ -1354,7 +1403,7 @@ export function MassTemplateDispatcher() {
 
     // Set audience source & filters
     if (data.audience_source) {
-      setAudienceSource(data.audience_source as 'crm' | 'leads' | 'both' | 'ravena');
+      setAudienceSource(data.audience_source as 'crm' | 'leads' | 'both' | 'ravena' | 'orphans');
     }
     if (data.audience_filters) {
       const f = data.audience_filters;
@@ -1762,6 +1811,8 @@ export function MassTemplateDispatcher() {
                 { value: 'leads' as const, label: 'Leads Captados', icon: FileSpreadsheet },
                 { value: 'both' as const, label: 'Ambos', icon: Zap },
                 { value: 'ravena' as const, label: '🌸 Ravena', icon: Store },
+                { value: 'orphans' as const, label: '👥 Base Órfãos', icon: Crown },
+
               ].map(s => (
                 <Button
                   key={s.value}
@@ -1876,6 +1927,16 @@ export function MassTemplateDispatcher() {
                   </SelectContent>
                 </Select>
               )}
+              {audienceSource === 'orphans' && (
+                <Select value={orphanGroupFilter} onValueChange={v => { setOrphanGroupFilter(v); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                  <SelectTrigger className="w-[220px] h-8 text-xs"><Crown className="h-3 w-3 mr-1" /><SelectValue placeholder="Grupo VIP" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os grupos</SelectItem>
+                    {orphanGroupNames.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+
               <Input
                 className="w-[200px] h-8 text-xs"
                 placeholder="Buscar nome ou telefone..."
