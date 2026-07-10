@@ -1239,6 +1239,13 @@ export function MassTemplateDispatcher() {
       return;
     }
 
+    // Block re-entrancy (double-click / duplicate invoke) while a save is running.
+    if (savingScheduledRef.current) {
+      toast.info("Salvamento já em andamento…");
+      return;
+    }
+    savingScheduledRef.current = true;
+
     const status = mode === 'schedule' ? 'scheduled' : 'scheduled_paused';
     const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
 
