@@ -195,6 +195,9 @@ export function MassTemplateDispatcher() {
   // Tracks the highest sent/failed seen for the dispatch currently being polled so
   // the displayed progress can never visually regress (defense against any backend race).
   const progressGuardRef = useRef<{ id: string | null; sent: number; failed: number }>({ id: null, sent: 0, failed: 0 });
+  // Re-entrancy guard: prevents a double-click / double-invoke from saving the
+  // same scheduled dispatch twice (which previously duplicated recipients).
+  const savingScheduledRef = useRef(false);
   const [testPhone, setTestPhone] = useState("");
   const [isTesting, setIsTesting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -1154,9 +1157,14 @@ export function MassTemplateDispatcher() {
           status: 'pending',
         }));
         for (let i = 0; i < recipientRows.length; i += 500) {
+          // upsert + ignoreDuplicates: guarded by the unique index
+          // (dispatch_id, phone). A re-run/retry can never duplicate a recipient.
           const { error: insErr } = await supabase
             .from('dispatch_recipients')
-            .insert(recipientRows.slice(i, i + 500));
+            .upsert(recipientRows.slice(i, i + 500), {
+              onConflict: 'dispatch_id,phone',
+              ignoreDuplicates: true,
+            });
           if (insErr) throw insErr;
         }
 
@@ -1231,6 +1239,13 @@ export function MassTemplateDispatcher() {
       return;
     }
 
+    // Block re-entrancy (double-click / duplicate invoke) while a save is running.
+    if (savingScheduledRef.current) {
+      toast.info("Salvamento já em andamento…");
+      return;
+    }
+    savingScheduledRef.current = true;
+
     const status = mode === 'schedule' ? 'scheduled' : 'scheduled_paused';
     const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
 
@@ -1270,8 +1285,14 @@ export function MassTemplateDispatcher() {
         if (updErr) throw updErr;
         dispatchId = editDispatchId;
 
-        // Replace recipients (delete old, insert new)
-        await supabase.from('dispatch_recipients').delete().eq('dispatch_id', dispatchId);
+        // Replace recipients: delete old, then insert new. The delete MUST
+        // succeed before we re-insert — otherwise the previous batch would stay
+        // and every recipient would be enqueued (and messaged) twice.
+        const { error: delErr } = await supabase
+          .from('dispatch_recipients')
+          .delete()
+          .eq('dispatch_id', dispatchId);
+        if (delErr) throw delErr;
       } else {
         const { data: dispatchData, error: dispErr } = await supabase
           .from('dispatch_history')
@@ -1282,7 +1303,8 @@ export function MassTemplateDispatcher() {
         dispatchId = dispatchData.id;
       }
 
-      // Save recipients
+      // Save recipients — upsert guarded by the unique index (dispatch_id, phone)
+      // so no re-save / retry can ever duplicate a recipient in the same dispatch.
       const recipientRows = allPhones.map(p => ({
         dispatch_id: dispatchId,
         phone: p,
@@ -1290,7 +1312,13 @@ export function MassTemplateDispatcher() {
         status: 'pending',
       }));
       for (let i = 0; i < recipientRows.length; i += 500) {
-        await supabase.from('dispatch_recipients').insert(recipientRows.slice(i, i + 500));
+        const { error: insErr } = await supabase
+          .from('dispatch_recipients')
+          .upsert(recipientRows.slice(i, i + 500), {
+            onConflict: 'dispatch_id,phone',
+            ignoreDuplicates: true,
+          });
+        if (insErr) throw insErr;
       }
 
       if (editDispatchId) {
@@ -1308,6 +1336,8 @@ export function MassTemplateDispatcher() {
     } catch (err) {
       console.error('Error saving scheduled dispatch:', err);
       toast.error("Erro ao salvar disparo");
+    } finally {
+      savingScheduledRef.current = false;
     }
   };
 
