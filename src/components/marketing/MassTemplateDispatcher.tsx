@@ -772,7 +772,31 @@ export function MassTemplateDispatcher() {
           email: c.email || undefined,
         });
       }
+    } else if (audienceSource === 'orphans') {
+      // Base de órfãos VIP — isolada, filtra por grupo e busca
+      for (const o of orphanContacts) {
+        if (!o.phone) continue;
+        const phone = (o.phone || '').replace(/\D/g, '');
+        if (!phone || phone.length < 8) continue;
+        if (orphanGroupFilter !== 'all' && !(o.group_names || []).includes(orphanGroupFilter)) continue;
+        if (searchQuery) {
+          const q = searchQuery.toLowerCase();
+          if (!(o.display_name || '').toLowerCase().includes(q) && !phone.includes(q)) continue;
+        }
+        const dk = dedupKey(phone);
+        if (addedPhones.has(dk)) continue;
+        addedPhones.add(dk);
+        const fullName = (o.display_name || '').trim();
+        list.push({
+          phone,
+          name: fullName || phone,
+          firstName: fullName.split(' ')[0] || '',
+          lastName: fullName.split(' ').slice(1).join(' '),
+          source: 'orphan',
+        });
+      }
     } else {
+
       if (audienceSource === 'crm' || audienceSource === 'both') {
         for (const c of crmCustomers) {
           if (!c.phone) continue;
