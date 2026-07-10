@@ -1743,8 +1743,20 @@ export default function Marketing() {
 
           {/* ── DISPAROS ── */}
           <TabsContent value="disparos" className="space-y-4">
-            <MassTemplateDispatcher />
+            <Tabs defaultValue="mass" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="mass" className="gap-1"><Send className="h-3.5 w-3.5" />Templates em Massa</TabsTrigger>
+                <TabsTrigger value="orphans" className="gap-1"><Users className="h-3.5 w-3.5" />Base de Órfãos & ROAS</TabsTrigger>
+              </TabsList>
+              <TabsContent value="mass" className="space-y-4">
+                <MassTemplateDispatcher />
+              </TabsContent>
+              <TabsContent value="orphans" className="space-y-4">
+                <OrphanDispatchPanel />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
+
 
           {/* ── AUTOMAÇÕES ── */}
           <TabsContent value="automations" className="space-y-4">
