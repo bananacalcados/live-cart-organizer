@@ -156,7 +156,7 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
       };
       syncParticipants();
     }
-  }, [fetchSnapshots, fetchLinkStats, fetchGroupsFromDb, campaignGroups, onRefreshGroups]);
+  }, [fetchSnapshots, fetchLinkStats, fetchCampaignStart, fetchGroupsFromDb, campaignGroups, onRefreshGroups]);
 
   // Auto-refresh polling every 30s
   useEffect(() => {
