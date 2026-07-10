@@ -120,6 +120,18 @@ export function CampaignDashboard({ targetGroups, allGroups: propGroups, links, 
     if (data) setLiveLinks(data);
   }, [campaignId]);
 
+  // Fetch campaign start date to scope snapshot deltas to this campaign's window
+  const [campaignStart, setCampaignStart] = useState<number | null>(null);
+  const fetchCampaignStart = useCallback(async () => {
+    if (!campaignId) return;
+    const { data } = await supabase
+      .from('group_campaigns')
+      .select('created_at')
+      .eq('id', campaignId)
+      .maybeSingle();
+    if (data?.created_at) setCampaignStart(new Date(data.created_at).getTime());
+  }, [campaignId]);
+
   // Initial sync: fetch group participant counts from WhatsApp on mount
   const initialSyncDone = useRef(false);
   useEffect(() => {
