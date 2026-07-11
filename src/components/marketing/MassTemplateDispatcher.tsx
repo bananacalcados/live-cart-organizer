@@ -1049,6 +1049,12 @@ export function MassTemplateDispatcher() {
     return Object.values(variables).some(v => v.mode !== '__static__');
   }, [variables]);
 
+  // Whether the template uses at least one "external field" variable (filled at
+  // trigger time via popup — e.g. a live link that changes each live).
+  const hasExternalVars = useMemo(() => {
+    return Object.values(variables).some(v => v.mode === '__external__');
+  }, [variables]);
+
   // Test send
   const handleTestSend = async () => {
     if (!selectedNumber) { toast.error("Selecione um número de WhatsApp primeiro"); return; }
