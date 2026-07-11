@@ -1715,7 +1715,7 @@ export default function TransparentCheckout() {
         .from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
       if (data?.value) {
         const config = data.value as any;
-        setInstallmentConfig({
+        setBaseInstallmentConfig({
           max_installments: config.max_installments || 12,
           interest_free_installments: config.interest_free_installments || 6,
           monthly_interest_rate: config.monthly_interest_rate || 2.49,
