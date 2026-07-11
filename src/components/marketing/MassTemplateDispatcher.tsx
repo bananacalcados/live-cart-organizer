@@ -214,6 +214,13 @@ export function MassTemplateDispatcher() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [campaignName, setCampaignName] = useState("");
   const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
+  // Split dispatch: divide the audience into N disjoint parts, each becoming its
+  // own dispatch (same template/variables) so each part can fire at a different
+  // time and prompt for its own external field value (e.g. a fresh live link).
+  const [splitCount, setSplitCount] = useState("2");
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+  const [splitParts, setSplitParts] = useState<{ mode: 'schedule' | 'paused'; date: string }[]>([]);
+  const [savingSplit, setSavingSplit] = useState(false);
 
   // Cooldown filter
   const [cooldownDays, setCooldownDays] = useState<string>("");
@@ -1042,6 +1049,12 @@ export function MassTemplateDispatcher() {
     return Object.values(variables).some(v => v.mode !== '__static__');
   }, [variables]);
 
+  // Whether the template uses at least one "external field" variable (filled at
+  // trigger time via popup — e.g. a live link that changes each live).
+  const hasExternalVars = useMemo(() => {
+    return Object.values(variables).some(v => v.mode === '__external__');
+  }, [variables]);
+
   // Test send
   const handleTestSend = async () => {
     if (!selectedNumber) { toast.error("Selecione um número de WhatsApp primeiro"); return; }
@@ -1391,6 +1404,128 @@ export function MassTemplateDispatcher() {
       savingScheduledRef.current = false;
     }
   };
+
+  // Open the split dialog, initializing one row per part (default: all paused).
+  const openSplitDialog = () => {
+    const n = Math.max(2, Math.min(10, Number(splitCount) || 2));
+    setSplitParts(Array.from({ length: n }, () => ({ mode: 'paused' as const, date: '' })));
+    setSplitDialogOpen(true);
+  };
+
+  // Deterministic round-robin split so every part is a comparable sample of the
+  // audience (same RFM/region/DDD mix) — ideal for testing the same template at
+  // different times. Slices are disjoint (a phone appears in exactly one part).
+  const splitPhonesRoundRobin = (phones: string[], n: number): string[][] => {
+    const parts: string[][] = Array.from({ length: n }, () => []);
+    const sorted = [...phones].sort();
+    sorted.forEach((p, i) => parts[i % n].push(p));
+    return parts;
+  };
+
+  // Save the audience split into N independent dispatches (one per part). Each
+  // part is a normal dispatch: it can be scheduled or left paused for manual
+  // trigger, and (crucially) keeps its own variables_config, so each part prompts
+  // for its own external field value at trigger time (fresh live link per part).
+  const handleSaveSplitDispatch = async () => {
+    if (!selectedTemplate || !selectedNumber) return;
+    const n = splitParts.length;
+    if (n < 2) return;
+
+    const allPhones = [...selectedPhones];
+    if (allPhones.length === 0) {
+      toast.error("Selecione pelo menos um destinatário");
+      return;
+    }
+    for (let i = 0; i < splitParts.length; i++) {
+      if (splitParts[i].mode === 'schedule' && !splitParts[i].date) {
+        toast.error(`Defina a data e hora da Parte ${i + 1}`);
+        return;
+      }
+    }
+
+    if (savingScheduledRef.current) {
+      toast.info("Salvamento já em andamento…");
+      return;
+    }
+    savingScheduledRef.current = true;
+    setSavingSplit(true);
+
+    const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
+    const slices = splitPhonesRoundRobin(allPhones, n);
+    const baseName = campaignName.trim() || selectedTemplate.name;
+
+    try {
+      let created = 0;
+      for (let i = 0; i < n; i++) {
+        const part = splitParts[i];
+        const slicePhones = slices[i];
+        if (slicePhones.length === 0) continue;
+
+        const status = part.mode === 'schedule' ? 'scheduled' : 'scheduled_paused';
+        const insertData: Record<string, any> = {
+          template_name: selectedTemplate.name,
+          campaign_name: `${baseName} — Parte ${i + 1}/${n}`,
+          template_language: selectedTemplate.language,
+          whatsapp_number_id: selectedNumber,
+          audience_source: audienceSource,
+          audience_filters: {
+            rfm: rfmFilter, state: stateFilter, city: cityFilter,
+            ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
+          } as any,
+          total_recipients: slicePhones.length,
+          rendered_message: renderedMessage || null,
+          variables_config: variables as any,
+          force_resend: forceResend,
+          status,
+          template_components: selectedTemplate.components as any,
+          has_dynamic_vars: hasDynamicVars,
+          header_media_url: headerMediaUrl || null,
+          template_category: selectedTemplate.category || 'MARKETING',
+        };
+        if (part.mode === 'schedule') {
+          insertData.scheduled_at = new Date(part.date).toISOString();
+        }
+
+        const { data: dispatchData, error: dispErr } = await supabase
+          .from('dispatch_history')
+          .insert(insertData as any)
+          .select('id')
+          .single();
+        if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
+        const dispatchId = dispatchData.id;
+
+        const recipientRows = slicePhones.map(p => ({
+          dispatch_id: dispatchId,
+          phone: p,
+          recipient_name: recipientMap.get(p)?.name || null,
+          status: 'pending',
+        }));
+        for (let j = 0; j < recipientRows.length; j += 500) {
+          const { error: insErr } = await supabase
+            .from('dispatch_recipients')
+            .upsert(recipientRows.slice(j, j + 500), {
+              onConflict: 'dispatch_id,phone',
+              ignoreDuplicates: true,
+            });
+          if (insErr) throw insErr;
+        }
+        created++;
+      }
+
+      toast.success(`✅ Público dividido em ${created} disparos — gerencie cada parte no histórico`);
+      setSplitDialogOpen(false);
+      setScheduleMode('none');
+      setHistoryKey(k => k + 1);
+    } catch (err) {
+      console.error('Error saving split dispatch:', err);
+      toast.error("Erro ao salvar disparo dividido");
+    } finally {
+      savingScheduledRef.current = false;
+      setSavingSplit(false);
+    }
+  };
+
+
 
   // Handle duplicate from history
   const handleDuplicate = useCallback((data: DuplicateDispatchData) => {
@@ -2187,6 +2322,30 @@ export function MassTemplateDispatcher() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {!editDispatchId && (
+                  <div className="flex items-center gap-1 mr-1 rounded-md border px-2 py-1">
+                    <Label className="text-[11px] text-muted-foreground">Dividir em</Label>
+                    <Input
+                      type="number"
+                      min={2}
+                      max={10}
+                      value={splitCount}
+                      onChange={e => setSplitCount(e.target.value)}
+                      className="h-7 w-12 text-xs px-1 text-center"
+                    />
+                    <span className="text-[11px] text-muted-foreground">partes</span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 gap-1 text-xs ml-1"
+                      disabled={isSending || selectedCount === 0 || !selectedTemplate || (Number(splitCount) || 0) < 2}
+                      onClick={openSplitDialog}
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      Dividir
+                    </Button>
+                  </div>
+                )}
                 <Button
                   variant="outline"
                   className="gap-1.5 text-xs"
@@ -2304,6 +2463,95 @@ export function MassTemplateDispatcher() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Split Dispatch Dialog — divide audience into N parts, each its own dispatch */}
+      <Dialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              Dividir público em {splitParts.length} partes
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-2">
+              <Label className="text-sm">Nome da campanha (opcional)</Label>
+              <Input
+                placeholder="Ex: Convite Live"
+                value={campaignName}
+                onChange={e => setCampaignName(e.target.value)}
+                className="h-8 text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Cada parte fica com "— Parte X/{splitParts.length}". Divisão intercalada (amostras equivalentes), sem sobreposição de contatos.
+              </p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
+              <p className="font-medium">Template: <span className="font-mono">{selectedTemplate?.name}</span></p>
+              <p>Total selecionado: <span className="font-bold">{selectedCount}</span> · ≈ <span className="font-bold">{Math.ceil(selectedCount / Math.max(1, splitParts.length))}</span> por parte</p>
+            </div>
+
+            {hasExternalVars && (
+              <div className="rounded-md border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 p-2 text-[11px] text-amber-700 dark:text-amber-300 flex gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>
+                  Este template usa <strong>campo externo</strong> (ex.: link da live). Para trocar o link a cada horário, deixe as partes como <strong>Pausada</strong> e dispare manualmente pelo histórico — cada parte pedirá seu próprio link. Se agendar, o link precisa ser preenchido antes do horário, senão sai vazio.
+                </span>
+              </div>
+            )}
+
+            <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+              {splitParts.map((part, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-md border p-2">
+                  <Badge variant="outline" className="shrink-0">Parte {i + 1}</Badge>
+                  <Select
+                    value={part.mode}
+                    onValueChange={(v) => setSplitParts(prev => prev.map((p, idx) => idx === i ? { ...p, mode: v as 'schedule' | 'paused' } : p))}
+                  >
+                    <SelectTrigger className="h-8 w-[130px] text-xs shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="paused">⏸️ Pausada</SelectItem>
+                      <SelectItem value="schedule">📅 Agendar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {part.mode === 'schedule' && (
+                    <Input
+                      type="datetime-local"
+                      value={part.date}
+                      onChange={e => setSplitParts(prev => prev.map((p, idx) => idx === i ? { ...p, date: e.target.value } : p))}
+                      className="h-8 text-xs flex-1"
+                    />
+                  )}
+                  {part.mode === 'paused' && (
+                    <span className="text-[11px] text-muted-foreground flex-1">Dispara manualmente pelo histórico</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox
+                id="force-resend-split"
+                checked={forceResend}
+                onCheckedChange={(v) => setForceResend(!!v)}
+              />
+              <Label htmlFor="force-resend-split" className="text-sm font-medium text-amber-600 dark:text-amber-400 cursor-pointer">
+                ⚠️ Forçar reenvio (envia mesmo para quem já recebeu hoje)
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSplitDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveSplitDispatch} disabled={savingSplit} className="gap-1">
+              {savingSplit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
+              Criar {splitParts.length} disparos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
       {/* Schedule/Pause Dialog */}
       <Dialog open={scheduleMode !== 'none'} onOpenChange={(o) => !o && setScheduleMode('none')}>
