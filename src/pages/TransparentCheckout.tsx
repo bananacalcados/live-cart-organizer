@@ -1557,11 +1557,12 @@ export default function TransparentCheckout() {
     if (!evId) { setEventInstallment(null); return; }
     (async () => {
       try {
+        // SECURITY DEFINER RPC: expõe só os campos de parcelamento do evento,
+        // para que clientes NÃO logados (anônimos) também recebam o override
+        // "Nx sem juros". A tabela events é bloqueada por RLS para anon, então
+        // um SELECT direto retornava null e o cliente via 10x COM juros.
         const { data } = await supabase
-          .from("events")
-          .select("installment_min_value, installment_max")
-          .eq("id", evId)
-          .maybeSingle();
+          .rpc("get_event_installment_config", { p_event_id: evId });
         const maxInst = Number((data as any)?.installment_max || 0);
         if (!maxInst) { setEventInstallment(null); return; }
         const minVal = Number((data as any)?.installment_min_value || 0);
