@@ -884,6 +884,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      discardRecordingRef.current = false;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) audioChunksRef.current.push(event.data);
@@ -892,36 +893,25 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        setIsRecording(false);
+
+        // Cancelled: discard everything, never send.
+        if (discardRecordingRef.current) {
+          audioChunksRef.current = [];
+          setRecordingTime(0);
+          return;
+        }
 
         const ct = getAudioContentType(mimeType);
         const ext = getAudioExtension(mimeType);
         const audioBlob = new Blob(audioChunksRef.current, { type: ct });
-        if (audioBlob.size === 0) { setIsRecording(false); setRecordingTime(0); return; }
+        if (audioBlob.size === 0) { setRecordingTime(0); return; }
 
         const file = new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: ct });
-        const mediaUrl = await uploadMediaToStorage(file);
-        if (mediaUrl) {
-          const result = await sendMessage(phone, '[Áudio]', 'audio', mediaUrl);
-          if (result.success) {
-            await supabase.from('whatsapp_messages').insert({
-              phone: normalizedPhone,
-              message: '[Áudio]',
-              direction: 'outgoing',
-              status: 'sent',
-              media_type: 'audio',
-              media_url: mediaUrl,
-              message_id: result.messageId || null,
-              whatsapp_number_id: effectiveNumberId || null,
-              sender_user_id: currentUserId || null,
-            });
-            updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
-            await loadMessages();
-          }
-        } else {
-          toast.error('Erro ao enviar áudio');
-        }
-        setIsRecording(false);
-        setRecordingTime(0);
+        // Instead of sending immediately, show a preview so the user can listen,
+        // then choose to send or discard.
+        setAudioPreviewUrl(URL.createObjectURL(audioBlob));
+        setAudioPreviewFile(file);
       };
 
       mediaRecorder.start();
@@ -933,17 +923,73 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     }
   }, [phone, normalizedPhone, order.id, updateOrder, effectiveNumberId]);
 
+  // Stop recording → moves to preview (does NOT send).
   const stopRecording = useCallback(() => {
+    discardRecordingRef.current = false;
     if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
   }, []);
 
+  // Cancel while recording → discard, never send.
   const cancelRecording = useCallback(() => {
-    audioChunksRef.current = [];
+    discardRecordingRef.current = true;
     if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setIsRecording(false);
     setRecordingTime(0);
   }, []);
+
+  // Discard the recorded preview (before sending).
+  const discardAudioPreview = useCallback(() => {
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+    setAudioPreviewUrl(null);
+    setAudioPreviewFile(null);
+    setIsPlayingPreview(false);
+    setRecordingTime(0);
+    audioChunksRef.current = [];
+  }, [audioPreviewUrl]);
+
+  const togglePreviewPlayback = useCallback(() => {
+    const el = audioPreviewRef.current;
+    if (!el) return;
+    if (isPlayingPreview) {
+      el.pause();
+      setIsPlayingPreview(false);
+    } else {
+      el.play();
+      setIsPlayingPreview(true);
+    }
+  }, [isPlayingPreview]);
+
+  // Send the previewed audio.
+  const sendAudioPreview = useCallback(async () => {
+    if (!audioPreviewFile || isSendingAudio) return;
+    setIsSendingAudio(true);
+    try {
+      const mediaUrl = await uploadMediaToStorage(audioPreviewFile);
+      if (!mediaUrl) { toast.error('Erro ao enviar áudio'); return; }
+      const result = await sendMessage(phone, '[Áudio]', 'audio', mediaUrl);
+      if (result.success) {
+        await supabase.from('whatsapp_messages').insert({
+          phone: normalizedPhone,
+          message: '[Áudio]',
+          direction: 'outgoing',
+          status: 'sent',
+          media_type: 'audio',
+          media_url: mediaUrl,
+          message_id: result.messageId || null,
+          whatsapp_number_id: effectiveNumberId || null,
+          sender_user_id: currentUserId || null,
+        });
+        updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
+        await loadMessages();
+        discardAudioPreview();
+      } else {
+        toast.error('Erro ao enviar áudio');
+      }
+    } finally {
+      setIsSendingAudio(false);
+    }
+  }, [audioPreviewFile, isSendingAudio, phone, normalizedPhone, effectiveNumberId, currentUserId, order.id, updateOrder, loadMessages, discardAudioPreview]);
 
   const formatRecordingTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
