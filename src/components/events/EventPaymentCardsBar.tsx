@@ -459,7 +459,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
               </div>
             )}
           </div>
-        ) : /* Cards de pedidos (Aguardando / Pagos) */ list.length === 0 ? (
+        ) : /* Cards de pedidos (Aguardando / Pagos) */ cards.length === 0 ? (
           <div className="text-xs text-muted-foreground py-2 px-1">
             {filter === "paid"
               ? "Nenhum pagamento concluído neste evento ainda."
