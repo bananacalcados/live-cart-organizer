@@ -352,6 +352,7 @@ const Events = () => {
     setMetaTemplateHeaderVar((event as any).meta_template_header_variable || null);
     setInitialMessageEnabled(Boolean((event as any).initial_message_enabled));
     setInitialMessageBlocks(((event as any).initial_message_blocks as string[]) || []);
+    setFollowupTemplates(((event as any).followup_templates as FollowupTemplate[]) || []);
     setDialogOpen(true);
   };
 
