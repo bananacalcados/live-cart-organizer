@@ -275,12 +275,13 @@ serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    const { dispatchId } = await req.json().catch(() => ({}));
+    const { dispatchId, testPhone, externalOverrides } = await req.json().catch(() => ({}));
     if (!dispatchId) {
       return new Response(JSON.stringify({ error: 'dispatchId required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    const isTest = typeof testPhone === 'string' && testPhone.replace(/\D/g, '').length >= 8;
 
     // Load dispatch metadata once
     const { data: dispatch, error: dispErr } = await supabase
