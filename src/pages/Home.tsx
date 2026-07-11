@@ -100,6 +100,8 @@ export default function Home() {
   const { toast } = useToast();
   const { session, isReady } = useAuthReady();
   const [allowedModules, setAllowedModules] = useState<string[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!isReady) return;
