@@ -544,6 +544,17 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
 
       {/* DM do Instagram (quando não há WhatsApp) */}
       {igHandle && <InstagramDMChat open={igOpen} onOpenChange={setIgOpen} username={igHandle} />}
+
+      {/* Detalhes completos do pedido pago */}
+      {detailsOrder && (
+        <OrderDetailsDialog
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+          orderId={detailsOrder.id}
+          fallbackWhatsapp={detailsOrder.customer?.whatsapp}
+          fallbackInstagram={detailsOrder.customer?.instagram_handle}
+        />
+      )}
     </div>
   );
 }
