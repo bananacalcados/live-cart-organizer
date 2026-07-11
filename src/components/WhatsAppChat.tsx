@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +37,7 @@ import { OrderDialogDb } from "./OrderDialogDb";
 import type { DbOrder } from "@/types/database";
 import { MessageStatusIcon } from "./chat/MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./chat/WhatsAppMediaAttachment";
+import type { FollowupTemplate } from "./events/EventFollowupTemplates";
 
 interface Message {
   id: string;
@@ -138,6 +139,11 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<MetaTemplate | null>(null);
   const [templateParamValues, setTemplateParamValues] = useState<string[]>([]);
 
+  // ── Follow-up (2ª/3ª) Meta templates configured on the event ──
+  const [followupTemplates, setFollowupTemplates] = useState<FollowupTemplate[]>([]);
+  const [eventMetaNumberId, setEventMetaNumberId] = useState<string | null>(null);
+  const [sendingFollowupId, setSendingFollowupId] = useState<string | null>(null);
+
   // Audio recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -146,6 +152,24 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
+
+  // Load this event's follow-up templates (2nd/3rd) + its Meta instance.
+  const eventId = dbOrder?.event_id ?? null;
+  useEffect(() => {
+    if (!eventId) { setFollowupTemplates([]); setEventMetaNumberId(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("events")
+        .select("followup_templates, whatsapp_number_id")
+        .eq("id", eventId)
+        .maybeSingle();
+      if (cancelled) return;
+      setFollowupTemplates((((data as any)?.followup_templates as FollowupTemplate[]) || []).filter((t) => t?.templateName));
+      setEventMetaNumberId((data as any)?.whatsapp_number_id || null);
+    })();
+    return () => { cancelled = true; };
+  }, [eventId]);
 
   // Load AI pause state from order store
   useEffect(() => {
@@ -777,6 +801,71 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     t.status === 'APPROVED' && t.name.toLowerCase().includes(templateSearch.toLowerCase())
   );
 
+  // ── Follow-up template token resolution (mirrors livete-start-order) ──
+  const resolveFollowupToken = (token: string): string => {
+    if (!/^\{[a-z_]+\}$/i.test(token)) return token || ''; // free text passes through
+    const products = order.products || [];
+    const subtotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
+    const igHandle = order.instagramHandle?.trim()
+      ? (order.instagramHandle.startsWith('@') ? order.instagramHandle : `@${order.instagramHandle}`)
+      : '';
+    const fullName = (dbOrder?.customer?.instagram_handle || igHandle || '').replace('@', '');
+    const checkoutLink = order.cartLink || `https://checkout.bananacalcados.com.br/checkout/order/${order.id}`;
+    switch (token) {
+      case '{customer_name}': return igHandle || fullName || '';
+      case '{customer_first_name}': return fullName.split(' ')[0] || '';
+      case '{instagram}': return igHandle;
+      case '{products}': return products.map((p) => `${p.quantity}x ${p.title}`).join(', ');
+      case '{products_short}': return products.map((p) => `${p.quantity}x ${p.title}`).join(', ');
+      case '{checkout_link}': return checkoutLink;
+      case '{subtotal}': return `R$${subtotal.toFixed(2)}`;
+      case '{discount}': return 'R$0.00';
+      case '{total}': return `R$${subtotal.toFixed(2)}`;
+      case '{order_id}': return String(order.id).slice(0, 8);
+      default: return '';
+    }
+  };
+
+  const handleSendFollowupTemplate = async (tpl: FollowupTemplate) => {
+    if (!tpl.templateName) { toast.error('Template não configurado'); return; }
+    const numberId = effectiveNumberId || eventMetaNumberId;
+    if (!numberId) { toast.error('Nenhuma instância Meta vinculada a esta conversa.'); return; }
+    const digits = (normalizedPhone || '').replace(/\D/g, '');
+    const e164 = digits.startsWith('55') ? digits : `55${digits}`;
+    setSendingFollowupId(tpl.id);
+    try {
+      const bodyParameters = (tpl.bodyVariables || []).map(resolveFollowupToken);
+      const headerParameter = tpl.headerVariable ? resolveFollowupToken(tpl.headerVariable) : undefined;
+      const { data, error } = await supabase.functions.invoke('meta-template-send', {
+        body: {
+          phone: e164,
+          whatsappNumberId: numberId,
+          templateName: tpl.templateName,
+          language: tpl.language || 'pt_BR',
+          bodyParameters,
+          headerParameter,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : 'Erro ao enviar template');
+      // Pause AI after a manual send (same rule as normal sends).
+      await supabase
+        .from('automation_ai_sessions')
+        .update({ is_active: false })
+        .eq('phone', e164)
+        .eq('is_active', true);
+      toast.success(`"${tpl.label}" enviado!`);
+      loadMessages();
+    } catch (err) {
+      const { extractEdgeError } = await import('@/lib/edgeFunctionError');
+      const detail = await extractEdgeError(err, '');
+      toast.error(detail ? `Erro ao enviar template: ${detail}` : 'Erro ao enviar template de acompanhamento');
+    } finally {
+      setSendingFollowupId(null);
+    }
+  };
+
+
   // ── Audio Recording ──
   const startRecording = useCallback(async () => {
     try {
@@ -916,6 +1005,40 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
         >
           <ShoppingBag className="h-4 w-4" />
         </Button>
+
+        {/* Disparar 2ª/3ª mensagem de template Meta (configurada no evento) */}
+        {followupTemplates.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/10 h-8 w-8"
+                title="Disparar template de acompanhamento"
+                disabled={!!sendingFollowupId}
+              >
+                {sendingFollowupId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="text-xs">Templates de acompanhamento</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {followupTemplates.map((tpl) => (
+                <DropdownMenuItem
+                  key={tpl.id}
+                  onClick={() => handleSendFollowupTemplate(tpl)}
+                  disabled={!!sendingFollowupId}
+                  className="flex-col items-start gap-0.5 cursor-pointer"
+                >
+                  <span className="font-medium text-sm">{tpl.label}</span>
+                  <span className="text-xs text-muted-foreground line-clamp-1">{tpl.templateName}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+
 
 
         <Button

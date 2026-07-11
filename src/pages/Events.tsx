@@ -40,6 +40,7 @@ import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { MetaTemplateConfigurator } from "@/components/events/MetaTemplateConfigurator";
 import { InitialMessageEditor } from "@/components/events/InitialMessageEditor";
+import { EventFollowupTemplates, type FollowupTemplate } from "@/components/events/EventFollowupTemplates";
 import { EventSetupWizard, EVENT_DRAFT_NAME } from "@/components/events/EventSetupWizard";
 import { ParticipantScorePanel } from "@/components/events/ParticipantScorePanel";
 import { DbEvent } from "@/types/database";
@@ -87,6 +88,7 @@ const Events = () => {
   const [metaTemplateHeaderVar, setMetaTemplateHeaderVar] = useState<string | null>(null);
   const [initialMessageEnabled, setInitialMessageEnabled] = useState<boolean>(false);
   const [initialMessageBlocks, setInitialMessageBlocks] = useState<string[]>([]);
+  const [followupTemplates, setFollowupTemplates] = useState<FollowupTemplate[]>([]);
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
   const [copiedEventId, setCopiedEventId] = useState<string | null>(null);
@@ -278,6 +280,7 @@ const Events = () => {
         manual_pos_routing: manualPosRouting,
         initial_message_enabled: initialMessageEnabled,
         initial_message_blocks: initialMessageBlocks,
+        followup_templates: followupTemplates,
         ...metaTemplateFields,
       } as any);
     } else {
@@ -293,6 +296,7 @@ const Events = () => {
           automation_enabled: automationEnabled,
           initial_message_enabled: initialMessageEnabled,
           initial_message_blocks: initialMessageBlocks,
+          followup_templates: followupTemplates,
           start_date: startDate || null,
           end_date: endDate || null,
           ...metaTemplateFields,
@@ -324,6 +328,7 @@ const Events = () => {
     setMetaTemplateHeaderVar(null);
     setInitialMessageEnabled(false);
     setInitialMessageBlocks([]);
+    setFollowupTemplates([]);
     setEditingEvent(null);
   };
 
@@ -347,6 +352,7 @@ const Events = () => {
     setMetaTemplateHeaderVar((event as any).meta_template_header_variable || null);
     setInitialMessageEnabled(Boolean((event as any).initial_message_enabled));
     setInitialMessageBlocks(((event as any).initial_message_blocks as string[]) || []);
+    setFollowupTemplates(((event as any).followup_templates as FollowupTemplate[]) || []);
     setDialogOpen(true);
   };
 
@@ -639,6 +645,13 @@ const Events = () => {
                            setMetaTemplateBodyVars(next.bodyVariables);
                            setMetaTemplateHeaderVar(next.headerVariable);
                          }}
+                       />
+                     )}
+                     {channelPreferences.includes("meta_whatsapp") && (
+                       <EventFollowupTemplates
+                         whatsappNumberId={selectedWhatsAppId && selectedWhatsAppId !== "none" ? selectedWhatsAppId : null}
+                         templates={followupTemplates}
+                         onChange={setFollowupTemplates}
                        />
                      )}
                   <InitialMessageEditor

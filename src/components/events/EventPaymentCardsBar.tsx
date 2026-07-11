@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw } from "lucide-react";
+import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DbOrder } from "@/types/database";
 import { Order } from "@/types/order";
@@ -8,6 +8,7 @@ import { getOrderFinalValue } from "@/lib/orderTotal";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -92,7 +93,13 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const [failedAttempts, setFailedAttempts] = useState<FailedAttempt[]>([]);
   const [loadingErrors, setLoadingErrors] = useState(false);
 
+  // Team-shared pinned conversations + checkout-link step per order.
+  const currentUserId = useCurrentUserId();
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+  const [stepByOrder, setStepByOrder] = useState<Record<string, number>>({});
+
   const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
+
 
   const handleCardClick = (order: DbOrder) => {
     const phone = order.customer?.whatsapp?.replace(/\D/g, "");
@@ -165,6 +172,80 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
     if (filter === "errors") loadErrors();
   }, [filter, loadErrors]);
 
+  // ── Load team-shared pins for the currently listed orders ──
+  const loadPins = useCallback(async () => {
+    if (orderIds.length === 0) { setPinnedIds(new Set()); return; }
+    const next = new Set<string>();
+    const batchSize = 100;
+    for (let i = 0; i < orderIds.length; i += batchSize) {
+      const batch = orderIds.slice(i, i + batchSize);
+      const { data } = await supabase
+        .from("event_pinned_conversations")
+        .select("order_id")
+        .in("order_id", batch);
+      for (const row of (data || []) as { order_id: string }[]) next.add(row.order_id);
+    }
+    setPinnedIds(next);
+  }, [orderIds]);
+
+  useEffect(() => { loadPins(); }, [loadPins]);
+
+  const togglePin = useCallback(async (order: DbOrder) => {
+    const isPinned = pinnedIds.has(order.id);
+    // Optimistic update
+    setPinnedIds((prev) => {
+      const next = new Set(prev);
+      if (isPinned) next.delete(order.id); else next.add(order.id);
+      return next;
+    });
+    if (isPinned) {
+      await supabase.from("event_pinned_conversations").delete().eq("order_id", order.id);
+    } else {
+      await supabase.from("event_pinned_conversations").insert({
+        order_id: order.id,
+        event_id: (order as any).event_id ?? null,
+        pinned_by: currentUserId || null,
+      } as never);
+    }
+    loadPins();
+  }, [pinnedIds, currentUserId, loadPins]);
+
+  // ── Compute checkout-link step (1/2/3) for listed non-paid orders ──
+  useEffect(() => {
+    const ids = orders.filter((o) => !isOrderMarkedPaid(o)).map((o) => o.id);
+    if (ids.length === 0) { setStepByOrder({}); return; }
+    let cancelled = false;
+    (async () => {
+      const startedMap: Record<string, boolean> = {};
+      for (const o of orders) startedMap[o.id] = !!(o as any).checkout_started_at;
+      const map: Record<string, number> = {};
+      const batchSize = 100;
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const batch = ids.slice(i, i + batchSize);
+        const { data } = await supabase
+          .from("customer_registrations")
+          .select("order_id, full_name, cpf, whatsapp, cep, address, city, state")
+          .in("order_id", batch);
+        const byOrder = new Map<string, any>();
+        for (const r of (data || []) as any[]) byOrder.set(r.order_id, r);
+        for (const id of batch) {
+          const reg = byOrder.get(id);
+          const notPlaceholder = (v?: string | null, ph?: string) =>
+            !!(v && v.trim() && (!ph || v.trim().toUpperCase() !== ph.toUpperCase()));
+          const hasIdentification = !!reg && notPlaceholder(reg.full_name) && notPlaceholder(reg.cpf) && notPlaceholder(reg.whatsapp);
+          const hasAddress = !!reg
+            && notPlaceholder(reg.cep) && reg.cep?.replace(/\D/g, "") !== "00000000"
+            && notPlaceholder(reg.address, "Pendente")
+            && notPlaceholder(reg.city, "Pendente")
+            && notPlaceholder(reg.state);
+          map[id] = hasAddress ? 3 : hasIdentification ? 2 : startedMap[id] ? 1 : 0;
+        }
+      }
+      if (!cancelled) setStepByOrder(map);
+    })();
+    return () => { cancelled = true; };
+  }, [orders]);
+
   const { awaiting, paid } = useMemo(() => {
     const awaitingList: DbOrder[] = [];
     const paidList: DbOrder[] = [];
@@ -177,14 +258,20 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
         awaitingList.push(o);
       }
     }
-    const sortByDate = (a: DbOrder, b: DbOrder) =>
-      new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
-    awaitingList.sort(sortByDate);
-    paidList.sort(sortByDate);
+    // Pinned first, then by date. Team-shared pins keep priority cards at the top.
+    const sortByPinThenDate = (a: DbOrder, b: DbOrder) => {
+      const pa = pinnedIds.has(a.id) ? 1 : 0;
+      const pb = pinnedIds.has(b.id) ? 1 : 0;
+      if (pa !== pb) return pb - pa;
+      return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
+    };
+    awaitingList.sort(sortByPinThenDate);
+    paidList.sort(sortByPinThenDate);
     return { awaiting: awaitingList, paid: paidList };
-  }, [orders]);
+  }, [orders, pinnedIds]);
 
   const list = filter === "paid" ? paid : awaiting;
+
 
   return (
     <div className="sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40">
@@ -325,26 +412,52 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
               const value = getOrderFinalValue(order);
               // Pisca quando há mensagem do cliente não visualizada (apenas aguardando).
               const unread = !paidCard && !!order.has_unread_messages;
+              const isPinned = pinnedIds.has(order.id);
+              // "SEM RESPOSTA": enviamos o template mas o cliente nunca respondeu.
+              const noResponse = !paidCard && !!order.last_sent_message_at && !order.last_customer_message_at;
+              const step = paidCard ? 0 : (stepByOrder[order.id] ?? 0);
               return (
-                <button
+                <div
                   key={order.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleCardClick(order)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleCardClick(order); }}
                   title={unread ? "Mensagem não lida — abrir conversa" : "Abrir conversa"}
                   className={cn(
-                    "group relative flex flex-col gap-1 min-w-[200px] max-w-[240px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0",
+                    "group relative flex flex-col gap-1 min-w-[210px] max-w-[250px] min-h-[104px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0 cursor-pointer",
                     paidCard
                       ? "bg-stage-paid/10 border-stage-paid/40 hover:bg-stage-paid/20"
                       : "bg-neutral-900 text-white border-l-4 border-l-yellow-400 border-y-neutral-700 border-r-neutral-700 hover:bg-neutral-800",
                     unread && "animate-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-background",
+                    isPinned && "ring-2 ring-sky-400 ring-offset-2 ring-offset-background",
                   )}
                 >
                   {unread && (
-                    <span className="absolute -top-1.5 -right-1.5 flex h-3.5 w-3.5">
+                    <span className="absolute -top-1.5 -left-1.5 flex h-3.5 w-3.5">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
                       <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-yellow-400" />
                     </span>
                   )}
-                  <div className="flex items-center gap-1.5 min-w-0">
+
+                  {/* Fixar conversa (compartilhado com a equipe) */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); togglePin(order); }}
+                    title={isPinned ? "Desafixar conversa" : "Fixar conversa"}
+                    className={cn(
+                      "absolute top-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full transition-colors",
+                      isPinned
+                        ? "bg-sky-500 text-white"
+                        : paidCard
+                          ? "bg-black/5 text-muted-foreground hover:bg-black/10"
+                          : "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white",
+                    )}
+                  >
+                    <Pin className={cn("h-3.5 w-3.5", isPinned && "fill-current")} />
+                  </button>
+
+                  <div className="flex items-center gap-1.5 min-w-0 pr-7">
                     <span
                       className={cn(
                         "flex h-5 w-5 items-center justify-center rounded-full shrink-0",
@@ -374,11 +487,37 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                   >
                     {paidCard ? "PAGO • " : "Aguardando • "}R$ {value.toFixed(2)}
                   </span>
-                </button>
+
+                  {/* Tags: SEM RESPOSTA + Etapa do link */}
+                  {(noResponse || step > 0) && (
+                    <div className="mt-auto flex flex-wrap items-center gap-1 pt-0.5">
+                      {noResponse && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 text-red-300 border border-red-400/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+                          <MessageSquareOff className="h-2.5 w-2.5" />
+                          Sem resposta
+                        </span>
+                      )}
+                      {step > 0 && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold",
+                            paidCard
+                              ? "bg-primary/10 text-primary border border-primary/30"
+                              : "bg-sky-400/15 text-sky-300 border border-sky-400/40",
+                          )}
+                        >
+                          <LinkIcon className="h-2.5 w-2.5" />
+                          Etapa {step}/3
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
         )}
+
       </div>
 
       {/* Chat de WhatsApp na instância da conversa */}
