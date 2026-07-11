@@ -513,6 +513,55 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     }
   };
 
+  // Open the test dialog for a saved dispatch. Pre-fills external fields with the
+  // value already stored (if any), so the user can confirm/adjust the live link.
+  const handleOpenTest = (dispatchId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const dispatch = dispatches.find(d => d.id === dispatchId);
+    const cfg = (dispatch?.variables_config || {}) as Record<string, any>;
+    const fields = Object.entries(cfg)
+      .filter(([, vc]) => vc && vc.mode === '__external__')
+      .map(([key, vc]) => ({ key, label: (vc.staticValue || 'Campo externo') as string }));
+    setTestDialog({ dispatchId, templateName: dispatch?.template_name || '', fields });
+    setTestExternalValues(Object.fromEntries(
+      fields.map(f => [f.key, (cfg[f.key]?.externalValue || '') as string])
+    ));
+    setTestPhone("");
+  };
+
+  // Fire a single test message via the dispatch-worker test path.
+  const runTest = async () => {
+    if (!testDialog) return;
+    if (testPhone.replace(/\D/g, '').length < 8) {
+      toast.error("Informe um número de teste válido");
+      return;
+    }
+    setTestSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('dispatch-worker', {
+        body: {
+          dispatchId: testDialog.dispatchId,
+          testPhone: testPhone.replace(/\D/g, ''),
+          externalOverrides: testExternalValues,
+        },
+      });
+      if (error || data?.success === false) {
+        throw new Error(data?.error || error?.message || 'Falha no envio de teste');
+      }
+      toast.success("✅ Teste enviado! Confira no WhatsApp de teste.");
+      setTestDialog(null);
+      setTestExternalValues({});
+      setTestPhone("");
+    } catch (err) {
+      console.error('Test send error:', err);
+      toast.error("Erro ao enviar teste: " + (err as Error).message);
+    } finally {
+      setTestSending(false);
+    }
+  };
+
+
+
   const handleCancelScheduled = async (dispatchId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     await supabase.from('dispatch_history').update({ status: 'cancelled' }).eq('id', dispatchId);
