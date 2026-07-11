@@ -6,6 +6,7 @@ import { Order } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { getOrderFinalValue } from "@/lib/orderTotal";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
+import { OrderDetailsDialog } from "@/components/OrderDetailsDialog";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
