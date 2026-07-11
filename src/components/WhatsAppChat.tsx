@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
+import { OrderDialogDb } from "./OrderDialogDb";
 import type { DbOrder } from "@/types/database";
 import { MessageStatusIcon } from "./chat/MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./chat/WhatsAppMediaAttachment";
@@ -113,7 +114,10 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [aiPaused, setAiPaused] = useState(false);
   const [togglingAiPause, setTogglingAiPause] = useState(false);
   const [fichaOpen, setFichaOpen] = useState(false);
+  const [editOrderOpen, setEditOrderOpen] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
+  const dbOrders = useDbOrderStore((s) => s.orders);
+  const dbOrder = useMemo(() => dbOrders.find((o) => o.id === order.id) || null, [dbOrders, order.id]);
   const { getTemplatesByStage, templates } = useTemplateStore();
   const { selectedNumberId, fetchNumbers, getSelectedNumber, numbers } = useWhatsAppNumberStore();
 
@@ -906,6 +910,18 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           variant="ghost"
           size="icon"
           className="text-white hover:bg-white/10 h-8 w-8"
+          title="Editar pedido (produtos)"
+          disabled={!dbOrder}
+          onClick={() => setEditOrderOpen(true)}
+        >
+          <ShoppingBag className="h-4 w-4" />
+        </Button>
+
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-white hover:bg-white/10 h-8 w-8"
           title="Ver dados do cliente"
           onClick={() => setFichaOpen(true)}
         >
@@ -1373,6 +1389,15 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       </Dialog>
 
       <CustomerFichaDialog open={fichaOpen} onOpenChange={setFichaOpen} order={fichaOrder} />
+
+      {dbOrder && (
+        <OrderDialogDb
+          open={editOrderOpen}
+          onOpenChange={setEditOrderOpen}
+          editingOrder={dbOrder}
+          eventId={dbOrder.event_id}
+        />
+      )}
     </div>
   );
 }
