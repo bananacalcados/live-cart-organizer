@@ -491,7 +491,21 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                     {paidCard ? "PAGO • " : "Aguardando • "}R$ {value.toFixed(2)}
                   </span>
 
+                  {/* Ver todas as informações do pedido (pago) */}
+                  {paidCard && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setDetailsOrder(order); setDetailsOpen(true); }}
+                      className="mt-auto inline-flex items-center justify-center gap-1 rounded-md border border-stage-paid/40 bg-stage-paid/10 px-2 py-1 text-[10px] font-semibold text-stage-paid hover:bg-stage-paid/20 transition-colors"
+                      title="Ver todas as informações do pedido"
+                    >
+                      <ClipboardList className="h-3 w-3" />
+                      Ver pedido
+                    </button>
+                  )}
+
                   {/* Tags: SEM RESPOSTA + Etapa do link */}
+
                   {(noResponse || step > 0) && (
                     <div className="mt-auto flex flex-wrap items-center gap-1 pt-0.5">
                       {noResponse && (
