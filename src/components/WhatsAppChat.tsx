@@ -139,6 +139,11 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [selectedTemplate, setSelectedTemplate] = useState<MetaTemplate | null>(null);
   const [templateParamValues, setTemplateParamValues] = useState<string[]>([]);
 
+  // ── Follow-up (2ª/3ª) Meta templates configured on the event ──
+  const [followupTemplates, setFollowupTemplates] = useState<FollowupTemplate[]>([]);
+  const [eventMetaNumberId, setEventMetaNumberId] = useState<string | null>(null);
+  const [sendingFollowupId, setSendingFollowupId] = useState<string | null>(null);
+
   // Audio recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
