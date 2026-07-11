@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, memo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
