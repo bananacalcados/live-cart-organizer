@@ -801,6 +801,71 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     t.status === 'APPROVED' && t.name.toLowerCase().includes(templateSearch.toLowerCase())
   );
 
+  // ── Follow-up template token resolution (mirrors livete-start-order) ──
+  const resolveFollowupToken = (token: string): string => {
+    if (!/^\{[a-z_]+\}$/i.test(token)) return token || ''; // free text passes through
+    const products = order.products || [];
+    const subtotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
+    const igHandle = order.instagramHandle?.trim()
+      ? (order.instagramHandle.startsWith('@') ? order.instagramHandle : `@${order.instagramHandle}`)
+      : '';
+    const fullName = (dbOrder?.customer?.instagram_handle || igHandle || '').replace('@', '');
+    const checkoutLink = order.cartLink || `https://checkout.bananacalcados.com.br/checkout/order/${order.id}`;
+    switch (token) {
+      case '{customer_name}': return igHandle || fullName || '';
+      case '{customer_first_name}': return fullName.split(' ')[0] || '';
+      case '{instagram}': return igHandle;
+      case '{products}': return products.map((p) => `${p.quantity}x ${p.title}`).join(', ');
+      case '{products_short}': return products.map((p) => `${p.quantity}x ${p.title}`).join(', ');
+      case '{checkout_link}': return checkoutLink;
+      case '{subtotal}': return `R$${subtotal.toFixed(2)}`;
+      case '{discount}': return 'R$0.00';
+      case '{total}': return `R$${subtotal.toFixed(2)}`;
+      case '{order_id}': return String(order.id).slice(0, 8);
+      default: return '';
+    }
+  };
+
+  const handleSendFollowupTemplate = async (tpl: FollowupTemplate) => {
+    if (!tpl.templateName) { toast.error('Template não configurado'); return; }
+    const numberId = effectiveNumberId || eventMetaNumberId;
+    if (!numberId) { toast.error('Nenhuma instância Meta vinculada a esta conversa.'); return; }
+    const digits = (normalizedPhone || '').replace(/\D/g, '');
+    const e164 = digits.startsWith('55') ? digits : `55${digits}`;
+    setSendingFollowupId(tpl.id);
+    try {
+      const bodyParameters = (tpl.bodyVariables || []).map(resolveFollowupToken);
+      const headerParameter = tpl.headerVariable ? resolveFollowupToken(tpl.headerVariable) : undefined;
+      const { data, error } = await supabase.functions.invoke('meta-template-send', {
+        body: {
+          phone: e164,
+          whatsappNumberId: numberId,
+          templateName: tpl.templateName,
+          language: tpl.language || 'pt_BR',
+          bodyParameters,
+          headerParameter,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(typeof data.error === 'string' ? data.error : 'Erro ao enviar template');
+      // Pause AI after a manual send (same rule as normal sends).
+      await supabase
+        .from('automation_ai_sessions')
+        .update({ is_active: false })
+        .eq('phone', e164)
+        .eq('is_active', true);
+      toast.success(`"${tpl.label}" enviado!`);
+      loadMessages();
+    } catch (err) {
+      const { extractEdgeError } = await import('@/lib/edgeFunctionError');
+      const detail = await extractEdgeError(err, '');
+      toast.error(detail ? `Erro ao enviar template: ${detail}` : 'Erro ao enviar template de acompanhamento');
+    } finally {
+      setSendingFollowupId(null);
+    }
+  };
+
+
   // ── Audio Recording ──
   const startRecording = useCallback(async () => {
     try {
