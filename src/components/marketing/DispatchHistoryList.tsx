@@ -977,6 +977,45 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Campos externos — preenchidos no momento do disparo (ex.: link da live) */}
+      <Dialog open={!!externalDialog} onOpenChange={(o) => { if (!o && !externalSaving) { setExternalDialog(null); setExternalValues({}); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              🔗 Preencher campos do disparo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              Informe os valores abaixo. Eles serão inseridos na mensagem antes do envio.
+            </p>
+            {externalDialog?.fields.map(f => (
+              <div key={f.key} className="space-y-1">
+                <label className="text-xs font-medium">{f.label}</label>
+                <Input
+                  value={externalValues[f.key] || ''}
+                  onChange={e => setExternalValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  placeholder={f.label}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => { setExternalDialog(null); setExternalValues({}); }}
+              disabled={externalSaving}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={confirmExternalTrigger} disabled={externalSaving} className="gap-1">
+              {externalSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              Disparar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
