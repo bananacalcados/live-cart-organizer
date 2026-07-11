@@ -2096,6 +2096,14 @@ export default function TransparentCheckout() {
                           await cpUpdateOrder(orderId, {
                             shipping_cost: newShippingCost,
                             free_shipping: isPickup,
+                            // Persiste os detalhes do frete escolhido para consulta posterior
+                            shipping_info: {
+                              carrier: option.carrier,
+                              service: option.service,
+                              delivery_days: option.delivery_days,
+                              price: option.price,
+                              type: option.type,
+                            },
                           });
                         }
                         // Recalculate total

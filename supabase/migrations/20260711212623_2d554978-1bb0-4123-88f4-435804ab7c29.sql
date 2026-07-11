@@ -1,0 +1,2 @@
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS shipping_info jsonb;
+COMMENT ON COLUMN public.orders.shipping_info IS 'Detalhes do frete escolhido no checkout: { carrier, service, delivery_days, price, type }';

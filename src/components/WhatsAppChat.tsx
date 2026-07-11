@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
+import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { OrderDialogDb } from "./OrderDialogDb";
 import type { DbOrder } from "@/types/database";
 import { MessageStatusIcon } from "./chat/MessageStatusIcon";
@@ -115,6 +116,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [aiPaused, setAiPaused] = useState(false);
   const [togglingAiPause, setTogglingAiPause] = useState(false);
   const [fichaOpen, setFichaOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [editOrderOpen, setEditOrderOpen] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
   const dbOrders = useDbOrderStore((s) => s.orders);
@@ -1051,6 +1053,16 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           <UserCog className="h-4 w-4" />
         </Button>
 
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-white hover:bg-white/10 h-8 w-8"
+          title="Ver todas as informações do pedido"
+          onClick={() => setDetailsOpen(true)}
+        >
+          <ClipboardList className="h-4 w-4" />
+        </Button>
+
 
         <CreateSupportTicketDialog
           phone={phone}
@@ -1512,6 +1524,14 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       </Dialog>
 
       <CustomerFichaDialog open={fichaOpen} onOpenChange={setFichaOpen} order={fichaOrder} />
+
+      <OrderDetailsDialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        orderId={order.id}
+        fallbackWhatsapp={order.whatsapp}
+        fallbackInstagram={order.instagramHandle}
+      />
 
       {dbOrder && (
         <OrderDialogDb

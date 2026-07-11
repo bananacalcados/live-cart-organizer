@@ -1,11 +1,12 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff } from "lucide-react";
+import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DbOrder } from "@/types/database";
 import { Order } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { getOrderFinalValue } from "@/lib/orderTotal";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
+import { OrderDetailsDialog } from "@/components/OrderDetailsDialog";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
@@ -97,6 +98,8 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const currentUserId = useCurrentUserId();
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [stepByOrder, setStepByOrder] = useState<Record<string, number>>({});
+  const [detailsOrder, setDetailsOrder] = useState<DbOrder | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
 
@@ -488,7 +491,21 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                     {paidCard ? "PAGO • " : "Aguardando • "}R$ {value.toFixed(2)}
                   </span>
 
+                  {/* Ver todas as informações do pedido (pago) */}
+                  {paidCard && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setDetailsOrder(order); setDetailsOpen(true); }}
+                      className="mt-auto inline-flex items-center justify-center gap-1 rounded-md border border-stage-paid/40 bg-stage-paid/10 px-2 py-1 text-[10px] font-semibold text-stage-paid hover:bg-stage-paid/20 transition-colors"
+                      title="Ver todas as informações do pedido"
+                    >
+                      <ClipboardList className="h-3 w-3" />
+                      Ver pedido
+                    </button>
+                  )}
+
                   {/* Tags: SEM RESPOSTA + Etapa do link */}
+
                   {(noResponse || step > 0) && (
                     <div className="mt-auto flex flex-wrap items-center gap-1 pt-0.5">
                       {noResponse && (
@@ -527,6 +544,17 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
 
       {/* DM do Instagram (quando não há WhatsApp) */}
       {igHandle && <InstagramDMChat open={igOpen} onOpenChange={setIgOpen} username={igHandle} />}
+
+      {/* Detalhes completos do pedido pago */}
+      {detailsOrder && (
+        <OrderDetailsDialog
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+          orderId={detailsOrder.id}
+          fallbackWhatsapp={detailsOrder.customer?.whatsapp}
+          fallbackInstagram={detailsOrder.customer?.instagram_handle}
+        />
+      )}
     </div>
   );
 }
