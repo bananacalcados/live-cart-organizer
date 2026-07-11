@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
+import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { OrderDialogDb } from "./OrderDialogDb";
 import type { DbOrder } from "@/types/database";
 import { MessageStatusIcon } from "./chat/MessageStatusIcon";
