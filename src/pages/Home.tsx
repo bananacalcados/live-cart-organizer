@@ -200,6 +200,27 @@ export default function Home() {
           <StickyNotesBoard />
         )}
 
+        {loadError ? (
+          <div className="col-span-full flex flex-col items-center gap-4 py-16 text-center">
+            <p className="text-lg font-semibold" style={{ color: "hsl(0 0% 95%)" }}>
+              Não foi possível carregar seus módulos
+            </p>
+            <p className="text-sm max-w-md" style={{ color: "hsl(0 0% 55%)" }}>
+              A conexão com o servidor falhou momentaneamente. Isso costuma se resolver ao tentar de novo.
+            </p>
+            <Button
+              onClick={() => {
+                setLoadError(false);
+                setAllowedModules(null);
+                setReloadKey((k) => k + 1);
+              }}
+              style={{ background: "hsl(48 95% 50%)", color: "hsl(0 0% 5%)" }}
+              className="hover:opacity-90"
+            >
+              Tentar novamente
+            </Button>
+          </div>
+        ) : (
         <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {allowedModules === null ? (
             <div className="col-span-full flex justify-center py-12">
