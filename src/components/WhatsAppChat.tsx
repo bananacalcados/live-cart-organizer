@@ -1389,6 +1389,15 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       </Dialog>
 
       <CustomerFichaDialog open={fichaOpen} onOpenChange={setFichaOpen} order={fichaOrder} />
+
+      {dbOrder && (
+        <OrderDialogDb
+          open={editOrderOpen}
+          onOpenChange={setEditOrderOpen}
+          editingOrder={dbOrder}
+          eventId={dbOrder.event_id}
+        />
+      )}
     </div>
   );
 }
