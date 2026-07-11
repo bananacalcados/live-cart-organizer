@@ -240,6 +240,7 @@ function buildRenderedMessage(
       text = text.replace(/\{\{(\d+)\}\}/g, (_: string, n: string) => {
         const vc = variablesConfig[`header_${n}`];
         if (!vc) return `{{${n}}}`;
+        if (vc.mode === '__external__') return vc.externalValue ?? '';
         if (vc.mode === '__static__' || !hasDynamicVars || !recipient) return vc.staticValue || '';
         return resolveVariable(vc, recipient);
       });
@@ -250,6 +251,7 @@ function buildRenderedMessage(
       text = text.replace(/\{\{(\d+)\}\}/g, (_: string, n: string) => {
         const vc = variablesConfig[`body_${n}`];
         if (!vc) return `{{${n}}}`;
+        if (vc.mode === '__external__') return vc.externalValue ?? '';
         if (vc.mode === '__static__' || !hasDynamicVars || !recipient) return vc.staticValue || '';
         return resolveVariable(vc, recipient);
       });
