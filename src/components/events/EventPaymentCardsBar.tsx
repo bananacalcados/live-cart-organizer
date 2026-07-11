@@ -643,6 +643,16 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
           fallbackInstagram={detailsOrder.customer?.instagram_handle}
         />
       )}
+
+      {/* Todos os pedidos de um cliente + unificação de envio */}
+      {groupDialogOrders && (
+        <EventCustomerOrdersDialog
+          open={groupDialogOpen}
+          onOpenChange={(v) => { setGroupDialogOpen(v); if (!v) setGroupDialogOrders(null); }}
+          orders={groupDialogOrders}
+          onChanged={refreshOrders}
+        />
+      )}
     </div>
   );
 }
