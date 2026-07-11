@@ -1470,11 +1470,15 @@ export default function TransparentCheckout() {
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [isEligibleForPrize, setIsEligibleForPrize] = useState(false);
   const [liveCartRaw, setLiveCartRaw] = useState<{ items: any[]; customer: any } | null>(null);
-  const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
+  // Config base (app_settings) + override por evento são mantidos SEPARADAMENTE
+  // e combinados via useMemo. Assim o override do evento (ex.: "10x sem juros
+  // acima de R$ X") nunca é sobrescrito por uma resolução async concorrente.
+  const [baseInstallmentConfig, setBaseInstallmentConfig] = useState<InstallmentConfig>({
     max_installments: 12,
     interest_free_installments: 6,
     monthly_interest_rate: 2.49,
   });
+  const [eventInstallment, setEventInstallment] = useState<{ minVal: number; maxInst: number } | null>(null);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const paymentConfirmedRef = useRef(false);
 
