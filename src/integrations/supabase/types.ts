@@ -9942,6 +9942,9 @@ export type Database = {
           last_sent_message_at: string | null
           max_installments_override: number | null
           mercadopago_payment_id: string | null
+          merged_at: string | null
+          merged_by: string | null
+          merged_into_order_id: string | null
           meta_capi_purchase_sent_at: string | null
           mp_account_id: string | null
           notes: string | null
@@ -9990,6 +9993,9 @@ export type Database = {
           last_sent_message_at?: string | null
           max_installments_override?: number | null
           mercadopago_payment_id?: string | null
+          merged_at?: string | null
+          merged_by?: string | null
+          merged_into_order_id?: string | null
           meta_capi_purchase_sent_at?: string | null
           mp_account_id?: string | null
           notes?: string | null
@@ -10038,6 +10044,9 @@ export type Database = {
           last_sent_message_at?: string | null
           max_installments_override?: number | null
           mercadopago_payment_id?: string | null
+          merged_at?: string | null
+          merged_by?: string | null
+          merged_into_order_id?: string | null
           meta_capi_purchase_sent_at?: string | null
           mp_account_id?: string | null
           notes?: string | null
@@ -10084,6 +10093,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_merged_into_order_id_fkey"
+            columns: ["merged_into_order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
           {

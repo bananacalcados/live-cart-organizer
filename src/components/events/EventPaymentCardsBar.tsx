@@ -1,15 +1,18 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList } from "lucide-react";
+import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList, Layers, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DbOrder } from "@/types/database";
 import { Order } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { getOrderFinalValue } from "@/lib/orderTotal";
+import { groupOrdersByCustomer, OrderRegLite } from "@/lib/customerOrderGrouping";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { OrderDetailsDialog } from "@/components/OrderDetailsDialog";
+import { EventCustomerOrdersDialog } from "@/components/events/EventCustomerOrdersDialog";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
+import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -100,6 +103,16 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const [stepByOrder, setStepByOrder] = useState<Record<string, number>>({});
   const [detailsOrder, setDetailsOrder] = useState<DbOrder | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // Agrupamento por cliente (aba Pagos) + unificação de pedidos.
+  const { fetchOrdersByEvent } = useDbOrderStore();
+  const eventId = orders[0] ? (orders[0] as any).event_id : null;
+  const refreshOrders = useCallback(() => {
+    if (eventId) fetchOrdersByEvent(eventId);
+  }, [eventId, fetchOrdersByEvent]);
+  const [paidRegs, setPaidRegs] = useState<Record<string, OrderRegLite>>({});
+  const [groupDialogOrders, setGroupDialogOrders] = useState<DbOrder[] | null>(null);
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
 
   const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
 
@@ -273,7 +286,53 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
     return { awaiting: awaitingList, paid: paidList };
   }, [orders, pinnedIds]);
 
-  const list = filter === "paid" ? paid : awaiting;
+  // ── Carrega fichas (cpf/endereço) dos pedidos PAGOS p/ agrupar por cliente ──
+  const paidIds = useMemo(() => paid.map((o) => o.id).join(","), [paid]);
+  useEffect(() => {
+    if (filter !== "paid") return;
+    const ids = paidIds ? paidIds.split(",") : [];
+    if (ids.length === 0) { setPaidRegs({}); return; }
+    let cancelled = false;
+    (async () => {
+      const map: Record<string, OrderRegLite> = {};
+      const batchSize = 100;
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const batch = ids.slice(i, i + batchSize);
+        const { data } = await supabase
+          .from("customer_registrations")
+          .select("order_id, cpf, whatsapp, cep, address, address_number, city, state")
+          .in("order_id", batch);
+        for (const r of (data || []) as OrderRegLite[]) if (r.order_id) map[r.order_id] = r;
+      }
+      if (!cancelled) setPaidRegs(map);
+    })();
+    return () => { cancelled = true; };
+  }, [filter, paidIds]);
+
+  // Entradas da aba Pagos: cada entrada é um cliente (1+ pedidos agrupados).
+  const paidEntries = useMemo(() => {
+    const groups = groupOrdersByCustomer(paid, paidRegs);
+    return groups.map((g) => {
+      // Representante: o pedido "mestre" (se unificado), senão o mais recente.
+      const master = g.find((o) => g.some((c) => c.merged_into_order_id === o.id));
+      const rep =
+        master ||
+        [...g].sort(
+          (a, b) =>
+            new Date(b.paid_at || b.created_at).getTime() -
+            new Date(a.paid_at || a.created_at).getTime(),
+        )[0];
+      return { rep, group: g };
+    });
+  }, [paid, paidRegs]);
+
+  type CardEntry = { rep: DbOrder; group: DbOrder[] };
+  const cards: CardEntry[] =
+    filter === "paid"
+      ? paidEntries
+      : awaiting.map((o) => ({ rep: o, group: [o] }));
+
+
 
 
   return (
@@ -400,7 +459,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
               </div>
             )}
           </div>
-        ) : /* Cards de pedidos (Aguardando / Pagos) */ list.length === 0 ? (
+        ) : /* Cards de pedidos (Aguardando / Pagos) */ cards.length === 0 ? (
           <div className="text-xs text-muted-foreground py-2 px-1">
             {filter === "paid"
               ? "Nenhum pagamento concluído neste evento ainda."
@@ -408,25 +467,35 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
           </div>
         ) : (
           <div className="flex items-stretch gap-2 overflow-x-auto pb-2 scrollbar-thin">
-            {list.map((order) => {
+            {cards.map((entry) => {
+              const order = entry.rep;
+              const group = entry.group;
+              const isGroup = group.length > 1;
+              const groupMerged = isGroup && group.some((o) => o.merged_into_order_id);
               const paidCard = filter === "paid";
               const name = order.customer?.instagram_handle?.trim() || "Sem nome";
               const phone = formatPhone(order.customer?.whatsapp);
-              const value = getOrderFinalValue(order);
+              const value = isGroup
+                ? group.reduce((s, o) => s + getOrderFinalValue(o), 0)
+                : getOrderFinalValue(order);
               // Pisca quando há mensagem do cliente não visualizada (apenas aguardando).
               const unread = !paidCard && !!order.has_unread_messages;
               const isPinned = pinnedIds.has(order.id);
               // "SEM RESPOSTA": enviamos o template mas o cliente nunca respondeu.
               const noResponse = !paidCard && !!order.last_sent_message_at && !order.last_customer_message_at;
               const step = paidCard ? 0 : (stepByOrder[order.id] ?? 0);
+              const onCardClick = () => {
+                if (isGroup) { setGroupDialogOrders(group); setGroupDialogOpen(true); }
+                else handleCardClick(order);
+              };
               return (
                 <div
                   key={order.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => handleCardClick(order)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleCardClick(order); }}
-                  title={unread ? "Mensagem não lida — abrir conversa" : "Abrir conversa"}
+                  onClick={onCardClick}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onCardClick(); }}
+                  title={isGroup ? "Ver todos os pedidos deste cliente" : unread ? "Mensagem não lida — abrir conversa" : "Abrir conversa"}
                   className={cn(
                     "group relative flex flex-col gap-1 min-w-[210px] max-w-[250px] min-h-[104px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0 cursor-pointer",
                     paidCard
@@ -434,6 +503,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                       : "bg-neutral-900 text-white border-l-4 border-l-yellow-400 border-y-neutral-700 border-r-neutral-700 hover:bg-neutral-800",
                     unread && "animate-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-background",
                     isPinned && "ring-2 ring-sky-400 ring-offset-2 ring-offset-background",
+                    isGroup && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
                   )}
                 >
                   {unread && (
@@ -470,6 +540,12 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                       {paidCard ? <Check className="h-3 w-3" /> : <QrCode className="h-3 w-3" />}
                     </span>
                     <span className={cn("truncate text-xs font-semibold", !paidCard && "text-white")}>@{name}</span>
+                    {isGroup && (
+                      <span className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-primary/15 text-primary border border-primary/40 px-1.5 py-0.5 text-[9px] font-bold shrink-0">
+                        <Layers className="h-2.5 w-2.5" />
+                        {group.length}
+                      </span>
+                    )}
                   </div>
                   {phone && (
                     <span
@@ -489,18 +565,30 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                     )}
                   >
                     {paidCard ? "PAGO • " : "Aguardando • "}R$ {value.toFixed(2)}
+                    {isGroup && <span className="ml-1 text-[10px] font-medium opacity-70">(total)</span>}
                   </span>
 
-                  {/* Ver todas as informações do pedido (pago) */}
+                  {groupMerged && (
+                    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-stage-paid/20 text-stage-paid border border-stage-paid/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+                      <Link2 className="h-2.5 w-2.5" />
+                      Unificado
+                    </span>
+                  )}
+
+                  {/* Ver informações do(s) pedido(s) — pago */}
                   {paidCard && (
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setDetailsOrder(order); setDetailsOpen(true); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isGroup) { setGroupDialogOrders(group); setGroupDialogOpen(true); }
+                        else { setDetailsOrder(order); setDetailsOpen(true); }
+                      }}
                       className="mt-auto inline-flex items-center justify-center gap-1 rounded-md border border-stage-paid/40 bg-stage-paid/10 px-2 py-1 text-[10px] font-semibold text-stage-paid hover:bg-stage-paid/20 transition-colors"
-                      title="Ver todas as informações do pedido"
+                      title={isGroup ? "Ver todos os pedidos deste cliente e unificar" : "Ver todas as informações do pedido"}
                     >
                       <ClipboardList className="h-3 w-3" />
-                      Ver pedido
+                      {isGroup ? `Ver ${group.length} pedidos` : "Ver pedido"}
                     </button>
                   )}
 
@@ -553,6 +641,16 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
           orderId={detailsOrder.id}
           fallbackWhatsapp={detailsOrder.customer?.whatsapp}
           fallbackInstagram={detailsOrder.customer?.instagram_handle}
+        />
+      )}
+
+      {/* Todos os pedidos de um cliente + unificação de envio */}
+      {groupDialogOrders && (
+        <EventCustomerOrdersDialog
+          open={groupDialogOpen}
+          onOpenChange={(v) => { setGroupDialogOpen(v); if (!v) setGroupDialogOrders(null); }}
+          orders={groupDialogOrders}
+          onChanged={refreshOrders}
         />
       )}
     </div>

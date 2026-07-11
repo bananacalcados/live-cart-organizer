@@ -84,6 +84,10 @@ export interface DbOrder {
   ai_paused_at?: string | null;
   // Delivery method
   delivery_method?: string | null;
+  // Unificação de pedidos (envio único p/ mesmo cliente no mesmo evento)
+  merged_into_order_id?: string | null;
+  merged_at?: string | null;
+  merged_by?: string | null;
   // Joined data
   customer?: DbCustomer;
 }
