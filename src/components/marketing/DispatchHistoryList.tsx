@@ -167,6 +167,9 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
   const [editName, setEditName] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [externalDialog, setExternalDialog] = useState<{ dispatchId: string; fields: { key: string; label: string }[] } | null>(null);
+  const [externalValues, setExternalValues] = useState<Record<string, string>>({});
+  const [externalSaving, setExternalSaving] = useState(false);
 
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
