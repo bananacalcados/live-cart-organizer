@@ -18255,6 +18255,13 @@ export type Database = {
         Args: { p_master: Json; p_variants: Json }
         Returns: string
       }
+      crm_facet_counts: {
+        Args: { p_column: string }
+        Returns: {
+          cnt: number
+          value: string
+        }[]
+      }
       dedup_outgoing_message: {
         Args: {
           p_cutoff_minutes?: number
@@ -18639,6 +18646,13 @@ export type Database = {
       is_generic_email: { Args: { raw: string }; Returns: boolean }
       is_sync_in_progress: { Args: never; Returns: boolean }
       is_unified_inventory_enabled: { Args: never; Returns: boolean }
+      lead_campaign_counts: {
+        Args: never
+        Returns: {
+          cnt: number
+          value: string
+        }[]
+      }
       legacy_master_variants: {
         Args: { p_master_id: string }
         Returns: {

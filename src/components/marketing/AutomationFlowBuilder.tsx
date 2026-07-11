@@ -1934,30 +1934,21 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
 
   useEffect(() => { loadAll(); }, []);
 
-  const fetchAllRows = async (table: string, column: string): Promise<any[]> => {
-    const allData: any[] = [];
-    const pageSize = 1000;
-    let from = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const { data, error } = await (supabase as any).from(table).select(column).range(from, from + pageSize - 1);
-      if (error || !data || data.length === 0) { hasMore = false; break; }
-      allData.push(...data);
-      if (data.length < pageSize) hasMore = false;
-      else from += pageSize;
-    }
-    return allData;
+  const fetchFacetCounts = async (column: string): Promise<{ value: string; cnt: number }[]> => {
+    const { data, error } = await (supabase as any).rpc("crm_facet_counts", { p_column: column });
+    if (error || !data) return [];
+    return data as { value: string; cnt: number }[];
   };
 
   const loadAll = async () => {
     setLoading(true);
-    const [campaignsData, rfmData, statesData, citiesData, regionsData, gendersData, presetsRes] = await Promise.all([
-      fetchAllRows("lp_leads", "campaign_tag"),
-      fetchAllRows("crm_customers_v", "rfm_segment"),
-      fetchAllRows("crm_customers_v", "state"),
-      fetchAllRows("crm_customers_v", "city"),
-      fetchAllRows("crm_customers_v", "region_type"),
-      fetchAllRows("crm_customers_v", "gender"),
+    const [campaignsRes, rfmData, statesData, citiesData, regionsData, gendersData, presetsRes] = await Promise.all([
+      (supabase as any).rpc("lead_campaign_counts"),
+      fetchFacetCounts("rfm_segment"),
+      fetchFacetCounts("state"),
+      fetchFacetCounts("city"),
+      fetchFacetCounts("region_type"),
+      fetchFacetCounts("gender"),
       supabase.from("app_settings").select("id,key,value").like("key", "rfm_filter_preset_%").order("created_at", { ascending: true }),
     ]);
 
@@ -1965,48 +1956,43 @@ function MassAudienceConfig({ triggerConfig, onChange }: { triggerConfig: any; o
 
     // Campaigns
     {
-      const counts: Record<string, number> = {};
-      campaignsData.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
-      setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
+      const rows = (campaignsRes?.data || []) as { value: string; cnt: number }[];
+      setCampaigns(rows.map((r) => ({ tag: r.value, count: Number(r.cnt) })).sort((a, b) => b.count - a.count));
     }
 
     // RFM
-    {
-      const counts: Record<string, number> = {};
-      rfmData.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
-      setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
-    }
+    setRfmSegments(rfmData.map((r) => ({ segment: r.value, count: Number(r.cnt) })).sort((a, b) => b.count - a.count));
 
     // States
-    {
-      const counts: Record<string, number> = {};
-      statesData.forEach((d: any) => { const s = d.state?.trim(); if (s && s.length === 2 && s !== '0') counts[s] = (counts[s] || 0) + 1; });
-      setStates(Object.entries(counts).map(([state, count]) => ({ state, count })).sort((a, b) => b.count - a.count));
-    }
+    setStates(
+      statesData
+        .map((r) => ({ state: r.value?.trim(), count: Number(r.cnt) }))
+        .filter((r) => r.state && r.state.length === 2 && r.state !== "0")
+        .sort((a, b) => b.count - a.count)
+    );
 
     // Cities
-    {
-      const counts: Record<string, number> = {};
-      citiesData.forEach((d: any) => { const c = d.city?.trim(); if (c) counts[c] = (counts[c] || 0) + 1; });
-      setCities(Object.entries(counts).map(([city, count]) => ({ city, count })).sort((a, b) => b.count - a.count));
-    }
+    setCities(
+      citiesData
+        .map((r) => ({ city: r.value?.trim(), count: Number(r.cnt) }))
+        .filter((r) => r.city)
+        .sort((a, b) => b.count - a.count)
+    );
 
     // Regions
-    {
-      const counts: Record<string, number> = {};
-      regionsData.forEach((d: any) => { if (d.region_type) counts[d.region_type] = (counts[d.region_type] || 0) + 1; });
-      setRegionTypes(Object.entries(counts).map(([region, count]) => ({ region, count })).sort((a, b) => b.count - a.count));
-    }
+    setRegionTypes(regionsData.map((r) => ({ region: r.value, count: Number(r.cnt) })).sort((a, b) => b.count - a.count));
 
     // Genders
-    {
-      const counts: Record<string, number> = {};
-      gendersData.forEach((d: any) => { const g = d.gender?.trim(); if (g) counts[g] = (counts[g] || 0) + 1; });
-      setGenders(Object.entries(counts).map(([gender, count]) => ({ gender, count })).sort((a, b) => b.count - a.count));
-    }
+    setGenders(
+      gendersData
+        .map((r) => ({ gender: r.value?.trim(), count: Number(r.cnt) }))
+        .filter((r) => r.gender)
+        .sort((a, b) => b.count - a.count)
+    );
 
     setLoading(false);
   };
+
 
   const toggleArray = (key: string, value: string) => {
     const current: string[] = triggerConfig[key] || [];
@@ -2340,39 +2326,23 @@ function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onC
   const selectedRfmSegments: string[] = triggerConfig.audience_rfm_segments || [];
   const audienceMode: string = triggerConfig.audience_mode || "trigger";
 
-  const fetchAllPaginated = async (table: string, column: string): Promise<any[]> => {
-    const allData: any[] = [];
-    const pageSize = 1000;
-    let from = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const { data, error } = await (supabase as any).from(table).select(column).range(from, from + pageSize - 1);
-      if (error || !data || data.length === 0) { hasMore = false; break; }
-      allData.push(...data);
-      if (data.length < pageSize) hasMore = false;
-      else from += pageSize;
-    }
-    return allData;
-  };
-
   useEffect(() => {
     setLoadingCampaigns(true);
     setLoadingRfm(true);
     Promise.all([
-      fetchAllPaginated("lp_leads", "campaign_tag").then((data) => {
-        const counts: Record<string, number> = {};
-        data.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
-        setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
+      (supabase as any).rpc("lead_campaign_counts").then(({ data }: any) => {
+        const rows = (data || []) as { value: string; cnt: number }[];
+        setCampaigns(rows.map((r) => ({ tag: r.value, count: Number(r.cnt) })).sort((a, b) => b.count - a.count));
         setLoadingCampaigns(false);
       }),
-      fetchAllPaginated("crm_customers_v", "rfm_segment").then((data) => {
-        const counts: Record<string, number> = {};
-        data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
-        setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
+      (supabase as any).rpc("crm_facet_counts", { p_column: "rfm_segment" }).then(({ data }: any) => {
+        const rows = (data || []) as { value: string; cnt: number }[];
+        setRfmSegments(rows.map((r) => ({ segment: r.value, count: Number(r.cnt) })).sort((a, b) => b.count - a.count));
         setLoadingRfm(false);
       }),
     ]);
   }, []);
+
 
   const toggleCampaign = (tag: string) => {
     const current = [...selectedCampaigns];
