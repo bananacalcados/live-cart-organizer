@@ -41,6 +41,7 @@ interface DispatchRecord {
   whatsapp_number_id?: string | null;
   whatsapp_instance_label?: string | null;
   whatsapp_phone_display?: string | null;
+  variables_config?: any;
   stats?: {
     delivered: number;
     read: number;
