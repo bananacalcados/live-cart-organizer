@@ -540,6 +540,12 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                       {paidCard ? <Check className="h-3 w-3" /> : <QrCode className="h-3 w-3" />}
                     </span>
                     <span className={cn("truncate text-xs font-semibold", !paidCard && "text-white")}>@{name}</span>
+                    {isGroup && (
+                      <span className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-primary/15 text-primary border border-primary/40 px-1.5 py-0.5 text-[9px] font-bold shrink-0">
+                        <Layers className="h-2.5 w-2.5" />
+                        {group.length}
+                      </span>
+                    )}
                   </div>
                   {phone && (
                     <span
