@@ -412,26 +412,52 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
               const value = getOrderFinalValue(order);
               // Pisca quando há mensagem do cliente não visualizada (apenas aguardando).
               const unread = !paidCard && !!order.has_unread_messages;
+              const isPinned = pinnedIds.has(order.id);
+              // "SEM RESPOSTA": enviamos o template mas o cliente nunca respondeu.
+              const noResponse = !paidCard && !!order.last_sent_message_at && !order.last_customer_message_at;
+              const step = paidCard ? 0 : (stepByOrder[order.id] ?? 0);
               return (
-                <button
+                <div
                   key={order.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleCardClick(order)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") handleCardClick(order); }}
                   title={unread ? "Mensagem não lida — abrir conversa" : "Abrir conversa"}
                   className={cn(
-                    "group relative flex flex-col gap-1 min-w-[200px] max-w-[240px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0",
+                    "group relative flex flex-col gap-1 min-w-[210px] max-w-[250px] min-h-[104px] px-3 py-2 rounded-lg border text-left transition-colors shrink-0 cursor-pointer",
                     paidCard
                       ? "bg-stage-paid/10 border-stage-paid/40 hover:bg-stage-paid/20"
                       : "bg-neutral-900 text-white border-l-4 border-l-yellow-400 border-y-neutral-700 border-r-neutral-700 hover:bg-neutral-800",
                     unread && "animate-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-background",
+                    isPinned && "ring-2 ring-sky-400 ring-offset-2 ring-offset-background",
                   )}
                 >
                   {unread && (
-                    <span className="absolute -top-1.5 -right-1.5 flex h-3.5 w-3.5">
+                    <span className="absolute -top-1.5 -left-1.5 flex h-3.5 w-3.5">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
                       <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-yellow-400" />
                     </span>
                   )}
-                  <div className="flex items-center gap-1.5 min-w-0">
+
+                  {/* Fixar conversa (compartilhado com a equipe) */}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); togglePin(order); }}
+                    title={isPinned ? "Desafixar conversa" : "Fixar conversa"}
+                    className={cn(
+                      "absolute top-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full transition-colors",
+                      isPinned
+                        ? "bg-sky-500 text-white"
+                        : paidCard
+                          ? "bg-black/5 text-muted-foreground hover:bg-black/10"
+                          : "bg-white/10 text-white/60 hover:bg-white/20 hover:text-white",
+                    )}
+                  >
+                    <Pin className={cn("h-3.5 w-3.5", isPinned && "fill-current")} />
+                  </button>
+
+                  <div className="flex items-center gap-1.5 min-w-0 pr-7">
                     <span
                       className={cn(
                         "flex h-5 w-5 items-center justify-center rounded-full shrink-0",
@@ -461,11 +487,37 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                   >
                     {paidCard ? "PAGO • " : "Aguardando • "}R$ {value.toFixed(2)}
                   </span>
-                </button>
+
+                  {/* Tags: SEM RESPOSTA + Etapa do link */}
+                  {(noResponse || step > 0) && (
+                    <div className="mt-auto flex flex-wrap items-center gap-1 pt-0.5">
+                      {noResponse && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 text-red-300 border border-red-400/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+                          <MessageSquareOff className="h-2.5 w-2.5" />
+                          Sem resposta
+                        </span>
+                      )}
+                      {step > 0 && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold",
+                            paidCard
+                              ? "bg-primary/10 text-primary border border-primary/30"
+                              : "bg-sky-400/15 text-sky-300 border border-sky-400/40",
+                          )}
+                        >
+                          <LinkIcon className="h-2.5 w-2.5" />
+                          Etapa {step}/3
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
         )}
+
       </div>
 
       {/* Chat de WhatsApp na instância da conversa */}
