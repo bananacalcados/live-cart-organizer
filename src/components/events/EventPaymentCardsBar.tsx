@@ -1,15 +1,18 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList } from "lucide-react";
+import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList, Layers, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DbOrder } from "@/types/database";
 import { Order } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { getOrderFinalValue } from "@/lib/orderTotal";
+import { groupOrdersByCustomer, OrderRegLite } from "@/lib/customerOrderGrouping";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { OrderDetailsDialog } from "@/components/OrderDetailsDialog";
+import { EventCustomerOrdersDialog } from "@/components/events/EventCustomerOrdersDialog";
 import { InstagramDMChat } from "@/components/events/InstagramDMChat";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
+import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
