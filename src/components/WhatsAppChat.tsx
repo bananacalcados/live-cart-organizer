@@ -153,6 +153,24 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
+  // Load this event's follow-up templates (2nd/3rd) + its Meta instance.
+  const eventId = dbOrder?.event_id ?? null;
+  useEffect(() => {
+    if (!eventId) { setFollowupTemplates([]); setEventMetaNumberId(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("events")
+        .select("followup_templates, whatsapp_number_id")
+        .eq("id", eventId)
+        .maybeSingle();
+      if (cancelled) return;
+      setFollowupTemplates((((data as any)?.followup_templates as FollowupTemplate[]) || []).filter((t) => t?.templateName));
+      setEventMetaNumberId((data as any)?.whatsapp_number_id || null);
+    })();
+    return () => { cancelled = true; };
+  }, [eventId]);
+
   // Load AI pause state from order store
   useEffect(() => {
     const dbOrder = useDbOrderStore.getState().orders.find(o => o.id === order.id);
