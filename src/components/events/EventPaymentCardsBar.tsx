@@ -93,7 +93,13 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const [failedAttempts, setFailedAttempts] = useState<FailedAttempt[]>([]);
   const [loadingErrors, setLoadingErrors] = useState(false);
 
+  // Team-shared pinned conversations + checkout-link step per order.
+  const currentUserId = useCurrentUserId();
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+  const [stepByOrder, setStepByOrder] = useState<Record<string, number>>({});
+
   const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
+
 
   const handleCardClick = (order: DbOrder) => {
     const phone = order.customer?.whatsapp?.replace(/\D/g, "");
