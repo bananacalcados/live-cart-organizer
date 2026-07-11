@@ -565,18 +565,30 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                     )}
                   >
                     {paidCard ? "PAGO • " : "Aguardando • "}R$ {value.toFixed(2)}
+                    {isGroup && <span className="ml-1 text-[10px] font-medium opacity-70">(total)</span>}
                   </span>
 
-                  {/* Ver todas as informações do pedido (pago) */}
+                  {groupMerged && (
+                    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-stage-paid/20 text-stage-paid border border-stage-paid/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+                      <Link2 className="h-2.5 w-2.5" />
+                      Unificado
+                    </span>
+                  )}
+
+                  {/* Ver informações do(s) pedido(s) — pago */}
                   {paidCard && (
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); setDetailsOrder(order); setDetailsOpen(true); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isGroup) { setGroupDialogOrders(group); setGroupDialogOpen(true); }
+                        else { setDetailsOrder(order); setDetailsOpen(true); }
+                      }}
                       className="mt-auto inline-flex items-center justify-center gap-1 rounded-md border border-stage-paid/40 bg-stage-paid/10 px-2 py-1 text-[10px] font-semibold text-stage-paid hover:bg-stage-paid/20 transition-colors"
-                      title="Ver todas as informações do pedido"
+                      title={isGroup ? "Ver todos os pedidos deste cliente e unificar" : "Ver todas as informações do pedido"}
                     >
                       <ClipboardList className="h-3 w-3" />
-                      Ver pedido
+                      {isGroup ? `Ver ${group.length} pedidos` : "Ver pedido"}
                     </button>
                   )}
 
