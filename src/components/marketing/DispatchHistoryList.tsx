@@ -1081,6 +1081,57 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Teste de envio — usa o template, variáveis e campo externo já salvos */}
+      <Dialog open={!!testDialog} onOpenChange={(o) => { if (!o && !testSending) { setTestDialog(null); setTestExternalValues({}); setTestPhone(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TestTube className="h-5 w-5 text-primary" /> Testar disparo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              Envia uma mensagem de teste usando o template <span className="font-mono">{testDialog?.templateName}</span> exatamente como será disparado, incluindo os valores abaixo.
+            </p>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Número de teste (WhatsApp)</label>
+              <Input
+                value={testPhone}
+                onChange={e => setTestPhone(e.target.value)}
+                placeholder="Ex: 33999998888"
+              />
+            </div>
+            {testDialog?.fields.map(f => (
+              <div key={f.key} className="space-y-1">
+                <label className="text-xs font-medium">🔗 {f.label}</label>
+                <Input
+                  value={testExternalValues[f.key] || ''}
+                  onChange={e => setTestExternalValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  placeholder={f.label}
+                />
+              </div>
+            ))}
+            {testDialog && testDialog.fields.length === 0 && (
+              <p className="text-xs text-muted-foreground">Este template não tem campo externo — o teste usará as variáveis já configuradas.</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => { setTestDialog(null); setTestExternalValues({}); setTestPhone(""); }}
+              disabled={testSending}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={runTest} disabled={testSending} className="gap-1">
+              {testSending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <TestTube className="h-4 w-4" />}
+              Enviar teste
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
+
   );
 }
