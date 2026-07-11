@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle, CheckCircle2, AlertTriangle, Sparkles, Tag } from "lucide-react";
+import { Radio, Search, Ban, ShoppingBag, Instagram, MessageCircle, CheckCircle2, AlertTriangle, Sparkles, Tag, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderDialogDb } from "@/components/OrderDialogDb";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
@@ -278,6 +278,8 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   const [comments, setComments] = useState<LiveComment[]>([]);
   const [bannedHandles, setBannedHandles] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [liveSyncing, setLiveSyncing] = useState(false);
+  const [liveSyncStatus, setLiveSyncStatus] = useState<string>("");
   const [search, setSearch] = useState("");
   // Só mostra "Carregando..." na primeira carga; refreshes silenciosos não piscam o painel
   const firstLoadRef = useRef(true);
@@ -405,9 +407,48 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     setLoading(false);
   }, [eventId, fromDate, toDate]);
 
+  const syncLiveCommentsFromMeta = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!eventId || liveSyncing) return;
+    if (!opts?.silent) {
+      setLiveSyncing(true);
+      setLiveSyncStatus("Sincronizando live...");
+    }
+    try {
+      const { data, error } = await supabase.functions.invoke("instagram-live-sync", {
+        body: { eventId },
+      });
+      if (error) throw error;
+      const found = Number((data as any)?.comments_found || 0);
+      const inserted = Number((data as any)?.live_comments_inserted || 0);
+      if (!opts?.silent) {
+        setLiveSyncStatus(found > 0
+          ? `Live localizada: ${found} comentários (${inserted} novos).`
+          : "Live localizada, sem comentário novo agora.");
+      }
+      await loadComments({ silent: true });
+    } catch (e: any) {
+      console.error("instagram-live-sync failed", e);
+      if (!opts?.silent) setLiveSyncStatus("Não consegui sincronizar direto da Meta agora.");
+    } finally {
+      if (!opts?.silent) setLiveSyncing(false);
+    }
+  }, [eventId, liveSyncing, loadComments]);
+
   useEffect(() => {
     loadComments();
   }, [loadComments]);
+
+  // Redundância definitiva para Live ao vivo: além do webhook, consulta direto o
+  // endpoint de vídeos ao vivo da Meta enquanto o painel está aberto. A Meta só
+  // permite ler comentários de live enquanto a transmissão está acontecendo.
+  useEffect(() => {
+    if (!eventId) return;
+    const isToToday = toDate === format(new Date(), "yyyy-MM-dd");
+    if (!isToToday) return;
+    syncLiveCommentsFromMeta({ silent: true });
+    const t = setInterval(() => syncLiveCommentsFromMeta({ silent: true }), 15000);
+    return () => clearInterval(t);
+  }, [eventId, toDate, syncLiveCommentsFromMeta]);
 
   // Clientes banidos (instagram_handle) — para a TAG de BANIDO
   const loadBanned = useCallback(async () => {
@@ -810,10 +851,26 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <Radio className="h-5 w-5 text-pink-500" />
         <h2 className="text-sm font-bold">Comentários da Live</h2>
+        <button
+          type="button"
+          onClick={() => syncLiveCommentsFromMeta()}
+          disabled={liveSyncing}
+          className="ml-1 inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 text-[11px] font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+          title="Buscar comentários direto no vídeo ao vivo do Instagram"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", liveSyncing && "animate-spin")} />
+          Sync
+        </button>
         <span className="ml-auto rounded-full bg-pink-500/15 px-2 py-0.5 text-xs font-semibold text-pink-600 dark:text-pink-300">
           {comments.length}
         </span>
       </div>
+
+      {liveSyncStatus && (
+        <div className="border-b border-border px-4 py-1 text-[11px] text-muted-foreground">
+          {liveSyncStatus}
+        </div>
+      )}
 
       {/* Faixa de datas (pente fino) */}
       <div className="grid grid-cols-2 gap-2 border-b border-border p-2">
