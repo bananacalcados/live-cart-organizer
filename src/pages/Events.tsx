@@ -296,6 +296,7 @@ const Events = () => {
           automation_enabled: automationEnabled,
           initial_message_enabled: initialMessageEnabled,
           initial_message_blocks: initialMessageBlocks,
+          followup_templates: followupTemplates,
           start_date: startDate || null,
           end_date: endDate || null,
           ...metaTemplateFields,
