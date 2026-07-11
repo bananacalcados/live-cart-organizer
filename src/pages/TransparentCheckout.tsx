@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { cpGetAttemptStatus, cpUpdateOrder, cpUpsertRegistration } from "@/lib/checkoutPublic";
@@ -1470,11 +1470,15 @@ export default function TransparentCheckout() {
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [isEligibleForPrize, setIsEligibleForPrize] = useState(false);
   const [liveCartRaw, setLiveCartRaw] = useState<{ items: any[]; customer: any } | null>(null);
-  const [installmentConfig, setInstallmentConfig] = useState<InstallmentConfig>({
+  // Config base (app_settings) + override por evento são mantidos SEPARADAMENTE
+  // e combinados via useMemo. Assim o override do evento (ex.: "10x sem juros
+  // acima de R$ X") nunca é sobrescrito por uma resolução async concorrente.
+  const [baseInstallmentConfig, setBaseInstallmentConfig] = useState<InstallmentConfig>({
     max_installments: 12,
     interest_free_installments: 6,
     monthly_interest_rate: 2.49,
   });
+  const [eventInstallment, setEventInstallment] = useState<{ minVal: number; maxInst: number } | null>(null);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const paymentConfirmedRef = useRef(false);
 
@@ -1546,10 +1550,11 @@ export default function TransparentCheckout() {
   }, [orderId]);
 
   // Per-event installment override: "acima de R$ X, parcelar em até N× sem juros".
+  // Carrega apenas os parâmetros do evento; a combinação com a config base é feita
+  // no useMemo `installmentConfig`, evitando corrida entre setters async.
   useEffect(() => {
     const evId = orderData?.eventId;
-    const total = orderData?.totalAmount;
-    if (!evId || total == null) return;
+    if (!evId) { setEventInstallment(null); return; }
     (async () => {
       try {
         const { data } = await supabase
@@ -1558,18 +1563,25 @@ export default function TransparentCheckout() {
           .eq("id", evId)
           .maybeSingle();
         const maxInst = Number((data as any)?.installment_max || 0);
-        if (!maxInst) return;
+        if (!maxInst) { setEventInstallment(null); return; }
         const minVal = Number((data as any)?.installment_min_value || 0);
-        if (total >= minVal) {
-          setInstallmentConfig((prev) => ({
-            ...prev,
-            max_installments: maxInst,
-            interest_free_installments: Math.max(prev.interest_free_installments, maxInst),
-          }));
-        }
-      } catch {}
+        setEventInstallment({ minVal, maxInst });
+      } catch {
+        setEventInstallment(null);
+      }
     })();
-  }, [orderData?.eventId, orderData?.totalAmount]);
+  }, [orderData?.eventId]);
+
+  // Config efetiva: base (app_settings) + override do evento quando o total atinge o mínimo.
+  const installmentConfig = useMemo<InstallmentConfig>(() => {
+    const cfg = { ...baseInstallmentConfig };
+    const total = orderData?.totalAmount;
+    if (eventInstallment && eventInstallment.maxInst > 0 && total != null && total >= eventInstallment.minVal) {
+      cfg.max_installments = Math.max(cfg.max_installments, eventInstallment.maxInst);
+      cfg.interest_free_installments = Math.max(cfg.interest_free_installments, eventInstallment.maxInst);
+    }
+    return cfg;
+  }, [baseInstallmentConfig, eventInstallment, orderData?.totalAmount]);
 
   // ===== Etapa A — Carregar ofertas de crossell após o pedido estar pronto =====
   useEffect(() => {
@@ -1703,7 +1715,7 @@ export default function TransparentCheckout() {
         .from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
       if (data?.value) {
         const config = data.value as any;
-        setInstallmentConfig({
+        setBaseInstallmentConfig({
           max_installments: config.max_installments || 12,
           interest_free_installments: config.interest_free_installments || 6,
           monthly_interest_rate: config.monthly_interest_rate || 2.49,
