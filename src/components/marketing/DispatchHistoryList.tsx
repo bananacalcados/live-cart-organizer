@@ -425,9 +425,24 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     return <Badge variant="outline" className="text-xs">{d.status}</Badge>;
   };
 
-  const handleTriggerNow = async (dispatchId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Actually flips the dispatch to 'sending' and kicks off the workers.
+  // `externalValues` (opcional) mapeia a chave da variável → valor colado no
+  // popup de campos externos (ex.: link da live) e é gravado em variables_config
+  // antes do envio.
+  const runTrigger = async (dispatchId: string, externalValues?: Record<string, string>) => {
     try {
+      if (externalValues && Object.keys(externalValues).length > 0) {
+        const dispatch = dispatches.find(d => d.id === dispatchId);
+        const cfg = { ...(dispatch?.variables_config || {}) };
+        for (const [key, value] of Object.entries(externalValues)) {
+          if (cfg[key]) cfg[key] = { ...cfg[key], externalValue: value };
+        }
+        await supabase
+          .from('dispatch_history')
+          .update({ variables_config: cfg } as any)
+          .eq('id', dispatchId);
+      }
+
       await supabase
         .from('dispatch_history')
         .update({ status: 'sending', started_at: new Date().toISOString(), completed_at: null } as any)
@@ -451,6 +466,41 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
       console.error('Error triggering dispatch:', error);
       toast.error("Erro ao iniciar disparo");
       loadHistory();
+    }
+  };
+
+  const handleTriggerNow = async (dispatchId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Detecta variáveis do tipo "Campo externo" — se houver, pede os valores
+    // antes de disparar (ex.: link da live gerado só quando a live começa).
+    const dispatch = dispatches.find(d => d.id === dispatchId);
+    const cfg = (dispatch?.variables_config || {}) as Record<string, any>;
+    const externalFields = Object.entries(cfg)
+      .filter(([, vc]) => vc && vc.mode === '__external__')
+      .map(([key, vc]) => ({ key, label: (vc.staticValue || 'Campo externo') as string }));
+
+    if (externalFields.length > 0) {
+      setExternalDialog({ dispatchId, fields: externalFields });
+      setExternalValues(Object.fromEntries(externalFields.map(f => [f.key, ''])));
+      return;
+    }
+
+    await runTrigger(dispatchId);
+  };
+
+  const confirmExternalTrigger = async () => {
+    if (!externalDialog) return;
+    if (externalDialog.fields.some(f => !(externalValues[f.key] || '').trim())) {
+      toast.error("Preencha todos os campos externos");
+      return;
+    }
+    setExternalSaving(true);
+    try {
+      await runTrigger(externalDialog.dispatchId, externalValues);
+      setExternalDialog(null);
+      setExternalValues({});
+    } finally {
+      setExternalSaving(false);
     }
   };
 
