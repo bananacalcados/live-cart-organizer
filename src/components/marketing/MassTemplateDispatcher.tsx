@@ -1573,6 +1573,22 @@ export function MassTemplateDispatcher() {
                           }))}
                         />
                       )}
+                      {vc.mode === '__external__' && (
+                        <div className="space-y-1">
+                          <Input
+                            className="h-7 text-xs"
+                            placeholder="Nome do campo (ex.: Link da live)"
+                            value={vc.staticValue}
+                            onChange={e => setVariables(prev => ({
+                              ...prev,
+                              [v.key]: { ...prev[v.key], staticValue: e.target.value },
+                            }))}
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            🔗 O valor será pedido no momento em que você clicar em "Disparar" no histórico.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
