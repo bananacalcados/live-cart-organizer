@@ -286,7 +286,53 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
     return { awaiting: awaitingList, paid: paidList };
   }, [orders, pinnedIds]);
 
-  const list = filter === "paid" ? paid : awaiting;
+  // ── Carrega fichas (cpf/endereço) dos pedidos PAGOS p/ agrupar por cliente ──
+  const paidIds = useMemo(() => paid.map((o) => o.id).join(","), [paid]);
+  useEffect(() => {
+    if (filter !== "paid") return;
+    const ids = paidIds ? paidIds.split(",") : [];
+    if (ids.length === 0) { setPaidRegs({}); return; }
+    let cancelled = false;
+    (async () => {
+      const map: Record<string, OrderRegLite> = {};
+      const batchSize = 100;
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const batch = ids.slice(i, i + batchSize);
+        const { data } = await supabase
+          .from("customer_registrations")
+          .select("order_id, cpf, whatsapp, cep, address, address_number, city, state")
+          .in("order_id", batch);
+        for (const r of (data || []) as OrderRegLite[]) if (r.order_id) map[r.order_id] = r;
+      }
+      if (!cancelled) setPaidRegs(map);
+    })();
+    return () => { cancelled = true; };
+  }, [filter, paidIds]);
+
+  // Entradas da aba Pagos: cada entrada é um cliente (1+ pedidos agrupados).
+  const paidEntries = useMemo(() => {
+    const groups = groupOrdersByCustomer(paid, paidRegs);
+    return groups.map((g) => {
+      // Representante: o pedido "mestre" (se unificado), senão o mais recente.
+      const master = g.find((o) => g.some((c) => c.merged_into_order_id === o.id));
+      const rep =
+        master ||
+        [...g].sort(
+          (a, b) =>
+            new Date(b.paid_at || b.created_at).getTime() -
+            new Date(a.paid_at || a.created_at).getTime(),
+        )[0];
+      return { rep, group: g };
+    });
+  }, [paid, paidRegs]);
+
+  type CardEntry = { rep: DbOrder; group: DbOrder[] };
+  const cards: CardEntry[] =
+    filter === "paid"
+      ? paidEntries
+      : awaiting.map((o) => ({ rep: o, group: [o] }));
+
+
 
 
   return (
