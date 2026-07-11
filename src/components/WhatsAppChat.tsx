@@ -114,7 +114,10 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const [aiPaused, setAiPaused] = useState(false);
   const [togglingAiPause, setTogglingAiPause] = useState(false);
   const [fichaOpen, setFichaOpen] = useState(false);
+  const [editOrderOpen, setEditOrderOpen] = useState(false);
   const { moveOrder, setHasUnreadMessages, updateOrder } = useDbOrderStore();
+  const dbOrders = useDbOrderStore((s) => s.orders);
+  const dbOrder = useMemo(() => dbOrders.find((o) => o.id === order.id) || null, [dbOrders, order.id]);
   const { getTemplatesByStage, templates } = useTemplateStore();
   const { selectedNumberId, fetchNumbers, getSelectedNumber, numbers } = useWhatsAppNumberStore();
 
