@@ -21,10 +21,13 @@ const CONCURRENCY = 45;
 const MAX_RUNTIME_MS = 50_000; // safely under 60s edge timeout
 const LEASE_SECONDS = 90;
 
-interface VariableConfig { mode: string; staticValue: string; }
+interface VariableConfig { mode: string; staticValue: string; externalValue?: string; }
 
 function resolveVariable(vc: VariableConfig, recipient: any): string {
   switch (vc.mode) {
+    // Campo externo: valor preenchido no momento do disparo (ex.: link da live).
+    // É igual para todos os destinatários. Fallback vazio se não preenchido.
+    case '__external__': return vc.externalValue ?? '';
     case '__first_name__': return recipient.first_name || (recipient.recipient_name || '').split(' ')[0] || 'Cliente';
     case '__full_name__': return recipient.recipient_name || 'Cliente';
     case '__phone__': return recipient.phone || '';
