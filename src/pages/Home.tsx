@@ -100,6 +100,8 @@ export default function Home() {
   const { toast } = useToast();
   const { session, isReady } = useAuthReady();
   const [allowedModules, setAllowedModules] = useState<string[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!isReady) return;
@@ -136,17 +138,17 @@ export default function Home() {
           return;
         }
 
+        if (!cancelled) setLoadError(false);
         const modules = await loadAllowedModules(session.user.id);
-        if (!cancelled) setAllowedModules(modules);
+        if (!cancelled) {
+          setAllowedModules(modules);
+          setLoadError(false);
+        }
       } catch (err) {
         console.error("Error checking permissions:", err);
         if (!cancelled) {
-          setAllowedModules([]);
-          toast({
-            title: "Erro ao verificar permissões",
-            description: "Não foi possível conectar ao servidor. Tente recarregar a página.",
-            variant: "destructive",
-          });
+          setLoadError(true);
+          setAllowedModules(null);
         }
       }
     };
@@ -156,7 +158,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [isReady, session, navigate, toast]);
+  }, [isReady, session, navigate, toast, reloadKey]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -198,6 +200,27 @@ export default function Home() {
           <StickyNotesBoard />
         )}
 
+        {loadError ? (
+          <div className="col-span-full flex flex-col items-center gap-4 py-16 text-center">
+            <p className="text-lg font-semibold" style={{ color: "hsl(0 0% 95%)" }}>
+              Não foi possível carregar seus módulos
+            </p>
+            <p className="text-sm max-w-md" style={{ color: "hsl(0 0% 55%)" }}>
+              A conexão com o servidor falhou momentaneamente. Isso costuma se resolver ao tentar de novo.
+            </p>
+            <Button
+              onClick={() => {
+                setLoadError(false);
+                setAllowedModules(null);
+                setReloadKey((k) => k + 1);
+              }}
+              style={{ background: "hsl(48 95% 50%)", color: "hsl(0 0% 5%)" }}
+              className="hover:opacity-90"
+            >
+              Tentar novamente
+            </Button>
+          </div>
+        ) : (
         <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {allowedModules === null ? (
             <div className="col-span-full flex justify-center py-12">
@@ -225,6 +248,7 @@ export default function Home() {
             </Card>
           ))}
         </div>
+        )}
       </main>
     </div>
   );
