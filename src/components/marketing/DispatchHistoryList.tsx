@@ -41,6 +41,7 @@ interface DispatchRecord {
   whatsapp_number_id?: string | null;
   whatsapp_instance_label?: string | null;
   whatsapp_phone_display?: string | null;
+  variables_config?: any;
   stats?: {
     delivered: number;
     read: number;
@@ -166,6 +167,9 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
   const [editName, setEditName] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [externalDialog, setExternalDialog] = useState<{ dispatchId: string; fields: { key: string; label: string }[] } | null>(null);
+  const [externalValues, setExternalValues] = useState<Record<string, string>>({});
+  const [externalSaving, setExternalSaving] = useState(false);
 
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
@@ -424,9 +428,24 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     return <Badge variant="outline" className="text-xs">{d.status}</Badge>;
   };
 
-  const handleTriggerNow = async (dispatchId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Actually flips the dispatch to 'sending' and kicks off the workers.
+  // `externalValues` (opcional) mapeia a chave da variável → valor colado no
+  // popup de campos externos (ex.: link da live) e é gravado em variables_config
+  // antes do envio.
+  const runTrigger = async (dispatchId: string, externalValues?: Record<string, string>) => {
     try {
+      if (externalValues && Object.keys(externalValues).length > 0) {
+        const dispatch = dispatches.find(d => d.id === dispatchId);
+        const cfg = { ...(dispatch?.variables_config || {}) };
+        for (const [key, value] of Object.entries(externalValues)) {
+          if (cfg[key]) cfg[key] = { ...cfg[key], externalValue: value };
+        }
+        await supabase
+          .from('dispatch_history')
+          .update({ variables_config: cfg } as any)
+          .eq('id', dispatchId);
+      }
+
       await supabase
         .from('dispatch_history')
         .update({ status: 'sending', started_at: new Date().toISOString(), completed_at: null } as any)
@@ -450,6 +469,41 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
       console.error('Error triggering dispatch:', error);
       toast.error("Erro ao iniciar disparo");
       loadHistory();
+    }
+  };
+
+  const handleTriggerNow = async (dispatchId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Detecta variáveis do tipo "Campo externo" — se houver, pede os valores
+    // antes de disparar (ex.: link da live gerado só quando a live começa).
+    const dispatch = dispatches.find(d => d.id === dispatchId);
+    const cfg = (dispatch?.variables_config || {}) as Record<string, any>;
+    const externalFields = Object.entries(cfg)
+      .filter(([, vc]) => vc && vc.mode === '__external__')
+      .map(([key, vc]) => ({ key, label: (vc.staticValue || 'Campo externo') as string }));
+
+    if (externalFields.length > 0) {
+      setExternalDialog({ dispatchId, fields: externalFields });
+      setExternalValues(Object.fromEntries(externalFields.map(f => [f.key, ''])));
+      return;
+    }
+
+    await runTrigger(dispatchId);
+  };
+
+  const confirmExternalTrigger = async () => {
+    if (!externalDialog) return;
+    if (externalDialog.fields.some(f => !(externalValues[f.key] || '').trim())) {
+      toast.error("Preencha todos os campos externos");
+      return;
+    }
+    setExternalSaving(true);
+    try {
+      await runTrigger(externalDialog.dispatchId, externalValues);
+      setExternalDialog(null);
+      setExternalValues({});
+    } finally {
+      setExternalSaving(false);
     }
   };
 
@@ -921,6 +975,45 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Campos externos — preenchidos no momento do disparo (ex.: link da live) */}
+      <Dialog open={!!externalDialog} onOpenChange={(o) => { if (!o && !externalSaving) { setExternalDialog(null); setExternalValues({}); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              🔗 Preencher campos do disparo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              Informe os valores abaixo. Eles serão inseridos na mensagem antes do envio.
+            </p>
+            {externalDialog?.fields.map(f => (
+              <div key={f.key} className="space-y-1">
+                <label className="text-xs font-medium">{f.label}</label>
+                <Input
+                  value={externalValues[f.key] || ''}
+                  onChange={e => setExternalValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  placeholder={f.label}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => { setExternalDialog(null); setExternalValues({}); }}
+              disabled={externalSaving}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={confirmExternalTrigger} disabled={externalSaving} className="gap-1">
+              {externalSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              Disparar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </Card>

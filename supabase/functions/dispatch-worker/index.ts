@@ -21,10 +21,13 @@ const CONCURRENCY = 45;
 const MAX_RUNTIME_MS = 50_000; // safely under 60s edge timeout
 const LEASE_SECONDS = 90;
 
-interface VariableConfig { mode: string; staticValue: string; }
+interface VariableConfig { mode: string; staticValue: string; externalValue?: string; }
 
 function resolveVariable(vc: VariableConfig, recipient: any): string {
   switch (vc.mode) {
+    // Campo externo: valor preenchido no momento do disparo (ex.: link da live).
+    // É igual para todos os destinatários. Fallback vazio se não preenchido.
+    case '__external__': return vc.externalValue ?? '';
     case '__first_name__': return recipient.first_name || (recipient.recipient_name || '').split(' ')[0] || 'Cliente';
     case '__full_name__': return recipient.recipient_name || 'Cliente';
     case '__phone__': return recipient.phone || '';
@@ -152,6 +155,7 @@ function buildComponentsForRecipient(
       const resolveBubble = (n: number) => {
         const vc = variablesConfig[`body_${n}`];
         if (!vc) return '';
+        if (vc.mode === '__external__') return vc.externalValue ?? '';
         if (vc.mode === '__static__' || !hasDynamicVars || !recipient) return vc.staticValue || 'Cliente';
         return resolveVariable(vc, recipient) || 'Cliente';
       };
@@ -181,6 +185,7 @@ function buildComponentsForRecipient(
   const resolve = (key: string) => {
     const vc = variablesConfig[key];
     if (!vc) return '';
+    if (vc.mode === '__external__') return vc.externalValue ?? '';
     if (vc.mode === '__static__') return vc.staticValue || 'Cliente';
     if (!recipient || !hasDynamicVars) return vc.staticValue || 'Cliente';
     return resolveVariable(vc, recipient) || 'Cliente';
@@ -235,6 +240,7 @@ function buildRenderedMessage(
       text = text.replace(/\{\{(\d+)\}\}/g, (_: string, n: string) => {
         const vc = variablesConfig[`header_${n}`];
         if (!vc) return `{{${n}}}`;
+        if (vc.mode === '__external__') return vc.externalValue ?? '';
         if (vc.mode === '__static__' || !hasDynamicVars || !recipient) return vc.staticValue || '';
         return resolveVariable(vc, recipient);
       });
@@ -245,6 +251,7 @@ function buildRenderedMessage(
       text = text.replace(/\{\{(\d+)\}\}/g, (_: string, n: string) => {
         const vc = variablesConfig[`body_${n}`];
         if (!vc) return `{{${n}}}`;
+        if (vc.mode === '__external__') return vc.externalValue ?? '';
         if (vc.mode === '__static__' || !hasDynamicVars || !recipient) return vc.staticValue || '';
         return resolveVariable(vc, recipient);
       });

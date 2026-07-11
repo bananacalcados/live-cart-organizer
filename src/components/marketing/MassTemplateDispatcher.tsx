@@ -108,6 +108,7 @@ interface Recipient {
 // Dynamic variable options that pull from recipient data
 const DYNAMIC_VARIABLE_OPTIONS = [
   { value: '__static__', label: '✏️ Texto fixo' },
+  { value: '__external__', label: '🔗 Campo externo (preencher ao disparar)' },
   { value: '__first_name__', label: '👤 Primeiro Nome' },
   { value: '__full_name__', label: '👤 Nome Completo' },
   { value: '__phone__', label: '📱 Telefone' },
@@ -133,6 +134,7 @@ function resolveVariableForRecipient(varConfig: { mode: string; staticValue: str
 function getPreviewLabel(mode: string, staticValue: string): string {
   const opt = DYNAMIC_VARIABLE_OPTIONS.find(o => o.value === mode);
   if (mode === '__static__') return staticValue || '{{?}}';
+  if (mode === '__external__') return `[🔗 ${staticValue || 'Campo externo'}]`;
   return opt ? `[${opt.label}]` : staticValue || '{{?}}';
 }
 
@@ -142,7 +144,7 @@ export function MassTemplateDispatcher() {
   const [templates, setTemplates] = useState<MetaTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<MetaTemplate | null>(null);
-  const [variables, setVariables] = useState<Record<string, { mode: string; staticValue: string }>>({});
+  const [variables, setVariables] = useState<Record<string, { mode: string; staticValue: string; externalValue?: string }>>({});
 
   // Audience
   const [audienceSource, setAudienceSource] = useState<'crm' | 'leads' | 'both' | 'ravena' | 'orphans'>('crm');
@@ -1570,6 +1572,22 @@ export function MassTemplateDispatcher() {
                             [v.key]: { ...prev[v.key], staticValue: e.target.value },
                           }))}
                         />
+                      )}
+                      {vc.mode === '__external__' && (
+                        <div className="space-y-1">
+                          <Input
+                            className="h-7 text-xs"
+                            placeholder="Nome do campo (ex.: Link da live)"
+                            value={vc.staticValue}
+                            onChange={e => setVariables(prev => ({
+                              ...prev,
+                              [v.key]: { ...prev[v.key], staticValue: e.target.value },
+                            }))}
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            🔗 O valor será pedido no momento em que você clicar em "Disparar" no histórico.
+                          </p>
+                        </div>
                       )}
                     </div>
                   );

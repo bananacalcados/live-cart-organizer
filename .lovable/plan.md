@@ -1,71 +1,65 @@
-# Base de Órfãos de Grupos VIP — Captura, Disparo e ROAS
+## Objetivo
 
-## Contexto / problema descoberto
-- O typebot da Live grava leads em **`event_leads`** (não em `lp_leads`). O cruzamento antigo ignorava essa tabela, gerando "órfãos" falsos.
-- Hoje não existe um lugar único e confiável que responda: "quantos membros tem cada grupo VIP" e "quem entrou no grupo mas não é cliente nem lead".
-- Precisamos preservar esses contatos (nome + telefone + grupo) e poder disparar para eles depois, medindo se o disparo gera venda (ROAS).
+Criar um novo tipo de variável — **"Campo externo"** — em MARKETING → Disparos. A variável fica configurada dentro do template (junto com público e mensagem salvos como *pausado*/*agendado*), mas o **valor só é preenchido no momento em que você aperta "Disparar"**. Uso principal: link da live shopping, que só existe quando a live começa.
 
-## Objetivos
-1. Saber exatamente quantos membros há em cada grupo VIP, classificados (cliente / lead / órfão).
-2. Nunca perder contato de quem entrou no grupo sem se cadastrar.
-3. Disparar em massa via WhatsApp API para a base de órfãos.
-4. Medir vendas geradas por esses disparos (ROAS).
+### Fluxo pretendido
+1. Monto a mensagem, escolho o público, marco uma variável do corpo como **"Campo externo"** e dou um nome a ela (ex.: `Link da live`).
+2. Salvo como **Pausado** (ou Agendado) com antecedência.
+3. Na hora da live, no **Histórico de disparos**, clico em **Disparar**. Aparece um popup pedindo o valor de cada campo externo (ex.: colar o link da live).
+4. O sistema injeta esse valor na variável e dispara.
 
 ---
 
-## 1. Classificação correta (fim dos falsos órfãos)
-Padronizar o cruzamento para bater contra TODAS as bases de contato por telefone (últimos 8 dígitos):
-`customers_unified`, `event_leads`, `lp_leads`, `ad_leads`, `link_page_leads`.
+## Como funciona hoje (base da decisão)
 
-Criar função SQL `classify_group_member(phone)` → retorna `customer` | `lead` | `orphan`, reutilizada em toda a lógica.
+- Cada variável do template é guardada em `variables_config` (JSONB em `dispatch_history`) no formato `{ mode, staticValue }`.
+- `mode` pode ser `__static__` (texto fixo) ou dinâmico (`__first_name__`, `__city__`, etc., que puxam do destinatário).
+- Ao disparar, a função `dispatch-worker` lê `variables_config` e resolve cada variável.
 
-## 2. Nova tabela: base de órfãos (persistente)
-`vip_orphan_contacts` — um registro por pessoa única (telefone E.164), nunca some mesmo que a lista do grupo mude:
-- `phone` (único), `phone_suffix8`, `display_name`
-- `group_ids text[]`, `group_names text[]` (todos os grupos VIP onde apareceu)
-- `first_seen_at`, `last_seen_at`
-- `status`: `orphan` | `promoted` (virou cliente/lead depois) | `opted_out`
-- `opted_out` bool (respeita bloqueios / descadastro)
-- `metadata jsonb`
-- timestamps + GRANTs + RLS + trigger updated_at.
-
-## 3. Função de atualização + contagem por grupo
-- `refresh_vip_orphans()`: recomputa a partir de `whatsapp_group_members` vs. todas as bases; faz UPSERT na `vip_orphan_contacts`, marca como `promoted` quem virou cliente/lead, acumula grupos. Idempotente.
-- View `vip_group_membership_stats`: por grupo → total, clientes, leads, órfãos, % (fonte única para o painel).
-- Acionada por botão "Atualizar base" no painel e opcionalmente por cron diário.
-
-## 4. Disparo em massa (WhatsApp API)
-Reutiliza a infra e regras anti-ban já existentes (throttling, cooldown, claim atômico — ver memórias de dispatch).
-- `mass_dispatch_campaigns`: nome, mensagem/template, filtros de público (grupo, tem nome, não opt-out), status, contadores, janela de atribuição (dias), criado_em.
-- `mass_dispatch_targets`: campanha × contato, status (`pending`/`sent`/`failed`), `sent_at`, `message_id`, telefone.
-- Edge function `vip-orphan-dispatch`: processa em lote, roteia pelo provider real (uazapi/wasender) respeitando instância, delays humanos e supressão de contatos bloqueados. Grava opt-out quando o contato pede saída.
-
-## 5. Análise de ROAS
-- View `mass_dispatch_roas`: junta `mass_dispatch_targets` → vendas (`pos_sales` / `orders`) pelo sufixo de 8 dígitos, dentro da janela de atribuição da campanha.
-- Métricas por campanha: enviados, entregues, compradores atribuídos, receita, ticket médio, taxa de conversão. (Custo de mídia = 0; ROAS = receita atribuída; opcional campo de custo manual.)
-
-## 6. UI — nova sub-aba em Marketing → Grupos VIP
-- **Dashboard de Membros**: contagem por grupo (cliente/lead/órfão) usando `vip_group_membership_stats`; botão "Atualizar base".
-- **Base de Órfãos**: lista (nome, telefone, grupos), busca/filtros, exportar Excel/CSV, status opt-out.
-- **Disparos**: criar campanha (mensagem/template + público), disparar, acompanhar progresso.
-- **ROAS**: painel por campanha (enviados → compradores → receita).
+A ideia se encaixa perfeitamente adicionando um novo `mode = '__external__'` — **sem mudar o banco** (o campo já é JSONB) e sem quebrar nada que já existe.
 
 ---
 
-## Detalhes técnicos
-- Chave de identidade: telefone E.164 com 9º dígito (padrão do projeto); match por DDD + 8 últimos dígitos.
-- Toda tabela nova em `public`: `CREATE TABLE` → `GRANT` (`authenticated` + `service_role`) → `ENABLE RLS` → policies → trigger `updated_at`.
-- Órfão que vira cliente/lead é marcado `promoted` e excluído automaticamente dos disparos.
-- Respeitar `blocked_contacts` e opt-out em todo disparo.
-- Sem dependência do Tiny; base 100% local.
+## Mudanças
 
-## Fora de escopo (por ora)
-- Fluxos de automação/nurture multi-etapa (só disparo único inicialmente).
-- Cobrança/custo de mídia detalhado no ROAS (campo manual opcional).
+### 1. Editor de variáveis — `src/components/marketing/MassTemplateDispatcher.tsx`
+- Adicionar a opção `{ value: '__external__', label: '🔗 Campo externo (preencher ao disparar)' }` na lista de tipos de variável.
+- Quando a variável estiver nesse modo, mostrar um input para **nomear o campo** (ex.: "Link da live"). Esse nome é guardado em `staticValue` (reaproveitando o campo) e será usado como rótulo do popup na hora do disparo.
+- `getPreviewLabel` passa a mostrar `[🔗 Link da live]` na pré-visualização.
+- O `variables_config` salvo continua idêntico em estrutura — só passa a poder conter `mode: '__external__'`.
 
-## Ordem de implementação
-1. Função `classify_group_member` + view `vip_group_membership_stats`.
-2. Tabela `vip_orphan_contacts` + `refresh_vip_orphans()`.
-3. UI Dashboard de Membros + Base de Órfãos (leitura + export).
-4. Tabelas de campanha + edge function de disparo.
-5. View + painel de ROAS.
+### 2. Popup de preenchimento no disparo — `src/components/marketing/DispatchHistoryList.tsx`
+- No `handleTriggerNow`, antes de acionar o envio, ler `variables_config` do disparo e detectar variáveis com `mode === '__external__'`.
+- Se houver: abrir um **diálogo** listando cada campo externo (pelo nome dado) com um input.
+- Ao confirmar: gravar o valor digitado em cada variável externa dentro de `variables_config` (num campo `externalValue`), atualizar o registro em `dispatch_history` e só então acionar o envio.
+- Se não houver campo externo: comportamento atual, sem popup.
+- A variável **continua marcada como externa** depois do disparo, então o mesmo disparo pausado pode ser reaproveitado em outra live (basta duplicar e disparar de novo, informando um link novo).
+
+### 3. Resolução no envio — `supabase/functions/dispatch-worker/index.ts`
+- Nas funções que resolvem variáveis (`resolveVariable` e os helpers de corpo/header), tratar `mode === '__external__'` retornando `externalValue` (o valor preenchido no popup), com fallback para vazio.
+- Garantir que o modo externo **não** caia no ramo de texto fixo nem exija dados do destinatário (o valor é igual para todos).
+
+---
+
+## Segurança / não-quebra
+
+- **Sem migração de banco** — `variables_config` já é JSONB flexível.
+- Disparos e templates existentes não usam `__external__`, então nada muda para eles.
+- Se um disparo com campo externo for acionado sem valor preenchido (ex.: cron de agendamento automático), a variável resolve para vazio em vez de travar o envio — mas o caminho recomendado para live é **salvar como Pausado e disparar manualmente**, que é onde o popup aparece.
+- Nenhuma alteração em lógica de público, cobrança ou envio em si — apenas resolução de uma variável.
+
+---
+
+## Detalhes técnicos (resumo p/ referência)
+
+| Camada | Arquivo | O que muda |
+|---|---|---|
+| UI config | `MassTemplateDispatcher.tsx` | Nova opção `__external__` + input de rótulo + preview |
+| UI disparo | `DispatchHistoryList.tsx` | Diálogo de preenchimento no `handleTriggerNow` + update de `variables_config` |
+| Envio | `dispatch-worker/index.ts` | Resolver `__external__` via `externalValue` |
+
+Estrutura da variável externa em `variables_config`:
+```text
+"body_1": { "mode": "__external__", "staticValue": "Link da live", "externalValue": "https://..." }
+                                     ^ nome do campo (config)        ^ valor colado no disparo
+```
