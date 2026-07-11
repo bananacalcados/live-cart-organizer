@@ -1006,6 +1006,40 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           <ShoppingBag className="h-4 w-4" />
         </Button>
 
+        {/* Disparar 2ª/3ª mensagem de template Meta (configurada no evento) */}
+        {followupTemplates.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/10 h-8 w-8"
+                title="Disparar template de acompanhamento"
+                disabled={!!sendingFollowupId}
+              >
+                {sendingFollowupId ? <Loader2 className="h-4 w-4 animate-spin" /> : <Megaphone className="h-4 w-4" />}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="text-xs">Templates de acompanhamento</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {followupTemplates.map((tpl) => (
+                <DropdownMenuItem
+                  key={tpl.id}
+                  onClick={() => handleSendFollowupTemplate(tpl)}
+                  disabled={!!sendingFollowupId}
+                  className="flex-col items-start gap-0.5 cursor-pointer"
+                >
+                  <span className="font-medium text-sm">{tpl.label}</span>
+                  <span className="text-xs text-muted-foreground line-clamp-1">{tpl.templateName}</span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+
+
 
         <Button
           variant="ghost"
