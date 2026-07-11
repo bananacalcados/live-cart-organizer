@@ -152,6 +152,13 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  const discardRecordingRef = useRef(false);
+  // Audio preview (before sending)
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [audioPreviewFile, setAudioPreviewFile] = useState<File | null>(null);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [isSendingAudio, setIsSendingAudio] = useState(false);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
