@@ -1053,6 +1053,16 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           <UserCog className="h-4 w-4" />
         </Button>
 
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-white hover:bg-white/10 h-8 w-8"
+          title="Ver todas as informações do pedido"
+          onClick={() => setDetailsOpen(true)}
+        >
+          <ClipboardList className="h-4 w-4" />
+        </Button>
+
 
         <CreateSupportTicketDialog
           phone={phone}
