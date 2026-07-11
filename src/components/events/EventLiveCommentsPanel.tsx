@@ -861,135 +861,23 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           <div className="divide-y divide-border/60">
             {filtered.map((c) => {
               const handle = cleanHandle(c.username);
-              const isBanned = bannedHandles.has(handle);
-              const hasUnpaid = unpaidOrderByHandle.has(handle);
-              const hasWhatsapp = whatsappByHandle.has(handle);
-              const stats = orderStatsByHandle.get(handle);
-              const leadTag = leadTagByHandle.get(handle);
-              const score = scoreByHandle.get(handle);
-              const scoreMeta = score ? SCORE_META[score.category] : undefined;
               return (
-                <div key={c.id} className="flex gap-2.5 px-3 py-2.5 hover:bg-muted/40">
-                  <Avatar className="h-9 w-9 shrink-0">
-                    {c.profile_pic_url && <AvatarImage src={c.profile_pic_url} alt={handle} />}
-                    <AvatarFallback className="bg-pink-500/20 text-pink-600 text-xs">
-                      {handle.slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <button
-                        onClick={() => openForHandle(c.username)}
-                        title="Abrir / criar pedido deste cliente"
-                        className="flex items-center gap-1 text-sm font-semibold text-pink-600 hover:underline dark:text-pink-300"
-                      >
-                        <ShoppingBag className="h-3 w-3" />@{handle}
-                      </button>
-                      {scoreMeta && (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase",
-                            scoreMeta.className,
-                          )}
-                          title={`Score de participação: ${score!.score} • ${score!.liveCount} live(s)`}
-                        >
-                          <Sparkles className="h-2.5 w-2.5" />
-                          {scoreMeta.label} {score!.score}
-                        </span>
-                      )}
-                      {leadTag?.thisEvent && (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full bg-pink-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
-                          title="Captado pela LP/Typebot deste evento"
-                        >
-                          <Tag className="h-2.5 w-2.5" />
-                          Lead
-                        </span>
-                      )}
-                      {leadTag && !leadTag.thisEvent && leadTag.otherEvent && (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full bg-fuchsia-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
-                          title={
-                            leadTag.otherEventName
-                              ? `Captado em: ${leadTag.otherEventName}${
-                                  leadTag.otherSource
-                                    ? ` (via ${LEAD_SOURCE_LABEL[leadTag.otherSource] || leadTag.otherSource})`
-                                    : ""
-                                }`
-                              : "Já captado em outra campanha/evento de marketing"
-                          }
-                        >
-                          <Tag className="h-2.5 w-2.5" />
-                          {leadTag.otherEventName
-                            ? `Lead: ${leadTag.otherEventName}`
-                            : "Lead de outra campanha"}
-                        </span>
-                      )}
-                      {isBanned && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase text-destructive-foreground">
-                          <Ban className="h-2.5 w-2.5" />
-                          Banido
-                        </span>
-                      )}
-                      {hasUnpaid && (
-                        <span className="rounded-full bg-neutral-900 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
-                          Pedido aberto
-                        </span>
-                      )}
-                      {stats && stats.paidThisEvent > 0 && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-green-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
-                          <CheckCircle2 className="h-2.5 w-2.5" />
-                          Concluído neste evento
-                        </span>
-                      )}
-                      {stats && stats.paidPast > 0 && (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white"
-                          title={stats.paidDates.length ? `Eventos: ${stats.paidDates.join(" • ")}` : undefined}
-                        >
-                          <CheckCircle2 className="h-2.5 w-2.5" />
-                          {stats.paidPast} {stats.paidPast === 1 ? "compra anterior" : "compras anteriores"}
-                          {stats.paidDates.length > 0 && ` (${stats.paidDates.slice(0, 3).join(", ")}${stats.paidDates.length > 3 ? "…" : ""})`}
-                        </span>
-                      )}
-                      {stats && stats.openPast > 0 && (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-black"
-                          title={stats.openDates.length ? `Eventos: ${stats.openDates.join(" • ")}` : "Pedidos feitos em lives anteriores que nunca foram pagos"}
-                        >
-                          <AlertTriangle className="h-2.5 w-2.5" />
-                          {stats.openPast} {stats.openPast === 1 ? "não finalizado" : "não finalizados"}
-                          {stats.openDates.length > 0 && ` (${stats.openDates.slice(0, 3).join(", ")}${stats.openDates.length > 3 ? "…" : ""})`}
-                        </span>
-                      )}
-                      <span className="ml-auto text-[10px] text-muted-foreground">{timeLabel(c.created_at)}</span>
-                    </div>
-                    <p className="mt-0.5 break-words text-sm text-foreground/90">{c.comment_text}</p>
-                    {/* Ações: abrir chat do Instagram / WhatsApp */}
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      <button
-                        onClick={() => openInstagramChat(c.username)}
-                        title="Abrir DM do Instagram"
-                        className="inline-flex items-center gap-1 rounded-md bg-pink-500/10 px-2 py-1 text-[11px] font-medium text-pink-600 hover:bg-pink-500/20 dark:text-pink-300"
-                      >
-                        <Instagram className="h-3 w-3" />
-                        Instagram
-                      </button>
-                      {hasWhatsapp && (
-                        <button
-                          onClick={() => openWhatsappChat(c.username)}
-                          title="Abrir conversa no WhatsApp"
-                          className="inline-flex items-center gap-1 rounded-md bg-green-500/10 px-2 py-1 text-[11px] font-medium text-green-600 hover:bg-green-500/20 dark:text-green-400"
-                        >
-                          <MessageCircle className="h-3 w-3" />
-                          WhatsApp
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <CommentRow
+                  key={c.id}
+                  comment={c}
+                  isBanned={bannedHandles.has(handle)}
+                  hasUnpaid={unpaidOrderByHandle.has(handle)}
+                  hasWhatsapp={whatsappByHandle.has(handle)}
+                  stats={orderStatsByHandle.get(handle)}
+                  leadTag={leadTagByHandle.get(handle)}
+                  score={scoreByHandle.get(handle)}
+                  onOpenOrder={openForHandle}
+                  onOpenInstagram={openInstagramChat}
+                  onOpenWhatsapp={openWhatsappChat}
+                />
               );
             })}
+
 
           </div>
         )}
