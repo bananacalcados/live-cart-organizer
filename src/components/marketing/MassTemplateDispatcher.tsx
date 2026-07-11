@@ -2322,6 +2322,30 @@ export function MassTemplateDispatcher() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {!editDispatchId && (
+                  <div className="flex items-center gap-1 mr-1 rounded-md border px-2 py-1">
+                    <Label className="text-[11px] text-muted-foreground">Dividir em</Label>
+                    <Input
+                      type="number"
+                      min={2}
+                      max={10}
+                      value={splitCount}
+                      onChange={e => setSplitCount(e.target.value)}
+                      className="h-7 w-12 text-xs px-1 text-center"
+                    />
+                    <span className="text-[11px] text-muted-foreground">partes</span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 gap-1 text-xs ml-1"
+                      disabled={isSending || selectedCount === 0 || !selectedTemplate || (Number(splitCount) || 0) < 2}
+                      onClick={openSplitDialog}
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      Dividir
+                    </Button>
+                  </div>
+                )}
                 <Button
                   variant="outline"
                   className="gap-1.5 text-xs"
