@@ -647,6 +647,13 @@ const Events = () => {
                          }}
                        />
                      )}
+                     {channelPreferences.includes("meta_whatsapp") && (
+                       <EventFollowupTemplates
+                         whatsappNumberId={selectedWhatsAppId && selectedWhatsAppId !== "none" ? selectedWhatsAppId : null}
+                         templates={followupTemplates}
+                         onChange={setFollowupTemplates}
+                       />
+                     )}
                   <InitialMessageEditor
                     enabled={initialMessageEnabled}
                     blocks={initialMessageBlocks}
