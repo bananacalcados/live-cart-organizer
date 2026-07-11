@@ -4399,6 +4399,33 @@ export type Database = {
           },
         ]
       }
+      event_pinned_conversations: {
+        Row: {
+          created_at: string
+          event_id: string | null
+          id: string
+          order_id: string
+          pinned_by: string | null
+          pinned_by_name: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          order_id: string
+          pinned_by?: string | null
+          pinned_by_name?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          order_id?: string
+          pinned_by?: string | null
+          pinned_by_name?: string | null
+        }
+        Relationships: []
+      }
       event_promotions: {
         Row: {
           created_at: string
@@ -4633,6 +4660,7 @@ export type Database = {
           default_store_id: string | null
           description: string | null
           end_date: string | null
+          followup_templates: Json
           free_shipping_threshold: number | null
           id: string
           initial_message_blocks: Json
@@ -4667,6 +4695,7 @@ export type Database = {
           default_store_id?: string | null
           description?: string | null
           end_date?: string | null
+          followup_templates?: Json
           free_shipping_threshold?: number | null
           id?: string
           initial_message_blocks?: Json
@@ -4701,6 +4730,7 @@ export type Database = {
           default_store_id?: string | null
           description?: string | null
           end_date?: string | null
+          followup_templates?: Json
           free_shipping_threshold?: number | null
           id?: string
           initial_message_blocks?: Json
