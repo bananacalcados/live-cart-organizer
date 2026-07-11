@@ -1405,6 +1405,128 @@ export function MassTemplateDispatcher() {
     }
   };
 
+  // Open the split dialog, initializing one row per part (default: all paused).
+  const openSplitDialog = () => {
+    const n = Math.max(2, Math.min(10, Number(splitCount) || 2));
+    setSplitParts(Array.from({ length: n }, () => ({ mode: 'paused' as const, date: '' })));
+    setSplitDialogOpen(true);
+  };
+
+  // Deterministic round-robin split so every part is a comparable sample of the
+  // audience (same RFM/region/DDD mix) — ideal for testing the same template at
+  // different times. Slices are disjoint (a phone appears in exactly one part).
+  const splitPhonesRoundRobin = (phones: string[], n: number): string[][] => {
+    const parts: string[][] = Array.from({ length: n }, () => []);
+    const sorted = [...phones].sort();
+    sorted.forEach((p, i) => parts[i % n].push(p));
+    return parts;
+  };
+
+  // Save the audience split into N independent dispatches (one per part). Each
+  // part is a normal dispatch: it can be scheduled or left paused for manual
+  // trigger, and (crucially) keeps its own variables_config, so each part prompts
+  // for its own external field value at trigger time (fresh live link per part).
+  const handleSaveSplitDispatch = async () => {
+    if (!selectedTemplate || !selectedNumber) return;
+    const n = splitParts.length;
+    if (n < 2) return;
+
+    const allPhones = [...selectedPhones];
+    if (allPhones.length === 0) {
+      toast.error("Selecione pelo menos um destinatário");
+      return;
+    }
+    for (let i = 0; i < splitParts.length; i++) {
+      if (splitParts[i].mode === 'schedule' && !splitParts[i].date) {
+        toast.error(`Defina a data e hora da Parte ${i + 1}`);
+        return;
+      }
+    }
+
+    if (savingScheduledRef.current) {
+      toast.info("Salvamento já em andamento…");
+      return;
+    }
+    savingScheduledRef.current = true;
+    setSavingSplit(true);
+
+    const recipientMap = new Map(filteredRecipients.map(r => [r.phone, r]));
+    const slices = splitPhonesRoundRobin(allPhones, n);
+    const baseName = campaignName.trim() || selectedTemplate.name;
+
+    try {
+      let created = 0;
+      for (let i = 0; i < n; i++) {
+        const part = splitParts[i];
+        const slicePhones = slices[i];
+        if (slicePhones.length === 0) continue;
+
+        const status = part.mode === 'schedule' ? 'scheduled' : 'scheduled_paused';
+        const insertData: Record<string, any> = {
+          template_name: selectedTemplate.name,
+          campaign_name: `${baseName} — Parte ${i + 1}/${n}`,
+          template_language: selectedTemplate.language,
+          whatsapp_number_id: selectedNumber,
+          audience_source: audienceSource,
+          audience_filters: {
+            rfm: rfmFilter, state: stateFilter, city: cityFilter,
+            ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
+          } as any,
+          total_recipients: slicePhones.length,
+          rendered_message: renderedMessage || null,
+          variables_config: variables as any,
+          force_resend: forceResend,
+          status,
+          template_components: selectedTemplate.components as any,
+          has_dynamic_vars: hasDynamicVars,
+          header_media_url: headerMediaUrl || null,
+          template_category: selectedTemplate.category || 'MARKETING',
+        };
+        if (part.mode === 'schedule') {
+          insertData.scheduled_at = new Date(part.date).toISOString();
+        }
+
+        const { data: dispatchData, error: dispErr } = await supabase
+          .from('dispatch_history')
+          .insert(insertData as any)
+          .select('id')
+          .single();
+        if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
+        const dispatchId = dispatchData.id;
+
+        const recipientRows = slicePhones.map(p => ({
+          dispatch_id: dispatchId,
+          phone: p,
+          recipient_name: recipientMap.get(p)?.name || null,
+          status: 'pending',
+        }));
+        for (let j = 0; j < recipientRows.length; j += 500) {
+          const { error: insErr } = await supabase
+            .from('dispatch_recipients')
+            .upsert(recipientRows.slice(j, j + 500), {
+              onConflict: 'dispatch_id,phone',
+              ignoreDuplicates: true,
+            });
+          if (insErr) throw insErr;
+        }
+        created++;
+      }
+
+      toast.success(`✅ Público dividido em ${created} disparos — gerencie cada parte no histórico`);
+      setSplitDialogOpen(false);
+      setScheduleMode('none');
+      setHistoryKey(k => k + 1);
+    } catch (err) {
+      console.error('Error saving split dispatch:', err);
+      toast.error("Erro ao salvar disparo dividido");
+    } finally {
+      savingScheduledRef.current = false;
+      setSavingSplit(false);
+    }
+  };
+
+
+
   // Handle duplicate from history
   const handleDuplicate = useCallback((data: DuplicateDispatchData) => {
     // Track edit mode (update existing dispatch instead of creating a new one)
