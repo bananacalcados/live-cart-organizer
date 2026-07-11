@@ -1550,10 +1550,11 @@ export default function TransparentCheckout() {
   }, [orderId]);
 
   // Per-event installment override: "acima de R$ X, parcelar em até N× sem juros".
+  // Carrega apenas os parâmetros do evento; a combinação com a config base é feita
+  // no useMemo `installmentConfig`, evitando corrida entre setters async.
   useEffect(() => {
     const evId = orderData?.eventId;
-    const total = orderData?.totalAmount;
-    if (!evId || total == null) return;
+    if (!evId) { setEventInstallment(null); return; }
     (async () => {
       try {
         const { data } = await supabase
@@ -1562,18 +1563,25 @@ export default function TransparentCheckout() {
           .eq("id", evId)
           .maybeSingle();
         const maxInst = Number((data as any)?.installment_max || 0);
-        if (!maxInst) return;
+        if (!maxInst) { setEventInstallment(null); return; }
         const minVal = Number((data as any)?.installment_min_value || 0);
-        if (total >= minVal) {
-          setInstallmentConfig((prev) => ({
-            ...prev,
-            max_installments: maxInst,
-            interest_free_installments: Math.max(prev.interest_free_installments, maxInst),
-          }));
-        }
-      } catch {}
+        setEventInstallment({ minVal, maxInst });
+      } catch {
+        setEventInstallment(null);
+      }
     })();
-  }, [orderData?.eventId, orderData?.totalAmount]);
+  }, [orderData?.eventId]);
+
+  // Config efetiva: base (app_settings) + override do evento quando o total atinge o mínimo.
+  const installmentConfig = useMemo<InstallmentConfig>(() => {
+    const cfg = { ...baseInstallmentConfig };
+    const total = orderData?.totalAmount;
+    if (eventInstallment && eventInstallment.maxInst > 0 && total != null && total >= eventInstallment.minVal) {
+      cfg.max_installments = Math.max(cfg.max_installments, eventInstallment.maxInst);
+      cfg.interest_free_installments = Math.max(cfg.interest_free_installments, eventInstallment.maxInst);
+    }
+    return cfg;
+  }, [baseInstallmentConfig, eventInstallment, orderData?.totalAmount]);
 
   // ===== Etapa A — Carregar ofertas de crossell após o pedido estar pronto =====
   useEffect(() => {
