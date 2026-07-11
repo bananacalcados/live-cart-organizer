@@ -192,7 +192,6 @@ Deno.serve(async (req) => {
     if (rows.length === 0) return json({ error: "no_instagram_accounts_configured" }, 404);
 
     const liveRows: any[] = [];
-    const messageRows: any[] = [];
     const linkRows: any[] = [];
     const scanned: any[] = [];
     const errors: string[] = [];
@@ -229,20 +228,6 @@ Deno.serve(async (req) => {
             ai_confidence: cls.confidence,
           });
 
-          messageRows.push({
-            phone: c.from?.id || c.id,
-            message: `💬 Comentário no Live: ${text}`,
-            direction: "incoming",
-            message_id: c.id,
-            status: "received",
-            media_type: "text",
-            is_group: false,
-            channel: "instagram",
-            sender_name: `@${username}`,
-            whatsapp_number_id: account.id,
-            created_at: createdAt,
-          });
-
           if (c.from?.id) {
             linkRows.push({ username, ig_user_id: c.from.id, source: "live_media_sync" });
           }
@@ -251,11 +236,9 @@ Deno.serve(async (req) => {
     }
 
     const uniqueLive = Array.from(new Map(liveRows.map((r) => [`${r.event_id}:${r.comment_id}`, r])).values());
-    const uniqueMessages = Array.from(new Map(messageRows.map((r) => [`${r.channel}:${r.message_id}`, r])).values());
     const uniqueLinks = Array.from(new Map(linkRows.map((r) => [r.username, r])).values());
 
     let insertedLive = 0;
-    let insertedMessages = 0;
 
     if (uniqueLive.length > 0) {
       const { data, error } = await supabase
@@ -264,19 +247,6 @@ Deno.serve(async (req) => {
         .select("id");
       if (error) return json({ error: "live_comments_upsert_failed", details: error.message }, 500);
       insertedLive = data?.length || 0;
-    }
-
-    if (uniqueMessages.length > 0) {
-      // A constraint de whatsapp_messages já bloqueia duplicados por canal+message_id.
-      // Inserimos um a um para ignorar comentários que já chegaram via webhook comum.
-      for (const row of uniqueMessages) {
-        const { error } = await supabase.from("whatsapp_messages").insert(row);
-        if (!error) {
-          insertedMessages += 1;
-        } else if ((error as any).code !== "23505") {
-          console.warn("[instagram-live-sync] whatsapp_messages insert failed:", error.message);
-        }
-      }
     }
 
     if (uniqueLinks.length > 0) {
@@ -292,7 +262,6 @@ Deno.serve(async (req) => {
       scanned,
       comments_found: uniqueLive.length,
       live_comments_inserted: insertedLive,
-      whatsapp_messages_inserted: insertedMessages,
       provider_errors: errors.slice(0, 4),
     });
   } catch (err) {
