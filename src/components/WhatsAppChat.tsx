@@ -1311,7 +1311,28 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
       {/* Input Area */}
       <div className="flex items-center gap-1 px-2 py-2 bg-[#F0F0F0]">
-        {isRecording ? (
+        {audioPreviewUrl ? (
+          <>
+            <audio
+              ref={audioPreviewRef}
+              src={audioPreviewUrl}
+              onEnded={() => setIsPlayingPreview(false)}
+              className="hidden"
+            />
+            <Button size="icon" variant="ghost" onClick={discardAudioPreview} className="h-10 w-10 text-destructive" disabled={isSendingAudio}>
+              <Trash2 className="h-5 w-5" />
+            </Button>
+            <div className="flex-1 flex items-center gap-2 px-2">
+              <Button size="icon" variant="ghost" onClick={togglePreviewPlayback} className="h-9 w-9 rounded-full bg-white shadow-sm">
+                {isPlayingPreview ? <Pause className="h-4 w-4 text-[#075E54]" /> : <Play className="h-4 w-4 text-[#075E54]" />}
+              </Button>
+              <span className="text-xs text-muted-foreground">Ouça antes de enviar</span>
+            </div>
+            <Button size="icon" onClick={sendAudioPreview} disabled={isSendingAudio} className="h-10 w-10 rounded-full bg-[#075E54] hover:bg-[#064E46] p-0">
+              {isSendingAudio ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+            </Button>
+          </>
+        ) : isRecording ? (
           <>
             <Button size="icon" variant="ghost" onClick={cancelRecording} className="h-10 w-10 text-destructive">
               <X className="h-5 w-5" />
@@ -1322,7 +1343,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               <span className="text-xs text-muted-foreground">Gravando...</span>
             </div>
             <Button size="icon" onClick={stopRecording} className="h-10 w-10 rounded-full bg-[#075E54] hover:bg-[#064E46] p-0">
-              <Send className="h-5 w-5" />
+              <Square className="h-5 w-5" />
             </Button>
           </>
         ) : (
