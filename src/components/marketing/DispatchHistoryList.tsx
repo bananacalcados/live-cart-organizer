@@ -830,6 +830,15 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                           {(d.status === 'scheduled' || d.status === 'scheduled_paused') ? (
                             <>
                               <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 gap-1 text-xs"
+                                onClick={(e) => handleOpenTest(d.id, e)}
+                                title="Enviar teste com o template, variáveis e campo externo já configurados"
+                              >
+                                <TestTube className="h-3 w-3" />Testar
+                              </Button>
+                              <Button
                                 variant="default"
                                 size="sm"
                                 className="h-7 px-2.5 gap-1 text-xs"
@@ -837,6 +846,7 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                               >
                                 <Play className="h-3 w-3" />Disparar
                               </Button>
+
                               <Button
                                 variant="ghost"
                                 size="sm"
