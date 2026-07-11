@@ -2464,6 +2464,95 @@ export function MassTemplateDispatcher() {
         </DialogContent>
       </Dialog>
 
+      {/* Split Dispatch Dialog — divide audience into N parts, each its own dispatch */}
+      <Dialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              Dividir público em {splitParts.length} partes
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-2">
+              <Label className="text-sm">Nome da campanha (opcional)</Label>
+              <Input
+                placeholder="Ex: Convite Live"
+                value={campaignName}
+                onChange={e => setCampaignName(e.target.value)}
+                className="h-8 text-sm"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Cada parte fica com "— Parte X/{splitParts.length}". Divisão intercalada (amostras equivalentes), sem sobreposição de contatos.
+              </p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
+              <p className="font-medium">Template: <span className="font-mono">{selectedTemplate?.name}</span></p>
+              <p>Total selecionado: <span className="font-bold">{selectedCount}</span> · ≈ <span className="font-bold">{Math.ceil(selectedCount / Math.max(1, splitParts.length))}</span> por parte</p>
+            </div>
+
+            {hasExternalVars && (
+              <div className="rounded-md border border-amber-400/50 bg-amber-50 dark:bg-amber-950/30 p-2 text-[11px] text-amber-700 dark:text-amber-300 flex gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>
+                  Este template usa <strong>campo externo</strong> (ex.: link da live). Para trocar o link a cada horário, deixe as partes como <strong>Pausada</strong> e dispare manualmente pelo histórico — cada parte pedirá seu próprio link. Se agendar, o link precisa ser preenchido antes do horário, senão sai vazio.
+                </span>
+              </div>
+            )}
+
+            <div className="space-y-2 max-h-[280px] overflow-y-auto pr-1">
+              {splitParts.map((part, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-md border p-2">
+                  <Badge variant="outline" className="shrink-0">Parte {i + 1}</Badge>
+                  <Select
+                    value={part.mode}
+                    onValueChange={(v) => setSplitParts(prev => prev.map((p, idx) => idx === i ? { ...p, mode: v as 'schedule' | 'paused' } : p))}
+                  >
+                    <SelectTrigger className="h-8 w-[130px] text-xs shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="paused">⏸️ Pausada</SelectItem>
+                      <SelectItem value="schedule">📅 Agendar</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {part.mode === 'schedule' && (
+                    <Input
+                      type="datetime-local"
+                      value={part.date}
+                      onChange={e => setSplitParts(prev => prev.map((p, idx) => idx === i ? { ...p, date: e.target.value } : p))}
+                      className="h-8 text-xs flex-1"
+                    />
+                  )}
+                  {part.mode === 'paused' && (
+                    <span className="text-[11px] text-muted-foreground flex-1">Dispara manualmente pelo histórico</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox
+                id="force-resend-split"
+                checked={forceResend}
+                onCheckedChange={(v) => setForceResend(!!v)}
+              />
+              <Label htmlFor="force-resend-split" className="text-sm font-medium text-amber-600 dark:text-amber-400 cursor-pointer">
+                ⚠️ Forçar reenvio (envia mesmo para quem já recebeu hoje)
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSplitDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveSplitDispatch} disabled={savingSplit} className="gap-1">
+              {savingSplit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
+              Criar {splitParts.length} disparos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
       {/* Schedule/Pause Dialog */}
       <Dialog open={scheduleMode !== 'none'} onOpenChange={(o) => !o && setScheduleMode('none')}>
         <DialogContent>
