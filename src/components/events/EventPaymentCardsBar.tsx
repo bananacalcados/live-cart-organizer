@@ -97,6 +97,8 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const currentUserId = useCurrentUserId();
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [stepByOrder, setStepByOrder] = useState<Record<string, number>>({});
+  const [detailsOrder, setDetailsOrder] = useState<DbOrder | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
 
