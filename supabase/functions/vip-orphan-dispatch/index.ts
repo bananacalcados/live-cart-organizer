@@ -5,6 +5,7 @@ import {
   uazapiInstance,
   formatUazapiNumber,
 } from "../_shared/uazapi-credentials.ts";
+import { loadBlockedSuffixes, isBlocked } from "../_shared/blocked-guard.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
