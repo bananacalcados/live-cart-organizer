@@ -194,19 +194,25 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
         .eq("event_id", eventId)
         .order("created_at", { ascending: false })
         .limit(2000),
-      // 2) SOMENTE comentários da LIVE (vídeo ao vivo) que chegaram pelo webhook do Meta.
-      //    Ignora STORIES, FEED, REELS e posts — esses ficam com outro prefixo
-      //    ("💬 Comentário no Reel/post: ..."). Só "💬 Comentário no Live:" é live shopping.
+      // 2) Comentários de vídeo que chegaram pelo webhook do Meta.
+      //    IMPORTANTE: o Meta classifica de forma INCONSISTENTE os comentários de
+      //    uma live — muitos chegam rotulados como "Reel"/"post" (media_product_type
+      //    REELS/post) mesmo tendo sido feitos no vídeo AO VIVO. Por isso NÃO dá para
+      //    filtrar só "💬 Comentário no Live:%": isso derruba comentários reais da live.
+      //    Puxamos todos os prefixos "💬 Comentário no <surface>:" dentro da faixa de
+      //    datas do evento (que já delimita o período da live). Story reply não usa
+      //    esse prefixo, então continua de fora.
       supabase
         .from("whatsapp_messages")
         .select("id, sender_name, message, created_at")
         .eq("channel", "instagram")
         .eq("direction", "incoming")
-        .ilike("message", "💬 Comentário no Live:%")
+        .ilike("message", "💬 Comentário no %")
         .gte("created_at", startIso)
         .lte("created_at", endIso)
         .order("created_at", { ascending: false })
-        .limit(3000),
+        .limit(5000),
+
     ]);
 
     const merged: LiveComment[] = [];
