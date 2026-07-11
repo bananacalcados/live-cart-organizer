@@ -248,6 +248,7 @@ export default function Home() {
             </Card>
           ))}
         </div>
+        )}
       </main>
     </div>
   );
