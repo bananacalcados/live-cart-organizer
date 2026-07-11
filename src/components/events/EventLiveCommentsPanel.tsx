@@ -592,7 +592,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
     return map;
   }, [orders]);
 
-  const openForHandle = (rawHandle: string) => {
+  const openForHandle = useCallback((rawHandle: string) => {
     const clean = cleanHandle(rawHandle);
     const unpaid = unpaidOrderByHandle.get(clean);
     if (unpaid) {
@@ -603,18 +603,18 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       setPrefillHandle(clean);
     }
     setDialogOpen(true);
-  };
+  }, [unpaidOrderByHandle]);
 
   // Abre a DM do Instagram do @ que comentou
-  const openInstagramChat = (rawHandle: string) => {
+  const openInstagramChat = useCallback((rawHandle: string) => {
     const clean = cleanHandle(rawHandle);
     if (!clean) return;
     setIgChatHandle(clean);
     setIgChatOpen(true);
-  };
+  }, []);
 
   // Abre o chat de WhatsApp (se o cliente tiver telefone cadastrado)
-  const openWhatsappChat = (rawHandle: string) => {
+  const openWhatsappChat = useCallback((rawHandle: string) => {
     const clean = cleanHandle(rawHandle);
     const whatsapp = whatsappByHandle.get(clean);
     if (!whatsapp) return;
@@ -628,7 +628,8 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       updatedAt: new Date(),
     } as Order);
     setWaChatOpen(true);
-  };
+  }, [whatsappByHandle]);
+
 
 
 
