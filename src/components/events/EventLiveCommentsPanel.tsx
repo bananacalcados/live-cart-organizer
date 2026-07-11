@@ -686,7 +686,12 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           const row = payload.new as any;
           if (row?.direction !== "incoming") return;
           const message = (row?.message || "").toString();
-          if (!message.startsWith("💬 Comentário no Live:")) return;
+          // O Meta rotula os comentários da live de forma INCONSISTENTE
+          // ("Live", "Reel" ou "post"). Aceitamos qualquer prefixo
+          // "💬 Comentário no <surface>:" — igual à consulta inicial —
+          // senão comentários reais da live entram só no polling de 60s
+          // (é o que causava os comentários "defasados").
+          if (!/^💬\s*Coment[áa]rio\s+no\s+[^:]+:/i.test(message)) return;
           const username = (row?.sender_name || "").toString();
           if (!username.startsWith("@")) return;
           const created = (row?.created_at as string) || new Date().toISOString();
