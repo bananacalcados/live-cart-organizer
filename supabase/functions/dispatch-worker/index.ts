@@ -296,7 +296,7 @@ serve(async (req) => {
       });
     }
 
-    if (['cancelled', 'paused', 'completed', 'failed'].includes(dispatch.status)) {
+    if (!isTest && ['cancelled', 'paused', 'completed', 'failed'].includes(dispatch.status)) {
       return new Response(JSON.stringify({ skipped: true, status: dispatch.status }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
