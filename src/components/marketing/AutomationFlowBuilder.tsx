@@ -2326,39 +2326,23 @@ function AudienceSelector({ triggerConfig, onChange }: { triggerConfig: any; onC
   const selectedRfmSegments: string[] = triggerConfig.audience_rfm_segments || [];
   const audienceMode: string = triggerConfig.audience_mode || "trigger";
 
-  const fetchAllPaginated = async (table: string, column: string): Promise<any[]> => {
-    const allData: any[] = [];
-    const pageSize = 1000;
-    let from = 0;
-    let hasMore = true;
-    while (hasMore) {
-      const { data, error } = await (supabase as any).from(table).select(column).range(from, from + pageSize - 1);
-      if (error || !data || data.length === 0) { hasMore = false; break; }
-      allData.push(...data);
-      if (data.length < pageSize) hasMore = false;
-      else from += pageSize;
-    }
-    return allData;
-  };
-
   useEffect(() => {
     setLoadingCampaigns(true);
     setLoadingRfm(true);
     Promise.all([
-      fetchAllPaginated("lp_leads", "campaign_tag").then((data) => {
-        const counts: Record<string, number> = {};
-        data.forEach((d: any) => { if (d.campaign_tag) counts[d.campaign_tag] = (counts[d.campaign_tag] || 0) + 1; });
-        setCampaigns(Object.entries(counts).map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
+      (supabase as any).rpc("lead_campaign_counts").then(({ data }: any) => {
+        const rows = (data || []) as { value: string; cnt: number }[];
+        setCampaigns(rows.map((r) => ({ tag: r.value, count: Number(r.cnt) })).sort((a, b) => b.count - a.count));
         setLoadingCampaigns(false);
       }),
-      fetchAllPaginated("crm_customers_v", "rfm_segment").then((data) => {
-        const counts: Record<string, number> = {};
-        data.forEach((d: any) => { if (d.rfm_segment) counts[d.rfm_segment] = (counts[d.rfm_segment] || 0) + 1; });
-        setRfmSegments(Object.entries(counts).map(([segment, count]) => ({ segment, count })).sort((a, b) => b.count - a.count));
+      (supabase as any).rpc("crm_facet_counts", { p_column: "rfm_segment" }).then(({ data }: any) => {
+        const rows = (data || []) as { value: string; cnt: number }[];
+        setRfmSegments(rows.map((r) => ({ segment: r.value, count: Number(r.cnt) })).sort((a, b) => b.count - a.count));
         setLoadingRfm(false);
       }),
     ]);
   }, []);
+
 
   const toggleCampaign = (tag: string) => {
     const current = [...selectedCampaigns];
