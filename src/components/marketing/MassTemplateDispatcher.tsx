@@ -144,7 +144,7 @@ export function MassTemplateDispatcher() {
   const [templates, setTemplates] = useState<MetaTemplate[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<MetaTemplate | null>(null);
-  const [variables, setVariables] = useState<Record<string, { mode: string; staticValue: string }>>({});
+  const [variables, setVariables] = useState<Record<string, { mode: string; staticValue: string; externalValue?: string }>>({});
 
   // Audience
   const [audienceSource, setAudienceSource] = useState<'crm' | 'leads' | 'both' | 'ravena' | 'orphans'>('crm');
