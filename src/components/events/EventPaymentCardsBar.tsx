@@ -172,6 +172,80 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
     if (filter === "errors") loadErrors();
   }, [filter, loadErrors]);
 
+  // ── Load team-shared pins for the currently listed orders ──
+  const loadPins = useCallback(async () => {
+    if (orderIds.length === 0) { setPinnedIds(new Set()); return; }
+    const next = new Set<string>();
+    const batchSize = 100;
+    for (let i = 0; i < orderIds.length; i += batchSize) {
+      const batch = orderIds.slice(i, i + batchSize);
+      const { data } = await supabase
+        .from("event_pinned_conversations")
+        .select("order_id")
+        .in("order_id", batch);
+      for (const row of (data || []) as { order_id: string }[]) next.add(row.order_id);
+    }
+    setPinnedIds(next);
+  }, [orderIds]);
+
+  useEffect(() => { loadPins(); }, [loadPins]);
+
+  const togglePin = useCallback(async (order: DbOrder) => {
+    const isPinned = pinnedIds.has(order.id);
+    // Optimistic update
+    setPinnedIds((prev) => {
+      const next = new Set(prev);
+      if (isPinned) next.delete(order.id); else next.add(order.id);
+      return next;
+    });
+    if (isPinned) {
+      await supabase.from("event_pinned_conversations").delete().eq("order_id", order.id);
+    } else {
+      await supabase.from("event_pinned_conversations").insert({
+        order_id: order.id,
+        event_id: (order as any).event_id ?? null,
+        pinned_by: currentUserId || null,
+      } as never);
+    }
+    loadPins();
+  }, [pinnedIds, currentUserId, loadPins]);
+
+  // ── Compute checkout-link step (1/2/3) for listed non-paid orders ──
+  useEffect(() => {
+    const ids = orders.filter((o) => !isOrderMarkedPaid(o)).map((o) => o.id);
+    if (ids.length === 0) { setStepByOrder({}); return; }
+    let cancelled = false;
+    (async () => {
+      const startedMap: Record<string, boolean> = {};
+      for (const o of orders) startedMap[o.id] = !!(o as any).checkout_started_at;
+      const map: Record<string, number> = {};
+      const batchSize = 100;
+      for (let i = 0; i < ids.length; i += batchSize) {
+        const batch = ids.slice(i, i + batchSize);
+        const { data } = await supabase
+          .from("customer_registrations")
+          .select("order_id, full_name, cpf, whatsapp, cep, address, city, state")
+          .in("order_id", batch);
+        const byOrder = new Map<string, any>();
+        for (const r of (data || []) as any[]) byOrder.set(r.order_id, r);
+        for (const id of batch) {
+          const reg = byOrder.get(id);
+          const notPlaceholder = (v?: string | null, ph?: string) =>
+            !!(v && v.trim() && (!ph || v.trim().toUpperCase() !== ph.toUpperCase()));
+          const hasIdentification = !!reg && notPlaceholder(reg.full_name) && notPlaceholder(reg.cpf) && notPlaceholder(reg.whatsapp);
+          const hasAddress = !!reg
+            && notPlaceholder(reg.cep) && reg.cep?.replace(/\D/g, "") !== "00000000"
+            && notPlaceholder(reg.address, "Pendente")
+            && notPlaceholder(reg.city, "Pendente")
+            && notPlaceholder(reg.state);
+          map[id] = hasAddress ? 3 : hasIdentification ? 2 : startedMap[id] ? 1 : 0;
+        }
+      }
+      if (!cancelled) setStepByOrder(map);
+    })();
+    return () => { cancelled = true; };
+  }, [orders]);
+
   const { awaiting, paid } = useMemo(() => {
     const awaitingList: DbOrder[] = [];
     const paidList: DbOrder[] = [];
@@ -184,14 +258,20 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
         awaitingList.push(o);
       }
     }
-    const sortByDate = (a: DbOrder, b: DbOrder) =>
-      new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
-    awaitingList.sort(sortByDate);
-    paidList.sort(sortByDate);
+    // Pinned first, then by date. Team-shared pins keep priority cards at the top.
+    const sortByPinThenDate = (a: DbOrder, b: DbOrder) => {
+      const pa = pinnedIds.has(a.id) ? 1 : 0;
+      const pb = pinnedIds.has(b.id) ? 1 : 0;
+      if (pa !== pb) return pb - pa;
+      return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime();
+    };
+    awaitingList.sort(sortByPinThenDate);
+    paidList.sort(sortByPinThenDate);
     return { awaiting: awaitingList, paid: paidList };
-  }, [orders]);
+  }, [orders, pinnedIds]);
 
   const list = filter === "paid" ? paid : awaiting;
+
 
   return (
     <div className="sticky top-16 z-40 bg-background/95 backdrop-blur border-b border-border/40">
