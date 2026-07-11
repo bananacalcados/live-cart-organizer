@@ -170,6 +170,12 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
   const [externalDialog, setExternalDialog] = useState<{ dispatchId: string; fields: { key: string; label: string }[] } | null>(null);
   const [externalValues, setExternalValues] = useState<Record<string, string>>({});
   const [externalSaving, setExternalSaving] = useState(false);
+  // Test-send: send a single message to a test phone using this dispatch's saved
+  // config (template + variables + external field values), without dispatching.
+  const [testDialog, setTestDialog] = useState<{ dispatchId: string; templateName: string; fields: { key: string; label: string }[] } | null>(null);
+  const [testPhone, setTestPhone] = useState("");
+  const [testExternalValues, setTestExternalValues] = useState<Record<string, string>>({});
+  const [testSending, setTestSending] = useState(false);
 
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
