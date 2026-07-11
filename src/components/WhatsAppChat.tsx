@@ -1525,6 +1525,14 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
       <CustomerFichaDialog open={fichaOpen} onOpenChange={setFichaOpen} order={fichaOrder} />
 
+      <OrderDetailsDialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        orderId={order.id}
+        fallbackWhatsapp={order.whatsapp}
+        fallbackInstagram={order.instagramHandle}
+      />
+
       {dbOrder && (
         <OrderDialogDb
           open={editOrderOpen}
