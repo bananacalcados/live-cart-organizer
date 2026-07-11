@@ -37,6 +37,7 @@ import { OrderDialogDb } from "./OrderDialogDb";
 import type { DbOrder } from "@/types/database";
 import { MessageStatusIcon } from "./chat/MessageStatusIcon";
 import { WhatsAppMediaAttachment } from "./chat/WhatsAppMediaAttachment";
+import type { FollowupTemplate } from "./events/EventFollowupTemplates";
 
 interface Message {
   id: string;
