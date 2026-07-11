@@ -108,6 +108,7 @@ interface Recipient {
 // Dynamic variable options that pull from recipient data
 const DYNAMIC_VARIABLE_OPTIONS = [
   { value: '__static__', label: '✏️ Texto fixo' },
+  { value: '__external__', label: '🔗 Campo externo (preencher ao disparar)' },
   { value: '__first_name__', label: '👤 Primeiro Nome' },
   { value: '__full_name__', label: '👤 Nome Completo' },
   { value: '__phone__', label: '📱 Telefone' },
