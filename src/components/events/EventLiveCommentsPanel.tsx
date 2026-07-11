@@ -283,6 +283,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   const [search, setSearch] = useState("");
   // Só mostra "Carregando..." na primeira carga; refreshes silenciosos não piscam o painel
   const firstLoadRef = useRef(true);
+  const liveSyncInFlightRef = useRef(false);
 
   // Faixa de datas (pente fino)
   const [fromDate, setFromDate] = useState<string>("");
@@ -408,7 +409,8 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
   }, [eventId, fromDate, toDate]);
 
   const syncLiveCommentsFromMeta = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!eventId || liveSyncing) return;
+    if (!eventId || liveSyncInFlightRef.current) return;
+    liveSyncInFlightRef.current = true;
     if (!opts?.silent) {
       setLiveSyncing(true);
       setLiveSyncStatus("Sincronizando live...");
@@ -430,9 +432,10 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
       console.error("instagram-live-sync failed", e);
       if (!opts?.silent) setLiveSyncStatus("Não consegui sincronizar direto da Meta agora.");
     } finally {
+      liveSyncInFlightRef.current = false;
       if (!opts?.silent) setLiveSyncing(false);
     }
-  }, [eventId, liveSyncing, loadComments]);
+  }, [eventId, loadComments]);
 
   useEffect(() => {
     loadComments();
