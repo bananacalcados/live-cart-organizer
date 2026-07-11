@@ -185,6 +185,7 @@ function buildComponentsForRecipient(
   const resolve = (key: string) => {
     const vc = variablesConfig[key];
     if (!vc) return '';
+    if (vc.mode === '__external__') return vc.externalValue ?? '';
     if (vc.mode === '__static__') return vc.staticValue || 'Cliente';
     if (!recipient || !hasDynamicVars) return vc.staticValue || 'Cliente';
     return resolveVariable(vc, recipient) || 'Cliente';
