@@ -214,6 +214,13 @@ export function MassTemplateDispatcher() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [campaignName, setCampaignName] = useState("");
   const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
+  // Split dispatch: divide the audience into N disjoint parts, each becoming its
+  // own dispatch (same template/variables) so each part can fire at a different
+  // time and prompt for its own external field value (e.g. a fresh live link).
+  const [splitCount, setSplitCount] = useState("2");
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+  const [splitParts, setSplitParts] = useState<{ mode: 'schedule' | 'paused'; date: string }[]>([]);
+  const [savingSplit, setSavingSplit] = useState(false);
 
   // Cooldown filter
   const [cooldownDays, setCooldownDays] = useState<string>("");
