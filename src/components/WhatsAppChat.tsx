@@ -1001,7 +1001,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      discardRecordingRef.current = true;
       if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
     };
   }, []);
 
