@@ -15,7 +15,7 @@ import {
   History, Send, CheckCircle, XCircle, Eye, Clock, RefreshCw,
   MessageSquare, BarChart3, Users, ChevronDown, ChevronUp,
   Pause, Play, CalendarClock, Trash2, Copy, Pencil, Check, X,
-  Download, FileSpreadsheet, FileText,
+  Download, FileSpreadsheet, FileText, TestTube,
 } from "lucide-react";
 import { DispatchAttributionPanel } from "./DispatchAttributionPanel";
 import { format } from "date-fns";
@@ -170,6 +170,12 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
   const [externalDialog, setExternalDialog] = useState<{ dispatchId: string; fields: { key: string; label: string }[] } | null>(null);
   const [externalValues, setExternalValues] = useState<Record<string, string>>({});
   const [externalSaving, setExternalSaving] = useState(false);
+  // Test-send: send a single message to a test phone using this dispatch's saved
+  // config (template + variables + external field values), without dispatching.
+  const [testDialog, setTestDialog] = useState<{ dispatchId: string; templateName: string; fields: { key: string; label: string }[] } | null>(null);
+  const [testPhone, setTestPhone] = useState("");
+  const [testExternalValues, setTestExternalValues] = useState<Record<string, string>>({});
+  const [testSending, setTestSending] = useState(false);
 
   const loadHistory = useCallback(async () => {
     setIsLoading(true);
@@ -507,6 +513,55 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     }
   };
 
+  // Open the test dialog for a saved dispatch. Pre-fills external fields with the
+  // value already stored (if any), so the user can confirm/adjust the live link.
+  const handleOpenTest = (dispatchId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const dispatch = dispatches.find(d => d.id === dispatchId);
+    const cfg = (dispatch?.variables_config || {}) as Record<string, any>;
+    const fields = Object.entries(cfg)
+      .filter(([, vc]) => vc && vc.mode === '__external__')
+      .map(([key, vc]) => ({ key, label: (vc.staticValue || 'Campo externo') as string }));
+    setTestDialog({ dispatchId, templateName: dispatch?.template_name || '', fields });
+    setTestExternalValues(Object.fromEntries(
+      fields.map(f => [f.key, (cfg[f.key]?.externalValue || '') as string])
+    ));
+    setTestPhone("");
+  };
+
+  // Fire a single test message via the dispatch-worker test path.
+  const runTest = async () => {
+    if (!testDialog) return;
+    if (testPhone.replace(/\D/g, '').length < 8) {
+      toast.error("Informe um número de teste válido");
+      return;
+    }
+    setTestSending(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('dispatch-worker', {
+        body: {
+          dispatchId: testDialog.dispatchId,
+          testPhone: testPhone.replace(/\D/g, ''),
+          externalOverrides: testExternalValues,
+        },
+      });
+      if (error || data?.success === false) {
+        throw new Error(data?.error || error?.message || 'Falha no envio de teste');
+      }
+      toast.success("✅ Teste enviado! Confira no WhatsApp de teste.");
+      setTestDialog(null);
+      setTestExternalValues({});
+      setTestPhone("");
+    } catch (err) {
+      console.error('Test send error:', err);
+      toast.error("Erro ao enviar teste: " + (err as Error).message);
+    } finally {
+      setTestSending(false);
+    }
+  };
+
+
+
   const handleCancelScheduled = async (dispatchId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     await supabase.from('dispatch_history').update({ status: 'cancelled' }).eq('id', dispatchId);
@@ -775,6 +830,15 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                           {(d.status === 'scheduled' || d.status === 'scheduled_paused') ? (
                             <>
                               <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 gap-1 text-xs"
+                                onClick={(e) => handleOpenTest(d.id, e)}
+                                title="Enviar teste com o template, variáveis e campo externo já configurados"
+                              >
+                                <TestTube className="h-3 w-3" />Testar
+                              </Button>
+                              <Button
                                 variant="default"
                                 size="sm"
                                 className="h-7 px-2.5 gap-1 text-xs"
@@ -782,6 +846,7 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                               >
                                 <Play className="h-3 w-3" />Disparar
                               </Button>
+
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1016,6 +1081,57 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Teste de envio — usa o template, variáveis e campo externo já salvos */}
+      <Dialog open={!!testDialog} onOpenChange={(o) => { if (!o && !testSending) { setTestDialog(null); setTestExternalValues({}); setTestPhone(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <TestTube className="h-5 w-5 text-primary" /> Testar disparo
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">
+              Envia uma mensagem de teste usando o template <span className="font-mono">{testDialog?.templateName}</span> exatamente como será disparado, incluindo os valores abaixo.
+            </p>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Número de teste (WhatsApp)</label>
+              <Input
+                value={testPhone}
+                onChange={e => setTestPhone(e.target.value)}
+                placeholder="Ex: 33999998888"
+              />
+            </div>
+            {testDialog?.fields.map(f => (
+              <div key={f.key} className="space-y-1">
+                <label className="text-xs font-medium">🔗 {f.label}</label>
+                <Input
+                  value={testExternalValues[f.key] || ''}
+                  onChange={e => setTestExternalValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  placeholder={f.label}
+                />
+              </div>
+            ))}
+            {testDialog && testDialog.fields.length === 0 && (
+              <p className="text-xs text-muted-foreground">Este template não tem campo externo — o teste usará as variáveis já configuradas.</p>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => { setTestDialog(null); setTestExternalValues({}); setTestPhone(""); }}
+              disabled={testSending}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={runTest} disabled={testSending} className="gap-1">
+              {testSending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <TestTube className="h-4 w-4" />}
+              Enviar teste
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
+
   );
 }

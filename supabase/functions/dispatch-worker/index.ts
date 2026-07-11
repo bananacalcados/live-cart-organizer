@@ -275,12 +275,13 @@ serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    const { dispatchId } = await req.json().catch(() => ({}));
+    const { dispatchId, testPhone, externalOverrides } = await req.json().catch(() => ({}));
     if (!dispatchId) {
       return new Response(JSON.stringify({ error: 'dispatchId required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    const isTest = typeof testPhone === 'string' && testPhone.replace(/\D/g, '').length >= 8;
 
     // Load dispatch metadata once
     const { data: dispatch, error: dispErr } = await supabase
@@ -295,7 +296,7 @@ serve(async (req) => {
       });
     }
 
-    if (['cancelled', 'paused', 'completed', 'failed'].includes(dispatch.status)) {
+    if (!isTest && ['cancelled', 'paused', 'completed', 'failed'].includes(dispatch.status)) {
       return new Response(JSON.stringify({ skipped: true, status: dispatch.status }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -338,6 +339,58 @@ serve(async (req) => {
     const isMediaHeader = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerFormat) && !!headerMediaUrl;
     const chatMediaType = isMediaHeader ? headerFormat.toLowerCase() : 'text';
     const chatMediaUrl = isMediaHeader ? headerMediaUrl : null;
+
+    // ── TEST MODE ─────────────────────────────────────────────────────────────
+    // Send a single test message to `testPhone` using the SAVED dispatch config
+    // (same component builder as the real send), without touching dispatch_recipients
+    // or dispatch status. `externalOverrides` (key → value) lets the caller fill/override
+    // external-field variables so they can verify the live link renders correctly.
+    if (isTest) {
+      // Merge external-field overrides into a shallow copy of variablesConfig.
+      const testConfig: Record<string, any> = { ...variablesConfig };
+      if (externalOverrides && typeof externalOverrides === 'object') {
+        for (const [key, value] of Object.entries(externalOverrides)) {
+          if (testConfig[key]) testConfig[key] = { ...testConfig[key], externalValue: value };
+        }
+      }
+
+      let formatted = testPhone.replace(/\D/g, '');
+      if (!formatted.startsWith('55')) formatted = '55' + formatted;
+
+      const testRcp: any = { phone: formatted, recipient_name: 'Teste', first_name: 'Teste' };
+      const components = buildComponentsForRecipient(templateComponents, testConfig, headerMediaUrl, testRcp, hasDynamicVars, dispatchId);
+
+      const body: any = {
+        messaging_product: 'whatsapp',
+        to: formatted,
+        type: 'template',
+        template: { name: dispatch.template_name, language: { code: dispatch.template_language || 'pt_BR' } },
+      };
+      if (components.length > 0) body.template.components = components;
+
+      try {
+        const res = await fetch(graphUrl, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          return new Response(JSON.stringify({ test: true, success: true, wamid: data.messages?.[0]?.id || null }), {
+            status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        return new Response(JSON.stringify({ test: true, success: false, error: data.error?.message || JSON.stringify(data).slice(0, 300) }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ test: true, success: false, error: String(e).slice(0, 300) }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+    // ── END TEST MODE ─────────────────────────────────────────────────────────
+
 
     let totalSent = 0;
     let totalFailed = 0;
