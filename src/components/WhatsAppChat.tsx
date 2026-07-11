@@ -910,6 +910,18 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
           variant="ghost"
           size="icon"
           className="text-white hover:bg-white/10 h-8 w-8"
+          title="Editar pedido (produtos)"
+          disabled={!dbOrder}
+          onClick={() => setEditOrderOpen(true)}
+        >
+          <ShoppingBag className="h-4 w-4" />
+        </Button>
+
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-white hover:bg-white/10 h-8 w-8"
           title="Ver dados do cliente"
           onClick={() => setFichaOpen(true)}
         >
