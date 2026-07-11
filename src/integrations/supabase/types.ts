@@ -18471,6 +18471,10 @@ export type Database = {
           pending_count: number
         }[]
       }
+      get_event_installment_config: {
+        Args: { p_event_id: string }
+        Returns: Json
+      }
       get_group_dispatch_ready_instances: {
         Args: never
         Returns: {
