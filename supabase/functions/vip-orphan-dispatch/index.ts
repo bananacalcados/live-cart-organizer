@@ -74,10 +74,9 @@ serve(async (req) => {
         list = list.filter((o) => (o.group_names || []).some((g) => groupNames.includes(g)));
       }
 
-      // Remove bloqueados (blocked_contacts por sufixo de 8 dígitos)
-      const { data: blocked } = await supabase.from("blocked_contacts").select("phone");
-      const blockedSet = new Set((blocked || []).map((b: { phone: string }) => last8(b.phone)));
-      list = list.filter((o) => !blockedSet.has(o.phone_suffix8));
+      // Remove bloqueados (match cross-instância por DDD + 8 dígitos finais)
+      const blockedSet = await loadBlockedSuffixes(supabase);
+      list = list.filter((o) => !isBlocked(blockedSet, o.phone));
 
       if (list.length === 0) return json({ error: "Nenhum destinatário elegível" }, 400);
 
