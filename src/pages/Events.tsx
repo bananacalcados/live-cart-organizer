@@ -280,6 +280,7 @@ const Events = () => {
         manual_pos_routing: manualPosRouting,
         initial_message_enabled: initialMessageEnabled,
         initial_message_blocks: initialMessageBlocks,
+        followup_templates: followupTemplates,
         ...metaTemplateFields,
       } as any);
     } else {
