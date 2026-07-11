@@ -138,17 +138,17 @@ export default function Home() {
           return;
         }
 
+        if (!cancelled) setLoadError(false);
         const modules = await loadAllowedModules(session.user.id);
-        if (!cancelled) setAllowedModules(modules);
+        if (!cancelled) {
+          setAllowedModules(modules);
+          setLoadError(false);
+        }
       } catch (err) {
         console.error("Error checking permissions:", err);
         if (!cancelled) {
-          setAllowedModules([]);
-          toast({
-            title: "Erro ao verificar permissões",
-            description: "Não foi possível conectar ao servidor. Tente recarregar a página.",
-            variant: "destructive",
-          });
+          setLoadError(true);
+          setAllowedModules(null);
         }
       }
     };
@@ -158,7 +158,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [isReady, session, navigate, toast]);
+  }, [isReady, session, navigate, toast, reloadKey]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
