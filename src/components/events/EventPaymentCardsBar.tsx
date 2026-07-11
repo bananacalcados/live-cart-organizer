@@ -104,6 +104,16 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
   const [detailsOrder, setDetailsOrder] = useState<DbOrder | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  // Agrupamento por cliente (aba Pagos) + unificação de pedidos.
+  const { fetchOrdersByEvent } = useDbOrderStore();
+  const eventId = orders[0] ? (orders[0] as any).event_id : null;
+  const refreshOrders = useCallback(() => {
+    if (eventId) fetchOrdersByEvent(eventId);
+  }, [eventId, fetchOrdersByEvent]);
+  const [paidRegs, setPaidRegs] = useState<Record<string, OrderRegLite>>({});
+  const [groupDialogOrders, setGroupDialogOrders] = useState<DbOrder[] | null>(null);
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+
   const orderIds = useMemo(() => orders.map((o) => o.id), [orders]);
 
 
