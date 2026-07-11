@@ -155,6 +155,7 @@ function buildComponentsForRecipient(
       const resolveBubble = (n: number) => {
         const vc = variablesConfig[`body_${n}`];
         if (!vc) return '';
+        if (vc.mode === '__external__') return vc.externalValue ?? '';
         if (vc.mode === '__static__' || !hasDynamicVars || !recipient) return vc.staticValue || 'Cliente';
         return resolveVariable(vc, recipient) || 'Cliente';
       };
