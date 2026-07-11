@@ -802,6 +802,27 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                               {getAudienceLabel(d.audience_source, d.audience_filters)}
                             </span>
                           </div>
+                          {d.status === 'sending' && (() => {
+                            const total = d.total_recipients || dispatched;
+                            const pct = total > 0 ? Math.min(100, Math.round((dispatched / total) * 100)) : 0;
+                            const remaining = Math.max(0, total - dispatched);
+                            return (
+                              <div className="mt-2">
+                                <div className="flex items-center justify-between text-[11px] mb-1">
+                                  <span className="font-medium text-amber-600">{pct}% enviado</span>
+                                  <span className="text-muted-foreground">
+                                    {dispatched} feitos · {remaining} restantes
+                                  </span>
+                                </div>
+                                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
 
                         <div className="flex items-center gap-2 text-xs shrink-0">
