@@ -134,6 +134,7 @@ function resolveVariableForRecipient(varConfig: { mode: string; staticValue: str
 function getPreviewLabel(mode: string, staticValue: string): string {
   const opt = DYNAMIC_VARIABLE_OPTIONS.find(o => o.value === mode);
   if (mode === '__static__') return staticValue || '{{?}}';
+  if (mode === '__external__') return `[🔗 ${staticValue || 'Campo externo'}]`;
   return opt ? `[${opt.label}]` : staticValue || '{{?}}';
 }
 
