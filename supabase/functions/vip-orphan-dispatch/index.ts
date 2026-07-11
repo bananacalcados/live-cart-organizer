@@ -20,7 +20,7 @@ function json(body: unknown, status = 200) {
 }
 
 const digits = (v: unknown) => String(v ?? "").replace(/\D/g, "");
-const last8 = (v: unknown) => digits(v).slice(-8);
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
