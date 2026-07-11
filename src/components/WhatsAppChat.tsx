@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList } from "lucide-react";
+import { Send, Loader2, ArrowLeft, Check, CheckCheck, Clock, X, ChevronDown, FileText, Paperclip, Image, Mic, Video, Play, Pause, Square, Phone, HeadphonesIcon, Bot, MoreVertical, Trash2, UserCog, ShoppingBag, Megaphone, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -152,6 +152,13 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  const discardRecordingRef = useRef(false);
+  // Audio preview (before sending)
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [audioPreviewFile, setAudioPreviewFile] = useState<File | null>(null);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [isSendingAudio, setIsSendingAudio] = useState(false);
+  const audioPreviewRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
@@ -877,6 +884,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
+      discardRecordingRef.current = false;
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) audioChunksRef.current.push(event.data);
@@ -885,36 +893,25 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        setIsRecording(false);
+
+        // Cancelled: discard everything, never send.
+        if (discardRecordingRef.current) {
+          audioChunksRef.current = [];
+          setRecordingTime(0);
+          return;
+        }
 
         const ct = getAudioContentType(mimeType);
         const ext = getAudioExtension(mimeType);
         const audioBlob = new Blob(audioChunksRef.current, { type: ct });
-        if (audioBlob.size === 0) { setIsRecording(false); setRecordingTime(0); return; }
+        if (audioBlob.size === 0) { setRecordingTime(0); return; }
 
         const file = new File([audioBlob], `audio-${Date.now()}.${ext}`, { type: ct });
-        const mediaUrl = await uploadMediaToStorage(file);
-        if (mediaUrl) {
-          const result = await sendMessage(phone, '[Áudio]', 'audio', mediaUrl);
-          if (result.success) {
-            await supabase.from('whatsapp_messages').insert({
-              phone: normalizedPhone,
-              message: '[Áudio]',
-              direction: 'outgoing',
-              status: 'sent',
-              media_type: 'audio',
-              media_url: mediaUrl,
-              message_id: result.messageId || null,
-              whatsapp_number_id: effectiveNumberId || null,
-              sender_user_id: currentUserId || null,
-            });
-            updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
-            await loadMessages();
-          }
-        } else {
-          toast.error('Erro ao enviar áudio');
-        }
-        setIsRecording(false);
-        setRecordingTime(0);
+        // Instead of sending immediately, show a preview so the user can listen,
+        // then choose to send or discard.
+        setAudioPreviewUrl(URL.createObjectURL(audioBlob));
+        setAudioPreviewFile(file);
       };
 
       mediaRecorder.start();
@@ -926,17 +923,73 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
     }
   }, [phone, normalizedPhone, order.id, updateOrder, effectiveNumberId]);
 
+  // Stop recording → moves to preview (does NOT send).
   const stopRecording = useCallback(() => {
+    discardRecordingRef.current = false;
     if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
   }, []);
 
+  // Cancel while recording → discard, never send.
   const cancelRecording = useCallback(() => {
-    audioChunksRef.current = [];
+    discardRecordingRef.current = true;
     if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setIsRecording(false);
     setRecordingTime(0);
   }, []);
+
+  // Discard the recorded preview (before sending).
+  const discardAudioPreview = useCallback(() => {
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+    setAudioPreviewUrl(null);
+    setAudioPreviewFile(null);
+    setIsPlayingPreview(false);
+    setRecordingTime(0);
+    audioChunksRef.current = [];
+  }, [audioPreviewUrl]);
+
+  const togglePreviewPlayback = useCallback(() => {
+    const el = audioPreviewRef.current;
+    if (!el) return;
+    if (isPlayingPreview) {
+      el.pause();
+      setIsPlayingPreview(false);
+    } else {
+      el.play();
+      setIsPlayingPreview(true);
+    }
+  }, [isPlayingPreview]);
+
+  // Send the previewed audio.
+  const sendAudioPreview = useCallback(async () => {
+    if (!audioPreviewFile || isSendingAudio) return;
+    setIsSendingAudio(true);
+    try {
+      const mediaUrl = await uploadMediaToStorage(audioPreviewFile);
+      if (!mediaUrl) { toast.error('Erro ao enviar áudio'); return; }
+      const result = await sendMessage(phone, '[Áudio]', 'audio', mediaUrl);
+      if (result.success) {
+        await supabase.from('whatsapp_messages').insert({
+          phone: normalizedPhone,
+          message: '[Áudio]',
+          direction: 'outgoing',
+          status: 'sent',
+          media_type: 'audio',
+          media_url: mediaUrl,
+          message_id: result.messageId || null,
+          whatsapp_number_id: effectiveNumberId || null,
+          sender_user_id: currentUserId || null,
+        });
+        updateOrder(order.id, { last_sent_message_at: new Date().toISOString() });
+        await loadMessages();
+        discardAudioPreview();
+      } else {
+        toast.error('Erro ao enviar áudio');
+      }
+    } finally {
+      setIsSendingAudio(false);
+    }
+  }, [audioPreviewFile, isSendingAudio, phone, normalizedPhone, effectiveNumberId, currentUserId, order.id, updateOrder, loadMessages, discardAudioPreview]);
 
   const formatRecordingTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -948,7 +1001,9 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      discardRecordingRef.current = true;
       if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
+      if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
     };
   }, []);
 
@@ -1258,7 +1313,28 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
       {/* Input Area */}
       <div className="flex items-center gap-1 px-2 py-2 bg-[#F0F0F0]">
-        {isRecording ? (
+        {audioPreviewUrl ? (
+          <>
+            <audio
+              ref={audioPreviewRef}
+              src={audioPreviewUrl}
+              onEnded={() => setIsPlayingPreview(false)}
+              className="hidden"
+            />
+            <Button size="icon" variant="ghost" onClick={discardAudioPreview} className="h-10 w-10 text-destructive" disabled={isSendingAudio}>
+              <Trash2 className="h-5 w-5" />
+            </Button>
+            <div className="flex-1 flex items-center gap-2 px-2">
+              <Button size="icon" variant="ghost" onClick={togglePreviewPlayback} className="h-9 w-9 rounded-full bg-white shadow-sm">
+                {isPlayingPreview ? <Pause className="h-4 w-4 text-[#075E54]" /> : <Play className="h-4 w-4 text-[#075E54]" />}
+              </Button>
+              <span className="text-xs text-muted-foreground">Ouça antes de enviar</span>
+            </div>
+            <Button size="icon" onClick={sendAudioPreview} disabled={isSendingAudio} className="h-10 w-10 rounded-full bg-[#075E54] hover:bg-[#064E46] p-0">
+              {isSendingAudio ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+            </Button>
+          </>
+        ) : isRecording ? (
           <>
             <Button size="icon" variant="ghost" onClick={cancelRecording} className="h-10 w-10 text-destructive">
               <X className="h-5 w-5" />
@@ -1269,7 +1345,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               <span className="text-xs text-muted-foreground">Gravando...</span>
             </div>
             <Button size="icon" onClick={stopRecording} className="h-10 w-10 rounded-full bg-[#075E54] hover:bg-[#064E46] p-0">
-              <Send className="h-5 w-5" />
+              <Square className="h-5 w-5" />
             </Button>
           </>
         ) : (
