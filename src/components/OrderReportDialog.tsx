@@ -320,6 +320,17 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
           {/* Filters */}
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
+              <Checkbox
+                id="unifyProducts"
+                checked={unifyProducts}
+                onCheckedChange={(v) => setUnifyProducts(!!v)}
+              />
+              <Label htmlFor="unifyProducts" className="text-sm cursor-pointer flex items-center gap-1 font-medium">
+                <Package className="h-3 w-3" />
+                Unificar produtos (mesmo modelo, cor e tamanho em 1 linha)
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
               <Checkbox 
                 id="duplicates" 
                 checked={filterDuplicates}
