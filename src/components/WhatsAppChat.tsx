@@ -21,7 +21,7 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { toast } from "sonner";
 import { extractDeleteFailureReason } from "@/lib/edgeFunctionError";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -709,7 +709,12 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const fetchMetaTemplates = async () => {
     setIsLoadingTemplates(true);
     try {
-      const params = selectedNumberId ? `?whatsappNumberId=${selectedNumberId}` : '';
+      // Use the instance bound to THIS conversation / event (e.g. META PÉROLA),
+      // not whichever instance happens to be globally selected. Sending uses
+      // effectiveNumberId, so template listing must match it or the operator
+      // sees templates from the wrong WhatsApp Business account.
+      const templateNumberId = effectiveNumberId || eventMetaNumberId || selectedNumberId;
+      const params = templateNumberId ? `?whatsappNumberId=${templateNumberId}` : '';
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-get-templates${params}`;
       const res = await fetch(url, {
         headers: {
@@ -1452,7 +1457,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
       {/* Meta Template Dialog */}
       <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-        <DialogContent className="bg-[#202c33] border-[#3b4a54] text-[#e9edef] max-w-lg max-h-[80vh]">
+        <DialogContent className="bg-[#202c33] border-[#3b4a54] text-[#e9edef] max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="text-[#e9edef] flex items-center gap-2">
               <FileText className="h-5 w-5 text-[#00a884]" />
@@ -1466,7 +1471,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               onChange={(e) => setTemplateSearch(e.target.value)}
               className="bg-[#2a3942] border-none text-[#e9edef] placeholder:text-[#8696a0]"
             />
-            <ScrollArea className="max-h-[50vh]">
+            <div className="h-[55vh] overflow-y-auto pr-1 -mr-1">
               {isLoadingTemplates ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="w-6 h-6 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin" />
@@ -1502,7 +1507,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                   })}
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -67,25 +67,40 @@ serve(async (req) => {
 
     // Fetch templates from Meta Graph API
     const statusFilter = url.searchParams.get('status') || '';
-    const graphUrl = statusFilter
-      ? `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?status=${statusFilter}&limit=100`
-      : `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?limit=250`;
+    let nextUrl: string | null = statusFilter
+      ? `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?status=${statusFilter}&limit=200`
+      : `https://graph.facebook.com/v21.0/${businessAccountId}/message_templates?limit=200`;
 
-    const response = await fetch(graphUrl, {
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-    });
+    // Meta paginates message templates. Follow paging.next until exhausted so
+    // ALL templates of the account are returned (not just the first page).
+    const templates: Record<string, unknown>[] = [];
+    let lastError: unknown = null;
+    let lastStatus = 200;
+    let pages = 0;
+    while (nextUrl && pages < 25) {
+      pages++;
+      const response = await fetch(nextUrl, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.error('Meta API error fetching templates:', data);
+        lastError = data;
+        lastStatus = response.status;
+        break;
+      }
+      if (Array.isArray(data.data)) templates.push(...data.data);
+      nextUrl = data?.paging?.next || null;
+    }
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error('Meta API error fetching templates:', data);
+    if (templates.length === 0 && lastError) {
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch templates', details: data }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Failed to fetch templates', details: lastError }),
+        { status: lastStatus, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const templates = data.data || [];
+
 
     // Enrich with rejected_reason: prefer Meta's own field, fallback to the webhook status log.
     let logMap: Record<string, string> = {};
