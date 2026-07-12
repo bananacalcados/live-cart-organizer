@@ -1,11 +1,11 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList, Layers, Link2 } from "lucide-react";
+import { Check, QrCode, Phone, Clock, AlertCircle, RefreshCw, Pin, Link as LinkIcon, MessageSquareOff, ClipboardList, Layers, Link2, PackageCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DbOrder } from "@/types/database";
 import { Order } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { getOrderFinalValue } from "@/lib/orderTotal";
-import { groupOrdersByCustomer, OrderRegLite } from "@/lib/customerOrderGrouping";
+import { groupOrdersByCustomer, sameShippingAddress, OrderRegLite } from "@/lib/customerOrderGrouping";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { OrderDetailsDialog } from "@/components/OrderDetailsDialog";
 import { EventCustomerOrdersDialog } from "@/components/events/EventCustomerOrdersDialog";
@@ -473,6 +473,10 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
               const isGroup = group.length > 1;
               const groupMerged = isGroup && group.some((o) => o.merged_into_order_id);
               const paidCard = filter === "paid";
+              // Card precisa de unificação: cliente com 2+ pedidos pagos,
+              // ainda não unificados e com o MESMO endereço de entrega.
+              const needsUnify =
+                paidCard && isGroup && !groupMerged && sameShippingAddress(group, paidRegs);
               const name = order.customer?.instagram_handle?.trim() || "Sem nome";
               const phone = formatPhone(order.customer?.whatsapp);
               const value = isGroup
@@ -503,7 +507,9 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                       : "bg-neutral-900 text-white border-l-4 border-l-yellow-400 border-y-neutral-700 border-r-neutral-700 hover:bg-neutral-800",
                     unread && "animate-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-background",
                     isPinned && "ring-2 ring-sky-400 ring-offset-2 ring-offset-background",
-                    isGroup && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
+                    isGroup && !needsUnify && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
+                    // Precisa unificar → anel âmbar pulsante para chamar atenção.
+                    needsUnify && "ring-2 ring-amber-500 ring-offset-2 ring-offset-background animate-pulse",
                   )}
                 >
                   {unread && (
@@ -575,6 +581,14 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                     </span>
                   )}
 
+                  {/* Chamada de ação: precisa unificar (mesmo endereço, ainda separado) */}
+                  {needsUnify && (
+                    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-500 text-white border border-amber-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide shadow-sm">
+                      <PackageCheck className="h-2.5 w-2.5" />
+                      Unificar envio · {group.length} pedidos
+                    </span>
+                  )}
+
                   {/* Ver informações do(s) pedido(s) — pago */}
                   {paidCard && (
                     <button
@@ -584,11 +598,16 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                         if (isGroup) { setGroupDialogOrders(group); setGroupDialogOpen(true); }
                         else { setDetailsOrder(order); setDetailsOpen(true); }
                       }}
-                      className="mt-auto inline-flex items-center justify-center gap-1 rounded-md border border-stage-paid/40 bg-stage-paid/10 px-2 py-1 text-[10px] font-semibold text-stage-paid hover:bg-stage-paid/20 transition-colors"
+                      className={cn(
+                        "mt-auto inline-flex items-center justify-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold transition-colors",
+                        needsUnify
+                          ? "border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25"
+                          : "border-stage-paid/40 bg-stage-paid/10 text-stage-paid hover:bg-stage-paid/20",
+                      )}
                       title={isGroup ? "Ver todos os pedidos deste cliente e unificar" : "Ver todas as informações do pedido"}
                     >
                       <ClipboardList className="h-3 w-3" />
-                      {isGroup ? `Ver ${group.length} pedidos` : "Ver pedido"}
+                      {needsUnify ? `Unificar ${group.length} pedidos` : isGroup ? `Ver ${group.length} pedidos` : "Ver pedido"}
                     </button>
                   )}
 
