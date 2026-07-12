@@ -1207,13 +1207,14 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           className="flex-1 text-xs gap-1 text-destructive hover:bg-destructive/10 border-destructive/30"
           onClick={(e) => {
             e.stopPropagation();
-            onDelete(order.id);
+            setShowDeleteOrderDialog(true);
           }}
         >
           <Trash2 className="h-3.5 w-3.5" />
           Excluir
         </Button>
       </div>
+
 
       <SendWhatsAppDialog
         open={showWhatsAppDialog}
