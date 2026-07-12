@@ -473,6 +473,10 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
               const isGroup = group.length > 1;
               const groupMerged = isGroup && group.some((o) => o.merged_into_order_id);
               const paidCard = filter === "paid";
+              // Card precisa de unificação: cliente com 2+ pedidos pagos,
+              // ainda não unificados e com o MESMO endereço de entrega.
+              const needsUnify =
+                paidCard && isGroup && !groupMerged && sameShippingAddress(group, paidRegs);
               const name = order.customer?.instagram_handle?.trim() || "Sem nome";
               const phone = formatPhone(order.customer?.whatsapp);
               const value = isGroup
