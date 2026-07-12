@@ -710,6 +710,7 @@ const Events = () => {
           </TabsList>
 
           <TabsContent value="events">
+            <EventCustomerOrderSearch />
             <EventsDashboard />
             
             {isLoading ? (
