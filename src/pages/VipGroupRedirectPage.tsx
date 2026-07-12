@@ -38,20 +38,26 @@ export default function VipGroupRedirectPage() {
         const invitePath = waRegular.replace('https://chat.whatsapp.com/', '');
         setInviteUrl(waRegular);
 
+        // Android: mesmo dentro do navegador interno (Instagram/Facebook) dá para
+        // abrir o app do WhatsApp via intent:// — não precisa da tela manual.
+        if (isAndroid) {
+          setStatus('redirecting');
+          const intentUrl = `intent://chat.whatsapp.com/${invitePath}#Intent;scheme=https;package=com.whatsapp;S.browser_fallback_url=${encodeURIComponent(waRegular)};end`;
+          window.location.href = intentUrl;
+          return;
+        }
+
+        // iOS (ou outro) dentro do navegador interno: webview não abre o app de
+        // forma confiável → mostra instruções para abrir no navegador.
         if (isInApp) {
           setStatus('inapp');
           return;
         }
 
+        // Navegador normal (fora de app): universal link abre o WhatsApp direto.
         setStatus('redirecting');
+        window.location.href = waRegular;
 
-        // Instant redirect — no delays
-        if (isAndroid) {
-          const intentUrl = `intent://chat.whatsapp.com/${invitePath}#Intent;scheme=https;package=com.whatsapp;S.browser_fallback_url=${encodeURIComponent(waRegular)};end`;
-          window.location.href = intentUrl;
-        } else {
-          window.location.href = waRegular;
-        }
 
       })
       .catch(err => {
