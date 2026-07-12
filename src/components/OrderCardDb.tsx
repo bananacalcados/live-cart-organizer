@@ -1316,6 +1316,30 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={showDeleteOrderDialog} onOpenChange={setShowDeleteOrderDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir pedido definitivamente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação apaga o pedido de forma permanente e <strong>não pode ser desfeita</strong>.
+              O link de pagamento já enviado ao cliente vai parar de funcionar
+              (aparecerá "Pedido não encontrado"). Só exclua se tiver certeza de que
+              o cliente não vai mais pagar por este link.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => onDelete(order.id)}
+            >
+              Excluir mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
