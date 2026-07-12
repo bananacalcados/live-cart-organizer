@@ -50,6 +50,8 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
   const [filterWithGift, setFilterWithGift] = useState(false);
   const [filterFreeShipping, setFilterFreeShipping] = useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
+  // Unificar produtos idênticos (mesmo título + variante) em 1 linha
+  const [unifyProducts, setUnifyProducts] = useState(true);
   // Colunas selecionadas para o relatório (todas as pós-pagamento por padrão)
   const [selectedStages, setSelectedStages] = useState<string[]>(ALL_REPORT_STAGE_IDS);
 
@@ -119,7 +121,10 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
     
     for (const order of ordersToProcess) {
       for (const product of order.products) {
-        const key = `${product.id}-${product.variant}`;
+        // Ao unificar, agrupa por título + variante (mesmo que o id difira entre pedidos)
+        const key = unifyProducts
+          ? `${product.title}||${product.variant}`
+          : `${product.id}-${product.variant}`;
         
         if (!products[key]) {
           products[key] = {
@@ -148,46 +153,80 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
       }
     }
     
-    return Object.values(products).sort((a, b) => b.quantity - a.quantity);
-  }, [filteredOrders, filterDuplicates, duplicateCustomers, customerOrderCounts]);
+    const list = Object.values(products);
+    // Ao unificar: ordena por nome do produto e depois variante, mantendo
+    // produtos "pais" (mesmo título) próximos e tamanhos em sequência.
+    if (unifyProducts) {
+      return list.sort((a, b) => {
+        const byTitle = a.title.localeCompare(b.title, 'pt-BR', { numeric: true, sensitivity: 'base' });
+        if (byTitle !== 0) return byTitle;
+        return a.variant.localeCompare(b.variant, 'pt-BR', { numeric: true, sensitivity: 'base' });
+      });
+    }
+    return list.sort((a, b) => b.quantity - a.quantity);
+  }, [filteredOrders, filterDuplicates, duplicateCustomers, customerOrderCounts, unifyProducts]);
+
 
   // Export to CSV
   const exportToCSV = () => {
-    const headers = [
-      'Produto',
-      'Variante',
-      'Quantidade Total',
-      'Cliente',
-      'WhatsApp',
-      'Pedidos do Cliente',
-      'Tem Brinde',
-      'Frete Grátis',
-      'Valor Desconto',
-      'Coluna / Status',
-    ];
-
+    let headers: string[];
     const rows: string[][] = [];
 
-    const ordersToExport = filterDuplicates
-      ? filteredOrders.filter(o => duplicateCustomers.some(dc => dc.orderIds.includes(o.id)))
-      : filteredOrders;
-
-    for (const order of ordersToExport) {
-      const orderCount = customerOrderCounts[order.customer_id]?.orderIds.length || 1;
-      
-      for (const product of order.products) {
+    if (unifyProducts) {
+      // Uma linha por produto (título + variante), quantidade somada e clientes agrupados
+      headers = [
+        'Produto',
+        'Variante',
+        'Quantidade Total',
+        'Clientes',
+        'Nº de Clientes',
+      ];
+      for (const product of productReport) {
         rows.push([
           product.title,
           product.variant,
           product.quantity.toString(),
-          order.customer?.instagram_handle || '',
-          order.customer?.whatsapp || '',
-          orderCount.toString(),
-          order.has_gift ? 'Sim' : 'Não',
-          order.free_shipping ? 'Sim' : 'Não',
-          order.discount_value ? `${order.discount_type === 'percentage' ? order.discount_value + '%' : 'R$' + order.discount_value}` : '-',
-          REPORT_STAGES.find((s) => s.id === order.stage)?.label || order.stage || '-',
+          product.customers
+            .map((c) => `@${c.instagram}${c.orderCount > 1 ? ` (${c.orderCount})` : ''}`)
+            .join(' | '),
+          product.customers.length.toString(),
         ]);
+      }
+    } else {
+      headers = [
+        'Produto',
+        'Variante',
+        'Quantidade Total',
+        'Cliente',
+        'WhatsApp',
+        'Pedidos do Cliente',
+        'Tem Brinde',
+        'Frete Grátis',
+        'Valor Desconto',
+        'Coluna / Status',
+      ];
+
+      const ordersToExport = filterDuplicates
+        ? filteredOrders.filter(o => duplicateCustomers.some(dc => dc.orderIds.includes(o.id)))
+        : filteredOrders;
+
+      for (const order of ordersToExport) {
+        const orderCount = customerOrderCounts[order.customer_id]?.orderIds.length || 1;
+
+        for (const product of order.products) {
+          rows.push([
+            product.title,
+            product.variant,
+            product.quantity.toString(),
+            order.customer?.instagram_handle || '',
+            order.customer?.whatsapp || '',
+            orderCount.toString(),
+            order.has_gift ? 'Sim' : 'Não',
+            order.free_shipping ? 'Sim' : 'Não',
+            order.discount_value ? `${order.discount_type === 'percentage' ? order.discount_value + '%' : 'R$' + order.discount_value}` : '-',
+            REPORT_STAGES.find((s) => s.id === order.stage)?.label || order.stage || '-',
+          ]);
+        }
       }
     }
 
@@ -202,6 +241,7 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
     link.download = `relatorio-produtos-${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -279,6 +319,17 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
 
           {/* Filters */}
           <div className="flex flex-wrap gap-4 items-center">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="unifyProducts"
+                checked={unifyProducts}
+                onCheckedChange={(v) => setUnifyProducts(!!v)}
+              />
+              <Label htmlFor="unifyProducts" className="text-sm cursor-pointer flex items-center gap-1 font-medium">
+                <Package className="h-3 w-3" />
+                Unificar produtos (mesmo modelo, cor e tamanho em 1 linha)
+              </Label>
+            </div>
             <div className="flex items-center gap-2">
               <Checkbox 
                 id="duplicates" 
