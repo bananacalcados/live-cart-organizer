@@ -507,7 +507,9 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                       : "bg-neutral-900 text-white border-l-4 border-l-yellow-400 border-y-neutral-700 border-r-neutral-700 hover:bg-neutral-800",
                     unread && "animate-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-background",
                     isPinned && "ring-2 ring-sky-400 ring-offset-2 ring-offset-background",
-                    isGroup && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
+                    isGroup && !needsUnify && "ring-2 ring-primary/60 ring-offset-1 ring-offset-background",
+                    // Precisa unificar → anel âmbar pulsante para chamar atenção.
+                    needsUnify && "ring-2 ring-amber-500 ring-offset-2 ring-offset-background animate-pulse",
                   )}
                 >
                   {unread && (
