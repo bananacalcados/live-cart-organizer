@@ -581,6 +581,14 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                     </span>
                   )}
 
+                  {/* Chamada de ação: precisa unificar (mesmo endereço, ainda separado) */}
+                  {needsUnify && (
+                    <span className="inline-flex w-fit items-center gap-1 rounded-full bg-amber-500 text-white border border-amber-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide shadow-sm">
+                      <PackageCheck className="h-2.5 w-2.5" />
+                      Unificar envio · {group.length} pedidos
+                    </span>
+                  )}
+
                   {/* Ver informações do(s) pedido(s) — pago */}
                   {paidCard && (
                     <button
@@ -590,11 +598,16 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
                         if (isGroup) { setGroupDialogOrders(group); setGroupDialogOpen(true); }
                         else { setDetailsOrder(order); setDetailsOpen(true); }
                       }}
-                      className="mt-auto inline-flex items-center justify-center gap-1 rounded-md border border-stage-paid/40 bg-stage-paid/10 px-2 py-1 text-[10px] font-semibold text-stage-paid hover:bg-stage-paid/20 transition-colors"
+                      className={cn(
+                        "mt-auto inline-flex items-center justify-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold transition-colors",
+                        needsUnify
+                          ? "border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25"
+                          : "border-stage-paid/40 bg-stage-paid/10 text-stage-paid hover:bg-stage-paid/20",
+                      )}
                       title={isGroup ? "Ver todos os pedidos deste cliente e unificar" : "Ver todas as informações do pedido"}
                     >
                       <ClipboardList className="h-3 w-3" />
-                      {isGroup ? `Ver ${group.length} pedidos` : "Ver pedido"}
+                      {needsUnify ? `Unificar ${group.length} pedidos` : isGroup ? `Ver ${group.length} pedidos` : "Ver pedido"}
                     </button>
                   )}
 
