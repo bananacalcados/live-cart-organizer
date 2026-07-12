@@ -163,7 +163,7 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
       'Tem Brinde',
       'Frete Grátis',
       'Valor Desconto',
-      'Status Pagamento',
+      'Coluna / Status',
     ];
 
     const rows: string[][] = [];
