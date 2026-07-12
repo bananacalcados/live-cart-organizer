@@ -132,13 +132,16 @@ serve(async (req) => {
     // ─── INSTANT 302 REDIRECT ───
     const campaign = link.group_campaigns as any;
     const useDeepLink = link.is_deep_link || campaign?.is_deep_link;
-    const isAndroid = /android/i.test(userAgent);
 
     let finalUrl = redirectUrl;
-    if (useDeepLink && isAndroid) {
+    // Android: usa intent:// quando é deep-link OU quando está no navegador
+    // interno (Instagram/Facebook) — é a única forma de abrir o app do WhatsApp
+    // a partir de uma webview em vez de renderizar a página dentro dela.
+    if (isAndroidUA && (useDeepLink || isInApp)) {
       const inviteCode = redirectUrl.replace('https://chat.whatsapp.com/', '');
       finalUrl = `intent://invite/${inviteCode}#Intent;scheme=whatsapp;package=com.whatsapp;S.browser_fallback_url=${encodeURIComponent(redirectUrl)};end`;
     }
+
 
     return new Response(null, {
       status: 302,
