@@ -186,7 +186,7 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
           order.has_gift ? 'Sim' : 'Não',
           order.free_shipping ? 'Sim' : 'Não',
           order.discount_value ? `${order.discount_type === 'percentage' ? order.discount_value + '%' : 'R$' + order.discount_value}` : '-',
-          order.stage === 'paid' || order.stage === 'shipped' ? 'Pago' : 'Pendente',
+          REPORT_STAGES.find((s) => s.id === order.stage)?.label || order.stage || '-',
         ]);
       }
     }
