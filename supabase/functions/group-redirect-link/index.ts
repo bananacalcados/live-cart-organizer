@@ -114,9 +114,12 @@ serve(async (req) => {
     // ─── DETECT IN-APP BROWSER ───
     const userAgent = req.headers.get('user-agent') || '';
     const isInApp = /Instagram|FBAN|FBAV/i.test(userAgent);
+    const isAndroidUA = /android/i.test(userAgent);
 
-    if (isInApp) {
-      // In-app browsers can't open WhatsApp directly, show instructions
+    // Android (mesmo dentro do Instagram/Facebook): abre o app do WhatsApp via
+    // intent://. Só o iOS in-app precisa da tela manual "abra no navegador".
+    if (isInApp && !isAndroidUA) {
+      // In-app browsers (iOS) can't open WhatsApp directly, show instructions
       return new Response(
         `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Abrir no navegador</title>
         <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,sans-serif;background:#075e54;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}.c{background:rgba(0,0,0,.25);border-radius:16px;padding:2rem;text-align:center;max-width:360px;width:100%}.w{background:rgba(255,180,0,.15);border:1px solid rgba(255,180,0,.4);border-radius:10px;padding:1rem;margin-bottom:1rem;text-align:left}ol{padding-left:1.2rem;margin-top:.5rem}li{font-size:.85rem;margin-bottom:.35rem}.b{display:block;width:100%;background:#25D366;color:#fff;border:none;padding:.75rem;border-radius:50px;font-weight:600;cursor:pointer;font-size:.95rem;margin-bottom:.5rem;text-decoration:none;text-align:center}</style>
@@ -124,6 +127,7 @@ serve(async (req) => {
         { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
       );
     }
+
 
     // ─── INSTANT 302 REDIRECT ───
     const campaign = link.group_campaigns as any;
