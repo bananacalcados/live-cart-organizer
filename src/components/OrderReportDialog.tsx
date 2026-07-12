@@ -121,7 +121,10 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
     
     for (const order of ordersToProcess) {
       for (const product of order.products) {
-        const key = `${product.id}-${product.variant}`;
+        // Ao unificar, agrupa por título + variante (mesmo que o id difira entre pedidos)
+        const key = unifyProducts
+          ? `${product.title}||${product.variant}`
+          : `${product.id}-${product.variant}`;
         
         if (!products[key]) {
           products[key] = {
@@ -150,8 +153,19 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
       }
     }
     
-    return Object.values(products).sort((a, b) => b.quantity - a.quantity);
-  }, [filteredOrders, filterDuplicates, duplicateCustomers, customerOrderCounts]);
+    const list = Object.values(products);
+    // Ao unificar: ordena por nome do produto e depois variante, mantendo
+    // produtos "pais" (mesmo título) próximos e tamanhos em sequência.
+    if (unifyProducts) {
+      return list.sort((a, b) => {
+        const byTitle = a.title.localeCompare(b.title, 'pt-BR', { numeric: true, sensitivity: 'base' });
+        if (byTitle !== 0) return byTitle;
+        return a.variant.localeCompare(b.variant, 'pt-BR', { numeric: true, sensitivity: 'base' });
+      });
+    }
+    return list.sort((a, b) => b.quantity - a.quantity);
+  }, [filteredOrders, filterDuplicates, duplicateCustomers, customerOrderCounts, unifyProducts]);
+
 
   // Export to CSV
   const exportToCSV = () => {
