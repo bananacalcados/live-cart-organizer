@@ -709,7 +709,12 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
   const fetchMetaTemplates = async () => {
     setIsLoadingTemplates(true);
     try {
-      const params = selectedNumberId ? `?whatsappNumberId=${selectedNumberId}` : '';
+      // Use the instance bound to THIS conversation / event (e.g. META PÉROLA),
+      // not whichever instance happens to be globally selected. Sending uses
+      // effectiveNumberId, so template listing must match it or the operator
+      // sees templates from the wrong WhatsApp Business account.
+      const templateNumberId = effectiveNumberId || eventMetaNumberId || selectedNumberId;
+      const params = templateNumberId ? `?whatsappNumberId=${templateNumberId}` : '';
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/meta-whatsapp-get-templates${params}`;
       const res = await fetch(url, {
         headers: {
