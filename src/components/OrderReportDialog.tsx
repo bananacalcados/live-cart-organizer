@@ -80,7 +80,7 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
       }
       return true;
     });
-  }, [orders, filterPaidOnly, filterWithGift, filterFreeShipping, customerQuery]);
+  }, [orders, selectedStages, filterWithGift, filterFreeShipping, customerQuery]);
 
 
   // Find customers with multiple orders
