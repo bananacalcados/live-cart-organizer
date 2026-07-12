@@ -79,6 +79,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [isManualRoutingEvent, setIsManualRoutingEvent] = useState(false);
   const [showUnlinkDialog, setShowUnlinkDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showDeleteOrderDialog, setShowDeleteOrderDialog] = useState(false);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [showShopifyActionsDialog, setShowShopifyActionsDialog] = useState(false);
   const [exchangeReason, setExchangeReason] = useState("Troca de produto/tamanho");
@@ -1206,13 +1207,14 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           className="flex-1 text-xs gap-1 text-destructive hover:bg-destructive/10 border-destructive/30"
           onClick={(e) => {
             e.stopPropagation();
-            onDelete(order.id);
+            setShowDeleteOrderDialog(true);
           }}
         >
           <Trash2 className="h-3.5 w-3.5" />
           Excluir
         </Button>
       </div>
+
 
       <SendWhatsAppDialog
         open={showWhatsAppDialog}
@@ -1313,6 +1315,30 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={showDeleteOrderDialog} onOpenChange={setShowDeleteOrderDialog}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir pedido definitivamente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação apaga o pedido de forma permanente e <strong>não pode ser desfeita</strong>.
+              O link de pagamento já enviado ao cliente vai parar de funcionar
+              (aparecerá "Pedido não encontrado"). Só exclua se tiver certeza de que
+              o cliente não vai mais pagar por este link.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => onDelete(order.id)}
+            >
+              Excluir mesmo assim
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
