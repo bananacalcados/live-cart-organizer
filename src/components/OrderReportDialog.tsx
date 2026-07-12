@@ -239,18 +239,46 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
             )}
           </div>
 
+          {/* Filtro por coluna (stage) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Colunas incluídas no relatório</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStages(ALL_REPORT_STAGE_IDS)}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Todas
+                </button>
+                <span className="text-xs text-muted-foreground">·</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStages([])}
+                  className="text-xs text-muted-foreground hover:underline"
+                >
+                  Limpar
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {REPORT_STAGES.map((s) => (
+                <div key={s.id} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`stage-${s.id}`}
+                    checked={selectedStages.includes(s.id)}
+                    onCheckedChange={() => toggleStage(s.id)}
+                  />
+                  <Label htmlFor={`stage-${s.id}`} className="text-sm cursor-pointer">
+                    {s.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Filters */}
           <div className="flex flex-wrap gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <Checkbox 
-                id="paidOnly" 
-                checked={filterPaidOnly}
-                onCheckedChange={(v) => setFilterPaidOnly(!!v)}
-              />
-              <Label htmlFor="paidOnly" className="text-sm cursor-pointer">
-                Apenas pagos
-              </Label>
-            </div>
             <div className="flex items-center gap-2">
               <Checkbox 
                 id="duplicates" 
