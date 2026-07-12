@@ -50,6 +50,8 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
   const [filterWithGift, setFilterWithGift] = useState(false);
   const [filterFreeShipping, setFilterFreeShipping] = useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
+  // Unificar produtos idênticos (mesmo título + variante) em 1 linha
+  const [unifyProducts, setUnifyProducts] = useState(true);
   // Colunas selecionadas para o relatório (todas as pós-pagamento por padrão)
   const [selectedStages, setSelectedStages] = useState<string[]>(ALL_REPORT_STAGE_IDS);
 
