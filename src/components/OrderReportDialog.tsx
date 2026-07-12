@@ -169,41 +169,64 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
 
   // Export to CSV
   const exportToCSV = () => {
-    const headers = [
-      'Produto',
-      'Variante',
-      'Quantidade Total',
-      'Cliente',
-      'WhatsApp',
-      'Pedidos do Cliente',
-      'Tem Brinde',
-      'Frete Grátis',
-      'Valor Desconto',
-      'Coluna / Status',
-    ];
-
+    let headers: string[];
     const rows: string[][] = [];
 
-    const ordersToExport = filterDuplicates
-      ? filteredOrders.filter(o => duplicateCustomers.some(dc => dc.orderIds.includes(o.id)))
-      : filteredOrders;
-
-    for (const order of ordersToExport) {
-      const orderCount = customerOrderCounts[order.customer_id]?.orderIds.length || 1;
-      
-      for (const product of order.products) {
+    if (unifyProducts) {
+      // Uma linha por produto (título + variante), quantidade somada e clientes agrupados
+      headers = [
+        'Produto',
+        'Variante',
+        'Quantidade Total',
+        'Clientes',
+        'Nº de Clientes',
+      ];
+      for (const product of productReport) {
         rows.push([
           product.title,
           product.variant,
           product.quantity.toString(),
-          order.customer?.instagram_handle || '',
-          order.customer?.whatsapp || '',
-          orderCount.toString(),
-          order.has_gift ? 'Sim' : 'Não',
-          order.free_shipping ? 'Sim' : 'Não',
-          order.discount_value ? `${order.discount_type === 'percentage' ? order.discount_value + '%' : 'R$' + order.discount_value}` : '-',
-          REPORT_STAGES.find((s) => s.id === order.stage)?.label || order.stage || '-',
+          product.customers
+            .map((c) => `@${c.instagram}${c.orderCount > 1 ? ` (${c.orderCount})` : ''}`)
+            .join(' | '),
+          product.customers.length.toString(),
         ]);
+      }
+    } else {
+      headers = [
+        'Produto',
+        'Variante',
+        'Quantidade Total',
+        'Cliente',
+        'WhatsApp',
+        'Pedidos do Cliente',
+        'Tem Brinde',
+        'Frete Grátis',
+        'Valor Desconto',
+        'Coluna / Status',
+      ];
+
+      const ordersToExport = filterDuplicates
+        ? filteredOrders.filter(o => duplicateCustomers.some(dc => dc.orderIds.includes(o.id)))
+        : filteredOrders;
+
+      for (const order of ordersToExport) {
+        const orderCount = customerOrderCounts[order.customer_id]?.orderIds.length || 1;
+
+        for (const product of order.products) {
+          rows.push([
+            product.title,
+            product.variant,
+            product.quantity.toString(),
+            order.customer?.instagram_handle || '',
+            order.customer?.whatsapp || '',
+            orderCount.toString(),
+            order.has_gift ? 'Sim' : 'Não',
+            order.free_shipping ? 'Sim' : 'Não',
+            order.discount_value ? `${order.discount_type === 'percentage' ? order.discount_value + '%' : 'R$' + order.discount_value}` : '-',
+            REPORT_STAGES.find((s) => s.id === order.stage)?.label || order.stage || '-',
+          ]);
+        }
       }
     }
 
@@ -218,6 +241,7 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
     link.download = `relatorio-produtos-${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
   };
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
