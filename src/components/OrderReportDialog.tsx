@@ -47,16 +47,22 @@ interface ReportProduct {
 export function OrderReportDialog({ orders }: OrderReportDialogProps) {
   const [open, setOpen] = useState(false);
   const [filterDuplicates, setFilterDuplicates] = useState(false);
-  const [filterPaidOnly, setFilterPaidOnly] = useState(true);
   const [filterWithGift, setFilterWithGift] = useState(false);
   const [filterFreeShipping, setFilterFreeShipping] = useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
+  // Colunas selecionadas para o relatório (todas as pós-pagamento por padrão)
+  const [selectedStages, setSelectedStages] = useState<string[]>(ALL_REPORT_STAGE_IDS);
+
+  const toggleStage = (id: string) =>
+    setSelectedStages((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
+    );
 
   // Filter orders
   const filteredOrders = useMemo(() => {
     const q = customerQuery.trim().toLowerCase().replace(/^@/, "");
     return orders.filter(order => {
-      if (filterPaidOnly && order.stage !== 'paid' && order.stage !== 'shipped') {
+      if (!selectedStages.includes(order.stage ?? "")) {
         return false;
       }
       if (filterWithGift && !order.has_gift) {
