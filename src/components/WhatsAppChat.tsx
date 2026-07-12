@@ -1471,7 +1471,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
               onChange={(e) => setTemplateSearch(e.target.value)}
               className="bg-[#2a3942] border-none text-[#e9edef] placeholder:text-[#8696a0]"
             />
-            <ScrollArea className="max-h-[50vh]">
+            <div className="h-[55vh] overflow-y-auto pr-1 -mr-1">
               {isLoadingTemplates ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="w-6 h-6 border-2 border-[#00a884] border-t-transparent rounded-full animate-spin" />
@@ -1507,7 +1507,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
                   })}
                 </div>
               )}
-            </ScrollArea>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
