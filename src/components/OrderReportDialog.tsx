@@ -20,6 +20,17 @@ interface OrderReportDialogProps {
   orders: DbOrder[];
 }
 
+// Colunas (stages) considerados "pagos"/pós-pagamento que podem entrar no relatório
+const REPORT_STAGES: { id: string; label: string }[] = [
+  { id: "paid", label: "Pago" },
+  { id: "awaiting_shipping", label: "Aguardando Envio" },
+  { id: "awaiting_mototaxi", label: "Aguardando Mototaxista" },
+  { id: "awaiting_pickup", label: "Aguardando Retirada" },
+  { id: "shipped", label: "Enviado" },
+  { id: "completed", label: "Concluído" },
+];
+const ALL_REPORT_STAGE_IDS = REPORT_STAGES.map((s) => s.id);
+
 interface ReportProduct {
   id: string;
   title: string;
