@@ -5,7 +5,7 @@ import { DbOrder } from "@/types/database";
 import { Order } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { getOrderFinalValue } from "@/lib/orderTotal";
-import { groupOrdersByCustomer, OrderRegLite } from "@/lib/customerOrderGrouping";
+import { groupOrdersByCustomer, sameShippingAddress, OrderRegLite } from "@/lib/customerOrderGrouping";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
 import { OrderDetailsDialog } from "@/components/OrderDetailsDialog";
 import { EventCustomerOrdersDialog } from "@/components/events/EventCustomerOrdersDialog";
