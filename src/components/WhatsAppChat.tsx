@@ -1457,7 +1457,7 @@ export function WhatsAppChat({ order, onBack }: WhatsAppChatProps) {
 
       {/* Meta Template Dialog */}
       <Dialog open={showTemplateDialog} onOpenChange={setShowTemplateDialog}>
-        <DialogContent className="bg-[#202c33] border-[#3b4a54] text-[#e9edef] max-w-lg max-h-[80vh]">
+        <DialogContent className="bg-[#202c33] border-[#3b4a54] text-[#e9edef] max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="text-[#e9edef] flex items-center gap-2">
               <FileText className="h-5 w-5 text-[#00a884]" />
