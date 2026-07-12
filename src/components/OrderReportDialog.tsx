@@ -20,6 +20,17 @@ interface OrderReportDialogProps {
   orders: DbOrder[];
 }
 
+// Colunas (stages) considerados "pagos"/pós-pagamento que podem entrar no relatório
+const REPORT_STAGES: { id: string; label: string }[] = [
+  { id: "paid", label: "Pago" },
+  { id: "awaiting_shipping", label: "Aguardando Envio" },
+  { id: "awaiting_mototaxi", label: "Aguardando Mototaxista" },
+  { id: "awaiting_pickup", label: "Aguardando Retirada" },
+  { id: "shipped", label: "Enviado" },
+  { id: "completed", label: "Concluído" },
+];
+const ALL_REPORT_STAGE_IDS = REPORT_STAGES.map((s) => s.id);
+
 interface ReportProduct {
   id: string;
   title: string;
@@ -36,16 +47,22 @@ interface ReportProduct {
 export function OrderReportDialog({ orders }: OrderReportDialogProps) {
   const [open, setOpen] = useState(false);
   const [filterDuplicates, setFilterDuplicates] = useState(false);
-  const [filterPaidOnly, setFilterPaidOnly] = useState(true);
   const [filterWithGift, setFilterWithGift] = useState(false);
   const [filterFreeShipping, setFilterFreeShipping] = useState(false);
   const [customerQuery, setCustomerQuery] = useState("");
+  // Colunas selecionadas para o relatório (todas as pós-pagamento por padrão)
+  const [selectedStages, setSelectedStages] = useState<string[]>(ALL_REPORT_STAGE_IDS);
+
+  const toggleStage = (id: string) =>
+    setSelectedStages((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
+    );
 
   // Filter orders
   const filteredOrders = useMemo(() => {
     const q = customerQuery.trim().toLowerCase().replace(/^@/, "");
     return orders.filter(order => {
-      if (filterPaidOnly && order.stage !== 'paid' && order.stage !== 'shipped') {
+      if (!selectedStages.includes(order.stage ?? "")) {
         return false;
       }
       if (filterWithGift && !order.has_gift) {
@@ -63,7 +80,7 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
       }
       return true;
     });
-  }, [orders, filterPaidOnly, filterWithGift, filterFreeShipping, customerQuery]);
+  }, [orders, selectedStages, filterWithGift, filterFreeShipping, customerQuery]);
 
 
   // Find customers with multiple orders
@@ -146,7 +163,7 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
       'Tem Brinde',
       'Frete Grátis',
       'Valor Desconto',
-      'Status Pagamento',
+      'Coluna / Status',
     ];
 
     const rows: string[][] = [];
@@ -169,7 +186,7 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
           order.has_gift ? 'Sim' : 'Não',
           order.free_shipping ? 'Sim' : 'Não',
           order.discount_value ? `${order.discount_type === 'percentage' ? order.discount_value + '%' : 'R$' + order.discount_value}` : '-',
-          order.stage === 'paid' || order.stage === 'shipped' ? 'Pago' : 'Pendente',
+          REPORT_STAGES.find((s) => s.id === order.stage)?.label || order.stage || '-',
         ]);
       }
     }
@@ -222,18 +239,46 @@ export function OrderReportDialog({ orders }: OrderReportDialogProps) {
             )}
           </div>
 
+          {/* Filtro por coluna (stage) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-medium">Colunas incluídas no relatório</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStages(ALL_REPORT_STAGE_IDS)}
+                  className="text-xs text-primary hover:underline"
+                >
+                  Todas
+                </button>
+                <span className="text-xs text-muted-foreground">·</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedStages([])}
+                  className="text-xs text-muted-foreground hover:underline"
+                >
+                  Limpar
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {REPORT_STAGES.map((s) => (
+                <div key={s.id} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`stage-${s.id}`}
+                    checked={selectedStages.includes(s.id)}
+                    onCheckedChange={() => toggleStage(s.id)}
+                  />
+                  <Label htmlFor={`stage-${s.id}`} className="text-sm cursor-pointer">
+                    {s.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Filters */}
           <div className="flex flex-wrap gap-4 items-center">
-            <div className="flex items-center gap-2">
-              <Checkbox 
-                id="paidOnly" 
-                checked={filterPaidOnly}
-                onCheckedChange={(v) => setFilterPaidOnly(!!v)}
-              />
-              <Label htmlFor="paidOnly" className="text-sm cursor-pointer">
-                Apenas pagos
-              </Label>
-            </div>
             <div className="flex items-center gap-2">
               <Checkbox 
                 id="duplicates" 
