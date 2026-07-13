@@ -422,6 +422,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
   const { crmMap, deleteWhatsApp } = useCrmPhoneLookup(conversationPhones);
+  const { cashbackMap } = useCashbackLookup(conversationPhones);
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
