@@ -18370,6 +18370,16 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_automation_exec_stats: {
+        Args: never
+        Returns: {
+          failed: number
+          flow_id: string
+          last_at: string
+          success: number
+          total: number
+        }[]
+      }
       get_checkout_order: { Args: { p_order_id: string }; Returns: Json }
       get_checkout_registration: { Args: { p_order_id: string }; Returns: Json }
       get_conversation_counts: {
@@ -18764,6 +18774,19 @@ export type Database = {
           size: string
           sku: string
           store_count: number
+        }[]
+      }
+      lookup_cashback_by_phones: {
+        Args: { p_phones: string[] }
+        Returns: {
+          cashback_amount: number
+          cashback_count: number
+          coupon_code: string
+          expires_at: string
+          generated_at: string
+          min_purchase: number
+          phone: string
+          total_available: number
         }[]
       }
       lookup_crm_by_phones: {
