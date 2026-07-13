@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { QuotedMessageData } from "@/components/chat/QuotedMessagePreview";
-import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store } from "lucide-react";
+import { Phone, MessageCircle, Users, Pencil, Check, ChevronLeft, X, Send, PhoneOff, User, Package, Truck, MoreVertical, ShoppingBag, UserPlus, Trash2, QrCode, CreditCard, Archive, BarChart3, ArrowRightLeft, FileText, HeadphonesIcon, ArrowLeft, CircleDashed, MapPin, Mail, Calendar, Store, Coins } from "lucide-react";
 import { useCurrentUserId } from "@/hooks/useCurrentUserId";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import { POSProductCatalogSender } from "./POSProductCatalogSender";
 import { POSLiveOrderPanel } from "./POSLiveOrderPanel";
 import { NewConversationDialog } from "./NewConversationDialog";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
+import { useCashbackLookup } from "@/hooks/useCashbackLookup";
 import { toast } from "sonner";
 import { extractDeleteFailureReason } from "@/lib/edgeFunctionError";
 import { format } from "date-fns";
@@ -73,6 +74,16 @@ interface CrmCustomerData {
   cpf?: string;
   address?: string;
   email?: string;
+  cashback?: {
+    totalAvailable: number;
+    count: number;
+    couponCode: string;
+    amount: number;
+    minPurchase: number;
+    generatedAt: string;
+    expiresAt: string;
+  };
+
   orders: {
     id: string;
     orderName?: string;
@@ -421,6 +432,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   // CRM phone lookup for conversation names
   const conversationPhones = useMemo(() => conversations.map(c => c.phone), [conversations]);
   const { crmMap, deleteWhatsApp } = useCrmPhoneLookup(conversationPhones);
+  const { cashbackMap } = useCashbackLookup(conversationPhones);
 
   useEffect(() => { fetchNumbers(); }, [fetchNumbers]);
 
@@ -820,6 +832,24 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         return db - da;
       });
 
+      // Cashback disponível (cupons ativos: não usados e dentro da validade)
+      let resolvedCashback: CrmCustomerData["cashback"] | undefined;
+      const { data: cbRows } = await supabase.rpc("lookup_cashback_by_phones" as any, {
+        p_phones: [selectedPhone],
+      });
+      const cbRow = (cbRows || [])[0] as any;
+      if (cbRow && Number(cbRow.total_available) > 0) {
+        resolvedCashback = {
+          totalAvailable: Number(cbRow.total_available) || 0,
+          count: Number(cbRow.cashback_count) || 0,
+          couponCode: cbRow.coupon_code,
+          amount: Number(cbRow.cashback_amount) || 0,
+          minPurchase: Number(cbRow.min_purchase) || 0,
+          generatedAt: cbRow.generated_at,
+          expiresAt: cbRow.expires_at,
+        };
+      }
+
       setCrmData({
         name: resolvedName || undefined,
         instagram: customer?.instagram_handle,
@@ -828,10 +858,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         cpf: resolvedCpf,
         address: resolvedAddress,
         email: resolvedEmail,
+        cashback: resolvedCashback,
         orders: allOrders,
       });
       setShowCrmPanel(true);
     };
+
 
     loadCrmData();
   }, [selectedPhone, chatContacts, contactPhotos]);
@@ -1670,6 +1702,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             selectedPhone={selectedPhone}
             selectedConversationKey={selectedConvKey}
             getAssignedName={getAssignedName}
+            cashbackMap={cashbackMap}
             onBulkFinish={(phones) => {
               setBulkFinishPhones(phones);
               setShowBulkFinishDialog(true);
@@ -1992,7 +2025,51 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     </div>
                   </div>
 
-                  {/* Tags */}
+                  {/* Cashback disponível */}
+                  {crmData?.cashback && crmData.cashback.totalAvailable > 0 && (
+                    <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-4">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <Coins className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          <h3 className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                            Cashback disponível
+                          </h3>
+                        </div>
+                        <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                          R$ {crmData.cashback.totalAvailable.toFixed(2).replace(".", ",")}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Código</p>
+                          <p className="text-sm font-mono font-bold text-foreground break-all">{crmData.cashback.couponCode}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Compra mínima</p>
+                          <p className="text-sm font-bold text-foreground">R$ {crmData.cashback.minPurchase.toFixed(2).replace(".", ",")}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Gerado em</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {new Date(crmData.cashback.generatedAt).toLocaleDateString("pt-BR")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Válido até</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {new Date(crmData.cashback.expiresAt).toLocaleDateString("pt-BR")}
+                          </p>
+                        </div>
+                      </div>
+                      {crmData.cashback.count > 1 && (
+                        <p className="mt-3 text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
+                          O cliente possui {crmData.cashback.count} cupons ativos (valor total acima; dados do mais recente).
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+
                   {crmData?.tags && crmData.tags.length > 0 && (
                     <div className="flex gap-1.5 flex-wrap">
                       {crmData.tags.map((t) => (

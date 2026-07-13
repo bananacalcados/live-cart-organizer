@@ -3475,19 +3475,23 @@ export function AutomationFlowBuilder() {
   }, []);
 
   const fetchExecStats = useCallback(async () => {
-    const { data } = await supabase.from("automation_executions").select("flow_id, status, executed_at").order("executed_at", { ascending: false });
-    if (!data) return;
+    // Agrega no banco (sem o limite de 1000 linhas do PostgREST) para que o
+    // contador reflita TODOS os acionamentos de cada automação, e não apenas
+    // os mais recentes — que eram dominados por fluxos de alto volume.
+    const { data, error } = await supabase.rpc('get_automation_exec_stats' as any);
+    if (error) { console.error('exec stats error:', error); return; }
     const stats: Record<string, { total: number; success: number; failed: number; lastAt: string | null }> = {};
-    for (const row of data) {
-      if (!stats[row.flow_id]) stats[row.flow_id] = { total: 0, success: 0, failed: 0, lastAt: null };
-      const s = stats[row.flow_id];
-      s.total++;
-      if (row.status === 'success' || row.status === 'sent' || row.status === 'delivered' || row.status === 'read') s.success++;
-      else if (row.status === 'error' || row.status === 'failed') s.failed++;
-      if (!s.lastAt) s.lastAt = row.executed_at;
+    for (const row of (data || []) as any[]) {
+      stats[row.flow_id] = {
+        total: Number(row.total) || 0,
+        success: Number(row.success) || 0,
+        failed: Number(row.failed) || 0,
+        lastAt: row.last_at || null,
+      };
     }
     setExecStats(stats);
   }, []);
+
 
   const fetchExecLog = useCallback(async () => {
     setExecLogLoading(true);

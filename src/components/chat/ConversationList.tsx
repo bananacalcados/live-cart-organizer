@@ -59,7 +59,10 @@ interface ConversationListProps {
   productArrivedCount?: number;
   /** Resolves the attendant name handling a conversation, by conversation key */
   getAssignedName?: (conversationKey: string) => string | null;
+  /** Cashback disponível por telefone (soma dos cupons ativos) para exibir badge ao lado do nome */
+  cashbackMap?: Map<string, { totalAvailable: number }>;
 }
+
 
 export function ConversationList({
   conversations,
@@ -90,7 +93,9 @@ export function ConversationList({
   onTeamChatClick,
   productArrivedCount = 0,
   getAssignedName,
+  cashbackMap,
 }: ConversationListProps) {
+
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
   const [visibleLimit, setVisibleLimit] = useState(60);
@@ -560,7 +565,20 @@ export function ConversationList({
                               🔗 {conv.otherInstanceLabels?.length ? `+${conv.otherInstanceLabels.length}` : ''}
                             </span>
                           )}
+                          {(() => {
+                            const cb = cashbackMap?.get(conv.phone);
+                            if (!cb || cb.totalAvailable <= 0) return null;
+                            return (
+                              <span
+                                className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-400/40"
+                                title={`Cashback disponível: R$ ${cb.totalAvailable.toFixed(2).replace('.', ',')}`}
+                              >
+                                💰 R$ {cb.totalAvailable.toFixed(2).replace('.', ',')}
+                              </span>
+                            );
+                          })()}
                         </div>
+
                         {(conv.customerName || contactNames[conv.phone]) && (
                           <span className="text-[11px] text-[#475360] dark:text-[#667781] truncate">{conv.phone}</span>
                         )}
