@@ -1244,7 +1244,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
               });
             } else if (couponApplied.type === 'cashback') {
               await supabase.from('internal_cashback')
-                .update({ is_used: true, used_at: new Date().toISOString(), used_sale_id: saleId } as any)
+                .update({ is_used: true, used_at: new Date().toISOString(), used_sale_id: saleId, used_channel: 'physical' } as any)
                 .eq('coupon_code', couponApplied.code);
             }
           } catch (e) { console.error('coupon redeem error', e); }
