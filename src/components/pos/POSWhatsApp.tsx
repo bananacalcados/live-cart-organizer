@@ -27,6 +27,7 @@ import { POSProductCatalogSender } from "./POSProductCatalogSender";
 import { POSLiveOrderPanel } from "./POSLiveOrderPanel";
 import { NewConversationDialog } from "./NewConversationDialog";
 import { useCrmPhoneLookup } from "@/hooks/useCrmPhoneLookup";
+import { useCashbackLookup } from "@/hooks/useCashbackLookup";
 import { toast } from "sonner";
 import { extractDeleteFailureReason } from "@/lib/edgeFunctionError";
 import { format } from "date-fns";
