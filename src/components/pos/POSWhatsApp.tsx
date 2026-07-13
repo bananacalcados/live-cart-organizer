@@ -832,6 +832,24 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         return db - da;
       });
 
+      // Cashback disponível (cupons ativos: não usados e dentro da validade)
+      let resolvedCashback: CrmCustomerData["cashback"] | undefined;
+      const { data: cbRows } = await supabase.rpc("lookup_cashback_by_phones" as any, {
+        p_phones: [selectedPhone],
+      });
+      const cbRow = (cbRows || [])[0] as any;
+      if (cbRow && Number(cbRow.total_available) > 0) {
+        resolvedCashback = {
+          totalAvailable: Number(cbRow.total_available) || 0,
+          count: Number(cbRow.cashback_count) || 0,
+          couponCode: cbRow.coupon_code,
+          amount: Number(cbRow.cashback_amount) || 0,
+          minPurchase: Number(cbRow.min_purchase) || 0,
+          generatedAt: cbRow.generated_at,
+          expiresAt: cbRow.expires_at,
+        };
+      }
+
       setCrmData({
         name: resolvedName || undefined,
         instagram: customer?.instagram_handle,
@@ -840,10 +858,12 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         cpf: resolvedCpf,
         address: resolvedAddress,
         email: resolvedEmail,
+        cashback: resolvedCashback,
         orders: allOrders,
       });
       setShowCrmPanel(true);
     };
+
 
     loadCrmData();
   }, [selectedPhone, chatContacts, contactPhotos]);
