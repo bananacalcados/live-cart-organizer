@@ -6957,6 +6957,8 @@ export type Database = {
           origin_type: string
           updated_at: string
           used_at: string | null
+          used_channel: string | null
+          used_external_ref: string | null
           used_sale_id: string | null
         }
         Insert: {
@@ -6973,6 +6975,8 @@ export type Database = {
           origin_type?: string
           updated_at?: string
           used_at?: string | null
+          used_channel?: string | null
+          used_external_ref?: string | null
           used_sale_id?: string | null
         }
         Update: {
@@ -6989,6 +6993,8 @@ export type Database = {
           origin_type?: string
           updated_at?: string
           used_at?: string | null
+          used_channel?: string | null
+          used_external_ref?: string | null
           used_sale_id?: string | null
         }
         Relationships: []
@@ -18907,6 +18913,15 @@ export type Database = {
         Returns: undefined
       }
       recompute_needs_review: { Args: never; Returns: number }
+      redeem_internal_cashback: {
+        Args: {
+          _channel?: string
+          _coupon_code: string
+          _external_ref?: string
+          _subtotal?: number
+        }
+        Returns: Json
+      }
       refresh_dispatch_counts: {
         Args: { p_dispatch_id: string }
         Returns: undefined
