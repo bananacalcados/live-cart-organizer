@@ -59,7 +59,10 @@ interface ConversationListProps {
   productArrivedCount?: number;
   /** Resolves the attendant name handling a conversation, by conversation key */
   getAssignedName?: (conversationKey: string) => string | null;
+  /** Cashback disponível por telefone (soma dos cupons ativos) para exibir badge ao lado do nome */
+  cashbackMap?: Map<string, { totalAvailable: number }>;
 }
+
 
 export function ConversationList({
   conversations,
