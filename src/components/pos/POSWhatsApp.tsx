@@ -1702,6 +1702,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
             selectedPhone={selectedPhone}
             selectedConversationKey={selectedConvKey}
             getAssignedName={getAssignedName}
+            cashbackMap={cashbackMap}
             onBulkFinish={(phones) => {
               setBulkFinishPhones(phones);
               setShowBulkFinishDialog(true);
