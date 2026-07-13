@@ -1811,6 +1811,21 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                 </Button>
               )}
 
+              {/* Cashback disponível ao lado do nome */}
+              {(() => {
+                const cb = (selectedPhone ? cashbackMap?.get(selectedPhone) : undefined) || crmData?.cashback;
+                const available = cb?.totalAvailable ?? 0;
+                if (!available || available <= 0) return null;
+                return (
+                  <Badge
+                    className="text-[10px] px-2 py-0.5 bg-emerald-500 text-white font-semibold flex-shrink-0 gap-1"
+                    title="Cashback disponível para este cliente"
+                  >
+                    💰 R$ {available.toFixed(2).replace(".", ",")}
+                  </Badge>
+                );
+              })()}
+
               {/* Instância da conversa */}
               {selectedChannel === "instagram" ? (() => {
                 const igUser = messageBoundNumberId ? igUsernameById[messageBoundNumberId] : null;
