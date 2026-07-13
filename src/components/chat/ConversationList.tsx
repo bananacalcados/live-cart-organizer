@@ -93,7 +93,9 @@ export function ConversationList({
   onTeamChatClick,
   productArrivedCount = 0,
   getAssignedName,
+  cashbackMap,
 }: ConversationListProps) {
+
   const [selectMode, setSelectMode] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
   const [visibleLimit, setVisibleLimit] = useState(60);
