@@ -1478,6 +1478,7 @@ export default function TransparentCheckout() {
     interest_free_installments: 6,
     monthly_interest_rate: 2.49,
   });
+  const [orderInstallmentConfig, setOrderInstallmentConfig] = useState<InstallmentConfig | null>(null);
   const [eventInstallment, setEventInstallment] = useState<{ minVal: number; maxInst: number } | null>(null);
   const [summaryCollapsed, setSummaryCollapsed] = useState(false);
   const paymentConfirmedRef = useRef(false);
@@ -1524,6 +1525,7 @@ export default function TransparentCheckout() {
         const subtotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
         const now = new Date().toISOString();
         setLiveCartRaw({ items: decoded.items || [], customer: decoded.customer || null });
+        setOrderInstallmentConfig(null);
         let shippingCost = 0;
         let freeShipping = false;
         const fc = decoded.freightConfig;
@@ -1576,13 +1578,21 @@ export default function TransparentCheckout() {
   // Config efetiva: base (app_settings) + override do evento quando o total atinge o mínimo.
   const installmentConfig = useMemo<InstallmentConfig>(() => {
     const cfg = { ...baseInstallmentConfig };
+    if (orderInstallmentConfig) {
+      cfg.max_installments = Math.max(cfg.max_installments, orderInstallmentConfig.max_installments);
+      cfg.interest_free_installments = Math.max(
+        cfg.interest_free_installments,
+        orderInstallmentConfig.interest_free_installments,
+      );
+      cfg.monthly_interest_rate = orderInstallmentConfig.monthly_interest_rate || cfg.monthly_interest_rate;
+    }
     const total = orderData?.totalAmount;
     if (eventInstallment && eventInstallment.maxInst > 0 && total != null && total >= eventInstallment.minVal) {
       cfg.max_installments = Math.max(cfg.max_installments, eventInstallment.maxInst);
       cfg.interest_free_installments = Math.max(cfg.interest_free_installments, eventInstallment.maxInst);
     }
     return cfg;
-  }, [baseInstallmentConfig, eventInstallment, orderData?.totalAmount]);
+  }, [baseInstallmentConfig, orderInstallmentConfig, eventInstallment, orderData?.totalAmount]);
 
   // ===== Etapa A — Carregar ofertas de crossell após o pedido estar pronto =====
   useEffect(() => {
@@ -1648,6 +1658,17 @@ export default function TransparentCheckout() {
       const order = orderRaw as any;
 
       if (error || !order) throw new Error("Pedido não encontrado");
+
+      const checkoutConfig = order.checkout_installment_config as Partial<InstallmentConfig> | null | undefined;
+      if (checkoutConfig?.max_installments && checkoutConfig?.interest_free_installments) {
+        setOrderInstallmentConfig({
+          max_installments: Number(checkoutConfig.max_installments) || 12,
+          interest_free_installments: Number(checkoutConfig.interest_free_installments) || 6,
+          monthly_interest_rate: Number(checkoutConfig.monthly_interest_rate) || 2.49,
+        });
+      } else {
+        setOrderInstallmentConfig(null);
+      }
 
       const products = (order.products || []) as unknown as OrderProduct[];
       const subtotal = products.reduce((s, p) => s + p.price * p.quantity, 0);
