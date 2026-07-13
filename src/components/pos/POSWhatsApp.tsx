@@ -74,6 +74,16 @@ interface CrmCustomerData {
   cpf?: string;
   address?: string;
   email?: string;
+  cashback?: {
+    totalAvailable: number;
+    count: number;
+    couponCode: string;
+    amount: number;
+    minPurchase: number;
+    generatedAt: string;
+    expiresAt: string;
+  };
+
   orders: {
     id: string;
     orderName?: string;
