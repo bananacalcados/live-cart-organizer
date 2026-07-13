@@ -2024,7 +2024,51 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                     </div>
                   </div>
 
-                  {/* Tags */}
+                  {/* Cashback disponível */}
+                  {crmData?.cashback && crmData.cashback.totalAvailable > 0 && (
+                    <div className="rounded-xl border border-emerald-400/40 bg-emerald-500/10 p-4">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2">
+                          <Coins className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                          <h3 className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                            Cashback disponível
+                          </h3>
+                        </div>
+                        <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                          R$ {crmData.cashback.totalAvailable.toFixed(2).replace(".", ",")}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Código</p>
+                          <p className="text-sm font-mono font-bold text-foreground break-all">{crmData.cashback.couponCode}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Compra mínima</p>
+                          <p className="text-sm font-bold text-foreground">R$ {crmData.cashback.minPurchase.toFixed(2).replace(".", ",")}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Gerado em</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {new Date(crmData.cashback.generatedAt).toLocaleDateString("pt-BR")}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">Válido até</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {new Date(crmData.cashback.expiresAt).toLocaleDateString("pt-BR")}
+                          </p>
+                        </div>
+                      </div>
+                      {crmData.cashback.count > 1 && (
+                        <p className="mt-3 text-[11px] text-emerald-700/80 dark:text-emerald-400/80">
+                          O cliente possui {crmData.cashback.count} cupons ativos (valor total acima; dados do mais recente).
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+
                   {crmData?.tags && crmData.tags.length > 0 && (
                     <div className="flex gap-1.5 flex-wrap">
                       {crmData.tags.map((t) => (
