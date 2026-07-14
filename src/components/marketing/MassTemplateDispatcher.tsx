@@ -413,14 +413,29 @@ export function MassTemplateDispatcher() {
       sinceDate.setDate(sinceDate.getDate() - days);
       const sinceISO = sinceDate.toISOString();
 
-      // Get dispatches in the period
-      const { data: dispatches } = await supabase
-        .from('dispatch_history')
-        .select('id, campaign_name, template_name, started_at')
-        .gte('created_at', sinceISO)
-        .in('status', ['sending', 'completed']);
+      // Get dispatches in the period (paginated + ordered — sem isso o
+      // PostgREST corta em 1000 linhas silenciosamente e a ordem varia entre
+      // execuções, causando contagens inconsistentes de "removidos").
+      const dispatches: Array<{ id: string; campaign_name: string | null; template_name: string | null; started_at: string | null }> = [];
+      {
+        let dFrom = 0;
+        const dPageSize = 1000;
+        while (true) {
+          const { data, error } = await supabase
+            .from('dispatch_history')
+            .select('id, campaign_name, template_name, started_at')
+            .gte('created_at', sinceISO)
+            .in('status', ['sending', 'completed'])
+            .order('created_at', { ascending: false })
+            .range(dFrom, dFrom + dPageSize - 1);
+          if (error || !data || data.length === 0) break;
+          dispatches.push(...data);
+          if (data.length < dPageSize) break;
+          dFrom += dPageSize;
+        }
+      }
 
-      if (!dispatches || dispatches.length === 0) {
+      if (dispatches.length === 0) {
         setCooldownExcludedPhones(new Set());
         setCooldownRecentRecipients([]);
         setCooldownApplied(true);
@@ -444,6 +459,7 @@ export function MassTemplateDispatcher() {
             .select('phone, recipient_name, created_at')
             .eq('dispatch_id', d.id)
             .in('status', ['sent', 'delivered', 'read'])
+            .order('created_at', { ascending: true })
             .range(from, from + pageSize - 1);
           if (error || !recipients || recipients.length === 0) break;
           for (const r of recipients) {
