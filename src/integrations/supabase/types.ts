@@ -3553,6 +3553,9 @@ export type Database = {
           created_at: string
           customer_code: string | null
           ddd: string | null
+          dispatch_ignored_count: number
+          dispatch_reacted_count: number
+          dispatch_total_count: number
           email: string | null
           first_purchase_at: string | null
           gender: string | null
@@ -3562,8 +3565,11 @@ export type Database = {
           instagram_user_id: string | null
           is_archived: boolean
           is_banned: boolean
+          last_engagement_at: string | null
+          last_engagement_type: string | null
           last_purchase_at: string | null
           last_seen_at: string | null
+          lead_temperature: string | null
           legacy_first_purchase_at: string | null
           legacy_last_purchase_at: string | null
           legacy_orders: number
@@ -3595,6 +3601,7 @@ export type Database = {
           source_origins: Json | null
           state: string | null
           tags: string[] | null
+          temperature_updated_at: string | null
           tenant_id: string | null
           total_items: number
           total_orders: number
@@ -3618,6 +3625,9 @@ export type Database = {
           created_at?: string
           customer_code?: string | null
           ddd?: string | null
+          dispatch_ignored_count?: number
+          dispatch_reacted_count?: number
+          dispatch_total_count?: number
           email?: string | null
           first_purchase_at?: string | null
           gender?: string | null
@@ -3627,8 +3637,11 @@ export type Database = {
           instagram_user_id?: string | null
           is_archived?: boolean
           is_banned?: boolean
+          last_engagement_at?: string | null
+          last_engagement_type?: string | null
           last_purchase_at?: string | null
           last_seen_at?: string | null
+          lead_temperature?: string | null
           legacy_first_purchase_at?: string | null
           legacy_last_purchase_at?: string | null
           legacy_orders?: number
@@ -3660,6 +3673,7 @@ export type Database = {
           source_origins?: Json | null
           state?: string | null
           tags?: string[] | null
+          temperature_updated_at?: string | null
           tenant_id?: string | null
           total_items?: number
           total_orders?: number
@@ -3683,6 +3697,9 @@ export type Database = {
           created_at?: string
           customer_code?: string | null
           ddd?: string | null
+          dispatch_ignored_count?: number
+          dispatch_reacted_count?: number
+          dispatch_total_count?: number
           email?: string | null
           first_purchase_at?: string | null
           gender?: string | null
@@ -3692,8 +3709,11 @@ export type Database = {
           instagram_user_id?: string | null
           is_archived?: boolean
           is_banned?: boolean
+          last_engagement_at?: string | null
+          last_engagement_type?: string | null
           last_purchase_at?: string | null
           last_seen_at?: string | null
+          lead_temperature?: string | null
           legacy_first_purchase_at?: string | null
           legacy_last_purchase_at?: string | null
           legacy_orders?: number
@@ -3725,6 +3745,7 @@ export type Database = {
           source_origins?: Json | null
           state?: string | null
           tags?: string[] | null
+          temperature_updated_at?: string | null
           tenant_id?: string | null
           total_items?: number
           total_orders?: number
@@ -18912,6 +18933,7 @@ export type Database = {
         Args: { p_customer?: string }
         Returns: undefined
       }
+      recalculate_lead_temperature: { Args: never; Returns: Json }
       recompute_needs_review: { Args: never; Returns: number }
       redeem_internal_cashback: {
         Args: {
