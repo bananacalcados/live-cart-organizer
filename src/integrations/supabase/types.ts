@@ -17756,6 +17756,7 @@ export type Database = {
           is_archived: boolean | null
           last_name: string | null
           last_purchase_at: string | null
+          lead_temperature: string | null
           name: string | null
           opt_out_mass_dispatch: boolean | null
           payment_methods: string[] | null
@@ -17793,6 +17794,7 @@ export type Database = {
           is_archived?: boolean | null
           last_name?: never
           last_purchase_at?: string | null
+          lead_temperature?: string | null
           name?: string | null
           opt_out_mass_dispatch?: boolean | null
           payment_methods?: string[] | null
@@ -17830,6 +17832,7 @@ export type Database = {
           is_archived?: boolean | null
           last_name?: never
           last_purchase_at?: string | null
+          lead_temperature?: string | null
           name?: string | null
           opt_out_mass_dispatch?: boolean | null
           payment_methods?: string[] | null
