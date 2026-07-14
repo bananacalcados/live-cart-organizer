@@ -951,36 +951,84 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       const firstErr = regularResults.find((r: any) => r.error);
       if (firstErr?.error) { console.error('Error loading conversations:', firstErr.error); return; }
 
+      // ── TEMP DEBUG (Novas/Não-lidas investigation) ──────────────────────
+      // Ative no console: window.__debugPhoneSuffix = '88191295'
+      const dbgSuffix: string | null = (typeof window !== 'undefined' && (window as any).__debugPhoneSuffix) || null;
+      const matchesDbg = (p: string) =>
+        !!dbgSuffix && String(p || '').replace(/\D/g, '').slice(-8) === dbgSuffix;
+      const dbgOn = !!dbgSuffix;
+
+      if (dbgOn) {
+        console.groupCollapsed(`[NOVAS-DEBUG] loadConversations tick — sufixo=${dbgSuffix}`);
+        console.log('storeId=', storeId, 'storeNumberIds=', storeNumberIds, 'multiInstanceFilter=', multiInstanceFilter, 'statusFilter=', statusFilter);
+        regularResults.forEach((r: any, i: number) => {
+          const rows = r?.data || [];
+          const hit = rows.filter((row: any) => matchesDbg(row.phone));
+          console.log(`  call#${i} regular → ${rows.length} rows; hits:`, hit);
+        });
+        dispatchResults.forEach((r: any, i: number) => {
+          const rows = r?.data || [];
+          const hit = rows.filter((row: any) => matchesDbg(row.phone));
+          console.log(`  call#${i} dispatch → ${rows.length} rows; hits:`, hit);
+        });
+      }
+
       // Une todos os resultados e deduplica por (telefone + instância).
       const mergedByKey = new Map<string, any>();
+      let dbgWinner: any = null;
+      let dbgDropped: any[] = [];
       for (const res of [...regularResults, ...dispatchResults]) {
         for (const row of (res.data || [])) {
           const key = `${row.phone}__${row.whatsapp_number_id || 'none'}`;
+          if (dbgOn && matchesDbg(row.phone)) {
+            if (!mergedByKey.has(key)) dbgWinner = { key, row };
+            else dbgDropped.push({ key, row, winner: mergedByKey.get(key) });
+          }
           if (!mergedByKey.has(key)) mergedByKey.set(key, row);
         }
       }
       let allRows = Array.from(mergedByKey.values());
+      if (dbgOn) {
+        console.log('  mergedByKey WINNER:', dbgWinner);
+        if (dbgDropped.length) console.log('  mergedByKey DROPPED por dedupe:', dbgDropped);
+      }
 
-
-      // Hide Instagram comment-only conversations (Live/Post/Reel comments) — chat should show DMs only
+      // Hide Instagram comment-only conversations (Live/Post/Reel comments)
       const isCommentMessage = (msg?: string | null) => {
         if (!msg) return false;
         return /^(💬\s*Coment[áa]rio|\[ig_post\]|\[ig_reel\])/i.test(msg.trim());
       };
+      if (dbgOn) {
+        const dropped = allRows.filter((r: any) => matchesDbg(r.phone) && isCommentMessage(r.last_message));
+        if (dropped.length) console.log('  DROPPED por isCommentMessage:', dropped);
+      }
       allRows = allRows.filter((row: any) => !isCommentMessage(row.last_message));
 
       // Client-side filter by store's assigned WhatsApp numbers (when more than 1)
       if (storeNumberIds.length > 1) {
+        if (dbgOn) {
+          const dropped = allRows.filter((row: any) => {
+            if (!matchesDbg(row.phone)) return false;
+            const rowNumId = row.whatsapp_number_id;
+            if (rowNumId) return !storeNumberIds.includes(rowNumId);
+            return !storeNumbers.some(n => n.provider === 'zapi');
+          });
+          if (dropped.length) console.log('  DROPPED por storeNumberIds:', dropped);
+        }
         allRows = allRows.filter((row: any) => {
           const rowNumId = row.whatsapp_number_id;
           if (rowNumId) return storeNumberIds.includes(rowNumId);
-          // Allow null whatsapp_number_id if store has Z-API numbers
           return storeNumbers.some(n => n.provider === 'zapi');
         });
       }
 
       // Multi-instance filter (user-selected)
       if (multiInstanceFilter.length > 0) {
+        if (dbgOn) {
+          const dropped = allRows.filter((row: any) =>
+            matchesDbg(row.phone) && !multiInstanceFilter.includes(row.whatsapp_number_id));
+          if (dropped.length) console.log('  DROPPED por multiInstanceFilter:', dropped);
+        }
         allRows = allRows.filter((row: any) =>
           multiInstanceFilter.includes(row.whatsapp_number_id)
         );
@@ -988,10 +1036,25 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
 
       const { convs, phoneMessages } = mapRowsToConvs(allRows);
       convs.sort((a, b) => b.lastMessageAt.getTime() - a.lastMessageAt.getTime());
-      // TODAS as conversas ficam visíveis para TODOS os usuários/vendedoras —
-      // a TAG da vendedora identifica de quem é o atendimento. Sem filtro de
-      // atribuição: foco no bom atendimento (qualquer vendedora pode assumir).
       const enriched = enrichConversations(convs, phoneMessages);
+
+      if (dbgOn) {
+        const hits = enriched.filter(c => matchesDbg(c.phone));
+        console.log('  ENRIQUECIDO (linhas para o sufixo):', hits.map(c => ({
+          phone: c.phone,
+          whatsapp_number_id: c.whatsapp_number_id,
+          conversationStatus: c.conversationStatus,
+          isFinished: c.isFinished,
+          isArchived: c.isArchived,
+          isDispatchOnly: c.isDispatchOnly,
+          isAwaitingProduct: (c as any).isAwaitingProduct,
+          isAwaitingPayment: c.isAwaitingPayment,
+          unreadCount: c.unreadCount,
+          lastMessage: c.lastMessage,
+        })));
+        (window as any).__lastEnriched = enriched;
+      }
+
       // Guarda anti-flicker: só troca o estado (e re-renderiza a lista) se algo
       // realmente mudou. Sem isso, o polling de segurança faria a lista "piscar"
       // a cada 20s mesmo quando nada novo chegou.
@@ -1001,7 +1064,11 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
       if (sig !== convSigRef.current) {
         convSigRef.current = sig;
         setConversations(enriched);
+        if (dbgOn) console.log('[NOVAS-DEBUG] setConversations aplicado');
+      } else if (dbgOn) {
+        console.log('[NOVAS-DEBUG] signature idêntica → setConversations SUPRIMIDO');
       }
+      if (dbgOn) console.groupEnd();
     };
 
     loadConversations();
