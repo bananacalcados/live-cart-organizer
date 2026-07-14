@@ -756,13 +756,9 @@ serve(async (req) => {
             msgLower.includes(String(kw.keyword).toLowerCase()),
           );
           if (matched) {
-            const phoneSuffix = phone.slice(-8);
-            const { data: existingCustomer } = await supabase
-              .from("pos_customers")
-              .select("id")
-              .or(`whatsapp.ilike.%${phoneSuffix}`)
-              .limit(1)
-              .maybeSingle();
+            // "customer" = comprador real (total_orders>0), casando DDD + 8 dígitos.
+            const isCustomer = await isBuyerPhone(supabase, phone);
+
             await supabase.from("lp_leads").insert({
               name: senderName || null,
               phone,
