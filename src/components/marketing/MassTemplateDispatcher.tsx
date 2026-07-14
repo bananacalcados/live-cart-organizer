@@ -906,6 +906,8 @@ export function MassTemplateDispatcher() {
           const phone = l.phone.replace(/\D/g, '');
           if (!phone || phone.length < 8) continue;
           if (leadCampaignFilter !== 'all' && l.campaign_tag !== leadCampaignFilter) continue;
+          // lp_leads don't carry lead_temperature; only apply VIP membership filter here.
+          if (!passesVipMembership(phone)) continue;
           const dk = dedupKey(phone);
           if (addedPhones.has(dk)) continue;
           addedPhones.add(dk);
