@@ -240,53 +240,141 @@ export function InitialMessageEditor({
               </div>
             )}
 
-            {safeBlocks.map((block, idx) => (
-              <div key={idx} className="flex gap-2 items-start">
-                <div className="flex flex-col gap-1 pt-1">
-                  <Badge variant="outline" className="h-6 w-6 p-0 flex items-center justify-center text-xs">
-                    {idx + 1}
-                  </Badge>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6"
-                    onClick={() => move(idx, -1)}
-                    disabled={idx === 0}
-                  >
-                    <ArrowUp className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6"
-                    onClick={() => move(idx, 1)}
-                    disabled={idx === safeBlocks.length - 1}
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                  </Button>
+            {safeBlocks.map((block, idx) => {
+              const blkButtons = buttonsForBlock(idx);
+              return (
+                <div key={idx} className="space-y-2 border rounded-md p-2 bg-background/60">
+                  <div className="flex gap-2 items-start">
+                    <div className="flex flex-col gap-1 pt-1">
+                      <Badge variant="outline" className="h-6 w-6 p-0 flex items-center justify-center text-xs">
+                        {idx + 1}
+                      </Badge>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => move(idx, -1)}
+                        disabled={idx === 0}
+                      >
+                        <ArrowUp className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => move(idx, 1)}
+                        disabled={idx === safeBlocks.length - 1}
+                      >
+                        <ArrowDown className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <Textarea
+                      ref={(el) => (textareasRef.current[idx] = el)}
+                      value={block}
+                      onChange={(e) => setBlock(idx, e.target.value)}
+                      onFocus={() => (focusedIndexRef.current = idx)}
+                      placeholder={`Bloco ${idx + 1} — digite o texto do balão`}
+                      className="min-h-[70px] font-mono text-xs"
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => removeBlock(idx)}
+                      title="Remover bloco"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {buttonsEnabled && (
+                    <div className="pl-8 space-y-2">
+                      {blkButtons.map((btn) => (
+                        <div key={btn.id} className="flex flex-wrap items-center gap-2 rounded border border-dashed p-2 bg-muted/30">
+                          <MousePointerClick className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                          <Select
+                            value={btn.type}
+                            onValueChange={(v: IgButtonType) =>
+                              updateButton(idx, btn.id, {
+                                type: v,
+                                urlToken: v === "url" ? btn.urlToken || "{checkout_link}" : undefined,
+                                automationId: v === "automation" ? btn.automationId : undefined,
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[140px] text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="url">
+                                <span className="flex items-center gap-1"><Link2 className="h-3 w-3" /> Link</span>
+                              </SelectItem>
+                              <SelectItem value="automation">
+                                <span className="flex items-center gap-1"><Zap className="h-3 w-3" /> Automação</span>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            value={btn.title}
+                            onChange={(e) => updateButton(idx, btn.id, { title: e.target.value.slice(0, MAX_BTN_TITLE) })}
+                            placeholder="Texto do botão"
+                            maxLength={MAX_BTN_TITLE}
+                            className="h-8 text-xs flex-1 min-w-[140px]"
+                          />
+                          {btn.type === "url" ? (
+                            <Input
+                              value={btn.urlToken || ""}
+                              onChange={(e) => updateButton(idx, btn.id, { urlToken: e.target.value })}
+                              placeholder="{checkout_link} ou https://..."
+                              className="h-8 text-xs flex-[2] min-w-[180px] font-mono"
+                            />
+                          ) : (
+                            <Select
+                              value={btn.automationId || ""}
+                              onValueChange={(v) => updateButton(idx, btn.id, { automationId: v })}
+                            >
+                              <SelectTrigger className="h-8 text-xs flex-[2] min-w-[180px]">
+                                <SelectValue placeholder={(automations?.length ?? 0) === 0 ? "Nenhuma automação criada" : "Selecione uma automação"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(automations || []).map((a) => (
+                                  <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive shrink-0"
+                            onClick={() => removeButton(idx, btn.id)}
+                            title="Remover botão"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                      {blkButtons.length < MAX_BTNS_PER_BLOCK && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addButton(idx)}
+                          className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
+                        >
+                          <Plus className="h-3 w-3" /> Adicionar botão ({blkButtons.length}/{MAX_BTNS_PER_BLOCK})
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <Textarea
-                  ref={(el) => (textareasRef.current[idx] = el)}
-                  value={block}
-                  onChange={(e) => setBlock(idx, e.target.value)}
-                  onFocus={() => (focusedIndexRef.current = idx)}
-                  placeholder={`Bloco ${idx + 1} — digite o texto do balão`}
-                  className="min-h-[70px] font-mono text-xs"
-                />
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-destructive"
-                  onClick={() => removeBlock(idx)}
-                  title="Remover bloco"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
+
 
             <Button type="button" variant="outline" size="sm" onClick={addBlock} className="w-full">
               <Plus className="h-3 w-3 mr-1" /> Adicionar bloco
