@@ -581,6 +581,16 @@ export function MassTemplateDispatcher() {
       const orphGroups: string[] = [...new Set(allOrphans.flatMap((o: any) => o.group_names || []).filter(Boolean))].sort();
       setOrphanGroupNames(orphGroups);
 
+      // VIP membership index — one round-trip returns the distinct 8-digit
+      // phone suffixes of everyone already inside any group flagged is_vip.
+      // Used by the include/exclude "Grupos VIP" filter below.
+      try {
+        const { data: vipSuffixes, error: vipErr } = await supabase.rpc('vip_group_member_phone_suffixes' as any);
+        if (!vipErr && Array.isArray(vipSuffixes)) {
+          setVipMemberSuffixes(new Set((vipSuffixes as string[]).filter(Boolean)));
+        }
+      } catch (e) { console.warn('vip_group_member_phone_suffixes failed', e); }
+
       setAudienceLoaded(true);
 
     } catch (err) { console.error(err); toast.error("Erro ao carregar audiência"); }
