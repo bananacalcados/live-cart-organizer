@@ -189,6 +189,20 @@ export function MassTemplateDispatcher() {
   const [leadCampaignFilter, setLeadCampaignFilter] = useState<string>("all");
   const [leadCampaignTags, setLeadCampaignTags] = useState<string[]>([]);
 
+  // Lead temperature (RFM/behavior) — include/exclude sets. Applies to CRM & Ravena
+  // (records that carry `lead_temperature` in customers_unified). Pure lp_leads
+  // rows don't have a temperature, so they pass through unaffected.
+  const TEMPERATURES = ['muito_quente', 'quente', 'morno', 'frio', 'inerte'] as const;
+  const [tempInclude, setTempInclude] = useState<Set<string>>(new Set());
+  const [tempExclude, setTempExclude] = useState<Set<string>>(new Set());
+
+  // VIP membership filter (based on whatsapp_group_members of groups flagged is_vip).
+  //  - 'any'     → ignore VIP membership
+  //  - 'exclude' → remove anyone already in any VIP group
+  //  - 'only'    → keep only people already in any VIP group
+  const [vipMembershipMode, setVipMembershipMode] = useState<'any' | 'exclude' | 'only'>('any');
+  const [vipMemberSuffixes, setVipMemberSuffixes] = useState<Set<string>>(new Set());
+
   // Selection
   const [selectAll, setSelectAll] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
