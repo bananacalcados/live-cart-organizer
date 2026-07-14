@@ -2240,6 +2240,41 @@ export function MassTemplateDispatcher() {
               </div>
             )}
 
+            {/* Última compra (X dias) — filtro independente por recência */}
+            {audienceSource !== 'orphans' && audienceSource !== 'leads' && (
+              <div className="rounded-md border border-sky-500/40 bg-sky-500/5 p-2">
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-wide text-sky-600 dark:text-sky-300">
+                    Última compra — recência
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select value={lastPurchaseMode} onValueChange={(v) => { setLastPurchaseMode(v as any); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                      <SelectTrigger className="w-[320px] h-8 text-xs bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Sem filtro por última compra</SelectItem>
+                        <SelectItem value="include">Somente quem comprou nos últimos X dias</SelectItem>
+                        <SelectItem value="exclude">Excluir quem comprou nos últimos X dias</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min={1}
+                      className="w-[90px] h-8 text-xs"
+                      value={lastPurchaseDays}
+                      onChange={(e) => setLastPurchaseDays(e.target.value)}
+                      disabled={lastPurchaseMode === 'any'}
+                    />
+                    <span className="text-[11px] text-muted-foreground">dias</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground pt-0.5">
+                    Analisa a data da última compra do cliente (CRM/Ravena). Em "Excluir", quem nunca comprou passa; em "Somente", quem nunca comprou é removido.
+                  </p>
+                </div>
+              </div>
+            )}
+
 
             {/* Date & value filters */}
             {(audienceSource === 'crm' || audienceSource === 'both') && (
