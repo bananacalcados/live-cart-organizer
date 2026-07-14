@@ -1,17 +1,55 @@
 import { useMemo, useRef } from "react";
-import { Plus, Trash2, ArrowUp, ArrowDown, Instagram, Eye } from "lucide-react";
+import { Plus, Trash2, ArrowUp, ArrowDown, Instagram, Eye, MousePointerClick, Link2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { IgAutomation } from "./IgAutomationsManager";
+
+export type IgButtonType = "url" | "automation";
+
+export interface IgBlockButton {
+  id: string;
+  type: IgButtonType;
+  title: string;
+  /** For type=url: variable token like "{checkout_link}" OR a fixed URL. */
+  urlToken?: string;
+  /** For type=automation: id of IgAutomation. */
+  automationId?: string;
+}
+
+export interface IgBlockButtonsEntry {
+  blockIndex: number;
+  buttons: IgBlockButton[];
+}
 
 interface Props {
   enabled: boolean;
   blocks: string[];
   onChange: (next: { enabled: boolean; blocks: string[] }) => void;
+  /** Optional — botões por bloco (extensão nova, opt-in). */
+  buttons?: IgBlockButtonsEntry[];
+  onChangeButtons?: (next: IgBlockButtonsEntry[]) => void;
+  /** Lista de automações do evento para escolher no seletor de botão. */
+  automations?: IgAutomation[];
 }
+
+const MAX_BTN_TITLE = 20;
+const MAX_BTNS_PER_BLOCK = 3;
+
+const URL_VARIABLES = [
+  { token: "{checkout_link}", label: "Link do checkout" },
+];
 
 // Mantém em sync com livete-start-order/resolveToken
 const VARIABLES: { token: string; label: string; sample: string }[] = [
