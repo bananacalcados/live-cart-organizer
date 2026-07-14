@@ -189,6 +189,20 @@ export function MassTemplateDispatcher() {
   const [leadCampaignFilter, setLeadCampaignFilter] = useState<string>("all");
   const [leadCampaignTags, setLeadCampaignTags] = useState<string[]>([]);
 
+  // Lead temperature (RFM/behavior) — include/exclude sets. Applies to CRM & Ravena
+  // (records that carry `lead_temperature` in customers_unified). Pure lp_leads
+  // rows don't have a temperature, so they pass through unaffected.
+  const TEMPERATURES = ['muito_quente', 'quente', 'morno', 'frio', 'inerte'] as const;
+  const [tempInclude, setTempInclude] = useState<Set<string>>(new Set());
+  const [tempExclude, setTempExclude] = useState<Set<string>>(new Set());
+
+  // VIP membership filter (based on whatsapp_group_members of groups flagged is_vip).
+  //  - 'any'     → ignore VIP membership
+  //  - 'exclude' → remove anyone already in any VIP group
+  //  - 'only'    → keep only people already in any VIP group
+  const [vipMembershipMode, setVipMembershipMode] = useState<'any' | 'exclude' | 'only'>('any');
+  const [vipMemberSuffixes, setVipMemberSuffixes] = useState<Set<string>>(new Set());
+
   // Selection
   const [selectAll, setSelectAll] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
@@ -492,7 +506,7 @@ export function MassTemplateDispatcher() {
       while (keepFetching) {
         const { data, error } = await supabase
           .from('crm_customers_v')
-          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type, total_orders, total_spent, avg_ticket, last_purchase_at, tags')
+          .select('id, first_name, last_name, phone, email, city, state, ddd, rfm_segment, region_type, total_orders, total_spent, avg_ticket, last_purchase_at, tags, lead_temperature')
           .not('phone', 'is', null)
           .order('total_spent', { ascending: false })
           .range(from, from + 999);
@@ -566,6 +580,16 @@ export function MassTemplateDispatcher() {
       setOrphanContacts(allOrphans);
       const orphGroups: string[] = [...new Set(allOrphans.flatMap((o: any) => o.group_names || []).filter(Boolean))].sort();
       setOrphanGroupNames(orphGroups);
+
+      // VIP membership index — one round-trip returns the distinct 8-digit
+      // phone suffixes of everyone already inside any group flagged is_vip.
+      // Used by the include/exclude "Grupos VIP" filter below.
+      try {
+        const { data: vipSuffixes, error: vipErr } = await supabase.rpc('vip_group_member_phone_suffixes' as any);
+        if (!vipErr && Array.isArray(vipSuffixes)) {
+          setVipMemberSuffixes(new Set((vipSuffixes as string[]).filter(Boolean)));
+        }
+      } catch (e) { console.warn('vip_group_member_phone_suffixes failed', e); }
 
       setAudienceLoaded(true);
 
@@ -742,6 +766,20 @@ export function MassTemplateDispatcher() {
     const list: Recipient[] = [];
     const addedPhones = new Set<string>();
 
+    // Shared filters (temperature + VIP membership) work across CRM/Ravena/leads
+    const passesTemperature = (temp: string | null | undefined) => {
+      const t = temp || null;
+      if (tempInclude.size > 0 && (!t || !tempInclude.has(t))) return false;
+      if (tempExclude.size > 0 && t && tempExclude.has(t)) return false;
+      return true;
+    };
+    const passesVipMembership = (phoneDigits: string) => {
+      if (vipMembershipMode === 'any') return true;
+      const suffix = phoneDigits.slice(-8);
+      const inVip = vipMemberSuffixes.has(suffix);
+      return vipMembershipMode === 'exclude' ? !inVip : inVip;
+    };
+
     // Ravena is ISOLATED — never mixes with Banana CRM/leads
     if (audienceSource === 'ravena') {
       for (const c of ravenaCustomers) {
@@ -760,6 +798,8 @@ export function MassTemplateDispatcher() {
         if (ticketMax && (c.avg_ticket || 0) > parseFloat(ticketMax)) continue;
         if (ordersMin && (c.total_orders || 0) < parseInt(ordersMin)) continue;
         if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
+        if (!passesTemperature(c.lead_temperature)) continue;
+        if (!passesVipMembership(phone)) continue;
 
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
@@ -835,6 +875,8 @@ export function MassTemplateDispatcher() {
           // Orders filters
           if (ordersMin && (c.total_orders || 0) < parseInt(ordersMin)) continue;
           if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
+          if (!passesTemperature(c.lead_temperature)) continue;
+          if (!passesVipMembership(phone)) continue;
 
           if (searchQuery) {
             const q = searchQuery.toLowerCase();
@@ -864,6 +906,8 @@ export function MassTemplateDispatcher() {
           const phone = l.phone.replace(/\D/g, '');
           if (!phone || phone.length < 8) continue;
           if (leadCampaignFilter !== 'all' && l.campaign_tag !== leadCampaignFilter) continue;
+          // lp_leads don't carry lead_temperature; only apply VIP membership filter here.
+          if (!passesVipMembership(phone)) continue;
           const dk = dedupKey(phone);
           if (addedPhones.has(dk)) continue;
           addedPhones.add(dk);
@@ -884,7 +928,7 @@ export function MassTemplateDispatcher() {
     const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
 
     return finalList;
-  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter]);
+  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes]);
 
   // Recipients after applying cooldown exclusion (suffix-based to catch same person with different DDDs)
   const filteredRecipients = useMemo((): Recipient[] => {
@@ -2097,6 +2141,76 @@ export function MassTemplateDispatcher() {
                 onChange={e => setSearchQuery(e.target.value)}
               />
             </div>
+
+            {/* Temperatura de leads + Grupos VIP — filtros comportamentais */}
+            {audienceSource !== 'orphans' && (
+              <div className="flex flex-wrap gap-3 items-start rounded-md border border-border/60 bg-muted/30 p-2">
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Temperatura {audienceSource === 'leads' ? '(não afeta Leads Captados)' : ''}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {TEMPERATURES.map((t) => {
+                      const inc = tempInclude.has(t);
+                      const exc = tempExclude.has(t);
+                      const label = t.replace('_', ' ');
+                      const cycle = () => {
+                        setSelectAll(false); setSelectedPhones(new Set());
+                        if (!inc && !exc) {
+                          setTempInclude((s) => new Set(s).add(t));
+                        } else if (inc) {
+                          setTempInclude((s) => { const n = new Set(s); n.delete(t); return n; });
+                          setTempExclude((s) => new Set(s).add(t));
+                        } else {
+                          setTempExclude((s) => { const n = new Set(s); n.delete(t); return n; });
+                        }
+                      };
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={cycle}
+                          className={`px-2 h-7 rounded-full text-[11px] border transition ${
+                            inc ? 'bg-emerald-500/20 border-emerald-500 text-emerald-100'
+                              : exc ? 'bg-red-500/20 border-red-500 text-red-100 line-through'
+                              : 'border-border text-muted-foreground hover:bg-accent'
+                          }`}
+                          title={inc ? 'Incluir apenas' : exc ? 'Excluir' : 'Clique para incluir · clique de novo para excluir'}
+                        >
+                          {inc ? '✓ ' : exc ? '✕ ' : ''}{label}
+                        </button>
+                      );
+                    })}
+                    {(tempInclude.size > 0 || tempExclude.size > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => { setTempInclude(new Set()); setTempExclude(new Set()); }}
+                        className="px-2 h-7 rounded-full text-[11px] border border-border text-muted-foreground hover:bg-accent"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Grupos VIP {vipMemberSuffixes.size > 0 ? `(${vipMemberSuffixes.size} membros)` : ''}
+                  </div>
+                  <Select value={vipMembershipMode} onValueChange={(v) => { setVipMembershipMode(v as any); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                    <SelectTrigger className="w-[260px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Sem filtro de Grupos VIP</SelectItem>
+                      <SelectItem value="exclude">Excluir quem já está em algum Grupo VIP</SelectItem>
+                      <SelectItem value="only">Somente quem já está em algum Grupo VIP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
 
             {/* Date & value filters */}
             {(audienceSource === 'crm' || audienceSource === 'both') && (

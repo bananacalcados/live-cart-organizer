@@ -19220,6 +19220,7 @@ export type Database = {
         Args: { p_instagram: string; p_phone: string; p_tag: string }
         Returns: undefined
       }
+      vip_group_member_phone_suffixes: { Args: never; Returns: string[] }
       vip_groups_interaction_ranking: {
         Args: { p_days?: number }
         Returns: {
