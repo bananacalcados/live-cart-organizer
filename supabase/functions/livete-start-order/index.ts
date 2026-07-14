@@ -61,7 +61,7 @@ serve(async (req) => {
     if (order.event_id) {
       const { data: eventData } = await supabase
         .from('events')
-        .select('whatsapp_number_id, channel_preference, channel_preferences, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks')
+        .select('whatsapp_number_id, channel_preference, channel_preferences, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks, ig_initial_message_buttons, ig_automations')
         .eq('id', order.event_id)
         .single();
 
