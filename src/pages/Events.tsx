@@ -40,7 +40,8 @@ import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
 import { PresenterTeamChat } from "@/components/events/PresenterTeamChat";
 import { ShippingRulesManager } from "@/components/events/ShippingRulesManager";
 import { MetaTemplateConfigurator } from "@/components/events/MetaTemplateConfigurator";
-import { InitialMessageEditor } from "@/components/events/InitialMessageEditor";
+import { InitialMessageEditor, type IgBlockButtonsEntry } from "@/components/events/InitialMessageEditor";
+import { IgAutomationsManager, type IgAutomation } from "@/components/events/IgAutomationsManager";
 import { EventFollowupTemplates, type FollowupTemplate } from "@/components/events/EventFollowupTemplates";
 import { EventSetupWizard, EVENT_DRAFT_NAME } from "@/components/events/EventSetupWizard";
 import { ParticipantScorePanel } from "@/components/events/ParticipantScorePanel";
@@ -89,6 +90,8 @@ const Events = () => {
   const [metaTemplateHeaderVar, setMetaTemplateHeaderVar] = useState<string | null>(null);
   const [initialMessageEnabled, setInitialMessageEnabled] = useState<boolean>(false);
   const [initialMessageBlocks, setInitialMessageBlocks] = useState<string[]>([]);
+  const [igButtons, setIgButtons] = useState<IgBlockButtonsEntry[]>([]);
+  const [igAutomations, setIgAutomations] = useState<IgAutomation[]>([]);
   const [followupTemplates, setFollowupTemplates] = useState<FollowupTemplate[]>([]);
   const [eventStats, setEventStats] = useState<EventStats[]>([]);
   const [verifyingEventId, setVerifyingEventId] = useState<string | null>(null);
@@ -101,11 +104,13 @@ const Events = () => {
       updateEvent(editingEvent, {
         initial_message_enabled: initialMessageEnabled,
         initial_message_blocks: initialMessageBlocks,
+        ig_initial_message_buttons: igButtons,
+        ig_automations: igAutomations,
       } as any).catch((e) => console.error("[InitialMessage auto-save]", e));
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMessageEnabled, initialMessageBlocks, editingEvent, dialogOpen]);
+  }, [initialMessageEnabled, initialMessageBlocks, igButtons, igAutomations, editingEvent, dialogOpen]);
 
   const handleCopyEventId = async (eventId: string) => {
     await navigator.clipboard.writeText(eventId);
@@ -281,6 +286,8 @@ const Events = () => {
         manual_pos_routing: manualPosRouting,
         initial_message_enabled: initialMessageEnabled,
         initial_message_blocks: initialMessageBlocks,
+        ig_initial_message_buttons: igButtons,
+        ig_automations: igAutomations,
         followup_templates: followupTemplates,
         ...metaTemplateFields,
       } as any);
@@ -297,6 +304,8 @@ const Events = () => {
           automation_enabled: automationEnabled,
           initial_message_enabled: initialMessageEnabled,
           initial_message_blocks: initialMessageBlocks,
+          ig_initial_message_buttons: igButtons,
+          ig_automations: igAutomations,
           followup_templates: followupTemplates,
           start_date: startDate || null,
           end_date: endDate || null,
@@ -329,6 +338,8 @@ const Events = () => {
     setMetaTemplateHeaderVar(null);
     setInitialMessageEnabled(false);
     setInitialMessageBlocks([]);
+    setIgButtons([]);
+    setIgAutomations([]);
     setFollowupTemplates([]);
     setEditingEvent(null);
   };
@@ -353,6 +364,8 @@ const Events = () => {
     setMetaTemplateHeaderVar((event as any).meta_template_header_variable || null);
     setInitialMessageEnabled(Boolean((event as any).initial_message_enabled));
     setInitialMessageBlocks(((event as any).initial_message_blocks as string[]) || []);
+    setIgButtons(((event as any).ig_initial_message_buttons as IgBlockButtonsEntry[]) || []);
+    setIgAutomations(((event as any).ig_automations as IgAutomation[]) || []);
     setFollowupTemplates(((event as any).followup_templates as FollowupTemplate[]) || []);
     setDialogOpen(true);
   };
@@ -662,6 +675,14 @@ const Events = () => {
                       setInitialMessageEnabled(next.enabled);
                       setInitialMessageBlocks(next.blocks);
                     }}
+                    buttons={igButtons}
+                    onChangeButtons={setIgButtons}
+                    automations={igAutomations}
+                  />
+                  <IgAutomationsManager
+                    eventId={editingEvent}
+                    automations={igAutomations}
+                    onChange={setIgAutomations}
                   />
                   {editingEvent && (
                     <EventTeamSelector eventId={editingEvent} />

@@ -21,7 +21,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { DbEvent } from "@/types/database";
 import { MetaTemplateConfigurator } from "./MetaTemplateConfigurator";
-import { InitialMessageEditor } from "./InitialMessageEditor";
+import { InitialMessageEditor, type IgBlockButtonsEntry } from "./InitialMessageEditor";
+import { IgAutomationsManager, type IgAutomation } from "./IgAutomationsManager";
 import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { CrossellConfigStep, CrossellOfferDraft } from "./CrossellConfigStep";
@@ -103,6 +104,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [metaTemplateHeaderVar, setMetaTemplateHeaderVar] = useState<string | null>(null);
   const [initialMessageEnabled, setInitialMessageEnabled] = useState(false);
   const [initialMessageBlocks, setInitialMessageBlocks] = useState<string[]>([]);
+  const [igButtons, setIgButtons] = useState<IgBlockButtonsEntry[]>([]);
+  const [igAutomations, setIgAutomations] = useState<IgAutomation[]>([]);
 
   // Parcelamento
   const [installMin, setInstallMin] = useState("");
@@ -154,6 +157,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setMetaTemplateHeaderVar(e.meta_template_header_variable || null);
     setInitialMessageEnabled(Boolean(e.initial_message_enabled));
     setInitialMessageBlocks((e.initial_message_blocks as string[]) || []);
+    setIgButtons((e.ig_initial_message_buttons as IgBlockButtonsEntry[]) || []);
+    setIgAutomations((e.ig_automations as IgAutomation[]) || []);
     setInstallMin(e.installment_min_value != null ? String(e.installment_min_value) : "");
     setInstallMax(e.installment_max != null ? String(e.installment_max) : "");
 
@@ -268,6 +273,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
       updates.meta_template_header_variable = metaTemplateHeaderVar;
       updates.initial_message_enabled = initialMessageEnabled;
       updates.initial_message_blocks = initialMessageBlocks;
+      updates.ig_initial_message_buttons = igButtons;
+      updates.ig_automations = igAutomations;
       // Keep channel preference consistent: a Meta instance + template means the
       // event dispatches via Meta WhatsApp template, not a plain session message.
       if (whatsappNumberId && metaTemplateName) {
@@ -627,6 +634,14 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                   setInitialMessageEnabled(next.enabled);
                   setInitialMessageBlocks(next.blocks);
                 }}
+                buttons={igButtons}
+                onChangeButtons={setIgButtons}
+                automations={igAutomations}
+              />
+              <IgAutomationsManager
+                eventId={event?.id ?? null}
+                automations={igAutomations}
+                onChange={setIgAutomations}
               />
             </div>
           )}

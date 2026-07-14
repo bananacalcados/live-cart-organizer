@@ -1,17 +1,55 @@
 import { useMemo, useRef } from "react";
-import { Plus, Trash2, ArrowUp, ArrowDown, Instagram, Eye } from "lucide-react";
+import { Plus, Trash2, ArrowUp, ArrowDown, Instagram, Eye, MousePointerClick, Link2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { IgAutomation } from "./IgAutomationsManager";
+
+export type IgButtonType = "url" | "automation";
+
+export interface IgBlockButton {
+  id: string;
+  type: IgButtonType;
+  title: string;
+  /** For type=url: variable token like "{checkout_link}" OR a fixed URL. */
+  urlToken?: string;
+  /** For type=automation: id of IgAutomation. */
+  automationId?: string;
+}
+
+export interface IgBlockButtonsEntry {
+  blockIndex: number;
+  buttons: IgBlockButton[];
+}
 
 interface Props {
   enabled: boolean;
   blocks: string[];
   onChange: (next: { enabled: boolean; blocks: string[] }) => void;
+  /** Optional — botões por bloco (extensão nova, opt-in). */
+  buttons?: IgBlockButtonsEntry[];
+  onChangeButtons?: (next: IgBlockButtonsEntry[]) => void;
+  /** Lista de automações do evento para escolher no seletor de botão. */
+  automations?: IgAutomation[];
 }
+
+const MAX_BTN_TITLE = 20;
+const MAX_BTNS_PER_BLOCK = 3;
+
+const URL_VARIABLES = [
+  { token: "{checkout_link}", label: "Link do checkout" },
+];
 
 // Mantém em sync com livete-start-order/resolveToken
 const VARIABLES: { token: string; label: string; sample: string }[] = [
@@ -33,9 +71,54 @@ const DEFAULT_BLOCKS = [
   "Só clicar no link acima pra finalizar a compra. Seu produto já foi separado, mas precisa ser pago em 10 minutos, pra continuar reservado, OK?",
 ];
 
-export function InitialMessageEditor({ enabled, blocks, onChange }: Props) {
+export function InitialMessageEditor({
+  enabled,
+  blocks,
+  onChange,
+  buttons,
+  onChangeButtons,
+  automations,
+}: Props) {
   const focusedIndexRef = useRef<number>(0);
   const textareasRef = useRef<Record<number, HTMLTextAreaElement | null>>({});
+
+  const safeButtons: IgBlockButtonsEntry[] = buttons ?? [];
+  const buttonsEnabled = typeof onChangeButtons === "function";
+  const buttonsForBlock = (idx: number): IgBlockButton[] =>
+    safeButtons.find((e) => e.blockIndex === idx)?.buttons ?? [];
+
+  const setButtonsForBlock = (idx: number, next: IgBlockButton[]) => {
+    if (!onChangeButtons) return;
+    const others = safeButtons.filter((e) => e.blockIndex !== idx);
+    onChangeButtons(next.length ? [...others, { blockIndex: idx, buttons: next }] : others);
+  };
+
+  const addButton = (idx: number) => {
+    const cur = buttonsForBlock(idx);
+    if (cur.length >= MAX_BTNS_PER_BLOCK) return;
+    setButtonsForBlock(idx, [
+      ...cur,
+      {
+        id: (globalThis.crypto?.randomUUID?.() ?? `btn_${Date.now()}_${Math.random().toString(36).slice(2)}`).slice(0, 12),
+        type: "url",
+        title: "",
+        urlToken: "{checkout_link}",
+      },
+    ]);
+  };
+
+  const updateButton = (idx: number, btnId: string, patch: Partial<IgBlockButton>) => {
+    setButtonsForBlock(
+      idx,
+      buttonsForBlock(idx).map((b) => (b.id === btnId ? { ...b, ...patch } : b)),
+    );
+  };
+
+  const removeButton = (idx: number, btnId: string) => {
+    setButtonsForBlock(idx, buttonsForBlock(idx).filter((b) => b.id !== btnId));
+  };
+
+
 
   const safeBlocks = blocks?.length ? blocks : [];
 
@@ -56,6 +139,12 @@ export function InitialMessageEditor({ enabled, blocks, onChange }: Props) {
   const removeBlock = (idx: number) => {
     const copy = safeBlocks.filter((_, i) => i !== idx);
     update({ blocks: copy });
+    if (onChangeButtons) {
+      const remapped = safeButtons
+        .filter((e) => e.blockIndex !== idx)
+        .map((e) => (e.blockIndex > idx ? { ...e, blockIndex: e.blockIndex - 1 } : e));
+      onChangeButtons(remapped);
+    }
   };
 
   const move = (idx: number, dir: -1 | 1) => {
@@ -64,7 +153,16 @@ export function InitialMessageEditor({ enabled, blocks, onChange }: Props) {
     const copy = [...safeBlocks];
     [copy[idx], copy[target]] = [copy[target], copy[idx]];
     update({ blocks: copy });
+    if (onChangeButtons) {
+      const remapped = safeButtons.map((e) => {
+        if (e.blockIndex === idx) return { ...e, blockIndex: target };
+        if (e.blockIndex === target) return { ...e, blockIndex: idx };
+        return e;
+      });
+      onChangeButtons(remapped);
+    }
   };
+
 
   const loadDefault = () => update({ blocks: DEFAULT_BLOCKS });
 
@@ -142,53 +240,141 @@ export function InitialMessageEditor({ enabled, blocks, onChange }: Props) {
               </div>
             )}
 
-            {safeBlocks.map((block, idx) => (
-              <div key={idx} className="flex gap-2 items-start">
-                <div className="flex flex-col gap-1 pt-1">
-                  <Badge variant="outline" className="h-6 w-6 p-0 flex items-center justify-center text-xs">
-                    {idx + 1}
-                  </Badge>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6"
-                    onClick={() => move(idx, -1)}
-                    disabled={idx === 0}
-                  >
-                    <ArrowUp className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6"
-                    onClick={() => move(idx, 1)}
-                    disabled={idx === safeBlocks.length - 1}
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                  </Button>
+            {safeBlocks.map((block, idx) => {
+              const blkButtons = buttonsForBlock(idx);
+              return (
+                <div key={idx} className="space-y-2 border rounded-md p-2 bg-background/60">
+                  <div className="flex gap-2 items-start">
+                    <div className="flex flex-col gap-1 pt-1">
+                      <Badge variant="outline" className="h-6 w-6 p-0 flex items-center justify-center text-xs">
+                        {idx + 1}
+                      </Badge>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => move(idx, -1)}
+                        disabled={idx === 0}
+                      >
+                        <ArrowUp className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => move(idx, 1)}
+                        disabled={idx === safeBlocks.length - 1}
+                      >
+                        <ArrowDown className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <Textarea
+                      ref={(el) => (textareasRef.current[idx] = el)}
+                      value={block}
+                      onChange={(e) => setBlock(idx, e.target.value)}
+                      onFocus={() => (focusedIndexRef.current = idx)}
+                      placeholder={`Bloco ${idx + 1} — digite o texto do balão`}
+                      className="min-h-[70px] font-mono text-xs"
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-destructive"
+                      onClick={() => removeBlock(idx)}
+                      title="Remover bloco"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  {buttonsEnabled && (
+                    <div className="pl-8 space-y-2">
+                      {blkButtons.map((btn) => (
+                        <div key={btn.id} className="flex flex-wrap items-center gap-2 rounded border border-dashed p-2 bg-muted/30">
+                          <MousePointerClick className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+                          <Select
+                            value={btn.type}
+                            onValueChange={(v: IgButtonType) =>
+                              updateButton(idx, btn.id, {
+                                type: v,
+                                urlToken: v === "url" ? btn.urlToken || "{checkout_link}" : undefined,
+                                automationId: v === "automation" ? btn.automationId : undefined,
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[140px] text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="url">
+                                <span className="flex items-center gap-1"><Link2 className="h-3 w-3" /> Link</span>
+                              </SelectItem>
+                              <SelectItem value="automation">
+                                <span className="flex items-center gap-1"><Zap className="h-3 w-3" /> Automação</span>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            value={btn.title}
+                            onChange={(e) => updateButton(idx, btn.id, { title: e.target.value.slice(0, MAX_BTN_TITLE) })}
+                            placeholder="Texto do botão"
+                            maxLength={MAX_BTN_TITLE}
+                            className="h-8 text-xs flex-1 min-w-[140px]"
+                          />
+                          {btn.type === "url" ? (
+                            <Input
+                              value={btn.urlToken || ""}
+                              onChange={(e) => updateButton(idx, btn.id, { urlToken: e.target.value })}
+                              placeholder="{checkout_link} ou https://..."
+                              className="h-8 text-xs flex-[2] min-w-[180px] font-mono"
+                            />
+                          ) : (
+                            <Select
+                              value={btn.automationId || ""}
+                              onValueChange={(v) => updateButton(idx, btn.id, { automationId: v })}
+                            >
+                              <SelectTrigger className="h-8 text-xs flex-[2] min-w-[180px]">
+                                <SelectValue placeholder={(automations?.length ?? 0) === 0 ? "Nenhuma automação criada" : "Selecione uma automação"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(automations || []).map((a) => (
+                                  <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-destructive shrink-0"
+                            onClick={() => removeButton(idx, btn.id)}
+                            title="Remover botão"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                      {blkButtons.length < MAX_BTNS_PER_BLOCK && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addButton(idx)}
+                          className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground"
+                        >
+                          <Plus className="h-3 w-3" /> Adicionar botão ({blkButtons.length}/{MAX_BTNS_PER_BLOCK})
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <Textarea
-                  ref={(el) => (textareasRef.current[idx] = el)}
-                  value={block}
-                  onChange={(e) => setBlock(idx, e.target.value)}
-                  onFocus={() => (focusedIndexRef.current = idx)}
-                  placeholder={`Bloco ${idx + 1} — digite o texto do balão`}
-                  className="min-h-[70px] font-mono text-xs"
-                />
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-destructive"
-                  onClick={() => removeBlock(idx)}
-                  title="Remover bloco"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+              );
+            })}
+
 
             <Button type="button" variant="outline" size="sm" onClick={addBlock} className="w-full">
               <Plus className="h-3 w-3 mr-1" /> Adicionar bloco

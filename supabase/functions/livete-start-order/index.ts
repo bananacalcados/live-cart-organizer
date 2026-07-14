@@ -55,11 +55,13 @@ serve(async (req) => {
     let metaTemplateHeaderVar: string | null = null;
     let initialMessageEnabled = false;
     let initialMessageBlocks: string[] = [];
+    let igInitialButtons: Array<{ blockIndex: number; buttons: Array<{ id: string; type: 'url' | 'automation'; title: string; urlToken?: string; automationId?: string }> }> = [];
+    let igAutomationsList: Array<{ id: string; label?: string }> = [];
 
     if (order.event_id) {
       const { data: eventData } = await supabase
         .from('events')
-        .select('whatsapp_number_id, channel_preference, channel_preferences, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks')
+        .select('whatsapp_number_id, channel_preference, channel_preferences, meta_template_name, meta_template_language, meta_template_body_variables, meta_template_header_variable, initial_message_enabled, initial_message_blocks, ig_initial_message_buttons, ig_automations')
         .eq('id', order.event_id)
         .single();
 
@@ -72,6 +74,8 @@ serve(async (req) => {
       metaTemplateHeaderVar = (eventData as any)?.meta_template_header_variable || null;
       initialMessageEnabled = Boolean((eventData as any)?.initial_message_enabled);
       initialMessageBlocks = (((eventData as any)?.initial_message_blocks as string[]) || []).filter((b) => typeof b === 'string' && b.trim().length > 0);
+      igInitialButtons = ((eventData as any)?.ig_initial_message_buttons as any[]) || [];
+      igAutomationsList = ((eventData as any)?.ig_automations as any[]) || [];
 
       if (eventData?.whatsapp_number_id) {
         whatsappNumberId = eventData.whatsapp_number_id;
@@ -297,6 +301,57 @@ serve(async (req) => {
       const fallbackCommentId = fallbackCommentIds[0];
 
       let igFailed = false;
+      const buttonsForBlock = (idx: number) => {
+        const entry = igInitialButtons.find((e) => Number(e?.blockIndex) === idx);
+        return Array.isArray(entry?.buttons) ? entry!.buttons : [];
+      };
+      const resolveButtonUrl = (raw: string | undefined): string | null => {
+        if (!raw) return null;
+        const v = raw.trim();
+        if (!v) return null;
+        if (v.startsWith('{') && v.endsWith('}')) {
+          const resolved = resolveToken(v);
+          return resolved && /^https?:\/\//i.test(resolved) ? resolved : null;
+        }
+        return /^https?:\/\//i.test(v) ? v : null;
+      };
+      const dispatchButtonsForBlock = async (idx: number) => {
+        const cfg = buttonsForBlock(idx);
+        if (!cfg.length) return;
+        const built: Array<{ type: 'web_url' | 'postback'; title: string; url?: string; payload?: string }> = [];
+        for (const b of cfg) {
+          const title = (b?.title || '').trim();
+          if (!title) continue;
+          if (b.type === 'url') {
+            const url = resolveButtonUrl(b.urlToken);
+            if (url) built.push({ type: 'web_url', title, url });
+          } else if (b.type === 'automation' && b.automationId) {
+            const known = igAutomationsList.some((a) => a?.id === b.automationId);
+            if (known) built.push({ type: 'postback', title, payload: `evtauto:${order.event_id}:${b.automationId}` });
+          }
+        }
+        if (!built.length) return;
+        try {
+          const r = await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send-buttons`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: igUsername,
+              text: '👇 Toque em uma opção:',
+              buttons: built,
+              whatsapp_number_id: whatsappNumberId,
+              eventId: order.event_id,
+            }),
+          });
+          if (!r.ok) {
+            const errBody = await r.text().catch(() => '');
+            console.warn(`[livete-start] IG buttons send failed (${r.status}) for @${igUsername}:`, errBody);
+          }
+        } catch (e) {
+          console.warn('[livete-start] IG buttons dispatch error:', e);
+        }
+      };
+
       for (let i = 0; i < rendered.length; i++) {
         const text = rendered[i];
         if (!igFailed) {
@@ -319,6 +374,9 @@ serve(async (req) => {
             if (isInstagram && waPhone) {
               await sendViaWhatsApp(text);
             }
+          } else {
+            // Envia botões configurados para este bloco (opcional, opt-in).
+            await dispatchButtonsForBlock(i);
           }
         } else if (isInstagram && waPhone) {
           await sendViaWhatsApp(text);
