@@ -786,6 +786,17 @@ export function MassTemplateDispatcher() {
       const inVip = vipMemberSuffixes.has(suffix);
       return vipMembershipMode === 'exclude' ? !inVip : inVip;
     };
+    // Última compra: cutoff em ms; se sem data e mode=include => reprova; se exclude => passa.
+    const lpDaysNum = parseInt(lastPurchaseDays || '0', 10);
+    const lpCutoffMs = lpDaysNum > 0 ? Date.now() - lpDaysNum * 86400000 : 0;
+    const passesLastPurchase = (lastPurchaseAt: string | null | undefined) => {
+      if (lastPurchaseMode === 'any' || lpCutoffMs === 0) return true;
+      if (!lastPurchaseAt) return lastPurchaseMode === 'exclude';
+      const ts = new Date(lastPurchaseAt).getTime();
+      if (Number.isNaN(ts)) return lastPurchaseMode === 'exclude';
+      const recent = ts >= lpCutoffMs;
+      return lastPurchaseMode === 'include' ? recent : !recent;
+    };
 
     // Ravena is ISOLATED — never mixes with Banana CRM/leads
     if (audienceSource === 'ravena') {
