@@ -157,6 +157,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     setMetaTemplateHeaderVar(e.meta_template_header_variable || null);
     setInitialMessageEnabled(Boolean(e.initial_message_enabled));
     setInitialMessageBlocks((e.initial_message_blocks as string[]) || []);
+    setIgButtons((e.ig_initial_message_buttons as IgBlockButtonsEntry[]) || []);
+    setIgAutomations((e.ig_automations as IgAutomation[]) || []);
     setInstallMin(e.installment_min_value != null ? String(e.installment_min_value) : "");
     setInstallMax(e.installment_max != null ? String(e.installment_max) : "");
 
