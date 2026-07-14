@@ -203,6 +203,13 @@ export function MassTemplateDispatcher() {
   const [vipMembershipMode, setVipMembershipMode] = useState<'any' | 'exclude' | 'only'>('any');
   const [vipMemberSuffixes, setVipMemberSuffixes] = useState<Set<string>>(new Set());
 
+  // Última compra (X dias) — filtro independente por recência da última compra.
+  // mode: 'any' ignora | 'include' mantém apenas quem comprou há <= X dias
+  //       | 'exclude' remove quem comprou há <= X dias (útil para não bater em quem acabou de comprar).
+  // Só afeta registros com last_purchase_at (CRM/Ravena). Leads puros passam.
+  const [lastPurchaseMode, setLastPurchaseMode] = useState<'any' | 'include' | 'exclude'>('any');
+  const [lastPurchaseDays, setLastPurchaseDays] = useState<string>('30');
+
   // Selection
   const [selectAll, setSelectAll] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
