@@ -769,7 +769,7 @@ serve(async (req) => {
                 campaign_label: (matched as AnyObj).campaign_label,
                 keyword_matched: (matched as AnyObj).keyword,
                 original_message: text.slice(0, 500),
-                lead_status: existingCustomer ? "customer" : "prospect",
+                lead_status: isCustomer ? "customer" : "prospect",
                 captured_at: new Date().toISOString(),
               },
             });
