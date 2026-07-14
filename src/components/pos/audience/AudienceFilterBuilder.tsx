@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Users, List } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Users, List, Star } from "lucide-react";
 import { MultiSelectFilter } from "./MultiSelectFilter";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -22,6 +23,8 @@ export interface AudienceFilterBlock {
   stores?: string[];
   payment_methods?: string[];
   rfm_segments?: string[];
+  tags?: string[];
+  in_vip_group?: boolean;
   min_avg_ticket?: string;
   max_avg_ticket?: string;
   min_total_orders?: string;
@@ -51,6 +54,7 @@ interface Options {
   stores: string[];
   payment_methods: string[];
   rfm_segments: string[];
+  tags: string[];
 }
 
 const EMPTY_OPTIONS: Options = {
@@ -63,6 +67,7 @@ const EMPTY_OPTIONS: Options = {
   stores: [],
   payment_methods: [],
   rfm_segments: [],
+  tags: [],
 };
 
 // Rótulos amigáveis para a Matriz RFM (PT-BR).
@@ -139,6 +144,42 @@ function FilterBlock({ tone, block, options, onChange }: BlockProps) {
           value={block.rfm_segments || []}
           onChange={(v) => set("rfm_segments", v)}
         />
+
+        <MultiSelectFilter
+          label="Tags / temperatura de lead"
+          tone={tone}
+          options={options.tags}
+          value={block.tags || []}
+          onChange={(v) => set("tags", v)}
+          placeholder="Ex.: lead:novo, lead:reativo, live..."
+        />
+
+        <div className="space-y-1.5 sm:col-span-2">
+          <label className="text-xs font-medium text-neutral-600 flex items-center gap-1.5">
+            <Star className="h-3.5 w-3.5 text-amber-500" />
+            {tone === "include"
+              ? "Somente quem está em algum Grupo VIP"
+              : "Excluir quem já está em algum Grupo VIP"}
+          </label>
+          <div
+            className={`flex items-center justify-between gap-3 rounded-lg border p-2.5 ${
+              tone === "include"
+                ? "border-emerald-200 bg-white"
+                : "border-rose-200 bg-white"
+            }`}
+          >
+            <span className="text-xs text-neutral-600">
+              {tone === "include"
+                ? "Filtra apenas clientes/leads que já são membros ativos de pelo menos um grupo marcado como VIP."
+                : "Remove do público quem já é membro ativo de qualquer grupo marcado como VIP (evita reconvidar)."}
+            </span>
+            <Switch
+              checked={!!block.in_vip_group}
+              onCheckedChange={(v) => onChange({ ...block, in_vip_group: v })}
+            />
+          </div>
+        </div>
+
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-neutral-600">Ticket médio (R$)</label>
@@ -256,6 +297,8 @@ export function cleanAudienceFilter(f: AudienceFilter): AudienceFilter {
         if (v.length > 0) (out[k] as string[]) = v;
       } else if (typeof v === "string" && v.trim() !== "") {
         (out[k] as string) = v.trim();
+      } else if (typeof v === "boolean" && v) {
+        (out[k] as boolean) = true;
       }
     });
     // Drop incomplete period filters so the RPC doesn't get partial data.
