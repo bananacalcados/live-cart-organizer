@@ -338,6 +338,8 @@ const Events = () => {
     setMetaTemplateHeaderVar(null);
     setInitialMessageEnabled(false);
     setInitialMessageBlocks([]);
+    setIgButtons([]);
+    setIgAutomations([]);
     setFollowupTemplates([]);
     setEditingEvent(null);
   };
