@@ -297,6 +297,8 @@ export function cleanAudienceFilter(f: AudienceFilter): AudienceFilter {
         if (v.length > 0) (out[k] as string[]) = v;
       } else if (typeof v === "string" && v.trim() !== "") {
         (out[k] as string) = v.trim();
+      } else if (typeof v === "boolean" && v) {
+        (out[k] as boolean) = true;
       }
     });
     // Drop incomplete period filters so the RPC doesn't get partial data.
