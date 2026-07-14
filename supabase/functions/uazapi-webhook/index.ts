@@ -19,6 +19,42 @@ function asString(v: unknown): string | null {
 }
 
 /**
+ * Casa um telefone por DDD + 8 últimos dígitos (e NÃO apenas os 8 últimos, que
+ * colidem entre DDDs diferentes). Cobre números salvos com e sem o 9º dígito.
+ * Retorna os padrões ilike para usar em phone_e164 / whatsapp.
+ */
+function ddd8Patterns(phoneE164: string): string[] {
+  const digits = (phoneE164 || "").replace(/\D/g, "");
+  const local = digits.startsWith("55") ? digits.slice(2) : digits;
+  if (local.length < 10) return [`%${digits.slice(-8)}`]; // fallback conservador
+  const ddd = local.slice(0, 2);
+  const last8 = local.slice(-8);
+  return [`%${ddd}9${last8}`, `%${ddd}${last8}`];
+}
+
+/**
+ * Verifica se o telefone pertence a um COMPRADOR real (total_orders > 0) na base
+ * unificada. Contatos que existem mas nunca compraram NÃO contam como cliente,
+ * para que possam voltar a ser captados como lead (medir recompra / público novo).
+ */
+async function isBuyerPhone(
+  supabase: ReturnType<typeof createClient>,
+  phoneE164: string,
+): Promise<boolean> {
+  const pats = ddd8Patterns(phoneE164);
+  const orClause = pats.map((p) => `phone_e164.ilike.${p}`).join(",");
+  const { data } = await supabase
+    .from("crm_customers_v")
+    .select("id")
+    .gt("total_orders", 0)
+    .or(orClause)
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}
+
+
+/**
  * Procura recursivamente por um objeto `externalAdReply` (miniatura do anúncio
  * Click-to-WhatsApp) dentro do payload da uazapi. O provedor pode aninhar esse
  * bloco em diferentes níveis (message.content, contextInfo, etc.), então
@@ -720,13 +756,9 @@ serve(async (req) => {
             msgLower.includes(String(kw.keyword).toLowerCase()),
           );
           if (matched) {
-            const phoneSuffix = phone.slice(-8);
-            const { data: existingCustomer } = await supabase
-              .from("pos_customers")
-              .select("id")
-              .or(`whatsapp.ilike.%${phoneSuffix}`)
-              .limit(1)
-              .maybeSingle();
+            // "customer" = comprador real (total_orders>0), casando DDD + 8 dígitos.
+            const isCustomer = await isBuyerPhone(supabase, phone);
+
             await supabase.from("lp_leads").insert({
               name: senderName || null,
               phone,
@@ -737,7 +769,7 @@ serve(async (req) => {
                 campaign_label: (matched as AnyObj).campaign_label,
                 keyword_matched: (matched as AnyObj).keyword,
                 original_message: text.slice(0, 500),
-                lead_status: existingCustomer ? "customer" : "prospect",
+                lead_status: isCustomer ? "customer" : "prospect",
                 captured_at: new Date().toISOString(),
               },
             });
@@ -756,14 +788,13 @@ serve(async (req) => {
         }).catch(() => {});
       }
 
-      // Lead orgânico (contato não-cliente em campanha semanal)
+      // Lead orgânico (contato que NÃO é comprador — campanha semanal).
+      // Critério = comprador real (total_orders>0), casando DDD + 8 dígitos.
+      // Quem só existe como conversa/contato (nunca comprou) VOLTA a ser captado,
+      // para medir recompra e público novo vs. já conhecido.
       try {
-        const suffix8 = phone.slice(-8);
-        const [{ data: zoppyMatch }, { data: posMatch }] = await Promise.all([
-          supabase.from("crm_customers_v").select("id").or(`phone.ilike.%${suffix8}`).limit(1).maybeSingle(),
-          supabase.from("pos_customers").select("id").or(`whatsapp.ilike.%${suffix8}`).limit(1).maybeSingle(),
-        ]);
-        if (!zoppyMatch && !posMatch) {
+        const isBuyer = await isBuyerPhone(supabase, phone);
+        if (!isBuyer) {
           const now = new Date();
           const d = now.getDate();
           const weekNum = d <= 7 ? 1 : d <= 14 ? 2 : d <= 21 ? 3 : 4;
