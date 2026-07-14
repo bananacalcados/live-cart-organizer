@@ -23,6 +23,8 @@ export interface AudienceFilterBlock {
   stores?: string[];
   payment_methods?: string[];
   rfm_segments?: string[];
+  tags?: string[];
+  in_vip_group?: boolean;
   min_avg_ticket?: string;
   max_avg_ticket?: string;
   min_total_orders?: string;
@@ -52,6 +54,7 @@ interface Options {
   stores: string[];
   payment_methods: string[];
   rfm_segments: string[];
+  tags: string[];
 }
 
 const EMPTY_OPTIONS: Options = {
@@ -64,6 +67,7 @@ const EMPTY_OPTIONS: Options = {
   stores: [],
   payment_methods: [],
   rfm_segments: [],
+  tags: [],
 };
 
 // Rótulos amigáveis para a Matriz RFM (PT-BR).
