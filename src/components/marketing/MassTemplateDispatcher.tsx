@@ -203,6 +203,13 @@ export function MassTemplateDispatcher() {
   const [vipMembershipMode, setVipMembershipMode] = useState<'any' | 'exclude' | 'only'>('any');
   const [vipMemberSuffixes, setVipMemberSuffixes] = useState<Set<string>>(new Set());
 
+  // Última compra (X dias) — filtro independente por recência da última compra.
+  // mode: 'any' ignora | 'include' mantém apenas quem comprou há <= X dias
+  //       | 'exclude' remove quem comprou há <= X dias (útil para não bater em quem acabou de comprar).
+  // Só afeta registros com last_purchase_at (CRM/Ravena). Leads puros passam.
+  const [lastPurchaseMode, setLastPurchaseMode] = useState<'any' | 'include' | 'exclude'>('any');
+  const [lastPurchaseDays, setLastPurchaseDays] = useState<string>('30');
+
   // Selection
   const [selectAll, setSelectAll] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
@@ -779,6 +786,17 @@ export function MassTemplateDispatcher() {
       const inVip = vipMemberSuffixes.has(suffix);
       return vipMembershipMode === 'exclude' ? !inVip : inVip;
     };
+    // Última compra: cutoff em ms; se sem data e mode=include => reprova; se exclude => passa.
+    const lpDaysNum = parseInt(lastPurchaseDays || '0', 10);
+    const lpCutoffMs = lpDaysNum > 0 ? Date.now() - lpDaysNum * 86400000 : 0;
+    const passesLastPurchase = (lastPurchaseAt: string | null | undefined) => {
+      if (lastPurchaseMode === 'any' || lpCutoffMs === 0) return true;
+      if (!lastPurchaseAt) return lastPurchaseMode === 'exclude';
+      const ts = new Date(lastPurchaseAt).getTime();
+      if (Number.isNaN(ts)) return lastPurchaseMode === 'exclude';
+      const recent = ts >= lpCutoffMs;
+      return lastPurchaseMode === 'include' ? recent : !recent;
+    };
 
     // Ravena is ISOLATED — never mixes with Banana CRM/leads
     if (audienceSource === 'ravena') {
@@ -800,6 +818,7 @@ export function MassTemplateDispatcher() {
         if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
         if (!passesTemperature(c.lead_temperature)) continue;
         if (!passesVipMembership(phone)) continue;
+        if (!passesLastPurchase(c.last_purchase_at)) continue;
 
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
@@ -877,6 +896,7 @@ export function MassTemplateDispatcher() {
           if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
           if (!passesTemperature(c.lead_temperature)) continue;
           if (!passesVipMembership(phone)) continue;
+          if (!passesLastPurchase(c.last_purchase_at)) continue;
 
           if (searchQuery) {
             const q = searchQuery.toLowerCase();
@@ -928,7 +948,7 @@ export function MassTemplateDispatcher() {
     const finalList = topN !== 'all' ? list.slice(0, parseInt(topN)) : list;
 
     return finalList;
-  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes]);
+  }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes, lastPurchaseMode, lastPurchaseDays]);
 
   // Recipients after applying cooldown exclusion (suffix-based to catch same person with different DDDs)
   const filteredRecipients = useMemo((): Recipient[] => {
@@ -2215,6 +2235,41 @@ export function MassTemplateDispatcher() {
                   </Select>
                   <p className="text-[10px] text-muted-foreground pt-0.5">
                     Cruza o telefone (últimos 8 dígitos) com membros dos grupos marcados como VIP na aba Grupos VIP e dos grupos usados como destino em campanhas de grupo.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Última compra (X dias) — filtro independente por recência */}
+            {audienceSource !== 'orphans' && audienceSource !== 'leads' && (
+              <div className="rounded-md border border-sky-500/40 bg-sky-500/5 p-2">
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-wide text-sky-600 dark:text-sky-300">
+                    Última compra — recência
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select value={lastPurchaseMode} onValueChange={(v) => { setLastPurchaseMode(v as any); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                      <SelectTrigger className="w-[320px] h-8 text-xs bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="any">Sem filtro por última compra</SelectItem>
+                        <SelectItem value="include">Somente quem comprou nos últimos X dias</SelectItem>
+                        <SelectItem value="exclude">Excluir quem comprou nos últimos X dias</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min={1}
+                      className="w-[90px] h-8 text-xs"
+                      value={lastPurchaseDays}
+                      onChange={(e) => setLastPurchaseDays(e.target.value)}
+                      disabled={lastPurchaseMode === 'any'}
+                    />
+                    <span className="text-[11px] text-muted-foreground">dias</span>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground pt-0.5">
+                    Analisa a data da última compra do cliente (CRM/Ravena). Em "Excluir", quem nunca comprou passa; em "Somente", quem nunca comprou é removido.
                   </p>
                 </div>
               </div>
