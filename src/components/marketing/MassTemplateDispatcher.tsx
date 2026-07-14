@@ -798,6 +798,8 @@ export function MassTemplateDispatcher() {
         if (ticketMax && (c.avg_ticket || 0) > parseFloat(ticketMax)) continue;
         if (ordersMin && (c.total_orders || 0) < parseInt(ordersMin)) continue;
         if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
+        if (!passesTemperature(c.lead_temperature)) continue;
+        if (!passesVipMembership(phone)) continue;
 
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
