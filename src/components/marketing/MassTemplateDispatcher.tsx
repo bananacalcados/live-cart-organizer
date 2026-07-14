@@ -2142,6 +2142,76 @@ export function MassTemplateDispatcher() {
               />
             </div>
 
+            {/* Temperatura de leads + Grupos VIP — filtros comportamentais */}
+            {audienceSource !== 'orphans' && (
+              <div className="flex flex-wrap gap-3 items-start rounded-md border border-border/60 bg-muted/30 p-2">
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Temperatura {audienceSource === 'leads' ? '(não afeta Leads Captados)' : ''}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {TEMPERATURES.map((t) => {
+                      const inc = tempInclude.has(t);
+                      const exc = tempExclude.has(t);
+                      const label = t.replace('_', ' ');
+                      const cycle = () => {
+                        setSelectAll(false); setSelectedPhones(new Set());
+                        if (!inc && !exc) {
+                          setTempInclude((s) => new Set(s).add(t));
+                        } else if (inc) {
+                          setTempInclude((s) => { const n = new Set(s); n.delete(t); return n; });
+                          setTempExclude((s) => new Set(s).add(t));
+                        } else {
+                          setTempExclude((s) => { const n = new Set(s); n.delete(t); return n; });
+                        }
+                      };
+                      return (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={cycle}
+                          className={`px-2 h-7 rounded-full text-[11px] border transition ${
+                            inc ? 'bg-emerald-500/20 border-emerald-500 text-emerald-100'
+                              : exc ? 'bg-red-500/20 border-red-500 text-red-100 line-through'
+                              : 'border-border text-muted-foreground hover:bg-accent'
+                          }`}
+                          title={inc ? 'Incluir apenas' : exc ? 'Excluir' : 'Clique para incluir · clique de novo para excluir'}
+                        >
+                          {inc ? '✓ ' : exc ? '✕ ' : ''}{label}
+                        </button>
+                      );
+                    })}
+                    {(tempInclude.size > 0 || tempExclude.size > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => { setTempInclude(new Set()); setTempExclude(new Set()); }}
+                        className="px-2 h-7 rounded-full text-[11px] border border-border text-muted-foreground hover:bg-accent"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Grupos VIP {vipMemberSuffixes.size > 0 ? `(${vipMemberSuffixes.size} membros)` : ''}
+                  </div>
+                  <Select value={vipMembershipMode} onValueChange={(v) => { setVipMembershipMode(v as any); setSelectAll(false); setSelectedPhones(new Set()); }}>
+                    <SelectTrigger className="w-[260px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Sem filtro de Grupos VIP</SelectItem>
+                      <SelectItem value="exclude">Excluir quem já está em algum Grupo VIP</SelectItem>
+                      <SelectItem value="only">Somente quem já está em algum Grupo VIP</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+
             {/* Date & value filters */}
             {(audienceSource === 'crm' || audienceSource === 'both') && (
               <div className="flex flex-wrap gap-2 items-end">
