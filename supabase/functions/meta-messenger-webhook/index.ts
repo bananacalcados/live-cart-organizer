@@ -340,6 +340,31 @@ serve(async (req) => {
               console.error('[ig-button] erro ao tratar postback:', btnErr);
             }
           }
+          // Botão de "Automação de Evento" (mensagem inicial da live) → dispara mídia configurada.
+          // Payload no formato: evtauto:<eventId>:<automationId>
+          if (channel === 'instagram' && typeof event.postback.payload === 'string' && event.postback.payload.startsWith('evtauto:')) {
+            try {
+              const parts = event.postback.payload.split(':');
+              const evtId = parts[1];
+              const autoId = parts.slice(2).join(':');
+              if (evtId && autoId && senderId) {
+                const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+                const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+                fetch(`${supabaseUrl}/functions/v1/instagram-dm-automation-run`, {
+                  method: 'POST',
+                  headers: { Authorization: `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    eventId: evtId,
+                    automationId: autoId,
+                    recipientId: senderId,
+                    whatsapp_number_id: entryNumberId,
+                  }),
+                }).catch((e) => console.error('[evtauto] dispatch error:', e));
+              }
+            } catch (btnErr) {
+              console.error('[evtauto] parse error:', btnErr);
+            }
+          }
         } else if (event.referral) {
           messageText = event.referral.ref ? `[referral: ${event.referral.ref}]` : '[via anúncio]';
           referralData = {
