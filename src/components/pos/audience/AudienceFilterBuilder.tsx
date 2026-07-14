@@ -145,6 +145,42 @@ function FilterBlock({ tone, block, options, onChange }: BlockProps) {
           onChange={(v) => set("rfm_segments", v)}
         />
 
+        <MultiSelectFilter
+          label="Tags / temperatura de lead"
+          tone={tone}
+          options={options.tags}
+          value={block.tags || []}
+          onChange={(v) => set("tags", v)}
+          placeholder="Ex.: lead:novo, lead:reativo, live..."
+        />
+
+        <div className="space-y-1.5 sm:col-span-2">
+          <label className="text-xs font-medium text-neutral-600 flex items-center gap-1.5">
+            <Star className="h-3.5 w-3.5 text-amber-500" />
+            {tone === "include"
+              ? "Somente quem está em algum Grupo VIP"
+              : "Excluir quem já está em algum Grupo VIP"}
+          </label>
+          <div
+            className={`flex items-center justify-between gap-3 rounded-lg border p-2.5 ${
+              tone === "include"
+                ? "border-emerald-200 bg-white"
+                : "border-rose-200 bg-white"
+            }`}
+          >
+            <span className="text-xs text-neutral-600">
+              {tone === "include"
+                ? "Filtra apenas clientes/leads que já são membros ativos de pelo menos um grupo marcado como VIP."
+                : "Remove do público quem já é membro ativo de qualquer grupo marcado como VIP (evita reconvidar)."}
+            </span>
+            <Switch
+              checked={!!block.in_vip_group}
+              onCheckedChange={(v) => onChange({ ...block, in_vip_group: v })}
+            />
+          </div>
+        </div>
+
+
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-neutral-600">Ticket médio (R$)</label>
           <div className="flex items-center gap-2">
