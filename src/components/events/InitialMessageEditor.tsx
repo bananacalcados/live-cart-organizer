@@ -71,9 +71,54 @@ const DEFAULT_BLOCKS = [
   "Só clicar no link acima pra finalizar a compra. Seu produto já foi separado, mas precisa ser pago em 10 minutos, pra continuar reservado, OK?",
 ];
 
-export function InitialMessageEditor({ enabled, blocks, onChange }: Props) {
+export function InitialMessageEditor({
+  enabled,
+  blocks,
+  onChange,
+  buttons,
+  onChangeButtons,
+  automations,
+}: Props) {
   const focusedIndexRef = useRef<number>(0);
   const textareasRef = useRef<Record<number, HTMLTextAreaElement | null>>({});
+
+  const safeButtons: IgBlockButtonsEntry[] = buttons ?? [];
+  const buttonsEnabled = typeof onChangeButtons === "function";
+  const buttonsForBlock = (idx: number): IgBlockButton[] =>
+    safeButtons.find((e) => e.blockIndex === idx)?.buttons ?? [];
+
+  const setButtonsForBlock = (idx: number, next: IgBlockButton[]) => {
+    if (!onChangeButtons) return;
+    const others = safeButtons.filter((e) => e.blockIndex !== idx);
+    onChangeButtons(next.length ? [...others, { blockIndex: idx, buttons: next }] : others);
+  };
+
+  const addButton = (idx: number) => {
+    const cur = buttonsForBlock(idx);
+    if (cur.length >= MAX_BTNS_PER_BLOCK) return;
+    setButtonsForBlock(idx, [
+      ...cur,
+      {
+        id: (globalThis.crypto?.randomUUID?.() ?? `btn_${Date.now()}_${Math.random().toString(36).slice(2)}`).slice(0, 12),
+        type: "url",
+        title: "",
+        urlToken: "{checkout_link}",
+      },
+    ]);
+  };
+
+  const updateButton = (idx: number, btnId: string, patch: Partial<IgBlockButton>) => {
+    setButtonsForBlock(
+      idx,
+      buttonsForBlock(idx).map((b) => (b.id === btnId ? { ...b, ...patch } : b)),
+    );
+  };
+
+  const removeButton = (idx: number, btnId: string) => {
+    setButtonsForBlock(idx, buttonsForBlock(idx).filter((b) => b.id !== btnId));
+  };
+
+
 
   const safeBlocks = blocks?.length ? blocks : [];
 
