@@ -74,6 +74,8 @@ serve(async (req) => {
       metaTemplateHeaderVar = (eventData as any)?.meta_template_header_variable || null;
       initialMessageEnabled = Boolean((eventData as any)?.initial_message_enabled);
       initialMessageBlocks = (((eventData as any)?.initial_message_blocks as string[]) || []).filter((b) => typeof b === 'string' && b.trim().length > 0);
+      igInitialButtons = ((eventData as any)?.ig_initial_message_buttons as any[]) || [];
+      igAutomationsList = ((eventData as any)?.ig_automations as any[]) || [];
 
       if (eventData?.whatsapp_number_id) {
         whatsappNumberId = eventData.whatsapp_number_id;
