@@ -301,6 +301,57 @@ serve(async (req) => {
       const fallbackCommentId = fallbackCommentIds[0];
 
       let igFailed = false;
+      const buttonsForBlock = (idx: number) => {
+        const entry = igInitialButtons.find((e) => Number(e?.blockIndex) === idx);
+        return Array.isArray(entry?.buttons) ? entry!.buttons : [];
+      };
+      const resolveButtonUrl = (raw: string | undefined): string | null => {
+        if (!raw) return null;
+        const v = raw.trim();
+        if (!v) return null;
+        if (v.startsWith('{') && v.endsWith('}')) {
+          const resolved = resolveToken(v);
+          return resolved && /^https?:\/\//i.test(resolved) ? resolved : null;
+        }
+        return /^https?:\/\//i.test(v) ? v : null;
+      };
+      const dispatchButtonsForBlock = async (idx: number) => {
+        const cfg = buttonsForBlock(idx);
+        if (!cfg.length) return;
+        const built: Array<{ type: 'web_url' | 'postback'; title: string; url?: string; payload?: string }> = [];
+        for (const b of cfg) {
+          const title = (b?.title || '').trim();
+          if (!title) continue;
+          if (b.type === 'url') {
+            const url = resolveButtonUrl(b.urlToken);
+            if (url) built.push({ type: 'web_url', title, url });
+          } else if (b.type === 'automation' && b.automationId) {
+            const known = igAutomationsList.some((a) => a?.id === b.automationId);
+            if (known) built.push({ type: 'postback', title, payload: `evtauto:${order.event_id}:${b.automationId}` });
+          }
+        }
+        if (!built.length) return;
+        try {
+          const r = await fetch(`${supabaseUrl}/functions/v1/instagram-dm-send-buttons`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${supabaseKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: igUsername,
+              text: '👇 Toque em uma opção:',
+              buttons: built,
+              whatsapp_number_id: whatsappNumberId,
+              eventId: order.event_id,
+            }),
+          });
+          if (!r.ok) {
+            const errBody = await r.text().catch(() => '');
+            console.warn(`[livete-start] IG buttons send failed (${r.status}) for @${igUsername}:`, errBody);
+          }
+        } catch (e) {
+          console.warn('[livete-start] IG buttons dispatch error:', e);
+        }
+      };
+
       for (let i = 0; i < rendered.length; i++) {
         const text = rendered[i];
         if (!igFailed) {
@@ -323,6 +374,9 @@ serve(async (req) => {
             if (isInstagram && waPhone) {
               await sendViaWhatsApp(text);
             }
+          } else {
+            // Envia botões configurados para este bloco (opcional, opt-in).
+            await dispatchButtonsForBlock(i);
           }
         } else if (isInstagram && waPhone) {
           await sendViaWhatsApp(text);
