@@ -766,6 +766,20 @@ export function MassTemplateDispatcher() {
     const list: Recipient[] = [];
     const addedPhones = new Set<string>();
 
+    // Shared filters (temperature + VIP membership) work across CRM/Ravena/leads
+    const passesTemperature = (temp: string | null | undefined) => {
+      const t = temp || null;
+      if (tempInclude.size > 0 && (!t || !tempInclude.has(t))) return false;
+      if (tempExclude.size > 0 && t && tempExclude.has(t)) return false;
+      return true;
+    };
+    const passesVipMembership = (phoneDigits: string) => {
+      if (vipMembershipMode === 'any') return true;
+      const suffix = phoneDigits.slice(-8);
+      const inVip = vipMemberSuffixes.has(suffix);
+      return vipMembershipMode === 'exclude' ? !inVip : inVip;
+    };
+
     // Ravena is ISOLATED — never mixes with Banana CRM/leads
     if (audienceSource === 'ravena') {
       for (const c of ravenaCustomers) {
