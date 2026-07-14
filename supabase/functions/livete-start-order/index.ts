@@ -55,6 +55,8 @@ serve(async (req) => {
     let metaTemplateHeaderVar: string | null = null;
     let initialMessageEnabled = false;
     let initialMessageBlocks: string[] = [];
+    let igInitialButtons: Array<{ blockIndex: number; buttons: Array<{ id: string; type: 'url' | 'automation'; title: string; urlToken?: string; automationId?: string }> }> = [];
+    let igAutomationsList: Array<{ id: string; label?: string }> = [];
 
     if (order.event_id) {
       const { data: eventData } = await supabase
