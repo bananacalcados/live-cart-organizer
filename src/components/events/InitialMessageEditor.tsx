@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import { Plus, Trash2, ArrowUp, ArrowDown, MessageSquare, Eye } from "lucide-react";
+import { Plus, Trash2, ArrowUp, ArrowDown, Instagram, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -95,15 +95,17 @@ export function InitialMessageEditor({ enabled, blocks, onChange }: Props) {
   }, [safeBlocks]);
 
   return (
-    <div className="space-y-3 rounded-lg border border-border p-4 bg-muted/30">
+    <div className="space-y-3 rounded-lg border border-pink-500/30 p-4 bg-gradient-to-br from-pink-500/5 via-purple-500/5 to-orange-500/5">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <Label className="flex items-center gap-2 text-base">
-            <MessageSquare className="h-4 w-4" />
-            Mensagem inicial automática
+            <Instagram className="h-4 w-4 text-pink-500" />
+            Mensagem inicial via Instagram Direct
           </Label>
           <p className="text-xs text-muted-foreground">
-            Quando ativada, substitui a saudação do agente de IA. A IA continua atuando apenas no follow-up depois que o cliente responder.
+            Enviada por DM no Instagram para quem <strong>comentou na live</strong> e virou pedido. Usa o comentário recente do cliente para abrir a janela de mensagem. A IA continua atuando apenas no follow-up depois que o cliente responder.
+            <br />
+            <span className="text-[11px] italic">Obs.: o WhatsApp é enviado pelo template Meta configurado acima — este bloco é exclusivo do Instagram.</span>
           </p>
         </div>
         <Switch checked={enabled} onCheckedChange={(v) => update({ enabled: v })} />
