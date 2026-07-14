@@ -106,12 +106,17 @@ export function EventsDashboard() {
       setLoading(true);
       const [from, to] = getDateRange(period, customFrom, customTo);
 
-      // Fetch events in range (filter by store channel when set)
+      // Fetch events in range using start_date (data configurada do evento)
+      // com fallback para created_at quando start_date não estiver definido.
+      const fromIso = from.toISOString();
+      const toIso = to.toISOString();
       let eventsQuery = supabase
         .from("events")
-        .select("id, name, channel, created_at")
-        .gte("created_at", from.toISOString())
-        .lte("created_at", to.toISOString());
+        .select("id, name, channel, created_at, start_date")
+        .or(
+          `and(start_date.gte.${fromIso},start_date.lte.${toIso}),` +
+          `and(start_date.is.null,created_at.gte.${fromIso},created_at.lte.${toIso})`
+        );
       if (store !== "all") eventsQuery = eventsQuery.eq("channel", store);
       const { data: eventsData } = await eventsQuery;
 
