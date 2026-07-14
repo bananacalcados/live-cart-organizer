@@ -1,5 +1,5 @@
 import { useMemo, useRef } from "react";
-import { Plus, Trash2, ArrowUp, ArrowDown, MessageSquare, Eye } from "lucide-react";
+import { Plus, Trash2, ArrowUp, ArrowDown, Instagram, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
