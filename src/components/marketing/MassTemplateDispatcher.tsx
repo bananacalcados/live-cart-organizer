@@ -2142,9 +2142,9 @@ export function MassTemplateDispatcher() {
               />
             </div>
 
-            {/* Temperatura de leads + Grupos VIP — filtros comportamentais */}
+            {/* Temperatura de leads — filtro comportamental (independente) */}
             {audienceSource !== 'orphans' && (
-              <div className="flex flex-wrap gap-3 items-start rounded-md border border-border/60 bg-muted/30 p-2">
+              <div className="rounded-md border border-border/60 bg-muted/30 p-2">
                 <div className="space-y-1">
                   <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                     Temperatura {audienceSource === 'leads' ? '(não afeta Leads Captados)' : ''}
@@ -2192,13 +2192,19 @@ export function MassTemplateDispatcher() {
                     )}
                   </div>
                 </div>
+              </div>
+            )}
 
+            {/* Grupos VIP — filtro de participação (independente da temperatura) */}
+            {audienceSource !== 'orphans' && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
                 <div className="space-y-1">
-                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Grupos VIP {vipMemberSuffixes.size > 0 ? `(${vipMemberSuffixes.size} membros)` : ''}
+                  <div className="text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-300 flex items-center gap-1">
+                    <Crown className="h-3 w-3" />
+                    Grupos VIP — participação {vipMemberSuffixes.size > 0 ? `(${vipMemberSuffixes.size} membros identificados)` : '(nenhum membro identificado)'}
                   </div>
                   <Select value={vipMembershipMode} onValueChange={(v) => { setVipMembershipMode(v as any); setSelectAll(false); setSelectedPhones(new Set()); }}>
-                    <SelectTrigger className="w-[260px] h-8 text-xs">
+                    <SelectTrigger className="w-[320px] h-8 text-xs bg-background">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -2207,6 +2213,9 @@ export function MassTemplateDispatcher() {
                       <SelectItem value="only">Somente quem já está em algum Grupo VIP</SelectItem>
                     </SelectContent>
                   </Select>
+                  <p className="text-[10px] text-muted-foreground pt-0.5">
+                    Cruza o telefone (últimos 8 dígitos) com membros dos grupos marcados como VIP na aba Grupos VIP e dos grupos usados como destino em campanhas de grupo.
+                  </p>
                 </div>
               </div>
             )}
