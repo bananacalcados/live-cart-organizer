@@ -104,11 +104,13 @@ const Events = () => {
       updateEvent(editingEvent, {
         initial_message_enabled: initialMessageEnabled,
         initial_message_blocks: initialMessageBlocks,
+        ig_initial_message_buttons: igButtons,
+        ig_automations: igAutomations,
       } as any).catch((e) => console.error("[InitialMessage auto-save]", e));
     }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialMessageEnabled, initialMessageBlocks, editingEvent, dialogOpen]);
+  }, [initialMessageEnabled, initialMessageBlocks, igButtons, igAutomations, editingEvent, dialogOpen]);
 
   const handleCopyEventId = async (eventId: string) => {
     await navigator.clipboard.writeText(eventId);
