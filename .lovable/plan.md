@@ -1,80 +1,112 @@
-# Matriz de Temperatura de Leads + Tags de Comportamento
+# Botões + Mídias na Mensagem Inicial do Instagram (Evento)
 
-## O que os dados reais mostram (base atual)
+Adicionar, no bloco "Mensagem inicial via Instagram Direct" do wizard de evento, a possibilidade de anexar **botões clicáveis** (link ou automação) e fazer **upload de mídia** (vídeo/imagem/áudio/arquivo) que será enviada quando o cliente clicar em botões de automação. Nada da estrutura atual é alterado — a feature é **aditiva** e opt-in por bloco.
 
-- **100.268** contatos em `customers_unified` → **60.718 compradores** e **39.550 nunca compraram** (leads puros).
-- Só **2.475** têm alguma tag hoje → **97.793 sem nenhuma classificação**. É aqui que está a cegueira.
-- Sinais de engajamento que já temos por telefone (DDD+8):
-  - **Leitura de disparo** (`dispatch_recipients.status='read'`): 24.927 telefones distintos já leram algum disparo.
-  - **Resposta ativa** (`whatsapp_messages` incoming, 90d): **10.832** telefones responderam — o sinal mais forte.
-  - **Reativos de ouro**: **7.737 não-compradores leram um disparo nos últimos 60 dias** — este é o segmento que você pediu para isolar.
-- Já existe o conceito de temperatura em `ad_leads` (frio/morno/quente/super_quente), mas só no funil de anúncios. Vamos generalizar para toda a base.
+## O que muda para o usuário
 
-## Princípio da matriz
+Dentro de cada bloco da "Mensagem inicial via Instagram Direct" a vendedora passa a poder:
 
-Temperatura mede **intenção/engajamento recente**, não valor histórico (isso é o RFM, que já existe para compradores). Cruzamos 3 eixos:
+1. **Adicionar botões** (até 3 por bloco — limite da Instagram Messaging API):
+   - **Botão do tipo Link** → escreve o rótulo (ex.: "Abrir meu carrinho") e escolhe uma **variável de link** já existente (`{checkout_link}`) **ou** cola uma URL fixa.
+   - **Botão do tipo Automação** → escreve o rótulo (ex.: "Como finalizar minha compra") e escolhe uma **automação** cadastrada no próprio evento (ver item 2).
 
-```
-ENGAJAMENTO   →  respondeu > leu > só recebeu > nunca entregou
-RECÊNCIA      →  quão recente foi o último sinal
-STATUS        →  já comprou? (comprador vs lead puro)
-```
+2. **Cadastrar Automações do Evento** (nova sub-seção logo abaixo da mensagem inicial):
+   - Nome interno da automação (ex.: `como_finalizar`).
+   - Texto opcional que acompanha a resposta.
+   - Upload de **1 mídia** (vídeo, imagem, áudio ou arquivo) — usa o bucket de storage já usado pelos eventos.
+   - Quando o cliente clicar no botão vinculado, o backend envia via Instagram DM o texto + a mídia.
 
-### Escala de temperatura (aplicada a TODOS os contatos)
+## Arquitetura (sem quebrar nada)
 
-| Temperatura | Regra (sinal mais recente por DDD+8) | Nº aprox. |
-|---|---|---|
-| 🔥🔥 **Muito Quente** | Respondeu no WhatsApp ≤15d **ou** entrou em funil de lead ≤7d | alto valor |
-| 🔥 **Quente** | Respondeu 16–45d **ou** leu disparo ≤30d **ou** funil 8–30d | ~7.7k reativos entram aqui |
-| 🌡️ **Morno** | Leu disparo 31–90d **ou** respondeu 46–90d | recuperável |
-| ❄️ **Frio** | Recebe disparos (delivered/sent) mas nunca leu/respondeu | maior fatia |
-| 💀 **Inerte** | 3+ disparos, 0 leitura/resposta, **ou** bloqueou/falhou repetido | suprimir da API |
+### 1. Schema — 2 colunas novas na tabela `events`
 
-### Tags de comportamento (ortogonais à temperatura)
+Migration aditiva, sem tocar em colunas existentes:
 
-Aplicadas junto no array `tags` de `customers_unified`, com prefixos para filtrar fácil no construtor de públicos:
+- `ig_initial_message_buttons jsonb default '[]'::jsonb`
+  Guarda, por bloco da mensagem inicial, os botões daquele bloco.
+  Formato:
+  ```json
+  [
+    { "blockIndex": 0, "buttons": [
+      { "id": "b1", "type": "url",       "title": "Abrir meu carrinho",
+        "urlToken": "{checkout_link}" },
+      { "id": "b2", "type": "automation","title": "Como finalizar compra",
+        "automationId": "auto_como_finalizar" }
+    ]}
+  ]
+  ```
+- `ig_automations jsonb default '[]'::jsonb`
+  Catálogo de automações do evento:
+  ```json
+  [{
+    "id": "auto_como_finalizar",
+    "label": "Como finalizar compra",
+    "text": "Olha só, é super rápido:",
+    "media": { "kind": "video", "url": "https://.../video.mp4", "mimeType": "video/mp4" }
+  }]
+  ```
 
-- **Origem:** `origem:organico`, `origem:ads`, `origem:live_vip`, `origem:indicacao`, `origem:site`
-- **Ciclo:** `lead:novo`, `lead:reativo`, `cliente:ativo`, `cliente:em_risco`, `cliente:perdido`, `convertido:ex_lead`
-- **Engajamento:** `engaja:responde`, `engaja:le`, `engaja:ignora`, `bloqueou`
-- **Interesse** (quando houver, de `ad_leads`): `interesse:ortopedico`, `tamanho:37`, etc.
+Sem RLS nova (herda a de `events`). Sem GRANT extra.
 
-## Como isso vira decisão de comunicação (o payoff)
+### 2. Storage
 
-| Temperatura | Política de WhatsApp |
-|---|---|
-| 🔥🔥 Muito Quente | Atendimento humano / convite VIP para live / oferta direta |
-| 🔥 Quente | Grupo VIP de live + cashback com validade curta (urgência) |
-| 🌡️ Morno | Nurture leve: conteúdo/prova social, máx. 1 disparo/semana |
-| ❄️ Frio | 1 última tentativa com oferta forte; se não reagir → vira Inerte |
-| 💀 Inerte | **NÃO disparar via API** (protege reputação do número); reengajar só por ads/orgânico |
+Reaproveita o bucket já existente usado por eventos (ex.: `event-assets` ou o bucket de mídia do chat) — se não existir um adequado, cria bucket público `event-ig-automations` na mesma migration com as políticas mínimas.
 
-Isso responde diretamente à sua dúvida anterior: o público que "já recebeu disparo e não converteu" não é um bloco só — a maioria é Frio/Inerte (parar de gastar API), mas os 7.7k reativos são Quentes e merecem energia.
+Upload feito no front via cliente Supabase (`.storage.from(...).upload(...)`) direto do editor da automação; salvamos apenas a URL pública em `ig_automations[].media.url`.
 
-## Implementação técnica
+### 3. Front-end (mudanças isoladas)
 
-1. **Migração** — adicionar em `customers_unified`:
-   - `lead_temperature text` (frio/morno/quente/muito_quente/inerte)
-   - `temperature_updated_at timestamptz`
-   - `last_engagement_at timestamptz` (última leitura ou resposta)
-   - `last_engagement_type text` (replied/read/delivered/none)
-   - `dispatch_ignored_count int` (disparos sem reação seguidos)
-   - Índice em `lead_temperature` para o construtor de públicos.
+- **`src/components/events/InitialMessageEditor.tsx`**
+  - Adiciona, dentro de cada bloco, uma linha "Botões (opcional)" com botão "+ Adicionar botão" (até 3).
+  - Cada botão tem: `type` (url | automation), `title`, e o campo dependente (URL/variável ou seletor de automação).
+  - Recebe/emite props novas: `buttons`, `onChangeButtons`, `automations` (para popular o select do tipo automação).
 
-2. **Função de recálculo** `recalculate-lead-temperature` (edge function + cron diário):
-   - Agrega `whatsapp_messages` (incoming) e `dispatch_recipients` por sufixo **DDD+8** (mesma lógica já corrigida no webhook).
-   - Calcula temperatura + `last_engagement_*` e faz `UPDATE` em lote em `customers_unified`.
-   - Refaz as tags de ciclo/engajamento sem apagar tags manuais (VIP, etc.) — merge, não overwrite.
+- **Novo componente `src/components/events/IgAutomationsManager.tsx`**
+  - Lista/CRUD das automações do evento (label, texto, upload de mídia).
+  - Renderizado no `EventSetupWizard.tsx` logo abaixo do `InitialMessageEditor`.
 
-3. **Construtor de Públicos (PDV/Marketing)** — adicionar filtro por `lead_temperature` e por tags de comportamento, para você montar disparos direcionados.
+- **`src/components/events/EventSetupWizard.tsx` e `src/pages/Events.tsx`**
+  - Novos estados `igButtons` e `igAutomations`, hidratados/salvos junto com os demais campos (`initial_message_*`). Zero mudança nos fluxos atuais.
 
-4. **Visão no CRM** — badge de temperatura + tags no card do cliente, e um contador de reativos no dashboard.
+- **`src/integrations/supabase/types.ts`**
+  - Regenerar tipos após a migration (as duas colunas novas em `events`).
 
-## Decisões que preciso confirmar antes de codar
+### 4. Backend — `supabase/functions/livete-start-order/index.ts`
 
-1. **Janelas de tempo** (15/30/45/90 dias) — mantenho os cortes propostos ou você prefere outros?
-2. **Regra de "Inerte"** — corto em 3 disparos ignorados seguidos ou prefere 4–5 antes de suprimir?
-3. **Escopo inicial** — aplico a matriz à base inteira (compradores + leads) ou só aos 39.550 leads puros primeiro?
-4. **Cron** — recálculo diário de madrugada te atende?
+Alteração cirúrgica dentro do bloco `dispatchInstagram`, sem tocar em WhatsApp:
 
-Confirmando esses 4 pontos, implemento migração + função de recálculo + filtros de público na sequência.
+1. Após enviar o texto de um bloco (`rendered[i]`), consulta `ig_initial_message_buttons` para aquele `blockIndex`.
+2. Se houver botões, chama uma **nova edge function** `instagram-dm-send-buttons` que usa o **Instagram Messaging API — Generic Template** (`attachment.type=template`, `payload.template_type=generic`) com até 3 `buttons` do tipo `web_url` (link) ou `postback` (automação).
+   - Payload `payload` idêntico ao já usado em `meta-messenger-send/index.ts` (mesmo token/roteamento de instância via `resolveIgAccountByNumberId`).
+   - Se o cliente já respondeu (janela 24h aberta), a IG aceita o template; se estiver fora da janela, o send falha e caímos no fallback atual (WA), sem quebrar.
+
+3. Nova edge function **`instagram-dm-automation-run`** (webhook target):
+   - Chamada pelo `instagram-webhook` existente quando recebe um `postback.payload` no formato `auto:<automationId>:<eventId>`.
+   - Carrega `ig_automations` do evento, pega a automação pelo id, envia via `meta-messenger-send`:
+     - Texto (se houver).
+     - Mídia (usa o `type` correto: `image` / `video` / `audio` / `file` já suportado por `meta-messenger-send`).
+
+4. `supabase/functions/instagram-webhook/index.ts` — adiciona **um único branch** que detecta `messaging[].postback` com `payload` prefixado `auto:` e invoca a nova função. Nenhum comportamento existente é removido.
+
+### 5. Segurança / limites
+
+- Máx. 3 botões por bloco (limite da API).
+- Título do botão ≤ 20 chars (limite IG) — validação no editor.
+- Upload de mídia com tamanho compatível com IG DM (vídeo ≤ 25 MB, áudio ≤ 25 MB, imagem ≤ 8 MB, arquivo ≤ 25 MB) — validação no `IgAutomationsManager`.
+- Postback payload assinado internamente (`auto:<id>:<eventId>`) e sempre validado contra `ig_automations` do evento antes de disparar.
+
+## Ordem de implementação
+
+1. Migration `events` (+2 colunas jsonb) e bucket, se necessário.
+2. `IgAutomationsManager.tsx` + wiring no wizard + persistência.
+3. Extensão do `InitialMessageEditor.tsx` com botões por bloco.
+4. Edge function `instagram-dm-send-buttons` (generic template + botões).
+5. Extensão do `livete-start-order` para disparar os botões após cada bloco.
+6. Edge function `instagram-dm-automation-run` + branch no `instagram-webhook`.
+7. Teste ponta-a-ponta em um evento de sandbox (comentário → DM inicial + botões → clique postback → mídia enviada).
+
+## O que NÃO muda
+
+- Fluxo do WhatsApp / template Meta permanece igual.
+- Envio atual de blocos de texto no IG continua funcionando mesmo se `ig_initial_message_buttons` estiver vazio.
+- Nenhuma coluna, edge function ou componente existente é removido/renomeado.
