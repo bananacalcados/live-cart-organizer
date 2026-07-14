@@ -896,6 +896,7 @@ export function MassTemplateDispatcher() {
           if (ordersMax && (c.total_orders || 0) > parseInt(ordersMax)) continue;
           if (!passesTemperature(c.lead_temperature)) continue;
           if (!passesVipMembership(phone)) continue;
+          if (!passesLastPurchase(c.last_purchase_at)) continue;
 
           if (searchQuery) {
             const q = searchQuery.toLowerCase();
