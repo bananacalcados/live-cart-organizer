@@ -19,6 +19,42 @@ function asString(v: unknown): string | null {
 }
 
 /**
+ * Casa um telefone por DDD + 8 últimos dígitos (e NÃO apenas os 8 últimos, que
+ * colidem entre DDDs diferentes). Cobre números salvos com e sem o 9º dígito.
+ * Retorna os padrões ilike para usar em phone_e164 / whatsapp.
+ */
+function ddd8Patterns(phoneE164: string): string[] {
+  const digits = (phoneE164 || "").replace(/\D/g, "");
+  const local = digits.startsWith("55") ? digits.slice(2) : digits;
+  if (local.length < 10) return [`%${digits.slice(-8)}`]; // fallback conservador
+  const ddd = local.slice(0, 2);
+  const last8 = local.slice(-8);
+  return [`%${ddd}9${last8}`, `%${ddd}${last8}`];
+}
+
+/**
+ * Verifica se o telefone pertence a um COMPRADOR real (total_orders > 0) na base
+ * unificada. Contatos que existem mas nunca compraram NÃO contam como cliente,
+ * para que possam voltar a ser captados como lead (medir recompra / público novo).
+ */
+async function isBuyerPhone(
+  supabase: ReturnType<typeof createClient>,
+  phoneE164: string,
+): Promise<boolean> {
+  const pats = ddd8Patterns(phoneE164);
+  const orClause = pats.map((p) => `phone_e164.ilike.${p}`).join(",");
+  const { data } = await supabase
+    .from("crm_customers_v")
+    .select("id")
+    .gt("total_orders", 0)
+    .or(orClause)
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}
+
+
+/**
  * Procura recursivamente por um objeto `externalAdReply` (miniatura do anúncio
  * Click-to-WhatsApp) dentro do payload da uazapi. O provedor pode aninhar esse
  * bloco em diferentes níveis (message.content, contextInfo, etc.), então
