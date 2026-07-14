@@ -104,6 +104,8 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
   const [metaTemplateHeaderVar, setMetaTemplateHeaderVar] = useState<string | null>(null);
   const [initialMessageEnabled, setInitialMessageEnabled] = useState(false);
   const [initialMessageBlocks, setInitialMessageBlocks] = useState<string[]>([]);
+  const [igButtons, setIgButtons] = useState<IgBlockButtonsEntry[]>([]);
+  const [igAutomations, setIgAutomations] = useState<IgAutomation[]>([]);
 
   // Parcelamento
   const [installMin, setInstallMin] = useState("");
