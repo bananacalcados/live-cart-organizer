@@ -286,6 +286,8 @@ const Events = () => {
         manual_pos_routing: manualPosRouting,
         initial_message_enabled: initialMessageEnabled,
         initial_message_blocks: initialMessageBlocks,
+        ig_initial_message_buttons: igButtons,
+        ig_automations: igAutomations,
         followup_templates: followupTemplates,
         ...metaTemplateFields,
       } as any);
