@@ -634,6 +634,14 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
                   setInitialMessageEnabled(next.enabled);
                   setInitialMessageBlocks(next.blocks);
                 }}
+                buttons={igButtons}
+                onChangeButtons={setIgButtons}
+                automations={igAutomations}
+              />
+              <IgAutomationsManager
+                eventId={event?.id ?? null}
+                automations={igAutomations}
+                onChange={setIgAutomations}
               />
             </div>
           )}
