@@ -788,14 +788,13 @@ serve(async (req) => {
         }).catch(() => {});
       }
 
-      // Lead orgânico (contato não-cliente em campanha semanal)
+      // Lead orgânico (contato que NÃO é comprador — campanha semanal).
+      // Critério = comprador real (total_orders>0), casando DDD + 8 dígitos.
+      // Quem só existe como conversa/contato (nunca comprou) VOLTA a ser captado,
+      // para medir recompra e público novo vs. já conhecido.
       try {
-        const suffix8 = phone.slice(-8);
-        const [{ data: zoppyMatch }, { data: posMatch }] = await Promise.all([
-          supabase.from("crm_customers_v").select("id").or(`phone.ilike.%${suffix8}`).limit(1).maybeSingle(),
-          supabase.from("pos_customers").select("id").or(`whatsapp.ilike.%${suffix8}`).limit(1).maybeSingle(),
-        ]);
-        if (!zoppyMatch && !posMatch) {
+        const isBuyer = await isBuyerPhone(supabase, phone);
+        if (!isBuyer) {
           const now = new Date();
           const d = now.getDate();
           const weekNum = d <= 7 ? 1 : d <= 14 ? 2 : d <= 21 ? 3 : 4;
