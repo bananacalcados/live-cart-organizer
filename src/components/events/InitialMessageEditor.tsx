@@ -139,6 +139,12 @@ export function InitialMessageEditor({
   const removeBlock = (idx: number) => {
     const copy = safeBlocks.filter((_, i) => i !== idx);
     update({ blocks: copy });
+    if (onChangeButtons) {
+      const remapped = safeButtons
+        .filter((e) => e.blockIndex !== idx)
+        .map((e) => (e.blockIndex > idx ? { ...e, blockIndex: e.blockIndex - 1 } : e));
+      onChangeButtons(remapped);
+    }
   };
 
   const move = (idx: number, dir: -1 | 1) => {
@@ -147,7 +153,16 @@ export function InitialMessageEditor({
     const copy = [...safeBlocks];
     [copy[idx], copy[target]] = [copy[target], copy[idx]];
     update({ blocks: copy });
+    if (onChangeButtons) {
+      const remapped = safeButtons.map((e) => {
+        if (e.blockIndex === idx) return { ...e, blockIndex: target };
+        if (e.blockIndex === target) return { ...e, blockIndex: idx };
+        return e;
+      });
+      onChangeButtons(remapped);
+    }
   };
+
 
   const loadDefault = () => update({ blocks: DEFAULT_BLOCKS });
 
