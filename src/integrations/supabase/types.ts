@@ -4684,6 +4684,8 @@ export type Database = {
           followup_templates: Json
           free_shipping_threshold: number | null
           id: string
+          ig_automations: Json
+          ig_initial_message_buttons: Json
           initial_message_blocks: Json
           initial_message_enabled: boolean
           installment_max: number | null
@@ -4719,6 +4721,8 @@ export type Database = {
           followup_templates?: Json
           free_shipping_threshold?: number | null
           id?: string
+          ig_automations?: Json
+          ig_initial_message_buttons?: Json
           initial_message_blocks?: Json
           initial_message_enabled?: boolean
           installment_max?: number | null
@@ -4754,6 +4758,8 @@ export type Database = {
           followup_templates?: Json
           free_shipping_threshold?: number | null
           id?: string
+          ig_automations?: Json
+          ig_initial_message_buttons?: Json
           initial_message_blocks?: Json
           initial_message_enabled?: boolean
           installment_max?: number | null
