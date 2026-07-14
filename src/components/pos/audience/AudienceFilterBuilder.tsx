@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Users, List, Flame, Star } from "lucide-react";
+import { Loader2, Users, List, Star } from "lucide-react";
 import { MultiSelectFilter } from "./MultiSelectFilter";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
