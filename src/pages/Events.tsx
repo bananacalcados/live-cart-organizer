@@ -675,6 +675,14 @@ const Events = () => {
                       setInitialMessageEnabled(next.enabled);
                       setInitialMessageBlocks(next.blocks);
                     }}
+                    buttons={igButtons}
+                    onChangeButtons={setIgButtons}
+                    automations={igAutomations}
+                  />
+                  <IgAutomationsManager
+                    eventId={editingEvent}
+                    automations={igAutomations}
+                    onChange={setIgAutomations}
                   />
                   {editingEvent && (
                     <EventTeamSelector eventId={editingEvent} />
