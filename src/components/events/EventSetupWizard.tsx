@@ -21,7 +21,8 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { DbEvent } from "@/types/database";
 import { MetaTemplateConfigurator } from "./MetaTemplateConfigurator";
-import { InitialMessageEditor } from "./InitialMessageEditor";
+import { InitialMessageEditor, type IgBlockButtonsEntry } from "./InitialMessageEditor";
+import { IgAutomationsManager, type IgAutomation } from "./IgAutomationsManager";
 import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { CrossellConfigStep, CrossellOfferDraft } from "./CrossellConfigStep";
