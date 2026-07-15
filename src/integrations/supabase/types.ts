@@ -19290,6 +19290,7 @@ export type Database = {
         Args: { p_customer_id: string }
         Returns: Json
       }
+      get_customer_lookup: { Args: { p_query: string }; Returns: Json }
       get_customer_store_seller_map: {
         Args: never
         Returns: {
@@ -19435,6 +19436,10 @@ export type Database = {
           status: string
         }[]
       }
+      get_leads_lookup: {
+        Args: { p_ate?: string; p_desde?: string; p_query?: string }
+        Returns: Json
+      }
       get_live_events_summary: { Args: { p_mes_ref: string }; Returns: Json }
       get_meta_capi_vault_state: {
         Args: never
@@ -19540,6 +19545,10 @@ export type Database = {
         Returns: Json
       }
       get_stock_by_size: { Args: { p_filtros?: Json }; Returns: Json }
+      get_top_customers: {
+        Args: { p_limite?: number; p_segmento?: string }
+        Returns: Json
+      }
       get_user_allowed_modules: {
         Args: { p_user_id: string }
         Returns: string[]
