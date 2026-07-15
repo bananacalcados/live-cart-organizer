@@ -1578,8 +1578,13 @@ export function MassTemplateDispatcher() {
   // for its own external field value at trigger time (fresh live link per part).
   const handleSaveSplitDispatch = async () => {
     if (!selectedTemplate || !selectedNumber) return;
+    if (!tipoComunicacao) {
+      toast.error("Escolha o tipo de comunicação (obrigatório).");
+      return;
+    }
     const n = splitParts.length;
     if (n < 2) return;
+
 
     const allPhones = [...selectedPhones];
     if (allPhones.length === 0) {
