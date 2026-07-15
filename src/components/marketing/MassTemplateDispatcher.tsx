@@ -1513,22 +1513,18 @@ export function MassTemplateDispatcher() {
         dispatchId = dispatchData.id;
       }
 
-      // Save recipients — upsert guarded by the unique index (dispatch_id, phone)
-      // so no re-save / retry can ever duplicate a recipient in the same dispatch.
-      const recipientRows = allPhones.map(p => ({
-        dispatch_id: dispatchId,
-        phone: p,
-        recipient_name: recipientMap.get(p)?.name || null,
-        status: 'pending',
-      }));
-      for (let i = 0; i < recipientRows.length; i += 500) {
-        const { error: insErr } = await supabase
-          .from('dispatch_recipients')
-          .upsert(recipientRows.slice(i, i + 500), {
-            onConflict: 'dispatch_id,phone',
-            ignoreDuplicates: true,
-          });
-        if (insErr) throw insErr;
+      // Enfileira via motor de cotas (única entrada permitida).
+      const guardResult = await enqueueRecipientsGuarded(
+        dispatchId,
+        allPhones,
+        recipientMap,
+        tipoComunicacao,
+        'meta_cloud',
+      );
+      if (!guardResult) throw new Error('tipo_comunicacao obrigatório');
+      if (guardResult.inserted === 0) {
+        toast.error("Motor de cota bloqueou todos os destinatários. Ajuste tipo de comunicação ou público.");
+        throw new Error('quota_zero');
       }
 
       if (editDispatchId) {
