@@ -1359,29 +1359,26 @@ export function MassTemplateDispatcher() {
         .single();
       dispatchId = dispatchData?.id || null;
 
-      // Save recipients SEQUENTIALLY in batches of 500. Firing all batches at once
-      // (Promise.all) opened dozens of concurrent connections and was a primary
-      // cause of the DB connection-pool exhaustion that froze the whole system.
+      // Enfileira via motor de cotas (única entrada permitida em dispatch_recipients).
       if (dispatchId) {
-        const recipientRows = phones.map(p => ({
-          dispatch_id: dispatchId!,
-          phone: p,
-          recipient_name: recipientMap.get(p)?.name || null,
-          status: 'pending',
-        }));
-        for (let i = 0; i < recipientRows.length; i += 500) {
-          // upsert + ignoreDuplicates: guarded by the unique index
-          // (dispatch_id, phone). A re-run/retry can never duplicate a recipient.
-          const { error: insErr } = await supabase
-            .from('dispatch_recipients')
-            .upsert(recipientRows.slice(i, i + 500), {
-              onConflict: 'dispatch_id,phone',
-              ignoreDuplicates: true,
-            });
-          if (insErr) throw insErr;
+        const guardResult = await enqueueRecipientsGuarded(
+          dispatchId,
+          phones,
+          recipientMap,
+          tipoComunicacao,
+          'meta_cloud',
+        );
+        if (!guardResult) throw new Error('tipo_comunicacao obrigatório');
+        if (guardResult.inserted === 0) {
+          toast.error("Nenhum destinatário elegível — motor de cota bloqueou todos. Verifique tipo de comunicação e classificações.");
+          await supabase.from('dispatch_history').update({ status: 'failed' } as any).eq('id', dispatchId);
+          setIsSending(false);
+          return;
         }
+        setSendProgress({ sent: 0, total: guardResult.inserted, failed: 0 });
+        toast.success(`✅ ${guardResult.inserted} destinatários enfileirados (motor de cota aplicado).`);
 
-        // Only NOW activate the dispatch — all recipients are guaranteed inserted.
+        // Só agora ativa — os destinatários elegíveis já estão inseridos pela RPC.
         const { error: actErr } = await supabase
           .from('dispatch_history')
           .update({ status: 'sending', started_at: new Date().toISOString(), processing_batch: false } as any)
