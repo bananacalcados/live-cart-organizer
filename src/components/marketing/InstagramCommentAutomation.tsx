@@ -549,6 +549,7 @@ export default function InstagramCommentAutomation() {
                   { value: "REELS", label: "Reels" },
                   { value: "IGTV", label: "IGTV" },
                   { value: "story", label: "Stories" },
+                  { value: "live", label: "Live (ao vivo)" },
                 ].map(({ value, label }) => (
                   <Badge
                     key={value}
@@ -562,7 +563,9 @@ export default function InstagramCommentAutomation() {
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">
                 Stories não têm comentário público — a regra responde por DM/fluxo quando alguém
-                responde ao seu story.
+                responde ao seu story. <strong>Live</strong> = transmissões ao vivo no Instagram
+                (media_product_type <code>LIVE</code> na API da Meta); desmarque para não responder
+                comentários durante lives.
               </p>
             </div>
 
