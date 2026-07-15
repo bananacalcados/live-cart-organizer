@@ -32,6 +32,8 @@ export function StrategistPanel({ onDataChanged }: { onDataChanged?: () => void 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [toolIndicator, setToolIndicator] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { loadConversations(); }, []);
