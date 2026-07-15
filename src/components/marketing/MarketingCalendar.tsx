@@ -232,7 +232,8 @@ export function MarketingCalendar() {
       const endDay = new Date(year, month + 1, 0).getDate();
       const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
 
-      const [entriesRes, goalsRes, recurringRes] = await Promise.all([
+      const mesRef = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const [entriesRes, goalsRes, recurringRes, agentRes] = await Promise.all([
         supabase.from('marketing_calendar_entries')
           .select('*')
           .or(`and(entry_date.gte.${startDate},entry_date.lte.${endDate}),and(end_date.gte.${startDate},entry_date.lte.${endDate})`)
@@ -246,8 +247,13 @@ export function MarketingCalendar() {
           .select('*')
           .eq('is_active', true)
           .lte('start_date', endDate)
-          .order('created_at', { ascending: true })
+          .order('created_at', { ascending: true }),
+        (supabase as any).from('agent_calendar')
+          .select('id, data, tipo_acao, titulo, custo_estimado_brl, status')
+          .eq('mes_ref', mesRef)
+          .order('data', { ascending: true }),
       ]);
+      setAgentActions((agentRes?.data as any) || []);
 
       if (entriesRes.error) throw entriesRes.error;
       setEntries(entriesRes.data || []);
