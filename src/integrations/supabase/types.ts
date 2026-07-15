@@ -3864,6 +3864,7 @@ export type Database = {
           audience_source: string | null
           campaign_name: string | null
           completed_at: string | null
+          cost_override_brl: number | null
           cost_per_message: number | null
           created_at: string
           created_by: string | null
@@ -3891,6 +3892,7 @@ export type Database = {
           audience_source?: string | null
           campaign_name?: string | null
           completed_at?: string | null
+          cost_override_brl?: number | null
           cost_per_message?: number | null
           created_at?: string
           created_by?: string | null
@@ -3918,6 +3920,7 @@ export type Database = {
           audience_source?: string | null
           campaign_name?: string | null
           completed_at?: string | null
+          cost_override_brl?: number | null
           cost_per_message?: number | null
           created_at?: string
           created_by?: string | null
@@ -4000,6 +4003,7 @@ export type Database = {
           classificacao: string
           cota_mensal: number
           created_at: string
+          min_dias_entre_toques: number
           observacoes: string | null
           silencio_threshold_ignorados: number | null
           tipos_permitidos: string[]
@@ -4009,6 +4013,7 @@ export type Database = {
           classificacao: string
           cota_mensal?: number
           created_at?: string
+          min_dias_entre_toques?: number
           observacoes?: string | null
           silencio_threshold_ignorados?: number | null
           tipos_permitidos?: string[]
@@ -4018,6 +4023,7 @@ export type Database = {
           classificacao?: string
           cota_mensal?: number
           created_at?: string
+          min_dias_entre_toques?: number
           observacoes?: string | null
           silencio_threshold_ignorados?: number | null
           tipos_permitidos?: string[]
@@ -13971,6 +13977,33 @@ export type Database = {
           id?: string
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      provider_costs: {
+        Row: {
+          cost_per_message_brl: number
+          created_at: string
+          notes: string | null
+          provider: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          cost_per_message_brl?: number
+          created_at?: string
+          notes?: string | null
+          provider: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          cost_per_message_brl?: number
+          created_at?: string
+          notes?: string | null
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
