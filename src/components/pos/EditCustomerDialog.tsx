@@ -37,10 +37,13 @@ export function EditCustomerDialog({ open, onOpenChange, unifiedId, onSaved }: P
         const { data, error } = await supabase
           .from("customers_unified")
           .select(
-            "name, cpf, email, phone_e164, birth_date, gender, age_range, shoe_size, preferred_style, cep, address, address_number, complement, neighborhood, city, state",
+            "name, cpf, email, phone_e164, birth_date, gender, age_range, shoe_size, preferred_style, cep, address, address_number, complement, neighborhood, city, state, merged_into_id",
           )
           .eq("id", unifiedId)
           .maybeSingle();
+        if ((data as any)?.merged_into_id) {
+          throw new Error("Registro foi mesclado; abra pela linha sobrevivente.");
+        }
         if (error) throw error;
         const d = (data || {}) as any;
         setForm({

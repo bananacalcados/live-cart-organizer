@@ -165,6 +165,7 @@ export const useUnifiedCustomerStore = create<UnifiedCustomerStore>()((set, get)
         const { data, error } = await supabase
           .from('customers_unified')
           .select('*')
+          .is('merged_into_id', null)
           .range(from, from + PAGE - 1);
         if (error) throw error;
         if (!data || data.length === 0) break;

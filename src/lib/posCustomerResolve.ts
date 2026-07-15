@@ -51,6 +51,7 @@ export async function searchUnifiedCustomers(
     .select(
       'id, name, cpf, email, phone_e164, phone_suffix8, city, state, cep, address, address_number, complement, neighborhood, total_orders, total_spent, avg_ticket, last_purchase_at',
     )
+    .is('merged_into_id', null)
     .order('last_purchase_at', { ascending: false, nullsFirst: false })
     .limit(limit);
 
