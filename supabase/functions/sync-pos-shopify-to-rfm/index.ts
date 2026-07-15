@@ -170,7 +170,7 @@ serve(async (req) => {
 
     // ── 2. Sync online sales from Tiny ERP (site) ──
     if (mode === 'tiny' || mode === 'all') {
-      const { data: tinyStore } = await supabase.from('pos_stores').select('id, name, tiny_token').eq('name', 'Tiny Shopify').single();
+      const { data: tinyStore } = await supabase.from('pos_stores').select('id, name, tiny_token').eq('id', '2bd2c08d-321c-47ee-98a9-e27e936818ab').single();
       const tinyToken = tinyStore?.tiny_token || Deno.env.get('TINY_ERP_TOKEN');
       if (!tinyToken) {
         console.warn('No Tiny token for online sync');

@@ -926,7 +926,7 @@ export default function Management() {
     const results: { name: string; revenue: number; orders: number }[] = [
       { name: "Loja Centro", revenue: centroRevenue, orders: centroSales.length },
       { name: "Loja Perola", revenue: perolaRevenue, orders: perolaSales.length },
-      { name: "Tiny Shopify", revenue: shopifyRevenue, orders: tinyShopifySales.length },
+      { name: "Site/Live", revenue: shopifyRevenue, orders: tinyShopifySales.length },
     ];
 
     return results.filter(s => s.orders > 0).sort((a, b) => b.revenue - a.revenue);
