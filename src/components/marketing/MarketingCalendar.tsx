@@ -6,7 +6,7 @@ import {
   FileText, Loader2, Target, Calendar as CalendarIcon, Eye, Calculator,
   ShieldAlert, Edit3, Repeat, RotateCcw, Sparkles
 } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StrategistPanel } from "./StrategistPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -121,7 +121,7 @@ export function MarketingCalendar() {
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [monthGoal, setMonthGoal] = useState<MonthGoal | null>(null);
   const [loading, setLoading] = useState(false);
-  const [strategistOpen, setStrategistOpen] = useState(false);
+  
   const [agentActions, setAgentActions] = useState<Array<{ id: string; data: string; tipo_acao: string; titulo: string; custo_estimado_brl: number | null; status: string }>>([]);
 
   // Recurring actions
@@ -621,6 +621,27 @@ export function MarketingCalendar() {
 
   return (
     <div className="space-y-4">
+      <Tabs defaultValue="estrategista" className="w-full">
+        <TabsList className="bg-white/10 border border-white/10">
+          <TabsTrigger value="estrategista" className="gap-1.5 text-white/70 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Sparkles className="h-3.5 w-3.5" /> Estrategista
+          </TabsTrigger>
+          <TabsTrigger value="calendario" className="gap-1.5 text-white/70 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <CalendarIcon className="h-3.5 w-3.5" /> Calendário
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── ESTRATEGISTA (padrão) ── */}
+        <TabsContent value="estrategista" className="mt-3">
+          <div className="h-[calc(100vh-160px)] rounded-lg border border-white/10 bg-card overflow-hidden">
+            <div className="h-full p-3">
+              <StrategistPanel onDataChanged={fetchData} />
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── CALENDÁRIO (sub-aba) ── */}
+        <TabsContent value="calendario" className="mt-3 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
@@ -638,12 +659,10 @@ export function MarketingCalendar() {
           <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setGoalDialogOpen(true)}>
             <Target className="h-3.5 w-3.5" />Metas do Mês
           </Button>
-          <Button variant="outline" size="sm" className="gap-1 border-violet-400/50 text-violet-300 hover:bg-violet-500/10" onClick={() => setStrategistOpen(true)}>
-            <Sparkles className="h-3.5 w-3.5" />Estrategista
-          </Button>
           <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
         </div>
       </div>
+
 
       {/* Calculator Widget */}
       {calcOpen && (
@@ -675,57 +694,6 @@ export function MarketingCalendar() {
         </Card>
       )}
 
-      {/* Campaign Rules - Persistent */}
-      {savedRules && !isEditingRules && (
-        <Card className="border-2 border-red-500/40 bg-red-500/10 shadow-lg shadow-red-500/5">
-          <CardContent className="py-4 px-5">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-red-500" />
-                <h3 className="font-bold text-sm text-red-500 uppercase tracking-wide">⚠️ Regras Obrigatórias de Campanha</h3>
-              </div>
-              <Button size="sm" variant="ghost" className="gap-1 text-xs h-7" onClick={() => setIsEditingRules(true)}>
-                <Edit3 className="h-3 w-3" />Editar
-              </Button>
-            </div>
-            <RichTextPreview content={savedRules} />
-          </CardContent>
-        </Card>
-      )}
-
-      {isEditingRules && (
-        <Card className="border-red-500/30 bg-card">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-red-500" />
-                <h3 className="text-sm font-semibold">Regras Obrigatórias de Campanha</h3>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => { setCampaignRules(savedRules); setIsEditingRules(false); }}>
-                  Cancelar
-                </Button>
-                <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={saveRules} disabled={isSavingRules}>
-                  {isSavingRules ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                  Salvar Regras
-                </Button>
-              </div>
-            </div>
-            <RichTextEditor
-              value={campaignRules}
-              onChange={setCampaignRules}
-              placeholder="Escreva aqui as regras obrigatórias que devem ser seguidas em TODAS as campanhas, independente do mês..."
-              minRows={5}
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {!savedRules && !isEditingRules && (
-        <Button variant="outline" size="sm" className="gap-1 border-red-500/30 text-red-400 hover:bg-red-500/10" onClick={() => setIsEditingRules(true)}>
-          <ShieldAlert className="h-3.5 w-3.5" />Definir Regras Obrigatórias de Campanha
-        </Button>
-      )}
 
       {/* Monthly Goals Summary */}
       {monthGoal && goalsList.length > 0 && (
@@ -817,32 +785,9 @@ export function MarketingCalendar() {
         </div>
       </div>
 
-      {/* Inline Month Notes (below calendar) */}
-      <Card className="bg-card border-white/10">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              📋 Informações Gerais — {MONTHS[month]} {year}
-            </h3>
-            <Button size="sm" variant="outline" className="gap-1" onClick={saveMonthNotes} disabled={isSavingNotes}>
-              {isSavingNotes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              Salvar
-            </Button>
-          </div>
-          <RichTextEditor
-            value={monthNotes}
-            onChange={setMonthNotes}
-            placeholder="Escreva informações gerais do mês, tarefas, planejamento..."
-            minRows={6}
-          />
-          {monthNotes && (
-            <div className="border-t pt-3">
-              <p className="text-xs text-muted-foreground mb-1">Pré-visualização:</p>
-              <RichTextPreview content={monthNotes} onToggleTask={(i) => { toggleMonthNoteTask(i); }} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
+
 
       {/* Day Detail Dialog */}
       <Dialog open={dayDetailOpen} onOpenChange={setDayDetailOpen}>
@@ -1304,16 +1249,6 @@ export function MarketingCalendar() {
           </div>
         </DialogContent>
       </Dialog>
-      <Sheet open={strategistOpen} onOpenChange={setStrategistOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-4xl p-4 overflow-hidden">
-          <SheetHeader className="mb-3">
-            <SheetTitle className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-violet-400" /> Estrategista de Marketing
-            </SheetTitle>
-          </SheetHeader>
-          <StrategistPanel onDataChanged={fetchData} />
-        </SheetContent>
-      </Sheet>
     </div>
   );
 }

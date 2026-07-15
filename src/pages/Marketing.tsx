@@ -1158,7 +1158,7 @@ export default function Marketing() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="calendar">📅 Calendário</SelectItem>
+                <SelectItem value="calendar">🧠 Estratégia</SelectItem>
                 <SelectItem value="attribution">📊 Dashboard</SelectItem>
                 <SelectItem value="customers">👥 Clientes RFM</SelectItem>
                 <SelectItem value="templates">📢 Templates Meta</SelectItem>
@@ -1189,7 +1189,7 @@ export default function Marketing() {
           <div className="hidden md:block">
             <ScrollArea className="w-full" type="scroll">
               <TabsList className="bg-white/10 border border-white/10 w-max">
-                <TabsTrigger value="calendar" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Calendar className="h-3.5 w-3.5" />Calendário</TabsTrigger>
+                <TabsTrigger value="calendar" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Sparkles className="h-3.5 w-3.5" />Estratégia</TabsTrigger>
                 <TabsTrigger value="attribution" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><BarChart3 className="h-3.5 w-3.5" />Dashboard</TabsTrigger>
                 <TabsTrigger value="customers" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Users className="h-3.5 w-3.5" />Clientes RFM</TabsTrigger>
                 <TabsTrigger value="templates" className="gap-1 text-white/70 data-[state=active]:text-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground whitespace-nowrap"><Megaphone className="h-3.5 w-3.5" />Templates Meta</TabsTrigger>
