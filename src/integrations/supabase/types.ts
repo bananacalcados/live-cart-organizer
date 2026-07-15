@@ -15229,11 +15229,13 @@ export type Database = {
       shadow_cycle_state: {
         Row: {
           captured_big_live_at: string | null
+          captured_criterion: string | null
           captured_live_session_id: string | null
           closed_at: string | null
           created_at: string
           id: string
           min_big_live_viewers: number
+          min_convite_live_recipients: number
           min_days: number
           notes: string | null
           started_at: string
@@ -15241,11 +15243,13 @@ export type Database = {
         }
         Insert: {
           captured_big_live_at?: string | null
+          captured_criterion?: string | null
           captured_live_session_id?: string | null
           closed_at?: string | null
           created_at?: string
           id?: string
           min_big_live_viewers?: number
+          min_convite_live_recipients?: number
           min_days?: number
           notes?: string | null
           started_at?: string
@@ -15253,11 +15257,13 @@ export type Database = {
         }
         Update: {
           captured_big_live_at?: string | null
+          captured_criterion?: string | null
           captured_live_session_id?: string | null
           closed_at?: string | null
           created_at?: string
           id?: string
           min_big_live_viewers?: number
+          min_convite_live_recipients?: number
           min_days?: number
           notes?: string | null
           started_at?: string
