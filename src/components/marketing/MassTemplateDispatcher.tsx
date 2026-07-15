@@ -2840,6 +2840,24 @@ export function MassTemplateDispatcher() {
                 className="h-8 text-sm"
               />
             </div>
+            <div className="space-y-2">
+              <Label className="text-sm">
+                Tipo de comunicação <span className="text-red-500">*</span>
+              </Label>
+              <Select value={tipoComunicacao} onValueChange={(v) => setTipoComunicacao(v as TipoComunicacao)}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Escolha o tipo (obrigatório)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPO_COMUNICACAO_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Motor de cota valida classe × tipo. Matriz editável em dispatch_touch_limits.
+              </p>
+            </div>
             <div className="bg-muted/50 rounded-lg p-3 space-y-1">
               <p className="text-sm font-medium">Template: <span className="font-mono">{selectedTemplate?.name}</span></p>
               <p className="text-sm">Destinatários: <span className="font-bold">{selectedCount}</span></p>
