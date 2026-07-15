@@ -785,32 +785,9 @@ export function MarketingCalendar() {
         </div>
       </div>
 
-      {/* Inline Month Notes (below calendar) */}
-      <Card className="bg-card border-white/10">
-        <CardContent className="p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              📋 Informações Gerais — {MONTHS[month]} {year}
-            </h3>
-            <Button size="sm" variant="outline" className="gap-1" onClick={saveMonthNotes} disabled={isSavingNotes}>
-              {isSavingNotes ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              Salvar
-            </Button>
-          </div>
-          <RichTextEditor
-            value={monthNotes}
-            onChange={setMonthNotes}
-            placeholder="Escreva informações gerais do mês, tarefas, planejamento..."
-            minRows={6}
-          />
-          {monthNotes && (
-            <div className="border-t pt-3">
-              <p className="text-xs text-muted-foreground mb-1">Pré-visualização:</p>
-              <RichTextPreview content={monthNotes} onToggleTask={(i) => { toggleMonthNoteTask(i); }} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
+
 
       {/* Day Detail Dialog */}
       <Dialog open={dayDetailOpen} onOpenChange={setDayDetailOpen}>
