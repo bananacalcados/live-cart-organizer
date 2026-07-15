@@ -103,7 +103,18 @@ interface Recipient {
   city?: string;
   state?: string;
   email?: string;
+  unified_id?: string | null;
 }
+
+type TipoComunicacao = '' | 'convite_live' | 'oferta' | 'reativacao' | 'lancamento' | 'pesquisa';
+
+const TIPO_COMUNICACAO_OPTIONS: Array<{ value: Exclude<TipoComunicacao,''>; label: string }> = [
+  { value: 'convite_live', label: 'Convite Live' },
+  { value: 'oferta', label: 'Oferta' },
+  { value: 'reativacao', label: 'Reativação' },
+  { value: 'lancamento', label: 'Lançamento' },
+  { value: 'pesquisa', label: 'Pesquisa' },
+];
 
 // Dynamic variable options that pull from recipient data
 const DYNAMIC_VARIABLE_OPTIONS = [
@@ -234,6 +245,11 @@ export function MassTemplateDispatcher() {
   const [scheduleMode, setScheduleMode] = useState<'none' | 'schedule' | 'paused'>('none');
   const [scheduledDate, setScheduledDate] = useState("");
   const [campaignName, setCampaignName] = useState("");
+  // Motor de cotas: tipo_comunicacao é OBRIGATÓRIO, sem default pré-selecionado
+  // (a decisão precisa ser consciente — matriz classe×tipo é editável em
+  // dispatch_touch_limits, então quente/morno podem receber "reativacao" no
+  // futuro por decisão de config, não por deploy).
+  const [tipoComunicacao, setTipoComunicacao] = useState<TipoComunicacao>("");
   const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
   // Split dispatch: divide the audience into N disjoint parts, each becoming its
   // own dispatch (same template/variables) so each part can fire at a different
@@ -932,6 +948,7 @@ export function MassTemplateDispatcher() {
             city: c.city || undefined,
             state: c.state || undefined,
             email: c.email || undefined,
+            unified_id: c.id || null,
           });
         }
       }
@@ -1211,10 +1228,66 @@ export function MassTemplateDispatcher() {
     return alreadySent;
   };
 
+  /**
+   * Wire-in do motor de cotas — única entrada permitida em `dispatch_recipients`.
+   * Chama a RPC SECURITY DEFINER `enqueue_dispatch_recipients_guarded`, que:
+   *  - Auto-cria linha em `customers_unified` para candidatos sem unified_id
+   *    (leads/órfãos entram no motor como `sem_classificacao`).
+   *  - Aplica cota mensal, matriz classe×tipo e min_dias_entre_toques.
+   *  - Grava `quota_check_summary` em `dispatch_history` para auditoria.
+   * Retorna { inserted, overridden, auto_created_unified, summary }.
+   */
+  const enqueueRecipientsGuarded = async (
+    dispatchId: string,
+    phones: string[],
+    recipientMap: Map<string, Recipient>,
+    tipo: TipoComunicacao,
+    provider: string = 'meta_cloud',
+  ): Promise<{ inserted: number; summary: any } | null> => {
+    if (!tipo) {
+      toast.error("Escolha o tipo de comunicação antes de disparar.");
+      return null;
+    }
+    const candidates = phones.map(p => {
+      const r = recipientMap.get(p);
+      return {
+        unified_id: r?.unified_id || null,
+        phone: p,
+        name: r?.name || null,
+      };
+    });
+    // Batches de 1000 para não estourar payload em audiências grandes
+    let totalInserted = 0;
+    let lastSummary: any = null;
+    for (let i = 0; i < candidates.length; i += 1000) {
+      const slice = candidates.slice(i, i + 1000);
+      const { data, error } = await supabase.rpc('enqueue_dispatch_recipients_guarded', {
+        p_dispatch_id: dispatchId,
+        p_candidates: slice as any,
+        p_tipo_comunicacao: tipo,
+        p_provider: provider,
+        p_overrides: [],
+      });
+      if (error) {
+        console.error('enqueue_dispatch_recipients_guarded error:', error);
+        toast.error(`Motor de cota bloqueou: ${error.message}`);
+        throw error;
+      }
+      const res = (data as any) || {};
+      totalInserted += Number(res.inserted || 0);
+      lastSummary = res.summary || lastSummary;
+    }
+    return { inserted: totalInserted, summary: lastSummary };
+  };
+
   // Mass send — background via Edge Function
   const handleMassSend = async () => {
     setConfirmOpen(false);
     if (!selectedTemplate || !selectedNumber) return;
+    if (!tipoComunicacao) {
+      toast.error("Escolha o tipo de comunicação (obrigatório).");
+      return;
+    }
 
     const allPhones = [...selectedPhones];
     if (allPhones.length === 0) {
@@ -1290,29 +1363,26 @@ export function MassTemplateDispatcher() {
         .single();
       dispatchId = dispatchData?.id || null;
 
-      // Save recipients SEQUENTIALLY in batches of 500. Firing all batches at once
-      // (Promise.all) opened dozens of concurrent connections and was a primary
-      // cause of the DB connection-pool exhaustion that froze the whole system.
+      // Enfileira via motor de cotas (única entrada permitida em dispatch_recipients).
       if (dispatchId) {
-        const recipientRows = phones.map(p => ({
-          dispatch_id: dispatchId!,
-          phone: p,
-          recipient_name: recipientMap.get(p)?.name || null,
-          status: 'pending',
-        }));
-        for (let i = 0; i < recipientRows.length; i += 500) {
-          // upsert + ignoreDuplicates: guarded by the unique index
-          // (dispatch_id, phone). A re-run/retry can never duplicate a recipient.
-          const { error: insErr } = await supabase
-            .from('dispatch_recipients')
-            .upsert(recipientRows.slice(i, i + 500), {
-              onConflict: 'dispatch_id,phone',
-              ignoreDuplicates: true,
-            });
-          if (insErr) throw insErr;
+        const guardResult = await enqueueRecipientsGuarded(
+          dispatchId,
+          phones,
+          recipientMap,
+          tipoComunicacao,
+          'meta_cloud',
+        );
+        if (!guardResult) throw new Error('tipo_comunicacao obrigatório');
+        if (guardResult.inserted === 0) {
+          toast.error("Nenhum destinatário elegível — motor de cota bloqueou todos. Verifique tipo de comunicação e classificações.");
+          await supabase.from('dispatch_history').update({ status: 'failed' } as any).eq('id', dispatchId);
+          setIsSending(false);
+          return;
         }
+        setSendProgress({ sent: 0, total: guardResult.inserted, failed: 0 });
+        toast.success(`✅ ${guardResult.inserted} destinatários enfileirados (motor de cota aplicado).`);
 
-        // Only NOW activate the dispatch — all recipients are guaranteed inserted.
+        // Só agora ativa — os destinatários elegíveis já estão inseridos pela RPC.
         const { error: actErr } = await supabase
           .from('dispatch_history')
           .update({ status: 'sending', started_at: new Date().toISOString(), processing_batch: false } as any)
@@ -1371,6 +1441,10 @@ export function MassTemplateDispatcher() {
   // Save as scheduled or paused (no immediate send)
   const handleSaveScheduledOrPaused = async (mode: 'schedule' | 'paused') => {
     if (!selectedTemplate || !selectedNumber) return;
+    if (!tipoComunicacao) {
+      toast.error("Escolha o tipo de comunicação (obrigatório).");
+      return;
+    }
 
     if (mode === 'schedule' && !scheduledDate) {
       toast.error("Defina a data e hora do agendamento");
@@ -1447,22 +1521,18 @@ export function MassTemplateDispatcher() {
         dispatchId = dispatchData.id;
       }
 
-      // Save recipients — upsert guarded by the unique index (dispatch_id, phone)
-      // so no re-save / retry can ever duplicate a recipient in the same dispatch.
-      const recipientRows = allPhones.map(p => ({
-        dispatch_id: dispatchId,
-        phone: p,
-        recipient_name: recipientMap.get(p)?.name || null,
-        status: 'pending',
-      }));
-      for (let i = 0; i < recipientRows.length; i += 500) {
-        const { error: insErr } = await supabase
-          .from('dispatch_recipients')
-          .upsert(recipientRows.slice(i, i + 500), {
-            onConflict: 'dispatch_id,phone',
-            ignoreDuplicates: true,
-          });
-        if (insErr) throw insErr;
+      // Enfileira via motor de cotas (única entrada permitida).
+      const guardResult = await enqueueRecipientsGuarded(
+        dispatchId,
+        allPhones,
+        recipientMap,
+        tipoComunicacao,
+        'meta_cloud',
+      );
+      if (!guardResult) throw new Error('tipo_comunicacao obrigatório');
+      if (guardResult.inserted === 0) {
+        toast.error("Motor de cota bloqueou todos os destinatários. Ajuste tipo de comunicação ou público.");
+        throw new Error('quota_zero');
       }
 
       if (editDispatchId) {
@@ -1508,8 +1578,13 @@ export function MassTemplateDispatcher() {
   // for its own external field value at trigger time (fresh live link per part).
   const handleSaveSplitDispatch = async () => {
     if (!selectedTemplate || !selectedNumber) return;
+    if (!tipoComunicacao) {
+      toast.error("Escolha o tipo de comunicação (obrigatório).");
+      return;
+    }
     const n = splitParts.length;
     if (n < 2) return;
+
 
     const allPhones = [...selectedPhones];
     if (allPhones.length === 0) {
@@ -1574,20 +1649,16 @@ export function MassTemplateDispatcher() {
         if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
         const dispatchId = dispatchData.id;
 
-        const recipientRows = slicePhones.map(p => ({
-          dispatch_id: dispatchId,
-          phone: p,
-          recipient_name: recipientMap.get(p)?.name || null,
-          status: 'pending',
-        }));
-        for (let j = 0; j < recipientRows.length; j += 500) {
-          const { error: insErr } = await supabase
-            .from('dispatch_recipients')
-            .upsert(recipientRows.slice(j, j + 500), {
-              onConflict: 'dispatch_id,phone',
-              ignoreDuplicates: true,
-            });
-          if (insErr) throw insErr;
+        const guardResult = await enqueueRecipientsGuarded(
+          dispatchId,
+          slicePhones,
+          recipientMap,
+          tipoComunicacao,
+          'meta_cloud',
+        );
+        if (!guardResult) throw new Error('tipo_comunicacao obrigatório');
+        if (guardResult.inserted === 0) {
+          console.warn(`Parte ${i + 1}: motor bloqueou todos os destinatários — dispatch criado vazio`);
         }
         created++;
       }
@@ -2627,6 +2698,24 @@ export function MassTemplateDispatcher() {
                 className="h-8 text-sm"
               />
             </div>
+            <div className="space-y-2">
+              <Label className="text-sm">
+                Tipo de comunicação <span className="text-red-500">*</span>
+              </Label>
+              <Select value={tipoComunicacao} onValueChange={(v) => setTipoComunicacao(v as TipoComunicacao)}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Escolha o tipo (obrigatório)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPO_COMUNICACAO_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Motor de cota valida classe × tipo. Matriz editável em dispatch_touch_limits.
+              </p>
+            </div>
             <div className="bg-muted/50 rounded-lg p-3 space-y-1">
               <p className="text-sm font-medium">Template: <span className="font-mono">{selectedTemplate?.name}</span></p>
               <p className="text-sm">Destinatários: <span className="font-bold">{selectedCount}</span></p>
@@ -2651,7 +2740,7 @@ export function MassTemplateDispatcher() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancelar</Button>
-            <Button onClick={handleMassSend} className="gap-1">
+            <Button onClick={handleMassSend} disabled={!tipoComunicacao} className="gap-1">
               <Send className="h-4 w-4" />Confirmar Disparo
             </Button>
           </DialogFooter>
@@ -2678,6 +2767,24 @@ export function MassTemplateDispatcher() {
               />
               <p className="text-[11px] text-muted-foreground">
                 Cada parte fica com "— Parte X/{splitParts.length}". Divisão intercalada (amostras equivalentes), sem sobreposição de contatos.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm">
+                Tipo de comunicação <span className="text-red-500">*</span>
+              </Label>
+              <Select value={tipoComunicacao} onValueChange={(v) => setTipoComunicacao(v as TipoComunicacao)}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Escolha o tipo (obrigatório)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPO_COMUNICACAO_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Motor de cota valida classe × tipo. Matriz editável em dispatch_touch_limits.
               </p>
             </div>
             <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
@@ -2738,7 +2845,7 @@ export function MassTemplateDispatcher() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSplitDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveSplitDispatch} disabled={savingSplit} className="gap-1">
+            <Button onClick={handleSaveSplitDispatch} disabled={savingSplit || !tipoComunicacao} className="gap-1">
               {savingSplit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
               Criar {splitParts.length} disparos
             </Button>
@@ -2768,6 +2875,24 @@ export function MassTemplateDispatcher() {
                 onChange={e => setCampaignName(e.target.value)}
                 className="h-8 text-sm"
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm">
+                Tipo de comunicação <span className="text-red-500">*</span>
+              </Label>
+              <Select value={tipoComunicacao} onValueChange={(v) => setTipoComunicacao(v as TipoComunicacao)}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Escolha o tipo (obrigatório)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPO_COMUNICACAO_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Motor de cota valida classe × tipo. Matriz editável em dispatch_touch_limits.
+              </p>
             </div>
             <div className="bg-muted/50 rounded-lg p-3 space-y-1">
               <p className="text-sm font-medium">Template: <span className="font-mono">{selectedTemplate?.name}</span></p>
@@ -2805,7 +2930,7 @@ export function MassTemplateDispatcher() {
             <Button
               onClick={() => handleSaveScheduledOrPaused(scheduleMode as 'schedule' | 'paused')}
               className="gap-1"
-              disabled={scheduleMode === 'schedule' && !scheduledDate}
+              disabled={(scheduleMode === 'schedule' && !scheduledDate) || !tipoComunicacao}
             >
               {scheduleMode === 'schedule' ? (
                 <><Calendar className="h-4 w-4" />Agendar</>
