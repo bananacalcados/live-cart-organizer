@@ -451,7 +451,7 @@ export default function InstagramCommentAutomation() {
                       <span className="font-medium">Mídias:</span>
                       {rule.media_types.map((mt) => (
                         <Badge key={mt} variant="secondary" className="text-[10px]">
-                          {mt === "REELS" ? "Reels" : mt === "story" ? "Stories" : mt}
+                          {mt === "REELS" ? "Reels" : mt === "story" ? "Stories" : mt === "live" ? "Live" : mt}
                         </Badge>
                       ))}
                     </div>
