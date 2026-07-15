@@ -620,20 +620,20 @@ export function MarketingCalendar() {
   };
 
   return (
-    <div className="space-y-4 bg-white text-slate-900 rounded-xl p-4 border border-slate-200 shadow-sm">
+    <div className="space-y-4">
       <Tabs defaultValue="estrategista" className="w-full">
-        <TabsList className="bg-slate-100 border border-slate-200">
-          <TabsTrigger value="estrategista" className="gap-1.5 text-slate-600 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+        <TabsList className="bg-white/10 border border-white/10">
+          <TabsTrigger value="estrategista" className="gap-1.5 text-white/70 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <Sparkles className="h-3.5 w-3.5" /> Estrategista
           </TabsTrigger>
-          <TabsTrigger value="calendario" className="gap-1.5 text-slate-600 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+          <TabsTrigger value="calendario" className="gap-1.5 text-white/70 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <CalendarIcon className="h-3.5 w-3.5" /> Calendário
           </TabsTrigger>
         </TabsList>
 
         {/* ── ESTRATEGISTA (padrão) ── */}
         <TabsContent value="estrategista" className="mt-3">
-          <div className="h-[calc(100vh-180px)] rounded-lg border border-slate-200 bg-slate-50 overflow-hidden">
+          <div className="h-[calc(100vh-160px)] rounded-lg border border-white/10 bg-card overflow-hidden">
             <div className="h-full p-3">
               <StrategistPanel onDataChanged={fetchData} />
             </div>
@@ -645,24 +645,23 @@ export function MarketingCalendar() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={prevMonth} className="border-slate-300 text-slate-900 hover:bg-slate-100"><ChevronLeft className="h-4 w-4" /></Button>
-          <h2 className="text-xl font-bold min-w-[200px] text-center text-slate-900">{MONTHS[month]} {year}</h2>
-          <Button variant="outline" size="icon" onClick={nextMonth} className="border-slate-300 text-slate-900 hover:bg-slate-100"><ChevronRight className="h-4 w-4" /></Button>
+          <Button variant="outline" size="icon" onClick={prevMonth} className="border-white/20 text-white hover:bg-white/10"><ChevronLeft className="h-4 w-4" /></Button>
+          <h2 className="text-xl font-bold min-w-[200px] text-center text-white">{MONTHS[month]} {year}</h2>
+          <Button variant="outline" size="icon" onClick={nextMonth} className="border-white/20 text-white hover:bg-white/10"><ChevronRight className="h-4 w-4" /></Button>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" className="gap-1 border-slate-300 text-slate-900 hover:bg-slate-100" onClick={() => setCalcOpen(!calcOpen)}>
+          <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setCalcOpen(!calcOpen)}>
             <Calculator className="h-3.5 w-3.5" />Calculadora
           </Button>
-          <Button variant="outline" size="sm" className="gap-1 border-purple-400/60 text-purple-700 hover:bg-purple-50" onClick={() => setRecurringListOpen(true)}>
+          <Button variant="outline" size="sm" className="gap-1 border-purple-400/40 text-purple-300 hover:bg-purple-500/10" onClick={() => setRecurringListOpen(true)}>
             <Repeat className="h-3.5 w-3.5" />Ações Recorrentes
           </Button>
-          <Button variant="outline" size="sm" className="gap-1 border-slate-300 text-slate-900 hover:bg-slate-100" onClick={() => setGoalDialogOpen(true)}>
+          <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setGoalDialogOpen(true)}>
             <Target className="h-3.5 w-3.5" />Metas do Mês
           </Button>
-          <Button variant="outline" size="sm" className="border-slate-300 text-slate-900 hover:bg-slate-100" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
+          <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
         </div>
       </div>
-
 
 
       {/* Calculator Widget */}
