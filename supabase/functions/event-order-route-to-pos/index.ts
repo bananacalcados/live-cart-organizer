@@ -39,11 +39,16 @@ Deno.serve(async (req) => {
       .eq("id", order.event_id)
       .maybeSingle();
 
-    if (!event?.default_store_id || event.channel === "site") {
-      return new Response(JSON.stringify({ skipped: "not a physical event" }), { headers: corsHeaders });
+    // Aceitar eventos "site" também: rotear para a loja Site/Live (fallback).
+    // Antes rejeitávamos site → agora entra como sale_type='live' em Site/Live.
+    const isSiteChannel = event?.channel === "site";
+    const resolvedStoreId = event?.default_store_id || (isSiteChannel ? SITE_LIVE_STORE_ID : null);
+
+    if (!resolvedStoreId) {
+      return new Response(JSON.stringify({ skipped: "no store to route" }), { headers: corsHeaders });
     }
 
-    const storeId = event.default_store_id as string;
+    const storeId = resolvedStoreId as string;
     const sellerId = LIVE_SELLER_BY_STORE[storeId] || null;
 
     const { data: customer } = await supabase
