@@ -238,7 +238,8 @@ export default function EventCaptureBuilder() {
           <TabsTrigger value="leads">Leads Capturados</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="leads" className="mt-4">
+        <TabsContent value="leads" className="mt-4 space-y-4">
+          <LeadCohortPanel eventId={eventId!} />
           <LeadsList eventId={eventId!} />
         </TabsContent>
 
