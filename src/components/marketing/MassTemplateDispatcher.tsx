@@ -2740,7 +2740,7 @@ export function MassTemplateDispatcher() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancelar</Button>
-            <Button onClick={handleMassSend} className="gap-1">
+            <Button onClick={handleMassSend} disabled={!tipoComunicacao} className="gap-1">
               <Send className="h-4 w-4" />Confirmar Disparo
             </Button>
           </DialogFooter>
