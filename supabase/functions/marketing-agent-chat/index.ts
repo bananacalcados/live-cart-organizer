@@ -293,7 +293,7 @@ serve(async (req) => {
       let steps = 0;
       while (steps < 8) {
         steps++;
-        const resp = await callAnthropic(ANTHROPIC_API_KEY!, anthropicModel, SYSTEM_PROMPT, msgs);
+        const resp = await callAnthropic(ANTHROPIC_API_KEY!, anthropicModel, buildSystemPrompt(), msgs);
         const blocks: any[] = resp.content || [];
         const textBlocks = blocks.filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
         const toolUses = blocks.filter((b) => b.type === "tool_use");
@@ -320,7 +320,7 @@ serve(async (req) => {
     }
 
     async function runGateway(): Promise<void> {
-      const msgs: any[] = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
+      const msgs: any[] = [{ role: "system", content: buildSystemPrompt() }, ...history];
       let steps = 0;
       while (steps < 8) {
         steps++;
