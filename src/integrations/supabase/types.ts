@@ -18360,6 +18360,7 @@ export type Database = {
         }[]
       }
       event_inner_dashboard: { Args: { p_event_id: string }; Returns: Json }
+      event_lead_cohorts: { Args: { p_event_id: string }; Returns: Json }
       extract_base_product_name: { Args: { p_name: string }; Returns: string }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       extract_phone_suffix8: { Args: { phone_input: string }; Returns: string }
