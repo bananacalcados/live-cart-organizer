@@ -4,8 +4,10 @@ import { toast } from "sonner";
 import {
   ChevronLeft, ChevronRight, Plus, X, Trash2, Save,
   FileText, Loader2, Target, Calendar as CalendarIcon, Eye, Calculator,
-  ShieldAlert, Edit3, Repeat, RotateCcw
+  ShieldAlert, Edit3, Repeat, RotateCcw, Sparkles
 } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { StrategistPanel } from "./StrategistPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
