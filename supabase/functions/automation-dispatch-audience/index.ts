@@ -451,8 +451,43 @@ serve(async (req) => {
       }
     }
 
+    // WIRE-IN motor de cotas (single-shot). Chamado por destinatário antes de
+    // qualquer envio. Em shadow_mode=true, prossegue mesmo se ineligível (só
+    // loga); em shadow=false, ineligível PULA o disparo.
+    const flowTipoComunicacao =
+      (flow as any).tipo_comunicacao || (triggerConfig.tipo_comunicacao as string) || "oferta";
+    let motorSkipped = 0;
+    let motorAllowed = 0;
+    let motorShadowAllowed = 0;
+
     async function processRecipient(recipient: typeof batch[0]): Promise<void> {
       const firstName = recipient.name.split(' ')[0];
+
+      // Guard antes do primeiro envio deste destinatário.
+      try {
+        const { data: guard } = await supabase.rpc('guard_automation_dispatch', {
+          p_flow_id: flowId,
+          p_phone: recipient.phone,
+          p_tipo_comunicacao: flowTipoComunicacao,
+          p_provider: 'uazapi',
+          p_template_category: 'default',
+        } as any);
+        const g = guard as any;
+        if (g && g.eligible === false) {
+          if (g.shadow_mode === false) {
+            motorSkipped++;
+            console.log(`[dispatch] motor bloqueou ${recipient.phone} motivo=${g.reason} class=${g.classificacao}`);
+            return;
+          } else {
+            motorShadowAllowed++;
+            console.log(`[dispatch] SHADOW: passaria bloqueio ${recipient.phone} motivo=${g.reason}`);
+          }
+        } else if (g && g.eligible) {
+          motorAllowed++;
+        }
+      } catch (e) {
+        console.warn('[dispatch] guard error, prosseguindo em fallback', (e as Error).message);
+      }
 
       function replaceVars(text: string): string {
         return text
@@ -756,6 +791,12 @@ serve(async (req) => {
           sent,
           failed,
           skipped,
+          motor: {
+            allowed: motorAllowed,
+            shadow_allowed: motorShadowAllowed,
+            blocked_enforced: motorSkipped,
+            tipo_comunicacao: flowTipoComunicacao,
+          },
           durationMs: Date.now() - startTime,
           done,
         },

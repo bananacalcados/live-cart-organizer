@@ -265,25 +265,46 @@ Deno.serve(async (req) => {
       }
     }
 
-    const dispatchRows = messages.map((m) => ({
-      campaign_id: matched.id,
-      message_id: m.id,
-      lead_id: leadId,
-      phone,
-      scheduled_at: nowIso,
-      status: "pending" as const,
-      whatsapp_number_id: resolvedNumberId,
-      channel: resolvedChannel,
-      ig_user_id: resolvedIgUserId,
-      ig_comment_id: resolvedIgCommentId,
-    }));
+    // WIRE-IN motor de cotas: uma RPC por mensagem (mesmo lead), grava snapshot
+    // de categoria/custo e respeita shadow_mode da campanha. Depois relemos os
+    // dispatches gerados para montar o mapa dispatchIdByMessage.
+    const tipoLive = (matched as any).tipo_comunicacao || "convite_live";
+    const motorPerMessage: any[] = [];
+    for (const m of messages) {
+      const { data: r, error: rErr } = await supabase.rpc(
+        "enqueue_live_campaign_dispatches_guarded",
+        {
+          p_campaign_id: matched.id,
+          p_message_id: m.id,
+          p_candidates: [{
+            phone,
+            lead_id: leadId,
+            whatsapp_number_id: resolvedNumberId,
+            channel: resolvedChannel,
+            ig_user_id: resolvedIgUserId,
+            ig_comment_id: resolvedIgCommentId,
+          }],
+          p_tipo_comunicacao: tipoLive,
+          p_provider: "meta_cloud",
+          p_template_category: (m as any).meta_template_name ? "marketing" : "utility",
+        } as any,
+      );
+      if (rErr) console.error("[live-trigger] guarded enqueue error", rErr);
+      else motorPerMessage.push(r);
+    }
     const { data: insertedDispatches } = await supabase
       .from("live_campaign_dispatches")
-      .insert(dispatchRows)
-      .select("id, message_id");
+      .select("id, message_id")
+      .eq("campaign_id", matched.id)
+      .eq("phone", phone)
+      .in("message_id", messages.map((m) => m.id))
+      .order("created_at", { ascending: false })
+      .limit(messages.length);
 
     const dispatchIdByMessage = new Map<string, string>();
-    (insertedDispatches || []).forEach((d) => dispatchIdByMessage.set(d.message_id, d.id));
+    (insertedDispatches || []).forEach((d) => {
+      if (!dispatchIdByMessage.has(d.message_id)) dispatchIdByMessage.set(d.message_id, d.id);
+    });
 
     // Função de envio sequencial em background (não bloqueia a resposta do webhook)
     const sendSequence = async () => {
