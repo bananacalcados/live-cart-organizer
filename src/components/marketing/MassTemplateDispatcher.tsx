@@ -2751,6 +2751,24 @@ export function MassTemplateDispatcher() {
                 Cada parte fica com "— Parte X/{splitParts.length}". Divisão intercalada (amostras equivalentes), sem sobreposição de contatos.
               </p>
             </div>
+            <div className="space-y-2">
+              <Label className="text-sm">
+                Tipo de comunicação <span className="text-red-500">*</span>
+              </Label>
+              <Select value={tipoComunicacao} onValueChange={(v) => setTipoComunicacao(v as TipoComunicacao)}>
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue placeholder="Escolha o tipo (obrigatório)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIPO_COMUNICACAO_OPTIONS.map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Motor de cota valida classe × tipo. Matriz editável em dispatch_touch_limits.
+              </p>
+            </div>
             <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
               <p className="font-medium">Template: <span className="font-mono">{selectedTemplate?.name}</span></p>
               <p>Total selecionado: <span className="font-bold">{selectedCount}</span> · ≈ <span className="font-bold">{Math.ceil(selectedCount / Math.max(1, splitParts.length))}</span> por parte</p>
