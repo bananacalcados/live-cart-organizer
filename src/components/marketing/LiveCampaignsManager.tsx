@@ -124,6 +124,9 @@ export default function LiveCampaignsManager() {
       return;
     }
     const slug = editing?.slug ?? slugify(form.name);
+    // Live campaigns são convites por natureza (matriz classe×tipo permite
+    // convite_live para quente/morno/frio). Mantemos o produto coerente com a
+    // regra retroativa da migração — sem exigir escolha no builder de lives.
     const payload = {
       name: form.name,
       trigger_phrase: form.trigger_phrase,
@@ -133,6 +136,7 @@ export default function LiveCampaignsManager() {
       jess_enabled: form.jess_enabled ?? true,
       jess_prompt: form.jess_prompt ?? null,
       channel_preference: form.channel_preference ?? "whatsapp",
+      tipo_comunicacao: "convite_live" as const,
       slug,
     };
     if (editing) {

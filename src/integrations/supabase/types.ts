@@ -1811,6 +1811,7 @@ export type Database = {
           template_categoria: string | null
           template_modelo: string | null
           tipo: string
+          tipo_comunicacao: string
           top_body: string
           updated_at: string
           variaveis: Json
@@ -1835,6 +1836,7 @@ export type Database = {
           template_categoria?: string | null
           template_modelo?: string | null
           tipo?: string
+          tipo_comunicacao: string
           top_body?: string
           updated_at?: string
           variaveis?: Json
@@ -1859,6 +1861,7 @@ export type Database = {
           template_categoria?: string | null
           template_modelo?: string | null
           tipo?: string
+          tipo_comunicacao?: string
           top_body?: string
           updated_at?: string
           variaveis?: Json
@@ -8257,6 +8260,7 @@ export type Database = {
           name: string
           shadow_mode: boolean
           slug: string
+          tipo_comunicacao: string
           total_leads: number
           trigger_phrase: string
           updated_at: string
@@ -8274,6 +8278,7 @@ export type Database = {
           name: string
           shadow_mode?: boolean
           slug: string
+          tipo_comunicacao: string
           total_leads?: number
           trigger_phrase: string
           updated_at?: string
@@ -8291,6 +8296,7 @@ export type Database = {
           name?: string
           shadow_mode?: boolean
           slug?: string
+          tipo_comunicacao?: string
           total_leads?: number
           trigger_phrase?: string
           updated_at?: string
@@ -15220,6 +15226,45 @@ export type Database = {
         }
         Relationships: []
       }
+      shadow_cycle_state: {
+        Row: {
+          captured_big_live_at: string | null
+          captured_live_session_id: string | null
+          closed_at: string | null
+          created_at: string
+          id: string
+          min_big_live_viewers: number
+          min_days: number
+          notes: string | null
+          started_at: string
+          updated_at: string
+        }
+        Insert: {
+          captured_big_live_at?: string | null
+          captured_live_session_id?: string | null
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          min_big_live_viewers?: number
+          min_days?: number
+          notes?: string | null
+          started_at?: string
+          updated_at?: string
+        }
+        Update: {
+          captured_big_live_at?: string | null
+          captured_live_session_id?: string | null
+          closed_at?: string | null
+          created_at?: string
+          id?: string
+          min_big_live_viewers?: number
+          min_days?: number
+          notes?: string | null
+          started_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       shipping_rules: {
         Row: {
           carrier_match: string | null
@@ -18403,6 +18448,18 @@ export type Database = {
           },
         ]
       }
+      shadow_report_period: {
+        Row: {
+          enforced_delivered: number | null
+          enforced_inserted: number | null
+          fila: string | null
+          first_send: string | null
+          last_send: string | null
+          shadow_delivered: number | null
+          shadow_inserted: number | null
+        }
+        Relationships: []
+      }
       v_a1_backfill_summary: {
         Row: {
           distinct_parents_in_pos: number | null
@@ -19376,6 +19433,32 @@ export type Database = {
           store_count: number
         }[]
       }
+      list_unack_template_alerts: {
+        Args: never
+        Returns: {
+          acknowledged: boolean
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          cost_delta_pct: number | null
+          cost_new_brl: number | null
+          cost_previous_brl: number | null
+          created_at: string
+          detected_at: string
+          id: string
+          new_category: string
+          previous_category: string | null
+          template_language: string
+          template_name: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "meta_template_category_alerts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       lookup_cashback_by_phones: {
         Args: { p_phones: string[] }
         Returns: {
@@ -19772,6 +19855,8 @@ export type Database = {
         }
         Returns: number
       }
+      shadow_cycle_check_big_live: { Args: never; Returns: Json }
+      shadow_cycle_ready_for_report: { Args: never; Returns: Json }
       shadow_report_period: {
         Args: { p_since?: string; p_until?: string }
         Returns: Json
