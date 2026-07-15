@@ -330,25 +330,41 @@ Deno.serve(async (req) => {
           .filter((s) => s.name && !isVirtualSeller(s.name));
       }
 
-      const rows = (batch as Array<{ cliente_id: string; phone: string; phone_suffix8: string }>).map(
+      // WIRE-IN motor de cotas: reposição passa por enqueue_campanha_envios_guarded
+      // (auto-upsert unified, check_touch_quota + matriz tipos_permitidos, snapshot
+      // categoria/custo, respeita shadow_mode). Envios barrados são visíveis no
+      // retorno (reasons/excluded) e serão auditáveis via shadow_report_period.
+      const candidates = (batch as Array<{ cliente_id: string; phone: string; phone_suffix8: string }>).map(
         (b, idx) => {
           const seller = sellers.length ? sellers[idx % sellers.length] : null;
           return {
-            campanha_id: campanhaId,
-            cliente_id: b.cliente_id,
+            unified_id: b.cliente_id,
             phone: b.phone,
-            phone_suffix8: b.phone_suffix8,
             vendedora_id: seller?.id ?? null,
             vendedora_nome: seller?.name ?? null,
-            status: "pendente",
           };
         },
       );
 
-      const { count, error: insErr } = await sb
-        .from("campanha_envios")
-        .insert(rows, { count: "exact" });
-      if (!insErr) toppedUp += count ?? rows.length;
+      const tipo = (cc.campaign.tipo_comunicacao as string) || "oferta";
+      const { data: gr, error: insErr } = await sb.rpc(
+        "enqueue_campanha_envios_guarded",
+        {
+          p_campanha_id: campanhaId,
+          p_candidates: candidates,
+          p_tipo_comunicacao: tipo,
+          p_template_category: cc.campaign.template_categoria || null,
+        } as any,
+      );
+      if (!insErr && gr) {
+        const obj = gr as any;
+        toppedUp += Number(obj?.inserted ?? 0) + Number(obj?.shadow_inserted ?? 0);
+        if ((obj?.excluded ?? 0) > 0) {
+          console.log(
+            `[carousel] top-up campanha=${campanhaId} inserted=${obj.inserted} shadow=${obj.shadow_inserted} excluded=${obj.excluded} reasons=${JSON.stringify(obj.reasons)} custo=${obj.cost_estimate_brl}`,
+          );
+        }
+      }
     } catch (_e) {
       // Reposição é best-effort; o próximo ciclo do cron tenta de novo.
     }
