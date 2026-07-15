@@ -19277,6 +19277,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      resolve_or_create_unified_customer: {
+        Args: { p_name?: string; p_phone: string }
+        Returns: string
+      }
       resolve_payment_fee: {
         Args: {
           p_acquirer: string
