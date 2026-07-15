@@ -362,6 +362,142 @@ export type Database = {
           },
         ]
       }
+      agent_calendar: {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          custo_estimado_brl: number | null
+          data: string
+          descricao: string | null
+          id: string
+          live_event_id: string | null
+          mes_ref: string
+          publico_alvo_descricao: string | null
+          status: string
+          tipo_acao: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          custo_estimado_brl?: number | null
+          data: string
+          descricao?: string | null
+          id?: string
+          live_event_id?: string | null
+          mes_ref: string
+          publico_alvo_descricao?: string | null
+          status?: string
+          tipo_acao: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          custo_estimado_brl?: number | null
+          data?: string
+          descricao?: string | null
+          id?: string
+          live_event_id?: string | null
+          mes_ref?: string
+          publico_alvo_descricao?: string | null
+          status?: string
+          tipo_acao?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_calendar_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agent_conversations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          last_message_at: string
+          summary: string | null
+          summary_updated_at: string | null
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_message_at?: string
+          summary?: string | null
+          summary_updated_at?: string | null
+          titulo?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          last_message_at?: string
+          summary?: string | null
+          summary_updated_at?: string | null
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      agent_decisions: {
+        Row: {
+          ativo: boolean
+          contexto: Json
+          conversation_id: string | null
+          created_at: string
+          descricao: string
+          id: string
+          motivo: string | null
+          revisitar_apos: string | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          contexto?: Json
+          conversation_id?: string | null
+          created_at?: string
+          descricao: string
+          id?: string
+          motivo?: string | null
+          revisitar_apos?: string | null
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          contexto?: Json
+          conversation_id?: string | null
+          created_at?: string
+          descricao?: string
+          id?: string
+          motivo?: string | null
+          revisitar_apos?: string | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_decisions_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_executions: {
         Row: {
           agent_name: string
@@ -400,6 +536,50 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      agent_messages: {
+        Row: {
+          content: string | null
+          conversation_id: string
+          created_at: string
+          id: string
+          pending_confirmation: Json | null
+          role: string
+          tokens_in: number | null
+          tokens_out: number | null
+          tool_calls: Json | null
+        }
+        Insert: {
+          content?: string | null
+          conversation_id: string
+          created_at?: string
+          id?: string
+          pending_confirmation?: Json | null
+          role: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          tool_calls?: Json | null
+        }
+        Update: {
+          content?: string | null
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          pending_confirmation?: Json | null
+          role?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          tool_calls?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "agent_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       agent_weekly_context: {
         Row: {
@@ -9923,6 +10103,36 @@ export type Database = {
         }
         Relationships: []
       }
+      monthly_goals: {
+        Row: {
+          created_at: string
+          id: string
+          loja: string
+          mes_ref: string
+          meta_faturamento_brl: number
+          observacao: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          loja: string
+          mes_ref: string
+          meta_faturamento_brl: number
+          observacao?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          loja?: string
+          mes_ref?: string
+          meta_faturamento_brl?: number
+          observacao?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       nfe_distribuicao_state: {
         Row: {
           company_id: string
@@ -19002,6 +19212,7 @@ export type Database = {
           public_key: string
         }[]
       }
+      get_agent_memory: { Args: { p_mes_ref?: string }; Returns: Json }
       get_attendant_metrics: {
         Args: { p_end_date?: string; p_start_date?: string; p_user_id?: string }
         Returns: {
@@ -19026,8 +19237,13 @@ export type Database = {
           total: number
         }[]
       }
+      get_campaign_results: {
+        Args: { p_ate: string; p_desde: string }
+        Returns: Json
+      }
       get_checkout_order: { Args: { p_order_id: string }; Returns: Json }
       get_checkout_registration: { Args: { p_order_id: string }; Returns: Json }
+      get_classificacao_summary: { Args: never; Returns: Json }
       get_conversation_counts: {
         Args: never
         Returns: {
@@ -19107,6 +19323,10 @@ export type Database = {
           total_spent: number
           whatsapp: string
         }[]
+      }
+      get_dispatch_pressure: {
+        Args: { p_ate: string; p_desde: string }
+        Returns: Json
       }
       get_dispatchable_scheduled_messages: {
         Args: { p_limit?: number }
@@ -19191,6 +19411,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_leads_by_channel: {
+        Args: { p_ate: string; p_desde: string }
+        Returns: Json
+      }
       get_leads_for_recovery: {
         Args: never
         Returns: {
@@ -19210,6 +19434,7 @@ export type Database = {
           status: string
         }[]
       }
+      get_live_events_summary: { Args: { p_mes_ref: string }; Returns: Json }
       get_meta_capi_vault_state: {
         Args: never
         Returns: {
@@ -19307,6 +19532,13 @@ export type Database = {
       }
       get_reactivation_candidates: { Args: { p_limit?: number }; Returns: Json }
       get_registration_by_cpf: { Args: { p_cpf: string }; Returns: Json }
+      get_rfm_summary: { Args: never; Returns: Json }
+      get_sales_vs_goals: { Args: { p_mes_ref: string }; Returns: Json }
+      get_shadow_report: {
+        Args: { p_ate: string; p_desde: string }
+        Returns: Json
+      }
+      get_stock_by_size: { Args: { p_filtros?: Json }; Returns: Json }
       get_user_allowed_modules: {
         Args: { p_user_id: string }
         Returns: string[]
