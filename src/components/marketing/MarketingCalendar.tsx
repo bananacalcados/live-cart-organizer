@@ -621,6 +621,27 @@ export function MarketingCalendar() {
 
   return (
     <div className="space-y-4">
+      <Tabs defaultValue="estrategista" className="w-full">
+        <TabsList className="bg-white/10 border border-white/10">
+          <TabsTrigger value="estrategista" className="gap-1.5 text-white/70 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <Sparkles className="h-3.5 w-3.5" /> Estrategista
+          </TabsTrigger>
+          <TabsTrigger value="calendario" className="gap-1.5 text-white/70 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+            <CalendarIcon className="h-3.5 w-3.5" /> Calendário
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── ESTRATEGISTA (padrão) ── */}
+        <TabsContent value="estrategista" className="mt-3">
+          <div className="h-[calc(100vh-160px)] rounded-lg border border-white/10 bg-card overflow-hidden">
+            <div className="h-full p-3">
+              <StrategistPanel onDataChanged={fetchData} />
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── CALENDÁRIO (sub-aba) ── */}
+        <TabsContent value="calendario" className="mt-3 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
@@ -638,12 +659,10 @@ export function MarketingCalendar() {
           <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setGoalDialogOpen(true)}>
             <Target className="h-3.5 w-3.5" />Metas do Mês
           </Button>
-          <Button variant="outline" size="sm" className="gap-1 border-violet-400/50 text-violet-300 hover:bg-violet-500/10" onClick={() => setStrategistOpen(true)}>
-            <Sparkles className="h-3.5 w-3.5" />Estrategista
-          </Button>
           <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
         </div>
       </div>
+
 
       {/* Calculator Widget */}
       {calcOpen && (
