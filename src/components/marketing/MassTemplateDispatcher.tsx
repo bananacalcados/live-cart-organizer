@@ -948,6 +948,7 @@ export function MassTemplateDispatcher() {
             city: c.city || undefined,
             state: c.state || undefined,
             email: c.email || undefined,
+            unified_id: c.id || null,
           });
         }
       }
