@@ -3873,7 +3873,10 @@ export type Database = {
           has_dynamic_vars: boolean | null
           header_media_url: string | null
           id: string
+          manual_overrides: Json
           processing_batch: boolean | null
+          provider: string | null
+          quota_check_summary: Json | null
           rendered_message: string | null
           scheduled_at: string | null
           sent_count: number | null
@@ -3883,6 +3886,7 @@ export type Database = {
           template_components: Json | null
           template_language: string | null
           template_name: string
+          tipo_comunicacao: string | null
           total_recipients: number | null
           variables_config: Json | null
           whatsapp_number_id: string | null
@@ -3901,7 +3905,10 @@ export type Database = {
           has_dynamic_vars?: boolean | null
           header_media_url?: string | null
           id?: string
+          manual_overrides?: Json
           processing_batch?: boolean | null
+          provider?: string | null
+          quota_check_summary?: Json | null
           rendered_message?: string | null
           scheduled_at?: string | null
           sent_count?: number | null
@@ -3911,6 +3918,7 @@ export type Database = {
           template_components?: Json | null
           template_language?: string | null
           template_name: string
+          tipo_comunicacao?: string | null
           total_recipients?: number | null
           variables_config?: Json | null
           whatsapp_number_id?: string | null
@@ -3929,7 +3937,10 @@ export type Database = {
           has_dynamic_vars?: boolean | null
           header_media_url?: string | null
           id?: string
+          manual_overrides?: Json
           processing_batch?: boolean | null
+          provider?: string | null
+          quota_check_summary?: Json | null
           rendered_message?: string | null
           scheduled_at?: string | null
           sent_count?: number | null
@@ -3939,6 +3950,7 @@ export type Database = {
           template_components?: Json | null
           template_language?: string | null
           template_name?: string
+          tipo_comunicacao?: string | null
           total_recipients?: number | null
           variables_config?: Json | null
           whatsapp_number_id?: string | null
@@ -3954,10 +3966,12 @@ export type Database = {
           last_error: string | null
           lease_until: string | null
           message_wamid: string | null
+          override_reason: string | null
           phone: string
           recipient_name: string | null
           sent_at: string | null
           status: string | null
+          unified_customer_id: string | null
           worker_id: string | null
         }
         Insert: {
@@ -3968,10 +3982,12 @@ export type Database = {
           last_error?: string | null
           lease_until?: string | null
           message_wamid?: string | null
+          override_reason?: string | null
           phone: string
           recipient_name?: string | null
           sent_at?: string | null
           status?: string | null
+          unified_customer_id?: string | null
           worker_id?: string | null
         }
         Update: {
@@ -3982,10 +3998,12 @@ export type Database = {
           last_error?: string | null
           lease_until?: string | null
           message_wamid?: string | null
+          override_reason?: string | null
           phone?: string
           recipient_name?: string | null
           sent_at?: string | null
           status?: string | null
+          unified_customer_id?: string | null
           worker_id?: string | null
         }
         Relationships: [
@@ -3994,6 +4012,20 @@ export type Database = {
             columns: ["dispatch_id"]
             isOneToOne: false
             referencedRelation: "dispatch_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_recipients_unified_customer_id_fkey"
+            columns: ["unified_customer_id"]
+            isOneToOne: false
+            referencedRelation: "crm_customers_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dispatch_recipients_unified_customer_id_fkey"
+            columns: ["unified_customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers_unified"
             referencedColumns: ["id"]
           },
         ]
@@ -18447,6 +18479,24 @@ export type Database = {
         }[]
       }
       check_order_paid: { Args: { p_order_id: string }; Returns: boolean }
+      check_touch_quota: {
+        Args: {
+          p_candidates: Json
+          p_exclude_dispatch_id?: string
+          p_provider?: string
+          p_tipo_comunicacao: string
+        }
+        Returns: {
+          classificacao: string
+          eligible: boolean
+          last_touch_at: string
+          name: string
+          phone: string
+          reason: string
+          toques_no_mes: number
+          unified_id: string
+        }[]
+      }
       claim_dispatch_jobs: {
         Args: {
           p_batch_size?: number
@@ -18533,6 +18583,26 @@ export type Database = {
           id: string
           message_id: string
         }[]
+      }
+      dispatch_quota_summary: {
+        Args: {
+          p_candidates: Json
+          p_exclude_dispatch_id?: string
+          p_provider?: string
+          p_sample_size?: number
+          p_tipo_comunicacao: string
+        }
+        Returns: Json
+      }
+      enqueue_dispatch_recipients_guarded: {
+        Args: {
+          p_candidates: Json
+          p_dispatch_id: string
+          p_overrides?: Json
+          p_provider?: string
+          p_tipo_comunicacao: string
+        }
+        Returns: Json
       }
       event_inner_dashboard: { Args: { p_event_id: string }; Returns: Json }
       event_lead_cohorts: { Args: { p_event_id: string }; Returns: Json }
