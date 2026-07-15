@@ -768,7 +768,7 @@ serve(async (req) => {
             }
             if (anyOk) {
               sent++;
-              await supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' });
+              await supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone, ...sentSnapshot }, { onConflict: 'flow_id,phone' });
             } else failed++;
           } catch {
             failed++;
