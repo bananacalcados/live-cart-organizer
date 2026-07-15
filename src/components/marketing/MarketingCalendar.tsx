@@ -638,6 +638,9 @@ export function MarketingCalendar() {
           <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setGoalDialogOpen(true)}>
             <Target className="h-3.5 w-3.5" />Metas do Mês
           </Button>
+          <Button variant="outline" size="sm" className="gap-1 border-violet-400/50 text-violet-300 hover:bg-violet-500/10" onClick={() => setStrategistOpen(true)}>
+            <Sparkles className="h-3.5 w-3.5" />Estrategista
+          </Button>
           <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
         </div>
       </div>
