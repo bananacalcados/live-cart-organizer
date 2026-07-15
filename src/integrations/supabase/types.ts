@@ -6841,6 +6841,80 @@ export type Database = {
           },
         ]
       }
+      group_message_exposures: {
+        Row: {
+          created_at: string
+          group_campaign_id: string | null
+          group_campaign_message_id: string | null
+          group_jid: string
+          group_name: string | null
+          id: string
+          member_jid: string | null
+          phone_e164: string | null
+          phone_suffix8: string | null
+          snapshotted_at: string
+          source: string
+          unified_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          group_campaign_id?: string | null
+          group_campaign_message_id?: string | null
+          group_jid: string
+          group_name?: string | null
+          id?: string
+          member_jid?: string | null
+          phone_e164?: string | null
+          phone_suffix8?: string | null
+          snapshotted_at?: string
+          source?: string
+          unified_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          group_campaign_id?: string | null
+          group_campaign_message_id?: string | null
+          group_jid?: string
+          group_name?: string | null
+          id?: string
+          member_jid?: string | null
+          phone_e164?: string | null
+          phone_suffix8?: string | null
+          snapshotted_at?: string
+          source?: string
+          unified_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_message_exposures_group_campaign_id_fkey"
+            columns: ["group_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "group_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_message_exposures_group_campaign_message_id_fkey"
+            columns: ["group_campaign_message_id"]
+            isOneToOne: false
+            referencedRelation: "group_campaign_scheduled_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_message_exposures_unified_id_fkey"
+            columns: ["unified_id"]
+            isOneToOne: false
+            referencedRelation: "crm_customers_v"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_message_exposures_unified_id_fkey"
+            columns: ["unified_id"]
+            isOneToOne: false
+            referencedRelation: "customers_unified"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_message_templates: {
         Row: {
           created_at: string
@@ -18124,6 +18198,21 @@ export type Database = {
       }
     }
     Views: {
+      campaign_shadow_report_v: {
+        Row: {
+          category: string | null
+          cost_total_brl: number | null
+          first_at: string | null
+          in_enforcement: number | null
+          in_shadow: number | null
+          last_at: string | null
+          provider: string | null
+          queue: string | null
+          shadow_mode: boolean | null
+          total_inserted: number | null
+        }
+        Relationships: []
+      }
       crm_customers_v: {
         Row: {
           avg_ticket: number | null
@@ -19683,10 +19772,22 @@ export type Database = {
         }
         Returns: number
       }
+      shadow_report_period: {
+        Args: { p_since?: string; p_until?: string }
+        Returns: Json
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       simulate_classificacao_disparo: { Args: never; Returns: Json }
       simulate_merge_unified_duplicates: { Args: never; Returns: Json }
+      snapshot_group_message_exposure: {
+        Args: {
+          p_group_campaign_id: string
+          p_group_campaign_message_id: string
+          p_group_jid: string
+        }
+        Returns: number
+      }
       sync_lead_pix_data: {
         Args: {
           p_chosen_payment_method: string
