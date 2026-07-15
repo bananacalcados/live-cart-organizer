@@ -791,6 +791,12 @@ serve(async (req) => {
           sent,
           failed,
           skipped,
+          motor: {
+            allowed: motorAllowed,
+            shadow_allowed: motorShadowAllowed,
+            blocked_enforced: motorSkipped,
+            tipo_comunicacao: flowTipoComunicacao,
+          },
           durationMs: Date.now() - startTime,
           done,
         },
