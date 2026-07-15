@@ -1441,6 +1441,10 @@ export function MassTemplateDispatcher() {
   // Save as scheduled or paused (no immediate send)
   const handleSaveScheduledOrPaused = async (mode: 'schedule' | 'paused') => {
     if (!selectedTemplate || !selectedNumber) return;
+    if (!tipoComunicacao) {
+      toast.error("Escolha o tipo de comunicação (obrigatório).");
+      return;
+    }
 
     if (mode === 'schedule' && !scheduledDate) {
       toast.error("Defina a data e hora do agendamento");
