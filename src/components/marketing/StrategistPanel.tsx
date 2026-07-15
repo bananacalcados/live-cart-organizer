@@ -143,21 +143,55 @@ export function StrategistPanel({ onDataChanged }: { onDataChanged?: () => void 
               <div
                 key={c.id}
                 className={`group flex items-start gap-1 p-2 rounded cursor-pointer hover:bg-muted ${activeId === c.id ? "bg-muted" : ""}`}
-                onClick={() => setActiveId(c.id)}
+                onClick={() => renamingId === c.id ? null : setActiveId(c.id)}
               >
                 <MessageSquare className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">{c.titulo}</p>
+                  {renamingId === c.id ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); confirmRename(c.id); }
+                        if (e.key === "Escape") { e.preventDefault(); setRenamingId(null); }
+                      }}
+                      onBlur={() => confirmRename(c.id)}
+                      className="w-full text-xs font-medium bg-background border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  ) : (
+                    <p className="text-xs font-medium truncate">{c.titulo}</p>
+                  )}
                   <p className="text-[10px] text-muted-foreground">
                     {format(new Date(c.last_message_at), "dd/MM HH:mm", { locale: ptBR })}
                   </p>
                 </div>
-                <button
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                  onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
+                {renamingId === c.id ? (
+                  <button
+                    className="text-muted-foreground hover:text-foreground"
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); confirmRename(c.id); }}
+                  >
+                    <Check className="h-3 w-3" />
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground"
+                      onClick={(e) => { e.stopPropagation(); startRename(c); }}
+                      title="Renomear"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                      onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }}
+                      title="Apagar"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
