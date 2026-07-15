@@ -222,16 +222,16 @@ function MessageBubble({ msg }: { msg: Message }) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm ${
+        className={`${isUser ? "max-w-[80%]" : "max-w-full w-full"} rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${
           isUser
             ? "bg-primary text-primary-foreground rounded-br-md"
-            : "bg-muted text-foreground rounded-bl-md"
+            : "bg-transparent text-foreground"
         }`}
       >
         {isUser ? (
           <div className="whitespace-pre-wrap">{msg.content}</div>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1">
+          <div className="prose prose-base dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-headings:mt-4 prose-headings:mb-2">
             <ReactMarkdown>{msg.content}</ReactMarkdown>
           </div>
         )}
