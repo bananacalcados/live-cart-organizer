@@ -463,6 +463,15 @@ serve(async (req) => {
     async function processRecipient(recipient: typeof batch[0]): Promise<void> {
       const firstName = recipient.name.split(' ')[0];
 
+      // Snapshot congelado do custo/categoria/provedor deste destinatário.
+      // Preenchido pelo guard e usado nos upserts em automation_dispatch_sent
+      // para permitir análise agregada (shadow_report_period + agente de custo)
+      // sem parser especial só para esta fila.
+      let snapshotCategory: string | null = null;
+      let snapshotUnitCost: number | null = null;
+      let snapshotProvider: string | null = null;
+      let snapshotShadow: boolean | null = null;
+
       // Guard antes do primeiro envio deste destinatário.
       try {
         const { data: guard } = await supabase.rpc('guard_automation_dispatch', {
@@ -473,6 +482,12 @@ serve(async (req) => {
           p_template_category: 'default',
         } as any);
         const g = guard as any;
+        if (g) {
+          snapshotCategory = g.template_category ?? null;
+          snapshotUnitCost = g.unit_cost_brl != null ? Number(g.unit_cost_brl) : null;
+          snapshotProvider = g.provider ?? 'uazapi';
+          snapshotShadow = g.shadow_mode ?? null;
+        }
         if (g && g.eligible === false) {
           if (g.shadow_mode === false) {
             motorSkipped++;
@@ -488,6 +503,13 @@ serve(async (req) => {
       } catch (e) {
         console.warn('[dispatch] guard error, prosseguindo em fallback', (e as Error).message);
       }
+
+      const sentSnapshot = {
+        template_category_at_send: snapshotCategory,
+        unit_cost_at_send: snapshotUnitCost,
+        provider_at_send: snapshotProvider,
+        shadow_mode: snapshotShadow,
+      };
 
       function replaceVars(text: string): string {
         return text
