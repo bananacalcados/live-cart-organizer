@@ -59,8 +59,11 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
     get_sales_vs_goals: { fn: "get_sales_vs_goals", args: (i) => ({ p_mes_ref: i.mes_ref }) },
     get_events_performance: { fn: "get_events_performance", args: (i) => ({ p_mes_ref: i.mes_ref }) },
     get_rfm_summary: { fn: "get_rfm_summary", args: () => ({}) },
+    get_customer_lookup: { fn: "get_customer_lookup", args: (i) => ({ p_query: i.query }) },
+    get_top_customers: { fn: "get_top_customers", args: (i) => ({ p_segmento: i.segmento ?? null, p_limite: i.limite ?? 20 }) },
     get_stock_by_size: { fn: "get_stock_by_size", args: (i) => ({ p_filtros: { marca: i.marca, categoria: i.categoria, min_estoque: i.min_estoque } }) },
     get_leads_by_channel: { fn: "get_leads_by_channel", args: (i) => ({ p_desde: i.desde, p_ate: i.ate }) },
+    get_leads_lookup: { fn: "get_leads_lookup", args: (i) => ({ p_query: i.query ?? null, p_desde: i.desde ?? null, p_ate: i.ate ?? null }) },
     get_campaign_results: { fn: "get_campaign_results", args: (i) => ({ p_desde: i.desde, p_ate: i.ate }) },
     get_dispatch_pressure: { fn: "get_dispatch_pressure", args: (i) => ({ p_desde: i.desde, p_ate: i.ate }) },
   };
