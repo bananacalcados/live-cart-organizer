@@ -80,20 +80,46 @@ serve(async (req) => {
 
       if (list.length === 0) return json({ error: "Nenhum destinatário elegível" }, 400);
 
-      const rows = list.map((o) => ({
-        campaign_id,
-        contact_id: o.id,
+      // WIRE-IN: enfileira via motor de cotas (guarded). Passa candidatos como
+      // {unified_id?, phone, name, contact_id} — a RPC faz auto-upsert de unified,
+      // aplica check_touch_quota + matriz tipos_permitidos, grava snapshot de
+      // categoria/custo e respeita shadow_mode da campanha.
+      const tipo = (campaign.tipo_comunicacao as string) || "oferta";
+      const candidates = list.map((o) => ({
         phone: o.phone,
-        phone_suffix8: o.phone_suffix8,
-        display_name: o.display_name,
-        status: "pending",
+        name: o.display_name,
+        contact_id: o.id,
       }));
 
-      // Insere em lotes, ignorando duplicados (unique campaign_id+suffix)
-      for (let i = 0; i < rows.length; i += 500) {
-        await supabase
-          .from("mass_dispatch_targets")
-          .upsert(rows.slice(i, i + 500), { onConflict: "campaign_id,phone_suffix8", ignoreDuplicates: true });
+      const guardedResults: any[] = [];
+      const CHUNK = 500;
+      let insertedTotal = 0, shadowTotal = 0, excludedTotal = 0, costTotal = 0;
+      const reasonsAgg: Record<string, number> = {};
+      for (let i = 0; i < candidates.length; i += CHUNK) {
+        const slice = candidates.slice(i, i + CHUNK);
+        const { data: r, error: rErr } = await supabase.rpc(
+          "enqueue_mass_dispatch_targets_guarded",
+          {
+            p_campaign_id: campaign_id,
+            p_candidates: slice,
+            p_tipo_comunicacao: tipo,
+            p_provider: "uazapi",
+            p_template_category: "default",
+          } as any,
+        );
+        if (rErr) {
+          console.error("[vip-orphan-dispatch] guarded enqueue error", rErr);
+          continue;
+        }
+        const obj = r as any;
+        guardedResults.push(obj);
+        insertedTotal += Number(obj?.inserted ?? 0);
+        shadowTotal   += Number(obj?.shadow_inserted ?? 0);
+        excludedTotal += Number(obj?.excluded ?? 0);
+        costTotal     += Number(obj?.cost_estimate_brl ?? 0);
+        for (const [k, v] of Object.entries((obj?.reasons ?? {}) as Record<string, number>)) {
+          reasonsAgg[k] = (reasonsAgg[k] ?? 0) + Number(v ?? 0);
+        }
       }
 
       const { count } = await supabase
@@ -103,10 +129,20 @@ serve(async (req) => {
 
       await supabase
         .from("mass_dispatch_campaigns")
-        .update({ status: "running", total_targets: count || rows.length, started_at: new Date().toISOString() })
+        .update({ status: "running", total_targets: count || 0, started_at: new Date().toISOString() })
         .eq("id", campaign_id);
 
-      return json({ success: true, total_targets: count || rows.length });
+      return json({
+        success: true,
+        total_targets: count || 0,
+        motor: {
+          inserted: insertedTotal,
+          shadow_inserted: shadowTotal,
+          excluded: excludedTotal,
+          reasons: reasonsAgg,
+          cost_estimate_brl: costTotal,
+        },
+      });
     }
 
     // ── PROCESS ───────────────────────────────────────────────────────
