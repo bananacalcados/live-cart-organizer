@@ -445,6 +445,10 @@ export function CampaignBuilder({ editingId, onClose }: Props) {
         rodizio_vendedora: rodizio,
         vendedoras_rodizio: rodizio && vendedorasSel.length ? vendedorasSel : null,
         ativa: startNow ? true : ativa,
+        // Carrosséis Meta são sempre ofertas comerciais (matriz classe×tipo
+        // permite oferta para quente/morno/sem_classificacao). Coerente com o
+        // default retroativo aplicado na migração.
+        tipo_comunicacao: "oferta" as const,
       };
 
       let campId = editingId;
