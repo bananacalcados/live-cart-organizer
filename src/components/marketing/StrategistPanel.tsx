@@ -274,7 +274,7 @@ function MessageBubble({ msg }: { msg: Message }) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`${isUser ? "max-w-[80%]" : "max-w-full w-full"} rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${
+        className={`${isUser ? "max-w-[80%]" : "max-w-full w-full"} rounded-2xl px-5 py-4 text-[16px] leading-[1.85] ${
           isUser
             ? "bg-primary text-primary-foreground rounded-br-md"
             : "bg-transparent text-foreground"
@@ -283,8 +283,18 @@ function MessageBubble({ msg }: { msg: Message }) {
         {isUser ? (
           <div className="whitespace-pre-wrap">{msg.content}</div>
         ) : (
-          <div className="prose prose-base dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-headings:mt-4 prose-headings:mb-2">
-            <ReactMarkdown>{msg.content}</ReactMarkdown>
+          <div className="prose prose-lg dark:prose-invert max-w-none
+            prose-p:my-3 prose-p:leading-[1.85]
+            prose-ul:my-3 prose-ol:my-3 prose-li:my-1.5 prose-li:leading-[1.8]
+            prose-headings:mt-6 prose-headings:mb-3
+            prose-strong:text-foreground
+            prose-table:my-4 prose-table:w-full prose-table:border-collapse prose-table:text-[15px]
+            prose-thead:bg-muted/60
+            prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:font-semibold
+            prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-2 prose-td:align-top
+            prose-tr:even:bg-muted/20
+            prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-[0.9em] prose-code:before:content-none prose-code:after:content-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
           </div>
         )}
 
