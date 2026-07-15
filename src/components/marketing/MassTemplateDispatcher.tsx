@@ -2930,7 +2930,7 @@ export function MassTemplateDispatcher() {
             <Button
               onClick={() => handleSaveScheduledOrPaused(scheduleMode as 'schedule' | 'paused')}
               className="gap-1"
-              disabled={scheduleMode === 'schedule' && !scheduledDate}
+              disabled={(scheduleMode === 'schedule' && !scheduledDate) || !tipoComunicacao}
             >
               {scheduleMode === 'schedule' ? (
                 <><Calendar className="h-4 w-4" />Agendar</>
