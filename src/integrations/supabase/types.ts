@@ -6823,6 +6823,39 @@ export type Database = {
           },
         ]
       }
+      identity_blacklist: {
+        Row: {
+          created_at: string
+          distinct_cpfs: number | null
+          distinct_names: number | null
+          distinct_phones: number | null
+          id: string
+          kind: string
+          reason: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          distinct_cpfs?: number | null
+          distinct_names?: number | null
+          distinct_phones?: number | null
+          id?: string
+          kind: string
+          reason: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          distinct_cpfs?: number | null
+          distinct_names?: number | null
+          distinct_phones?: number | null
+          id?: string
+          kind?: string
+          reason?: string
+          value?: string
+        }
+        Relationships: []
+      }
       instagram_comment_actions: {
         Row: {
           action_type: string
@@ -16471,6 +16504,72 @@ export type Database = {
           },
         ]
       }
+      unified_dedup_snapshots: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          rows_count: number | null
+          snapshot_table: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          rows_count?: number | null
+          snapshot_table: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          rows_count?: number | null
+          snapshot_table?: string
+        }
+        Relationships: []
+      }
+      unified_merge_log: {
+        Row: {
+          absorbed_id: string
+          absorbed_row: Json
+          fks_repointed: Json
+          id: string
+          merge_batch_id: string
+          merged_at: string
+          mirror_sales_detected: number
+          reverted_at: string | null
+          rule: string
+          survivor_id: string
+        }
+        Insert: {
+          absorbed_id: string
+          absorbed_row: Json
+          fks_repointed?: Json
+          id?: string
+          merge_batch_id: string
+          merged_at?: string
+          mirror_sales_detected?: number
+          reverted_at?: string | null
+          rule: string
+          survivor_id: string
+        }
+        Update: {
+          absorbed_id?: string
+          absorbed_row?: Json
+          fks_repointed?: Json
+          id?: string
+          merge_batch_id?: string
+          merged_at?: string
+          mirror_sales_detected?: number
+          reverted_at?: string | null
+          rule?: string
+          survivor_id?: string
+        }
+        Relationships: []
+      }
       user_module_permissions: {
         Row: {
           created_at: string
@@ -18230,6 +18329,10 @@ export type Database = {
           variants_updated: number
         }[]
       }
+      backfill_phones_from_pos_customers: {
+        Args: { p_dry_run?: boolean }
+        Returns: Json
+      }
       backfill_pos_products_from_sales:
         | { Args: { p_commit?: boolean }; Returns: Json }
         | {
@@ -18400,6 +18503,10 @@ export type Database = {
       }
       event_inner_dashboard: { Args: { p_event_id: string }; Returns: Json }
       event_lead_cohorts: { Args: { p_event_id: string }; Returns: Json }
+      execute_merge_unified_duplicates: {
+        Args: { p_dry_run?: boolean; p_rule?: string }
+        Returns: Json
+      }
       extract_base_product_name: { Args: { p_name: string }; Returns: string }
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       extract_phone_suffix8: { Args: { phone_input: string }; Returns: string }
@@ -18782,7 +18889,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      is_cpf_mergeable: { Args: { p_cpf: string }; Returns: boolean }
+      is_email_placeholder: { Args: { p_email: string }; Returns: boolean }
       is_generic_email: { Args: { raw: string }; Returns: boolean }
+      is_phone_generic: { Args: { p_suffix8: string }; Returns: boolean }
       is_sync_in_progress: { Args: never; Returns: boolean }
       is_unified_inventory_enabled: { Args: never; Returns: boolean }
       lead_campaign_counts: {
@@ -18930,6 +19040,7 @@ export type Database = {
         Args: { p_cep: string; p_number: string }
         Returns: string
       }
+      normalize_phone_br: { Args: { p_raw: string }; Returns: string }
       normalize_variant_color_size: {
         Args: { p_color: string; p_master_name?: string; p_size: string }
         Returns: {
@@ -19097,6 +19208,7 @@ export type Database = {
         Args: { p_barcode: string; p_sale_id: string; p_sku: string }
         Returns: undefined
       }
+      revert_merge_batch: { Args: { p_batch_id: string }; Returns: Json }
       sample_variant_normalization: {
         Args: { p_limit?: number }
         Returns: {
@@ -19213,6 +19325,7 @@ export type Database = {
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       simulate_classificacao_disparo: { Args: never; Returns: Json }
+      simulate_merge_unified_duplicates: { Args: never; Returns: Json }
       sync_lead_pix_data: {
         Args: {
           p_chosen_payment_method: string
@@ -19341,6 +19454,7 @@ export type Database = {
         }[]
       }
       wa_status_rank: { Args: { s: string }; Returns: number }
+      zoppy_origin_class: { Args: { p_zoppy_id: string }; Returns: string }
     }
     Enums: {
       ambiente_nfe: "homologacao" | "producao"
