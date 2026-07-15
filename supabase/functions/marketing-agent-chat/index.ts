@@ -53,6 +53,7 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
     get_shadow_report: { fn: "get_shadow_report", args: (i) => ({ p_desde: i.desde, p_ate: i.ate }) },
     get_live_events_summary: { fn: "get_live_events_summary", args: (i) => ({ p_mes_ref: i.mes_ref }) },
     get_sales_vs_goals: { fn: "get_sales_vs_goals", args: (i) => ({ p_mes_ref: i.mes_ref }) },
+    get_events_performance: { fn: "get_events_performance", args: (i) => ({ p_mes_ref: i.mes_ref }) },
     get_rfm_summary: { fn: "get_rfm_summary", args: () => ({}) },
     get_stock_by_size: { fn: "get_stock_by_size", args: (i) => ({ p_filtros: { marca: i.marca, categoria: i.categoria, min_estoque: i.min_estoque } }) },
     get_leads_by_channel: { fn: "get_leads_by_channel", args: (i) => ({ p_desde: i.desde, p_ate: i.ate }) },
