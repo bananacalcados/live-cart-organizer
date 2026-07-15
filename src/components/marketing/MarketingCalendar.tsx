@@ -4,8 +4,10 @@ import { toast } from "sonner";
 import {
   ChevronLeft, ChevronRight, Plus, X, Trash2, Save,
   FileText, Loader2, Target, Calendar as CalendarIcon, Eye, Calculator,
-  ShieldAlert, Edit3, Repeat, RotateCcw
+  ShieldAlert, Edit3, Repeat, RotateCcw, Sparkles
 } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { StrategistPanel } from "./StrategistPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -119,6 +121,8 @@ export function MarketingCalendar() {
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [monthGoal, setMonthGoal] = useState<MonthGoal | null>(null);
   const [loading, setLoading] = useState(false);
+  const [strategistOpen, setStrategistOpen] = useState(false);
+  const [agentActions, setAgentActions] = useState<Array<{ id: string; data: string; tipo_acao: string; titulo: string; custo_estimado_brl: number | null; status: string }>>([]);
 
   // Recurring actions
   const [recurringActions, setRecurringActions] = useState<RecurringAction[]>([]);
@@ -228,7 +232,8 @@ export function MarketingCalendar() {
       const endDay = new Date(year, month + 1, 0).getDate();
       const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
 
-      const [entriesRes, goalsRes, recurringRes] = await Promise.all([
+      const mesRef = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const [entriesRes, goalsRes, recurringRes, agentRes] = await Promise.all([
         supabase.from('marketing_calendar_entries')
           .select('*')
           .or(`and(entry_date.gte.${startDate},entry_date.lte.${endDate}),and(end_date.gte.${startDate},entry_date.lte.${endDate})`)
@@ -242,8 +247,13 @@ export function MarketingCalendar() {
           .select('*')
           .eq('is_active', true)
           .lte('start_date', endDate)
-          .order('created_at', { ascending: true })
+          .order('created_at', { ascending: true }),
+        (supabase as any).from('agent_calendar')
+          .select('id, data, tipo_acao, titulo, custo_estimado_brl, status')
+          .eq('mes_ref', mesRef)
+          .order('data', { ascending: true }),
       ]);
+      setAgentActions((agentRes?.data as any) || []);
 
       if (entriesRes.error) throw entriesRes.error;
       setEntries(entriesRes.data || []);
@@ -628,6 +638,9 @@ export function MarketingCalendar() {
           <Button variant="outline" size="sm" className="gap-1 border-white/20 text-white hover:bg-white/10" onClick={() => setGoalDialogOpen(true)}>
             <Target className="h-3.5 w-3.5" />Metas do Mês
           </Button>
+          <Button variant="outline" size="sm" className="gap-1 border-violet-400/50 text-violet-300 hover:bg-violet-500/10" onClick={() => setStrategistOpen(true)}>
+            <Sparkles className="h-3.5 w-3.5" />Estrategista
+          </Button>
           <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10" onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }}>Hoje</Button>
         </div>
       </div>
@@ -782,6 +795,19 @@ export function MarketingCalendar() {
                       {allItems.length > 3 && (
                         <span className="text-[10px] text-muted-foreground px-1">+{allItems.length - 3} mais</span>
                       )}
+                      {agentActions
+                        .filter((a) => a.data === getDateStr(day))
+                        .slice(0, 2)
+                        .map((a) => (
+                          <div
+                            key={`ag-${a.id}`}
+                            className="text-[10px] leading-tight px-1 py-0.5 rounded truncate flex items-center gap-0.5 border border-violet-500/40 bg-violet-500/10 text-violet-800"
+                            title={`Estrategista · ${a.tipo_acao}${a.custo_estimado_brl ? ` · R$ ${Number(a.custo_estimado_brl).toFixed(2)}` : ''}`}
+                          >
+                            <Sparkles className="h-2 w-2 shrink-0" />
+                            {a.titulo}
+                          </div>
+                        ))}
                     </div>
                   </>
                 )}
@@ -1278,6 +1304,16 @@ export function MarketingCalendar() {
           </div>
         </DialogContent>
       </Dialog>
+      <Sheet open={strategistOpen} onOpenChange={setStrategistOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-4xl p-4 overflow-hidden">
+          <SheetHeader className="mb-3">
+            <SheetTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-violet-400" /> Estrategista de Marketing
+            </SheetTitle>
+          </SheetHeader>
+          <StrategistPanel onDataChanged={fetchData} />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
