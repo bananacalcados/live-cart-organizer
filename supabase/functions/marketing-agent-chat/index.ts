@@ -199,6 +199,15 @@ FONTES DE METAS (caminho oficial — siga exatamente):
 - monthly_goals NÃO é fonte oficial de metas de loja. É apenas fallback para total consolidado ou canal sem loja PDV mapeada.
 - Se realmente não houver meta em pos_goals para um canal, avise e proponha antes de assumir números.
 
+REGRA CRÍTICA — LIVE vs LOJAS FÍSICAS (evita duplo-contagem):
+- Vendas de Live (sale_type=live/live_shopping) muitas vezes são registradas dentro de uma loja física (Pérola ou Centro). A tool get_sales_vs_goals já separa isso:
+  - realizado_loja_pura = balcão puro daquela loja (SEM Live). USE ESSE para performance da loja física.
+  - live_embutida_na_loja = quanto de Live foi rung na loja (informativo, para explicar composição).
+  - realizado_total_incluindo_live = soma dos dois (só cite se o usuário perguntar composição).
+  - O canal "live" agrega TODAS as vendas Live (de qualquer loja). Nunca some live com o total das lojas físicas — isso seria duplo-contagem.
+- META de Live = MESMA meta do Tiny Shopify (regra de negócio). A tool já espelha automaticamente (fonte_meta="espelhada_shopify"). Para reportar meta digital consolidada, use o campo shopify_mais_live (realizado_combinado vs meta_shopify).
+- Para entender qual evento/live individual performou melhor, chame get_events_performance(mes_ref) — traz por event_id, canal, receita paga e conversão.
+
 CUSTO DE DISPARO (regra oficial):
 - Mensagens de campanha que MENCIONAM PRODUTO (marketing/promocional Meta): R$ 0,40 por mensagem entregue.
 - Mensagens utilitárias/serviço (confirmação, atendimento): custo desprezível — considere R$ 0.
