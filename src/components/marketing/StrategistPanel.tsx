@@ -67,6 +67,21 @@ export function StrategistPanel({ onDataChanged }: { onDataChanged?: () => void 
     loadConversations();
   }
 
+  function startRename(c: Conversation) {
+    setRenamingId(c.id);
+    setRenameValue(c.titulo);
+  }
+
+  async function confirmRename(id: string) {
+    const novo = renameValue.trim();
+    if (!novo) { setRenamingId(null); return; }
+    const { error } = await supabase.from("agent_conversations").update({ titulo: novo }).eq("id", id);
+    if (error) toast.error("Não foi possível renomear");
+    else setConversations((prev) => prev.map((c) => c.id === id ? { ...c, titulo: novo } : c));
+    setRenamingId(null);
+  }
+
+
   async function send() {
     if (!input.trim() || sending) return;
     const userMessage = input.trim();
