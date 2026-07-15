@@ -2845,7 +2845,7 @@ export function MassTemplateDispatcher() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSplitDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSaveSplitDispatch} disabled={savingSplit} className="gap-1">
+            <Button onClick={handleSaveSplitDispatch} disabled={savingSplit || !tipoComunicacao} className="gap-1">
               {savingSplit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
               Criar {splitParts.length} disparos
             </Button>
