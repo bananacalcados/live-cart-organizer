@@ -21,7 +21,7 @@ const TOOLS_ANTHROPIC = [
   { name: "get_classificacao_summary", description: "Distribuição de disparos por classificação (marketing/utility/authentication) nos últimos 30 dias.", input_schema: { type: "object", properties: {} } },
   { name: "get_shadow_report", description: "Relatório do ciclo shadow (bloqueios que teriam sido feitos, custo evitado).", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
   { name: "get_live_events_summary", description: "Lives capturadas no mês (viewers, proxy convite_live 5k+, eventos).", input_schema: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } },
-  { name: "get_sales_vs_goals", description: "Vendas por loja vs metas do mês (usa monthly_goals).", input_schema: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } },
+  { name: "get_sales_vs_goals", description: "Vendas por loja vs metas oficiais do PDV no mês (public.pos_goals + public.pos_stores; monthly_goals só complementa canais sem meta no PDV).", input_schema: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } },
   { name: "get_rfm_summary", description: "Distribuição de clientes por classe RFM.", input_schema: { type: "object", properties: {} } },
   { name: "get_stock_by_size", description: "Estoque agregado por numeração/marca/categoria.", input_schema: { type: "object", properties: { marca: { type: "string" }, categoria: { type: "string" }, min_estoque: { type: "integer" } } } },
   { name: "get_leads_by_channel", description: "Leads captados por canal no período.", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
@@ -29,7 +29,7 @@ const TOOLS_ANTHROPIC = [
   { name: "get_dispatch_pressure", description: "Pressão de toques por classe RFM e exposição a grupos no período.", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
   { name: "propor_decisao", description: "PROPÕE gravar uma decisão/veto/regra/pendência. Só grava após confirmação explícita do usuário no próximo turn.", input_schema: { type: "object", properties: { tipo: { type: "string", enum: ["decisao", "veto", "regra_aprendida", "pendencia"] }, descricao: { type: "string" }, motivo: { type: "string" }, contexto: { type: "object" } }, required: ["tipo", "descricao"] } },
   { name: "propor_acao_calendario", description: "PROPÕE adicionar ação no calendário. Só grava após confirmação.", input_schema: { type: "object", properties: { mes_ref: { type: "string" }, data: { type: "string", description: "YYYY-MM-DD" }, tipo_acao: { type: "string", enum: ["live_grande", "live_loja", "disparo_semanal", "campanha_estoque", "acao_meta_ads", "outro"] }, titulo: { type: "string" }, descricao: { type: "string" }, publico_alvo_descricao: { type: "string" }, custo_estimado_brl: { type: "number" } }, required: ["mes_ref", "data", "tipo_acao", "titulo"] } },
-  { name: "propor_meta", description: "PROPÕE definir/atualizar meta mensal por loja. Só grava após confirmação.", input_schema: { type: "object", properties: { mes_ref: { type: "string" }, loja: { type: "string", enum: ["perola", "centro", "shopify", "live", "total"] }, meta_faturamento_brl: { type: "number" }, observacao: { type: "string" } }, required: ["mes_ref", "loja", "meta_faturamento_brl"] } },
+  { name: "propor_meta", description: "PROPÕE definir/atualizar meta mensal. Para loja/canal com store no PDV grava em public.pos_goals; total ou canal sem store cai em monthly_goals. Só grava após confirmação.", input_schema: { type: "object", properties: { mes_ref: { type: "string" }, loja: { type: "string", enum: ["perola", "centro", "shopify", "live", "total"] }, meta_faturamento_brl: { type: "number" }, observacao: { type: "string" } }, required: ["mes_ref", "loja", "meta_faturamento_brl"] } },
 ];
 
 const TOOLS_OPENAI = TOOLS_ANTHROPIC.map((t) => ({
@@ -90,15 +90,79 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
     return error ? { error: error.message } : { ok: true, id: data.id };
   }
   if (kind === "propor_meta") {
+    const monthBounds = getMonthBounds(payload.mes_ref);
+    const store = await resolveStoreForGoal(supabase, payload.loja);
+
+    // Fonte oficial: metas de loja/canal vivem no PDV (pos_goals).
+    if (store && payload.loja !== "total") {
+      await supabase
+        .from("pos_goals")
+        .update({ is_active: false })
+        .eq("store_id", store.id)
+        .eq("goal_type", "revenue")
+        .is("seller_id", null)
+        .eq("period", "custom")
+        .lte("period_start", monthBounds.end)
+        .gte("period_end", monthBounds.start);
+
+      const { data, error } = await supabase.from("pos_goals").insert({
+        store_id: store.id,
+        seller_id: null,
+        goal_type: "revenue",
+        goal_value: payload.meta_faturamento_brl,
+        period: "custom",
+        period_start: monthBounds.start,
+        period_end: monthBounds.end,
+        is_active: true,
+      }).select().single();
+      return error ? { error: error.message } : { ok: true, id: data.id, fonte: "pos_goals", store: store.name };
+    }
+
+    // Fallback apenas para total consolidado ou canal sem loja cadastrada.
     const { data, error } = await supabase.from("monthly_goals").upsert({
       mes_ref: payload.mes_ref,
       loja: payload.loja,
       meta_faturamento_brl: payload.meta_faturamento_brl,
-      observacao: payload.observacao ?? null,
+      observacao: payload.observacao ?? "Fallback: canal sem loja PDV mapeada",
     }, { onConflict: "mes_ref,loja" }).select().single();
-    return error ? { error: error.message } : { ok: true, id: data.id };
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "monthly_goals" };
   }
   return { error: `kind desconhecido: ${kind}` };
+}
+
+function getMonthBounds(mesRef: string): { start: string; end: string } {
+  const [year, month] = mesRef.split("-").map(Number);
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const endDate = new Date(Date.UTC(year, month, 0));
+  const end = endDate.toISOString().slice(0, 10);
+  return { start, end };
+}
+
+function normalizeStoreName(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+async function resolveStoreForGoal(supabase: any, loja: string): Promise<{ id: string; name: string } | null> {
+  if (loja === "total") return null;
+  const { data } = await supabase
+    .from("pos_stores")
+    .select("id, name")
+    .eq("is_active", true)
+    .eq("is_simulation", false)
+    .order("name");
+
+  const stores = (data || []) as Array<{ id: string; name: string }>;
+  const matches: Record<string, (name: string) => boolean> = {
+    perola: (name) => name.includes("perola"),
+    centro: (name) => name.includes("centro") && !name.includes("site"),
+    shopify: (name) => name.includes("shopify"),
+    live: (name) => name.includes("live"),
+  };
+  const predicate = matches[loja];
+  return stores.find((s) => predicate?.(normalizeStoreName(s.name))) || null;
 }
 
 function buildSystemPrompt(): string {
@@ -125,10 +189,13 @@ O QUE VOCÊ PODE FAZER:
 - Se o usuário mudar de assunto sem confirmar, a proposta expira. NÃO grave retroativamente.
 - Quando houver múltiplas propostas em aberto, pergunte QUAL o "ok" cobre.
 
-FONTES DE METAS (pos_goals do PDV é a fonte oficial):
-- pos_goals cobre metas MENSAIS por LOJA (store_id não nulo, seller_id nulo) E metas por VENDEDORA (seller_id não nulo). Sempre considere as duas dimensões antes de dizer "não há meta".
-- get_sales_vs_goals une metas de loja do PDV com overrides manuais em monthly_goals. Se ainda assim uma loja aparecer com meta = 0, verifique se existe meta por vendedora agregada antes de afirmar ausência.
-- Se realmente não houver meta, avise e proponha antes de assumir números.
+FONTES DE METAS (caminho oficial — siga exatamente):
+- Metas oficiais vêm de public.pos_goals (PDV) ligadas por store_id em public.pos_stores.
+- Caminho de leitura: get_agent_memory(${mesRef}) e get_sales_vs_goals(${mesRef}) → ambos leem pos_goals + pos_stores.
+- pos_goals cobre metas MENSAIS/CUSTOM por LOJA (store_id não nulo, seller_id nulo) E metas por VENDEDORA (seller_id não nulo). Sempre considere as duas dimensões antes de dizer "não há meta".
+- Para julho/2026 já existem metas PDV: Tiny Shopify R$ 60.000, Loja Centro R$ 40.000, Loja Perola R$ 95.000. Se a tool divergir disso, trate como erro técnico e cite o caminho pos_goals.
+- monthly_goals NÃO é fonte oficial de metas de loja. É apenas fallback para total consolidado ou canal sem loja PDV mapeada.
+- Se realmente não houver meta em pos_goals para um canal, avise e proponha antes de assumir números.
 
 CUSTO DE DISPARO (regra oficial):
 - Mensagens de campanha que MENCIONAM PRODUTO (marketing/promocional Meta): R$ 0,40 por mensagem entregue.
