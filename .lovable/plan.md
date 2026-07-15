@@ -1,112 +1,51 @@
-# Botões + Mídias na Mensagem Inicial do Instagram (Evento)
+# Plano: Eventos "site" → PDV direto + Renomear "Tiny Shopify" → "Site/Live"
 
-Adicionar, no bloco "Mensagem inicial via Instagram Direct" do wizard de evento, a possibilidade de anexar **botões clicáveis** (link ou automação) e fazer **upload de mídia** (vídeo/imagem/áudio/arquivo) que será enviada quando o cliente clicar em botões de automação. Nada da estrutura atual é alterado — a feature é **aditiva** e opt-in por bloco.
+## Objetivo
+Eliminar o gargalo em que eventos de canal `site` só viram receita no PDV quando alguém aperta "Criar na Shopify". Passar a rotear **automaticamente** todo pedido pago de evento `site` para `pos_sales` da loja Site/Live como `sale_type='live'`, aparecendo no **Faturamento Live** da loja. E renomear a loja em todo o sistema.
 
-## O que muda para o usuário
+---
 
-Dentro de cada bloco da "Mensagem inicial via Instagram Direct" a vendedora passa a poder:
+## Etapa 1 — Roteamento automático de eventos `site` para o PDV
 
-1. **Adicionar botões** (até 3 por bloco — limite da Instagram Messaging API):
-   - **Botão do tipo Link** → escreve o rótulo (ex.: "Abrir meu carrinho") e escolhe uma **variável de link** já existente (`{checkout_link}`) **ou** cola uma URL fixa.
-   - **Botão do tipo Automação** → escreve o rótulo (ex.: "Como finalizar minha compra") e escolhe uma **automação** cadastrada no próprio evento (ver item 2).
+**Migration (ajuste do trigger `trg_route_paid_event_order_to_pos`):**
+- Remover a condição que ignora `channel = 'site'`.
+- Para eventos `site` sem `default_store_id`, forçar `store_id = '2bd2c08d-321c-47ee-98a9-e27e936818ab'` (Site/Live).
+- Chamar `event-order-route-to-pos` também para esses casos → grava `pos_sale` com `sale_type='live'`, `revenue_attribution='store'`, `status='paid'` quando pago.
 
-2. **Cadastrar Automações do Evento** (nova sub-seção logo abaixo da mensagem inicial):
-   - Nome interno da automação (ex.: `como_finalizar`).
-   - Texto opcional que acompanha a resposta.
-   - Upload de **1 mídia** (vídeo, imagem, áudio ou arquivo) — usa o bucket de storage já usado pelos eventos.
-   - Quando o cliente clicar no botão vinculado, o backend envia via Instagram DM o texto + a mídia.
+**Ajuste em `event-order-route-to-pos/index.ts`:**
+- Aceitar eventos `site`: se `channel='site'` e não há `default_store_id`, usar o UUID da Site/Live e `seller_id = null` (sem vendedora de balcão para online).
+- Manter mesma lógica de resolução de `pos_customer`, itens e address.
 
-## Arquitetura (sem quebrar nada)
+## Etapa 2 — Corrigir dupla contagem em `get_sales_vs_goals`
 
-### 1. Schema — 2 colunas novas na tabela `events`
+Migration atualizando a CTE que soma vendas da loja **Site/Live**:
+- Excluir `sale_type IN ('live','live_shopping')` do `realizado_loja_pura` da Site/Live (mesma regra já aplicada em Pérola/Centro).
+- `shopify_mais_live` continua somando Shopify puro + total Live (agora incluindo eventos `site` roteados).
 
-Migration aditiva, sem tocar em colunas existentes:
+## Etapa 3 — Renomear loja "Tiny Shopify" → "Site/Live"
 
-- `ig_initial_message_buttons jsonb default '[]'::jsonb`
-  Guarda, por bloco da mensagem inicial, os botões daquele bloco.
-  Formato:
-  ```json
-  [
-    { "blockIndex": 0, "buttons": [
-      { "id": "b1", "type": "url",       "title": "Abrir meu carrinho",
-        "urlToken": "{checkout_link}" },
-      { "id": "b2", "type": "automation","title": "Como finalizar compra",
-        "automationId": "auto_como_finalizar" }
-    ]}
-  ]
-  ```
-- `ig_automations jsonb default '[]'::jsonb`
-  Catálogo de automações do evento:
-  ```json
-  [{
-    "id": "auto_como_finalizar",
-    "label": "Como finalizar compra",
-    "text": "Olha só, é super rápido:",
-    "media": { "kind": "video", "url": "https://.../video.mp4", "mimeType": "video/mp4" }
-  }]
-  ```
+**Migration data:**
+```sql
+UPDATE pos_stores SET name = 'Site/Live' WHERE id = '2bd2c08d-...';
+```
 
-Sem RLS nova (herda a de `events`). Sem GRANT extra.
+**Frontend:** procurar strings hardcoded "Tiny Shopify" e trocar por "Site/Live" (labels de UI apenas — UUIDs permanecem intocados). Arquivos identificados: componentes de dashboard, expedição, trocas, metas, estrategista. Todos consomem `pos_stores.name` via query em sua maioria, então o UPDATE já resolve; ajustes de string ficam só onde o nome está literal no código.
 
-### 2. Storage
+**`concierge-respond`:** não será alterado (usuário confirmou que não é mais usado).
 
-Reaproveita o bucket já existente usado por eventos (ex.: `event-assets` ou o bucket de mídia do chat) — se não existir um adequado, cria bucket público `event-ig-automations` na mesma migration com as políticas mínimas.
+## Etapa 4 — Validação
 
-Upload feito no front via cliente Supabase (`.storage.from(...).upload(...)`) direto do editor da automação; salvamos apenas a URL pública em `ig_automations[].media.url`.
-
-### 3. Front-end (mudanças isoladas)
-
-- **`src/components/events/InitialMessageEditor.tsx`**
-  - Adiciona, dentro de cada bloco, uma linha "Botões (opcional)" com botão "+ Adicionar botão" (até 3).
-  - Cada botão tem: `type` (url | automation), `title`, e o campo dependente (URL/variável ou seletor de automação).
-  - Recebe/emite props novas: `buttons`, `onChangeButtons`, `automations` (para popular o select do tipo automação).
-
-- **Novo componente `src/components/events/IgAutomationsManager.tsx`**
-  - Lista/CRUD das automações do evento (label, texto, upload de mídia).
-  - Renderizado no `EventSetupWizard.tsx` logo abaixo do `InitialMessageEditor`.
-
-- **`src/components/events/EventSetupWizard.tsx` e `src/pages/Events.tsx`**
-  - Novos estados `igButtons` e `igAutomations`, hidratados/salvos junto com os demais campos (`initial_message_*`). Zero mudança nos fluxos atuais.
-
-- **`src/integrations/supabase/types.ts`**
-  - Regenerar tipos após a migration (as duas colunas novas em `events`).
-
-### 4. Backend — `supabase/functions/livete-start-order/index.ts`
-
-Alteração cirúrgica dentro do bloco `dispatchInstagram`, sem tocar em WhatsApp:
-
-1. Após enviar o texto de um bloco (`rendered[i]`), consulta `ig_initial_message_buttons` para aquele `blockIndex`.
-2. Se houver botões, chama uma **nova edge function** `instagram-dm-send-buttons` que usa o **Instagram Messaging API — Generic Template** (`attachment.type=template`, `payload.template_type=generic`) com até 3 `buttons` do tipo `web_url` (link) ou `postback` (automação).
-   - Payload `payload` idêntico ao já usado em `meta-messenger-send/index.ts` (mesmo token/roteamento de instância via `resolveIgAccountByNumberId`).
-   - Se o cliente já respondeu (janela 24h aberta), a IG aceita o template; se estiver fora da janela, o send falha e caímos no fallback atual (WA), sem quebrar.
-
-3. Nova edge function **`instagram-dm-automation-run`** (webhook target):
-   - Chamada pelo `instagram-webhook` existente quando recebe um `postback.payload` no formato `auto:<automationId>:<eventId>`.
-   - Carrega `ig_automations` do evento, pega a automação pelo id, envia via `meta-messenger-send`:
-     - Texto (se houver).
-     - Mídia (usa o `type` correto: `image` / `video` / `audio` / `file` já suportado por `meta-messenger-send`).
-
-4. `supabase/functions/instagram-webhook/index.ts` — adiciona **um único branch** que detecta `messaging[].postback` com `payload` prefixado `auto:` e invoca a nova função. Nenhum comportamento existente é removido.
-
-### 5. Segurança / limites
-
-- Máx. 3 botões por bloco (limite da API).
-- Título do botão ≤ 20 chars (limite IG) — validação no editor.
-- Upload de mídia com tamanho compatível com IG DM (vídeo ≤ 25 MB, áudio ≤ 25 MB, imagem ≤ 8 MB, arquivo ≤ 25 MB) — validação no `IgAutomationsManager`.
-- Postback payload assinado internamente (`auto:<id>:<eventId>`) e sempre validado contra `ig_automations` do evento antes de disparar.
-
-## Ordem de implementação
-
-1. Migration `events` (+2 colunas jsonb) e bucket, se necessário.
-2. `IgAutomationsManager.tsx` + wiring no wizard + persistência.
-3. Extensão do `InitialMessageEditor.tsx` com botões por bloco.
-4. Edge function `instagram-dm-send-buttons` (generic template + botões).
-5. Extensão do `livete-start-order` para disparar os botões após cada bloco.
-6. Edge function `instagram-dm-automation-run` + branch no `instagram-webhook`.
-7. Teste ponta-a-ponta em um evento de sandbox (comentário → DM inicial + botões → clique postback → mídia enviada).
+- Criar um pedido pago fictício em um evento `site` de teste → conferir que aparece no Dashboard Geral do PDV, aba **Faturamento Live** da Site/Live.
+- Rodar `get_sales_vs_goals` no mês corrente → conferir que `shopify_mais_live` não duplica e que `realizado_loja_pura` da Site/Live continua só com online "puro" (não-live).
+- Verificar `EventsDashboard` intacto (não muda cálculo por evento).
 
 ## O que NÃO muda
+- Estoque (fica pra próxima conversa, conforme pedido).
+- `pos_sales`, `orders`, `events`, `pos_goals` — sem DDL.
+- Webhook Shopify, expedição, trocas, fiscal — só recebem mais dados, sem mudança de comportamento.
+- Módulo Eventos e `get_events_performance` — intactos.
 
-- Fluxo do WhatsApp / template Meta permanece igual.
-- Envio atual de blocos de texto no IG continua funcionando mesmo se `ig_initial_message_buttons` estiver vazio.
-- Nenhuma coluna, edge function ou componente existente é removido/renomeado.
+## Detalhes técnicos
+- 1 migration: trigger + `get_sales_vs_goals` + UPDATE do nome da loja.
+- 1 edge function editada: `event-order-route-to-pos`.
+- Ajustes de strings "Tiny Shopify" → "Site/Live" em componentes que têm o texto literal (varredura via ripgrep antes de editar).
