@@ -154,55 +154,60 @@ export function StrategistPanel({ onDataChanged }: { onDataChanged?: () => void 
           <Badge variant="outline" className="text-[10px] ml-auto">leitura + memória · confirmação em 2 passos</Badge>
         </div>
 
-        <ScrollArea className="flex-1 p-4">
-          {messages.length === 0 && !sending && (
-            <div className="text-center py-10 text-muted-foreground text-sm">
-              <Sparkles className="h-8 w-8 mx-auto mb-3 text-violet-400" />
-              <p className="font-medium">Sou seu Estrategista de Marketing.</p>
-              <p className="text-xs mt-2 max-w-md mx-auto">
-                Posso ler métricas reais (vendas, RFM, estoque por numeração, resultados de campanha,
-                pressão de disparo, ciclo shadow) e planejar com você o calendário do mês.
-                Proponho ações — você confirma antes de eu gravar.
-              </p>
-              <div className="flex flex-wrap gap-2 mt-4 justify-center">
-                {[
-                  "Como estamos vs meta neste mês?",
-                  "Onde está o gargalo de estoque agora?",
-                  "Ideia de calendário para a próxima semana",
-                ].map((s) => (
-                  <Button key={s} variant="outline" size="sm" className="text-xs" onClick={() => setInput(s)}>
-                    {s}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {messages.map((m) => (
-              <MessageBubble key={m.id} msg={m} />
-            ))}
-            {toolIndicator && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" /> {toolIndicator}
+        <ScrollArea className="flex-1 px-6 py-8">
+          <div className="max-w-3xl mx-auto w-full">
+            {messages.length === 0 && !sending && (
+              <div className="text-center py-16 text-muted-foreground">
+                <Sparkles className="h-10 w-10 mx-auto mb-4 text-violet-400" />
+                <p className="font-medium text-base">Sou seu Estrategista de Marketing.</p>
+                <p className="text-sm mt-3 max-w-lg mx-auto leading-relaxed">
+                  Posso ler métricas reais (vendas, RFM, estoque por numeração, resultados de campanha,
+                  pressão de disparo, ciclo shadow) e planejar com você o calendário do mês.
+                  Proponho ações — você confirma antes de eu gravar.
+                </p>
+                <div className="flex flex-wrap gap-2 mt-6 justify-center">
+                  {[
+                    "Como estamos vs meta neste mês?",
+                    "Onde está o gargalo de estoque agora?",
+                    "Ideia de calendário para a próxima semana",
+                  ].map((s) => (
+                    <Button key={s} variant="outline" size="sm" className="text-xs" onClick={() => setInput(s)}>
+                      {s}
+                    </Button>
+                  ))}
+                </div>
               </div>
             )}
-            <div ref={scrollRef} />
+
+            <div className="space-y-5">
+              {messages.map((m) => (
+                <MessageBubble key={m.id} msg={m} />
+              ))}
+              {toolIndicator && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" /> {toolIndicator}
+                </div>
+              )}
+              <div ref={scrollRef} />
+            </div>
           </div>
         </ScrollArea>
 
-        <div className="border-t p-3 flex gap-2">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Pergunte, peça análise ou proponha uma ação…"
-            disabled={sending}
-            className="flex-1"
-          />
-          <Button onClick={send} disabled={sending || !input.trim()} size="icon">
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
+        <div className="border-t p-4">
+          <div className="max-w-3xl mx-auto flex gap-2 items-end">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder="Pergunte, peça análise ou proponha uma ação…"
+              disabled={sending}
+              rows={2}
+              className="flex-1 resize-none rounded-xl border border-input bg-background px-4 py-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40 min-h-[56px] max-h-40"
+            />
+            <Button onClick={send} disabled={sending || !input.trim()} size="icon" className="h-11 w-11 shrink-0">
+              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
       </Card>
     </div>
