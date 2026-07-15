@@ -11,6 +11,8 @@ const LIVE_SELLER_BY_STORE: Record<string, string> = {
   "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2": "bec7d0b3-a1fd-4611-a165-6cd49f185a0a",
   "4ade7b44-5043-4ab1-a124-7a6ab5468e29": "559b9848-4e76-4942-9c58-b9987c479111",
 };
+// Loja "Site/Live" (ex-Tiny Shopify) — usada para eventos de canal 'site' sem loja física padrão.
+const SITE_LIVE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
