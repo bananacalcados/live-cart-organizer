@@ -44,7 +44,8 @@ const TOOLS_OPENAI = TOOLS_ANTHROPIC.map((t) => ({
 const READ_TOOLS = new Set([
   "get_agent_memory", "get_classificacao_summary", "get_shadow_report",
   "get_live_events_summary", "get_sales_vs_goals", "get_events_performance", "get_rfm_summary",
-  "get_stock_by_size", "get_leads_by_channel", "get_campaign_results",
+  "get_customer_lookup", "get_top_customers",
+  "get_stock_by_size", "get_leads_by_channel", "get_leads_lookup", "get_campaign_results",
   "get_dispatch_pressure",
 ]);
 const PROPOSAL_TOOLS = new Set(["propor_decisao", "propor_acao_calendario", "propor_meta"]);
