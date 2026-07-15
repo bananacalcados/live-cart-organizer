@@ -679,7 +679,7 @@ serve(async (req) => {
               sent++;
               const messageId = (sendData as any)?.messages?.[0]?.id || null;
               // Fire-and-forget: persist sent marker + chat message + auto-close
-              supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone }, { onConflict: 'flow_id,phone' }).then(() => {});
+              supabase.from('automation_dispatch_sent').upsert({ flow_id: flowId, phone: recipient.phone, ...sentSnapshot }, { onConflict: 'flow_id,phone' }).then(() => {});
               supabase.from('whatsapp_messages').insert({
                 phone: formattedPhone,
                 message: carouselChatPayload?.body || renderedMessage || `[Template: ${templateName}]`,
