@@ -1304,6 +1304,16 @@ export function MarketingCalendar() {
           </div>
         </DialogContent>
       </Dialog>
+      <Sheet open={strategistOpen} onOpenChange={setStrategistOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-4xl p-4 overflow-hidden">
+          <SheetHeader className="mb-3">
+            <SheetTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-violet-400" /> Estrategista de Marketing
+            </SheetTitle>
+          </SheetHeader>
+          <StrategistPanel onDataChanged={fetchData} />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
