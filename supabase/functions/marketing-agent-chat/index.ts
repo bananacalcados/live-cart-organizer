@@ -1,5 +1,5 @@
-// Marketing Agent (Estrategista) — Claude tool use com memória e confirmação em dois passos.
-// Fase 2 · Etapas 2-3. Leitura de RPCs + escrita em agent_decisions/agent_calendar/monthly_goals.
+// Marketing Agent (Estrategista) — Lovable AI Gateway (OpenAI-compat) com tool use,
+// memória e confirmação em dois passos.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -12,23 +12,21 @@ const corsHeaders = {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// ---------- TOOLS ----------
+// ---------- TOOLS (formato OpenAI/Gateway) ----------
 const TOOLS = [
-  // ----- LEITURA -----
-  { name: "get_agent_memory", description: "Carrega decisões ativas, vetos, regras aprendidas, calendário e metas. SEMPRE chame no início da conversa.", input_schema: { type: "object", properties: { mes_ref: { type: "string", description: "YYYY-MM (opcional; sem filtro se omitido)" } } } },
-  { name: "get_classificacao_summary", description: "Distribuição de disparos por classificação (marketing/utility/authentication) nos últimos 30 dias.", input_schema: { type: "object", properties: {} } },
-  { name: "get_shadow_report", description: "Relatório do ciclo shadow (bloqueios que teriam sido feitos, custo evitado).", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
-  { name: "get_live_events_summary", description: "Lives capturadas no mês (viewers, proxy convite_live 5k+, eventos).", input_schema: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } },
-  { name: "get_sales_vs_goals", description: "Vendas por loja vs metas do mês (usa monthly_goals).", input_schema: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } },
-  { name: "get_rfm_summary", description: "Distribuição de clientes por classe RFM.", input_schema: { type: "object", properties: {} } },
-  { name: "get_stock_by_size", description: "Estoque agregado por numeração/marca/categoria. Use filtros para drill-down.", input_schema: { type: "object", properties: { marca: { type: "string" }, categoria: { type: "string" }, min_estoque: { type: "integer" } } } },
-  { name: "get_leads_by_channel", description: "Leads captados por canal no período.", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
-  { name: "get_campaign_results", description: "Envios/custo por dia+categoria+provider nos 4 fluxos (campanha_envios, live_campaign_dispatches, mass_dispatch, automation).", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
-  { name: "get_dispatch_pressure", description: "Pressão de toques por classe RFM e exposição a grupos no período.", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
-  // ----- ESCRITA (dois passos: propõe e aguarda 'confirmar' do usuário) -----
-  { name: "propor_decisao", description: "PROPÕE gravar uma decisão/veto/regra/pendência. Só grava depois que o usuário confirmar EXPLICITAMENTE.", input_schema: { type: "object", properties: { tipo: { type: "string", enum: ["decisao", "veto", "regra_aprendida", "pendencia"] }, descricao: { type: "string" }, motivo: { type: "string" }, contexto: { type: "object" } }, required: ["tipo", "descricao"] } },
-  { name: "propor_acao_calendario", description: "PROPÕE adicionar ação no calendário do estrategista. Só grava após confirmação.", input_schema: { type: "object", properties: { mes_ref: { type: "string" }, data: { type: "string", description: "YYYY-MM-DD" }, tipo_acao: { type: "string", enum: ["live_grande", "live_loja", "disparo_semanal", "campanha_estoque", "acao_meta_ads", "outro"] }, titulo: { type: "string" }, descricao: { type: "string" }, publico_alvo_descricao: { type: "string" }, custo_estimado_brl: { type: "number" } }, required: ["mes_ref", "data", "tipo_acao", "titulo"] } },
-  { name: "propor_meta", description: "PROPÕE definir/atualizar meta mensal por loja. Só grava após confirmação.", input_schema: { type: "object", properties: { mes_ref: { type: "string" }, loja: { type: "string", enum: ["perola", "centro", "shopify", "live", "total"] }, meta_faturamento_brl: { type: "number" }, observacao: { type: "string" } }, required: ["mes_ref", "loja", "meta_faturamento_brl"] } },
+  { type: "function", function: { name: "get_agent_memory", description: "Carrega decisões ativas, vetos, regras aprendidas, calendário e metas. SEMPRE chame no início da conversa.", parameters: { type: "object", properties: { mes_ref: { type: "string", description: "YYYY-MM (opcional)" } } } } },
+  { type: "function", function: { name: "get_classificacao_summary", description: "Distribuição de disparos por classificação (marketing/utility/authentication) nos últimos 30 dias.", parameters: { type: "object", properties: {} } } },
+  { type: "function", function: { name: "get_shadow_report", description: "Relatório do ciclo shadow (bloqueios que teriam sido feitos, custo evitado).", parameters: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } } },
+  { type: "function", function: { name: "get_live_events_summary", description: "Lives capturadas no mês (viewers, proxy convite_live 5k+, eventos).", parameters: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } } },
+  { type: "function", function: { name: "get_sales_vs_goals", description: "Vendas por loja vs metas do mês (usa monthly_goals).", parameters: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } } },
+  { type: "function", function: { name: "get_rfm_summary", description: "Distribuição de clientes por classe RFM.", parameters: { type: "object", properties: {} } } },
+  { type: "function", function: { name: "get_stock_by_size", description: "Estoque agregado por numeração/marca/categoria.", parameters: { type: "object", properties: { marca: { type: "string" }, categoria: { type: "string" }, min_estoque: { type: "integer" } } } } },
+  { type: "function", function: { name: "get_leads_by_channel", description: "Leads captados por canal no período.", parameters: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } } },
+  { type: "function", function: { name: "get_campaign_results", description: "Envios/custo por dia+categoria+provider nos 4 fluxos.", parameters: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } } },
+  { type: "function", function: { name: "get_dispatch_pressure", description: "Pressão de toques por classe RFM e exposição a grupos no período.", parameters: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } } },
+  { type: "function", function: { name: "propor_decisao", description: "PROPÕE gravar uma decisão/veto/regra/pendência. Só grava após confirmação explícita do usuário no próximo turn.", parameters: { type: "object", properties: { tipo: { type: "string", enum: ["decisao", "veto", "regra_aprendida", "pendencia"] }, descricao: { type: "string" }, motivo: { type: "string" }, contexto: { type: "object" } }, required: ["tipo", "descricao"] } } },
+  { type: "function", function: { name: "propor_acao_calendario", description: "PROPÕE adicionar ação no calendário. Só grava após confirmação.", parameters: { type: "object", properties: { mes_ref: { type: "string" }, data: { type: "string", description: "YYYY-MM-DD" }, tipo_acao: { type: "string", enum: ["live_grande", "live_loja", "disparo_semanal", "campanha_estoque", "acao_meta_ads", "outro"] }, titulo: { type: "string" }, descricao: { type: "string" }, publico_alvo_descricao: { type: "string" }, custo_estimado_brl: { type: "number" } }, required: ["mes_ref", "data", "tipo_acao", "titulo"] } } },
+  { type: "function", function: { name: "propor_meta", description: "PROPÕE definir/atualizar meta mensal por loja. Só grava após confirmação.", parameters: { type: "object", properties: { mes_ref: { type: "string" }, loja: { type: "string", enum: ["perola", "centro", "shopify", "live", "total"] }, meta_faturamento_brl: { type: "number" }, observacao: { type: "string" } }, required: ["mes_ref", "loja", "meta_faturamento_brl"] } } },
 ];
 
 const READ_TOOLS = new Set([
@@ -37,10 +35,8 @@ const READ_TOOLS = new Set([
   "get_stock_by_size", "get_leads_by_channel", "get_campaign_results",
   "get_dispatch_pressure",
 ]);
-
 const PROPOSAL_TOOLS = new Set(["propor_decisao", "propor_acao_calendario", "propor_meta"]);
 
-// Executa uma tool de leitura via RPC.
 async function executeReadTool(supabase: any, name: string, input: any): Promise<any> {
   const rpcMap: Record<string, { fn: string; args: (i: any) => any }> = {
     get_agent_memory: { fn: "get_agent_memory", args: (i) => ({ p_mes_ref: i.mes_ref ?? null }) },
@@ -61,7 +57,6 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
   return data;
 }
 
-// Persiste uma proposta confirmada.
 async function commitProposal(supabase: any, kind: string, payload: any, conversationId: string) {
   if (kind === "propor_decisao") {
     const { data, error } = await supabase.from("agent_decisions").insert({
@@ -98,21 +93,28 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
   return { error: `kind desconhecido: ${kind}` };
 }
 
-async function callClaude(apiKey: string, model: string, system: string, messages: any[], tools: any[]) {
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+// Chama o Lovable AI Gateway (formato OpenAI Chat Completions).
+async function callGateway(apiKey: string, model: string, messages: any[], tools: any[]) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const body: any = { model, messages, tools, tool_choice: "auto" };
+    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
-      headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-      body: JSON.stringify({ model, max_tokens: 4096, system, messages, tools }),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "Lovable-API-Key": apiKey,
+      },
+      body: JSON.stringify(body),
     });
     if (res.ok) return await res.json();
     const errText = await res.text();
-    const retryable = res.status === 429 || res.status === 529 || /overloaded|rate.?limit/i.test(errText);
-    console.error(`Claude ${res.status}:`, errText.slice(0, 300));
-    if (retryable && attempt < 2) { await sleep(800); continue; }
-    throw new Error(`Claude ${res.status}: ${errText.slice(0, 200)}`);
+    console.error(`Gateway ${res.status}:`, errText.slice(0, 400));
+    if (res.status === 429) throw new Error("Limite de requisições atingido. Tente novamente em instantes.");
+    if (res.status === 402) throw new Error("Créditos de IA esgotados. Adicione créditos no workspace.");
+    if (res.status >= 500 && attempt < 3) { await sleep(600 * attempt); continue; }
+    throw new Error(`Gateway ${res.status}: ${errText.slice(0, 200)}`);
   }
-  throw new Error("Claude exhausted retries");
+  throw new Error("Gateway exhausted retries");
 }
 
 const SYSTEM_PROMPT = `Você é o "Estrategista de Marketing" da Banana Calçados, dentro do módulo Marketing → Calendário.
@@ -120,23 +122,22 @@ const SYSTEM_PROMPT = `Você é o "Estrategista de Marketing" da Banana Calçado
 QUEM VOCÊ FALA: o dono/gestor. Tom direto, analítico, pt-BR. Discorda com DADOS quando necessário. Nunca elogia por elogiar. Confirma antes de gravar qualquer coisa.
 
 O QUE VOCÊ PODE FAZER:
-- Ler: use as tools get_* para consultar métricas reais (nunca invente números). SEMPRE chame get_agent_memory PRIMEIRO em cada nova conversa para carregar decisões/vetos/calendário.
-- Escrever (somente com confirmação explícita do usuário, em DOIS PASSOS):
+- Ler: use as tools get_* para consultar métricas reais (nunca invente números). SEMPRE chame get_agent_memory PRIMEIRO em cada nova conversa.
+- Escrever (com confirmação em DOIS PASSOS):
   1) Você chama propor_decisao / propor_acao_calendario / propor_meta.
-  2) O usuário responde "ok", "confirma", "grava", "sim, pode gravar" etc. mencionando O ITEM.
+  2) O usuário responde "ok"/"confirma"/"grava" mencionando O ITEM.
   3) Só então a proposta vira real (o sistema faz o commit no próximo turn).
 - Se o usuário mudar de assunto sem confirmar, a proposta expira. NÃO grave retroativamente.
 - Quando houver múltiplas propostas em aberto, pergunte QUAL o "ok" cobre.
 
 RESTRIÇÕES:
-- Você NÃO envia mensagens, NÃO dispara campanhas, NÃO altera estoque. Só planeja e memoriza.
+- Você NÃO envia mensagens, NÃO dispara campanhas, NÃO altera estoque.
 - Sempre cite a fonte (nome da tool) quando apresentar um número.
 - Faça agregações por período; não peça dumps enormes.
 - Se detectar contradição com um veto ou regra ativa: alerte e proponha alternativa.
 
 FORMATO: markdown curto, listas, negritos em números-chave. Sem emojis excessivos.`;
 
-// Detecção grosseira de confirmação em texto do usuário.
 function isConfirmation(text: string): boolean {
   const t = text.toLowerCase().trim();
   return /\b(ok|confirmo|confirma|pode gravar|grava|sim.{0,10}(pode|grava)|aprovado|confirmado|manda ver)\b/.test(t);
@@ -146,8 +147,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const ANTHROPIC_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-    if (!ANTHROPIC_KEY) throw new Error("ANTHROPIC_API_KEY ausente");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY ausente");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -157,12 +158,13 @@ serve(async (req) => {
     const { conversationId: incomingConvId, userMessage } = await req.json();
     if (!userMessage) throw new Error("userMessage obrigatório");
 
-    // Resolve modelo dinâmico (app_settings.agent_model)
+    // Modelo dinâmico (default: gemini-2.5-pro no gateway)
     const { data: modelSetting } = await supabase
       .from("app_settings").select("value").eq("key", "agent_model").maybeSingle();
-    const model = (modelSetting?.value as any)?.model || "claude-sonnet-4-20250514";
+    let model = (modelSetting?.value as any)?.model || "google/gemini-2.5-pro";
+    // Se veio um id Anthropic legado do app_settings, faz fallback silencioso.
+    if (model.startsWith("claude")) model = "google/gemini-2.5-pro";
 
-    // Autor
     const authHeader = req.headers.get("Authorization") ?? "";
     const jwt = authHeader.replace(/^Bearer\s+/i, "");
     let createdBy: string | null = null;
@@ -171,7 +173,6 @@ serve(async (req) => {
       createdBy = u?.user?.id ?? null;
     }
 
-    // Cria conversa se necessário
     let conversationId = incomingConvId;
     if (!conversationId) {
       const titulo = userMessage.slice(0, 80);
@@ -181,12 +182,10 @@ serve(async (req) => {
       conversationId = data.id;
     }
 
-    // Grava mensagem do usuário
     await supabase.from("agent_messages").insert({
       conversation_id: conversationId, role: "user", content: userMessage,
     });
 
-    // Recupera pending_confirmation (última proposta em aberto) e checa confirmação
     const { data: recentMsgs } = await supabase
       .from("agent_messages").select("*")
       .eq("conversation_id", conversationId)
@@ -194,25 +193,22 @@ serve(async (req) => {
 
     const committedThisTurn: any[] = [];
     if (isConfirmation(userMessage) && recentMsgs) {
-      // Pega a proposta mais recente ainda não commitada
       const lastProposal = recentMsgs.find((m: any) => m.pending_confirmation && !m.pending_confirmation.committed);
       if (lastProposal) {
         const p = lastProposal.pending_confirmation;
         const result = await commitProposal(supabase, p.kind, p.payload, conversationId);
         committedThisTurn.push({ kind: p.kind, payload: p.payload, result });
-        // Marca como commitada (idempotência simples)
         await supabase.from("agent_messages").update({
           pending_confirmation: { ...p, committed: true, committed_at: new Date().toISOString() },
         }).eq("id", lastProposal.id);
       }
     }
 
-    // Monta histórico (últimas 20 msgs, cronológica) para o Claude
-    const history = (recentMsgs ?? []).slice().reverse().map((m: any) => ({
-      role: m.role === "tool" ? "user" : m.role,
-      content: m.content ?? "",
-    }));
-    // Injeta info de commit no contexto se houver
+    // Monta mensagens no formato OpenAI. Apenas role user/assistant vindas do banco.
+    const history = (recentMsgs ?? []).slice().reverse()
+      .filter((m: any) => (m.role === "user" || m.role === "assistant") && m.content)
+      .map((m: any) => ({ role: m.role, content: m.content }));
+
     if (committedThisTurn.length > 0) {
       history.push({
         role: "user",
@@ -220,49 +216,48 @@ serve(async (req) => {
       });
     }
 
-    // Loop de tool use — até 8 passos.
+    const messages: any[] = [{ role: "system", content: SYSTEM_PROMPT }, ...history];
+
     let steps = 0;
     let finalText = "";
     const executedTools: any[] = [];
     let pendingProposal: any = null;
-    const claudeMessages: any[] = history.filter((m) => m.content).map((m) => ({ role: m.role, content: m.content }));
 
     while (steps < 8) {
       steps++;
-      const resp = await callClaude(ANTHROPIC_KEY, model, SYSTEM_PROMPT, claudeMessages, TOOLS);
-      const contentBlocks = resp.content || [];
-      const toolUseBlocks = contentBlocks.filter((b: any) => b.type === "tool_use");
-      const textBlocks = contentBlocks.filter((b: any) => b.type === "text");
-      finalText = textBlocks.map((b: any) => b.text).join("\n").trim();
+      const resp = await callGateway(LOVABLE_API_KEY, model, messages, TOOLS);
+      const msg = resp.choices?.[0]?.message;
+      if (!msg) break;
+      const toolCalls = msg.tool_calls || [];
+      finalText = (msg.content || "").trim();
 
-      if (toolUseBlocks.length === 0) break;
+      if (toolCalls.length === 0) break;
 
-      // Assistant turn (com tool_use)
-      claudeMessages.push({ role: "assistant", content: contentBlocks });
+      // Assistant turn com tool_calls
+      messages.push({ role: "assistant", content: msg.content ?? "", tool_calls: toolCalls });
 
-      const toolResults: any[] = [];
-      for (const tb of toolUseBlocks) {
+      for (const tc of toolCalls) {
+        const name = tc.function?.name;
+        let input: any = {};
+        try { input = JSON.parse(tc.function?.arguments || "{}"); } catch { /* ignore */ }
         let result: any;
-        if (READ_TOOLS.has(tb.name)) {
-          result = await executeReadTool(supabase, tb.name, tb.input);
-          executedTools.push({ name: tb.name, input: tb.input });
-        } else if (PROPOSAL_TOOLS.has(tb.name)) {
-          // NÃO commita. Guarda proposta e devolve marcador para o modelo.
-          pendingProposal = { kind: tb.name, payload: tb.input };
-          result = {
-            proposta_registrada: true,
-            aguardando: "confirmação explícita do usuário no próximo turn",
-            resumo: tb.input,
-          };
+        if (READ_TOOLS.has(name)) {
+          result = await executeReadTool(supabase, name, input);
+          executedTools.push({ name, input });
+        } else if (PROPOSAL_TOOLS.has(name)) {
+          pendingProposal = { kind: name, payload: input };
+          result = { proposta_registrada: true, aguardando: "confirmação explícita do usuário no próximo turn", resumo: input };
         } else {
-          result = { error: `Tool desconhecida: ${tb.name}` };
+          result = { error: `Tool desconhecida: ${name}` };
         }
-        toolResults.push({ type: "tool_result", tool_use_id: tb.id, content: JSON.stringify(result) });
+        messages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content: JSON.stringify(result),
+        });
       }
-      claudeMessages.push({ role: "user", content: toolResults });
     }
 
-    // Grava resposta do assistant + proposta pendente
     await supabase.from("agent_messages").insert({
       conversation_id: conversationId,
       role: "assistant",
@@ -271,7 +266,6 @@ serve(async (req) => {
       pending_confirmation: pendingProposal ? { ...pendingProposal, created_at: new Date().toISOString() } : null,
     });
 
-    // Atualiza timestamp da conversa
     await supabase.from("agent_conversations")
       .update({ last_message_at: new Date().toISOString() }).eq("id", conversationId);
 
