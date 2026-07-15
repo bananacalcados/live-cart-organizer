@@ -1158,7 +1158,7 @@ export default function Marketing() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="calendar">📅 Calendário</SelectItem>
+                <SelectItem value="calendar">🧠 Estratégia</SelectItem>
                 <SelectItem value="attribution">📊 Dashboard</SelectItem>
                 <SelectItem value="customers">👥 Clientes RFM</SelectItem>
                 <SelectItem value="templates">📢 Templates Meta</SelectItem>
