@@ -110,9 +110,9 @@ export function StrategistPanel({ onDataChanged }: { onDataChanged?: () => void 
   }
 
   return (
-    <div className="flex h-[calc(100vh-120px)] gap-3">
+    <div className="flex h-full gap-3">
       {/* Sidebar de conversas */}
-      <div className="w-56 shrink-0 flex flex-col gap-2">
+      <div className="w-64 shrink-0 flex flex-col gap-2">
         <Button onClick={newConversation} size="sm" className="gap-1.5">
           <Plus className="h-3.5 w-3.5" /> Nova conversa
         </Button>
