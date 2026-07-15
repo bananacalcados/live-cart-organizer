@@ -21,7 +21,8 @@ const TOOLS_ANTHROPIC = [
   { name: "get_classificacao_summary", description: "Distribuição de disparos por classificação (marketing/utility/authentication) nos últimos 30 dias.", input_schema: { type: "object", properties: {} } },
   { name: "get_shadow_report", description: "Relatório do ciclo shadow (bloqueios que teriam sido feitos, custo evitado).", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
   { name: "get_live_events_summary", description: "Lives capturadas no mês (viewers, proxy convite_live 5k+, eventos).", input_schema: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } },
-  { name: "get_sales_vs_goals", description: "Vendas por loja vs metas oficiais do PDV no mês (public.pos_goals + public.pos_stores; monthly_goals só complementa canais sem meta no PDV).", input_schema: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } },
+  { name: "get_sales_vs_goals", description: "Vendas por loja vs metas oficiais do PDV no mês. Retorna por_loja com realizado_loja_pura (balcão, sem Live), live_embutida_na_loja (quanto de Live foi registrado dentro daquela loja física) e realizado_total_incluindo_live. Também retorna shopify_mais_live (Shopify+Live agregados contra a meta digital).", input_schema: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } },
+  { name: "get_events_performance", description: "Performance por evento do módulo Eventos no mês (id, nome, canal site/pos_perola/pos_centro, pedidos, pagos, receita paga/total, conversão). Use para entender qual live/evento performou melhor.", input_schema: { type: "object", properties: { mes_ref: { type: "string" } }, required: ["mes_ref"] } },
   { name: "get_rfm_summary", description: "Distribuição de clientes por classe RFM.", input_schema: { type: "object", properties: {} } },
   { name: "get_stock_by_size", description: "Estoque agregado por numeração/marca/categoria.", input_schema: { type: "object", properties: { marca: { type: "string" }, categoria: { type: "string" }, min_estoque: { type: "integer" } } } },
   { name: "get_leads_by_channel", description: "Leads captados por canal no período.", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
@@ -39,7 +40,7 @@ const TOOLS_OPENAI = TOOLS_ANTHROPIC.map((t) => ({
 
 const READ_TOOLS = new Set([
   "get_agent_memory", "get_classificacao_summary", "get_shadow_report",
-  "get_live_events_summary", "get_sales_vs_goals", "get_rfm_summary",
+  "get_live_events_summary", "get_sales_vs_goals", "get_events_performance", "get_rfm_summary",
   "get_stock_by_size", "get_leads_by_channel", "get_campaign_results",
   "get_dispatch_pressure",
 ]);
@@ -52,6 +53,7 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
     get_shadow_report: { fn: "get_shadow_report", args: (i) => ({ p_desde: i.desde, p_ate: i.ate }) },
     get_live_events_summary: { fn: "get_live_events_summary", args: (i) => ({ p_mes_ref: i.mes_ref }) },
     get_sales_vs_goals: { fn: "get_sales_vs_goals", args: (i) => ({ p_mes_ref: i.mes_ref }) },
+    get_events_performance: { fn: "get_events_performance", args: (i) => ({ p_mes_ref: i.mes_ref }) },
     get_rfm_summary: { fn: "get_rfm_summary", args: () => ({}) },
     get_stock_by_size: { fn: "get_stock_by_size", args: (i) => ({ p_filtros: { marca: i.marca, categoria: i.categoria, min_estoque: i.min_estoque } }) },
     get_leads_by_channel: { fn: "get_leads_by_channel", args: (i) => ({ p_desde: i.desde, p_ate: i.ate }) },
@@ -196,6 +198,15 @@ FONTES DE METAS (caminho oficial — siga exatamente):
 - Para julho/2026 já existem metas PDV: Tiny Shopify R$ 60.000, Loja Centro R$ 40.000, Loja Perola R$ 95.000. Se a tool divergir disso, trate como erro técnico e cite o caminho pos_goals.
 - monthly_goals NÃO é fonte oficial de metas de loja. É apenas fallback para total consolidado ou canal sem loja PDV mapeada.
 - Se realmente não houver meta em pos_goals para um canal, avise e proponha antes de assumir números.
+
+REGRA CRÍTICA — LIVE vs LOJAS FÍSICAS (evita duplo-contagem):
+- Vendas de Live (sale_type=live/live_shopping) muitas vezes são registradas dentro de uma loja física (Pérola ou Centro). A tool get_sales_vs_goals já separa isso:
+  - realizado_loja_pura = balcão puro daquela loja (SEM Live). USE ESSE para performance da loja física.
+  - live_embutida_na_loja = quanto de Live foi rung na loja (informativo, para explicar composição).
+  - realizado_total_incluindo_live = soma dos dois (só cite se o usuário perguntar composição).
+  - O canal "live" agrega TODAS as vendas Live (de qualquer loja). Nunca some live com o total das lojas físicas — isso seria duplo-contagem.
+- META de Live = MESMA meta do Tiny Shopify (regra de negócio). A tool já espelha automaticamente (fonte_meta="espelhada_shopify"). Para reportar meta digital consolidada, use o campo shopify_mais_live (realizado_combinado vs meta_shopify).
+- Para entender qual evento/live individual performou melhor, chame get_events_performance(mes_ref) — traz por event_id, canal, receita paga e conversão.
 
 CUSTO DE DISPARO (regra oficial):
 - Mensagens de campanha que MENCIONAM PRODUTO (marketing/promocional Meta): R$ 0,40 por mensagem entregue.
