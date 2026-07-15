@@ -195,7 +195,7 @@ FONTES DE METAS (caminho oficial — siga exatamente):
 - Metas oficiais vêm de public.pos_goals (PDV) ligadas por store_id em public.pos_stores.
 - Caminho de leitura: get_agent_memory(${mesRef}) e get_sales_vs_goals(${mesRef}) → ambos leem pos_goals + pos_stores.
 - pos_goals cobre metas MENSAIS/CUSTOM por LOJA (store_id não nulo, seller_id nulo) E metas por VENDEDORA (seller_id não nulo). Sempre considere as duas dimensões antes de dizer "não há meta".
-- Para julho/2026 já existem metas PDV: Tiny Shopify R$ 60.000, Loja Centro R$ 40.000, Loja Perola R$ 95.000. Se a tool divergir disso, trate como erro técnico e cite o caminho pos_goals.
+- Para julho/2026 já existem metas PDV: Site/Live (ex-Tiny Shopify) R$ 60.000, Loja Centro R$ 40.000, Loja Perola R$ 95.000. Se a tool divergir disso, trate como erro técnico e cite o caminho pos_goals.
 - monthly_goals NÃO é fonte oficial de metas de loja. É apenas fallback para total consolidado ou canal sem loja PDV mapeada.
 - Se realmente não houver meta em pos_goals para um canal, avise e proponha antes de assumir números.
 
@@ -205,7 +205,7 @@ REGRA CRÍTICA — LIVE vs LOJAS FÍSICAS (evita duplo-contagem):
   - live_embutida_na_loja = quanto de Live foi rung na loja (informativo, para explicar composição).
   - realizado_total_incluindo_live = soma dos dois (só cite se o usuário perguntar composição).
   - O canal "live" agrega TODAS as vendas Live (de qualquer loja). Nunca some live com o total das lojas físicas — isso seria duplo-contagem.
-- META de Live = MESMA meta do Tiny Shopify (regra de negócio). A tool já espelha automaticamente (fonte_meta="espelhada_shopify"). Para reportar meta digital consolidada, use o campo shopify_mais_live (realizado_combinado vs meta_shopify).
+- META de Live = MESMA meta da loja Site/Live (ex-Tiny Shopify). A tool já espelha automaticamente quando não há meta própria (fonte_meta="espelhada_shopify"). Para reportar meta digital consolidada, use shopify_mais_live (realizado_combinado vs meta). Pedidos de eventos do canal "site" agora são roteados automaticamente para a loja Site/Live como sale_type=live.
 - Para entender qual evento/live individual performou melhor, chame get_events_performance(mes_ref) — traz por event_id, canal, receita paga e conversão.
 
 CUSTO DE DISPARO (regra oficial):

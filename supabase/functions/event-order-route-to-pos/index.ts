@@ -11,6 +11,8 @@ const LIVE_SELLER_BY_STORE: Record<string, string> = {
   "1c08a9d8-fc12-4657-8ecf-d442f0c0e9f2": "bec7d0b3-a1fd-4611-a165-6cd49f185a0a",
   "4ade7b44-5043-4ab1-a124-7a6ab5468e29": "559b9848-4e76-4942-9c58-b9987c479111",
 };
+// Loja "Site/Live" (ex-Tiny Shopify) — usada para eventos de canal 'site' sem loja física padrão.
+const SITE_LIVE_STORE_ID = "2bd2c08d-321c-47ee-98a9-e27e936818ab";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -37,11 +39,16 @@ Deno.serve(async (req) => {
       .eq("id", order.event_id)
       .maybeSingle();
 
-    if (!event?.default_store_id || event.channel === "site") {
-      return new Response(JSON.stringify({ skipped: "not a physical event" }), { headers: corsHeaders });
+    // Aceitar eventos "site" também: rotear para a loja Site/Live (fallback).
+    // Antes rejeitávamos site → agora entra como sale_type='live' em Site/Live.
+    const isSiteChannel = event?.channel === "site";
+    const resolvedStoreId = event?.default_store_id || (isSiteChannel ? SITE_LIVE_STORE_ID : null);
+
+    if (!resolvedStoreId) {
+      return new Response(JSON.stringify({ skipped: "no store to route" }), { headers: corsHeaders });
     }
 
-    const storeId = event.default_store_id as string;
+    const storeId = resolvedStoreId as string;
     const sellerId = LIVE_SELLER_BY_STORE[storeId] || null;
 
     const { data: customer } = await supabase
