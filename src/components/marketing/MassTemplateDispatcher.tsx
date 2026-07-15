@@ -103,7 +103,18 @@ interface Recipient {
   city?: string;
   state?: string;
   email?: string;
+  unified_id?: string | null;
 }
+
+type TipoComunicacao = '' | 'convite_live' | 'oferta' | 'reativacao' | 'lancamento' | 'pesquisa';
+
+const TIPO_COMUNICACAO_OPTIONS: Array<{ value: Exclude<TipoComunicacao,''>; label: string }> = [
+  { value: 'convite_live', label: 'Convite Live' },
+  { value: 'oferta', label: 'Oferta' },
+  { value: 'reativacao', label: 'Reativação' },
+  { value: 'lancamento', label: 'Lançamento' },
+  { value: 'pesquisa', label: 'Pesquisa' },
+];
 
 // Dynamic variable options that pull from recipient data
 const DYNAMIC_VARIABLE_OPTIONS = [
