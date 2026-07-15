@@ -1228,6 +1228,58 @@ export function MassTemplateDispatcher() {
     return alreadySent;
   };
 
+  /**
+   * Wire-in do motor de cotas — única entrada permitida em `dispatch_recipients`.
+   * Chama a RPC SECURITY DEFINER `enqueue_dispatch_recipients_guarded`, que:
+   *  - Auto-cria linha em `customers_unified` para candidatos sem unified_id
+   *    (leads/órfãos entram no motor como `sem_classificacao`).
+   *  - Aplica cota mensal, matriz classe×tipo e min_dias_entre_toques.
+   *  - Grava `quota_check_summary` em `dispatch_history` para auditoria.
+   * Retorna { inserted, overridden, auto_created_unified, summary }.
+   */
+  const enqueueRecipientsGuarded = async (
+    dispatchId: string,
+    phones: string[],
+    recipientMap: Map<string, Recipient>,
+    tipo: TipoComunicacao,
+    provider: string = 'meta_cloud',
+  ): Promise<{ inserted: number; summary: any } | null> => {
+    if (!tipo) {
+      toast.error("Escolha o tipo de comunicação antes de disparar.");
+      return null;
+    }
+    const candidates = phones.map(p => {
+      const r = recipientMap.get(p);
+      return {
+        unified_id: r?.unified_id || null,
+        phone: p,
+        name: r?.name || null,
+      };
+    });
+    // Batches de 1000 para não estourar payload em audiências grandes
+    let totalInserted = 0;
+    let lastSummary: any = null;
+    for (let i = 0; i < candidates.length; i += 1000) {
+      const slice = candidates.slice(i, i + 1000);
+      const { data, error } = await supabase.rpc('enqueue_dispatch_recipients_guarded', {
+        p_dispatch_id: dispatchId,
+        p_candidates: slice as any,
+        p_tipo_comunicacao: tipo,
+        p_provider: provider,
+        p_overrides: [],
+      });
+      if (error) {
+        console.error('enqueue_dispatch_recipients_guarded error:', error);
+        toast.error(`Motor de cota bloqueou: ${error.message}`);
+        throw error;
+      }
+      const res = (data as any) || {};
+      totalInserted += Number(res.inserted || 0);
+      lastSummary = res.summary || lastSummary;
+    }
+    return { inserted: totalInserted, summary: lastSummary };
+  };
+
   // Mass send — background via Edge Function
   const handleMassSend = async () => {
     setConfirmOpen(false);
