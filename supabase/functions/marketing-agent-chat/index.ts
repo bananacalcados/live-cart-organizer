@@ -210,7 +210,7 @@ serve(async (req) => {
     const { data: modelSetting } = await supabase
       .from("app_settings").select("value").eq("key", "agent_model").maybeSingle();
     const cfg: any = modelSetting?.value || {};
-    const anthropicModel = cfg.anthropic_model || (typeof cfg.model === "string" && cfg.model.startsWith("claude") ? cfg.model : "claude-sonnet-4-20250514");
+    const anthropicModel = cfg.anthropic_model || (typeof cfg.model === "string" && cfg.model.startsWith("claude") ? cfg.model : "claude-sonnet-4-5");
     const gatewayModel = cfg.gateway_model || (typeof cfg.model === "string" && !cfg.model.startsWith("claude") ? cfg.model : "google/gemini-2.5-pro");
 
     const authHeader = req.headers.get("Authorization") ?? "";
