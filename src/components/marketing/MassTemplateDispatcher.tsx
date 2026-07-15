@@ -1636,20 +1636,16 @@ export function MassTemplateDispatcher() {
         if (dispErr || !dispatchData) throw dispErr || new Error('Failed to create dispatch');
         const dispatchId = dispatchData.id;
 
-        const recipientRows = slicePhones.map(p => ({
-          dispatch_id: dispatchId,
-          phone: p,
-          recipient_name: recipientMap.get(p)?.name || null,
-          status: 'pending',
-        }));
-        for (let j = 0; j < recipientRows.length; j += 500) {
-          const { error: insErr } = await supabase
-            .from('dispatch_recipients')
-            .upsert(recipientRows.slice(j, j + 500), {
-              onConflict: 'dispatch_id,phone',
-              ignoreDuplicates: true,
-            });
-          if (insErr) throw insErr;
+        const guardResult = await enqueueRecipientsGuarded(
+          dispatchId,
+          slicePhones,
+          recipientMap,
+          tipoComunicacao,
+          'meta_cloud',
+        );
+        if (!guardResult) throw new Error('tipo_comunicacao obrigatório');
+        if (guardResult.inserted === 0) {
+          console.warn(`Parte ${i + 1}: motor bloqueou todos os destinatários — dispatch criado vazio`);
         }
         created++;
       }
