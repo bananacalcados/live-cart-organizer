@@ -18768,12 +18768,46 @@ export type Database = {
         }
         Returns: Json
       }
+      enqueue_campanha_envios_guarded: {
+        Args: {
+          p_campanha_id: string
+          p_candidates: Json
+          p_overrides?: Json
+          p_shadow_mode?: boolean
+          p_template_category?: string
+          p_tipo_comunicacao: string
+        }
+        Returns: Json
+      }
       enqueue_dispatch_recipients_guarded: {
         Args: {
           p_candidates: Json
           p_dispatch_id: string
           p_overrides?: Json
           p_provider?: string
+          p_tipo_comunicacao: string
+        }
+        Returns: Json
+      }
+      enqueue_live_campaign_dispatches_guarded: {
+        Args: {
+          p_campaign_id: string
+          p_candidates: Json
+          p_message_id: string
+          p_provider?: string
+          p_shadow_mode?: boolean
+          p_template_category?: string
+          p_tipo_comunicacao: string
+        }
+        Returns: Json
+      }
+      enqueue_mass_dispatch_targets_guarded: {
+        Args: {
+          p_campaign_id: string
+          p_candidates: Json
+          p_provider?: string
+          p_shadow_mode?: boolean
+          p_template_category?: string
           p_tipo_comunicacao: string
         }
         Returns: Json
@@ -19125,6 +19159,16 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: string[]
       }
+      guard_automation_dispatch: {
+        Args: {
+          p_flow_id: string
+          p_phone: string
+          p_provider?: string
+          p_template_category?: string
+          p_tipo_comunicacao: string
+        }
+        Returns: Json
+      }
       has_module_access: {
         Args: { _module: string; _user_id: string }
         Returns: boolean
@@ -19362,6 +19406,27 @@ export type Database = {
         Returns: undefined
       }
       product_name_key: { Args: { p_name: string }; Returns: string }
+      quota_check_with_snapshot: {
+        Args: {
+          p_candidates: Json
+          p_exclude_dispatch_id?: string
+          p_provider: string
+          p_template_category: string
+          p_tipo_comunicacao: string
+        }
+        Returns: {
+          classificacao: string
+          eligible: boolean
+          name: string
+          phone: string
+          provider: string
+          reason: string
+          template_category: string
+          toques_no_mes: number
+          unified_id: string
+          unit_cost_brl: number
+        }[]
+      }
       recalc_customer_metrics: {
         Args: { p_customer_id: string }
         Returns: undefined
