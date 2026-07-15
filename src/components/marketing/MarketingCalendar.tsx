@@ -6,7 +6,7 @@ import {
   FileText, Loader2, Target, Calendar as CalendarIcon, Eye, Calculator,
   ShieldAlert, Edit3, Repeat, RotateCcw, Sparkles
 } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { StrategistPanel } from "./StrategistPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
