@@ -74,6 +74,7 @@ Deno.serve(async (req) => {
       .from("customers_unified")
       .select("id, name, tags")
       .eq("phone_suffix8", suffix)
+      .is("merged_into_id", null)
       .limit(1);
     const existingCustomer = existingCustomers?.[0] || null;
 

@@ -304,6 +304,7 @@ async function buildContacts(supabase: any, def: any, storeId: string, target: n
     let q = supabase
       .from("customers_unified")
       .select("name, phone_e164, rfm_segment, last_purchase_at, total_orders")
+      .is("merged_into_id", null)
       .not("phone_e164", "is", null)
       .gt("total_orders", 0)
       .order("last_purchase_at", { ascending: true, nullsFirst: false })

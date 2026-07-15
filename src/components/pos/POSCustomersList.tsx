@@ -138,7 +138,8 @@ export function POSCustomersList({ onOpenProfile }: Props) {
         .select(
           "id, name, cpf, email, phone_e164, phone_suffix8, city, state, total_orders, total_spent, avg_ticket, last_purchase_at",
           { count: "exact" },
-        );
+        )
+        .is("merged_into_id", null);
 
       // Search
       const term = search.trim();
