@@ -1284,6 +1284,10 @@ export function MassTemplateDispatcher() {
   const handleMassSend = async () => {
     setConfirmOpen(false);
     if (!selectedTemplate || !selectedNumber) return;
+    if (!tipoComunicacao) {
+      toast.error("Escolha o tipo de comunicação (obrigatório).");
+      return;
+    }
 
     const allPhones = [...selectedPhones];
     if (allPhones.length === 0) {
