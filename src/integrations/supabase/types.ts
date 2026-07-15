@@ -3548,11 +3548,14 @@ export type Database = {
           cep: string | null
           children_age_range: string | null
           city: string | null
+          classificacao_disparo: string | null
+          classificacao_disparo_updated_at: string | null
           complement: string | null
           cpf: string | null
           created_at: string
           customer_code: string | null
           ddd: string | null
+          dispatch_consecutive_ignored: number
           dispatch_ignored_count: number
           dispatch_reacted_count: number
           dispatch_total_count: number
@@ -3620,11 +3623,14 @@ export type Database = {
           cep?: string | null
           children_age_range?: string | null
           city?: string | null
+          classificacao_disparo?: string | null
+          classificacao_disparo_updated_at?: string | null
           complement?: string | null
           cpf?: string | null
           created_at?: string
           customer_code?: string | null
           ddd?: string | null
+          dispatch_consecutive_ignored?: number
           dispatch_ignored_count?: number
           dispatch_reacted_count?: number
           dispatch_total_count?: number
@@ -3692,11 +3698,14 @@ export type Database = {
           cep?: string | null
           children_age_range?: string | null
           city?: string | null
+          classificacao_disparo?: string | null
+          classificacao_disparo_updated_at?: string | null
           complement?: string | null
           cpf?: string | null
           created_at?: string
           customer_code?: string | null
           ddd?: string | null
+          dispatch_consecutive_ignored?: number
           dispatch_ignored_count?: number
           dispatch_reacted_count?: number
           dispatch_total_count?: number
@@ -3985,6 +3994,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      dispatch_touch_limits: {
+        Row: {
+          classificacao: string
+          cota_mensal: number
+          created_at: string
+          observacoes: string | null
+          silencio_threshold_ignorados: number | null
+          tipos_permitidos: string[]
+          updated_at: string
+        }
+        Insert: {
+          classificacao: string
+          cota_mensal?: number
+          created_at?: string
+          observacoes?: string | null
+          silencio_threshold_ignorados?: number | null
+          tipos_permitidos?: string[]
+          updated_at?: string
+        }
+        Update: {
+          classificacao?: string
+          cota_mensal?: number
+          created_at?: string
+          observacoes?: string | null
+          silencio_threshold_ignorados?: number | null
+          tipos_permitidos?: string[]
+          updated_at?: string
+        }
+        Relationships: []
       }
       email_campaigns: {
         Row: {
@@ -19173,6 +19212,7 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      simulate_classificacao_disparo: { Args: never; Returns: Json }
       sync_lead_pix_data: {
         Args: {
           p_chosen_payment_method: string
