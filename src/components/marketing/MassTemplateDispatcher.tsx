@@ -245,6 +245,11 @@ export function MassTemplateDispatcher() {
   const [scheduleMode, setScheduleMode] = useState<'none' | 'schedule' | 'paused'>('none');
   const [scheduledDate, setScheduledDate] = useState("");
   const [campaignName, setCampaignName] = useState("");
+  // Motor de cotas: tipo_comunicacao é OBRIGATÓRIO, sem default pré-selecionado
+  // (a decisão precisa ser consciente — matriz classe×tipo é editável em
+  // dispatch_touch_limits, então quente/morno podem receber "reativacao" no
+  // futuro por decisão de config, não por deploy).
+  const [tipoComunicacao, setTipoComunicacao] = useState<TipoComunicacao>("");
   const [editDispatchId, setEditDispatchId] = useState<string | null>(null);
   // Split dispatch: divide the audience into N disjoint parts, each becoming its
   // own dispatch (same template/variables) so each part can fire at a different
