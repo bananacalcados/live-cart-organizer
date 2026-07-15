@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Send, Sparkles, Plus, Trash2, MessageSquare, CheckCircle2, Clock } from "lucide-react";
+import { Loader2, Send, Sparkles, Plus, Trash2, MessageSquare, CheckCircle2, Clock, Pencil, Check, X } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -31,6 +32,8 @@ export function StrategistPanel({ onDataChanged }: { onDataChanged?: () => void 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [toolIndicator, setToolIndicator] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { loadConversations(); }, []);
@@ -63,6 +66,21 @@ export function StrategistPanel({ onDataChanged }: { onDataChanged?: () => void 
     if (activeId === id) setActiveId(null);
     loadConversations();
   }
+
+  function startRename(c: Conversation) {
+    setRenamingId(c.id);
+    setRenameValue(c.titulo);
+  }
+
+  async function confirmRename(id: string) {
+    const novo = renameValue.trim();
+    if (!novo) { setRenamingId(null); return; }
+    const { error } = await supabase.from("agent_conversations").update({ titulo: novo }).eq("id", id);
+    if (error) toast.error("Não foi possível renomear");
+    else setConversations((prev) => prev.map((c) => c.id === id ? { ...c, titulo: novo } : c));
+    setRenamingId(null);
+  }
+
 
   async function send() {
     if (!input.trim() || sending) return;
@@ -125,21 +143,55 @@ export function StrategistPanel({ onDataChanged }: { onDataChanged?: () => void 
               <div
                 key={c.id}
                 className={`group flex items-start gap-1 p-2 rounded cursor-pointer hover:bg-muted ${activeId === c.id ? "bg-muted" : ""}`}
-                onClick={() => setActiveId(c.id)}
+                onClick={() => renamingId === c.id ? null : setActiveId(c.id)}
               >
                 <MessageSquare className="h-3 w-3 mt-0.5 shrink-0 text-muted-foreground" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium truncate">{c.titulo}</p>
+                  {renamingId === c.id ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") { e.preventDefault(); confirmRename(c.id); }
+                        if (e.key === "Escape") { e.preventDefault(); setRenamingId(null); }
+                      }}
+                      onBlur={() => confirmRename(c.id)}
+                      className="w-full text-xs font-medium bg-background border rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  ) : (
+                    <p className="text-xs font-medium truncate">{c.titulo}</p>
+                  )}
                   <p className="text-[10px] text-muted-foreground">
                     {format(new Date(c.last_message_at), "dd/MM HH:mm", { locale: ptBR })}
                   </p>
                 </div>
-                <button
-                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                  onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
+                {renamingId === c.id ? (
+                  <button
+                    className="text-muted-foreground hover:text-foreground"
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); confirmRename(c.id); }}
+                  >
+                    <Check className="h-3 w-3" />
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground"
+                      onClick={(e) => { e.stopPropagation(); startRename(c); }}
+                      title="Renomear"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                      onClick={(e) => { e.stopPropagation(); deleteConversation(c.id); }}
+                      title="Apagar"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -222,7 +274,7 @@ function MessageBubble({ msg }: { msg: Message }) {
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`${isUser ? "max-w-[80%]" : "max-w-full w-full"} rounded-2xl px-4 py-3 text-[15px] leading-relaxed ${
+        className={`${isUser ? "max-w-[80%]" : "max-w-full w-full"} rounded-2xl px-5 py-4 text-[16px] leading-[1.85] ${
           isUser
             ? "bg-primary text-primary-foreground rounded-br-md"
             : "bg-transparent text-foreground"
@@ -231,8 +283,18 @@ function MessageBubble({ msg }: { msg: Message }) {
         {isUser ? (
           <div className="whitespace-pre-wrap">{msg.content}</div>
         ) : (
-          <div className="prose prose-base dark:prose-invert max-w-none prose-p:my-2 prose-ul:my-2 prose-headings:mt-4 prose-headings:mb-2">
-            <ReactMarkdown>{msg.content}</ReactMarkdown>
+          <div className="prose prose-lg dark:prose-invert max-w-none
+            prose-p:my-3 prose-p:leading-[1.85]
+            prose-ul:my-3 prose-ol:my-3 prose-li:my-1.5 prose-li:leading-[1.8]
+            prose-headings:mt-6 prose-headings:mb-3
+            prose-strong:text-foreground
+            prose-table:my-4 prose-table:w-full prose-table:border-collapse prose-table:text-[15px]
+            prose-thead:bg-muted/60
+            prose-th:border prose-th:border-border prose-th:px-3 prose-th:py-2 prose-th:text-left prose-th:font-semibold
+            prose-td:border prose-td:border-border prose-td:px-3 prose-td:py-2 prose-td:align-top
+            prose-tr:even:bg-muted/20
+            prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-[0.9em] prose-code:before:content-none prose-code:after:content-none">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
           </div>
         )}
 
