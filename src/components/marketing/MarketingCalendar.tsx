@@ -121,6 +121,8 @@ export function MarketingCalendar() {
   const [entries, setEntries] = useState<CalendarEntry[]>([]);
   const [monthGoal, setMonthGoal] = useState<MonthGoal | null>(null);
   const [loading, setLoading] = useState(false);
+  const [strategistOpen, setStrategistOpen] = useState(false);
+  const [agentActions, setAgentActions] = useState<Array<{ id: string; data: string; tipo_acao: string; titulo: string; custo_estimado_brl: number | null; status: string }>>([]);
 
   // Recurring actions
   const [recurringActions, setRecurringActions] = useState<RecurringAction[]>([]);
