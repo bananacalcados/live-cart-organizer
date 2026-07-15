@@ -795,6 +795,19 @@ export function MarketingCalendar() {
                       {allItems.length > 3 && (
                         <span className="text-[10px] text-muted-foreground px-1">+{allItems.length - 3} mais</span>
                       )}
+                      {agentActions
+                        .filter((a) => a.data === getDateStr(day))
+                        .slice(0, 2)
+                        .map((a) => (
+                          <div
+                            key={`ag-${a.id}`}
+                            className="text-[10px] leading-tight px-1 py-0.5 rounded truncate flex items-center gap-0.5 border border-violet-500/40 bg-violet-500/10 text-violet-800"
+                            title={`Estrategista · ${a.tipo_acao}${a.custo_estimado_brl ? ` · R$ ${Number(a.custo_estimado_brl).toFixed(2)}` : ''}`}
+                          >
+                            <Sparkles className="h-2 w-2 shrink-0" />
+                            {a.titulo}
+                          </div>
+                        ))}
                     </div>
                   </>
                 )}
