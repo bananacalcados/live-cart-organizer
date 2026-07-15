@@ -829,22 +829,43 @@ export type Database = {
       }
       automation_dispatch_sent: {
         Row: {
+          blocked_reason: string | null
           flow_id: string
           id: string
           phone: string
+          provider_at_send: string | null
           sent_at: string
+          shadow_mode: boolean
+          status: string
+          template_category_at_send: string | null
+          unified_id: string | null
+          unit_cost_at_send: number | null
         }
         Insert: {
+          blocked_reason?: string | null
           flow_id: string
           id?: string
           phone: string
+          provider_at_send?: string | null
           sent_at?: string
+          shadow_mode?: boolean
+          status?: string
+          template_category_at_send?: string | null
+          unified_id?: string | null
+          unit_cost_at_send?: number | null
         }
         Update: {
+          blocked_reason?: string | null
           flow_id?: string
           id?: string
           phone?: string
+          provider_at_send?: string | null
           sent_at?: string
+          shadow_mode?: boolean
+          status?: string
+          template_category_at_send?: string | null
+          unified_id?: string | null
+          unit_cost_at_send?: number | null
         }
         Relationships: [
           {
@@ -920,6 +941,7 @@ export type Database = {
           is_active: boolean
           jess_campaign_name: string | null
           name: string
+          shadow_mode: boolean
           trigger_config: Json | null
           trigger_type: string
           updated_at: string
@@ -933,6 +955,7 @@ export type Database = {
           is_active?: boolean
           jess_campaign_name?: string | null
           name: string
+          shadow_mode?: boolean
           trigger_config?: Json | null
           trigger_type?: string
           updated_at?: string
@@ -946,6 +969,7 @@ export type Database = {
           is_active?: boolean
           jess_campaign_name?: string | null
           name?: string
+          shadow_mode?: boolean
           trigger_config?: Json | null
           trigger_type?: string
           updated_at?: string
@@ -1681,9 +1705,13 @@ export type Database = {
           message_wamid: string | null
           phone: string | null
           phone_suffix8: string | null
+          provider_at_send: string | null
           proxima_tentativa: string | null
+          shadow_mode: boolean
           status: string
+          template_category_at_send: string | null
           tentativas: number
+          unit_cost_at_send: number | null
           updated_at: string
           vendedora_id: string | null
           vendedora_nome: string | null
@@ -1698,9 +1726,13 @@ export type Database = {
           message_wamid?: string | null
           phone?: string | null
           phone_suffix8?: string | null
+          provider_at_send?: string | null
           proxima_tentativa?: string | null
+          shadow_mode?: boolean
           status?: string
+          template_category_at_send?: string | null
           tentativas?: number
+          unit_cost_at_send?: number | null
           updated_at?: string
           vendedora_id?: string | null
           vendedora_nome?: string | null
@@ -1715,9 +1747,13 @@ export type Database = {
           message_wamid?: string | null
           phone?: string | null
           phone_suffix8?: string | null
+          provider_at_send?: string | null
           proxima_tentativa?: string | null
+          shadow_mode?: boolean
           status?: string
+          template_category_at_send?: string | null
           tentativas?: number
+          unit_cost_at_send?: number | null
           updated_at?: string
           vendedora_id?: string | null
           vendedora_nome?: string | null
@@ -1771,6 +1807,8 @@ export type Database = {
           publico_id: string | null
           qtd_por_dia: number
           rodizio_vendedora: boolean
+          shadow_mode: boolean
+          template_categoria: string | null
           template_modelo: string | null
           tipo: string
           top_body: string
@@ -1793,6 +1831,8 @@ export type Database = {
           publico_id?: string | null
           qtd_por_dia?: number
           rodizio_vendedora?: boolean
+          shadow_mode?: boolean
+          template_categoria?: string | null
           template_modelo?: string | null
           tipo?: string
           top_body?: string
@@ -1815,6 +1855,8 @@ export type Database = {
           publico_id?: string | null
           qtd_por_dia?: number
           rodizio_vendedora?: boolean
+          shadow_mode?: boolean
+          template_categoria?: string | null
           template_modelo?: string | null
           tipo?: string
           top_body?: string
@@ -3876,18 +3918,22 @@ export type Database = {
           manual_overrides: Json
           processing_batch: boolean | null
           provider: string | null
+          provider_at_send: string | null
           quota_check_summary: Json | null
           rendered_message: string | null
           scheduled_at: string | null
           sent_count: number | null
+          shadow_mode: boolean
           started_at: string
           status: string | null
           template_category: string | null
+          template_category_at_send: string | null
           template_components: Json | null
           template_language: string | null
           template_name: string
           tipo_comunicacao: string | null
           total_recipients: number | null
+          unit_cost_at_send: number | null
           variables_config: Json | null
           whatsapp_number_id: string | null
         }
@@ -3908,18 +3954,22 @@ export type Database = {
           manual_overrides?: Json
           processing_batch?: boolean | null
           provider?: string | null
+          provider_at_send?: string | null
           quota_check_summary?: Json | null
           rendered_message?: string | null
           scheduled_at?: string | null
           sent_count?: number | null
+          shadow_mode?: boolean
           started_at?: string
           status?: string | null
           template_category?: string | null
+          template_category_at_send?: string | null
           template_components?: Json | null
           template_language?: string | null
           template_name: string
           tipo_comunicacao?: string | null
           total_recipients?: number | null
+          unit_cost_at_send?: number | null
           variables_config?: Json | null
           whatsapp_number_id?: string | null
         }
@@ -3940,18 +3990,22 @@ export type Database = {
           manual_overrides?: Json
           processing_batch?: boolean | null
           provider?: string | null
+          provider_at_send?: string | null
           quota_check_summary?: Json | null
           rendered_message?: string | null
           scheduled_at?: string | null
           sent_count?: number | null
+          shadow_mode?: boolean
           started_at?: string
           status?: string | null
           template_category?: string | null
+          template_category_at_send?: string | null
           template_components?: Json | null
           template_language?: string | null
           template_name?: string
           tipo_comunicacao?: string | null
           total_recipients?: number | null
+          unit_cost_at_send?: number | null
           variables_config?: Json | null
           whatsapp_number_id?: string | null
         }
@@ -3968,10 +4022,14 @@ export type Database = {
           message_wamid: string | null
           override_reason: string | null
           phone: string
+          provider_at_send: string | null
           recipient_name: string | null
           sent_at: string | null
+          shadow_mode: boolean
           status: string | null
+          template_category_at_send: string | null
           unified_customer_id: string | null
+          unit_cost_at_send: number | null
           worker_id: string | null
         }
         Insert: {
@@ -3984,10 +4042,14 @@ export type Database = {
           message_wamid?: string | null
           override_reason?: string | null
           phone: string
+          provider_at_send?: string | null
           recipient_name?: string | null
           sent_at?: string | null
+          shadow_mode?: boolean
           status?: string | null
+          template_category_at_send?: string | null
           unified_customer_id?: string | null
+          unit_cost_at_send?: number | null
           worker_id?: string | null
         }
         Update: {
@@ -4000,10 +4062,14 @@ export type Database = {
           message_wamid?: string | null
           override_reason?: string | null
           phone?: string
+          provider_at_send?: string | null
           recipient_name?: string | null
           sent_at?: string | null
+          shadow_mode?: boolean
           status?: string | null
+          template_category_at_send?: string | null
           unified_customer_id?: string | null
+          unit_cost_at_send?: number | null
           worker_id?: string | null
         }
         Relationships: [
@@ -7961,9 +8027,13 @@ export type Database = {
           locked_until: string | null
           message_id: string
           phone: string
+          provider_at_send: string | null
           scheduled_at: string
           sent_at: string | null
+          shadow_mode: boolean
           status: string
+          template_category_at_send: string | null
+          unit_cost_at_send: number | null
           whatsapp_number_id: string | null
         }
         Insert: {
@@ -7979,9 +8049,13 @@ export type Database = {
           locked_until?: string | null
           message_id: string
           phone: string
+          provider_at_send?: string | null
           scheduled_at?: string
           sent_at?: string | null
+          shadow_mode?: boolean
           status?: string
+          template_category_at_send?: string | null
+          unit_cost_at_send?: number | null
           whatsapp_number_id?: string | null
         }
         Update: {
@@ -7997,9 +8071,13 @@ export type Database = {
           locked_until?: string | null
           message_id?: string
           phone?: string
+          provider_at_send?: string | null
           scheduled_at?: string
           sent_at?: string | null
+          shadow_mode?: boolean
           status?: string
+          template_category_at_send?: string | null
+          unit_cost_at_send?: number | null
           whatsapp_number_id?: string | null
         }
         Relationships: [
@@ -8103,6 +8181,7 @@ export type Database = {
           jess_enabled: boolean
           jess_prompt: string | null
           name: string
+          shadow_mode: boolean
           slug: string
           total_leads: number
           trigger_phrase: string
@@ -8119,6 +8198,7 @@ export type Database = {
           jess_enabled?: boolean
           jess_prompt?: string | null
           name: string
+          shadow_mode?: boolean
           slug: string
           total_leads?: number
           trigger_phrase: string
@@ -8135,6 +8215,7 @@ export type Database = {
           jess_enabled?: boolean
           jess_prompt?: string | null
           name?: string
+          shadow_mode?: boolean
           slug?: string
           total_leads?: number
           trigger_phrase?: string
@@ -9164,6 +9245,7 @@ export type Database = {
           message: string | null
           name: string
           sent_count: number
+          shadow_mode: boolean
           started_at: string | null
           status: string
           total_targets: number
@@ -9180,6 +9262,7 @@ export type Database = {
           message?: string | null
           name: string
           sent_count?: number
+          shadow_mode?: boolean
           started_at?: string | null
           status?: string
           total_targets?: number
@@ -9196,6 +9279,7 @@ export type Database = {
           message?: string | null
           name?: string
           sent_count?: number
+          shadow_mode?: boolean
           started_at?: string | null
           status?: string
           total_targets?: number
@@ -9215,8 +9299,12 @@ export type Database = {
           message_id: string | null
           phone: string
           phone_suffix8: string
+          provider_at_send: string | null
           sent_at: string | null
+          shadow_mode: boolean
           status: string
+          template_category_at_send: string | null
+          unit_cost_at_send: number | null
           updated_at: string
         }
         Insert: {
@@ -9229,8 +9317,12 @@ export type Database = {
           message_id?: string | null
           phone: string
           phone_suffix8: string
+          provider_at_send?: string | null
           sent_at?: string | null
+          shadow_mode?: boolean
           status?: string
+          template_category_at_send?: string | null
+          unit_cost_at_send?: number | null
           updated_at?: string
         }
         Update: {
@@ -9243,8 +9335,12 @@ export type Database = {
           message_id?: string | null
           phone?: string
           phone_suffix8?: string
+          provider_at_send?: string | null
           sent_at?: string | null
+          shadow_mode?: boolean
           status?: string
+          template_category_at_send?: string | null
+          unit_cost_at_send?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -9641,6 +9737,75 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      meta_template_category_alerts: {
+        Row: {
+          acknowledged: boolean
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          cost_delta_pct: number | null
+          cost_new_brl: number | null
+          cost_previous_brl: number | null
+          created_at: string
+          detected_at: string
+          id: string
+          new_category: string
+          previous_category: string | null
+          template_language: string
+          template_name: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          acknowledged?: boolean
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          cost_delta_pct?: number | null
+          cost_new_brl?: number | null
+          cost_previous_brl?: number | null
+          created_at?: string
+          detected_at?: string
+          id?: string
+          new_category: string
+          previous_category?: string | null
+          template_language?: string
+          template_name: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          acknowledged?: boolean
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          cost_delta_pct?: number | null
+          cost_new_brl?: number | null
+          cost_previous_brl?: number | null
+          created_at?: string
+          detected_at?: string
+          id?: string
+          new_category?: string
+          previous_category?: string | null
+          template_language?: string
+          template_name?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_template_category_alerts_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_template_category_alerts_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       meta_template_status_log: {
         Row: {
@@ -14014,6 +14179,7 @@ export type Database = {
       }
       provider_costs: {
         Row: {
+          category: string
           cost_per_message_brl: number
           created_at: string
           notes: string | null
@@ -14022,6 +14188,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          category?: string
           cost_per_message_brl?: number
           created_at?: string
           notes?: string | null
@@ -14030,6 +14197,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          category?: string
           cost_per_message_brl?: number
           created_at?: string
           notes?: string | null
@@ -15615,12 +15783,14 @@ export type Database = {
       templates_carrossel: {
         Row: {
           aprovado: boolean
+          category_last_synced_at: string | null
           created_at: string
           id: string
           meta_status: string
           nome: string
           observacao: string | null
           qtd_cards: number
+          template_category: string | null
           template_id: string
           template_language: string
           updated_at: string
@@ -15628,12 +15798,14 @@ export type Database = {
         }
         Insert: {
           aprovado?: boolean
+          category_last_synced_at?: string | null
           created_at?: string
           id?: string
           meta_status?: string
           nome?: string
           observacao?: string | null
           qtd_cards: number
+          template_category?: string | null
           template_id: string
           template_language?: string
           updated_at?: string
@@ -15641,12 +15813,14 @@ export type Database = {
         }
         Update: {
           aprovado?: boolean
+          category_last_synced_at?: string | null
           created_at?: string
           id?: string
           meta_status?: string
           nome?: string
           observacao?: string | null
           qtd_cards?: number
+          template_category?: string | null
           template_id?: string
           template_language?: string
           updated_at?: string
@@ -18941,6 +19115,10 @@ export type Database = {
         Args: { p_days?: number; p_store_id: string }
         Returns: Json
       }
+      get_provider_cost: {
+        Args: { p_category?: string; p_provider: string }
+        Returns: number
+      }
       get_reactivation_candidates: { Args: { p_limit?: number }; Returns: Json }
       get_registration_by_cpf: { Args: { p_cpf: string }; Returns: Json }
       get_user_allowed_modules: {
@@ -19212,6 +19390,15 @@ export type Database = {
         Returns: undefined
       }
       refresh_vip_orphans: { Args: never; Returns: Json }
+      register_template_category_change: {
+        Args: {
+          p_language: string
+          p_new_category: string
+          p_template_name: string
+          p_whatsapp_number_id: string
+        }
+        Returns: undefined
+      }
       reopen_finished_conversation: {
         Args: { p_phone: string }
         Returns: number
@@ -19220,12 +19407,14 @@ export type Database = {
         Args: { p_campanha_id: string }
         Returns: {
           aprovado: boolean
+          category_last_synced_at: string | null
           created_at: string
           id: string
           meta_status: string
           nome: string
           observacao: string | null
           qtd_cards: number
+          template_category: string | null
           template_id: string
           template_language: string
           updated_at: string
