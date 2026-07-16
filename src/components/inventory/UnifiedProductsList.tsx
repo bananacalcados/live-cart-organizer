@@ -811,14 +811,29 @@ function MasterEditDialog({
 
 /* ============ Pos Sku Edit Dialog ============ */
 function PosSkuEditDialog({
-  sku, storeName, onClose, onSaved,
-}: { sku: PosSku | null; storeName: string; onClose: () => void; onSaved: () => void; }) {
+  sku, storeName, stores, onClose, onLocalUpdate, onLocalCreate,
+}: {
+  sku: PosSku | null;
+  storeName: string;
+  stores: Store[];
+  onClose: () => void;
+  onLocalUpdate: (patch: Partial<PosSku> & { id: string }) => void;
+  onLocalCreate: (row: PosSku) => void;
+}) {
+  // Editar
   const [skuCode, setSkuCode] = useState("");
   const [barcode, setBarcode] = useState("");
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
   const [stock, setStock] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Transferir
+  const [tab, setTab] = useState<"edit" | "transfer">("edit");
+  const [destStoreId, setDestStoreId] = useState<string>("");
+  const [transferQty, setTransferQty] = useState<string>("");
+  const [transferReason, setTransferReason] = useState<string>("");
+  const [transferring, setTransferring] = useState(false);
 
   useEffect(() => {
     if (!sku) return;
@@ -827,68 +842,202 @@ function PosSkuEditDialog({
     setPrice(sku.price?.toString() || "");
     setCost(sku.cost_price?.toString() || "");
     setStock(sku.stock?.toString() || "0");
+    setTab("edit");
+    setDestStoreId("");
+    setTransferQty("");
+    setTransferReason("");
   }, [sku]);
+
+  const destStores = useMemo(
+    () => stores.filter((s) => s.id !== sku?.store_id),
+    [stores, sku?.store_id]
+  );
 
   async function save() {
     if (!sku) return;
     setSaving(true);
+    const patch = {
+      sku: skuCode.trim() || null,
+      barcode: barcode.trim() || null,
+      price: price ? parseFloat(price) : null,
+      cost_price: cost ? parseFloat(cost) : null,
+      stock: stock ? parseInt(stock) : 0,
+    };
     const { error } = await supabase
       .from("pos_products")
-      .update({
-        sku: skuCode.trim() || null,
-        barcode: barcode.trim() || null,
-        price: price ? parseFloat(price) : null,
-        cost_price: cost ? parseFloat(cost) : null,
-        stock: stock ? parseInt(stock) : 0,
-      })
+      .update(patch)
       .eq("id", sku.id);
     setSaving(false);
-    if (error) toast.error("Erro: " + error.message);
-    else { toast.success("SKU atualizado."); onSaved(); }
+    if (error) {
+      toast.error("Erro: " + error.message);
+      return;
+    }
+    onLocalUpdate({ id: sku.id, ...patch });
+    toast.success("SKU atualizado.");
+    onClose();
   }
+
+  async function transfer() {
+    if (!sku) return;
+    const qty = parseInt(transferQty, 10);
+    if (!destStoreId) { toast.error("Escolha a loja destino"); return; }
+    if (!Number.isFinite(qty) || qty <= 0) { toast.error("Quantidade inválida"); return; }
+    const available = sku.stock || 0;
+    if (qty > available) {
+      toast.error(`Origem só tem ${available} un.`);
+      return;
+    }
+    setTransferring(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-stock-transfer", {
+        body: {
+          source_product_id: sku.id,
+          dest_store_id: destStoreId,
+          quantity: qty,
+          reason: transferReason,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || "Falha ao transferir");
+
+      // Atualiza origem
+      onLocalUpdate({ id: sku.id, stock: data.source.new_stock });
+      // Atualiza/insere destino
+      if (data.dest.created && data.dest.product) {
+        onLocalCreate(data.dest.product as PosSku);
+      } else {
+        onLocalUpdate({ id: data.dest.product_id, stock: data.dest.new_stock });
+      }
+      toast.success(
+        `Transferido: ${data.source.store_name} (${data.source.new_stock}) → ${data.dest.store_name} (${data.dest.new_stock})`
+      );
+      onClose();
+    } catch (err: any) {
+      toast.error("Erro: " + err.message, { duration: 8000 });
+    } finally {
+      setTransferring(false);
+    }
+  }
+
+  const destPreview = useMemo(() => {
+    if (!sku || !destStoreId) return null;
+    return { id: destStoreId, name: stores.find((s) => s.id === destStoreId)?.name || "" };
+  }, [sku, destStoreId, stores]);
 
   return (
     <Dialog open={!!sku} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Editar SKU em {storeName}</DialogTitle>
+          <DialogTitle>{sku?.name || "SKU"} — {storeName}</DialogTitle>
         </DialogHeader>
         {sku && (
-          <div className="space-y-3">
-            <div className="text-xs text-muted-foreground">
-              parent_sku: <code>{sku.parent_sku || "—"}</code>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>SKU</Label>
-                <Input value={skuCode} onChange={(e) => setSkuCode(e.target.value)} />
+          <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="edit">Editar</TabsTrigger>
+              <TabsTrigger value="transfer">Transferir estoque</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="edit" className="space-y-3 pt-3">
+              <div className="text-xs text-muted-foreground">
+                parent_sku: <code>{sku.parent_sku || "—"}</code>
               </div>
-              <div>
-                <Label>Código de barras</Label>
-                <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>SKU</Label>
+                  <Input value={skuCode} onChange={(e) => setSkuCode(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Código de barras</Label>
+                  <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Preço (R$)</Label>
+                  <Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Custo (R$)</Label>
+                  <Input type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Estoque</Label>
+                  <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} />
+                </div>
               </div>
-              <div>
-                <Label>Preço (R$)</Label>
-                <Input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+              <DialogFooter className="pt-2">
+                <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                <Button onClick={save} disabled={saving}>
+                  {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                  Salvar
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+
+            <TabsContent value="transfer" className="space-y-3 pt-3">
+              <div className="text-xs bg-muted/40 rounded-md p-2 space-y-1">
+                <div>
+                  <span className="text-muted-foreground">Origem: </span>
+                  <strong>{storeName}</strong> · estoque atual{" "}
+                  <Badge variant="secondary">{sku.stock ?? 0} un</Badge>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Variação: </span>
+                  {sku.color || "—"} / {sku.size || "—"}
+                </div>
               </div>
+
               <div>
-                <Label>Custo (R$)</Label>
-                <Input type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} />
+                <Label>Loja destino</Label>
+                <Select value={destStoreId} onValueChange={setDestStoreId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a loja destino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {destStores.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+
               <div>
-                <Label>Estoque</Label>
-                <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} />
+                <Label>Quantidade a transferir</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={sku.stock ?? 0}
+                  value={transferQty}
+                  onChange={(e) => setTransferQty(e.target.value)}
+                  placeholder={`Máx: ${sku.stock ?? 0}`}
+                />
               </div>
-            </div>
-          </div>
+
+              <div>
+                <Label>Motivo (opcional)</Label>
+                <Textarea
+                  rows={2}
+                  value={transferReason}
+                  onChange={(e) => setTransferReason(e.target.value)}
+                  placeholder="Ex: repor grade da Loja Centro"
+                />
+              </div>
+
+              {destPreview && (
+                <p className="text-[11px] text-muted-foreground">
+                  Se a variação não existir em <strong>{destPreview.name}</strong>, será criada
+                  automaticamente com o mesmo cadastro (SKU/barcode/preço).
+                </p>
+              )}
+
+              <DialogFooter className="pt-2">
+                <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                <Button onClick={transfer} disabled={transferring || !destStoreId || !transferQty}>
+                  {transferring ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Boxes className="h-4 w-4 mr-1" />}
+                  Transferir
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+          </Tabs>
         )}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button onClick={save} disabled={saving}>
-            {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-            Salvar
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
