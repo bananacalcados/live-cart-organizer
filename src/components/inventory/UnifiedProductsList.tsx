@@ -129,6 +129,43 @@ export function UnifiedProductsList() {
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
 
+  // Seleção múltipla + exclusão em massa
+  const [selectedParents, setSelectedParents] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  function toggleParent(sku: string) {
+    setSelectedParents((prev) => {
+      const n = new Set(prev);
+      n.has(sku) ? n.delete(sku) : n.add(sku);
+      return n;
+    });
+  }
+
+  async function bulkDeleteSelected() {
+    if (selectedParents.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-master-products", {
+        body: { parent_skus: Array.from(selectedParents) },
+      });
+      if (error) throw error;
+      const d = (data as any)?.deleted || {};
+      const b = (data as any)?.blocked || [];
+      toast.success(
+        `${d.unified || 0} do Unificado · ${d.legacy || 0} do Legacy · ${d.pos_products || 0} do PDV${b.length ? ` · ${b.length} bloqueados (histórico)` : ""}`,
+        { duration: 8000 },
+      );
+      setSelectedParents(new Set());
+      setBulkDeleteOpen(false);
+      await load();
+    } catch (err: any) {
+      toast.error("Erro ao excluir: " + err.message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   async function load() {
     setLoading(true);
     // Batch pos_products in chunks of 1000 to bypass PostgREST default cap
