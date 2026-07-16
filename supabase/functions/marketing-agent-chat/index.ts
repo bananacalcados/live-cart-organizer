@@ -173,6 +173,62 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
     }, { onConflict: "mes_ref,loja" }).select().single();
     return error ? { error: error.message } : { ok: true, id: data.id, fonte: "monthly_goals" };
   }
+  if (kind === "propor_entrada_calendario") {
+    const { data, error } = await supabase.from("marketing_calendar_entries").insert({
+      entry_date: payload.entry_date,
+      end_date: payload.end_date ?? null,
+      title: payload.title,
+      content: payload.content ?? "",
+      entry_type: payload.entry_type ?? "outro",
+      color: payload.color ?? "#3b82f6",
+    }).select().single();
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "marketing_calendar_entries" };
+  }
+  if (kind === "propor_meta_mensal_calendario") {
+    const { data: existing } = await supabase
+      .from("marketing_calendar_goals").select("id")
+      .eq("year", payload.year).eq("month", payload.month).maybeSingle();
+    const row = {
+      year: payload.year,
+      month: payload.month,
+      goals: payload.goals ?? [],
+      actions: payload.actions ?? "",
+      notes: payload.notes ?? "",
+    };
+    if (existing?.id) {
+      const { error } = await supabase.from("marketing_calendar_goals").update(row).eq("id", existing.id);
+      return error ? { error: error.message } : { ok: true, id: existing.id, fonte: "marketing_calendar_goals", updated: true };
+    }
+    const { data, error } = await supabase.from("marketing_calendar_goals").insert(row).select().single();
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "marketing_calendar_goals", updated: false };
+  }
+  if (kind === "propor_publico") {
+    // Valida filtro chamando list_campaign_audience antes de gravar.
+    const filtro = payload.filtro_json ?? {};
+    const { error: vErr } = await supabase.rpc("list_campaign_audience", {
+      p_filtro: filtro, p_limit: 1, p_offset: 0,
+    });
+    if (vErr) return { error: `filtro_json inválido: ${vErr.message}` };
+    const { data, error } = await supabase.from("campanha_publicos").insert({
+      nome: payload.nome,
+      filtro_json: filtro,
+    }).select().single();
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos" };
+  }
+  if (kind === "propor_atualizar_publico") {
+    const update: any = {};
+    if (payload.nome != null) update.nome = payload.nome;
+    if (payload.filtro_json != null) {
+      const { error: vErr } = await supabase.rpc("list_campaign_audience", {
+        p_filtro: payload.filtro_json, p_limit: 1, p_offset: 0,
+      });
+      if (vErr) return { error: `filtro_json inválido: ${vErr.message}` };
+      update.filtro_json = payload.filtro_json;
+    }
+    const { data, error } = await supabase.from("campanha_publicos")
+      .update(update).eq("id", payload.id).select().single();
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos" };
+  }
   return { error: `kind desconhecido: ${kind}` };
 }
 
