@@ -222,10 +222,23 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (master) {
         for (const it of items) {
-          const color = (it.parsed_color || "").toString().trim();
-          const size = (it.parsed_size || "").toString().trim();
+          let color = (it.parsed_color || "").toString().trim();
+          let size = (it.parsed_size || "").toString().trim();
           const barcode = (it.ean && /^\d{8,14}$/.test(it.ean)) ? it.ean : null;
           const cost = Number(it.unit_cost) || master.cost_price || 0;
+
+          // GUARD: nunca criar variação sem cor + tamanho (evita "variação só GTIN")
+          if (!color || !size) {
+            console.warn(`[catalog mirror] pulando linha sem cor/tamanho (barcode=${barcode})`);
+            continue;
+          }
+
+          // Auto-detecta cor/tamanho invertidos (Tiny às vezes vem "NOME - COR - TAM")
+          const sizeIsNumeric = /^[0-9/.,\-]+$/.test(size);
+          const colorIsNumeric = /^[0-9/.,\-]+$/.test(color);
+          if (!sizeIsNumeric && colorIsNumeric) {
+            [color, size] = [size, color];
+          }
 
           // Já existe essa variação no catálogo? (por gtin ou cor+tamanho)
           let exists = false;
