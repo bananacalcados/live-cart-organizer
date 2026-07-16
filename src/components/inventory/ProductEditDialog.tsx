@@ -750,7 +750,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                           <Input
                             className="h-8"
                             value={v.color}
-                            onChange={(e) => updateVariant(idx, { color: e.target.value })}
+                            onChange={(e) => updateVariant(idx, { color: sanitizeColorInput(e.target.value) })}
                           />
                         </div>
                         <div className="col-span-1">
@@ -758,7 +758,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                           <Input
                             className="h-8"
                             value={v.size}
-                            onChange={(e) => updateVariant(idx, { size: e.target.value })}
+                            onChange={(e) => updateVariant(idx, { size: sanitizeSizeInput(e.target.value) })}
                           />
                         </div>
                         <div className="col-span-2">
