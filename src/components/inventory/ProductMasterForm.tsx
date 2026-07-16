@@ -179,6 +179,10 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
       toast.error("Informe o nome do produto.");
       return;
     }
+    if (!stockStoreId) {
+      toast.error("Escolha a loja que receberá o estoque inicial (o produto será replicado em todas as lojas com estoque zero nas demais).");
+      return;
+    }
     if (!variants.length) {
       toast.error("Adicione pelo menos uma variação.");
       return;
