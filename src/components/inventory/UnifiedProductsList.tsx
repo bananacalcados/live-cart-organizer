@@ -381,13 +381,29 @@ export function UnifiedProductsList() {
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="text-xs text-muted-foreground">
-            {grouped.length} produtos · {grouped.reduce((s, g) => s + g.skus.length, 0)} SKUs · {grouped.reduce((s, g) => s + g.totalStock, 0)} unidades
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div>
+              {grouped.length} produtos · {grouped.reduce((s, g) => s + g.skus.length, 0)} SKUs · {grouped.reduce((s, g) => s + g.totalStock, 0)} unidades
+            </div>
+            {selectedParents.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-foreground">{selectedParents.size} selecionados</span>
+                <Button size="sm" variant="ghost" onClick={() => setSelectedParents(new Set())}>Limpar</Button>
+                <Button size="sm" variant="destructive" className="gap-1" onClick={() => setBulkDeleteOpen(true)}>
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir selecionados
+                </Button>
+              </div>
+            )}
           </div>
           {pageItems.map((g) => (
             <Card key={g.parent_sku}>
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-start gap-2">
+                  <Checkbox
+                    checked={selectedParents.has(g.parent_sku)}
+                    onCheckedChange={() => toggleParent(g.parent_sku)}
+                    className="mt-1.5 shrink-0"
+                  />
                   <Button
                     size="icon" variant="ghost" className="h-7 w-7 mt-0.5"
                     onClick={() => toggleExpand(g.parent_sku)}
