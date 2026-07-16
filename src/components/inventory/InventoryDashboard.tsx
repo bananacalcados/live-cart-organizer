@@ -8,10 +8,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  Loader2, RefreshCw, Play, Package, DollarSign, TrendingUp, Boxes,
-  AlertTriangle, CheckCircle2, Clock, Store as StoreIcon, Zap,
+  Loader2, RefreshCw, Package, DollarSign, TrendingUp, Boxes,
+  Store as StoreIcon,
 } from "lucide-react";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 type RunRow = {
