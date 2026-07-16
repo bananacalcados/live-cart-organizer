@@ -557,8 +557,16 @@ export function UnifiedProductsList() {
       <PosSkuEditDialog
         sku={editingSku}
         onClose={() => setEditingSku(null)}
-        onSaved={() => { setEditingSku(null); load(); }}
         storeName={editingSku ? storeName(editingSku.store_id) : ""}
+        stores={stores}
+        onLocalUpdate={(patch) =>
+          setPosProducts((prev) =>
+            prev.map((p) => (p.id === patch.id ? { ...p, ...patch } as PosSku : p))
+          )
+        }
+        onLocalCreate={(row) =>
+          setPosProducts((prev) => [...prev, row])
+        }
       />
 
       {/* Edit variation (color/size) dialog */}
