@@ -195,6 +195,14 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
         toast.error("Todas as variações precisam de cor e tamanho.");
         return;
       }
+      if (!isValidSize(v.size)) {
+        toast.error(`Tamanho inválido: "${v.size}". Use números (39, 34/35) ou PP/P/M/G/GG.`);
+        return;
+      }
+      if (!isValidColor(v.color)) {
+        toast.error(`Cor inválida: "${v.color}". Cor não pode ser apenas números.`);
+        return;
+      }
     }
 
     setSaving(true);
