@@ -2125,8 +2125,34 @@ export function MassTemplateDispatcher() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Público salvo (campanha_publicos) — filtro adicional final */}
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-blue-200 bg-blue-50/50 p-2">
+              <span className="text-xs font-medium text-blue-800">Público salvo:</span>
+              <SavedAudiencePicker
+                activeId={savedAudienceMeta?.id ?? null}
+                onApply={(suffixes, meta) => {
+                  setSavedAudienceSuffixes(suffixes);
+                  setSavedAudienceMeta(meta);
+                }}
+              />
+              {savedAudienceMeta && (
+                <Badge variant="secondary" className="text-[10px]">
+                  Restringindo a "{savedAudienceMeta.nome}" ({savedAudienceSuffixes?.size ?? 0} contatos)
+                </Badge>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-auto h-7 gap-1 text-xs"
+                onClick={() => setSaveAudienceOpen(true)}
+              >
+                <Save className="h-3 w-3" /> Salvar filtros atuais como público
+              </Button>
+            </div>
+
             {/* Source tabs */}
             <div className="flex gap-2">
+
               {[
                 { value: 'crm' as const, label: 'Clientes CRM', icon: Users },
                 { value: 'leads' as const, label: 'Leads Captados', icon: FileSpreadsheet },
