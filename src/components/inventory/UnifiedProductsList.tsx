@@ -638,6 +638,33 @@ export function UnifiedProductsList() {
         productName={labelGroup?.name}
         items={labelGroup?.items || []}
       />
+
+      {/* Bulk delete confirmation */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={(v) => !bulkDeleting && setBulkDeleteOpen(v)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir {selectedParents.size} produto(s)?</DialogTitle>
+            <DialogDescription>
+              Vai apagar do Catálogo Unificado, do Legacy (quando existir vínculo) e do PDV.
+              Produtos com histórico de venda são bloqueados automaticamente.
+              Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-40 overflow-auto text-xs text-muted-foreground border rounded p-2 space-y-0.5">
+            {grouped.filter((g) => selectedParents.has(g.parent_sku)).slice(0, 15).map((g) => (
+              <div key={g.parent_sku}>• {g.master?.name || g.parent_sku}</div>
+            ))}
+            {selectedParents.size > 15 && <div>... e mais {selectedParents.size - 15}</div>}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleting}>Cancelar</Button>
+            <Button variant="destructive" onClick={bulkDeleteSelected} disabled={bulkDeleting} className="gap-1">
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Excluir {selectedParents.size}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
