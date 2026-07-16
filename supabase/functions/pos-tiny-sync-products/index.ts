@@ -6,19 +6,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// Extract variant info from product name like "CHINELO CARTAGO DAKAR - 42 - Marrom"
+// Extract variant info from product name.
+// O nome do Tiny pode vir em qualquer ordem:
+//   "CHINELO CARTAGO DAKAR - 42 - Marrom"  (tamanho, cor)
+//   "CHINELO RIDER INFANTIL FEEL - AZUL - 25/26" (cor, tamanho)
+// Regra: o token que for numérico/símbolos é sempre o TAMANHO; o alfabético é a COR.
 function extractVariantFromName(name: string): { baseName: string; variant: string; size: string | null; color: string | null } {
-  const parts = name.split(' - ');
+  const SIZE_RE = /^[0-9]+([/.,\-\s][0-9]+)*$/;
+  const parts = name.split(' - ').map((p) => p.trim()).filter(Boolean);
   if (parts.length >= 3) {
+    const last = parts[parts.length - 1];
+    const prev = parts[parts.length - 2];
     const baseName = parts.slice(0, parts.length - 2).join(' - ').trim();
-    const size = parts[parts.length - 2]?.trim() || null;
-    const color = parts[parts.length - 1]?.trim() || null;
+    let size: string | null = null;
+    let color: string | null = null;
+    if (SIZE_RE.test(last) && !SIZE_RE.test(prev)) { size = last; color = prev; }
+    else if (SIZE_RE.test(prev) && !SIZE_RE.test(last)) { size = prev; color = last; }
+    else { size = prev; color = last; } // fallback ordem original
     return { baseName, variant: `${size || ''} ${color || ''}`.trim(), size, color };
   }
   if (parts.length === 2) {
     const baseName = parts[0].trim();
     const last = parts[1]?.trim() || '';
-    if (/^\d{2,3}$/.test(last)) {
+    if (SIZE_RE.test(last)) {
       return { baseName, variant: last, size: last, color: null };
     }
     return { baseName, variant: last, size: null, color: last };

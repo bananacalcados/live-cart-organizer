@@ -15,6 +15,7 @@ import { Plus, Trash2, Loader2, Package, Sparkles, Upload, X, Store as StoreIcon
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { generateEan13, normalizeColorForSku } from "@/lib/ean13";
+import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
 
 interface VariantRow {
   color: string;
@@ -192,6 +193,14 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
     for (const v of variants) {
       if (!v.color || !v.size) {
         toast.error("Todas as variações precisam de cor e tamanho.");
+        return;
+      }
+      if (!isValidSize(v.size)) {
+        toast.error(`Tamanho inválido: "${v.size}". Use números (39, 34/35) ou PP/P/M/G/GG.`);
+        return;
+      }
+      if (!isValidColor(v.color)) {
+        toast.error(`Cor inválida: "${v.color}". Cor não pode ser apenas números.`);
         return;
       }
     }
@@ -474,7 +483,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
                       <Input
                         className="h-8"
                         value={v.color}
-                        onChange={(e) => updateVariant(idx, { color: e.target.value })}
+                        onChange={(e) => updateVariant(idx, { color: sanitizeColorInput(e.target.value) })}
                         placeholder="Preto"
                       />
                     </div>
@@ -483,7 +492,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
                       <Input
                         className="h-8"
                         value={v.size}
-                        onChange={(e) => updateVariant(idx, { size: e.target.value })}
+                        onChange={(e) => updateVariant(idx, { size: sanitizeSizeInput(e.target.value) })}
                         placeholder="39"
                       />
                     </div>

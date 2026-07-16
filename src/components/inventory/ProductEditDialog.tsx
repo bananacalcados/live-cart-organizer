@@ -20,6 +20,7 @@ import {
 import { Loader2, Save, Trash2, Plus, Upload, X, Package, Sparkles, Store as StoreIcon } from "lucide-react";
 import { toast } from "sonner";
 import { generateEan13, isValidEan13 } from "@/lib/ean13";
+import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
 
 interface VariantRow {
   id?: string;                 // existente
@@ -261,6 +262,20 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
   async function handleSave() {
     if (!masterId) return;
     if (!name.trim()) { toast.error("Informe o nome."); return; }
+
+    // Valida formato de cor/tamanho em todas as variações preenchidas
+    for (const v of variants) {
+      if (!v.color && !v.size) continue;
+      if (v.size && !isValidSize(v.size)) {
+        toast.error(`Tamanho inválido: "${v.size}". Use números (39, 34/35) ou PP/P/M/G/GG.`);
+        return;
+      }
+      if (v.color && !isValidColor(v.color)) {
+        toast.error(`Cor inválida: "${v.color}". Cor não pode ser apenas números.`);
+        return;
+      }
+    }
+
 
     const hasNewVariants = variants.some((v) => !v.id && v.color && v.size);
     if (hasNewVariants && !stockStoreId) {
@@ -749,7 +764,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                           <Input
                             className="h-8"
                             value={v.color}
-                            onChange={(e) => updateVariant(idx, { color: e.target.value })}
+                            onChange={(e) => updateVariant(idx, { color: sanitizeColorInput(e.target.value) })}
                           />
                         </div>
                         <div className="col-span-1">
@@ -757,7 +772,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                           <Input
                             className="h-8"
                             value={v.size}
-                            onChange={(e) => updateVariant(idx, { size: e.target.value })}
+                            onChange={(e) => updateVariant(idx, { size: sanitizeSizeInput(e.target.value) })}
                           />
                         </div>
                         <div className="col-span-2">
