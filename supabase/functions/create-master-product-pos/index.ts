@@ -82,6 +82,7 @@ Deno.serve(async (req) => {
       .from("pos_stores")
       .select("id")
       .eq("is_active", true)
+      .eq("is_simulation", false)
       .order("name");
     const targetStoreIds: string[] = (stores || []).map((s: any) => s.id);
     const stockStoreId: string | null = store_id || null;
