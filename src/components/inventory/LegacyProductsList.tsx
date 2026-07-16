@@ -783,6 +783,64 @@ export function LegacyProductsList() {
         onClose={() => setEditingVariant(null)}
         onSaved={async (masterId) => { setEditingVariant(null); await refreshVariants(masterId); }}
       />
+
+      {/* Diálogo: sincronizar estoque no PDV — exige loja */}
+      <Dialog open={!!syncStockDialog} onOpenChange={(v) => !v && setSyncStockDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sincronizar estoque no PDV</DialogTitle>
+            <DialogDescription>
+              Escolha a loja física que receberá o estoque das variações. As demais lojas não serão tocadas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Loja de destino</Label>
+            <select
+              className="w-full border rounded h-9 px-2 bg-background"
+              value={syncStockDialog?.storeId || ""}
+              onChange={(e) => setSyncStockDialog((p) => p ? { ...p, storeId: e.target.value } : p)}
+            >
+              <option value="">Selecione uma loja física...</option>
+              {physicalStores.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSyncStockDialog(null)}>Cancelar</Button>
+            <Button onClick={confirmSyncStockPos} disabled={!syncStockDialog?.storeId}>
+              Sincronizar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo: exclusão em massa */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={(v) => !bulkDeleting && setBulkDeleteOpen(v)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir {selected.size} produto(s)?</DialogTitle>
+            <DialogDescription>
+              Vai apagar do Legacy, do Catálogo Unificado (quando existir) e do PDV.
+              Produtos com histórico de venda serão automaticamente bloqueados.
+              Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-40 overflow-auto text-xs text-muted-foreground border rounded p-2 space-y-0.5">
+            {items.filter((p) => selected.has(p.id)).slice(0, 15).map((p) => (
+              <div key={p.id}>• {p.name}</div>
+            ))}
+            {selected.size > 15 && <div>... e mais {selected.size - 15}</div>}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleting}>Cancelar</Button>
+            <Button variant="destructive" onClick={bulkDeleteSelected} disabled={bulkDeleting} className="gap-1">
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Excluir {selected.size}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
