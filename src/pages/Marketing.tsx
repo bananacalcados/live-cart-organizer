@@ -57,6 +57,8 @@ import { MarketingAttributionDashboard } from "@/components/marketing/MarketingA
 import AdCampaignManager from "@/components/marketing/AdCampaignManager";
 import { TriggersManager } from "@/components/marketing/TriggersManager";
 import InstagramCommentAutomation from "@/components/marketing/InstagramCommentAutomation";
+import { SaveAudienceDialog } from "@/components/marketing/SaveAudienceDialog";
+import type { AudienceFilter } from "@/components/pos/audience/AudienceFilterBuilder";
 
 // ─── Types ──────────────────────────────────────
 
