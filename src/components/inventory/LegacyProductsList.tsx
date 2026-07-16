@@ -146,6 +146,23 @@ export function LegacyProductsList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
+  // Lojas físicas para o diálogo de sincronizar estoque
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("pos_stores")
+        .select("id, name")
+        .eq("is_active", true)
+        .eq("is_simulation", false)
+        .order("name");
+      const filtered = (data || []).filter((s: any) => {
+        const n = String(s.name || "").toLowerCase();
+        return !["site/live", "site + centro", "lojas + live"].some((x) => n.includes(x));
+      });
+      setPhysicalStores(filtered as any);
+    })();
+  }, []);
+
   // busca de pai existente (products_master) para vincular
   useEffect(() => {
     if (!unifyOpen || unifyMode !== "existing") return;
