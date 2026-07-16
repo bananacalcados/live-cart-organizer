@@ -27,6 +27,9 @@ import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ImageCropDialog } from "@/components/ImageCropDialog";
+import { SavedAudiencePicker } from "@/components/marketing/SavedAudiencePicker";
+import { SaveAudienceDialog } from "@/components/marketing/SaveAudienceDialog";
+import type { AudienceFilter } from "@/components/pos/audience/AudienceFilterBuilder";
 
 /**
  * Extrai o DDD (2 dígitos) de um telefone em qualquer formato.
@@ -220,6 +223,12 @@ export function MassTemplateDispatcher() {
   // Só afeta registros com last_purchase_at (CRM/Ravena). Leads puros passam.
   const [lastPurchaseMode, setLastPurchaseMode] = useState<'any' | 'include' | 'exclude'>('any');
   const [lastPurchaseDays, setLastPurchaseDays] = useState<string>('30');
+
+  // Saved audience (campanha_publicos) — filtro adicional final
+  const [savedAudienceSuffixes, setSavedAudienceSuffixes] = useState<Set<string> | null>(null);
+  const [savedAudienceMeta, setSavedAudienceMeta] = useState<{ id: string; nome: string } | null>(null);
+  const [saveAudienceOpen, setSaveAudienceOpen] = useState(false);
+
 
   // Selection
   const [selectAll, setSelectAll] = useState(false);
@@ -983,16 +992,24 @@ export function MassTemplateDispatcher() {
     return finalList;
   }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes, lastPurchaseMode, lastPurchaseDays]);
 
-  // Recipients after applying cooldown exclusion (suffix-based to catch same person with different DDDs)
+  // Recipients after applying cooldown exclusion + público salvo (interseção por sufixo 8 díg.)
   const filteredRecipients = useMemo((): Recipient[] => {
+    let out = baseRecipients;
     if (cooldownApplied && cooldownExcludedPhones.size > 0) {
-      return baseRecipients.filter(r => {
+      out = out.filter(r => {
         const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
         return !cooldownExcludedPhones.has(suffix);
       });
     }
-    return baseRecipients;
-  }, [baseRecipients, cooldownApplied, cooldownExcludedPhones]);
+    if (savedAudienceSuffixes) {
+      out = out.filter(r => {
+        const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
+        return savedAudienceSuffixes.has(suffix);
+      });
+    }
+    return out;
+  }, [baseRecipients, cooldownApplied, cooldownExcludedPhones, savedAudienceSuffixes]);
+
 
   // How many of the CURRENT audience were actually removed by the cooldown
   const cooldownRemovedFromAudience = baseRecipients.length - filteredRecipients.length;
@@ -2108,8 +2125,34 @@ export function MassTemplateDispatcher() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* Público salvo (campanha_publicos) — filtro adicional final */}
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-dashed border-blue-200 bg-blue-50/50 p-2">
+              <span className="text-xs font-medium text-blue-800">Público salvo:</span>
+              <SavedAudiencePicker
+                activeId={savedAudienceMeta?.id ?? null}
+                onApply={(suffixes, meta) => {
+                  setSavedAudienceSuffixes(suffixes);
+                  setSavedAudienceMeta(meta);
+                }}
+              />
+              {savedAudienceMeta && (
+                <Badge variant="secondary" className="text-[10px]">
+                  Restringindo a "{savedAudienceMeta.nome}" ({savedAudienceSuffixes?.size ?? 0} contatos)
+                </Badge>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-auto h-7 gap-1 text-xs"
+                onClick={() => setSaveAudienceOpen(true)}
+              >
+                <Save className="h-3 w-3" /> Salvar filtros atuais como público
+              </Button>
+            </div>
+
             {/* Source tabs */}
             <div className="flex gap-2">
+
               {[
                 { value: 'crm' as const, label: 'Clientes CRM', icon: Users },
                 { value: 'leads' as const, label: 'Leads Captados', icon: FileSpreadsheet },
@@ -2954,6 +2997,54 @@ export function MassTemplateDispatcher() {
 
       {/* Dispatch History */}
       <DispatchHistoryList key={historyKey} onDuplicate={handleDuplicate} />
+
+      {/* Salvar filtros atuais como público reutilizável */}
+      <SaveAudienceDialog
+        open={saveAudienceOpen}
+        onOpenChange={setSaveAudienceOpen}
+        filter={(() => {
+          const inc: any = {};
+          if (rfmFilter !== 'all') inc.rfm_segments = [rfmFilter];
+          if (stateFilter !== 'all') inc.states = [stateFilter];
+          if (cityFilter !== 'all') inc.cities = [cityFilter];
+          if (dddFilter !== 'all') inc.ddds = [dddFilter];
+          if (crmTagFilter !== 'all') inc.tags = [crmTagFilter];
+          if (ticketMin) inc.min_avg_ticket = ticketMin;
+          if (ticketMax) inc.max_avg_ticket = ticketMax;
+          if (ordersMin) inc.min_total_orders = ordersMin;
+          if (ordersMax) inc.max_total_orders = ordersMax;
+          if (dateFrom && dateTo) {
+            inc.last_purchase_op = 'between';
+            inc.last_purchase_from = dateFrom;
+            inc.last_purchase_to = dateTo;
+          } else if (dateFrom) {
+            inc.last_purchase_op = 'after';
+            inc.last_purchase_from = dateFrom;
+          } else if (dateTo) {
+            inc.last_purchase_op = 'before';
+            inc.last_purchase_to = dateTo;
+          } else if (lastPurchaseMode === 'include' && lastPurchaseDays) {
+            inc.last_purchase_op = 'lt_days';
+            inc.last_purchase_days = lastPurchaseDays;
+          }
+          const exc: any = {};
+          if (lastPurchaseMode === 'exclude' && lastPurchaseDays) {
+            exc.last_purchase_op = 'lt_days';
+            exc.last_purchase_days = lastPurchaseDays;
+          }
+          if (vipMembershipMode === 'only') inc.in_vip_group = true;
+          if (vipMembershipMode === 'exclude') exc.in_vip_group = true;
+          return { include: inc, exclude: exc } as AudienceFilter;
+        })()}
+        ignoredFilters={[
+          ...(regionFilter !== 'all' ? ['Região (derivada)'] : []),
+          ...(storeFilter !== 'all' ? ['Loja'] : []),
+          ...(sellerFilter !== 'all' ? ['Vendedora'] : []),
+          ...(topN !== 'all' ? ['Top N'] : []),
+          ...(searchQuery ? ['Busca livre'] : []),
+        ]}
+      />
     </div>
+
   );
 }

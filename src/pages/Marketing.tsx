@@ -57,6 +57,8 @@ import { MarketingAttributionDashboard } from "@/components/marketing/MarketingA
 import AdCampaignManager from "@/components/marketing/AdCampaignManager";
 import { TriggersManager } from "@/components/marketing/TriggersManager";
 import InstagramCommentAutomation from "@/components/marketing/InstagramCommentAutomation";
+import { SaveAudienceDialog } from "@/components/marketing/SaveAudienceDialog";
+import type { AudienceFilter } from "@/components/pos/audience/AudienceFilterBuilder";
 
 // ─── Types ──────────────────────────────────────
 
@@ -247,12 +249,13 @@ export default function Marketing() {
    const [customerStoreMap, setCustomerStoreMap] = useState<Map<string, { store_id: string; store_name: string; seller_id: string; seller_name: string }>>(new Map());
    const [storesList, setStoresList] = useState<{ id: string; name: string }[]>([]);
    const [sellersList, setSellersList] = useState<{ id: string; name: string }[]>([]);
-   const [savedPresets, setSavedPresets] = useState<{ id: string; key: string; value: any }[]>([]);
-   const [presetName, setPresetName] = useState("");
-   const [presetDialogOpen, setPresetDialogOpen] = useState(false);
-   const [excludedPresetIds, setExcludedPresetIds] = useState<string[]>([]);
-   const [includedPresetIds, setIncludedPresetIds] = useState<string[]>([]);
-   const [presetOpsOpen, setPresetOpsOpen] = useState(false);
+  const [savedPresets, setSavedPresets] = useState<{ id: string; key: string; value: any }[]>([]);
+  const [presetName, setPresetName] = useState("");
+  const [presetDialogOpen, setPresetDialogOpen] = useState(false);
+  const [excludedPresetIds, setExcludedPresetIds] = useState<string[]>([]);
+  const [includedPresetIds, setIncludedPresetIds] = useState<string[]>([]);
+  const [presetOpsOpen, setPresetOpsOpen] = useState(false);
+  const [saveAudienceOpen, setSaveAudienceOpen] = useState(false);
    const [tagFilter, setTagFilter] = useState<string>("all");
    const [brandFilter, setBrandFilter] = useState<string>("all");
    const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -1476,6 +1479,9 @@ export default function Marketing() {
               </p>
               <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={() => setPresetDialogOpen(true)}>
                 <Save className="h-3 w-3" />Salvar Filtro
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => setSaveAudienceOpen(true)}>
+                <Save className="h-3 w-3" />Salvar como Público
               </Button>
               {savedPresets.length > 0 && (
                 <>
@@ -2711,6 +2717,42 @@ export default function Marketing() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Salvar filtros RFM atuais como público reutilizável */}
+      <SaveAudienceDialog
+        open={saveAudienceOpen}
+        onOpenChange={setSaveAudienceOpen}
+        filter={(() => {
+          const inc: any = {};
+          if (rfmFilter !== 'all') inc.rfm_segments = [rfmFilter];
+          if (dddFilter !== 'all') inc.ddds = [dddFilter];
+          if (ticketMin) inc.min_avg_ticket = ticketMin;
+          if (ticketMax) inc.max_avg_ticket = ticketMax;
+          if (ordersMin) inc.min_total_orders = ordersMin;
+          if (ordersMax) inc.max_total_orders = ordersMax;
+          if (dateFrom && dateTo) {
+            inc.last_purchase_op = 'between';
+            inc.last_purchase_from = dateFrom;
+            inc.last_purchase_to = dateTo;
+          } else if (dateFrom) {
+            inc.last_purchase_op = 'after';
+            inc.last_purchase_from = dateFrom;
+          } else if (dateTo) {
+            inc.last_purchase_op = 'before';
+            inc.last_purchase_to = dateTo;
+          }
+          return { include: inc, exclude: {} } as AudienceFilter;
+        })()}
+        ignoredFilters={[
+          ...(regionFilter !== 'all' ? ['Região (derivada)'] : []),
+          ...(storeFilter !== 'all' ? ['Loja'] : []),
+          ...(sellerFilter !== 'all' ? ['Vendedora'] : []),
+          ...(recencyFilter !== 'all' ? ['Score de Recência RFM'] : []),
+          ...(topN !== 'all' ? ['Top N'] : []),
+          ...(excludedPresetIds.length > 0 || includedPresetIds.length > 0 ? ['Interseção/Exclusão de presets'] : []),
+        ]}
+      />
     </div>
+
   );
 }

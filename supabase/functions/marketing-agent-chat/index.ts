@@ -32,8 +32,14 @@ const TOOLS_ANTHROPIC = [
   { name: "get_campaign_results", description: "Envios/custo por dia+categoria+provider nos 4 fluxos.", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
   { name: "get_dispatch_pressure", description: "Pressão de toques por segmento RFM e exposição a grupos no período.", input_schema: { type: "object", properties: { desde: { type: "string" }, ate: { type: "string" } }, required: ["desde", "ate"] } },
   { name: "propor_decisao", description: "PROPÕE gravar uma decisão/veto/regra/pendência. Só grava após confirmação explícita do usuário no próximo turn.", input_schema: { type: "object", properties: { tipo: { type: "string", enum: ["decisao", "veto", "regra_aprendida", "pendencia"] }, descricao: { type: "string" }, motivo: { type: "string" }, contexto: { type: "object" } }, required: ["tipo", "descricao"] } },
-  { name: "propor_acao_calendario", description: "PROPÕE adicionar ação no calendário. Só grava após confirmação.", input_schema: { type: "object", properties: { mes_ref: { type: "string" }, data: { type: "string", description: "YYYY-MM-DD" }, tipo_acao: { type: "string", enum: ["live_grande", "live_loja", "disparo_semanal", "campanha_estoque", "acao_meta_ads", "outro"] }, titulo: { type: "string" }, descricao: { type: "string" }, publico_alvo_descricao: { type: "string" }, custo_estimado_brl: { type: "number" } }, required: ["mes_ref", "data", "tipo_acao", "titulo"] } },
-  { name: "propor_meta", description: "PROPÕE definir/atualizar meta mensal. Para loja/canal com store no PDV grava em public.pos_goals; total ou canal sem store cai em monthly_goals. Só grava após confirmação.", input_schema: { type: "object", properties: { mes_ref: { type: "string" }, loja: { type: "string", enum: ["perola", "centro", "shopify", "live", "total"] }, meta_faturamento_brl: { type: "number" }, observacao: { type: "string" } }, required: ["mes_ref", "loja", "meta_faturamento_brl"] } },
+  { name: "propor_acao_calendario", description: "PROPÕE adicionar ação no CALENDÁRIO INTERNO DO AGENTE (rascunho/memória). Para itens que devem aparecer na aba Calendário do Marketing use propor_entrada_calendario.", input_schema: { type: "object", properties: { mes_ref: { type: "string" }, data: { type: "string", description: "YYYY-MM-DD" }, tipo_acao: { type: "string", enum: ["live_grande", "live_loja", "disparo_semanal", "campanha_estoque", "acao_meta_ads", "outro"] }, titulo: { type: "string" }, descricao: { type: "string" }, publico_alvo_descricao: { type: "string" }, custo_estimado_brl: { type: "number" } }, required: ["mes_ref", "data", "tipo_acao", "titulo"] } },
+  { name: "propor_entrada_calendario", description: "PROPÕE criar entrada REAL no Calendário do Marketing (aba Calendário). Só grava após confirmação. Use para lives, campanhas, lembretes, metas ou outros marcos que o usuário deve ver no calendário.", input_schema: { type: "object", properties: { entry_date: { type: "string", description: "YYYY-MM-DD" }, end_date: { type: "string", description: "YYYY-MM-DD (opcional, evento multi-dia)" }, title: { type: "string" }, content: { type: "string" }, entry_type: { type: "string", enum: ["live", "campanha", "lembrete", "meta", "outro"] }, color: { type: "string", description: "Cor HEX, ex #3b82f6" } }, required: ["entry_date", "title", "entry_type"] } },
+  { name: "propor_meta_mensal_calendario", description: "PROPÕE gravar metas/anotações do mês na aba Calendário (marketing_calendar_goals). Upsert por (year, month). Só grava após confirmação.", input_schema: { type: "object", properties: { year: { type: "integer" }, month: { type: "integer", description: "1-12" }, goals: { type: "array", items: { type: "string" }, description: "Lista de objetivos do mês" }, actions: { type: "string" }, notes: { type: "string" } }, required: ["year", "month"] } },
+  { name: "propor_meta", description: "PROPÕE definir/atualizar meta mensal de FATURAMENTO por loja/canal. Para loja/canal com store no PDV grava em public.pos_goals; total ou canal sem store cai em monthly_goals. Só grava após confirmação.", input_schema: { type: "object", properties: { mes_ref: { type: "string" }, loja: { type: "string", enum: ["perola", "centro", "shopify", "live", "total"] }, meta_faturamento_brl: { type: "number" }, observacao: { type: "string" } }, required: ["mes_ref", "loja", "meta_faturamento_brl"] } },
+  { name: "propor_publico", description: "PROPÕE criar um PÚBLICO reutilizável (campanha_publicos) que fica disponível em PDV > Online > Automação, Marketing > Disparos e Matriz RFM. SEMPRE chame preview_audience antes com o MESMO filtro_json para mostrar total estimado e amostra ao usuário. Só grava após confirmação.", input_schema: { type: "object", properties: { nome: { type: "string" }, filtro_json: { type: "object", description: "Objeto com include e exclude (ambos opcionais). Chaves suportadas em cada bloco: sizes[], categories[], brands[], stores[], payment_methods[], cities[], ddds[], states[], rfm_segments[], tags[], in_vip_group (bool), min_avg_ticket, max_avg_ticket, min_total_orders, max_total_orders, last_purchase_op (gt_days|lt_days|after|before|between), last_purchase_days, last_purchase_from, last_purchase_to, first_purchase_op, first_purchase_days, first_purchase_from, first_purchase_to. Nunca invente segmento RFM — use somente segmentos existentes vistos em get_rfm_summary." }, descricao_curta: { type: "string", description: "Uma frase explicando o que o público representa" } }, required: ["nome", "filtro_json"] } },
+  { name: "propor_atualizar_publico", description: "PROPÕE atualizar nome e/ou filtro_json de um público existente. Só grava após confirmação.", input_schema: { type: "object", properties: { id: { type: "string" }, nome: { type: "string" }, filtro_json: { type: "object" } }, required: ["id"] } },
+  { name: "preview_audience", description: "READ. Calcula quantos clientes o filtro_json atinge (crm_customers_v via bc_match_audience) e devolve amostra de até 50. Use sempre ANTES de propor_publico para validar o filtro e mostrar volume ao usuário.", input_schema: { type: "object", properties: { filtro_json: { type: "object" } }, required: ["filtro_json"] } },
+  { name: "list_audiences", description: "READ. Lista os públicos já salvos em campanha_publicos (id, nome, filtro_json, updated_at) para evitar duplicatas.", input_schema: { type: "object", properties: {} } },
 ];
 
 const TOOLS_OPENAI = TOOLS_ANTHROPIC.map((t) => ({
@@ -47,10 +53,41 @@ const READ_TOOLS = new Set([
   "get_customer_lookup", "get_top_customers",
   "get_stock_by_size", "get_leads_by_channel", "get_leads_lookup", "get_campaign_results",
   "get_dispatch_pressure",
+  "preview_audience", "list_audiences",
 ]);
-const PROPOSAL_TOOLS = new Set(["propor_decisao", "propor_acao_calendario", "propor_meta"]);
+const PROPOSAL_TOOLS = new Set([
+  "propor_decisao", "propor_acao_calendario", "propor_meta",
+  "propor_entrada_calendario", "propor_meta_mensal_calendario",
+  "propor_publico", "propor_atualizar_publico",
+]);
 
 async function executeReadTool(supabase: any, name: string, input: any): Promise<any> {
+  if (name === "preview_audience") {
+    const filtro = input?.filtro_json ?? {};
+    const { data, error } = await supabase.rpc("list_campaign_audience", {
+      p_filtro: filtro, p_limit: 50, p_offset: 0,
+    });
+    if (error) return { error: error.message };
+    // total estimado extra (contagem real limitada a 5000 pra não estourar)
+    const { data: bulk, error: e2 } = await supabase.rpc("list_campaign_audience", {
+      p_filtro: filtro, p_limit: 5000, p_offset: 0,
+    });
+    if (e2) return { error: e2.message };
+    return {
+      total_estimado: bulk?.length ?? 0,
+      total_truncado_em: 5000,
+      sample: (data ?? []).slice(0, 50),
+    };
+  }
+  if (name === "list_audiences") {
+    const { data, error } = await supabase
+      .from("campanha_publicos")
+      .select("id, nome, filtro_json, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(100);
+    if (error) return { error: error.message };
+    return { publicos: data ?? [] };
+  }
   const rpcMap: Record<string, { fn: string; args: (i: any) => any }> = {
     get_agent_memory: { fn: "get_agent_memory", args: (i) => ({ p_mes_ref: i.mes_ref ?? null }) },
     get_classificacao_summary: { fn: "get_classificacao_summary", args: () => ({}) },
@@ -136,6 +173,62 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
     }, { onConflict: "mes_ref,loja" }).select().single();
     return error ? { error: error.message } : { ok: true, id: data.id, fonte: "monthly_goals" };
   }
+  if (kind === "propor_entrada_calendario") {
+    const { data, error } = await supabase.from("marketing_calendar_entries").insert({
+      entry_date: payload.entry_date,
+      end_date: payload.end_date ?? null,
+      title: payload.title,
+      content: payload.content ?? "",
+      entry_type: payload.entry_type ?? "outro",
+      color: payload.color ?? "#3b82f6",
+    }).select().single();
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "marketing_calendar_entries" };
+  }
+  if (kind === "propor_meta_mensal_calendario") {
+    const { data: existing } = await supabase
+      .from("marketing_calendar_goals").select("id")
+      .eq("year", payload.year).eq("month", payload.month).maybeSingle();
+    const row = {
+      year: payload.year,
+      month: payload.month,
+      goals: payload.goals ?? [],
+      actions: payload.actions ?? "",
+      notes: payload.notes ?? "",
+    };
+    if (existing?.id) {
+      const { error } = await supabase.from("marketing_calendar_goals").update(row).eq("id", existing.id);
+      return error ? { error: error.message } : { ok: true, id: existing.id, fonte: "marketing_calendar_goals", updated: true };
+    }
+    const { data, error } = await supabase.from("marketing_calendar_goals").insert(row).select().single();
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "marketing_calendar_goals", updated: false };
+  }
+  if (kind === "propor_publico") {
+    // Valida filtro chamando list_campaign_audience antes de gravar.
+    const filtro = payload.filtro_json ?? {};
+    const { error: vErr } = await supabase.rpc("list_campaign_audience", {
+      p_filtro: filtro, p_limit: 1, p_offset: 0,
+    });
+    if (vErr) return { error: `filtro_json inválido: ${vErr.message}` };
+    const { data, error } = await supabase.from("campanha_publicos").insert({
+      nome: payload.nome,
+      filtro_json: filtro,
+    }).select().single();
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos" };
+  }
+  if (kind === "propor_atualizar_publico") {
+    const update: any = {};
+    if (payload.nome != null) update.nome = payload.nome;
+    if (payload.filtro_json != null) {
+      const { error: vErr } = await supabase.rpc("list_campaign_audience", {
+        p_filtro: payload.filtro_json, p_limit: 1, p_offset: 0,
+      });
+      if (vErr) return { error: `filtro_json inválido: ${vErr.message}` };
+      update.filtro_json = payload.filtro_json;
+    }
+    const { data, error } = await supabase.from("campanha_publicos")
+      .update(update).eq("id", payload.id).select().single();
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos" };
+  }
   return { error: `kind desconhecido: ${kind}` };
 }
 
@@ -196,11 +289,34 @@ O QUE VOCÊ PODE FAZER:
 - MAPA DE CALOR = por_calor de get_rfm_summary (lead_temperature: quente/morno/frio/etc) OU rfm_segment (campeões > leais > potenciais > em_risco > hibernando > perdidos). Ambos disponíveis em get_customer_lookup/get_top_customers.
 - Base de leads: get_leads_by_channel (contagem) e get_leads_lookup (detalhes cruzando ad_leads/event_leads/lp_leads/link_page_leads — traz temperatura e tamanho quando existe).
 - Escrever (com confirmação em DOIS PASSOS):
-  1) Você chama propor_decisao / propor_acao_calendario / propor_meta.
+  1) Você chama uma tool de proposta (propor_*).
   2) O usuário responde "ok"/"confirma"/"grava" mencionando O ITEM.
   3) Só então a proposta vira real (o sistema faz o commit no próximo turn).
 - Se o usuário mudar de assunto sem confirmar, a proposta expira. NÃO grave retroativamente.
 - Quando houver múltiplas propostas em aberto, pergunte QUAL o "ok" cobre.
+
+CALENDÁRIO DE MARKETING (aba Calendário):
+- Para criar um evento visível na aba Calendário (live, campanha, lembrete, meta, outro), use propor_entrada_calendario (grava em marketing_calendar_entries). É o caminho oficial.
+- Para gravar metas/anotações do MÊS (objetivos, ações planejadas, notas), use propor_meta_mensal_calendario (upsert em marketing_calendar_goals por year+month).
+- propor_acao_calendario continua existindo, mas é apenas rascunho interno do agente (agent_calendar). Prefira as duas tools acima quando o usuário quer ver no calendário real.
+
+PÚBLICOS REUTILIZÁVEIS (campanha_publicos):
+- Você pode criar/atualizar públicos que aparecem automaticamente em: PDV > Online > Automação, Marketing > Disparos e Matriz RFM.
+- Fluxo obrigatório para criar público:
+  1) Chame list_audiences para não duplicar público existente.
+  2) Monte o filtro_json usando SOMENTE estas chaves (dentro de include e/ou exclude):
+     sizes, categories, brands, stores, payment_methods, cities, ddds, states, rfm_segments, tags,
+     in_vip_group (bool), min_avg_ticket, max_avg_ticket, min_total_orders, max_total_orders,
+     last_purchase_op (gt_days|lt_days|after|before|between), last_purchase_days, last_purchase_from, last_purchase_to,
+     first_purchase_op, first_purchase_days, first_purchase_from, first_purchase_to.
+  3) Chame preview_audience(filtro_json) para obter total_estimado e amostra.
+  4) Mostre ao usuário o total + amostra e pergunte se pode gravar.
+  5) Chame propor_publico(nome, filtro_json, descricao_curta). Só grava após "ok".
+- NUNCA invente segmento RFM — use apenas os que aparecerem em get_rfm_summary.por_segmento.
+- Tamanhos vão como strings (ex.: "36", "37"). DDDs como strings ("33", "31").
+- Para editar público existente use propor_atualizar_publico (id obrigatório).
+
+
 
 FONTES DE METAS (caminho oficial — siga exatamente):
 - Metas oficiais vêm de public.pos_goals (PDV) ligadas por store_id em public.pos_stores.
