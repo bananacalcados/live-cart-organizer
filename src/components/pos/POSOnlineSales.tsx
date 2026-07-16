@@ -135,6 +135,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
       .from("pos_stores")
       .select("id, name")
       .eq("is_active", true)
+      .eq("is_simulation", false)
       .order("name")
       .then(({ data }) => {
         if (data) setStores(data);
