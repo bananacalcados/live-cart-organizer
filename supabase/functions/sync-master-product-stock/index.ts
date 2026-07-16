@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { master_id, target = "both", distribute_pos = "replicate" } = await req.json();
+    const { master_id, target = "both", store_id: body_store_id = null } = await req.json();
     if (!master_id) {
       return new Response(JSON.stringify({ error: "master_id required" }), {
         status: 400,
