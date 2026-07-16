@@ -20,6 +20,7 @@ import {
 import { Loader2, Save, Trash2, Plus, Upload, X, Package, Sparkles, Store as StoreIcon } from "lucide-react";
 import { toast } from "sonner";
 import { generateEan13, isValidEan13 } from "@/lib/ean13";
+import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
 
 interface VariantRow {
   id?: string;                 // existente
