@@ -96,6 +96,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       .from("pos_stores")
       .select("id, name")
       .eq("is_active", true)
+      .eq("is_simulation", false)
       .order("name")
       .then(({ data }) => setStores((data || []) as any));
   }, [open]);

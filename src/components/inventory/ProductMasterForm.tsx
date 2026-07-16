@@ -74,6 +74,8 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
     supabase
       .from("pos_stores")
       .select("id, name")
+      .eq("is_active", true)
+      .eq("is_simulation", false)
       .order("name")
       .then(({ data }) => setStores((data || []) as any));
     supabase
