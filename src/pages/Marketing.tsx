@@ -2717,6 +2717,42 @@ export default function Marketing() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Salvar filtros RFM atuais como público reutilizável */}
+      <SaveAudienceDialog
+        open={saveAudienceOpen}
+        onOpenChange={setSaveAudienceOpen}
+        filter={(() => {
+          const inc: any = {};
+          if (rfmFilter !== 'all') inc.rfm_segments = [rfmFilter];
+          if (dddFilter !== 'all') inc.ddds = [dddFilter];
+          if (ticketMin) inc.min_avg_ticket = ticketMin;
+          if (ticketMax) inc.max_avg_ticket = ticketMax;
+          if (ordersMin) inc.min_total_orders = ordersMin;
+          if (ordersMax) inc.max_total_orders = ordersMax;
+          if (dateFrom && dateTo) {
+            inc.last_purchase_op = 'between';
+            inc.last_purchase_from = dateFrom;
+            inc.last_purchase_to = dateTo;
+          } else if (dateFrom) {
+            inc.last_purchase_op = 'after';
+            inc.last_purchase_from = dateFrom;
+          } else if (dateTo) {
+            inc.last_purchase_op = 'before';
+            inc.last_purchase_to = dateTo;
+          }
+          return { include: inc, exclude: {} } as AudienceFilter;
+        })()}
+        ignoredFilters={[
+          ...(regionFilter !== 'all' ? ['Região (derivada)'] : []),
+          ...(storeFilter !== 'all' ? ['Loja'] : []),
+          ...(sellerFilter !== 'all' ? ['Vendedora'] : []),
+          ...(recencyFilter !== 'all' ? ['Score de Recência RFM'] : []),
+          ...(topN !== 'all' ? ['Top N'] : []),
+          ...(excludedPresetIds.length > 0 || includedPresetIds.length > 0 ? ['Interseção/Exclusão de presets'] : []),
+        ]}
+      />
     </div>
+
   );
 }
