@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
 
     // ====================== POS ======================
     if (target === "pos" || target === "both") {
-      const { data: stores } = await supabase.from("pos_stores").select("id, name");
+      const { data: stores } = await supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false);
       const storeIds = (stores || []).map((s: any) => s.id);
 
       let posUpdated = 0;

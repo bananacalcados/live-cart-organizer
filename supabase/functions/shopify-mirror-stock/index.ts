@@ -120,16 +120,25 @@ Deno.serve(async (req) => {
 
     const results: any[] = [];
 
+    // Somar estoque APENAS das lojas reais (exclui simulações do Gestão > Formação de Margem)
+    const { data: realStores } = await supabase
+      .from("pos_stores")
+      .select("id")
+      .eq("is_active", true)
+      .eq("is_simulation", false);
+    const realStoreIds = (realStores || []).map((s: any) => s.id);
+
     for (const [key, v] of variantMap.entries()) {
       try {
-        // Estoque COMPARTILHADO = soma de todas as lojas por barcode
+        // Estoque COMPARTILHADO = soma das lojas REAIS por barcode
         let shared = 0;
         const barcode = v.gtin || (key.startsWith("sku:") ? null : key);
-        if (barcode) {
+        if (barcode && realStoreIds.length > 0) {
           const { data: posRows } = await supabase
             .from("pos_products")
             .select("stock")
-            .eq("barcode", barcode);
+            .eq("barcode", barcode)
+            .in("store_id", realStoreIds);
           shared = (posRows || []).reduce((acc: number, r: any) => acc + (Number(r.stock) || 0), 0);
         }
         if (shared < 0) shared = 0;

@@ -55,6 +55,7 @@ Deno.serve(async (req) => {
       .from("pos_stores")
       .select("id, name")
       .eq("is_active", true)
+      .eq("is_simulation", false)
       .order("name");
     const targetStores = (stores || []) as { id: string; name: string }[];
     if (targetStores.length === 0) throw new Error("Nenhuma loja PDV ativa cadastrada.");

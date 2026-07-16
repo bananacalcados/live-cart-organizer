@@ -118,11 +118,12 @@ Deno.serve(async (req) => {
 
     const baseName = baseNameFromVariant(template.name || "");
 
-    // Lojas ativas
+    // Lojas reais (exclui simulações do módulo Gestão > Formação de Margem)
     const { data: stores } = await supabase
       .from("pos_stores")
       .select("id, name")
       .eq("is_active", true)
+      .eq("is_simulation", false)
       .order("name");
     const targetStores = (stores || []) as { id: string; name: string }[];
     if (targetStores.length === 0) throw new Error("Nenhuma loja PDV ativa cadastrada.");
