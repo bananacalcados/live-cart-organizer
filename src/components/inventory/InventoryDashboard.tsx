@@ -2,8 +2,6 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -29,20 +27,17 @@ const fmtNum = (v: number) => v.toLocaleString("pt-BR");
 export function InventoryDashboard() {
   const [snapshot, setSnapshot] = useState<StoreSnapshot[]>([]);
   const [loadingSnapshot, setLoadingSnapshot] = useState(true);
-  const [run, setRun] = useState<RunRow | null>(null);
-  const [loadingRun, setLoadingRun] = useState(true);
-  const [triggering, setTriggering] = useState(false);
-  const [syncingIncremental, setSyncingIncremental] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  // ---- Snapshot ao vivo do banco (pos_products) ----
+  // ---- Snapshot ao vivo do banco (pos_products) — auditoria interna ----
   const loadSnapshot = useCallback(async () => {
     setLoadingSnapshot(true);
     const { data: stores } = await supabase
       .from("pos_stores")
       .select("id, name")
-      .eq("has_tiny_token", true)
       .eq("is_active", true)
-      .eq("is_simulation", false);
+      .eq("is_simulation", false)
+      .order("name");
 
     if (!stores) {
       setSnapshot([]);
@@ -52,7 +47,6 @@ export function InventoryDashboard() {
 
     const results: StoreSnapshot[] = [];
     for (const s of stores) {
-      // Pagina pra calcular agregados sem estourar os 1000 do PostgREST
       let from = 0;
       const pageSize = 1000;
       let skus = 0;
@@ -83,89 +77,27 @@ export function InventoryDashboard() {
       results.push({ store_id: s.id, store_name: s.name, skus, pairs, cost, sale });
     }
     setSnapshot(results);
+    setLastRefresh(new Date());
     setLoadingSnapshot(false);
-  }, []);
-
-  // ---- Última run da auditoria ----
-  const loadRun = useCallback(async () => {
-    const { data } = await supabase
-      .from("inventory_audit_runs")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    setRun(data as unknown as RunRow);
-    setLoadingRun(false);
   }, []);
 
   useEffect(() => {
     loadSnapshot();
-    loadRun();
-  }, [loadSnapshot, loadRun]);
+  }, [loadSnapshot]);
 
-  // Polling de progresso enquanto rodando
-  useEffect(() => {
-    if (!run || run.status !== "running") return;
-    const t = setInterval(loadRun, 5000);
-    return () => clearInterval(t);
-  }, [run?.status, loadRun]);
-
-  // Realtime no pos_products pra dar refresh do snapshot quando o sync salvar dados
+  // Realtime: refresh do snapshot quando pos_products muda
   useEffect(() => {
     const ch = supabase
       .channel("inventory-dashboard-products")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "pos_products" },
-        () => {
-          // Throttle leve
-          if (run?.status === "running") return; // já tem polling
-          loadSnapshot();
-        },
+        () => { loadSnapshot(); },
       )
       .subscribe();
-    return () => {
-      supabase.removeChannel(ch);
-    };
-  }, [run?.status, loadSnapshot]);
+    return () => { supabase.removeChannel(ch); };
+  }, [loadSnapshot]);
 
-
-  // ---- Cálculo de % verificado ----
-  const perStore = (run?.per_store as any[]) || [];
-
-  // Estágio 1: páginas escaneadas vs total. Não temos número_paginas final salvo,
-  // então mostramos pages_scanned (aproximação) + skus_seen como métrica viva.
-  const stage1Snapshot = perStore.map((s) => ({
-    name: s.store_name,
-    stage: s.stage as number,
-    pages: s.pages_scanned ?? 0,
-    seen: s.skus_seen ?? 0,
-  }));
-
-  const snapshotByStore = new Map(snapshot.map((item) => [item.store_id, item]));
-  const totalSkusFromSnapshot = snapshot.reduce((a, b) => a + b.skus, 0);
-  const stockProcessedTotal = perStore.reduce((total, store) => {
-    const stage = Number(store.stage ?? 1);
-    const storeSkus = snapshotByStore.get(store.store_id)?.skus ?? 0;
-    const processed = Math.min(Number(store.stock_skus_processed) || 0, storeSkus);
-    return total + (stage >= 2 || store.stock_finished ? processed : 0);
-  }, 0);
-
-  const catalogStoreCount = snapshot.length;
-  const catalogFinishedCount = perStore.reduce(
-    (count, store) => count + (store.catalog_finished ? 1 : 0),
-    0,
-  );
-  const catalogPct = catalogStoreCount > 0 ? (catalogFinishedCount / catalogStoreCount) * 100 : 0;
-  const stage2Pct = totalSkusFromSnapshot > 0 ? Math.min(100, (stockProcessedTotal / totalSkusFromSnapshot) * 100) : 0;
-
-  const overallPct = run?.status === "done"
-    ? 100
-    : catalogPct < 100
-      ? Math.round((catalogPct + stage2Pct) / 2)
-      : Math.round(stage2Pct);
-
-  // Totais consolidados (ao vivo, do banco)
   const totals = snapshot.reduce(
     (a, s) => ({
       skus: a.skus + s.skus,
@@ -183,17 +115,18 @@ export function InventoryDashboard() {
         <div>
           <h2 className="text-2xl font-bold">Dashboard de Estoque</h2>
           <p className="text-sm text-muted-foreground">
-            Visão consolidada das 3 contas Tiny (Centro, Pérola e Site).
+            Auditoria interna consolidada das lojas reais. Dados apurados diretamente do
+            catálogo do sistema (sem depender de sistemas externos).
+            {lastRefresh && (
+              <> · Atualizado em {lastRefresh.toLocaleTimeString("pt-BR")}</>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => {
-              loadSnapshot();
-              loadRun();
-            }}
+            onClick={() => loadSnapshot()}
             disabled={loadingSnapshot}
           >
             <RefreshCw className={cn("h-4 w-4 mr-1", loadingSnapshot && "animate-spin")} />
@@ -229,94 +162,6 @@ export function InventoryDashboard() {
           loading={loadingSnapshot}
         />
       </div>
-
-      {/* Status da auditoria */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              Status da última auditoria
-            </span>
-            {run && <RunStatusBadge status={run.status} />}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loadingRun ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
-            </div>
-          ) : !run ? (
-            <p className="text-sm text-muted-foreground">
-              Nenhuma auditoria registrada ainda. Dispare a auditoria v2 pra puxar os dados do Tiny.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">
-                  Iniciada em {new Date(run.created_at).toLocaleString("pt-BR")}
-                </span>
-                {run.finished_at && (
-                  <span className="text-muted-foreground">
-                    Finalizada em {new Date(run.finished_at).toLocaleString("pt-BR")}
-                  </span>
-                )}
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium">% verificado no estoque</span>
-                  <span className="text-sm font-bold">{overallPct}%</span>
-                </div>
-                <Progress value={overallPct} className="h-3" />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Catálogo {Math.round(catalogPct)}% • Estoque {Math.round(stage2Pct)}% • {fmtNum(stockProcessedTotal)} de {fmtNum(totalSkusFromSnapshot)} SKUs processados no estágio 2.
-                  </p>
-              </div>
-
-              {run.error_message && (
-                <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm">
-                  <AlertTriangle className="h-4 w-4 text-destructive mt-0.5" />
-                  <div>
-                    <p className="font-medium text-destructive">Erro na auditoria</p>
-                    <p className="text-muted-foreground">{run.error_message}</p>
-                  </div>
-                </div>
-              )}
-
-              {/* Per-store progress */}
-              {perStore.length > 0 && (
-                <div className="space-y-3 pt-2">
-                  {perStore.map((s) => (
-                    <div key={s.store_id} className="rounded-md border p-3">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium flex items-center gap-2">
-                          <StoreIcon className="h-4 w-4" /> {s.store_name}
-                        </span>
-                        <Badge variant="secondary" className="text-xs">
-                          Estágio {s.stage}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                        <Metric label="Páginas" value={fmtNum(s.pages_scanned ?? 0)} />
-                        <Metric label="SKUs vistos" value={fmtNum(s.skus_seen ?? 0)} />
-                        <Metric label="SKUs atualizados" value={fmtNum(s.skus_updated ?? 0)} />
-                        <Metric label="Estoque processado" value={fmtNum(s.stock_skus_processed ?? 0)} />
-                      </div>
-                      {(s.last_progress_at || s.last_error) && (
-                        <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-                          {s.last_progress_at && <span>Último avanço: {new Date(s.last_progress_at).toLocaleString("pt-BR")}</span>}
-                          {s.last_error && <span>Último aviso: {s.last_error}</span>}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Tabela por loja */}
       <Card>
@@ -394,38 +239,4 @@ function KpiCard({
       </CardContent>
     </Card>
   );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-muted-foreground">{label}</div>
-      <div className="font-semibold">{value}</div>
-    </div>
-  );
-}
-
-function RunStatusBadge({ status }: { status: string }) {
-  if (status === "running") {
-    return (
-      <Badge variant="secondary" className="gap-1">
-        <Loader2 className="h-3 w-3 animate-spin" /> Em andamento
-      </Badge>
-    );
-  }
-  if (status === "done") {
-    return (
-      <Badge className="gap-1 bg-green-600 hover:bg-green-600">
-        <CheckCircle2 className="h-3 w-3" /> Concluída
-      </Badge>
-    );
-  }
-  if (status === "error") {
-    return (
-      <Badge variant="destructive" className="gap-1">
-        <AlertTriangle className="h-3 w-3" /> Erro
-      </Badge>
-    );
-  }
-  return <Badge variant="outline">{status}</Badge>;
 }
