@@ -18875,10 +18875,6 @@ export type Database = {
           total_variants: number
         }[]
       }
-      apply_catalog_sync_from_pos: {
-        Args: { p_limit?: number; p_offset?: number }
-        Returns: Json
-      }
       apply_shopify_links: { Args: { _links: Json }; Returns: number }
       apply_variant_normalization: {
         Args: { p_dry_run?: boolean; p_limit?: number }
