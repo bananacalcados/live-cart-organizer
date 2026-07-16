@@ -992,16 +992,24 @@ export function MassTemplateDispatcher() {
     return finalList;
   }, [crmCustomers, leads, ravenaCustomers, orphanContacts, orphanGroupFilter, audienceSource, rfmFilter, stateFilter, cityFilter, dddFilter, regionFilter, searchQuery, leadCampaignFilter, storeFilter, sellerFilter, dateFrom, dateTo, ticketMin, ticketMax, ordersMin, ordersMax, topN, customerStoreMap, crmTagFilter, tempInclude, tempExclude, vipMembershipMode, vipMemberSuffixes, lastPurchaseMode, lastPurchaseDays]);
 
-  // Recipients after applying cooldown exclusion (suffix-based to catch same person with different DDDs)
+  // Recipients after applying cooldown exclusion + público salvo (interseção por sufixo 8 díg.)
   const filteredRecipients = useMemo((): Recipient[] => {
+    let out = baseRecipients;
     if (cooldownApplied && cooldownExcludedPhones.size > 0) {
-      return baseRecipients.filter(r => {
+      out = out.filter(r => {
         const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
         return !cooldownExcludedPhones.has(suffix);
       });
     }
-    return baseRecipients;
-  }, [baseRecipients, cooldownApplied, cooldownExcludedPhones]);
+    if (savedAudienceSuffixes) {
+      out = out.filter(r => {
+        const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
+        return savedAudienceSuffixes.has(suffix);
+      });
+    }
+    return out;
+  }, [baseRecipients, cooldownApplied, cooldownExcludedPhones, savedAudienceSuffixes]);
+
 
   // How many of the CURRENT audience were actually removed by the cooldown
   const cooldownRemovedFromAudience = baseRecipients.length - filteredRecipients.length;
