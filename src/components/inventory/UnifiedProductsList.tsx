@@ -191,7 +191,7 @@ export function UnifiedProductsList() {
       // Inclui também masters inativos para não esconder o produto-pai.
       supabase.from("product_master_data").select("*").order("name").limit(8000),
       fetchAllPos(),
-      supabase.from("pos_stores").select("id, name").order("name"),
+      supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false).order("name"),
     ]);
     setMasters((m || []) as any);
     setPosProducts(pp);
