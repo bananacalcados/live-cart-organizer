@@ -224,6 +224,12 @@ export function MassTemplateDispatcher() {
   const [lastPurchaseMode, setLastPurchaseMode] = useState<'any' | 'include' | 'exclude'>('any');
   const [lastPurchaseDays, setLastPurchaseDays] = useState<string>('30');
 
+  // Saved audience (campanha_publicos) — filtro adicional final
+  const [savedAudienceSuffixes, setSavedAudienceSuffixes] = useState<Set<string> | null>(null);
+  const [savedAudienceMeta, setSavedAudienceMeta] = useState<{ id: string; nome: string } | null>(null);
+  const [saveAudienceOpen, setSaveAudienceOpen] = useState(false);
+
+
   // Selection
   const [selectAll, setSelectAll] = useState(false);
   const [selectedPhones, setSelectedPhones] = useState<Set<string>>(new Set());
