@@ -263,6 +263,20 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
     if (!masterId) return;
     if (!name.trim()) { toast.error("Informe o nome."); return; }
 
+    // Valida formato de cor/tamanho em todas as variações preenchidas
+    for (const v of variants) {
+      if (!v.color && !v.size) continue;
+      if (v.size && !isValidSize(v.size)) {
+        toast.error(`Tamanho inválido: "${v.size}". Use números (39, 34/35) ou PP/P/M/G/GG.`);
+        return;
+      }
+      if (v.color && !isValidColor(v.color)) {
+        toast.error(`Cor inválida: "${v.color}". Cor não pode ser apenas números.`);
+        return;
+      }
+    }
+
+
     const hasNewVariants = variants.some((v) => !v.id && v.color && v.size);
     if (hasNewVariants && !stockStoreId) {
       toast.error("Há variações novas: escolha a loja que recebe o estoque (no topo das Variações).");
