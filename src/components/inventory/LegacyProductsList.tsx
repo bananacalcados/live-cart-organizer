@@ -470,6 +470,9 @@ export function LegacyProductsList() {
           <span className="text-sm font-medium">{selectedCount} produto(s) selecionado(s)</span>
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Limpar</Button>
+            <Button size="sm" variant="destructive" className="gap-1" onClick={() => setBulkDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4" /> Excluir selecionados
+            </Button>
             <Button size="sm" className="gap-1" onClick={openUnify}>
               <GitMerge className="h-4 w-4" /> Unificar selecionados
             </Button>
