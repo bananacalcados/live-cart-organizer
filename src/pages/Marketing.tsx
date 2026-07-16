@@ -1480,6 +1480,9 @@ export default function Marketing() {
               <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={() => setPresetDialogOpen(true)}>
                 <Save className="h-3 w-3" />Salvar Filtro
               </Button>
+              <Button variant="outline" size="sm" className="gap-1 text-xs h-7 border-blue-300 text-blue-700 hover:bg-blue-50" onClick={() => setSaveAudienceOpen(true)}>
+                <Save className="h-3 w-3" />Salvar como Público
+              </Button>
               {savedPresets.length > 0 && (
                 <>
                   <Button variant="outline" size="sm" className="gap-1 text-xs h-7" onClick={() => setPresetOpsOpen(true)}>
