@@ -53,10 +53,41 @@ const READ_TOOLS = new Set([
   "get_customer_lookup", "get_top_customers",
   "get_stock_by_size", "get_leads_by_channel", "get_leads_lookup", "get_campaign_results",
   "get_dispatch_pressure",
+  "preview_audience", "list_audiences",
 ]);
-const PROPOSAL_TOOLS = new Set(["propor_decisao", "propor_acao_calendario", "propor_meta"]);
+const PROPOSAL_TOOLS = new Set([
+  "propor_decisao", "propor_acao_calendario", "propor_meta",
+  "propor_entrada_calendario", "propor_meta_mensal_calendario",
+  "propor_publico", "propor_atualizar_publico",
+]);
 
 async function executeReadTool(supabase: any, name: string, input: any): Promise<any> {
+  if (name === "preview_audience") {
+    const filtro = input?.filtro_json ?? {};
+    const { data, error } = await supabase.rpc("list_campaign_audience", {
+      p_filtro: filtro, p_limit: 50, p_offset: 0,
+    });
+    if (error) return { error: error.message };
+    // total estimado extra (contagem real limitada a 5000 pra não estourar)
+    const { data: bulk, error: e2 } = await supabase.rpc("list_campaign_audience", {
+      p_filtro: filtro, p_limit: 5000, p_offset: 0,
+    });
+    if (e2) return { error: e2.message };
+    return {
+      total_estimado: bulk?.length ?? 0,
+      total_truncado_em: 5000,
+      sample: (data ?? []).slice(0, 50),
+    };
+  }
+  if (name === "list_audiences") {
+    const { data, error } = await supabase
+      .from("campanha_publicos")
+      .select("id, nome, filtro_json, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(100);
+    if (error) return { error: error.message };
+    return { publicos: data ?? [] };
+  }
   const rpcMap: Record<string, { fn: string; args: (i: any) => any }> = {
     get_agent_memory: { fn: "get_agent_memory", args: (i) => ({ p_mes_ref: i.mes_ref ?? null }) },
     get_classificacao_summary: { fn: "get_classificacao_summary", args: () => ({}) },
