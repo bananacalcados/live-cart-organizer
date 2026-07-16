@@ -466,6 +466,30 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
         }
       }
 
+      // 5. Propaga campos do PAI ao PDV automaticamente (todas as SKUs existentes deste master).
+      // Sincroniza: category, category_id, price, cost_price (respeitando overrides da variação).
+      try {
+        const existingRows = variants.filter((v) => v.id && v.sku);
+        if (existingRows.length > 0) {
+          const masterCost = parseFloat(costPrice) || 0;
+          const masterSale = parseFloat(salePrice) || 0;
+          for (const v of existingRows) {
+            const rowCost = v.cost_price_override ? parseFloat(v.cost_price_override) : masterCost;
+            const rowSale = v.sale_price_override ? parseFloat(v.sale_price_override) : masterSale;
+            const posPatch: Record<string, any> = {
+              category: category || null,
+              category_id: categoryId || null,
+            };
+            if (rowCost > 0) posPatch.cost_price = rowCost;
+            if (rowSale > 0) posPatch.price = rowSale;
+            await supabase.from("pos_products").update(posPatch).eq("sku", v.sku!);
+          }
+        }
+      } catch (syncErr: any) {
+        console.warn("Falha ao propagar campos ao PDV:", syncErr?.message);
+      }
+
+
       toast.success("Produto atualizado!");
       onSaved?.();
       onOpenChange(false);
