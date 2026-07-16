@@ -48,9 +48,35 @@ Deno.serve(async (req) => {
     const result: Record<string, unknown> = {};
 
     // ====================== POS ======================
+    // ATENÇÃO: nunca replica estoque em todas as lojas. store_id é OBRIGATÓRIO
+    // quando target inclui 'pos'. Apenas a loja indicada recebe o estoque das
+    // variantes; as demais lojas não são tocadas.
     if (target === "pos" || target === "both") {
-      const { data: stores } = await supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false);
-      const storeIds = (stores || []).map((s: any) => s.id);
+      const store_id: string | null = body_store_id;
+      if (!store_id) {
+        return new Response(JSON.stringify({
+          error: "store_id obrigatório para sincronizar estoque no PDV",
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // Bloqueia lojas simulação e buckets online (Site/Live, Site + Centro, Lojas + Live)
+      const { data: store } = await supabase
+        .from("pos_stores")
+        .select("id, name, is_simulation")
+        .eq("id", store_id)
+        .maybeSingle();
+      if (!store || store.is_simulation) {
+        return new Response(JSON.stringify({
+          error: "Loja inválida ou de simulação",
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      const nameNorm = String(store.name || "").toLowerCase();
+      const isOnlineBucket = ["site/live", "site + centro", "lojas + live"].some(n => nameNorm.includes(n));
+      if (isOnlineBucket) {
+        return new Response(JSON.stringify({
+          error: `A loja "${store.name}" é um agregador online e não recebe estoque via sincronização.`,
+        }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
 
       let posUpdated = 0;
       let posMissing = 0;
@@ -58,34 +84,29 @@ Deno.serve(async (req) => {
       for (const v of variants) {
         if (!v.gtin) continue;
         const stockMaster = Number(v.initial_stock || 0);
-        const perStoreStock = distribute_pos === "split" && storeIds.length > 0
-          ? Math.floor(stockMaster / storeIds.length)
-          : stockMaster;
 
-        for (const storeId of storeIds) {
-          const { data: existing } = await supabase
+        const { data: existing } = await supabase
+          .from("pos_products")
+          .select("id")
+          .eq("store_id", store_id)
+          .eq("barcode", v.gtin)
+          .maybeSingle();
+
+        if (existing) {
+          const { error } = await supabase
             .from("pos_products")
-            .select("id")
-            .eq("store_id", storeId)
-            .eq("barcode", v.gtin)
-            .maybeSingle();
-
-          if (existing) {
-            const { error } = await supabase
-              .from("pos_products")
-              .update({ stock: perStoreStock })
-              .eq("id", existing.id);
-            if (!error) posUpdated++;
-          } else {
-            posMissing++;
-          }
+            .update({ stock: stockMaster })
+            .eq("id", existing.id);
+          if (!error) posUpdated++;
+        } else {
+          posMissing++;
         }
       }
       result.pos = {
         updated: posUpdated,
         missing: posMissing,
-        stores: storeIds.length,
-        strategy: distribute_pos,
+        store_id,
+        store_name: store.name,
       };
     }
 
