@@ -1,61 +1,101 @@
+# Plano de Limpeza e Exclusão em Massa dos Catálogos
 
-## Diagnóstico
+## Contexto: Legacy ↔ Unificado estão vinculados?
 
-Investigando **Bota Texana em Couro Anita** (`parent_sku=100025`):
-- Módulo Estoque tem 12 variantes corretas em `product_variants` (Cafe/Preto × 34-39) com barcodes reais (`7892719060016`, `7891806186530`, ...).
-- No PDV (`pos_products`) existem 2 cadastros por variação/loja: um com SKU `100025-CAFE-35` (barcode que casa com `product_variants` → vinculado ao Estoque) e outro com SKU `7899304763598` (barcode diferente → aparece em Divergências).
-- Ambos foram criados em 10/jun/2026 na mesma sincronização. **Alguns duplicados têm estoque** (ex.: Cafe 35 na Pérola = 1 par no cadastro fantasma).
-- Risco: vendas podem sair do cadastro fantasma sem abater o Estoque real.
+Praticamente sim, mas não 100%:
 
-**Padrão para identificar o cadastro certo:** para um `pos_products` divergente `(parent_sku, color, size, barcode X)`, existe outro `pos_products` **mesma tripla** `(parent_sku, color, size)` cujo `barcode` bate com uma linha em `product_variants` (mesmo `sku_root`, `color`, `size`) — esse é o oficial; o divergente é o duplicado.
+- **Unificado → Legacy:** 519 dos 522 pais únicos do Catálogo Unificado têm o master correspondente no Legacy (99,4 %). Existem apenas **3 exceções** (`7142.101 TAMANCO MASSAGEADOR EM X`, `Tênis Nice`, `SANDALIA ULTRACONFORTO MARLLY`).
+- **Legacy → Unificado:** 186 masters existem no Legacy sem espelho no Unificado — são os produtos que nunca foram "Enviados ao PDV".
 
-## O que muda na aba Divergências PDV
+O vínculo é feito pelo campo **`parent_sku` do Unificado = `sku_root` do Legacy**. Não existe FK dura entre as duas tabelas — é um vínculo lógico por string.
 
-### 1. Novo agrupamento visual por pai
-- Substituir a lista plana por lista agrupada em **card por `parent_sku`**, mostrando:
-  - Nome-base do modelo + `parent_sku`.
-  - Se existe pai correspondente em `products_master` (sku_root), badge verde "vinculado ao Estoque"; senão badge âmbar "sem pai no Estoque".
-  - Linhas filhas expansíveis: cor · tamanho · barcode divergente · lojas · e coluna **"Cadastro correto encontrado"** (mostra SKU/barcode do irmão vinculado ao Estoque quando existir, ou "—" quando não).
-  - Botão **Excluir divergentes** (por linha e por pai inteiro) — só habilita quando existir cadastro correto irmão.
-  - Botão **Unificar** por pai (chama o consolidate existente com escopo neste `parent_sku`).
+Por isso a cascata só deve ser aplicada quando o par de fato existir; nos casos órfãos, a exclusão em um lado não deve travar por falta do outro.
 
-### 2. Nova RPC `list_pos_estoque_divergences_grouped(p_search, p_limit, p_offset)`
-- Retorna: `parent_sku`, `parent_name`, `has_master`, e `variants jsonb[]` cada uma com `{sku, barcode, color, size, store_count, correct_sku, correct_barcode, correct_stock_sum, divergent_stock_sum}`.
-- `correct_*` = `pos_products` irmão (mesmo `parent_sku+color+size`) cujo `barcode` casa com `product_variants` (via `sku_root/color/size`).
+## Item 1 — Limpar os 162 órfãos do Legacy
 
-### 3. Nova RPC `delete_pos_divergent_variant(p_parent_sku, p_barcode)` — SECURITY DEFINER
-Executa em transação para todas as lojas:
-1. Localiza a linha "correta" por loja: `pos_products` com mesmo `(parent_sku, color, size)` cujo `barcode` casa com `product_variants`. Se não existir em alguma loja com estoque no divergente > 0, **cria** a linha correta copiando price/cost/name do divergente + barcode/sku oficial.
-2. Migra estoque: `correta.stock += divergente.stock`.
-3. Registra 2 linhas em `pos_stock_adjustments` (`type='entrada'` no correto, `type='saida'` no divergente, `reason='Fusão de cadastro duplicado PDV'`).
-4. `DELETE FROM pos_products WHERE parent_sku=... AND barcode=... AND barcode <> correct_barcode`.
-5. Retorna `jsonb` com contagens: `rows_deleted`, `stock_migrated`, `stores_affected`.
+Órfãos = registros em `products_master` **sem nenhuma linha em `product_variants`**. São o rastro deixado pela extinta `apply_catalog_sync_from_pos`.
 
-Só permite excluir quando existe cadastro correto (`correct_barcode` não nulo) — protege contra apagar sem migrar. Se o usuário quiser eliminar um divergente sem cadastro correto, precisa antes rodar Unificar (consolidate) para criar o pai.
+Ação: `DELETE FROM products_master WHERE NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.master_id = id)`.
 
-### 4. RPC auxiliar `delete_pos_divergent_parent(p_parent_sku)`
-Loop chamando `delete_pos_divergent_variant` para todos os divergentes daquele pai (batch).
+Salvaguardas antes do delete:
+- Não apagar nenhum que esteja referenciado em `product_master_data` (parent_sku), `pos_products` (parent_sku) ou `purchase_invoice_items` — se algum órfão estiver amarrado a essas tabelas, mantém e loga.
+- Migration única, transacional. Grava o número de linhas deletadas em `catalog_sync_log` (operation = `cleanup_orphan_masters`).
 
-### 5. UI (`InventoryPosDivergences.tsx`)
-- Trocar `list_pos_estoque_divergences` por `list_pos_estoque_divergences_grouped`.
-- Renderizar collapsible por pai (usar `Accordion` do shadcn).
-- Diálogo de confirmação (`AlertDialog`) antes de excluir, mostrando: nº de variações, nº de lojas, pares que serão migrados.
-- Toast com resumo pós-exclusão + `loadRows` local sem reload da página inteira.
+Nenhum efeito sobre PDV, Shopify ou vendas — órfãos não têm variantes nem estoque associado.
 
-## Segurança
-- Nenhuma alteração em `product_variants`/`products_master`.
-- Trigger existente `trg_reactivate_pos_product_on_stock` continua funcionando (o "correto" pode virar `is_active=true` ao ganhar estoque).
-- Espelho Shopify roda normal (via SUM por barcode compartilhado).
-- Ajustes gravados em `pos_stock_adjustments` deixam trilha completa e permitem estorno manual se necessário.
+## Item 2 — Corrigir `sync-master-product-stock`
 
-## Arquivos
+Hoje o default é `distribute_pos: 'replicate'`, que espalhou 3 pares do Modare Vitória em TODAS as lojas, inclusive Site/Live.
 
-**Nova migration** (RPCs + grants):
-- `list_pos_estoque_divergences_grouped`
-- `delete_pos_divergent_variant`
-- `delete_pos_divergent_parent`
+Mudanças na edge function:
+- Remover o modo `replicate` como padrão. Passar a exigir `store_id` (loja de origem obrigatória).
+- Estoque das variantes vai apenas para a loja indicada; demais lojas recebem 0 quando o SKU não existe, ou permanecem intocadas quando já existem.
+- Nunca escrever em lojas com `is_simulation = true` (já ok) **e nunca em lojas com nome `Site/Live`, `Site + Centro`, `Lojas + Live`** (lista mantida no código a partir de uma flag `is_online_bucket` em `pos_stores` que já usamos ou por padrão de nome).
+- Ajustar `LegacyProductsList.tsx → syncStock`: perguntar loja de origem antes de chamar (`Select` com lojas físicas).
 
-**Editado:**
-- `src/components/inventory/InventoryPosDivergences.tsx` — agrupamento, botões Excluir/Unificar por pai, dialogs de confirmação, refresh local.
+Nada muda no fluxo de vendas nem no espelho Shopify.
 
-Nenhum arquivo do fluxo de vendas, expedição ou espelhamento é tocado.
+## Item 3 — Multi-seleção + exclusão em massa (Legacy e Unificado)
+
+### Legacy (`LegacyProductsList.tsx`)
+- Adicionar `Checkbox` na 1ª coluna de cada linha + checkbox "Selecionar todos" no cabeçalho (respeitando o filtro/aba ativa).
+- Já existe estado `selected: Set<string>` usado por "Unificar" — reaproveitar.
+- Botão **"Excluir selecionados"** (destructive) ao lado dos botões atuais, com `AlertDialog` de confirmação mostrando quantos e listando os primeiros 10 nomes.
+- Ao confirmar: chama uma edge function nova `delete-master-products` (ver seção técnica).
+
+### Unificado (`UnifiedProductsList.tsx`)
+- Mesmo padrão: Checkbox por linha do agrupamento pai + "Selecionar todos".
+- Botão **"Excluir selecionados"** com confirmação.
+- Chama a mesma edge function passando `parent_skus`.
+
+### Cascata bidirecional
+Ao excluir por qualquer lado, a edge function faz:
+1. Resolve pares: para cada `master_id` recebido, busca `sku_root`; para cada `parent_sku` recebido, busca `master_id` correspondente.
+2. Exclui **em cascata** nas duas tabelas quando o par existir:
+   - `products_master` + `product_variants` (cascade FK já existe) + linhas em `product_master_data` com mesmo `parent_sku` + linhas em `pos_products` com mesmo `parent_sku`.
+3. Se o par não existir (órfão de um dos lados), exclui só o que foi pedido — sem falhar.
+4. Antes de apagar, checa se existe **venda vinculada em `pos_sale_items`** (por sku/parent_sku). Se sim, bloqueia esse item específico e devolve na resposta como `blocked: [...]` para o front mostrar aviso. Não bloqueia o lote inteiro — só o item com histórico de venda.
+5. Loga cada exclusão em `catalog_sync_log` (operation = `bulk_delete_from_legacy` ou `bulk_delete_from_unified`).
+
+Toast final: `"X excluídos · Y bloqueados por histórico de venda"`.
+
+## Detalhes técnicos
+
+**Migration 1 — cleanup órfãos:**
+```sql
+WITH orphans AS (
+  SELECT id FROM products_master m
+  WHERE NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.master_id = m.id)
+    AND NOT EXISTS (SELECT 1 FROM product_master_data d WHERE d.parent_sku = m.sku_root)
+    AND NOT EXISTS (SELECT 1 FROM pos_products p WHERE p.parent_sku = m.sku_root)
+    AND NOT EXISTS (SELECT 1 FROM purchase_invoice_items i WHERE i.master_id = m.id)
+)
+DELETE FROM products_master WHERE id IN (SELECT id FROM orphans);
+```
+
+**Edge function `delete-master-products`:**
+- Input: `{ master_ids?: string[], parent_skus?: string[] }`
+- Service role, verify_jwt = false, CORS.
+- Passos: resolver pares → checar bloqueios (`pos_sale_items`) → deletar → logar.
+- Retorno: `{ deleted: {legacy: n, unified: n, pos_products: n}, blocked: [{sku_root, reason}] }`.
+
+**Edge function `sync-master-product-stock` (correção):**
+- Novo body: `{ master_id, store_id, target }`. `store_id` passa a ser obrigatório para `target ∈ {pos, both}`.
+- Remove o loop `for storeId of storeIds` — atualiza apenas 1 loja.
+- Manter o path do Shopify inalterado.
+
+**Front (arquivos):**
+- `src/components/inventory/LegacyProductsList.tsx` — checkbox coluna, botão "Excluir selecionados", diálogo do syncStock com Select de loja.
+- `src/components/inventory/UnifiedProductsList.tsx` — checkbox no card-header do pai, botão "Excluir selecionados".
+- Novo arquivo: `src/components/inventory/BulkDeleteDialog.tsx` — reutilizável nos dois.
+
+**Não são tocados:**
+- Fluxo de vendas, `process_pos_sale_sale_event`, triggers de estoque, `create-master-product-pos`, espelho Shopify, PDV.
+
+## Ordem de execução
+1. Migration limpeza dos 162 órfãos.
+2. Edge function `delete-master-products` (nova).
+3. Ajustes front (checkboxes + bulk delete + diálogo do sync).
+4. Correção `sync-master-product-stock` (Item 2).
+
+Aguardo aprovação para implementar.

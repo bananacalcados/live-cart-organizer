@@ -89,6 +89,14 @@ export function LegacyProductsList() {
   const [parentTargetId, setParentTargetId] = useState<string | null>(null);
   const [merging, setMerging] = useState(false);
 
+  // Diálogo de sync-estoque-PDV (loja obrigatória)
+  const [syncStockDialog, setSyncStockDialog] = useState<{ masterId: string; storeId: string } | null>(null);
+  const [physicalStores, setPhysicalStores] = useState<Array<{ id: string; name: string }>>([]);
+
+  // Exclusão em massa
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   async function load() {
     setLoading(true);
     const term = search.trim();
@@ -137,6 +145,23 @@ export function LegacyProductsList() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
+
+  // Lojas físicas para o diálogo de sincronizar estoque
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("pos_stores")
+        .select("id, name")
+        .eq("is_active", true)
+        .eq("is_simulation", false)
+        .order("name");
+      const filtered = (data || []).filter((s: any) => {
+        const n = String(s.name || "").toLowerCase();
+        return !["site/live", "site + centro", "lojas + live"].some((x) => n.includes(x));
+      });
+      setPhysicalStores(filtered as any);
+    })();
+  }, []);
 
   // busca de pai existente (products_master) para vincular
   useEffect(() => {
@@ -290,18 +315,65 @@ export function LegacyProductsList() {
   }
 
   async function syncStock(masterId: string, target: "pos" | "shopify") {
+    if (target === "pos") {
+      // Estoque no PDV agora exige loja de origem para não replicar em todas as lojas
+      setSyncStockDialog({ masterId, storeId: "" });
+      return;
+    }
     setSendingTo(masterId);
     try {
       const { data, error } = await supabase.functions.invoke("sync-master-product-stock", { body: { master_id: masterId, target } });
       if (error) throw error;
       const r = data?.result || {};
       const parts: string[] = [];
-      if (r.pos) parts.push(`PDV: ${r.pos.updated} atualizados em ${r.pos.stores} loja(s)`);
+      if (r.pos) parts.push(`PDV: ${r.pos.updated} atualizados em ${r.pos.store_name}`);
       if (r.shopify) parts.push(`Shopify: ${r.shopify.updated || 0} variantes`);
       toast.success("Estoque sincronizado — " + parts.join(" · "));
     } catch (err: any) {
       toast.error("Erro ao sincronizar estoque: " + err.message);
     } finally { setSendingTo(null); }
+  }
+
+  async function confirmSyncStockPos() {
+    if (!syncStockDialog?.storeId) { toast.error("Selecione a loja de origem"); return; }
+    const { masterId, storeId } = syncStockDialog;
+    setSyncStockDialog(null);
+    setSendingTo(masterId);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-master-product-stock", {
+        body: { master_id: masterId, target: "pos", store_id: storeId },
+      });
+      if (error) throw error;
+      const r = data?.result || data || {};
+      toast.success(`PDV: ${r.pos?.updated ?? 0} atualizados em ${r.pos?.store_name ?? "loja"}`);
+    } catch (err: any) {
+      toast.error("Erro ao sincronizar estoque: " + err.message);
+    } finally { setSendingTo(null); }
+  }
+
+  async function bulkDeleteSelected() {
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    setBulkDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-master-products", {
+        body: { master_ids: ids },
+      });
+      if (error) throw error;
+      const d = (data as any)?.deleted || {};
+      const b = (data as any)?.blocked || [];
+      toast.success(
+        `${d.legacy || 0} excluídos do Legacy · ${d.unified || 0} do Unificado · ${d.pos_products || 0} do PDV${b.length ? ` · ${b.length} bloqueados (histórico de venda)` : ""}`,
+        { duration: 8000 },
+      );
+      setSelected(new Set());
+      setBulkDeleteOpen(false);
+      await load();
+    } catch (err: any) {
+      toast.error("Erro ao excluir: " + err.message);
+    } finally {
+      setBulkDeleting(false);
+    }
   }
 
   function openUnify() {
@@ -398,6 +470,9 @@ export function LegacyProductsList() {
           <span className="text-sm font-medium">{selectedCount} produto(s) selecionado(s)</span>
           <div className="flex gap-2">
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Limpar</Button>
+            <Button size="sm" variant="destructive" className="gap-1" onClick={() => setBulkDeleteOpen(true)}>
+              <Trash2 className="h-4 w-4" /> Excluir selecionados
+            </Button>
             <Button size="sm" className="gap-1" onClick={openUnify}>
               <GitMerge className="h-4 w-4" /> Unificar selecionados
             </Button>
@@ -711,6 +786,64 @@ export function LegacyProductsList() {
         onClose={() => setEditingVariant(null)}
         onSaved={async (masterId) => { setEditingVariant(null); await refreshVariants(masterId); }}
       />
+
+      {/* Diálogo: sincronizar estoque no PDV — exige loja */}
+      <Dialog open={!!syncStockDialog} onOpenChange={(v) => !v && setSyncStockDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sincronizar estoque no PDV</DialogTitle>
+            <DialogDescription>
+              Escolha a loja física que receberá o estoque das variações. As demais lojas não serão tocadas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Loja de destino</Label>
+            <select
+              className="w-full border rounded h-9 px-2 bg-background"
+              value={syncStockDialog?.storeId || ""}
+              onChange={(e) => setSyncStockDialog((p) => p ? { ...p, storeId: e.target.value } : p)}
+            >
+              <option value="">Selecione uma loja física...</option>
+              {physicalStores.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSyncStockDialog(null)}>Cancelar</Button>
+            <Button onClick={confirmSyncStockPos} disabled={!syncStockDialog?.storeId}>
+              Sincronizar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo: exclusão em massa */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={(v) => !bulkDeleting && setBulkDeleteOpen(v)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir {selected.size} produto(s)?</DialogTitle>
+            <DialogDescription>
+              Vai apagar do Legacy, do Catálogo Unificado (quando existir) e do PDV.
+              Produtos com histórico de venda serão automaticamente bloqueados.
+              Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-40 overflow-auto text-xs text-muted-foreground border rounded p-2 space-y-0.5">
+            {items.filter((p) => selected.has(p.id)).slice(0, 15).map((p) => (
+              <div key={p.id}>• {p.name}</div>
+            ))}
+            {selected.size > 15 && <div>... e mais {selected.size - 15}</div>}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleting}>Cancelar</Button>
+            <Button variant="destructive" onClick={bulkDeleteSelected} disabled={bulkDeleting} className="gap-1">
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Excluir {selected.size}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

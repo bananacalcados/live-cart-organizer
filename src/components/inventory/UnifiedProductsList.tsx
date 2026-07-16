@@ -16,6 +16,8 @@ import {
 import {
   Search, Package, Loader2, Pencil, AlertCircle, Boxes, Save, Filter, ChevronDown, ChevronRight, Store as StoreIcon, Tag, Trash2,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
 
@@ -126,6 +128,43 @@ export function UnifiedProductsList() {
   const [labelGroup, setLabelGroup] = useState<{ name: string; items: LabelItem[] } | null>(null);
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
+
+  // Seleção múltipla + exclusão em massa
+  const [selectedParents, setSelectedParents] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  function toggleParent(sku: string) {
+    setSelectedParents((prev) => {
+      const n = new Set(prev);
+      n.has(sku) ? n.delete(sku) : n.add(sku);
+      return n;
+    });
+  }
+
+  async function bulkDeleteSelected() {
+    if (selectedParents.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-master-products", {
+        body: { parent_skus: Array.from(selectedParents) },
+      });
+      if (error) throw error;
+      const d = (data as any)?.deleted || {};
+      const b = (data as any)?.blocked || [];
+      toast.success(
+        `${d.unified || 0} do Unificado · ${d.legacy || 0} do Legacy · ${d.pos_products || 0} do PDV${b.length ? ` · ${b.length} bloqueados (histórico)` : ""}`,
+        { duration: 8000 },
+      );
+      setSelectedParents(new Set());
+      setBulkDeleteOpen(false);
+      await load();
+    } catch (err: any) {
+      toast.error("Erro ao excluir: " + err.message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -342,13 +381,29 @@ export function UnifiedProductsList() {
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="text-xs text-muted-foreground">
-            {grouped.length} produtos · {grouped.reduce((s, g) => s + g.skus.length, 0)} SKUs · {grouped.reduce((s, g) => s + g.totalStock, 0)} unidades
+          <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div>
+              {grouped.length} produtos · {grouped.reduce((s, g) => s + g.skus.length, 0)} SKUs · {grouped.reduce((s, g) => s + g.totalStock, 0)} unidades
+            </div>
+            {selectedParents.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-foreground">{selectedParents.size} selecionados</span>
+                <Button size="sm" variant="ghost" onClick={() => setSelectedParents(new Set())}>Limpar</Button>
+                <Button size="sm" variant="destructive" className="gap-1" onClick={() => setBulkDeleteOpen(true)}>
+                  <Trash2 className="h-3.5 w-3.5" /> Excluir selecionados
+                </Button>
+              </div>
+            )}
           </div>
           {pageItems.map((g) => (
             <Card key={g.parent_sku}>
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-start gap-2">
+                  <Checkbox
+                    checked={selectedParents.has(g.parent_sku)}
+                    onCheckedChange={() => toggleParent(g.parent_sku)}
+                    className="mt-1.5 shrink-0"
+                  />
                   <Button
                     size="icon" variant="ghost" className="h-7 w-7 mt-0.5"
                     onClick={() => toggleExpand(g.parent_sku)}
@@ -583,6 +638,33 @@ export function UnifiedProductsList() {
         productName={labelGroup?.name}
         items={labelGroup?.items || []}
       />
+
+      {/* Bulk delete confirmation */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={(v) => !bulkDeleting && setBulkDeleteOpen(v)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir {selectedParents.size} produto(s)?</DialogTitle>
+            <DialogDescription>
+              Vai apagar do Catálogo Unificado, do Legacy (quando existir vínculo) e do PDV.
+              Produtos com histórico de venda são bloqueados automaticamente.
+              Esta ação não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-40 overflow-auto text-xs text-muted-foreground border rounded p-2 space-y-0.5">
+            {grouped.filter((g) => selectedParents.has(g.parent_sku)).slice(0, 15).map((g) => (
+              <div key={g.parent_sku}>• {g.master?.name || g.parent_sku}</div>
+            ))}
+            {selectedParents.size > 15 && <div>... e mais {selectedParents.size - 15}</div>}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleting}>Cancelar</Button>
+            <Button variant="destructive" onClick={bulkDeleteSelected} disabled={bulkDeleting} className="gap-1">
+              {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Excluir {selectedParents.size}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
