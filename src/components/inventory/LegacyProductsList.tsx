@@ -89,6 +89,14 @@ export function LegacyProductsList() {
   const [parentTargetId, setParentTargetId] = useState<string | null>(null);
   const [merging, setMerging] = useState(false);
 
+  // Diálogo de sync-estoque-PDV (loja obrigatória)
+  const [syncStockDialog, setSyncStockDialog] = useState<{ masterId: string; storeId: string } | null>(null);
+  const [physicalStores, setPhysicalStores] = useState<Array<{ id: string; name: string }>>([]);
+
+  // Exclusão em massa
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   async function load() {
     setLoading(true);
     const term = search.trim();
