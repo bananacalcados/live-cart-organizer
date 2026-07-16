@@ -716,9 +716,23 @@ function MasterEditDialog({
       .from("product_master_data")
       .update(patch)
       .eq("parent_sku", master.parent_sku);
+    if (error) { setSaving(false); toast.error("Erro: " + error.message); return; }
+
+    // Propaga automaticamente para o PDV (pos_products) — todas as SKUs com este parent_sku.
+    try {
+      const posPatch: Record<string, any> = {
+        category: patch.category,
+      };
+      if (patch.cost_price && patch.cost_price > 0) posPatch.cost_price = patch.cost_price;
+      if (patch.sale_price && patch.sale_price > 0) posPatch.price = patch.sale_price;
+      await supabase.from("pos_products").update(posPatch).eq("parent_sku", master.parent_sku);
+    } catch (syncErr: any) {
+      console.warn("Falha ao propagar edição ao PDV:", syncErr?.message);
+    }
+
     setSaving(false);
-    if (error) toast.error("Erro: " + error.message);
-    else { toast.success("Catálogo atualizado."); onSaved(); }
+    toast.success("Catálogo atualizado e sincronizado com o PDV.");
+    onSaved();
   }
 
   return (

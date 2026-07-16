@@ -179,6 +179,10 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
       toast.error("Informe o nome do produto.");
       return;
     }
+    if (!stockStoreId) {
+      toast.error("Escolha a loja que receberá o estoque inicial (o produto será replicado em todas as lojas com estoque zero nas demais).");
+      return;
+    }
     if (!variants.length) {
       toast.error("Adicione pelo menos uma variação.");
       return;
@@ -224,18 +228,15 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
       const masterId = data as string;
 
       // Empurra ao PDV / catálogo unificado já com o estoque inicial na loja escolhida.
-      if (stockStoreId) {
-        const { error: posErr } = await supabase.functions.invoke("create-master-product-pos", {
-          body: { master_id: masterId, store_id: stockStoreId, stock_from_variants: true },
-        });
-        if (posErr) {
-          toast.warning("Produto criado, mas falhou ao enviar ao PDV: " + posErr.message);
-        } else {
-          const storeName = stores.find((s) => s.id === stockStoreId)?.name || "loja";
-          toast.success(`Produto criado e estoque lançado em ${storeName}!`);
-        }
+      // Envio SEMPRE obrigatório — replica em todas as lojas ativas (estoque zero nas outras).
+      const { error: posErr } = await supabase.functions.invoke("create-master-product-pos", {
+        body: { master_id: masterId, store_id: stockStoreId, stock_from_variants: true },
+      });
+      if (posErr) {
+        toast.warning("Produto criado, mas falhou ao enviar ao PDV: " + posErr.message + ". Use 'Enviar ao PDV' na aba Legacy para reenviar.");
       } else {
-        toast.success("Produto criado com sucesso!");
+        const storeName = stores.find((s) => s.id === stockStoreId)?.name || "loja";
+        toast.success(`Produto criado e estoque lançado em ${storeName}!`);
       }
 
       onCreated?.(masterId);
