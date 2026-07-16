@@ -19120,6 +19120,14 @@ export type Database = {
           message_id: string
         }[]
       }
+      delete_pos_divergent_parent: {
+        Args: { p_parent_sku: string }
+        Returns: Json
+      }
+      delete_pos_divergent_variant: {
+        Args: { p_barcode: string; p_parent_sku: string }
+        Returns: Json
+      }
       dispatch_quota_summary: {
         Args: {
           p_candidates: Json
@@ -19679,6 +19687,17 @@ export type Database = {
           size: string
           sku: string
           store_count: number
+        }[]
+      }
+      list_pos_estoque_divergences_grouped: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          has_master: boolean
+          parent_name: string
+          parent_sku: string
+          total_divergent_stock: number
+          total_divergent_variants: number
+          variants: Json
         }[]
       }
       list_unack_template_alerts: {
