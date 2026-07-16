@@ -475,7 +475,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
                       <Input
                         className="h-8"
                         value={v.color}
-                        onChange={(e) => updateVariant(idx, { color: e.target.value })}
+                        onChange={(e) => updateVariant(idx, { color: sanitizeColorInput(e.target.value) })}
                         placeholder="Preto"
                       />
                     </div>
@@ -484,7 +484,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
                       <Input
                         className="h-8"
                         value={v.size}
-                        onChange={(e) => updateVariant(idx, { size: e.target.value })}
+                        onChange={(e) => updateVariant(idx, { size: sanitizeSizeInput(e.target.value) })}
                         placeholder="39"
                       />
                     </div>
