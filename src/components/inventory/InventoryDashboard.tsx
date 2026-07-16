@@ -13,16 +13,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type RunRow = {
-  id: string;
-  status: "running" | "done" | "error" | string;
-  per_store: any[] | null;
-  totals: Record<string, number> | null;
-  error_message: string | null;
-  created_at: string;
-  finished_at: string | null;
-};
-
 type StoreSnapshot = {
   store_id: string;
   store_name: string;
