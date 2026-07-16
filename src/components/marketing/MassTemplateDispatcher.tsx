@@ -2997,6 +2997,54 @@ export function MassTemplateDispatcher() {
 
       {/* Dispatch History */}
       <DispatchHistoryList key={historyKey} onDuplicate={handleDuplicate} />
+
+      {/* Salvar filtros atuais como público reutilizável */}
+      <SaveAudienceDialog
+        open={saveAudienceOpen}
+        onOpenChange={setSaveAudienceOpen}
+        filter={(() => {
+          const inc: any = {};
+          if (rfmFilter !== 'all') inc.rfm_segments = [rfmFilter];
+          if (stateFilter !== 'all') inc.states = [stateFilter];
+          if (cityFilter !== 'all') inc.cities = [cityFilter];
+          if (dddFilter !== 'all') inc.ddds = [dddFilter];
+          if (crmTagFilter !== 'all') inc.tags = [crmTagFilter];
+          if (ticketMin) inc.min_avg_ticket = ticketMin;
+          if (ticketMax) inc.max_avg_ticket = ticketMax;
+          if (ordersMin) inc.min_total_orders = ordersMin;
+          if (ordersMax) inc.max_total_orders = ordersMax;
+          if (dateFrom && dateTo) {
+            inc.last_purchase_op = 'between';
+            inc.last_purchase_from = dateFrom;
+            inc.last_purchase_to = dateTo;
+          } else if (dateFrom) {
+            inc.last_purchase_op = 'after';
+            inc.last_purchase_from = dateFrom;
+          } else if (dateTo) {
+            inc.last_purchase_op = 'before';
+            inc.last_purchase_to = dateTo;
+          } else if (lastPurchaseMode === 'include' && lastPurchaseDays) {
+            inc.last_purchase_op = 'lt_days';
+            inc.last_purchase_days = lastPurchaseDays;
+          }
+          const exc: any = {};
+          if (lastPurchaseMode === 'exclude' && lastPurchaseDays) {
+            exc.last_purchase_op = 'lt_days';
+            exc.last_purchase_days = lastPurchaseDays;
+          }
+          if (vipMembershipMode === 'only') inc.in_vip_group = true;
+          if (vipMembershipMode === 'exclude') exc.in_vip_group = true;
+          return { include: inc, exclude: exc } as AudienceFilter;
+        })()}
+        ignoredFilters={[
+          ...(regionFilter !== 'all' ? ['Região (derivada)'] : []),
+          ...(storeFilter !== 'all' ? ['Loja'] : []),
+          ...(sellerFilter !== 'all' ? ['Vendedora'] : []),
+          ...(topN !== 'all' ? ['Top N'] : []),
+          ...(searchQuery ? ['Busca livre'] : []),
+        ]}
+      />
     </div>
+
   );
 }
