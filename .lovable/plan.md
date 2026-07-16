@@ -1,130 +1,77 @@
-## Objetivo
 
-Permitir que o Estrategista (chat em Marketing → Estrategista) crie, sob confirmação em 2 passos:
+# Transferência de Estoque entre Lojas + fim do reload ao corrigir
 
-1. **Eventos/ações no Calendário** de Marketing (visíveis na aba Calendário, não só na tira “ações do agente”).
-2. **Públicos de clientes/leads** reutilizáveis, gravados na tabela única `campanha_publicos`, imediatamente selecionáveis em:
-   - PDV → Online → Automação (já lê `campanha_publicos`).
-   - Marketing → Disparos (hoje não tem público salvo — vamos adicionar seletor).
-   - Marketing → Matriz RFM (hoje só salva “presets” em `app_settings` — vamos adicionar botão “Salvar como público”).
+## Onde vive hoje
 
-Mantendo o padrão existente do agente: `propor_*` → usuário responde “ok” → `commitProposal` grava.
+Clicando no número de estoque de uma variação em **Controle de Estoque > Loja X > Produtos > Catálogo Unificado**, abre o `PosSkuEditDialog` (em `src/components/inventory/UnifiedProductsList.tsx`, linhas 804-887). Hoje ele só edita SKU, código de barras, preço, custo e estoque **daquela loja**, e ao salvar dispara `onSaved()` que chama `load()` — a função `load()` refaz o fetch de tudo (masters + todos os `pos_products` em lotes de 1000 + lojas). Por isso a página inteira "recarrega" e você perde o produto expandido.
 
----
+## Parte 1 — Nova aba "Transferir Estoque" no modal
 
-## Fonte única de verdade dos públicos
+Reestruturar o `PosSkuEditDialog` em duas abas (`Tabs` do shadcn):
 
-`campanha_publicos.filtro_json` no formato `AudienceFilter = { include, exclude }` já definido em `src/components/pos/audience/AudienceFilterBuilder.tsx`. O RPC `bc_match_audience(cv, inc, exc)` já resolve esse JSON contra `crm_customers_v` (base RFM). Reaproveitar isso evita fragmentar o conceito de público.
+1. **Editar** — mantém exatamente o comportamento atual (SKU / barcode / preço / custo / estoque).
+2. **Transferir** — nova aba:
+   - Mostra: nome do produto, cor, tamanho, loja origem e estoque atual (readonly).
+   - Campo **Quantidade** (número, mínimo 1, máximo = estoque da origem — bloqueia envio se maior).
+   - Campo **Loja destino** (`Select` com as outras lojas reais — filtra `is_active=true AND is_simulation=false` e exclui a loja origem).
+   - Mostra estoque atual da loja destino para a mesma variação (se existir cadastro), buscando por `barcode` OU `parent_sku+color+size`.
+   - Campo **Motivo** (opcional).
+   - Botão **Transferir**.
 
-Filtros suportados hoje (bloco include e exclude, mesmos campos):
-`sizes, cities, ddds, categories, brands, stores, payment_methods, rfm_segments, tags, in_vip_group, min/max_avg_ticket, min/max_total_orders, last_purchase_op+dias/from/to, first_purchase_op+dias/from/to`.
+Regras de negócio da transferência:
+- Origem: `stock -= quantidade`.
+- Destino: se a variação já tem cadastro na loja destino (match por `barcode` quando existe; senão por `parent_sku+color+size`), soma `stock += quantidade`. Se não existe, cria a linha copiando o cadastro completo (`parent_sku, name, sku, barcode, color, size, variant, price, cost_price, category, brand, image_url, is_active, price_tier_id`, etc.) com `stock = quantidade`.
+- Registra 2 linhas em `pos_stock_adjustments`: uma `type='saida'` na origem e uma `type='entrada'` no destino, com `reason='Transferência entre lojas'` e um `transfer_id` (UUID compartilhado) para rastreio.
+- Nunca deixar `stock` negativo na origem (validação server-side).
+- O trigger `apply_pos_sale_stock_movement` **não** dispara — usaremos ajustes diretos, então o mirror da Shopify é chamado explicitamente ao final (`shopify-mirror-stock` para o barcode/parent afetado — o estoque total compartilhado não muda, mas invocamos para garantir consistência).
 
----
+## Parte 2 — Edge function `pos-stock-transfer`
 
-## Etapa 0 — Verificações antes de codar (evitar quebrar filtros existentes)
+Nova função em `supabase/functions/pos-stock-transfer/index.ts`:
 
-- Localizar e ler `CREATE FUNCTION public.bc_match_audience` nas migrations para confirmar formato exato esperado de `sizes` (string vs int), `ddds`, `tags` e datas. O agente só pode escrever `filtro_json` que esta função entenda 1:1.
-- Rodar `list_campaign_audience(p_filtro, 5, 0)` com um `filtro_json` de teste antes de expor a tool, para garantir que preview funciona.
+- Input: `{ source_product_id, dest_store_id, quantity, reason? }`.
+- Valida: `quantity>0`, `source.stock >= quantity`, `dest_store_id` é real (`is_simulation=false`, `is_active=true`), lojas diferentes.
+- Resolve/cria a linha destino (match por barcode; fallback por parent_sku+color+size).
+- Executa `UPDATE` de origem e destino + `INSERT` dos 2 ajustes numa única invocação (sequencial com SERVICE_ROLE), tudo com `transfer_id = gen_random_uuid()`.
+- Rollback simples se o segundo update falhar (reverter o primeiro).
+- Retorna `{ success, source: {store, new_stock}, dest: {store, new_stock, created?} }`.
 
----
+Sem migration de schema (usa colunas já existentes). Se quisermos rastreabilidade forte, adicionamos depois uma coluna opcional `transfer_id UUID` em `pos_stock_adjustments`.
 
-## Etapa 1 — Novas tools no `marketing-agent-chat`
+## Parte 3 — Fim do reload total no modal
 
-Arquivo: `supabase/functions/marketing-agent-chat/index.ts`.
+O reload existe porque `PosSkuEditDialog.onSaved` chama `load()`. Vou trocar o contrato:
 
-Adicionar em `TOOLS_ANTHROPIC` + `PROPOSAL_TOOLS` + `commitProposal()` (mesmo padrão de `propor_acao_calendario` / `propor_meta`):
-
-### 1.1 Leitura auxiliar (READ_TOOLS, sem confirmação)
-
-- `preview_audience(filtro_json)` → chama `list_campaign_audience(p_filtro, 50, 0)` e devolve `{total_estimado, sample: [nome, telefone, cidade, rfm_segment, purchased_sizes, last_purchase_at]}`. Serve para o agente conferir o que o público retorna antes de propor gravar.
-- `list_audiences()` → `select id, nome, filtro_json, updated_at from campanha_publicos order by updated_at desc limit 50`. Para o agente saber o que já existe (e não duplicar).
-
-### 1.2 Escrita — Calendário (2 passos)
-
-- `propor_entrada_calendario` — input: `{entry_date, end_date?, title, content?, entry_type: 'live'|'campanha'|'lembrete'|'meta'|'outro', color?, media_url?, media_type?}`. Commit: `insert into marketing_calendar_entries`.
-- `propor_meta_mensal_calendario` — input: `{year, month, goals: string[], actions?, notes?}`. Commit: `upsert into marketing_calendar_goals` por `(year, month)`.
-
-Manter também `propor_acao_calendario` atual (grava em `agent_calendar` como memória do agente) — não remover para não quebrar histórico; instruir no system_prompt que a partir de agora ele prefere `propor_entrada_calendario` para itens que devem aparecer no calendário real, e usa `propor_acao_calendario` apenas quando for uma sugestão em rascunho.
-
-### 1.3 Escrita — Públicos (2 passos)
-
-- `propor_publico` — input:
-  ```json
-  {
-    "nome": "string",
-    "filtro_json": { "include": {...}, "exclude": {...} },
-    "descricao_curta": "string (o que esse público representa, ex: 'Tamanho 36 em GV inativos 60d')"
-  }
+- Novo prop `onLocalUpdate(patch: Partial<PosSku> & { id: string })` no `PosSkuEditDialog`.
+- No `UnifiedProductsList`, passar:
   ```
-  Commit: `insert into campanha_publicos(nome, filtro_json)`. Antes do insert, validar server-side chamando `list_campaign_audience(filtro_json, 1, 0)` — se der erro, aborta com mensagem clara em vez de gravar lixo.
-- `propor_atualizar_publico` — input: `{id, nome?, filtro_json?}`. Commit: `update campanha_publicos`.
+  onLocalUpdate={(patch) => setPosProducts((prev) =>
+    prev.map((p) => (p.id === patch.id ? { ...p, ...patch } : p))
+  )}
+  ```
+- No `save()` do modal, após sucesso, chamar `onLocalUpdate({ id, sku, barcode, price, cost_price, stock })` e fechar o dialog. Nada de refetch.
+- Para a aba **Transferir**, o mesmo mecanismo:
+  - Atualiza o `stock` da linha origem (`onLocalUpdate`).
+  - Se destino já existia, atualiza também. Se foi criado, faz um `setPosProducts((prev) => [...prev, novaLinha])` retornando a linha nova pela edge function.
+- Botão manual "Recarregar" continua disponível para o caso raro de divergência.
 
-Opcional (recomendado, migração mínima): adicionar coluna `created_by_agent boolean default false` e `descricao text` em `campanha_publicos` para rastreabilidade. Não obrigatório para funcionar.
+Efeito: você fica no mesmo produto expandido, no mesmo scroll, e vai corrigindo as variações uma a uma sem perder o contexto. Vale também pra transferências: você transfere 1 par e continua vendo a grade atualizada.
 
-### 1.4 System prompt
+## Fora do escopo (não altero agora)
 
-Ampliar o prompt do agente para:
-- Explicar as 4 novas tools de escrita + as 2 de leitura.
-- Regra de ouro: **sempre chamar `preview_audience` antes de `propor_publico`** e mostrar ao usuário o `total_estimado` e amostra.
-- Instruir a montar `filtro_json` usando somente as chaves suportadas pelo `AudienceFilterBlock` (listar as chaves no prompt).
-- Nunca inventar segmento RFM — usar os que aparecerem em `get_rfm_summary`.
+- Balanço/entrada/saída simples via `ProductStockManagerDialog` (aquele modal separado): mantém como está — o pedido foi só o modal do Catálogo Unificado.
+- Nenhuma mudança em schema (nada de nova coluna / policy nova / trigger novo). Nenhuma mudança em outras telas.
+- Não mexo em `MassTemplateDispatcher`, agente de marketing, ou nas funções da Fase A/B de estoque.
 
----
+## Segurança / riscos
 
-## Etapa 2 — UI Marketing → Disparos: seletor + salvar público
+- Edge function usa SERVICE_ROLE — validações server-side impedem: quantidade zero/negativa, exceder estoque origem, loja de simulação, loja igual origem.
+- Todas as respostas da função incluem `corsHeaders`.
+- O trigger `trg_reactivate_pos_product_on_stock` reativa automaticamente o destino quando ganha estoque — comportamento desejado.
+- Se a criação da linha destino colidir com o índice `(store_id, sku, variant)` (produto já existe com barcode em branco), a função faz `SELECT` prévio e tenta 2 estratégias de match antes de inserir; se ainda assim colidir, retorna erro claro pedindo revisão manual — não deixa estoque "sumir".
 
-Arquivo principal: `src/components/marketing/MassTemplateDispatcher.tsx`.
+## Arquivos que serão tocados na implementação
 
-Sem mexer nos ~20 filtros locais existentes (não quebrar). Adicionar em cima da barra de filtros:
-
-- **Combobox “Público salvo”** que lista `campanha_publicos`. Ao escolher:
-  - Chama `list_campaign_audience(filtro_json, big_limit, 0)` para obter os `phones/customer_ids`.
-  - Aplica esses IDs como um **filtro adicional final** sobre `filteredCustomers` (interseção). Não substitui os filtros de UI atuais — apenas restringe. Isso preserva 100% do fluxo antigo.
-- **Botão “Salvar filtros atuais como público”**: converte o subconjunto compatível dos filtros da UI (rfmFilter, tags, region/DDD/cidade, ticket, orders, janela de compra) para o formato `AudienceFilter{include,exclude}` e abre um pequeno diálogo (nome + confirmar) que insere em `campanha_publicos`.
-  - Filtros da UI que não têm equivalente em `AudienceFilterBlock` ficam de fora do público salvo (avisar no diálogo: “os filtros X, Y não serão salvos porque não são suportados no formato de público reutilizável”).
-- Não tocar em `app_settings` presets — continuam funcionando em paralelo.
-
----
-
-## Etapa 3 — UI Marketing → Matriz RFM: “Salvar seleção como público”
-
-Arquivo: `src/pages/Marketing.tsx` (aba Clientes RFM, blocos `1194` / `1480-1730`).
-
-- Botão **“Salvar como público”** ao lado dos presets atuais. Converte os filtros ativos da matriz RFM (segmentos selecionados, região, ticket, orders, janela de última compra) em `AudienceFilter{include,exclude}` e insere em `campanha_publicos` via mesmo diálogo do passo 2.
-- Nenhuma alteração nos presets `app_settings` existentes.
-
----
-
-## Etapa 4 — PDV → Online → Automação
-
-Nenhuma mudança de UI. `CampaignAudienceManager` já lê/escreve `campanha_publicos` — os públicos criados pelo agente aparecerão automaticamente na lista.
-
----
-
-## Etapa 5 — Riscos e mitigação
-
-- **Formato de `filtro_json` incompatível com `bc_match_audience`** → mitigar com Etapa 0 (ler a função) + validação com `list_campaign_audience` antes de gravar.
-- **Agente criar públicos duplicados** → tool `list_audiences` no prompt e regra “verifique antes de propor”.
-- **Filtros de Disparos que não existem em `AudienceFilterBlock`** → salvar só o subconjunto compatível e avisar no diálogo; presets `app_settings` continuam disponíveis para o resto.
-- **Presets `app_settings` vs `campanha_publicos`** → coexistem; nada é migrado agora.
-- **`agent_calendar` vs `marketing_calendar_entries`** → não remover `agent_calendar`; agente passa a preferir a tabela real. Zero regressão visual.
-
----
-
-## Detalhes técnicos (para o build depois de aprovado)
-
-- Backend: 1 edit em `supabase/functions/marketing-agent-chat/index.ts` (novas tools + branches em `commitProposal`).
-- Backend opcional: 1 migration adicionando `created_by_agent boolean`, `descricao text` em `campanha_publicos`.
-- Frontend:
-  - `MassTemplateDispatcher.tsx`: novo componente `<SavedAudiencePicker/>` e `<SaveAsAudienceButton/>` + helper `uiFiltersToAudienceFilter()`.
-  - `Marketing.tsx` (aba RFM): botão “Salvar como público” usando o mesmo helper/diálogo.
-  - Novo componente compartilhado `src/components/marketing/SaveAudienceDialog.tsx` reutilizado por Disparos e RFM.
-- Nada muda em `CampaignAudienceManager.tsx`, `AudienceFilterBuilder.tsx`, `bc_match_audience`, `select_campaign_batch`, `list_campaign_audience`.
-
----
-
-## Fora de escopo (fica registrado para depois)
-
-- Migrar presets `app_settings` (`rfm_filter_preset_%`) para `campanha_publicos`.
-- Consolidar `agent_calendar` dentro de `marketing_calendar_entries`.
-- Filtros de Disparos que não cabem em `AudienceFilterBlock` (ex.: `topN`, `sellerFilter`) — se você quiser incluí-los, criamos depois um bloco extra em `AudienceFilterBlock` com atualização coordenada em `bc_match_audience`.
+- `src/components/inventory/UnifiedProductsList.tsx` — `PosSkuEditDialog` vira Tabs + novo prop `onLocalUpdate`; remove `load()` do fluxo de salvar.
+- `supabase/functions/pos-stock-transfer/index.ts` — nova.
+- Nada mais.
