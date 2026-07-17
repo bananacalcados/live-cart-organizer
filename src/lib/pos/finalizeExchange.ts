@@ -263,6 +263,7 @@ export async function finalizeExchange(
       await supabase
         .from("pos_sales")
         .update({
+          status: "cancelled",
           status_cancelamento: "cancelado",
           motivo_cancelamento,
         } as any)
