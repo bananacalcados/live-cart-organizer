@@ -906,6 +906,34 @@ function MasterEditDialog({
 }
 
 /* ============ Pos Sku Edit Dialog ============ */
+type MovementRow = {
+  id: string;
+  created_at: string;
+  movement_type: string | null;
+  direction: string;
+  quantity: number;
+  previous_stock: number | null;
+  new_stock: number | null;
+  reason: string | null;
+  sale_id: string | null;
+  exchange_id: string | null;
+  exchange_number: string | null;
+  count_id: string | null;
+  user_name: string | null;
+  seller_name: string | null;
+};
+
+const MOVE_LABEL: Record<string, { label: string; className: string }> = {
+  entrada: { label: "Entrada", className: "bg-emerald-100 text-emerald-700 border-emerald-300" },
+  saida: { label: "Saída", className: "bg-rose-100 text-rose-700 border-rose-300" },
+  balanco: { label: "Balanço", className: "bg-blue-100 text-blue-700 border-blue-300" },
+  venda: { label: "Venda", className: "bg-violet-100 text-violet-700 border-violet-300" },
+  troca: { label: "Troca", className: "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-300" },
+  devolucao: { label: "Devolução", className: "bg-orange-100 text-orange-700 border-orange-300" },
+  transferencia: { label: "Transferência", className: "bg-cyan-100 text-cyan-700 border-cyan-300" },
+  ajuste: { label: "Ajuste", className: "bg-amber-100 text-amber-800 border-amber-300" },
+};
+
 function PosSkuEditDialog({
   sku, storeName, stores, onClose, onLocalUpdate, onLocalCreate,
 }: {
@@ -916,20 +944,30 @@ function PosSkuEditDialog({
   onLocalUpdate: (patch: Partial<PosSku> & { id: string }) => void;
   onLocalCreate: (row: PosSku) => void;
 }) {
-  // Editar
+  // Cadastro
   const [skuCode, setSkuCode] = useState("");
   const [barcode, setBarcode] = useState("");
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
-  const [stock, setStock] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Movimentação
+  const [moveType, setMoveType] = useState<"entrada" | "saida" | "balanco">("entrada");
+  const [moveQty, setMoveQty] = useState("");
+  const [moveReason, setMoveReason] = useState("");
+  const [moving, setMoving] = useState(false);
+
   // Transferir
-  const [tab, setTab] = useState<"edit" | "transfer">("edit");
+  const [tab, setTab] = useState<"edit" | "transfer" | "history">("edit");
   const [destStoreId, setDestStoreId] = useState<string>("");
   const [transferQty, setTransferQty] = useState<string>("");
   const [transferReason, setTransferReason] = useState<string>("");
   const [transferring, setTransferring] = useState(false);
+
+  // Histórico
+  const [history, setHistory] = useState<MovementRow[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<string>("all");
 
   useEffect(() => {
     if (!sku) return;
@@ -937,19 +975,46 @@ function PosSkuEditDialog({
     setBarcode(sku.barcode || "");
     setPrice(sku.price?.toString() || "");
     setCost(sku.cost_price?.toString() || "");
-    setStock(sku.stock?.toString() || "0");
     setTab("edit");
+    setMoveType("entrada");
+    setMoveQty("");
+    setMoveReason("");
     setDestStoreId("");
     setTransferQty("");
     setTransferReason("");
+    setHistory([]);
   }, [sku]);
+
+  async function loadHistory() {
+    if (!sku) return;
+    setHistoryLoading(true);
+    const { data, error } = await supabase
+      .from("pos_stock_adjustments")
+      .select("id, created_at, movement_type, direction, quantity, previous_stock, new_stock, reason, sale_id, exchange_id, exchange_number, count_id, user_name, seller_name")
+      .eq("product_id", sku.id)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    setHistoryLoading(false);
+    if (error) { toast.error("Erro ao carregar histórico: " + error.message); return; }
+    setHistory((data as MovementRow[]) || []);
+  }
+
+  useEffect(() => {
+    if (tab === "history") loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, sku?.id]);
 
   const destStores = useMemo(
     () => stores.filter((s) => s.id !== sku?.store_id),
     [stores, sku?.store_id]
   );
 
-  async function save() {
+  const filteredHistory = useMemo(() => {
+    if (historyFilter === "all") return history;
+    return history.filter((h) => (h.movement_type || "") === historyFilter);
+  }, [history, historyFilter]);
+
+  async function saveCadastro() {
     if (!sku) return;
     setSaving(true);
     const patch = {
@@ -957,20 +1022,48 @@ function PosSkuEditDialog({
       barcode: barcode.trim() || null,
       price: price ? parseFloat(price) : null,
       cost_price: cost ? parseFloat(cost) : null,
-      stock: stock ? parseInt(stock) : 0,
     };
     const { error } = await supabase
       .from("pos_products")
       .update(patch)
       .eq("id", sku.id);
     setSaving(false);
-    if (error) {
-      toast.error("Erro: " + error.message);
-      return;
-    }
+    if (error) { toast.error("Erro: " + error.message); return; }
     onLocalUpdate({ id: sku.id, ...patch });
-    toast.success("SKU atualizado.");
-    onClose();
+    toast.success("Cadastro atualizado.");
+  }
+
+  async function submitMovement() {
+    if (!sku) return;
+    const qty = parseFloat(moveQty);
+    if (!Number.isFinite(qty) || qty < 0) { toast.error("Quantidade inválida"); return; }
+    if (moveType !== "balanco" && qty <= 0) { toast.error("Quantidade deve ser maior que zero"); return; }
+    if (moveType === "balanco" && !moveReason.trim()) { toast.error("Informe o motivo do balanço"); return; }
+
+    setMoving(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-stock-movement", {
+        body: {
+          product_id: sku.id,
+          movement_type: moveType,
+          quantity: qty,
+          reason: moveReason.trim() || null,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || "Falha na movimentação");
+
+      onLocalUpdate({ id: sku.id, stock: data.new_stock });
+      toast.success(`Estoque: ${data.previous_stock} → ${data.new_stock}`);
+      setMoveQty("");
+      setMoveReason("");
+      // Se histórico já carregado, recarrega
+      if (tab === "history" || history.length > 0) loadHistory();
+    } catch (err: any) {
+      toast.error("Erro: " + err.message, { duration: 8000 });
+    } finally {
+      setMoving(false);
+    }
   }
 
   async function transfer() {
@@ -979,10 +1072,7 @@ function PosSkuEditDialog({
     if (!destStoreId) { toast.error("Escolha a loja destino"); return; }
     if (!Number.isFinite(qty) || qty <= 0) { toast.error("Quantidade inválida"); return; }
     const available = sku.stock || 0;
-    if (qty > available) {
-      toast.error(`Origem só tem ${available} un.`);
-      return;
-    }
+    if (qty > available) { toast.error(`Origem só tem ${available} un.`); return; }
     setTransferring(true);
     try {
       const { data, error } = await supabase.functions.invoke("pos-stock-transfer", {
@@ -996,9 +1086,7 @@ function PosSkuEditDialog({
       if (error) throw new Error(error.message);
       if (!data?.success) throw new Error(data?.error || "Falha ao transferir");
 
-      // Atualiza origem
       onLocalUpdate({ id: sku.id, stock: data.source.new_stock });
-      // Atualiza/insere destino
       if (data.dest.created && data.dest.product) {
         onLocalCreate(data.dest.product as PosSku);
       } else {
@@ -1020,23 +1108,32 @@ function PosSkuEditDialog({
     return { id: destStoreId, name: stores.find((s) => s.id === destStoreId)?.name || "" };
   }, [sku, destStoreId, stores]);
 
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+  };
+
   return (
     <Dialog open={!!sku} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{sku?.name || "SKU"} — {storeName}</DialogTitle>
         </DialogHeader>
         {sku && (
           <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="edit">Editar</TabsTrigger>
-              <TabsTrigger value="transfer">Transferir estoque</TabsTrigger>
+              <TabsTrigger value="transfer">Transferir</TabsTrigger>
+              <TabsTrigger value="history">Histórico</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="edit" className="space-y-3 pt-3">
+            <TabsContent value="edit" className="space-y-4 pt-3">
               <div className="text-xs text-muted-foreground">
-                parent_sku: <code>{sku.parent_sku || "—"}</code>
+                parent_sku: <code>{sku.parent_sku || "—"}</code> · estoque atual{" "}
+                <Badge variant="secondary">{sku.stock ?? 0} un</Badge>
               </div>
+
+              {/* Cadastro */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>SKU</Label>
@@ -1054,17 +1151,79 @@ function PosSkuEditDialog({
                   <Label>Custo (R$)</Label>
                   <Input type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} />
                 </div>
+              </div>
+              <div className="flex justify-end">
+                <Button size="sm" onClick={saveCadastro} disabled={saving}>
+                  {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                  Salvar cadastro
+                </Button>
+              </div>
+
+              {/* Movimentação de estoque */}
+              <div className="rounded-md border p-3 space-y-3 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Movimentar estoque</Label>
+                  <span className="text-[11px] text-muted-foreground">Registro auditável</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Label className="text-xs">Tipo</Label>
+                    <Select value={moveType} onValueChange={(v) => setMoveType(v as any)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="entrada">Entrada</SelectItem>
+                        <SelectItem value="saida">Saída</SelectItem>
+                        <SelectItem value="balanco">Balanço</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">
+                      {moveType === "balanco" ? "Novo total" : "Quantidade"}
+                    </Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={moveQty}
+                      onChange={(e) => setMoveQty(e.target.value)}
+                      placeholder={moveType === "balanco" ? "Ex: 3" : "Ex: 1"}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Novo estoque</Label>
+                    <Input
+                      readOnly
+                      value={(() => {
+                        const q = parseFloat(moveQty);
+                        if (!Number.isFinite(q)) return sku.stock ?? 0;
+                        const cur = sku.stock ?? 0;
+                        if (moveType === "entrada") return cur + q;
+                        if (moveType === "saida") return Math.max(0, cur - q);
+                        return q;
+                      })()}
+                    />
+                  </div>
+                </div>
                 <div>
-                  <Label>Estoque</Label>
-                  <Input type="number" value={stock} onChange={(e) => setStock(e.target.value)} />
+                  <Label className="text-xs">
+                    Motivo {moveType === "balanco" && <span className="text-rose-600">*</span>}
+                  </Label>
+                  <Input
+                    value={moveReason}
+                    onChange={(e) => setMoveReason(e.target.value)}
+                    placeholder={moveType === "balanco" ? "Ex: Balanço mensal loja Centro" : "Ex: Reposição de fornecedor / quebra / avaria"}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={submitMovement} disabled={moving || !moveQty}>
+                    {moving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Boxes className="h-4 w-4 mr-1" />}
+                    Aplicar {MOVE_LABEL[moveType]?.label.toLowerCase()}
+                  </Button>
                 </div>
               </div>
+
               <DialogFooter className="pt-2">
-                <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                <Button onClick={save} disabled={saving}>
-                  {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                  Salvar
-                </Button>
+                <Button variant="outline" onClick={onClose}>Fechar</Button>
               </DialogFooter>
             </TabsContent>
 
@@ -1130,6 +1289,93 @@ function PosSkuEditDialog({
                   {transferring ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Boxes className="h-4 w-4 mr-1" />}
                   Transferir
                 </Button>
+              </DialogFooter>
+            </TabsContent>
+
+            <TabsContent value="history" className="space-y-3 pt-3">
+              <div className="flex items-center justify-between gap-2">
+                <Select value={historyFilter} onValueChange={setHistoryFilter}>
+                  <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os tipos</SelectItem>
+                    <SelectItem value="entrada">Entrada</SelectItem>
+                    <SelectItem value="saida">Saída</SelectItem>
+                    <SelectItem value="balanco">Balanço</SelectItem>
+                    <SelectItem value="venda">Venda</SelectItem>
+                    <SelectItem value="troca">Troca</SelectItem>
+                    <SelectItem value="devolucao">Devolução</SelectItem>
+                    <SelectItem value="transferencia">Transferência</SelectItem>
+                    <SelectItem value="ajuste">Ajuste</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="outline" onClick={loadHistory} disabled={historyLoading}>
+                  {historyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Atualizar"}
+                </Button>
+              </div>
+
+              <div className="border rounded-md max-h-[420px] overflow-auto">
+                {historyLoading ? (
+                  <div className="p-6 text-center text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin inline mr-2" />Carregando...
+                  </div>
+                ) : filteredHistory.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-muted-foreground">
+                    Nenhuma movimentação registrada.
+                  </div>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/50 sticky top-0">
+                      <tr className="text-left">
+                        <th className="p-2">Data/hora</th>
+                        <th className="p-2">Tipo</th>
+                        <th className="p-2 text-right">Qtd</th>
+                        <th className="p-2 text-right">De → Para</th>
+                        <th className="p-2">Referência</th>
+                        <th className="p-2">Motivo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredHistory.map((h) => {
+                        const mt = h.movement_type || "ajuste";
+                        const cfg = MOVE_LABEL[mt] ?? MOVE_LABEL.ajuste;
+                        const ref = h.exchange_number
+                          ? h.exchange_number
+                          : h.sale_id
+                          ? `#${h.sale_id.slice(0, 8)}`
+                          : h.count_id
+                          ? `Balanço ${h.count_id.slice(0, 6)}`
+                          : "—";
+                        return (
+                          <tr key={h.id} className="border-t">
+                            <td className="p-2 whitespace-nowrap">{fmtDate(h.created_at)}</td>
+                            <td className="p-2">
+                              <Badge variant="outline" className={cfg.className}>{cfg.label}</Badge>
+                            </td>
+                            <td className="p-2 text-right font-medium">
+                              {h.direction === "in" ? "+" : "−"}{h.quantity}
+                            </td>
+                            <td className="p-2 text-right tabular-nums">
+                              {h.previous_stock ?? "?"} → {h.new_stock ?? "?"}
+                            </td>
+                            <td className="p-2 text-muted-foreground">{ref}</td>
+                            <td className="p-2 text-muted-foreground">
+                              {h.reason || "—"}
+                              {(h.user_name || h.seller_name) && (
+                                <span className="block text-[10px] opacity-70">
+                                  por {h.user_name || h.seller_name}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button variant="outline" onClick={onClose}>Fechar</Button>
               </DialogFooter>
             </TabsContent>
           </Tabs>
