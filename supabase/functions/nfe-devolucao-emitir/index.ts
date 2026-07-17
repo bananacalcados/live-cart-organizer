@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
 
     const ambiente = forcedAmb || company.ambiente_nfe || "homologacao";
     const tipoAmbiente = ambiente === "producao" ? "1" : "2";
-    const ufOrigem: string = (company.uf || company.address_state || "MG").toUpperCase();
+    const ufOrigem: string = (company.address_state || "MG").toUpperCase();
 
     // 5. Itens devolvidos CONFERIDOS (estado_estoque preenchido = conferência concluída)
     const devolvidos = (((evt as any).trocas_devolucoes_itens) || [])
@@ -340,7 +340,7 @@ Deno.serve(async (req) => {
       : {
           // Sem CPF OU sem endereço válido → loja é a destinatária (devolução para o próprio estoque).
           CpfCnpj: digits(company.cnpj),
-          NmCliente: sanitize(company.razao_social || company.nome_fantasia || "LOJA").slice(0, 60),
+          NmCliente: sanitize(company.legal_name || company.trade_name || "LOJA").slice(0, 60),
           ...(ieEmitente ? { Ie: ieEmitente } : {}),
           IndicadorIe: ieEmitente ? 1 : 9,
           Endereco: {
