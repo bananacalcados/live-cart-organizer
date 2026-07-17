@@ -170,6 +170,82 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
     );
   });
 
+  const buildDefaultWaMessage = (ev: EventRow, code: string, carrier: string, name?: string | null) => {
+    const cliente = (name || ev.customer_name || "").split(" ")[0] || "";
+    const cc = carrier || "Correios";
+    return `Oi${cliente ? " " + cliente : ""}! 💛\n\nSua troca já foi despachada!\n📦 Transportadora: ${cc}\n🔎 Código de rastreio: ${code}\n\nQualquer dúvida é só chamar.\nBanana Calçados 🍌`;
+  };
+
+  const loadCustomerIntoForm = useCallback(async (custId: string) => {
+    const { data: c } = await supabase
+      .from("pos_customers")
+      .select("id, name, cpf, whatsapp, cep, address, address_number, complement, neighborhood, city, state")
+      .eq("id", custId).maybeSingle();
+    if (c) {
+      setShipCustomer({
+        name: (c as any).name || "",
+        cpf: (c as any).cpf || "",
+        whatsapp: (c as any).whatsapp || "",
+        cep: (c as any).cep || "",
+        address: (c as any).address || "",
+        number: (c as any).address_number || "",
+        complement: (c as any).complement || "",
+        neighborhood: (c as any).neighborhood || "",
+        city: (c as any).city || "",
+        state: (c as any).state || "",
+      });
+    }
+  }, []);
+
+  const loadShippingState = useCallback(async (ev: EventRow) => {
+    // Localiza a venda-espelho da reposição (external_source='troca')
+    const { data: sale } = await supabase
+      .from("pos_sales")
+      .select("id, customer_id, customer_name, customer_phone, tracking_code, tracking_carrier")
+      .eq("external_source", "troca")
+      .eq("external_order_id", ev.id)
+      .maybeSingle();
+    const psid = (sale as any)?.id || null;
+    setPosSaleId(psid);
+    setTrackingCode((sale as any)?.tracking_code || "");
+    setTrackingCarrier((sale as any)?.tracking_carrier || "");
+    const custId = (sale as any)?.customer_id || ev.cliente_id || null;
+    setCustomerId(custId);
+    if (custId) await loadCustomerIntoForm(custId);
+    // NF-e da reposição, se já existir
+    const nfeId = (ev as any).nfe_reposicao_id as string | null | undefined;
+    if (nfeId) {
+      const { data: doc } = await supabase
+        .from("fiscal_documents")
+        .select("id, status, chave_acesso, danfe_url, xml_content, rejeicao_motivo")
+        .eq("id", nfeId).maybeSingle();
+      if (doc) {
+        setNfeDoc({
+          id: (doc as any).id, status: (doc as any).status,
+          chave: (doc as any).chave_acesso, danfe_url: (doc as any).danfe_url,
+          xml_content: (doc as any).xml_content, rejeicao_motivo: (doc as any).rejeicao_motivo,
+        });
+      }
+    } else if (psid) {
+      // Fallback: procura NF-e vinculada à venda-espelho
+      const { data: doc } = await supabase
+        .from("fiscal_documents")
+        .select("id, status, chave_acesso, danfe_url, xml_content, rejeicao_motivo")
+        .eq("pos_sale_id", psid).eq("modelo", 55)
+        .order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (doc) {
+        setNfeDoc({
+          id: (doc as any).id, status: (doc as any).status,
+          chave: (doc as any).chave_acesso, danfe_url: (doc as any).danfe_url,
+          xml_content: (doc as any).xml_content, rejeicao_motivo: (doc as any).rejeicao_motivo,
+        });
+        // Persiste vínculo para próximas aberturas
+        await supabase.from("trocas_devolucoes").update({ nfe_reposicao_id: (doc as any).id } as any).eq("id", ev.id);
+      }
+    }
+    return { psid, nfeAuthorized: nfeId ? true : false };
+  }, [loadCustomerIntoForm]);
+
   const selectEvent = async (ev: EventRow) => {
     setLoadingItems(true);
     setSelected(ev);
@@ -189,7 +265,16 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
         })),
       );
       setReposicoes(items.filter((i) => i.direcao === "reposicao"));
-      setPhase("confer");
+
+      // Reabrir aguardando_envio: pula direto pra NF-e ou pra rastreio.
+      if (ev.status === "aguardando_envio") {
+        await loadShippingState(ev);
+        const nfeStatus = (ev as any).nfe_reposicao_id ? "linked" : "missing";
+        // se já há doc autorizada carregada, pula pra tracking
+        setPhase(nfeStatus === "linked" ? "tracking" : "nfe");
+      } else {
+        setPhase("confer");
+      }
     } catch (e) {
       console.error("[FinalizeExchangePicker] selectEvent", e);
       toast.error("Erro ao carregar itens do evento");
@@ -197,6 +282,7 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
       setLoadingItems(false);
     }
   };
+
 
   // Fase 6 — duas camadas de valor
   const valorDevolvido = devolvidos
