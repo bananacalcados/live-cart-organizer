@@ -59,8 +59,9 @@ serve(async (req) => {
       .eq('id', store_id)
       .single();
 
-    const skipTiny = !wantTiny || !!(store as any)?.disable_tiny_orders;
-    if (wantTiny && !skipTiny && !store?.tiny_token) throw new Error('Store token not configured');
+    // Integração de envio ao Tiny DESATIVADA. O sistema é independente do Tiny
+    // para vendas — apenas persiste em pos_sales localmente.
+    const skipTiny = true;
 
     const token = store?.tiny_token;
     const subtotal = items.reduce((s: number, i: any) => s + (i.price * i.quantity), 0);
