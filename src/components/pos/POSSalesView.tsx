@@ -171,6 +171,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [receiptDone, setReceiptDone] = useState(false);
   const [currentRegisterId, setCurrentRegisterId] = useState<string | null>(null);
 
+  // Vale-troca (voucher) redemption when payment method = Vale-troca
+  const [voucherCodeInput, setVoucherCodeInput] = useState("");
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherApplied, setVoucherApplied] = useState<{ id: string; codigo: string; saldo: number } | null>(null);
+
   // Custo de entrega (mototaxista/transportadora) — fica "a pagar" e aparece no Caixa da Loja
   const [storeName, setStoreName] = useState<string>("");
   const [deliveryEnabled, setDeliveryEnabled] = useState(false);
