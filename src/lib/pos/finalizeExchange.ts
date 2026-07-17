@@ -80,6 +80,10 @@ export interface FinalizeExchangeResult {
   totalReturn: boolean;
   restocked: number;
   concluded: boolean;
+  /** True quando a troca ficou aguardando as etapas de NF-e da reposição + rastreio. */
+  awaitingShipping?: boolean;
+  /** ID da venda-espelho criada em pos_sales para a reposição (só em trocas). */
+  posSaleId?: string | null;
   devolucao: {
     status: DevolucaoStatus;
     chave?: string | null;
