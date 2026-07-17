@@ -2748,38 +2748,50 @@ export type Database = {
       chat_finished_conversations: {
         Row: {
           created_at: string
+          duvida_text: string | null
           finish_reason: string | null
           finished_at: string
           finished_by: string | null
           id: string
           phone: string
+          purchased: boolean | null
           sale_currency: string | null
           sale_value: number | null
           seller_id: string | null
+          support_reason: string | null
+          support_satisfactory: boolean | null
           trigger_id: string | null
         }
         Insert: {
           created_at?: string
+          duvida_text?: string | null
           finish_reason?: string | null
           finished_at?: string
           finished_by?: string | null
           id?: string
           phone: string
+          purchased?: boolean | null
           sale_currency?: string | null
           sale_value?: number | null
           seller_id?: string | null
+          support_reason?: string | null
+          support_satisfactory?: boolean | null
           trigger_id?: string | null
         }
         Update: {
           created_at?: string
+          duvida_text?: string | null
           finish_reason?: string | null
           finished_at?: string
           finished_by?: string | null
           id?: string
           phone?: string
+          purchased?: boolean | null
           sale_currency?: string | null
           sale_value?: number | null
           seller_id?: string | null
+          support_reason?: string | null
+          support_satisfactory?: boolean | null
           trigger_id?: string | null
         }
         Relationships: [
