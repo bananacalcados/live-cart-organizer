@@ -23,6 +23,7 @@ import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import { SiteExchangePicker, SiteExchangeResult } from "./SiteExchangePicker";
 import { NewExchangePicker } from "./NewExchangePicker";
+import { PresentialExchangePicker } from "./PresentialExchangePicker";
 import { FinalizeExchangePicker } from "./FinalizeExchangePicker";
 import { ExchangeSearchList } from "./ExchangeSearchList";
 import { ConditionalFinalizePicker, ConditionalPickResult } from "./ConditionalFinalizePicker";
@@ -102,6 +103,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   // Trocas/Devolução: submenu de entrada (Troca do Site pré-faturamento / Nova / Finalizar)
   const [showExchangeMenu, setShowExchangeMenu] = useState(false);
   const [showNewExchange, setShowNewExchange] = useState(false);
+  const [showPresentialExchange, setShowPresentialExchange] = useState(false);
   const [showExchangeTypePicker, setShowExchangeTypePicker] = useState(false);
   const [showFinalizeExchange, setShowFinalizeExchange] = useState(false);
   const [showExchangeSearch, setShowExchangeSearch] = useState(false);
@@ -1963,7 +1965,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             </DialogHeader>
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
-                onClick={() => { setShowExchangeTypePicker(false); toast.info('Fluxo Presencial em preparação — em breve.'); }}
+                onClick={() => { setShowExchangeTypePicker(false); setShowPresentialExchange(true); }}
                 className="rounded-2xl border-2 border-emerald-400/40 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-400 p-5 flex flex-col items-center gap-3 transition-all"
               >
                 <div className="h-14 w-14 rounded-full bg-emerald-500/20 flex items-center justify-center text-2xl">🏬</div>
@@ -1990,6 +1992,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           onDone={() => { setShowNewExchange(false); onCloseSalesView?.(); }}
         />
 
+        <PresentialExchangePicker
+          open={showPresentialExchange}
+          sellerId={selectedSeller || undefined}
+          sellerName={sellers.find((s) => s.id === selectedSeller)?.name || undefined}
+          onCancel={() => setShowPresentialExchange(false)}
+          onDone={() => { setShowPresentialExchange(false); onCloseSalesView?.(); }}
+        />
+
         <FinalizeExchangePicker
           open={showFinalizeExchange}
           sellerId={selectedSeller || undefined}
@@ -2003,7 +2013,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           onClose={() => setShowExchangeSearch(false)}
         />
 
-        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu && !showNewExchange && !showFinalizeExchange && !showExchangeSearch} onOpenChange={() => {}}>
+        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu && !showNewExchange && !showPresentialExchange && !showExchangeTypePicker && !showFinalizeExchange && !showExchangeSearch} onOpenChange={() => {}}>
           <DialogContent className="bg-pos-black border-pos-orange/40 max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
