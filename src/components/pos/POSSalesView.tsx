@@ -102,6 +102,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   // Trocas/Devolução: submenu de entrada (Troca do Site pré-faturamento / Nova / Finalizar)
   const [showExchangeMenu, setShowExchangeMenu] = useState(false);
   const [showNewExchange, setShowNewExchange] = useState(false);
+  const [showExchangeTypePicker, setShowExchangeTypePicker] = useState(false);
   const [showFinalizeExchange, setShowFinalizeExchange] = useState(false);
   const [showExchangeSearch, setShowExchangeSearch] = useState(false);
   // Condicional: pedido enviado ao cliente para experimentar (2 etapas)
