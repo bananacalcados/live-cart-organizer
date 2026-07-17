@@ -42,6 +42,7 @@ import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 
 
 import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
+import { posSendText } from "@/lib/pos/posWhatsappSend";
 import { POSWhatsAppDashboard } from "./POSWhatsAppDashboard";
 import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
 import { POSSendTemplateDialog } from "./POSSendTemplateDialog";
