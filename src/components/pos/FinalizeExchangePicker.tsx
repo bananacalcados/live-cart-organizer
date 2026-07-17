@@ -661,7 +661,248 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
             </div>
           </ScrollArea>
         )}
+
+        {phase === "nfe" && selected && (
+          <ScrollArea className="max-h-[72vh] pr-2">
+            <div className="space-y-3 pt-1">
+              <div className="rounded-xl border border-emerald-400/20 bg-pos-white/5 p-3">
+                <p className="text-sm font-bold text-pos-white flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-emerald-400" /> NF-e da Reposição
+                </p>
+                <p className="text-[11px] text-pos-white/40">
+                  {selected.codigo_devolucao} · {selected.customer_name || "Cliente"} · {STORE_NAMES[selected.loja_origem_id || ""] || "—"}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-pos-white/70 mb-2">Itens que serão enviados</p>
+                <div className="space-y-1">
+                  {reposicoes.map((r) => (
+                    <div key={r.id} className="rounded-lg border border-purple-400/20 bg-purple-500/5 p-2 flex items-center gap-2">
+                      <Undo2 className="h-3.5 w-3.5 text-purple-400" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-pos-white truncate">{r.produto_nome || r.sku}</p>
+                        <p className="text-[10px] text-pos-white/40">
+                          {r.sku && `SKU ${r.sku} · `}{r.tamanho && `Tam ${r.tamanho} · `}Qtd {r.quantidade} · R$ {Number(r.valor_unitario).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-emerald-400/20 bg-pos-white/5 p-3 space-y-2">
+                <p className="text-xs font-semibold text-pos-white/70">Destinatário</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input placeholder="Nome" value={shipCustomer.name} onChange={(e) => setShipCustomer((s) => ({ ...s, name: e.target.value }))} className="h-8 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                  <Input placeholder="CPF" value={shipCustomer.cpf} onChange={(e) => setShipCustomer((s) => ({ ...s, cpf: e.target.value }))} className="h-8 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                  <Input placeholder="WhatsApp" value={shipCustomer.whatsapp} onChange={(e) => setShipCustomer((s) => ({ ...s, whatsapp: e.target.value }))} className="h-8 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                  <Input placeholder="CEP" value={shipCustomer.cep} onChange={(e) => setShipCustomer((s) => ({ ...s, cep: e.target.value }))} className="h-8 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                  <Input placeholder="Endereço" value={shipCustomer.address} onChange={(e) => setShipCustomer((s) => ({ ...s, address: e.target.value }))} className="h-8 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white col-span-2" />
+                  <Input placeholder="Número" value={shipCustomer.number} onChange={(e) => setShipCustomer((s) => ({ ...s, number: e.target.value }))} className="h-8 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                  <Input placeholder="Complemento" value={shipCustomer.complement} onChange={(e) => setShipCustomer((s) => ({ ...s, complement: e.target.value }))} className="h-8 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                  <Input placeholder="Bairro" value={shipCustomer.neighborhood} onChange={(e) => setShipCustomer((s) => ({ ...s, neighborhood: e.target.value }))} className="h-8 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                  <Input placeholder="Cidade" value={shipCustomer.city} onChange={(e) => setShipCustomer((s) => ({ ...s, city: e.target.value }))} className="h-8 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                  <Input placeholder="UF" maxLength={2} value={shipCustomer.state} onChange={(e) => setShipCustomer((s) => ({ ...s, state: e.target.value.toUpperCase() }))} className="h-8 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                </div>
+                <p className="text-[10px] text-pos-white/40">Edite se necessário — as alterações são salvas no cadastro do cliente antes da emissão.</p>
+              </div>
+
+              <div>
+                <Label className="text-xs text-pos-white/70">Informações complementares (opcional)</Label>
+                <Textarea value={nfeObs} onChange={(e) => setNfeObs(e.target.value)} placeholder="Ex.: NF-e referente à troca do pedido #123" className="mt-1 min-h-[60px] text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+              </div>
+
+              {nfeDoc && (
+                <div className={cn("rounded-lg border p-2.5 text-[12px]",
+                  nfeDoc.status === "authorized" || nfeDoc.status === "autorizada"
+                    ? "border-emerald-400/40 bg-emerald-500/5 text-emerald-200"
+                    : nfeDoc.status === "rejected" || nfeDoc.status === "rejeitada"
+                    ? "border-red-400/40 bg-red-500/5 text-red-200"
+                    : "border-amber-400/40 bg-amber-500/5 text-amber-200")}>
+                  <p className="font-semibold">NF-e status: {nfeDoc.status}</p>
+                  {nfeDoc.chave && <p className="text-[11px] opacity-80">Chave: {nfeDoc.chave}</p>}
+                  {nfeDoc.rejeicao_motivo && <p className="text-[11px] mt-1">{nfeDoc.rejeicao_motivo}</p>}
+                  {nfeDoc.danfe_url && (
+                    <a href={nfeDoc.danfe_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] underline mt-1">
+                      <ExternalLink className="h-3 w-3" /> Abrir DANFE
+                    </a>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between pt-2 gap-2">
+                <Button variant="ghost" className="text-pos-white/70" onClick={() => setPhase("list")}>Fechar</Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={emittingNfe || !posSaleId}
+                    onClick={async () => {
+                      if (!posSaleId || !selected) return;
+                      setEmittingNfe(true);
+                      try {
+                        // Persiste cadastro do cliente antes de emitir (endereço vivo é a fonte para a NF-e).
+                        if (customerId) {
+                          setSavingCustomer(true);
+                          await supabase.from("pos_customers").update({
+                            name: shipCustomer.name || null,
+                            cpf: shipCustomer.cpf || null,
+                            whatsapp: shipCustomer.whatsapp || null,
+                            cep: shipCustomer.cep || null,
+                            address: shipCustomer.address || null,
+                            address_number: shipCustomer.number || null,
+                            complement: shipCustomer.complement || null,
+                            neighborhood: shipCustomer.neighborhood || null,
+                            city: shipCustomer.city || null,
+                            state: shipCustomer.state || null,
+                          } as any).eq("id", customerId);
+                          setSavingCustomer(false);
+                        }
+                        const { data, error } = await supabase.functions.invoke("nfe-emitir", {
+                          body: { sale_id: posSaleId, informacoes_complementares: nfeObs || undefined },
+                        });
+                        if (error) throw new Error(error.message);
+                        const docId = (data as any)?.document_id || (data as any)?.documentId;
+                        if (docId) {
+                          const { data: doc } = await supabase
+                            .from("fiscal_documents")
+                            .select("id, status, chave_acesso, danfe_url, xml_content, rejeicao_motivo")
+                            .eq("id", docId).maybeSingle();
+                          if (doc) {
+                            setNfeDoc({
+                              id: (doc as any).id, status: (doc as any).status,
+                              chave: (doc as any).chave_acesso, danfe_url: (doc as any).danfe_url,
+                              xml_content: (doc as any).xml_content, rejeicao_motivo: (doc as any).rejeicao_motivo,
+                            });
+                            await supabase.from("trocas_devolucoes").update({ nfe_reposicao_id: docId } as any).eq("id", selected.id);
+                            const ok = ((doc as any).status || "").toLowerCase().startsWith("autor");
+                            if (ok) toast.success("NF-e da reposição autorizada.");
+                            else toast.error(`NF-e ${(doc as any).status}: ${(doc as any).rejeicao_motivo || ""}`);
+                          }
+                        } else {
+                          toast.warning("Emissão enviada, mas não foi possível localizar o documento.");
+                        }
+                      } catch (e: any) {
+                        toast.error(e?.message || "Falha ao emitir NF-e");
+                      } finally {
+                        setEmittingNfe(false);
+                      }
+                    }}
+                  >
+                    {emittingNfe ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <FileText className="h-4 w-4 mr-1" />}
+                    {nfeDoc ? "Reemitir NF-e" : "Emitir NF-e"}
+                  </Button>
+                  <Button
+                    className="bg-emerald-500 text-pos-black hover:bg-emerald-600 font-bold"
+                    disabled={!nfeDoc || !((nfeDoc.status || "").toLowerCase().startsWith("autor"))}
+                    onClick={() => {
+                      if (!waMessage && selected) {
+                        setWaMessage(buildDefaultWaMessage(selected, trackingCode || "___", trackingCarrier || "Correios", shipCustomer.name));
+                      }
+                      setPhase("tracking");
+                    }}
+                  >
+                    Avançar <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </ScrollArea>
+        )}
+
+        {phase === "tracking" && selected && (
+          <ScrollArea className="max-h-[72vh] pr-2">
+            <div className="space-y-3 pt-1">
+              <div className="rounded-xl border border-emerald-400/20 bg-pos-white/5 p-3">
+                <p className="text-sm font-bold text-pos-white flex items-center gap-2">
+                  <Truck className="h-4 w-4 text-emerald-400" /> Rastreio + WhatsApp
+                </p>
+                <p className="text-[11px] text-pos-white/40">
+                  {selected.codigo_devolucao} · {shipCustomer.name || selected.customer_name || "Cliente"}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs text-pos-white/70">Código de rastreio</Label>
+                  <Input value={trackingCode} onChange={(e) => {
+                    const v = e.target.value.toUpperCase();
+                    setTrackingCode(v);
+                    if (selected) setWaMessage(buildDefaultWaMessage(selected, v, trackingCarrier || "Correios", shipCustomer.name));
+                  }} placeholder="Ex.: BR123456789BR" className="mt-1 h-9 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                </div>
+                <div>
+                  <Label className="text-xs text-pos-white/70">Transportadora</Label>
+                  <Input value={trackingCarrier} onChange={(e) => {
+                    setTrackingCarrier(e.target.value);
+                    if (selected) setWaMessage(buildDefaultWaMessage(selected, trackingCode || "___", e.target.value || "Correios", shipCustomer.name));
+                  }} placeholder="Correios / Jadlog / Loggi..." className="mt-1 h-9 text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white" />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs text-pos-white/70 flex items-center gap-1">
+                  <MessageCircle className="h-3 w-3" /> Instância do WhatsApp
+                </Label>
+                <div className="mt-1">
+                  <WhatsAppNumberSelector value={waNumberId} onValueChange={setWaNumberId} autoSelect />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs text-pos-white/70">Mensagem para o cliente</Label>
+                <Textarea value={waMessage} onChange={(e) => setWaMessage(e.target.value)} className="mt-1 min-h-[120px] text-xs bg-pos-white/5 border-emerald-400/30 text-pos-white font-mono" />
+                <p className="text-[10px] text-pos-white/40 mt-1">Enviada para: {shipCustomer.whatsapp || selected.customer_name || "—"}</p>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <Button variant="ghost" className="text-pos-white/70" onClick={() => setPhase("nfe")}>Voltar</Button>
+                <Button
+                  className="bg-emerald-500 text-pos-black hover:bg-emerald-600 font-bold"
+                  disabled={sendingWa || !trackingCode.trim() || !waMessage.trim() || !posSaleId}
+                  onClick={async () => {
+                    if (!selected || !posSaleId) return;
+                    setSendingWa(true);
+                    try {
+                      const phone = (shipCustomer.whatsapp || "").replace(/\D/g, "");
+                      if (!phone) throw new Error("Cliente sem WhatsApp cadastrado");
+                      const number = waNumbers.find((n) => n.id === waNumberId);
+                      const provider = number?.provider || null;
+                      const msgId = await posSendText({
+                        provider, phone, message: waMessage, numberId: waNumberId,
+                      });
+                      if (!msgId) throw new Error("Falha ao enviar WhatsApp");
+
+                      await supabase.from("pos_sales").update({
+                        tracking_code: trackingCode.trim(),
+                        tracking_carrier: trackingCarrier.trim() || null,
+                      } as any).eq("id", posSaleId);
+
+                      await supabase.from("trocas_devolucoes").update({
+                        tracking_code: trackingCode.trim(),
+                        tracking_carrier: trackingCarrier.trim() || null,
+                        whatsapp_notification_sent_at: new Date().toISOString(),
+                        status: "concluida",
+                      } as any).eq("id", selected.id);
+
+                      toast.success(`${selected.codigo_devolucao} finalizada. Cliente notificado via WhatsApp.`);
+                      onDone();
+                    } catch (e: any) {
+                      toast.error(e?.message || "Falha ao enviar/finalizar");
+                    } finally {
+                      setSendingWa(false);
+                    }
+                  }}
+                >
+                  {sendingWa ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-1" />}
+                  Enviar WhatsApp e concluir
+                </Button>
+              </div>
+            </div>
+          </ScrollArea>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
+
