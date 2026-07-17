@@ -188,6 +188,22 @@ export function NewExchangePicker({ open, sellerId, onCancel, onDone }: Props) {
         .eq("sale_id", s.id);
       if (itErr) throw itErr;
 
+      // Rateia desconto do pedido para achar o preço efetivamente pago por item
+      const { data: saleTotals } = await supabase
+        .from("pos_sales")
+        .select("discount, total, subtotal")
+        .eq("id", s.id)
+        .maybeSingle();
+      const { computeEffectiveUnitPrices } = await import("@/lib/pos/effectivePrice");
+      const eff = computeEffectiveUnitPrices(
+        (rawItems || []).map((i: any) => ({
+          unit_price: Number(i.unit_price || 0),
+          quantity: Number(i.quantity || 1),
+        })),
+        Number((saleTotals as any)?.discount || 0),
+        Number((saleTotals as any)?.total || 0) || null,
+      );
+
       // resolve produto_id por sku (catálogo da loja)
       const skus = [...new Set((rawItems || []).map((i: any) => (i.sku || "").trim()).filter(Boolean))];
       const bySku = new Map<string, { id: string; barcode: string }>();
@@ -212,7 +228,7 @@ export function NewExchangePicker({ open, sellerId, onCancel, onDone }: Props) {
           variant: i.variant_name || "",
           size: i.size || null,
           barcode: (i.barcode || resolved?.barcode || "") as string,
-          unit_price: Number(i.unit_price || 0),
+          unit_price: eff.effective[idx] ?? Number(i.unit_price || 0),
           quantity: Number(i.quantity || 1),
           returned: true, // por padrão, todos entram na devolução; a vendedora remove os que ficam
         };
