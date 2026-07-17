@@ -281,24 +281,81 @@ Deno.serve(async (req) => {
 
     const totalLiquido = round2(totalProd - totalDesc);
 
-    // 6. Cliente: identificado (CPF) → contraparte; sem identificação → a própria loja
+    // 6. Cliente: identificado (CPF) → contraparte com endereço; sem CPF ou sem endereço válido → a própria loja.
+    //    Endereço é MONTADO automaticamente do cadastro vivo (pos_customers) + snapshot do pedido
+    //    (customer_state/city/cep + shipping_address). Se faltar UF/CEP, cai no fallback loja
+    //    para não travar a devolução por dado de cadastro incompleto (a NF continua idônea:
+    //    devolução para o próprio estoque via CNPJ do emitente).
     const cpfDest = digits((sale as any).customer_cpf || (sale as any).pos_customers?.cpf);
-    const clienteIdentificado = cpfDest.length === 11;
+    const hasCpf = cpfDest.length === 11;
     const ieEmitente = digits(company.ie);
 
-    const cliente = clienteIdentificado
+    const pc: any = (sale as any).pos_customers || {};
+    const sa: any = (sale as any).shipping_address || {};
+    const pick = (...vals: any[]) => {
+      for (const v of vals) {
+        const s = v == null ? "" : String(v).trim();
+        if (s) return s;
+      }
+      return "";
+    };
+    const ufDest = ufFromAny(pick(pc.state, (sale as any).customer_state, sa.province, sa.state));
+    const cepDest = digits(pick(pc.cep, (sale as any).customer_cep, sa.zip, sa.cep));
+    const cityDest = pick(pc.city, (sale as any).customer_city, sa.city);
+    const enderecoRaw = pick(
+      [pick(pc.address), pick(pc.address_number)].filter(Boolean).join(", "),
+      sa.address1,
+      [sa.address, sa.number].filter(Boolean).join(", "),
+    );
+    const bairroDest = pick(pc.neighborhood, sa.neighborhood, sa.address2, "Centro");
+    const split = splitStreetNumber(enderecoRaw);
+    const numeroDest = pick(pc.address_number, sa.number, split.numero, "S/N");
+    const logradouroDest = split.logradouro || pick(pc.address, sa.address) || "S/N";
+
+    const clienteComEndereco = hasCpf && !!ufDest && cepDest.length === 8;
+    const ibgeDest = clienteComEndereco && cityDest ? await lookupIbge(cityDest, ufDest!) : null;
+    const clienteIdentificado = clienteComEndereco;
+
+    const cliente: any = clienteComEndereco
       ? {
           CpfCnpj: cpfDest,
-          NmCliente: sanitize((sale as any).customer_name || (sale as any).pos_customers?.name || "CONSUMIDOR").slice(0, 60),
+          NmCliente: sanitize((sale as any).customer_name || pc.name || "CONSUMIDOR").slice(0, 60),
           IndicadorIe: 9,
+          Endereco: {
+            Cep: cepDest,
+            Logradouro: sanitize(logradouroDest).slice(0, 60) || "S/N",
+            Numero: sanitize(numeroDest).slice(0, 10) || "S/N",
+            Bairro: sanitize(bairroDest).slice(0, 60) || "Centro",
+            ...(ibgeDest ? { CodMunicipio: ibgeDest } : {}),
+            Municipio: sanitize(cityDest).slice(0, 60),
+            Uf: ufDest,
+            CodPais: 1058,
+            Pais: "BRASIL",
+          },
+          Contato: {
+            ...((sale as any).customer_phone ? { Telefone: digits((sale as any).customer_phone) } : {}),
+            ...((sale as any).customer_email || pc.email ? { Email: (sale as any).customer_email || pc.email } : {}),
+          },
         }
       : {
-          // Venda sem identificação → loja é a destinatária (devolução para o próprio estoque)
+          // Sem CPF OU sem endereço válido → loja é a destinatária (devolução para o próprio estoque).
           CpfCnpj: digits(company.cnpj),
           NmCliente: sanitize(company.razao_social || company.nome_fantasia || "LOJA").slice(0, 60),
           ...(ieEmitente ? { Ie: ieEmitente } : {}),
           IndicadorIe: ieEmitente ? 1 : 9,
+          Endereco: {
+            Cep: digits(company.address_cep),
+            Logradouro: sanitize(company.address_street || "S/N").slice(0, 60) || "S/N",
+            Numero: sanitize(company.address_number || "S/N").slice(0, 10) || "S/N",
+            Bairro: sanitize(company.address_neighborhood || "Centro").slice(0, 60) || "Centro",
+            ...(company.address_city_ibge ? { CodMunicipio: String(company.address_city_ibge) } : {}),
+            Municipio: sanitize(company.address_city || "").slice(0, 60),
+            Uf: (company.address_state || ufOrigem).toUpperCase(),
+            CodPais: 1058,
+            Pais: "BRASIL",
+          },
         };
+
 
     // 7. Cria o documento fiscal (entrada) pendente e vincula ao evento AGORA
     const { data: doc, error: dErr } = await supabase.from("fiscal_documents").insert({
