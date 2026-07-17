@@ -399,7 +399,7 @@ export async function finalizeExchange(
             const subtotal = Number(valor_reposicao || 0);
             const credito = Number(valor_devolvido || 0);
             const diferenca = Number((subtotal - credito).toFixed(2));
-            const notaTroca = `🔁 Troca ${codigo_devolucao || eventId} · Crédito devolução: R$ ${credito.toFixed(2)} · Diferença: R$ ${diferenca.toFixed(2)}`;
+            const notaTroca = `🔁 Troca ${codigo_devolucao || eventId} · Pedido original: ${pedido_original_id} · Crédito devolução: R$ ${credito.toFixed(2)} · Diferença: R$ ${diferenca.toFixed(2)}`;
 
             const { data: newSale, error: saleErr } = await supabase
               .from("pos_sales")
@@ -415,7 +415,7 @@ export async function finalizeExchange(
                 sale_type: "exchange",
                 external_source: "troca",
                 external_order_id: eventId,
-                source_order_id: pedido_original_id || null,
+                // Rastreabilidade ao pedido original fica em `notes` (não usar source_order_id: FK aponta para tabela `orders` legado)
                 notes: notaTroca,
                 paid_at: new Date().toISOString(),
                 revenue_attribution: origem_canal === "site" ? "online" : "store",
@@ -423,7 +423,13 @@ export async function finalizeExchange(
               .select("id")
               .single();
 
-            if (!saleErr && newSale?.id) {
+            if (saleErr) {
+              console.error("[finalizeExchange] mirror sale insert error", saleErr);
+              await supabase
+                .from("trocas_devolucoes")
+                .update({ fase2_erro: `Venda-espelho falhou: ${saleErr.message}` } as any)
+                .eq("id", eventId);
+            } else if (newSale?.id) {
               posSaleId = (newSale as any).id;
               const itemsPayload = (repItems as any[]).map((r) => ({
                 sale_id: newSale.id,
@@ -436,13 +442,24 @@ export async function finalizeExchange(
                 quantity: Number(r.quantidade || 0),
                 total_price: Number(r.valor_unitario || 0) * Number(r.quantidade || 0),
               }));
-              await supabase.from("pos_sale_items").insert(itemsPayload);
+              const { error: itErr } = await supabase.from("pos_sale_items").insert(itemsPayload);
+              if (itErr) {
+                console.error("[finalizeExchange] mirror sale items insert error", itErr);
+                await supabase
+                  .from("trocas_devolucoes")
+                  .update({ fase2_erro: `Itens da venda-espelho falharam: ${itErr.message}` } as any)
+                  .eq("id", eventId);
+              }
             }
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         // best-effort: falha aqui não invalida a troca (fiscal + estoque já OK).
         console.error("[finalizeExchange] criação da venda-espelho da troca falhou", e);
+        await supabase
+          .from("trocas_devolucoes")
+          .update({ fase2_erro: `Venda-espelho exception: ${e?.message || String(e)}` } as any)
+          .eq("id", eventId);
       }
     }
 
