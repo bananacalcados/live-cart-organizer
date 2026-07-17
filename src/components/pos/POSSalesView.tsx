@@ -1723,6 +1723,44 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const cashChange = cashReceived ? Math.max(0, parseFloat(cashReceived) - totalWithDiscount) : 0;
   const multiPaymentsTotal = multiPayments.reduce((s, p) => s + p.amount, 0);
 
+  // ── Vale-troca (voucher) helpers ────────────────────────────────────────────
+  const isValeTrocaName = (n?: string | null) =>
+    (n || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, "").includes("valetroca");
+  const multiPickingValeTroca = useMultiPayment && isValeTrocaName(paymentMethods.find(m => m.id === multiPaymentMethodId)?.name);
+  const multiHasValeTroca = useMultiPayment && multiPayments.some(p => isValeTrocaName(p.method_name));
+  const singleIsValeTroca = !useMultiPayment && isValeTrocaName(selectedPaymentName);
+  const showVoucherPanel = singleIsValeTroca || multiPickingValeTroca || multiHasValeTroca;
+  const valeTrocaAmountRequired = useMultiPayment
+    ? multiPayments.filter(p => isValeTrocaName(p.method_name)).reduce((s, p) => s + Number(p.amount || 0), 0)
+    : (singleIsValeTroca ? totalWithDiscount : 0);
+
+  const applyVoucherForSale = async () => {
+    const codigo = voucherCodeInput.trim();
+    if (!codigo) return;
+    setVoucherLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("vouchers")
+        .select("id, codigo, saldo, status, validade")
+        .eq("codigo", codigo)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) { toast.error("Voucher não encontrado"); return; }
+      if ((data as any).status !== "ativo") { toast.error("Voucher não está ativo"); return; }
+      const saldo = Number((data as any).saldo || 0);
+      if (saldo <= 0) { toast.error("Voucher sem saldo"); return; }
+      const validade = (data as any).validade ? new Date((data as any).validade) : null;
+      if (validade && validade.getTime() < Date.now()) { toast.error("Voucher expirado"); return; }
+      setVoucherApplied({ id: (data as any).id, codigo: (data as any).codigo, saldo });
+      toast.success(`Voucher ${(data as any).codigo}: R$ ${saldo.toFixed(2)} disponível`);
+    } catch (e: any) {
+      console.error("[POSSalesView] applyVoucherForSale", e);
+      toast.error(e?.message || "Erro ao validar voucher");
+    } finally {
+      setVoucherLoading(false);
+    }
+  };
+
   // Ação do botão principal (rodapé) — roteia por tipo de venda/etapa.
   const primaryActionLabel = finalizingSale
     ? (isNewConditional ? "Gerando..." : "Finalizando...")
