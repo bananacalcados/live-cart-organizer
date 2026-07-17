@@ -32,6 +32,7 @@ const STATUS_LABELS: Record<TdStatus, string> = {
   iniciada: "Iniciada",
   aguardando_retorno: "Aguardando Retorno",
   recebido_conferencia: "Recebido / Conferência",
+  aguardando_envio: "Aguardando Envio",
   concluida: "Concluída",
   cancelada: "Cancelada",
 };
@@ -40,6 +41,7 @@ const STATUS_COLORS: Record<TdStatus, string> = {
   iniciada: "bg-yellow-500/15 text-yellow-300 border-yellow-500/40",
   aguardando_retorno: "bg-blue-500/15 text-blue-300 border-blue-500/40",
   recebido_conferencia: "bg-purple-500/15 text-purple-300 border-purple-500/40",
+  aguardando_envio: "bg-cyan-500/15 text-cyan-300 border-cyan-500/40",
   concluida: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
   cancelada: "bg-red-500/15 text-red-300 border-red-500/40",
 };
