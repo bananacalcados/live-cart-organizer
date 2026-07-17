@@ -40,6 +40,38 @@ const sanitize = (s: string) => String(s ?? "")
   .replace(/[^A-Za-z0-9 ]/g, " ")
   .replace(/\s+/g, " ").trim();
 
+const UF_MAP: Record<string, string> = {
+  "ACRE":"AC","ALAGOAS":"AL","AMAPA":"AP","AMAZONAS":"AM","BAHIA":"BA","CEARA":"CE",
+  "DISTRITO FEDERAL":"DF","ESPIRITO SANTO":"ES","GOIAS":"GO","MARANHAO":"MA",
+  "MATO GROSSO":"MT","MATO GROSSO DO SUL":"MS","MINAS GERAIS":"MG","PARA":"PA",
+  "PARAIBA":"PB","PARANA":"PR","PERNAMBUCO":"PE","PIAUI":"PI","RIO DE JANEIRO":"RJ",
+  "RIO GRANDE DO NORTE":"RN","RIO GRANDE DO SUL":"RS","RONDONIA":"RO","RORAIMA":"RR",
+  "SANTA CATARINA":"SC","SAO PAULO":"SP","SERGIPE":"SE","TOCANTINS":"TO",
+};
+function ufFromAny(p: any): string | null {
+  if (!p) return null;
+  const up = String(p).toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  if (up.length === 2) return up;
+  return UF_MAP[up] || null;
+}
+function splitStreetNumber(addr1: string | null | undefined): { logradouro: string; numero: string } {
+  const s = String(addr1 ?? "").trim();
+  if (!s) return { logradouro: "", numero: "S/N" };
+  const m = s.match(/^(.*?)[,\s]+(\d{1,6}[A-Za-z]?)\s*$/);
+  if (m) return { logradouro: m[1].trim().replace(/,$/, ""), numero: m[2] };
+  return { logradouro: s, numero: "S/N" };
+}
+async function lookupIbge(city: string, uf: string): Promise<string | null> {
+  try {
+    const r = await fetch(`https://brasilapi.com.br/api/ibge/municipios/v1/${uf}?providers=dados-abertos-br`, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return null;
+    const arr = await r.json();
+    const target = sanitize(city).toUpperCase();
+    const hit = arr.find((m: any) => sanitize(m.nome).toUpperCase() === target);
+    return hit?.codigo_ibge || null;
+  } catch { return null; }
+}
+
 // CST de PIS/COFINS: converte o código da nota de SAÍDA (grupo 01–09) para um
 // código válido em nota de ENTRADA (grupo 50–99). Sem isso a SEFAZ rejeita a
 // devolução com "CST do PIS/COFINS inválido para nota fiscal de entrada".
