@@ -1708,6 +1708,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setCashReceived("");
     setInstallments("1");
     setMultiPayments([]);
+    setVoucherApplied(null);
+    setVoucherCodeInput("");
     setUseMultiPayment(false);
     setMultiPaymentMethodId("");
     setMultiPaymentAmount("");
