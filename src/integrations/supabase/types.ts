@@ -12705,6 +12705,7 @@ export type Database = {
           tiny_order_id: string | null
           tiny_order_number: string | null
           total: number
+          tracking_carrier: string | null
           tracking_code: string | null
           updated_at: string
           vindi_transaction_id: string | null
@@ -12773,6 +12774,7 @@ export type Database = {
           tiny_order_id?: string | null
           tiny_order_number?: string | null
           total?: number
+          tracking_carrier?: string | null
           tracking_code?: string | null
           updated_at?: string
           vindi_transaction_id?: string | null
@@ -12841,6 +12843,7 @@ export type Database = {
           tiny_order_id?: string | null
           tiny_order_number?: string | null
           total?: number
+          tracking_carrier?: string | null
           tracking_code?: string | null
           updated_at?: string
           vindi_transaction_id?: string | null
@@ -16828,6 +16831,7 @@ export type Database = {
           loja_origem_id: string | null
           modo_expedicao: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo: Database["public"]["Enums"]["td_motivo"]
+          nfe_reposicao_id: string | null
           origem_canal: Database["public"]["Enums"]["td_origem_canal"]
           pedido_ajustado: boolean
           pedido_novo_id: string | null
@@ -16835,12 +16839,15 @@ export type Database = {
           resolucao_diferenca: string | null
           status: Database["public"]["Enums"]["td_status"]
           tipo: Database["public"]["Enums"]["td_tipo"]
+          tracking_carrier: string | null
+          tracking_code: string | null
           updated_at: string
           valor_devolvido: number
           valor_reposicao: number
           venda_nova_doc_id: string | null
           vendedora_troca_id: string | null
           voucher_id: string | null
+          whatsapp_notification_sent_at: string | null
         }
         Insert: {
           chave_acesso_original?: string | null
@@ -16859,6 +16866,7 @@ export type Database = {
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo: Database["public"]["Enums"]["td_motivo"]
+          nfe_reposicao_id?: string | null
           origem_canal: Database["public"]["Enums"]["td_origem_canal"]
           pedido_ajustado?: boolean
           pedido_novo_id?: string | null
@@ -16866,12 +16874,15 @@ export type Database = {
           resolucao_diferenca?: string | null
           status?: Database["public"]["Enums"]["td_status"]
           tipo: Database["public"]["Enums"]["td_tipo"]
+          tracking_carrier?: string | null
+          tracking_code?: string | null
           updated_at?: string
           valor_devolvido?: number
           valor_reposicao?: number
           venda_nova_doc_id?: string | null
           vendedora_troca_id?: string | null
           voucher_id?: string | null
+          whatsapp_notification_sent_at?: string | null
         }
         Update: {
           chave_acesso_original?: string | null
@@ -16890,6 +16901,7 @@ export type Database = {
           loja_origem_id?: string | null
           modo_expedicao?: Database["public"]["Enums"]["td_modo_expedicao"]
           motivo?: Database["public"]["Enums"]["td_motivo"]
+          nfe_reposicao_id?: string | null
           origem_canal?: Database["public"]["Enums"]["td_origem_canal"]
           pedido_ajustado?: boolean
           pedido_novo_id?: string | null
@@ -16897,12 +16909,15 @@ export type Database = {
           resolucao_diferenca?: string | null
           status?: Database["public"]["Enums"]["td_status"]
           tipo?: Database["public"]["Enums"]["td_tipo"]
+          tracking_carrier?: string | null
+          tracking_code?: string | null
           updated_at?: string
           valor_devolvido?: number
           valor_reposicao?: number
           venda_nova_doc_id?: string | null
           vendedora_troca_id?: string | null
           voucher_id?: string | null
+          whatsapp_notification_sent_at?: string | null
         }
         Relationships: [
           {
@@ -16917,6 +16932,13 @@ export type Database = {
             columns: ["loja_origem_id"]
             isOneToOne: false
             referencedRelation: "pos_stores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "trocas_devolucoes_nfe_reposicao_id_fkey"
+            columns: ["nfe_reposicao_id"]
+            isOneToOne: false
+            referencedRelation: "fiscal_documents"
             referencedColumns: ["id"]
           },
           {
@@ -20312,6 +20334,7 @@ export type Database = {
         | "iniciada"
         | "aguardando_retorno"
         | "recebido_conferencia"
+        | "aguardando_envio"
         | "concluida"
         | "cancelada"
       td_tipo: "troca" | "devolucao"
@@ -20493,6 +20516,7 @@ export const Constants = {
         "iniciada",
         "aguardando_retorno",
         "recebido_conferencia",
+        "aguardando_envio",
         "concluida",
         "cancelada",
       ],

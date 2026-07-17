@@ -80,6 +80,10 @@ export interface FinalizeExchangeResult {
   totalReturn: boolean;
   restocked: number;
   concluded: boolean;
+  /** True quando a troca ficou aguardando as etapas de NF-e da reposição + rastreio. */
+  awaitingShipping?: boolean;
+  /** ID da venda-espelho criada em pos_sales para a reposição (só em trocas). */
+  posSaleId?: string | null;
   devolucao: {
     status: DevolucaoStatus;
     chave?: string | null;
@@ -366,6 +370,9 @@ export async function finalizeExchange(
 
   // ── Conclusão: só quando a parte fiscal está resolvida (autorizada/sem nota). ──
   const concluded = fiscalOk;
+  let posSaleId: string | null = null;
+  let awaitingShipping = false;
+
   if (concluded) {
     // ── 6) Criar venda-espelho da reposição na aba Pedidos (idempotente) ──
     // Só faz sentido quando é TROCA (tem reposição). Devolução pura não gera venda.
@@ -378,7 +385,9 @@ export async function finalizeExchange(
           .eq("external_order_id", eventId)
           .maybeSingle();
 
-        if (!existing) {
+        if (existing?.id) {
+          posSaleId = (existing as any).id;
+        } else {
           const { data: repItems } = await supabase
             .from("trocas_devolucoes_itens")
             .select("sku, barcode, produto_nome, tamanho, quantidade, valor_unitario")
@@ -414,6 +423,7 @@ export async function finalizeExchange(
               .single();
 
             if (!saleErr && newSale?.id) {
+              posSaleId = (newSale as any).id;
               const itemsPayload = (repItems as any[]).map((r) => ({
                 sale_id: newSale.id,
                 sku: r.sku || null,
@@ -435,10 +445,20 @@ export async function finalizeExchange(
       }
     }
 
-    await supabase
-      .from("trocas_devolucoes")
-      .update({ status: "concluida", fase2_erro: null })
-      .eq("id", eventId);
+    // ── 7) Se é troca com reposição, aguardar etapas de NF + rastreio antes de concluir ──
+    const hasReposicao = tipo === "troca" && !!posSaleId;
+    if (hasReposicao) {
+      awaitingShipping = true;
+      await supabase
+        .from("trocas_devolucoes")
+        .update({ status: "aguardando_envio", fase2_erro: null } as any)
+        .eq("id", eventId);
+    } else {
+      await supabase
+        .from("trocas_devolucoes")
+        .update({ status: "concluida", fase2_erro: null })
+        .eq("id", eventId);
+    }
   } else {
     // Contingência: fica reprocessável. Marca o motivo para a UI.
     await supabase
@@ -450,5 +470,5 @@ export async function finalizeExchange(
       .eq("id", eventId);
   }
 
-  return { totalReturn, restocked, concluded, devolucao, atribuicao };
+  return { totalReturn, restocked, concluded, awaitingShipping, posSaleId, devolucao, atribuicao };
 }

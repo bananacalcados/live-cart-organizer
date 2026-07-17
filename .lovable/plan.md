@@ -1,101 +1,140 @@
-# Plano de Limpeza e Exclusão em Massa dos Catálogos
+# Wizard pós-troca com NF-e da reposição, rastreio e WhatsApp
 
-## Contexto: Legacy ↔ Unificado estão vinculados?
+Transforma o modal atual "Finalizar Troca / Devolução" em um wizard de 3 etapas **apenas quando há reposição** (envio novo pro cliente). Devolução pura mantém o fluxo atual de 1 etapa.
 
-Praticamente sim, mas não 100%:
+## Fluxo novo
 
-- **Unificado → Legacy:** 519 dos 522 pais únicos do Catálogo Unificado têm o master correspondente no Legacy (99,4 %). Existem apenas **3 exceções** (`7142.101 TAMANCO MASSAGEADOR EM X`, `Tênis Nice`, `SANDALIA ULTRACONFORTO MARLLY`).
-- **Legacy → Unificado:** 186 masters existem no Legacy sem espelho no Unificado — são os produtos que nunca foram "Enviados ao PDV".
+```text
+Etapa 1: Conferência (modal atual)           ── botão vira "Avançar"
+   │
+   ├── Se NÃO há reposição → Concluir agora (fluxo antigo)
+   │
+   ▼
+Etapa 2: NF-e da reposição (mod.55 fin=1)
+   • Preview editável antes de emitir na SEFAZ
+   • Editáveis: destinatário (nome/CPF/endereço), CFOP por item,
+     preço/qtd por item, natureza da operação, observações
+   • Botão "Emitir NF-e" → chama edge function → mostra status
+   • Se rejeitada: exibe motivo, permite editar e reemitir
+   • Ao autorizar: mostra DANFE (PDF) + XML pra download
+   • Botão "Avançar" só habilita com NF autorizada
+   │
+   ▼
+Etapa 3: Rastreio + WhatsApp
+   • Input do código de rastreio + transportadora
+   • Seletor de instância WhatsApp
+   • Template editável com {nome}, {codigo}, {transportadora}
+   • Preview da mensagem final
+   • Botão único "Enviar WhatsApp e concluir troca"
+   │
+   ▼
+Troca marcada como concluída
+```
 
-O vínculo é feito pelo campo **`parent_sku` do Unificado = `sku_root` do Legacy**. Não existe FK dura entre as duas tabelas — é um vínculo lógico por string.
+Nenhuma etapa é pulável (conforme decisão do usuário). Se o operador fechar o modal no meio, a troca fica em `status='aguardando_envio'` e reabre exatamente onde parou.
 
-Por isso a cascata só deve ser aplicada quando o par de fato existir; nos casos órfãos, a exclusão em um lado não deve travar por falta do outro.
+## Componentes de UI
 
-## Item 1 — Limpar os 162 órfãos do Legacy
+Arquivos novos em `src/components/pos/exchange-wizard/`:
 
-Órfãos = registros em `products_master` **sem nenhuma linha em `product_variants`**. São o rastro deixado pela extinta `apply_catalog_sync_from_pos`.
+- `ExchangeWizardDialog.tsx` — container do wizard, gerencia step atual e estado compartilhado.
+- `Step1Conference.tsx` — extrai o conteúdo atual do modal `Finalizar Troca / Devolução` (o que já está em `FinalizeExchangeDialog`).
+- `Step2NfeReposicao.tsx` — preview editável da NF-e com tabela de itens (CFOP/preço/qtd), campos do destinatário, natureza, obs. Botão emitir + status.
+- `Step3TrackingWhatsApp.tsx` — código rastreio, transportadora, seletor de instância (reusa `WhatsAppNumberSelector`), textarea do template, preview, botão enviar+concluir.
 
-Ação: `DELETE FROM products_master WHERE NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.master_id = id)`.
+Arquivo alterado:
+- `src/lib/pos/finalizeExchange.ts` — separa em duas fases:
+  1. `finalizeExchangeReturn()`: NF devolução + cancelamento + estoque + venda-espelho `pos_sales` (o que já faz hoje). Marca `status='aguardando_envio'` se houver reposição, senão `concluida`.
+  2. `completeExchangeShipping({ nfe_id, tracking_code, carrier })`: última etapa, marca troca `concluida`, grava rastreio na venda-espelho.
 
-Salvaguardas antes do delete:
-- Não apagar nenhum que esteja referenciado em `product_master_data` (parent_sku), `pos_products` (parent_sku) ou `purchase_invoice_items` — se algum órfão estiver amarrado a essas tabelas, mantém e loga.
-- Migration única, transacional. Grava o número de linhas deletadas em `catalog_sync_log` (operation = `cleanup_orphan_masters`).
+## Backend
 
-Nenhum efeito sobre PDV, Shopify ou vendas — órfãos não têm variantes nem estoque associado.
+### Nova coluna
+`trocas_devolucoes`:
+- `status` novo valor: `aguardando_envio` (entre `em_conferencia` e `concluida`)
+- `nfe_reposicao_id UUID` FK → `fiscal_documents(id)`
+- `tracking_code TEXT`
+- `tracking_carrier TEXT`
+- `whatsapp_notification_sent_at TIMESTAMPTZ`
 
-## Item 2 — Corrigir `sync-master-product-stock`
+`pos_sales` (venda-espelho da reposição):
+- `tracking_code TEXT` (usa também em envios normais no futuro)
+- `tracking_carrier TEXT`
 
-Hoje o default é `distribute_pos: 'replicate'`, que espalhou 3 pares do Modare Vitória em TODAS as lojas, inclusive Site/Live.
+### Nova edge function: `pos-exchange-emit-nfe-reposicao`
 
-Mudanças na edge function:
-- Remover o modo `replicate` como padrão. Passar a exigir `store_id` (loja de origem obrigatória).
-- Estoque das variantes vai apenas para a loja indicada; demais lojas recebem 0 quando o SKU não existe, ou permanecem intocadas quando já existem.
-- Nunca escrever em lojas com `is_simulation = true` (já ok) **e nunca em lojas com nome `Site/Live`, `Site + Centro`, `Lojas + Live`** (lista mantida no código a partir de uma flag `is_online_bucket` em `pos_stores` que já usamos ou por padrão de nome).
-- Ajustar `LegacyProductsList.tsx → syncStock`: perguntar loja de origem antes de chamar (`Select` com lojas físicas).
+Body:
+```json
+{
+  "troca_id": "uuid",
+  "pos_sale_id": "uuid",           // venda-espelho já criada
+  "overrides": {
+    "destinatario": { "nome", "cpf", "endereco": {...} },
+    "natureza_operacao": "Venda em substituição - troca",
+    "observacoes": "Ref. TD-2026-000008",
+    "items": [{ "id", "cfop", "unit_price", "quantity" }]
+  }
+}
+```
 
-Nada muda no fluxo de vendas nem no espelho Shopify.
+Fluxo:
+1. Monta payload BrasilNFe reaproveitando o golden `nfe-emitir` (mod.55, fin=1, natureza "Venda em substituição – Troca").
+2. Aplica overrides antes de enviar.
+3. Emite → grava em `fiscal_documents` vinculado ao `pos_sale_id`.
+4. Atualiza `trocas_devolucoes.nfe_reposicao_id`.
+5. Retorna DANFE URL, XML URL e status.
 
-## Item 3 — Multi-seleção + exclusão em massa (Legacy e Unificado)
+Segue o mesmo padrão do `nfe-emitir` atual (idempotência, retry SEFAZ, contingência pending_sefaz).
 
-### Legacy (`LegacyProductsList.tsx`)
-- Adicionar `Checkbox` na 1ª coluna de cada linha + checkbox "Selecionar todos" no cabeçalho (respeitando o filtro/aba ativa).
-- Já existe estado `selected: Set<string>` usado por "Unificar" — reaproveitar.
-- Botão **"Excluir selecionados"** (destructive) ao lado dos botões atuais, com `AlertDialog` de confirmação mostrando quantos e listando os primeiros 10 nomes.
-- Ao confirmar: chama uma edge function nova `delete-master-products` (ver seção técnica).
+### Nova edge function: `pos-exchange-send-tracking-whatsapp`
 
-### Unificado (`UnifiedProductsList.tsx`)
-- Mesmo padrão: Checkbox por linha do agrupamento pai + "Selecionar todos".
-- Botão **"Excluir selecionados"** com confirmação.
-- Chama a mesma edge function passando `parent_skus`.
+Body:
+```json
+{
+  "troca_id": "uuid",
+  "pos_sale_id": "uuid",
+  "tracking_code": "BR123...",
+  "carrier": "Correios",
+  "whatsapp_instance_id": "uuid",
+  "phone": "5533...",
+  "message": "Oi {nome}! Seu pedido..."
+}
+```
 
-### Cascata bidirecional
-Ao excluir por qualquer lado, a edge function faz:
-1. Resolve pares: para cada `master_id` recebido, busca `sku_root`; para cada `parent_sku` recebido, busca `master_id` correspondente.
-2. Exclui **em cascata** nas duas tabelas quando o par existir:
-   - `products_master` + `product_variants` (cascade FK já existe) + linhas em `product_master_data` com mesmo `parent_sku` + linhas em `pos_products` com mesmo `parent_sku`.
-3. Se o par não existir (órfão de um dos lados), exclui só o que foi pedido — sem falhar.
-4. Antes de apagar, checa se existe **venda vinculada em `pos_sale_items`** (por sku/parent_sku). Se sim, bloqueia esse item específico e devolve na resposta como `blocked: [...]` para o front mostrar aviso. Não bloqueia o lote inteiro — só o item com histórico de venda.
-5. Loga cada exclusão em `catalog_sync_log` (operation = `bulk_delete_from_legacy` ou `bulk_delete_from_unified`).
+Fluxo:
+1. Roteia pelo provider correto da instância (uazapi/wasender/meta) — reusa `_shared/instance-guard.ts`.
+2. Envia mensagem.
+3. Grava `whatsapp_notification_sent_at`, `tracking_code`, `carrier` na troca e na venda-espelho.
+4. Marca `trocas_devolucoes.status = 'concluida'`.
+5. Retorna sucesso.
 
-Toast final: `"X excluídos · Y bloqueados por histórico de venda"`.
+## Template padrão WhatsApp
+
+Salvo em `app_settings` key `exchange_shipping_wa_template` (editável no futuro em Admin). Default:
+
+```
+Oi {nome}! 👋
+
+Sua troca foi processada e o novo pedido já foi criado para envio.
+
+📦 Rastreio: {codigo}
+🚚 Transportadora: {carrier}
+
+Assim que a transportadora coletar, você recebe a atualização por aqui. Qualquer dúvida é só chamar!
+```
+
+## Regressão / segurança
+
+- Devolução pura (sem reposição): mantém 1 etapa e nenhuma alteração de comportamento.
+- Se o operador emitir NF e depois fechar antes do rastreio: NF fica válida, troca em `aguardando_envio`, aparece no módulo Trocas com botão "Continuar envio" que reabre o wizard direto na Etapa 3.
+- Se NF for rejeitada: nada da Etapa 1 é revertido (devolução, cancelamento, venda-espelho continuam válidos). Só a Etapa 2 fica pendente.
+- Idempotência: `pos-exchange-emit-nfe-reposicao` checa `nfe_reposicao_id` antes de emitir de novo.
+- Reaproveita 100% do fluxo fiscal golden (`nfe-emitir` payload) — só adiciona uma camada de overrides.
 
 ## Detalhes técnicos
 
-**Migration 1 — cleanup órfãos:**
-```sql
-WITH orphans AS (
-  SELECT id FROM products_master m
-  WHERE NOT EXISTS (SELECT 1 FROM product_variants v WHERE v.master_id = m.id)
-    AND NOT EXISTS (SELECT 1 FROM product_master_data d WHERE d.parent_sku = m.sku_root)
-    AND NOT EXISTS (SELECT 1 FROM pos_products p WHERE p.parent_sku = m.sku_root)
-    AND NOT EXISTS (SELECT 1 FROM purchase_invoice_items i WHERE i.master_id = m.id)
-)
-DELETE FROM products_master WHERE id IN (SELECT id FROM orphans);
-```
-
-**Edge function `delete-master-products`:**
-- Input: `{ master_ids?: string[], parent_skus?: string[] }`
-- Service role, verify_jwt = false, CORS.
-- Passos: resolver pares → checar bloqueios (`pos_sale_items`) → deletar → logar.
-- Retorno: `{ deleted: {legacy: n, unified: n, pos_products: n}, blocked: [{sku_root, reason}] }`.
-
-**Edge function `sync-master-product-stock` (correção):**
-- Novo body: `{ master_id, store_id, target }`. `store_id` passa a ser obrigatório para `target ∈ {pos, both}`.
-- Remove o loop `for storeId of storeIds` — atualiza apenas 1 loja.
-- Manter o path do Shopify inalterado.
-
-**Front (arquivos):**
-- `src/components/inventory/LegacyProductsList.tsx` — checkbox coluna, botão "Excluir selecionados", diálogo do syncStock com Select de loja.
-- `src/components/inventory/UnifiedProductsList.tsx` — checkbox no card-header do pai, botão "Excluir selecionados".
-- Novo arquivo: `src/components/inventory/BulkDeleteDialog.tsx` — reutilizável nos dois.
-
-**Não são tocados:**
-- Fluxo de vendas, `process_pos_sale_sale_event`, triggers de estoque, `create-master-product-pos`, espelho Shopify, PDV.
-
-## Ordem de execução
-1. Migration limpeza dos 162 órfãos.
-2. Edge function `delete-master-products` (nova).
-3. Ajustes front (checkboxes + bulk delete + diálogo do sync).
-4. Correção `sync-master-product-stock` (Item 2).
-
-Aguardo aprovação para implementar.
+- Migration: adiciona colunas + novo enum value `aguardando_envio`.
+- 2 novas edge functions com JWT verificado (equipe logada, não requer admin).
+- UI usa o padrão de wizard já existente (`components/ui/dialog` + steps controlados por estado).
+- Selector de instância WhatsApp reusa `WhatsAppNumberSelector` existente.
+- Nenhuma mudança no fluxo de vendas normais, apenas no fluxo de troca com reposição.
