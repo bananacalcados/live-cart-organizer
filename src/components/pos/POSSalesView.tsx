@@ -2013,7 +2013,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           onClose={() => setShowExchangeSearch(false)}
         />
 
-        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu && !showNewExchange && !showFinalizeExchange && !showExchangeSearch} onOpenChange={() => {}}>
+        <Dialog open={!showSiteExchange && !showConditionalPicker && !showConditionalMenu && !showExchangeMenu && !showNewExchange && !showPresentialExchange && !showExchangeTypePicker && !showFinalizeExchange && !showExchangeSearch} onOpenChange={() => {}}>
           <DialogContent className="bg-pos-black border-pos-orange/40 max-w-2xl">
             <DialogHeader>
               <DialogTitle className="text-pos-white text-xl">Tipo de venda</DialogTitle>
