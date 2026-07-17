@@ -171,6 +171,11 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const [receiptDone, setReceiptDone] = useState(false);
   const [currentRegisterId, setCurrentRegisterId] = useState<string | null>(null);
 
+  // Vale-troca (voucher) redemption when payment method = Vale-troca
+  const [voucherCodeInput, setVoucherCodeInput] = useState("");
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherApplied, setVoucherApplied] = useState<{ id: string; codigo: string; saldo: number } | null>(null);
+
   // Custo de entrega (mototaxista/transportadora) — fica "a pagar" e aparece no Caixa da Loja
   const [storeName, setStoreName] = useState<string>("");
   const [deliveryEnabled, setDeliveryEnabled] = useState(false);
@@ -1019,6 +1024,18 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       }
     }
 
+    // 🎟️ Vale-troca: exige voucher aplicado e saldo suficiente
+    if (valeTrocaAmountRequired > 0) {
+      if (!voucherApplied) {
+        toast.error("Informe e aplique o código do Vale-troca antes de finalizar.");
+        return;
+      }
+      if (valeTrocaAmountRequired > voucherApplied.saldo + 0.01) {
+        toast.error(`Voucher ${voucherApplied.codigo} tem saldo R$ ${voucherApplied.saldo.toFixed(2)}, insuficiente para R$ ${valeTrocaAmountRequired.toFixed(2)}.`);
+        return;
+      }
+    }
+
     // 👤 CLIENTE: resolve o cliente que será gravado na venda.
     // Caso o vendedor tenha digitado um nome/CPF/telefone na busca mas NÃO tenha
     // clicado no cartão do cliente (ou tenha clicado em "Trocar" e esquecido de
@@ -1252,6 +1269,21 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             }
           } catch (e) { console.error('coupon redeem error', e); }
         }
+
+        // 🎟️ Vale-troca: debita saldo do voucher e marca como usado se zerou
+        if (voucherApplied && valeTrocaAmountRequired > 0) {
+          try {
+            const usado = Math.min(voucherApplied.saldo, valeTrocaAmountRequired);
+            const novoSaldo = Number((voucherApplied.saldo - usado).toFixed(2));
+            await supabase.from('vouchers').update({
+              saldo: Math.max(0, novoSaldo),
+              status: (novoSaldo <= 0.009 ? 'usado' : 'ativo') as any,
+              troca_devolucao_id: (voucherApplied as any).troca_devolucao_id ?? undefined,
+            } as any).eq('id', voucherApplied.id);
+            toast.success(`Voucher ${voucherApplied.codigo} debitado: R$ ${usado.toFixed(2)}`);
+          } catch (e) { console.error('[vale-troca redeem]', e); }
+        }
+
 
         // Update cash register with sale amounts
         try {
@@ -1676,6 +1708,8 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
     setCashReceived("");
     setInstallments("1");
     setMultiPayments([]);
+    setVoucherApplied(null);
+    setVoucherCodeInput("");
     setUseMultiPayment(false);
     setMultiPaymentMethodId("");
     setMultiPaymentAmount("");
@@ -1717,6 +1751,44 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
   const selectedPaymentName = paymentMethods.find(m => m.id === selectedPayment)?.name || '';
   const cashChange = cashReceived ? Math.max(0, parseFloat(cashReceived) - totalWithDiscount) : 0;
   const multiPaymentsTotal = multiPayments.reduce((s, p) => s + p.amount, 0);
+
+  // ── Vale-troca (voucher) helpers ────────────────────────────────────────────
+  const isValeTrocaName = (n?: string | null) =>
+    (n || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, "").includes("valetroca");
+  const multiPickingValeTroca = useMultiPayment && isValeTrocaName(paymentMethods.find(m => m.id === multiPaymentMethodId)?.name);
+  const multiHasValeTroca = useMultiPayment && multiPayments.some(p => isValeTrocaName(p.method_name));
+  const singleIsValeTroca = !useMultiPayment && isValeTrocaName(selectedPaymentName);
+  const showVoucherPanel = singleIsValeTroca || multiPickingValeTroca || multiHasValeTroca;
+  const valeTrocaAmountRequired = useMultiPayment
+    ? multiPayments.filter(p => isValeTrocaName(p.method_name)).reduce((s, p) => s + Number(p.amount || 0), 0)
+    : (singleIsValeTroca ? totalWithDiscount : 0);
+
+  const applyVoucherForSale = async () => {
+    const codigo = voucherCodeInput.trim();
+    if (!codigo) return;
+    setVoucherLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("vouchers")
+        .select("id, codigo, saldo, status, validade")
+        .eq("codigo", codigo)
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) { toast.error("Voucher não encontrado"); return; }
+      if ((data as any).status !== "ativo") { toast.error("Voucher não está ativo"); return; }
+      const saldo = Number((data as any).saldo || 0);
+      if (saldo <= 0) { toast.error("Voucher sem saldo"); return; }
+      const validade = (data as any).validade ? new Date((data as any).validade) : null;
+      if (validade && validade.getTime() < Date.now()) { toast.error("Voucher expirado"); return; }
+      setVoucherApplied({ id: (data as any).id, codigo: (data as any).codigo, saldo });
+      toast.success(`Voucher ${(data as any).codigo}: R$ ${saldo.toFixed(2)} disponível`);
+    } catch (e: any) {
+      console.error("[POSSalesView] applyVoucherForSale", e);
+      toast.error(e?.message || "Erro ao validar voucher");
+    } finally {
+      setVoucherLoading(false);
+    }
+  };
 
   // Ação do botão principal (rodapé) — roteia por tipo de venda/etapa.
   const primaryActionLabel = finalizingSale
@@ -2879,6 +2951,52 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                       )}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* 🎟️ Vale-troca — resgatar voucher gerado em Trocas/Devoluções */}
+              {showVoucherPanel && (
+                <div className="space-y-3 p-4 rounded-xl bg-purple-500/5 border border-purple-500/30">
+                  <Label className="text-pos-white flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-purple-300" /> Vale-troca — informe o código do voucher
+                  </Label>
+                  {voucherApplied ? (
+                    <div className="flex items-center justify-between gap-2 rounded bg-purple-500/10 border border-purple-500/40 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-purple-200 truncate">✓ {voucherApplied.codigo}</p>
+                        <p className="text-[11px] text-pos-white/60">
+                          Saldo R$ {voucherApplied.saldo.toFixed(2)}
+                          {valeTrocaAmountRequired > 0 && ` · Usar R$ ${Math.min(voucherApplied.saldo, valeTrocaAmountRequired).toFixed(2)}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => { setVoucherApplied(null); setVoucherCodeInput(""); }}
+                        className="text-red-400 text-xs px-2 hover:text-red-300"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        value={voucherCodeInput}
+                        onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
+                        placeholder="Ex.: VC-2026-XXXX"
+                        className="flex-1 uppercase bg-pos-white/5 border-purple-500/30 text-pos-white placeholder:text-pos-white/30"
+                      />
+                      <Button
+                        size="sm"
+                        className="bg-purple-500 hover:bg-purple-400 text-white"
+                        onClick={applyVoucherForSale}
+                        disabled={voucherLoading || !voucherCodeInput.trim()}
+                      >
+                        {voucherLoading ? "..." : "Aplicar"}
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-pos-white/40">
+                    O código é gerado ao concluir uma troca/devolução com crédito ao cliente. O saldo será debitado após finalizar a venda.
+                  </p>
                 </div>
               )}
 
