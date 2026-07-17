@@ -398,8 +398,23 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
       }
 
 
+      // Se ficou aguardando envio (troca com reposição), abre Step 2 (NF-e).
+      if (result.awaitingShipping && result.posSaleId) {
+        setPosSaleId(result.posSaleId);
+        // Recarrega o evento (agora com status aguardando_envio) e move pro wizard
+        const { data: refreshed } = await supabase
+          .from("trocas_devolucoes").select("*").eq("id", selected.id).maybeSingle();
+        if (refreshed) {
+          const evRow = { ...selected, ...(refreshed as any) } as EventRow;
+          setSelected(evRow);
+          await loadShippingState(evRow);
+        }
+        setPhase("nfe");
+        return;
+      }
 
       onDone();
+
     } catch (e: any) {
       console.error("[FinalizeExchangePicker] finalize", e);
       toast.error(e?.message || "Erro ao finalizar");
