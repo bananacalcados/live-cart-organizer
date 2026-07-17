@@ -13315,9 +13315,13 @@ export type Database = {
       pos_stock_adjustments: {
         Row: {
           barcode: string | null
+          count_id: string | null
           created_at: string | null
           direction: string
+          exchange_id: string | null
+          exchange_number: string | null
           id: string
+          movement_type: string | null
           new_stock: number | null
           previous_stock: number | null
           product_id: string | null
@@ -13333,12 +13337,18 @@ export type Database = {
           tiny_id: number | null
           tiny_mirror_status: string | null
           tiny_mirrored_at: string | null
+          user_id: string | null
+          user_name: string | null
         }
         Insert: {
           barcode?: string | null
+          count_id?: string | null
           created_at?: string | null
           direction: string
+          exchange_id?: string | null
+          exchange_number?: string | null
           id?: string
+          movement_type?: string | null
           new_stock?: number | null
           previous_stock?: number | null
           product_id?: string | null
@@ -13354,12 +13364,18 @@ export type Database = {
           tiny_id?: number | null
           tiny_mirror_status?: string | null
           tiny_mirrored_at?: string | null
+          user_id?: string | null
+          user_name?: string | null
         }
         Update: {
           barcode?: string | null
+          count_id?: string | null
           created_at?: string | null
           direction?: string
+          exchange_id?: string | null
+          exchange_number?: string | null
           id?: string
+          movement_type?: string | null
           new_stock?: number | null
           previous_stock?: number | null
           product_id?: string | null
@@ -13375,8 +13391,24 @@ export type Database = {
           tiny_id?: number | null
           tiny_mirror_status?: string | null
           tiny_mirrored_at?: string | null
+          user_id?: string | null
+          user_name?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "pos_stock_adjustments_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_counts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_stock_adjustments_exchange_id_fkey"
+            columns: ["exchange_id"]
+            isOneToOne: false
+            referencedRelation: "trocas_devolucoes"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pos_stock_adjustments_product_id_fkey"
             columns: ["product_id"]
