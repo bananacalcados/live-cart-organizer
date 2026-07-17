@@ -42,6 +42,7 @@ import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 
 
 import { POSFinishConversationDialog } from "./POSFinishConversationDialog";
+import { posSendText } from "@/lib/pos/posWhatsappSend";
 import { POSWhatsAppDashboard } from "./POSWhatsAppDashboard";
 import { TransferConversationDialog } from "@/components/chat/TransferConversationDialog";
 import { POSSendTemplateDialog } from "./POSSendTemplateDialog";
@@ -2414,9 +2415,9 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               c.phone === selectedPhone ? { ...c, isFinished: true } : c
             ));
             
-            // Auto-send Review+Referral link when reason is 'compra'
-            if (reason === 'compra') {
-              const conv = conversations.find(c => c.phone === selectedPhone);
+            // Auto-send Review+Referral link when reason is 'compra' AND client actually purchased.
+            const conv = conversations.find(c => c.phone === selectedPhone);
+            if (reason === 'compra' && (extras as any)?.purchased === true) {
               const cashbackVal = (extras as any)?.cashback_value || (extras as any)?.cashback || 0;
               const saleVal = (extras as any)?.saleValue || (extras as any)?.sale_value || 0;
               supabase.functions.invoke('review-send-link', {
@@ -2432,6 +2433,32 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
               }).then(res => {
                 if ((res.data as any)?.success) toast.success('Link de avaliação enviado 💛');
               }).catch(() => {});
+            }
+
+            // Cliente NÃO comprou → convida para o Grupo VIP.
+            if (reason === 'compra' && (extras as any)?.purchased === false) {
+              const vipMessage =
+                'Dessa vez não finalizamos uma compra, mas sabemos que no futuro dará certo ☺️\n\n' +
+                '*Enquanto isso entre em nosso Grupo Vip* 👇\n\n' +
+                'https://checkout.bananacalcados.com.br/vip/vips-lojafisicas\n\n' +
+                'No grupo VIP temos sempre oportunidades e lançamentos antecipados 💕';
+              const numberId = conv?.whatsapp_number_id || selectedConvNumberId || null;
+              const numberRec =
+                metaNumbers.find((n) => n.id === numberId) ||
+                storeNumbers.find((n) => n.id === numberId) ||
+                selectedSendNumber ||
+                null;
+              posSendText({
+                provider: (numberRec as any)?.provider || null,
+                phone: selectedPhone,
+                message: vipMessage,
+                numberId,
+              }).then(() => {
+                toast.success('Convite para o Grupo VIP enviado 💜');
+              }).catch((e) => {
+                console.error('[finish/vip-invite] send failed', e);
+                toast.error('Não foi possível enviar o convite VIP');
+              });
             }
 
             // Deactivate any active followup for this phone

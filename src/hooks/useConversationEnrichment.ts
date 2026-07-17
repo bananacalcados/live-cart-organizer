@@ -144,7 +144,16 @@ export function useConversationEnrichment() {
     phone: string,
     reason?: string,
     sellerId?: string,
-    extras?: { saleValue?: number; saleCurrency?: string; triggerId?: string | null; whatsappNumberId?: string | null }
+    extras?: {
+      saleValue?: number;
+      saleCurrency?: string;
+      triggerId?: string | null;
+      whatsappNumberId?: string | null;
+      purchased?: boolean;
+      supportReason?: string;
+      supportSatisfactory?: boolean;
+      duvidaText?: string;
+    }
   ) => {
     const phoneKey = normalizePhoneKey(phone);
     const finishedAtIso = new Date().toISOString();
@@ -168,7 +177,12 @@ export function useConversationEnrichment() {
       sale_value: extras?.saleValue ?? null,
       sale_currency: extras?.saleCurrency ?? 'BRL',
       trigger_id: extras?.triggerId ?? null,
+      purchased: extras?.purchased ?? null,
+      support_reason: extras?.supportReason ?? null,
+      support_satisfactory: extras?.supportSatisfactory ?? null,
+      duvida_text: extras?.duvidaText ?? null,
     } as any, { onConflict: 'phone' });
+
 
     if (error && phoneKey) {
       setFinishedPhones(prev => {
