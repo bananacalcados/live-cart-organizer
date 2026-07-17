@@ -1024,6 +1024,18 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
       }
     }
 
+    // 🎟️ Vale-troca: exige voucher aplicado e saldo suficiente
+    if (valeTrocaAmountRequired > 0) {
+      if (!voucherApplied) {
+        toast.error("Informe e aplique o código do Vale-troca antes de finalizar.");
+        return;
+      }
+      if (valeTrocaAmountRequired > voucherApplied.saldo + 0.01) {
+        toast.error(`Voucher ${voucherApplied.codigo} tem saldo R$ ${voucherApplied.saldo.toFixed(2)}, insuficiente para R$ ${valeTrocaAmountRequired.toFixed(2)}.`);
+        return;
+      }
+    }
+
     // 👤 CLIENTE: resolve o cliente que será gravado na venda.
     // Caso o vendedor tenha digitado um nome/CPF/telefone na busca mas NÃO tenha
     // clicado no cartão do cliente (ou tenha clicado em "Trocar" e esquecido de
