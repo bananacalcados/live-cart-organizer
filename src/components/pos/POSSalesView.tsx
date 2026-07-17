@@ -23,6 +23,7 @@ import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 import { isVirtualSeller } from "@/lib/pos/virtualSellers";
 import { SiteExchangePicker, SiteExchangeResult } from "./SiteExchangePicker";
 import { NewExchangePicker } from "./NewExchangePicker";
+import { PresentialExchangePicker } from "./PresentialExchangePicker";
 import { FinalizeExchangePicker } from "./FinalizeExchangePicker";
 import { ExchangeSearchList } from "./ExchangeSearchList";
 import { ConditionalFinalizePicker, ConditionalPickResult } from "./ConditionalFinalizePicker";
