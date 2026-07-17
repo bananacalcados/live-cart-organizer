@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
 
     const ambiente = forcedAmb || company.ambiente_nfe || "homologacao";
     const tipoAmbiente = ambiente === "producao" ? "1" : "2";
-    const ufOrigem: string = (company.uf || company.address_state || "MG").toUpperCase();
+    const ufOrigem: string = (company.address_state || "MG").toUpperCase();
 
     // 5. Itens devolvidos CONFERIDOS (estado_estoque preenchido = conferência concluída)
     const devolvidos = (((evt as any).trocas_devolucoes_itens) || [])
