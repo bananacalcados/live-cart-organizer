@@ -109,6 +109,7 @@ function resolveSaleOrigin(sale: Sale): string | null {
   if (marked && LINK_ORIGIN_LABELS[marked]) return LINK_ORIGIN_LABELS[marked];
   if (marked) return marked;
 
+  if (sale.sale_type === "exchange" || sale.external_source === "troca") return "Troca / Devolução";
   if (sale.sale_type === "live") return "Live / Evento";
   if (sale.external_source === "shopify" || sale.payment_gateway === "shopify") return "Loja Online (Shopify)";
   if (sale.payment_gateway === "point") return "Maquininha (Point)";
