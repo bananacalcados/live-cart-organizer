@@ -1,27 +1,33 @@
-// Fase 4 — Etapa 2: Finalizar Troca/Devolução
-// Buscar evento iniciado -> conferência do retorno -> entrada de estoque,
-// despacho da reposição, ajuste do pedido original e conclusão.
-import { useState, useEffect, useCallback } from "react";
+// Fase 4 — Etapa 2: Finalizar Troca/Devolução (wizard)
+// list → confer → nfe (reposição) → tracking (WhatsApp) → concluída
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Loader2, Search, CheckCircle2, ChevronRight, PackageCheck, AlertTriangle, Undo2,
+  FileText, Truck, MessageCircle, ExternalLink,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { finalizeExchange, type ConferItemInput } from "@/lib/pos/finalizeExchange";
+import { WhatsAppNumberSelector } from "@/components/WhatsAppNumberSelector";
+import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
+import { posSendText } from "@/lib/pos/posWhatsappSend";
 import type { Database } from "@/integrations/supabase/types";
 
 type TdEvent = Database["public"]["Tables"]["trocas_devolucoes"]["Row"];
 type TdItem = Database["public"]["Tables"]["trocas_devolucoes_itens"]["Row"];
+type WizardPhase = "list" | "confer" | "nfe" | "tracking";
 
 const OPEN_STATUSES: Database["public"]["Enums"]["td_status"][] = [
-  "iniciada", "aguardando_retorno", "recebido_conferencia",
+  "iniciada", "aguardando_retorno", "recebido_conferencia", "aguardando_envio",
 ];
 
 const STORE_NAMES: Record<string, string> = {
@@ -42,6 +48,24 @@ interface ConferRow {
   quantidade: number;
 }
 
+interface ShippingCustomerForm {
+  name: string;
+  cpf: string;
+  whatsapp: string;
+  cep: string;
+  address: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+}
+
+const EMPTY_CUSTOMER: ShippingCustomerForm = {
+  name: "", cpf: "", whatsapp: "", cep: "", address: "", number: "",
+  complement: "", neighborhood: "", city: "", state: "",
+};
+
 interface Props {
   open: boolean;
   sellerId?: string;
@@ -51,7 +75,7 @@ interface Props {
 }
 
 export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, onDone }: Props) {
-  const [phase, setPhase] = useState<"list" | "confer">("list");
+  const [phase, setPhase] = useState<WizardPhase>("list");
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -64,13 +88,32 @@ export function FinalizeExchangePicker({ open, sellerId, sellerName, onCancel, o
   const [resolucao, setResolucao] = useState<"voucher" | "estorno_financeiro">("voucher");
   const [estornoForma, setEstornoForma] = useState<"pix" | "cartao" | "dinheiro">("pix");
 
+  // Wizard: NF-e da reposição + rastreio
+  const [posSaleId, setPosSaleId] = useState<string | null>(null);
+  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [shipCustomer, setShipCustomer] = useState<ShippingCustomerForm>(EMPTY_CUSTOMER);
+  const [savingCustomer, setSavingCustomer] = useState(false);
+  const [nfeDoc, setNfeDoc] = useState<{ id: string; status: string; chave: string | null; danfe_url: string | null; xml_content: string | null; rejeicao_motivo: string | null } | null>(null);
+  const [emittingNfe, setEmittingNfe] = useState(false);
+  const [nfeObs, setNfeObs] = useState<string>("");
+  const [trackingCode, setTrackingCode] = useState("");
+  const [trackingCarrier, setTrackingCarrier] = useState("");
+  const [waNumberId, setWaNumberId] = useState<string | null>(null);
+  const [waMessage, setWaMessage] = useState<string>("");
+  const [sendingWa, setSendingWa] = useState(false);
+  const { numbers: waNumbers } = useWhatsAppNumberStore();
+
   useEffect(() => {
     if (open) {
       setPhase("list"); setSearch(""); setSelected(null);
       setDevolvidos([]); setReposicoes([]);
       setResolucao("voucher"); setEstornoForma("pix");
+      setPosSaleId(null); setCustomerId(null); setShipCustomer(EMPTY_CUSTOMER);
+      setNfeDoc(null); setNfeObs(""); setTrackingCode(""); setTrackingCarrier("");
+      setWaNumberId(null); setWaMessage("");
     }
   }, [open]);
+
 
   const loadEvents = useCallback(async () => {
     setLoading(true);
