@@ -2952,6 +2952,52 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 </div>
               )}
 
+              {/* 🎟️ Vale-troca — resgatar voucher gerado em Trocas/Devoluções */}
+              {showVoucherPanel && (
+                <div className="space-y-3 p-4 rounded-xl bg-purple-500/5 border border-purple-500/30">
+                  <Label className="text-pos-white flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-purple-300" /> Vale-troca — informe o código do voucher
+                  </Label>
+                  {voucherApplied ? (
+                    <div className="flex items-center justify-between gap-2 rounded bg-purple-500/10 border border-purple-500/40 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-purple-200 truncate">✓ {voucherApplied.codigo}</p>
+                        <p className="text-[11px] text-pos-white/60">
+                          Saldo R$ {voucherApplied.saldo.toFixed(2)}
+                          {valeTrocaAmountRequired > 0 && ` · Usar R$ ${Math.min(voucherApplied.saldo, valeTrocaAmountRequired).toFixed(2)}`}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => { setVoucherApplied(null); setVoucherCodeInput(""); }}
+                        className="text-red-400 text-xs px-2 hover:text-red-300"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Input
+                        value={voucherCodeInput}
+                        onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
+                        placeholder="Ex.: VC-2026-XXXX"
+                        className="flex-1 uppercase bg-pos-white/5 border-purple-500/30 text-pos-white placeholder:text-pos-white/30"
+                      />
+                      <Button
+                        size="sm"
+                        className="bg-purple-500 hover:bg-purple-400 text-white"
+                        onClick={applyVoucherForSale}
+                        disabled={voucherLoading || !voucherCodeInput.trim()}
+                      >
+                        {voucherLoading ? "..." : "Aplicar"}
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-pos-white/40">
+                    O código é gerado ao concluir uma troca/devolução com crédito ao cliente. O saldo será debitado após finalizar a venda.
+                  </p>
+                </div>
+              )}
+
               {/* Discount Section */}
               <div className="space-y-3 p-4 rounded-xl bg-pos-white/5 border border-pos-orange/20">
                 <Label className="text-pos-white flex items-center gap-2">
