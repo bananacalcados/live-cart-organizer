@@ -1955,6 +1955,34 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           </DialogContent>
         </Dialog>
 
+        {/* Sub-seletor: Presencial vs Com Envio */}
+        <Dialog open={showExchangeTypePicker} onOpenChange={(o) => { if (!o) setShowExchangeTypePicker(false); }}>
+          <DialogContent className="bg-pos-black border-purple-500/40 max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-pos-white text-xl">Como será essa troca?</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => { setShowExchangeTypePicker(false); toast.info('Fluxo Presencial em preparação — em breve.'); }}
+                className="rounded-2xl border-2 border-emerald-400/40 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-emerald-500/20 flex items-center justify-center text-2xl">🏬</div>
+                <p className="font-bold text-pos-white text-center">Troca Presencial</p>
+                <p className="text-[11px] text-pos-white/60 text-center">Cliente na loja · finaliza tudo agora</p>
+              </button>
+              <button
+                onClick={() => { setShowExchangeTypePicker(false); setShowNewExchange(true); }}
+                className="rounded-2xl border-2 border-purple-400/40 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-400 p-5 flex flex-col items-center gap-3 transition-all"
+              >
+                <div className="h-14 w-14 rounded-full bg-purple-500/20 flex items-center justify-center text-2xl">📦</div>
+                <p className="font-bold text-pos-white text-center">Troca com Envio</p>
+                <p className="text-[11px] text-pos-white/60 text-center">Enviar reposição para o cliente</p>
+              </button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+
         <NewExchangePicker
           open={showNewExchange}
           sellerId={selectedSeller || undefined}
