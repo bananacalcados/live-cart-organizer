@@ -1992,6 +1992,14 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           onDone={() => { setShowNewExchange(false); onCloseSalesView?.(); }}
         />
 
+        <PresentialExchangePicker
+          open={showPresentialExchange}
+          sellerId={selectedSeller || undefined}
+          sellerName={sellers.find((s) => s.id === selectedSeller)?.name || undefined}
+          onCancel={() => setShowPresentialExchange(false)}
+          onDone={() => { setShowPresentialExchange(false); onCloseSalesView?.(); }}
+        />
+
         <FinalizeExchangePicker
           open={showFinalizeExchange}
           sellerId={selectedSeller || undefined}
