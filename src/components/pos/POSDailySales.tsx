@@ -758,19 +758,7 @@ export function POSDailySales({ storeId }: Props) {
                   <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />Não Aprovado
                 </Badge>
               )}
-              {sale.tiny_order_number ? (
-                <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-1.5 py-0">
-                  Tiny #{sale.tiny_order_number}
-                </Badge>
-              ) : sale.status === 'pending_sync' ? (
-                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
-                  Pendente Tiny
-                </Badge>
-              ) : sale.status !== 'online_pending' && sale.status !== 'payment_failed' && sale.status !== 'payment_declined' && sale.status !== 'cancelled' && sale.status !== 'conditional' ? (
-                <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">
-                  Erro Tiny
-                </Badge>
-              ) : null}
+              {/* Tiny badges removidos — integração de envio ao Tiny desativada */}
               {custName && (
                 <p className="text-xs text-pos-white font-medium truncate">{custName}</p>
               )}

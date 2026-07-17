@@ -401,12 +401,24 @@ export async function finalizeExchange(
             const diferenca = Number((subtotal - credito).toFixed(2));
             const notaTroca = `🔁 Troca ${codigo_devolucao || eventId} · Pedido original: ${pedido_original_id} · Crédito devolução: R$ ${credito.toFixed(2)} · Diferença: R$ ${diferenca.toFixed(2)}`;
 
+            // Busca nome do cliente para gravar no espelho (evita "Sem cliente" no dashboard)
+            let mirrorCustomerName: string | null = null;
+            if (cliente_id) {
+              const { data: cust } = await supabase
+                .from("pos_customers")
+                .select("name")
+                .eq("id", cliente_id)
+                .maybeSingle();
+              mirrorCustomerName = (cust as any)?.name || null;
+            }
+
             const { data: newSale, error: saleErr } = await supabase
               .from("pos_sales")
               .insert({
                 store_id: loja_origem_id,
                 seller_id: sellerId || null,
                 customer_id: cliente_id || null,
+                customer_name: mirrorCustomerName,
                 subtotal,
                 discount: credito,
                 total: Math.max(0, diferenca),

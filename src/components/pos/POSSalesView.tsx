@@ -3136,11 +3136,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-pos-white">Venda Finalizada!</h3>
-                  <p className="text-pos-white/50 mt-1">
-                    {saleResult?.tiny_order_number
-                      ? `Pedido #${saleResult.tiny_order_number} criado no Tiny ERP`
-                      : 'Pedido criado no Tiny ERP'}
-                  </p>
+                  <p className="text-pos-white/50 mt-1">Registrado no PDV</p>
                 </div>
                 <div className="text-2xl font-bold text-pos-orange">R$ {totalWithDiscount.toFixed(2)}</div>
                 {discountValue > 0 && <p className="text-sm text-red-400">Desconto: -R$ {discountValue.toFixed(2)}</p>}
