@@ -1,120 +1,84 @@
-# Trocas / Devoluções — Presencial, Voucher e Preço Real
 
-Duas frentes independentes:
-A) Novo fluxo **Troca Presencial** (finaliza em 1 modal, com voucher e diferença).
-B) Correção do **valor do item na troca** (usar preço realmente pago, não preço de tabela).
+# Diagnóstico e Plano — Bugs Venda/Troca (Matthews · BABUCHE MORMAII 12277)
 
----
+## Investigação (o que realmente aconteceu)
 
-## A. Troca Presencial
+### Venda original — `c5769f9c…` · 17/07 15:40 · tamanho 35
+- `pos_stock_adjustments` mostra `1.00 → 0.00` (direction=out, sale_event=sale) no mesmo segundo da venda. **A saída FOI feita.**
+- Em 17/07 19:19:44, a troca gerou um movimento `+1` com motivo *"Devolução troca (retorno vendável)"*, devolvendo o par 35 ao estoque.
+- **Resultado:** o "1 par no 35" que você viu é o produto que a cliente devolveu voltando para venda — comportamento esperado.
+- **Bug 1 real? Não neste caso.** Mas a auditoria histórica abaixo mostra que existe um problema maior de outras vendas sem saída.
 
-### A.1 Diagnóstico do que muda vs. hoje
-Hoje "Nova Troca/Devolução" cai direto no `NewExchangePicker` (fluxo com envio). Precisamos de um seletor antes:
+### Troca `TD-2026-000009` · devolução 35 / reposição 36
+Item de reposição na `trocas_devolucoes_itens` ficou com `repoe_estoque=false` e `estado_estoque=reservado`. Nenhum registro em `pos_stock_adjustments` para o produto do 36.
 
+**Causa raiz (Bug 2):** `finalizeExchange` só faz movimento de **entrada** dos itens devolvidos. Para a reposição, quando `modo_expedicao='aguarda_retorno'` (que é o valor fixo usado pelo `PresentialExchangePicker`), ele apenas atualiza `estado_estoque='despachado'` — **nunca insere `direction=out` em `pos_stock_adjustments`** para abater o par do 36. A saída da reposição só existe implicitamente na troca "com envio" pré-reservada, não no fluxo presencial.
+
+### Pedido original ainda como "pago" + venda-espelho ausente
+- `pos_sales.status` continua `completed`. `finalizeExchange` (linha 262-269) só grava `status_cancelamento='cancelado'`, sem tocar em `status`. A aba **Pedidos** filtra por `status`, então o pedido continua aparecendo como aprovado.
+- A venda-espelho da reposição (mirror sale em `pos_sales`) **falhou silenciosamente**. Reproduzi o INSERT: erro `pos_sales_source_order_id_fkey` — a coluna `source_order_id` tem **FK para a tabela `orders`** (legado), mas o código passa um `pos_sales.id`. O try/catch em `finalizeExchange` engole o erro.
+
+### Auditoria retroativa — vendas físicas sem saída de estoque
 ```text
-Trocas/Devolução
-   └─ Nova Troca/Devolução
-        ├─ [Troca com Envio]   → fluxo atual (mantém 100%)
-        └─ [Troca Presencial]  → NOVO fluxo (finaliza tudo no modal)
+mês        | sem_saida | com_saida
+2026-02    |      126  |     0
+2026-03    |      593  |     0
+2026-04    |      460  |     0
+2026-05    |      771  |     0
+2026-06    |      230  |   296   ← trigger passou a operar
+2026-07    |       17  |   280   ← ainda escapam alguns
 ```
-
-### A.2 Etapas de implementação
-
-**Etapa 1 — Modal de escolha do tipo**
-- Novo componente `ExchangeTypePicker.tsx` com dois cards: *Presencial* / *Com Envio*.
-- Botão "Nova Troca/Devolução" abre este seletor primeiro.
-
-**Etapa 2 — Voucher (base para o presencial)**
-Nova tabela `pos_vouchers`:
-- `code` (BC-VC-XXXXXX gerado por sequence), `customer_unified_id`, `origin_troca_id`, `original_sale_id`, `amount`, `balance`, `expires_at`, `status` (`active|used|expired|cancelled`), `store_id`, `created_by`.
-- Índices por `code`, `customer_unified_id`.
-- RLS: `authenticated` full, `service_role` all.
-
-RPCs:
-- `create_voucher(...)` → gera code único, retorna registro.
-- `redeem_voucher(code, amount)` → valida validade/saldo, debita `balance`, marca `used` se zerar.
-- `find_voucher(code)` → usado no campo de cupom do PDV.
-
-**Etapa 3 — `PresentialExchangePicker.tsx`** (baseado no `NewExchangePicker`, mas simplificado)
-Remove:
-- Campo "Código de postagem reversa".
-- Bloco "Modo de expedição".
-- Etapas 2/3 do wizard (NF-e reposição + rastreio WhatsApp).
-
-Mantém:
-- Seleção do pedido original + itens devolvidos.
-- Motivo, Devolução vs Troca.
-- Bloco "Produtos de reposição".
-
-Adiciona:
-- Toggle **Voucher integral** (marca todos itens como devolvidos, gera voucher no valor total; sem reposição).
-- Cálculo de diferença ao vivo (após correção do preço — ver B):
-  - `diferenca = total_reposicao − total_devolvido`
-  - Se `> 0` (cliente paga): bloco **Formas de pagamento** com multi-linhas (método + valor), somando até cobrir diferença. Reusa componente de pagamento do PDV (`PosPaymentMethods` / equivalente).
-  - Se `< 0` (crédito ao cliente): bloco **Gerar voucher da diferença** com `expires_at` (default +90 dias) e preview do code.
-  - Se `== 0`: apenas troca simples.
-
-**Etapa 4 — Backend `finalize-presential-exchange` (edge function nova)**
-Fluxo transacional único (uma chamada finaliza tudo):
-
-1. Detecta origem fiscal da venda original:
-   - `has_fiscal = existe fiscal_document authorized (modelo 55 ou 65) vinculado ao `original_sale_id``.
-2. **Sempre**: devolve itens ao estoque em tempo real (`pos_stock_movements` + `pos_products.stock`).
-3. **Sempre**: cancela pedido original (`pos_sales.status='cancelled'`, marca `cancelled_reason='troca_presencial'`).
-4. Se `has_fiscal`: enfileira **NF-e de devolução** (mod. 55 fin=4, ref à chave original) via `nfe-devolucao-emitir` — assíncrono, mas devolução de estoque/cancelamento não esperam.
-5. Se troca com produtos novos:
-   - Cria **novo `pos_sales`** com itens de reposição, `sale_type='exchange'`, `external_source='troca_presencial'`, `parent_troca_id`, `customer_unified_id` copiado.
-   - Se diferença > 0: grava `pos_sale_payments` com métodos informados.
-   - Se `has_fiscal` **e** diferença paga em (crédito|débito|pix): dispara `nfce-emitir` para o novo pedido usando snapshot do cliente da venda original.
-   - Se diferença ≤ 0: novo pedido total = total dos itens novos, pagamento = `voucher` de valor equivalente.
-6. Se `voucher_integral` **e sem reposição**: NÃO cria novo `pos_sales`. Só cancela original + gera voucher.
-7. Se diferença negativa com reposição: cria voucher pelo saldo.
-8. Marca `trocas_devolucoes.status='concluida'` direto (sem passar por `aguardando_envio`).
-
-Idempotência: chave `troca_id` + guard em `trocas_devolucoes.status`.
-
-**Etapa 5 — Integração do voucher no PDV**
-- Campo "Cupom" da tela de Venda: se o código bater regex `BC-VC-*`, chama `redeem_voucher` em vez do fluxo de cupom normal. Aplica como desconto/pagamento tipo `voucher`.
-- Aba **Consultar** de Trocas: exibir o `voucher.code` do registro, com botão copiar e badge de saldo/validade.
-
-**Etapa 6 — Verificação**
-- Testar 6 cenários: (a) devolução sem NF, (b) devolução com NF, (c) troca par-a-par sem diferença, (d) troca com diferença a receber (PIX → gera NFCe), (e) troca com diferença a receber (dinheiro → sem NFCe), (f) troca com crédito ao cliente (gera voucher), (g) voucher integral.
-- Confirmar em cada caso: estoque, pedido cancelado, novo pedido (ou ausência), NF-e devolução, NFCe nova, voucher gerado + resgatável na Venda.
+- **~1.980 vendas físicas pré-junho/2026** sem saída (a trigger `apply_pos_sale_stock_movement` não existia). Estoque histórico já ficou inconsistente na origem.
+- **17 vendas em julho ainda sem saída**: itens cujo SKU/barcode aparece em múltiplas lojas ou está ausente do catálogo local, e o `process_pos_sale_sale_event` não consegue casar 1 linha determinística.
+- Online (Shopify/live): 489+236+126 sem saída — mas essas historicamente eram abatidas pelo Tiny/outras rotas antes do desacoplamento.
 
 ---
 
-## B. Preço real na troca (bug do R$ 200 vs R$ 79,99)
+## Plano de Correção (sem quebrar nada)
 
-### B.1 Diagnóstico
-`pos_sale_items.unit_price` guarda o **preço de tabela** do item. O desconto fica em `pos_sales.discount` no nível do pedido. Quando `NewExchangePicker` carrega os itens devolvíveis, usa `unit_price` cru — por isso mostra o valor cheio, ignorando desconto rateado.
+### Fase 1 — Bug 3 (Pedidos): mirror sale + cancelamento visível
+1. **Remover uso indevido de `source_order_id`** no INSERT da mirror sale em `src/lib/pos/finalizeExchange.ts`. A rastreabilidade ao pedido original fica em `notes` + `external_order_id` (id da troca) — que é o que já usamos para idempotência.
+2. **Log explícito** (não silencioso) do erro do INSERT: se falhar, gravar `fase2_erro` na troca para aparecer no painel.
+3. **Marcar o pedido original como `cancelled` no `status`** (não só `status_cancelamento`) quando `totalReturn=true`, preservando `motivo_cancelamento='troca'`. Isso faz a aba Pedidos refletir corretamente. Vendas parciais continuam intactas.
+4. **Backfill único**: para trocas `concluida` cujo evento tem `pedido_ajustado=true`, `estoque_movimentado=true` e a devolução cobre 100% do pedido, mover `status` para `cancelled`. E, para trocas do tipo `troca` sem mirror sale correspondente, gerar as mirror sales retroativamente.
 
-### B.2 Correção
-- Criar helper `computeEffectiveUnitPrice(saleItems, saleDiscount, saleTotal)`:
-  - `subtotal = Σ(unit_price*qty)`
-  - Se `discount > 0`: fator = `(subtotal − discount) / subtotal`
-  - `effective_unit = unit_price * fator` (arredonda 2 casas; ajusta última linha para bater com `total`).
-- Aplicar em:
-  - `NewExchangePicker.tsx` (carregamento de itens devolvíveis).
-  - `PresentialExchangePicker.tsx` (novo).
-  - `SiteExchangePicker.tsx` (mesma lógica).
-  - `finalizeExchange.ts` / venda-espelho (usa `effective_unit` para casar com valor real devolvido).
-  - Emissão de NF-e devolução (item price).
-- **Não** alterar `pos_sale_items` no banco — cálculo runtime, evita mexer em vendas históricas.
-- Cobrir com teste unitário em `src/lib/pos/` (novo `effectivePrice.test.ts`) com 3 cenários (sem desconto, desconto proporcional, arredondamento).
+### Fase 2 — Bug 2 (saída da reposição na troca presencial)
+1. Em `finalizeExchange`, após criar/localizar a mirror sale (bloco linha 376-446), **disparar a saída de estoque de cada item de reposição** via `pos-stock-balance` (`direction: "out"`, `reason: "Reposição troca <codigo>"`). Idempotência: só executa se ainda não houver `pos_stock_adjustments` com `sale_id = mirrorSale.id`.
+2. Alternativa mais limpa: como já criamos a mirror sale com `status='completed'`, deixar a trigger `apply_pos_sale_stock_movement` fazer o abate normal via `process_pos_sale_sale_event` (que já é chamada pela trigger no INSERT). Isso é o melhor caminho — hoje ela não abate porque o INSERT nunca ocorre por causa da FK do Bug 3. **Corrigindo Bug 3, o Bug 2 se resolve automaticamente** pela trigger existente. Nada de código novo de estoque na troca.
+3. Atualizar `trocas_devolucoes_itens.repoe_estoque=true` e `estado_estoque='despachado'` para itens de reposição em troca presencial, para refletir na UI.
+4. **Backfill**: para trocas `concluida` sem saída em `pos_stock_adjustments` para o par reposto, gerar movimento retroativo (idempotente por `troca_devolucao_id`).
 
-### B.3 Verificação
-- Abrir a troca da cliente citada (R$ 200 / R$ 79,99) e confirmar que o modal agora mostra 79,99.
-- Emitir uma NF-e devolução de teste e confirmar valor correto.
+### Fase 3 — Bug 1 e auditoria retroativa de estoque
+1. **17 vendas de julho sem saída**: script diagnóstico para cada uma — identificar por que `process_pos_sale_sale_event` não localizou produto (SKU ausente / múltiplas lojas). Corrigir cadastros faltantes e reprocessar chamando `process_pos_sale_sale_event(sale_id)` (é idempotente: só cria adjustment se não existir).
+2. **~1.980 vendas pré-junho/2026**: relatório para você aprovar antes de qualquer ação. Duas opções apresentadas por loja:
+   - (a) Não abater retroativamente e usar o Balanço Inteligente para "verdade fisica" (recomendado — o estoque histórico já foi corrigido inúmeras vezes pelos balanços).
+   - (b) Abater retroativo com flag `reason='backfill_historico'`, reversível.
+3. **Trava preventiva**: alerta no dashboard de Estoque quando venda `completed/paid` física não gerar `pos_stock_adjustments` em até 30s (job leve).
+
+### Fase 4 — Testes end-to-end antes de subir
+1. Criar venda física teste em ambiente atual → confirmar saída.
+2. Fazer troca presencial (devolução X reposição Y) → confirmar: entrada de X, saída de Y via mirror sale, pedido original `cancelled`, mirror aparece em Pedidos.
+3. Troca parcial → pedido original **permanece** completed (só marca `status_cancelamento`).
+4. Rodar auditoria: 0 vendas físicas `completed/paid` recentes sem saída.
 
 ---
 
-## Ordem de execução
-1. Migration `pos_vouchers` + RPCs.
-2. Helper de preço efetivo + testes + patch nos pickers existentes (B).
-3. `ExchangeTypePicker` + roteamento do botão.
-4. `PresentialExchangePicker` UI.
-5. Edge function `finalize-presential-exchange`.
-6. Integração voucher no campo de cupom da Venda + exibição em Consultar.
-7. Round de testes manuais nos 7 cenários.
+## Detalhes Técnicos
 
-Cada etapa termina com verificação antes de prosseguir para a próxima.
+- **Arquivo principal**: `src/lib/pos/finalizeExchange.ts` (mirror sale + cancelamento do original).
+- **Migration**:
+  - Backfill de `status='cancelled'` em pedidos com `status_cancelamento='cancelado'` e evento `pedido_ajustado=true` cobrindo 100% dos itens.
+  - Backfill de mirror sales para trocas antigas sem `pos_sales` correspondente (a trigger cuida do estoque).
+- **Sem migration na FK** de `source_order_id`: a coluna pertence a fluxo online→Shopify (`orders`); apenas paramos de usá-la nas trocas.
+- **Nenhuma alteração** nas triggers de estoque nem em `process_pos_sale_sale_event`. Aproveitamos o que já existe.
+- Auditoria retroativa das 17 vendas de julho: consulta pronta; correção sob demanda (idempotente).
+
+---
+
+## Ordem de execução sugerida
+1. Fase 1 (código + migration de backfill do status/pedidos) — desbloqueia Pedidos e, por tabela, Bug 2.
+2. Fase 2 (ajustes de flags + backfill de estoque das trocas concluídas) — reconcilia estoque das trocas passadas.
+3. Fase 3 (17 vendas de julho + relatório para decisão sobre histórico).
+4. Fase 4 (testes + monitor).
+
+Aguardo seu OK para implementar. Nada será alterado até você aprovar.
