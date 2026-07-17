@@ -711,7 +711,11 @@ export function POSDailySales({ storeId }: Props) {
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              {sale.sale_type === 'live' ? (
+              {sale.external_source === 'troca' || sale.sale_type === 'exchange' ? (
+                <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/30 text-[10px] px-1.5 py-0">
+                  🔁 Troca
+                </Badge>
+              ) : sale.sale_type === 'live' ? (
                 <Badge className="bg-pink-500/20 text-pink-400 border-pink-500/30 text-[10px] px-1.5 py-0">
                   🔴 Live
                 </Badge>
