@@ -1270,6 +1270,21 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
           } catch (e) { console.error('coupon redeem error', e); }
         }
 
+        // 🎟️ Vale-troca: debita saldo do voucher e marca como usado se zerou
+        if (voucherApplied && valeTrocaAmountRequired > 0) {
+          try {
+            const usado = Math.min(voucherApplied.saldo, valeTrocaAmountRequired);
+            const novoSaldo = Number((voucherApplied.saldo - usado).toFixed(2));
+            await supabase.from('vouchers').update({
+              saldo: Math.max(0, novoSaldo),
+              status: (novoSaldo <= 0.009 ? 'usado' : 'ativo') as any,
+              troca_devolucao_id: (voucherApplied as any).troca_devolucao_id ?? undefined,
+            } as any).eq('id', voucherApplied.id);
+            toast.success(`Voucher ${voucherApplied.codigo} debitado: R$ ${usado.toFixed(2)}`);
+          } catch (e) { console.error('[vale-troca redeem]', e); }
+        }
+
+
         // Update cash register with sale amounts
         try {
           const { data: openRegister } = await supabase
