@@ -200,6 +200,22 @@ export function SiteExchangePicker({ open, onCancel, onConfirm }: Props) {
         .eq("sale_id", sale.id);
       if (itemsErr) throw itemsErr;
 
+      // Rateia desconto para achar preço efetivamente pago
+      const { data: saleTotals } = await supabase
+        .from("pos_sales")
+        .select("discount, total")
+        .eq("id", sale.id)
+        .maybeSingle();
+      const { computeEffectiveUnitPrices } = await import("@/lib/pos/effectivePrice");
+      const eff = computeEffectiveUnitPrices(
+        (items || []).map((i: any) => ({
+          unit_price: Number(i.unit_price || 0),
+          quantity: Number(i.quantity || 1),
+        })),
+        Number((saleTotals as any)?.discount || 0),
+        Number((saleTotals as any)?.total || 0) || null,
+      );
+
       // 2) resolve barcode/tiny_id/estoque a partir do SKU (catálogo do PDV)
       const skus = [...new Set((items || []).map((i: any) => (i.sku || "").trim()).filter(Boolean))];
       const bySku = new Map<string, { barcode: string; tiny_id?: number; stock?: number }>();
@@ -226,7 +242,7 @@ export function SiteExchangePicker({ open, onCancel, onConfirm }: Props) {
           variant: i.variant_name || "",
           size: i.size || undefined,
           category: i.category || undefined,
-          price: Number(i.unit_price || 0),
+          price: eff.effective[idx] ?? Number(i.unit_price || 0),
           quantity: Number(i.quantity || 1),
           barcode: (i.barcode || resolved.barcode || "") as string,
           stock: resolved.stock,

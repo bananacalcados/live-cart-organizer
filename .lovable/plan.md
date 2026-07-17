@@ -1,140 +1,120 @@
-# Wizard pós-troca com NF-e da reposição, rastreio e WhatsApp
+# Trocas / Devoluções — Presencial, Voucher e Preço Real
 
-Transforma o modal atual "Finalizar Troca / Devolução" em um wizard de 3 etapas **apenas quando há reposição** (envio novo pro cliente). Devolução pura mantém o fluxo atual de 1 etapa.
+Duas frentes independentes:
+A) Novo fluxo **Troca Presencial** (finaliza em 1 modal, com voucher e diferença).
+B) Correção do **valor do item na troca** (usar preço realmente pago, não preço de tabela).
 
-## Fluxo novo
+---
+
+## A. Troca Presencial
+
+### A.1 Diagnóstico do que muda vs. hoje
+Hoje "Nova Troca/Devolução" cai direto no `NewExchangePicker` (fluxo com envio). Precisamos de um seletor antes:
 
 ```text
-Etapa 1: Conferência (modal atual)           ── botão vira "Avançar"
-   │
-   ├── Se NÃO há reposição → Concluir agora (fluxo antigo)
-   │
-   ▼
-Etapa 2: NF-e da reposição (mod.55 fin=1)
-   • Preview editável antes de emitir na SEFAZ
-   • Editáveis: destinatário (nome/CPF/endereço), CFOP por item,
-     preço/qtd por item, natureza da operação, observações
-   • Botão "Emitir NF-e" → chama edge function → mostra status
-   • Se rejeitada: exibe motivo, permite editar e reemitir
-   • Ao autorizar: mostra DANFE (PDF) + XML pra download
-   • Botão "Avançar" só habilita com NF autorizada
-   │
-   ▼
-Etapa 3: Rastreio + WhatsApp
-   • Input do código de rastreio + transportadora
-   • Seletor de instância WhatsApp
-   • Template editável com {nome}, {codigo}, {transportadora}
-   • Preview da mensagem final
-   • Botão único "Enviar WhatsApp e concluir troca"
-   │
-   ▼
-Troca marcada como concluída
+Trocas/Devolução
+   └─ Nova Troca/Devolução
+        ├─ [Troca com Envio]   → fluxo atual (mantém 100%)
+        └─ [Troca Presencial]  → NOVO fluxo (finaliza tudo no modal)
 ```
 
-Nenhuma etapa é pulável (conforme decisão do usuário). Se o operador fechar o modal no meio, a troca fica em `status='aguardando_envio'` e reabre exatamente onde parou.
+### A.2 Etapas de implementação
 
-## Componentes de UI
+**Etapa 1 — Modal de escolha do tipo**
+- Novo componente `ExchangeTypePicker.tsx` com dois cards: *Presencial* / *Com Envio*.
+- Botão "Nova Troca/Devolução" abre este seletor primeiro.
 
-Arquivos novos em `src/components/pos/exchange-wizard/`:
+**Etapa 2 — Voucher (base para o presencial)**
+Nova tabela `pos_vouchers`:
+- `code` (BC-VC-XXXXXX gerado por sequence), `customer_unified_id`, `origin_troca_id`, `original_sale_id`, `amount`, `balance`, `expires_at`, `status` (`active|used|expired|cancelled`), `store_id`, `created_by`.
+- Índices por `code`, `customer_unified_id`.
+- RLS: `authenticated` full, `service_role` all.
 
-- `ExchangeWizardDialog.tsx` — container do wizard, gerencia step atual e estado compartilhado.
-- `Step1Conference.tsx` — extrai o conteúdo atual do modal `Finalizar Troca / Devolução` (o que já está em `FinalizeExchangeDialog`).
-- `Step2NfeReposicao.tsx` — preview editável da NF-e com tabela de itens (CFOP/preço/qtd), campos do destinatário, natureza, obs. Botão emitir + status.
-- `Step3TrackingWhatsApp.tsx` — código rastreio, transportadora, seletor de instância (reusa `WhatsAppNumberSelector`), textarea do template, preview, botão enviar+concluir.
+RPCs:
+- `create_voucher(...)` → gera code único, retorna registro.
+- `redeem_voucher(code, amount)` → valida validade/saldo, debita `balance`, marca `used` se zerar.
+- `find_voucher(code)` → usado no campo de cupom do PDV.
 
-Arquivo alterado:
-- `src/lib/pos/finalizeExchange.ts` — separa em duas fases:
-  1. `finalizeExchangeReturn()`: NF devolução + cancelamento + estoque + venda-espelho `pos_sales` (o que já faz hoje). Marca `status='aguardando_envio'` se houver reposição, senão `concluida`.
-  2. `completeExchangeShipping({ nfe_id, tracking_code, carrier })`: última etapa, marca troca `concluida`, grava rastreio na venda-espelho.
+**Etapa 3 — `PresentialExchangePicker.tsx`** (baseado no `NewExchangePicker`, mas simplificado)
+Remove:
+- Campo "Código de postagem reversa".
+- Bloco "Modo de expedição".
+- Etapas 2/3 do wizard (NF-e reposição + rastreio WhatsApp).
 
-## Backend
+Mantém:
+- Seleção do pedido original + itens devolvidos.
+- Motivo, Devolução vs Troca.
+- Bloco "Produtos de reposição".
 
-### Nova coluna
-`trocas_devolucoes`:
-- `status` novo valor: `aguardando_envio` (entre `em_conferencia` e `concluida`)
-- `nfe_reposicao_id UUID` FK → `fiscal_documents(id)`
-- `tracking_code TEXT`
-- `tracking_carrier TEXT`
-- `whatsapp_notification_sent_at TIMESTAMPTZ`
+Adiciona:
+- Toggle **Voucher integral** (marca todos itens como devolvidos, gera voucher no valor total; sem reposição).
+- Cálculo de diferença ao vivo (após correção do preço — ver B):
+  - `diferenca = total_reposicao − total_devolvido`
+  - Se `> 0` (cliente paga): bloco **Formas de pagamento** com multi-linhas (método + valor), somando até cobrir diferença. Reusa componente de pagamento do PDV (`PosPaymentMethods` / equivalente).
+  - Se `< 0` (crédito ao cliente): bloco **Gerar voucher da diferença** com `expires_at` (default +90 dias) e preview do code.
+  - Se `== 0`: apenas troca simples.
 
-`pos_sales` (venda-espelho da reposição):
-- `tracking_code TEXT` (usa também em envios normais no futuro)
-- `tracking_carrier TEXT`
+**Etapa 4 — Backend `finalize-presential-exchange` (edge function nova)**
+Fluxo transacional único (uma chamada finaliza tudo):
 
-### Nova edge function: `pos-exchange-emit-nfe-reposicao`
+1. Detecta origem fiscal da venda original:
+   - `has_fiscal = existe fiscal_document authorized (modelo 55 ou 65) vinculado ao `original_sale_id``.
+2. **Sempre**: devolve itens ao estoque em tempo real (`pos_stock_movements` + `pos_products.stock`).
+3. **Sempre**: cancela pedido original (`pos_sales.status='cancelled'`, marca `cancelled_reason='troca_presencial'`).
+4. Se `has_fiscal`: enfileira **NF-e de devolução** (mod. 55 fin=4, ref à chave original) via `nfe-devolucao-emitir` — assíncrono, mas devolução de estoque/cancelamento não esperam.
+5. Se troca com produtos novos:
+   - Cria **novo `pos_sales`** com itens de reposição, `sale_type='exchange'`, `external_source='troca_presencial'`, `parent_troca_id`, `customer_unified_id` copiado.
+   - Se diferença > 0: grava `pos_sale_payments` com métodos informados.
+   - Se `has_fiscal` **e** diferença paga em (crédito|débito|pix): dispara `nfce-emitir` para o novo pedido usando snapshot do cliente da venda original.
+   - Se diferença ≤ 0: novo pedido total = total dos itens novos, pagamento = `voucher` de valor equivalente.
+6. Se `voucher_integral` **e sem reposição**: NÃO cria novo `pos_sales`. Só cancela original + gera voucher.
+7. Se diferença negativa com reposição: cria voucher pelo saldo.
+8. Marca `trocas_devolucoes.status='concluida'` direto (sem passar por `aguardando_envio`).
 
-Body:
-```json
-{
-  "troca_id": "uuid",
-  "pos_sale_id": "uuid",           // venda-espelho já criada
-  "overrides": {
-    "destinatario": { "nome", "cpf", "endereco": {...} },
-    "natureza_operacao": "Venda em substituição - troca",
-    "observacoes": "Ref. TD-2026-000008",
-    "items": [{ "id", "cfop", "unit_price", "quantity" }]
-  }
-}
-```
+Idempotência: chave `troca_id` + guard em `trocas_devolucoes.status`.
 
-Fluxo:
-1. Monta payload BrasilNFe reaproveitando o golden `nfe-emitir` (mod.55, fin=1, natureza "Venda em substituição – Troca").
-2. Aplica overrides antes de enviar.
-3. Emite → grava em `fiscal_documents` vinculado ao `pos_sale_id`.
-4. Atualiza `trocas_devolucoes.nfe_reposicao_id`.
-5. Retorna DANFE URL, XML URL e status.
+**Etapa 5 — Integração do voucher no PDV**
+- Campo "Cupom" da tela de Venda: se o código bater regex `BC-VC-*`, chama `redeem_voucher` em vez do fluxo de cupom normal. Aplica como desconto/pagamento tipo `voucher`.
+- Aba **Consultar** de Trocas: exibir o `voucher.code` do registro, com botão copiar e badge de saldo/validade.
 
-Segue o mesmo padrão do `nfe-emitir` atual (idempotência, retry SEFAZ, contingência pending_sefaz).
+**Etapa 6 — Verificação**
+- Testar 6 cenários: (a) devolução sem NF, (b) devolução com NF, (c) troca par-a-par sem diferença, (d) troca com diferença a receber (PIX → gera NFCe), (e) troca com diferença a receber (dinheiro → sem NFCe), (f) troca com crédito ao cliente (gera voucher), (g) voucher integral.
+- Confirmar em cada caso: estoque, pedido cancelado, novo pedido (ou ausência), NF-e devolução, NFCe nova, voucher gerado + resgatável na Venda.
 
-### Nova edge function: `pos-exchange-send-tracking-whatsapp`
+---
 
-Body:
-```json
-{
-  "troca_id": "uuid",
-  "pos_sale_id": "uuid",
-  "tracking_code": "BR123...",
-  "carrier": "Correios",
-  "whatsapp_instance_id": "uuid",
-  "phone": "5533...",
-  "message": "Oi {nome}! Seu pedido..."
-}
-```
+## B. Preço real na troca (bug do R$ 200 vs R$ 79,99)
 
-Fluxo:
-1. Roteia pelo provider correto da instância (uazapi/wasender/meta) — reusa `_shared/instance-guard.ts`.
-2. Envia mensagem.
-3. Grava `whatsapp_notification_sent_at`, `tracking_code`, `carrier` na troca e na venda-espelho.
-4. Marca `trocas_devolucoes.status = 'concluida'`.
-5. Retorna sucesso.
+### B.1 Diagnóstico
+`pos_sale_items.unit_price` guarda o **preço de tabela** do item. O desconto fica em `pos_sales.discount` no nível do pedido. Quando `NewExchangePicker` carrega os itens devolvíveis, usa `unit_price` cru — por isso mostra o valor cheio, ignorando desconto rateado.
 
-## Template padrão WhatsApp
+### B.2 Correção
+- Criar helper `computeEffectiveUnitPrice(saleItems, saleDiscount, saleTotal)`:
+  - `subtotal = Σ(unit_price*qty)`
+  - Se `discount > 0`: fator = `(subtotal − discount) / subtotal`
+  - `effective_unit = unit_price * fator` (arredonda 2 casas; ajusta última linha para bater com `total`).
+- Aplicar em:
+  - `NewExchangePicker.tsx` (carregamento de itens devolvíveis).
+  - `PresentialExchangePicker.tsx` (novo).
+  - `SiteExchangePicker.tsx` (mesma lógica).
+  - `finalizeExchange.ts` / venda-espelho (usa `effective_unit` para casar com valor real devolvido).
+  - Emissão de NF-e devolução (item price).
+- **Não** alterar `pos_sale_items` no banco — cálculo runtime, evita mexer em vendas históricas.
+- Cobrir com teste unitário em `src/lib/pos/` (novo `effectivePrice.test.ts`) com 3 cenários (sem desconto, desconto proporcional, arredondamento).
 
-Salvo em `app_settings` key `exchange_shipping_wa_template` (editável no futuro em Admin). Default:
+### B.3 Verificação
+- Abrir a troca da cliente citada (R$ 200 / R$ 79,99) e confirmar que o modal agora mostra 79,99.
+- Emitir uma NF-e devolução de teste e confirmar valor correto.
 
-```
-Oi {nome}! 👋
+---
 
-Sua troca foi processada e o novo pedido já foi criado para envio.
+## Ordem de execução
+1. Migration `pos_vouchers` + RPCs.
+2. Helper de preço efetivo + testes + patch nos pickers existentes (B).
+3. `ExchangeTypePicker` + roteamento do botão.
+4. `PresentialExchangePicker` UI.
+5. Edge function `finalize-presential-exchange`.
+6. Integração voucher no campo de cupom da Venda + exibição em Consultar.
+7. Round de testes manuais nos 7 cenários.
 
-📦 Rastreio: {codigo}
-🚚 Transportadora: {carrier}
-
-Assim que a transportadora coletar, você recebe a atualização por aqui. Qualquer dúvida é só chamar!
-```
-
-## Regressão / segurança
-
-- Devolução pura (sem reposição): mantém 1 etapa e nenhuma alteração de comportamento.
-- Se o operador emitir NF e depois fechar antes do rastreio: NF fica válida, troca em `aguardando_envio`, aparece no módulo Trocas com botão "Continuar envio" que reabre o wizard direto na Etapa 3.
-- Se NF for rejeitada: nada da Etapa 1 é revertido (devolução, cancelamento, venda-espelho continuam válidos). Só a Etapa 2 fica pendente.
-- Idempotência: `pos-exchange-emit-nfe-reposicao` checa `nfe_reposicao_id` antes de emitir de novo.
-- Reaproveita 100% do fluxo fiscal golden (`nfe-emitir` payload) — só adiciona uma camada de overrides.
-
-## Detalhes técnicos
-
-- Migration: adiciona colunas + novo enum value `aguardando_envio`.
-- 2 novas edge functions com JWT verificado (equipe logada, não requer admin).
-- UI usa o padrão de wizard já existente (`components/ui/dialog` + steps controlados por estado).
-- Selector de instância WhatsApp reusa `WhatsAppNumberSelector` existente.
-- Nenhuma mudança no fluxo de vendas normais, apenas no fluxo de troca com reposição.
+Cada etapa termina com verificação antes de prosseguir para a próxima.
