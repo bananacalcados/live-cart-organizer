@@ -1965,7 +1965,7 @@ export function POSSalesView({ storeId, sellerId, preloadedSellers, sellersPrelo
             </DialogHeader>
             <div className="grid grid-cols-2 gap-3 pt-2">
               <button
-                onClick={() => { setShowExchangeTypePicker(false); toast.info('Fluxo Presencial em preparação — em breve.'); }}
+                onClick={() => { setShowExchangeTypePicker(false); setShowPresentialExchange(true); }}
                 className="rounded-2xl border-2 border-emerald-400/40 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-400 p-5 flex flex-col items-center gap-3 transition-all"
               >
                 <div className="h-14 w-14 rounded-full bg-emerald-500/20 flex items-center justify-center text-2xl">🏬</div>
