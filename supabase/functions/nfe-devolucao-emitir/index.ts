@@ -340,7 +340,7 @@ Deno.serve(async (req) => {
       : {
           // Sem CPF OU sem endereço válido → loja é a destinatária (devolução para o próprio estoque).
           CpfCnpj: digits(company.cnpj),
-          NmCliente: sanitize(company.razao_social || company.nome_fantasia || "LOJA").slice(0, 60),
+          NmCliente: sanitize(company.legal_name || company.trade_name || "LOJA").slice(0, 60),
           ...(ieEmitente ? { Ie: ieEmitente } : {}),
           IndicadorIe: ieEmitente ? 1 : 9,
           Endereco: {
