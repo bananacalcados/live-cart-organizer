@@ -71,6 +71,7 @@ interface Sale {
   mercadopago_payment_id?: string | null;
   external_source?: string | null;
   tracking_code?: string | null;
+  external_order_id?: string | null;
 }
 
 const GATEWAY_LABELS: Record<string, string> = {
@@ -177,6 +178,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
   const [sendingTracking, setSendingTracking] = useState(false);
   const [showDeliveryCost, setShowDeliveryCost] = useState(false);
+  const [originalSale, setOriginalSale] = useState<{ id: string; created_at: string; total: number; status: string; customer_name: string | null; paid_at: string | null } | null>(null);
+  const [loadingOriginal, setLoadingOriginal] = useState(false);
   const isRemoteSale = sale?.sale_type === 'online' || sale?.sale_type === 'live';
   // Rótulo derivado do modelo REAL do documento (55=NF-e, 65=NFC-e); fallback pelo tipo de venda.
   const fiscalTipoLabel = fiscalDoc?.modelo === 55 ? 'NF-e'
@@ -190,6 +193,34 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   useEffect(() => {
     setTrackingCode(sale?.tracking_code || "");
   }, [sale?.id, sale?.tracking_code]);
+
+  // Se for venda-espelho de troca, busca o pedido original para o usuário conferir o cancelamento
+  useEffect(() => {
+    const isExchange = sale?.sale_type === "exchange" || sale?.external_source === "troca";
+    if (!sale || !isExchange || !sale.external_order_id) { setOriginalSale(null); return; }
+    let cancelled = false;
+    (async () => {
+      setLoadingOriginal(true);
+      try {
+        const { data: td } = await supabase
+          .from("trocas_devolucoes")
+          .select("pedido_original_id")
+          .eq("id", sale.external_order_id!)
+          .maybeSingle();
+        const origId = (td as any)?.pedido_original_id;
+        if (!origId) { if (!cancelled) setOriginalSale(null); return; }
+        const { data: orig } = await supabase
+          .from("pos_sales")
+          .select("id, created_at, total, status, customer_name, paid_at")
+          .eq("id", origId)
+          .maybeSingle();
+        if (!cancelled) setOriginalSale((orig as any) || null);
+      } finally {
+        if (!cancelled) setLoadingOriginal(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sale?.id, sale?.external_order_id, sale?.sale_type, sale?.external_source]);
 
   const handleSaveTracking = async () => {
     if (!sale) return;
@@ -1039,6 +1070,65 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
                 </div>
               )}
             </div>
+
+            {/* Pedido original (trocas) — permite conferir se foi cancelado */}
+            {(sale.sale_type === "exchange" || sale.external_source === "troca") && (
+              <div className="rounded-lg border-2 border-purple-200 bg-purple-50 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs uppercase tracking-wider text-purple-700 font-bold flex items-center gap-1.5">
+                    <RotateCcw className="h-3.5 w-3.5" /> Pedido Original (Troca)
+                  </h4>
+                  {loadingOriginal && <Loader2 className="h-3 w-3 animate-spin text-purple-600" />}
+                </div>
+                {!loadingOriginal && !originalSale && (
+                  <p className="text-xs text-gray-600">Não foi possível localizar o pedido original.</p>
+                )}
+                {originalSale && (
+                  <div className="space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Status</span>
+                      {originalSale.status === "cancelled" ? (
+                        <Badge className="bg-red-100 text-red-700 border-red-300 font-bold">
+                          ✓ Cancelado (fora do faturamento)
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-amber-100 text-amber-700 border-amber-300 font-bold">
+                          ⚠️ {originalSale.status}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Cliente</span>
+                      <span className="font-medium text-gray-900">{originalSale.customer_name || "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Data original</span>
+                      <span className="font-medium text-gray-900">
+                        {format(new Date(originalSale.paid_at || originalSale.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-600">Valor original</span>
+                      <span className="font-bold text-gray-900">R$ {Number(originalSale.total || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-purple-200">
+                      <span className="text-gray-600">Pedido</span>
+                      <div className="flex items-center gap-1">
+                        <code className="text-[10px] bg-white px-1.5 py-0.5 rounded border border-purple-200">#{originalSale.id.slice(0, 8)}</code>
+                        <button
+                          onClick={() => { navigator.clipboard?.writeText(originalSale.id); toast.success("ID copiado"); }}
+                          className="text-purple-600 hover:text-purple-800"
+                          title="Copiar ID completo"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
 
             {/* Customer */}
             <div className="space-y-2">
