@@ -399,7 +399,21 @@ export async function finalizeExchange(
             const subtotal = Number(valor_reposicao || 0);
             const credito = Number(valor_devolvido || 0);
             const diferenca = Number((subtotal - credito).toFixed(2));
-            const notaTroca = `🔁 Troca ${codigo_devolucao || eventId} · Pedido original: ${pedido_original_id} · Crédito devolução: R$ ${credito.toFixed(2)} · Diferença: R$ ${diferenca.toFixed(2)}`;
+
+            // REGRA DE FATURAMENTO:
+            // • Se o pedido original foi TOTALMENTE cancelado (totalReturn), ele deixou
+            //   de contar como faturamento — logo a venda-espelho carrega o VALOR CHEIO
+            //   da reposição (sem desconto do crédito), para que loja/vendedora recebam
+            //   faturamento e comissão.
+            // • Em troca parcial, o pedido original continua ativo com os itens que
+            //   ficaram, então o crédito da devolução entra como desconto para não
+            //   contabilizar duas vezes.
+            const mirrorDiscount = totalReturn ? 0 : credito;
+            const mirrorTotal = totalReturn ? subtotal : Math.max(0, diferenca);
+            const mirrorPayment = totalReturn
+              ? "troca"
+              : (diferenca > 0.009 ? "troca_com_diferenca" : "troca");
+            const notaTroca = `🔁 Troca ${codigo_devolucao || eventId} · Pedido original: ${pedido_original_id}${totalReturn ? " (cancelado integralmente)" : ""} · Crédito devolução: R$ ${credito.toFixed(2)} · Diferença: R$ ${diferenca.toFixed(2)}`;
 
             // Busca nome do cliente para gravar no espelho (evita "Sem cliente" no dashboard)
             let mirrorCustomerName: string | null = null;
@@ -420,9 +434,9 @@ export async function finalizeExchange(
                 customer_id: cliente_id || null,
                 customer_name: mirrorCustomerName,
                 subtotal,
-                discount: credito,
-                total: Math.max(0, diferenca),
-                payment_method: diferenca > 0.009 ? "troca_com_diferenca" : "troca",
+                discount: mirrorDiscount,
+                total: mirrorTotal,
+                payment_method: mirrorPayment,
                 status: "completed",
                 sale_type: "exchange",
                 external_source: "troca",
@@ -432,6 +446,7 @@ export async function finalizeExchange(
                 paid_at: new Date().toISOString(),
                 revenue_attribution: origem_canal === "site" ? "online" : "store",
               } as any)
+
               .select("id")
               .single();
 
