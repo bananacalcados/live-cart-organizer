@@ -178,6 +178,8 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
   const [trackingNumberId, setTrackingNumberId] = useState<string | null>(null);
   const [sendingTracking, setSendingTracking] = useState(false);
   const [showDeliveryCost, setShowDeliveryCost] = useState(false);
+  const [originalSale, setOriginalSale] = useState<{ id: string; created_at: string; total: number; status: string; customer_name: string | null; paid_at: string | null } | null>(null);
+  const [loadingOriginal, setLoadingOriginal] = useState(false);
   const isRemoteSale = sale?.sale_type === 'online' || sale?.sale_type === 'live';
   // Rótulo derivado do modelo REAL do documento (55=NF-e, 65=NFC-e); fallback pelo tipo de venda.
   const fiscalTipoLabel = fiscalDoc?.modelo === 55 ? 'NF-e'
