@@ -194,6 +194,34 @@ export function POSSaleDetailDialog({ sale, onClose, customer, items, sellerName
     setTrackingCode(sale?.tracking_code || "");
   }, [sale?.id, sale?.tracking_code]);
 
+  // Se for venda-espelho de troca, busca o pedido original para o usuário conferir o cancelamento
+  useEffect(() => {
+    const isExchange = sale?.sale_type === "exchange" || sale?.external_source === "troca";
+    if (!sale || !isExchange || !sale.external_order_id) { setOriginalSale(null); return; }
+    let cancelled = false;
+    (async () => {
+      setLoadingOriginal(true);
+      try {
+        const { data: td } = await supabase
+          .from("trocas_devolucoes")
+          .select("pedido_original_id")
+          .eq("id", sale.external_order_id!)
+          .maybeSingle();
+        const origId = (td as any)?.pedido_original_id;
+        if (!origId) { if (!cancelled) setOriginalSale(null); return; }
+        const { data: orig } = await supabase
+          .from("pos_sales")
+          .select("id, created_at, total, status, customer_name, paid_at")
+          .eq("id", origId)
+          .maybeSingle();
+        if (!cancelled) setOriginalSale((orig as any) || null);
+      } finally {
+        if (!cancelled) setLoadingOriginal(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [sale?.id, sale?.external_order_id, sale?.sale_type, sale?.external_source]);
+
   const handleSaveTracking = async () => {
     if (!sale) return;
     setSavingTracking(true);
