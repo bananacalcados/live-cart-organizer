@@ -71,6 +71,7 @@ interface Sale {
   mercadopago_payment_id?: string | null;
   external_source?: string | null;
   tracking_code?: string | null;
+  external_order_id?: string | null;
 }
 
 const GATEWAY_LABELS: Record<string, string> = {
