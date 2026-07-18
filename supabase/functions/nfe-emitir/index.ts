@@ -265,8 +265,29 @@ Deno.serve(async (req) => {
       };
     }
 
+    // Idempotência: se já existe uma NF-e autorizada para este pos_sale_id / order_id,
+    // reutiliza (evita rejeição "Já foi emitida uma nota fiscal com o identificador interno…").
+    {
+      const q = supabase.from("fiscal_documents")
+        .select("id, status, chave_acesso, numero, protocolo, danfe_url")
+        .eq("status", "authorized")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (order.source === "sale") q.eq("pos_sale_id", order.source_id);
+      else q.eq("order_id", order.source_id);
+      const { data: existing } = await q.maybeSingle();
+      if (existing) {
+        return new Response(JSON.stringify({
+          ok: true, reused: true, document_id: (existing as any).id,
+          numero: (existing as any).numero, chave_acesso: (existing as any).chave_acesso,
+          protocolo: (existing as any).protocolo, danfe_url: (existing as any).danfe_url,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
+      }
+    }
+
     const items = order.items;
     if (!items.length) throw new Error("Pedido sem itens");
+
 
     // Fallback Tiny: completa endereço/CPF ausentes em pedidos Beta (sync sem endereco_entrega
     // ou pedidos do checkout-transparente). Busca on-demand no Tiny e persiste de volta para
