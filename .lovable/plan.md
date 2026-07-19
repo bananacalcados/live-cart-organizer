@@ -1,104 +1,71 @@
-## Objetivo
+# Enquetes com resultado auditável + enriquecimento de cadastro
 
-Tornar toda movimentação de estoque **auditável e classificada** (Entrada / Saída / Balanço), com um **histórico completo por variação** dentro do modal de edição.
+## Diagnóstico (o que já existe hoje)
 
----
+**Campo de tamanho de calçado — já existe em quase todo lugar:**
+- `customers_unified.shoe_size` (text) + `purchased_sizes` (text[])
+- `pos_customers.shoe_size`
+- `ad_leads.shoe_size` (com índice)
+- `lp_leads` **NÃO tem** — precisa adicionar
 
-## Diagnóstico atual
+**Como as enquetes funcionam hoje:**
+- Criadas em `group_campaign_scheduled_messages` (`type='poll'`, `poll_options jsonb`, `poll_max_options int`).
+- Enviadas via `uazapi-send-extra` (endpoint `/send/menu` type `poll`) para grupos VIP.
+- Cada envio gera uma linha em `group_campaign_block_dispatches` com `scheduled_message_id` + `message_id` retornado pela uazapi (é o ID da enquete no WhatsApp).
+- Votos chegam no `uazapi-webhook` como `messageType = "pollupdatemessage"`. O código já detecta (`isPoll = true`) e chama `recordGroupActivity` gravando em `whatsapp_group_member_activity` com `activity_type='poll_vote'`, `content = opção votada`, `message_id`, `group_id`, `phone`.
 
-- Tabela `pos_stock_adjustments` já registra a maioria das movimentações (`direction in/out`, `sale_id`, `sale_event`, `reason`, `previous_stock`, `new_stock`, `seller`) — boa base, **não precisa recriar**.
-- **Problemas hoje:**
-  1. Não existe conceito de **"Balanço"** — balanços gravam como `in`/`out` misturados às vendas.
-  2. O modal de edição salva estoque via `UPDATE` cru em `pos_products`, **sem gerar linha** em `pos_stock_adjustments` → correções manuais somem do histórico.
-  3. Trocas/devoluções gravam apenas com `reason` textual, sem link para `trocas_devolucoes.id`/número.
-  4. Não há UI para ver o histórico de uma variação.
-  5. Página inteira ainda pode remontar em alguns fluxos que não usam `onLocalUpdate`.
-
----
-
-## Plano (4 fases, cada uma independente e reversível)
-
-### Fase 1 — Banco (migration)
-- Adicionar em `pos_stock_adjustments`:
-  - `movement_type text` com CHECK `IN ('entrada','saida','balanco','venda','troca','devolucao','transferencia','ajuste')`.
-  - `exchange_id uuid` (FK opcional → `trocas_devolucoes.id`).
-  - `exchange_number text` (denormalizado, ex: `TD-2026-000009`).
-  - `count_id uuid` (FK opcional → `inventory_counts.id`).
-  - Backfill: `movement_type` derivado dos registros existentes (regra: `sale_id NOT NULL` → `venda`; `reason ILIKE '%balanço%'` → `balanco`; `reason ILIKE '%transfer%'` → `transferencia`; `reason ILIKE '%troca%'` → `troca`; senão `direction`=`in`→`entrada`, `out`→`saida`).
-- Índice `(product_id, created_at DESC)` para o histórico.
-- **Não altera nada existente que já grava** — só adiciona colunas nullable.
-
-### Fase 2 — Blindagem de gravação
-- Trigger `AFTER UPDATE OF stock ON pos_products` que, **se não houver linha correspondente em `pos_stock_adjustments` nos últimos 2 segundos para o mesmo product_id**, insere uma linha `movement_type='ajuste'` com `previous_stock`/`new_stock` e `reason='Ajuste direto sem classificação'`.
-  - Garantia: nenhuma alteração de estoque escapa do log, mesmo que código antigo faça UPDATE cru.
-- Ajustar funções que já gravam corretamente (venda, troca, transferência, balanço) para passar `movement_type` explícito → a trigger detecta e não duplica.
-
-### Fase 3 — Frontend: seletor Entrada/Saída/Balanço no modal
-No `PosSkuEditDialog` (aba "Editar"):
-- Substituir o input único de "Estoque" por:
-  - **Radio/Select**: `Entrada` | `Saída` | `Balanço`.
-  - Input de **quantidade** (positiva).
-  - Input de **motivo** (obrigatório para Balanço, opcional para Entrada/Saída).
-- Ao salvar, chamar edge function `pos-stock-movement` que:
-  - `entrada`: `stock += qty`, grava `movement_type='entrada'`.
-  - `saida`: `stock -= qty` (bloqueia negativo), grava `movement_type='saida'`.
-  - `balanco`: `stock = qty` (absoluto), grava `movement_type='balanco'` com `previous_stock`/`new_stock`.
-- **Sem recarregar página**: usar `onLocalUpdate({ id, stock: newStock })` (já existe) → tela não remonta.
-- Preço/Custo/SKU/Barcode continuam salvando por `UPDATE` direto (não mexem em estoque).
-
-### Fase 4 — Aba "Histórico" no modal
-Nova `TabsTrigger value="history"` ao lado de Editar/Transferir:
-- Query: `pos_stock_adjustments WHERE product_id = sku.id ORDER BY created_at DESC LIMIT 200`.
-- Colunas: **Data/hora · Tipo (badge colorido) · Qtd · De → Para · Referência · Motivo · Usuário**.
-- Coluna "Referência" renderiza link contextual:
-  - `venda` → `#PDV-{sale.numero}` (link para `POSSaleDetailDialog`).
-  - `troca`/`devolucao` → `{exchange_number}` (link para módulo de trocas).
-  - `balanco` → `Balanço de {data}` (link para `inventory_counts`).
-  - `transferencia` → `De {loja_origem} → {loja_destino}`.
-  - `ajuste`/`entrada`/`saida` → mostra `reason` + nome do usuário.
-- Filtros: por tipo e por período.
-- Botão "Exportar CSV" para uso fiscal.
+**Gaps identificados:**
+1. `whatsapp_group_member_activity` tem 0 linhas — a função `recordGroupActivity` só grava se o telefone existir em `whatsapp_group_members`. Votos de quem ainda não foi sincronizado se perdem.
+2. Não há vínculo direto entre o `message_id` do voto e o `scheduled_message_id` da enquete original → hoje é impossível montar "resultado da enquete X".
+3. Nada escreve `shoe_size` (ou outro campo) no cadastro do cliente/lead quando ele vota.
+4. Não há UI de "Resultado da enquete".
 
 ---
 
-## Compatibilidade / risco
-- Todas as colunas novas são nullable → código antigo continua gravando sem quebrar.
-- Trigger de blindagem é idempotente (janela de 2s) → não duplica linhas de fluxos que já gravam.
-- Nenhum trigger existente é alterado nesta primeira leva; apenas complementado.
-- Rollback: `DROP` das colunas novas e da trigger volta ao estado atual sem perda.
+## Plano (3 camadas, sem quebrar nada)
+
+### 1. Persistência dos votos (base para tudo)
+- Nova tabela `group_poll_votes` (id, scheduled_message_id, group_id, instance_id, phone, phone_suffix8, option_index, option_text, message_id UNIQUE, customer_unified_id nullable, voted_at). GRANTs + RLS (leitura autenticada, escrita service_role).
+- Migração: adicionar `poll_message_id text` em `group_campaign_block_dispatches` (já existe `message_id` do envio — reaproveitar) e índice para lookup rápido.
+- No `uazapi-webhook`, quando `isPoll`:
+  - Continuar gravando em `whatsapp_group_member_activity` (compatibilidade), mas **sem depender** de estar em `whatsapp_group_members`.
+  - Extrair a(s) opção(ões) escolhida(s) do payload da uazapi (`message.poll` / `pollupdatemessage`) — hoje só grava `displayMessage`.
+  - Localizar o `scheduled_message_id` cruzando o `poll_message_id` do voto com `group_campaign_block_dispatches.message_id` do mesmo grupo/instância.
+  - Inserir/upsert em `group_poll_votes` (UNIQUE em `message_id + phone` para permitir troca de voto).
+  - Resolver `customer_unified_id` via `phone_suffix8`.
+
+### 2. Enriquecimento automático de cadastro (opcional por enquete)
+- Adicionar em `group_campaign_scheduled_messages`:
+  - `poll_enrichment_field text` (ex.: `shoe_size`, `preferred_style`, `gender`)
+  - `poll_enrichment_map jsonb` (mapa `{ "0": "36", "1": "37", ... }` — traduz índice/label da opção para o valor gravado)
+- Na UI do `ScheduledMessageForm` (bloco "Enquete"): novo select "Salvar resposta em…" (nenhum | Tamanho de calçado | Estilo preferido | Gênero | Tag customizada) e, quando habilitado, campo por opção mapeando ao valor final.
+- Adicionar coluna `shoe_size text` em `lp_leads` (paridade com `ad_leads`).
+- No processamento do voto (item 1), se a enquete tem `poll_enrichment_field` definido:
+  - Atualizar `customers_unified.<campo>` (via `phone_suffix8`).
+  - Se não houver `customers_unified`, atualizar `lp_leads`/`ad_leads` pelo telefone.
+  - Registrar em `source_origins` que o dado veio de "enquete X".
+  - Não sobrescrever se já preenchido, a menos que a enquete marque `overwrite=true`.
+
+### 3. UI de resultado (leitura)
+- Em `VipGroupsAnalyticsDashboard` (ou nova aba dentro do card da mensagem agendada): "Resultado da enquete" com:
+  - Total de votos, votos por opção (%), lista de quem votou (nome + telefone + link p/ ficha), export CSV.
+  - Fonte: `group_poll_votes` filtrado por `scheduled_message_id`.
 
 ---
 
-## Detalhes técnicos
+## Riscos e mitigação
+- **Webhook**: mudança é aditiva (novo insert em nova tabela + upsert). Nada removido. Se falhar, o fluxo atual (`whatsapp_group_member_activity`) continua.
+- **Enriquecimento**: opt-in por enquete via novo campo → enquetes existentes não mudam de comportamento.
+- **Formato do payload uazapi**: antes de escrever, adicionar log temporário no webhook por 24h para confirmar a estrutura real de `pollupdatemessage` (nome do campo com a opção escolhida) e ajustar o parser.
+- **Duplicidade de voto**: UNIQUE(message_id, phone) + upsert respeitando o mais recente.
+- **Privacidade**: `group_poll_votes` só acessível a authenticated (padrão dos outros dados de marketing).
 
-**Migration esperada:**
-```sql
-ALTER TABLE pos_stock_adjustments
-  ADD COLUMN movement_type text,
-  ADD COLUMN exchange_id uuid REFERENCES trocas_devolucoes(id) ON DELETE SET NULL,
-  ADD COLUMN exchange_number text,
-  ADD COLUMN count_id uuid REFERENCES inventory_counts(id) ON DELETE SET NULL;
+## Validação após implementar
+1. Criar enquete de teste "Que tamanho você calça?" com opções 34–41 e `poll_enrichment_field=shoe_size`.
+2. Disparar em 1 grupo pequeno.
+3. Votar de 2–3 telefones.
+4. Conferir: linhas em `group_poll_votes`, `customers_unified.shoe_size` preenchido, painel de resultado exibindo contagem correta.
 
-CREATE INDEX idx_psa_product_created ON pos_stock_adjustments(product_id, created_at DESC);
-
--- Backfill classificação
-UPDATE pos_stock_adjustments SET movement_type = CASE
-  WHEN sale_id IS NOT NULL THEN 'venda'
-  WHEN reason ILIKE '%balanço%' OR reason ILIKE '%balanco%' THEN 'balanco'
-  WHEN reason ILIKE '%transfer%' THEN 'transferencia'
-  WHEN reason ILIKE '%troca%' THEN 'troca'
-  WHEN reason ILIKE '%devoluç%' THEN 'devolucao'
-  WHEN direction='in' THEN 'entrada'
-  ELSE 'saida'
-END WHERE movement_type IS NULL;
-
-ALTER TABLE pos_stock_adjustments
-  ADD CONSTRAINT psa_movement_type_chk
-  CHECK (movement_type IN ('entrada','saida','balanco','venda','troca','devolucao','transferencia','ajuste'));
-```
-
-**Nova edge function:** `pos-stock-movement` (entrada/saida/balanço, service-role, transacional).
-
----
-
-Aprova para eu implementar as 4 fases?
+## Escopo fora deste plano (fica para depois)
+- Enquetes 1‑a‑1 (fora de grupo).
+- Enquetes vindas de outros provedores (Meta Cloud, WaSender) — a estrutura já suporta, mas o parser específico fica para quando for necessário.
