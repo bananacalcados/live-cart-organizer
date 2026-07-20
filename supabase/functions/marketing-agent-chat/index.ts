@@ -126,6 +126,24 @@ function sourceRef(dispatchIds: string[], bucket: string, desde?: string | null,
   return { source: "dispatch_result", dispatch_ids: dispatchIds, bucket, desde: desde ?? null, ate: ate ?? null };
 }
 
+function canonicalDispatchBucket(raw: any): string | null {
+  const bucket = String(raw || "").trim();
+  const aliases: Record<string, string> = {
+    engaged_unique: "engaged",
+    read_unique: "read",
+    failed_unique: "failed",
+    converted_unique: "converted",
+    not_converted_unique: "not_converted",
+    replied_unique: "replied",
+    read_not_converted_unique: "read_not_converted",
+    read_converted_unique: "read_converted",
+  };
+  const canonical = aliases[bucket] || bucket;
+  return ["engaged", "read", "failed", "converted", "not_converted", "replied", "read_not_converted", "read_converted"].includes(canonical)
+    ? canonical
+    : null;
+}
+
 async function analyzeDispatchResult(supabase: any, input: any): Promise<{ result: any; phoneLists: any }> {
   const ids: string[] = Array.isArray(input?.dispatch_ids) ? input.dispatch_ids : [];
   if (!ids.length) return { result: { error: "dispatch_ids obrigatório" }, phoneLists: null };
@@ -453,8 +471,8 @@ async function analyzeDispatchResult(supabase: any, input: any): Promise<{ resul
 
 async function resolveDispatchSourcePhones(supabase: any, ref: any): Promise<string[]> {
   if (!ref || !Array.isArray(ref.dispatch_ids) || !ref.dispatch_ids.length) return [];
-  const bucket = String(ref.bucket || "");
-  if (!["engaged", "read", "failed", "converted", "not_converted", "replied", "read_not_converted", "read_converted"].includes(bucket)) return [];
+  const bucket = canonicalDispatchBucket(ref.bucket);
+  if (!bucket) return [];
   const { phoneLists } = await analyzeDispatchResult(supabase, {
     dispatch_ids: ref.dispatch_ids,
     desde: ref.desde ?? undefined,
@@ -754,11 +772,15 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
     const sourceRefPayload = payload.source_ref ?? null;
     const src = payload.source ?? sourceRefPayload?.source ?? null;
     const rawInputCount = phonesIn.length;
-    if (!phonesIn.length && (src === "dispatch_result" || Array.isArray(sourceRefPayload?.dispatch_ids))) {
-      phonesIn = await resolveDispatchSourcePhones(supabase, sourceRefPayload);
+    // Quando existe source_ref, ele é a fonte canônica. Não use uma lista parcial
+    // enviada pelo modelo (ex.: sample/trecho) como resultado final do público.
+    if (src === "dispatch_result" || Array.isArray(sourceRefPayload?.dispatch_ids)) {
+      const resolved = await resolveDispatchSourcePhones(supabase, sourceRefPayload);
+      if (resolved.length) phonesIn = resolved;
     }
-    if (!phonesIn.length && (src === "leads_pool" || (sourceRefPayload && (sourceRefPayload.desde || sourceRefPayload.canais)))) {
-      phonesIn = await resolveLeadsPoolPhones(supabase, sourceRefPayload);
+    if (src === "leads_pool" || (sourceRefPayload && (sourceRefPayload.desde || sourceRefPayload.canais))) {
+      const resolved = await resolveLeadsPoolPhones(supabase, sourceRefPayload);
+      if (resolved.length) phonesIn = resolved;
     }
     const resolvedCount = phonesIn.length;
     const seen = new Set<string>();
