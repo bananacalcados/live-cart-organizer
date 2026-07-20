@@ -1273,6 +1273,8 @@ export function MassTemplateDispatcher() {
         name: r?.name || null,
       };
     });
+    // Ravena é loja externa: não entra no CRM unificado nem no motor de cota.
+    const skipUnify = audienceSource === 'ravena';
     // Batches de 1000 para não estourar payload em audiências grandes
     let totalInserted = 0;
     let lastSummary: any = null;
@@ -1284,7 +1286,8 @@ export function MassTemplateDispatcher() {
         p_tipo_comunicacao: tipo,
         p_provider: provider,
         p_overrides: [],
-      });
+        p_skip_unify: skipUnify,
+      } as any);
       if (error) {
         console.error('enqueue_dispatch_recipients_guarded error:', error);
         toast.error(`Motor de cota bloqueou: ${error.message}`);
@@ -1296,6 +1299,7 @@ export function MassTemplateDispatcher() {
     }
     return { inserted: totalInserted, summary: lastSummary };
   };
+
 
   // Mass send — background via Edge Function
   const handleMassSend = async () => {
