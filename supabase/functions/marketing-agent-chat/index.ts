@@ -454,7 +454,7 @@ async function analyzeDispatchResult(supabase: any, input: any): Promise<{ resul
 async function resolveDispatchSourcePhones(supabase: any, ref: any): Promise<string[]> {
   if (!ref || !Array.isArray(ref.dispatch_ids) || !ref.dispatch_ids.length) return [];
   const bucket = String(ref.bucket || "");
-  if (!["engaged", "read", "failed", "converted", "not_converted", "replied"].includes(bucket)) return [];
+  if (!["engaged", "read", "failed", "converted", "not_converted", "replied", "read_not_converted", "read_converted"].includes(bucket)) return [];
   const { phoneLists } = await analyzeDispatchResult(supabase, {
     dispatch_ids: ref.dispatch_ids,
     desde: ref.desde ?? undefined,
