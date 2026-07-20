@@ -10895,6 +10895,108 @@ export type Database = {
         }
         Relationships: []
       }
+      pos_boletos: {
+        Row: {
+          address_city: string
+          address_complement: string | null
+          address_neighborhood: string
+          address_number: string
+          address_state: string
+          address_street: string
+          address_zip: string
+          amount: number
+          created_at: string
+          created_by: string | null
+          customer_cpf: string
+          customer_email: string
+          customer_name: string
+          customer_phone: string | null
+          description: string | null
+          due_date: string
+          error_message: string | null
+          id: string
+          mp_account_id: string | null
+          mp_barcode: string | null
+          mp_boleto_url: string | null
+          mp_payment_id: string | null
+          mp_pix_payment_id: string | null
+          mp_pix_qr_base64: string | null
+          mp_pix_qr_code: string | null
+          paid_at: string | null
+          pdf_path: string | null
+          seller_id: string | null
+          status: string
+          store_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          address_city: string
+          address_complement?: string | null
+          address_neighborhood: string
+          address_number: string
+          address_state: string
+          address_street: string
+          address_zip: string
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          customer_cpf: string
+          customer_email: string
+          customer_name: string
+          customer_phone?: string | null
+          description?: string | null
+          due_date: string
+          error_message?: string | null
+          id?: string
+          mp_account_id?: string | null
+          mp_barcode?: string | null
+          mp_boleto_url?: string | null
+          mp_payment_id?: string | null
+          mp_pix_payment_id?: string | null
+          mp_pix_qr_base64?: string | null
+          mp_pix_qr_code?: string | null
+          paid_at?: string | null
+          pdf_path?: string | null
+          seller_id?: string | null
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address_city?: string
+          address_complement?: string | null
+          address_neighborhood?: string
+          address_number?: string
+          address_state?: string
+          address_street?: string
+          address_zip?: string
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          customer_cpf?: string
+          customer_email?: string
+          customer_name?: string
+          customer_phone?: string | null
+          description?: string | null
+          due_date?: string
+          error_message?: string | null
+          id?: string
+          mp_account_id?: string | null
+          mp_barcode?: string | null
+          mp_boleto_url?: string | null
+          mp_payment_id?: string | null
+          mp_pix_payment_id?: string | null
+          mp_pix_qr_base64?: string | null
+          mp_pix_qr_code?: string | null
+          paid_at?: string | null
+          pdf_path?: string | null
+          seller_id?: string | null
+          status?: string
+          store_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pos_cash_movements: {
         Row: {
           amount: number

@@ -36,6 +36,7 @@ import { CreateSupportTicketDialog } from "@/components/CreateSupportTicketDialo
 import { ExportConversationDialog } from "@/components/chat/ExportConversationDialog";
 import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
+import { POSGenerateBoletoDialog } from "./POSGenerateBoletoDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
 import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 
@@ -142,6 +143,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showCheckout, setShowCheckout] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showPix, setShowPix] = useState(false);
+  const [showBoleto, setShowBoleto] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
@@ -1941,6 +1943,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   <QrCode className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">PIX</span>
                 </Button>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-orange-500" onClick={() => setShowBoleto(true)} title="Gerar Boleto" disabled={requiresInstanceSelection}>
+                  <FileText className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Boleto</span>
+                </Button>
                 <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => setShowCatalog(true)} title="Catálogo" disabled={requiresInstanceSelection}>
                   <ShoppingBag className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Catálogo</span>
@@ -2328,6 +2334,19 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         <POSWhatsAppPixDialog
           open={showPix}
           onOpenChange={setShowPix}
+          storeId={storeId}
+          phone={selectedPhone}
+          customerName={selectedConversation?.customerName}
+          sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
+          selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
+        />
+      )}
+
+      {/* Boleto Dialog */}
+      {selectedPhone && (
+        <POSGenerateBoletoDialog
+          open={showBoleto}
+          onOpenChange={setShowBoleto}
           storeId={storeId}
           phone={selectedPhone}
           customerName={selectedConversation?.customerName}

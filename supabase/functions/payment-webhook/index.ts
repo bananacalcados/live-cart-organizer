@@ -219,6 +219,39 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
 
   console.log(`MercadoPago payment ${paymentId} status=${status}`);
 
+  // Boleto sob demanda (PDV chat): external_reference = "boleto:<uuid>"
+  const extRefStr = String(mpPayment?.external_reference || "");
+  if (extRefStr.startsWith("boleto:")) {
+    const boletoId = extRefStr.slice("boleto:".length);
+    const newStatus = status === "approved" ? "paid"
+      : status === "cancelled" || status === "refunded" ? "cancelled"
+      : status === "expired" ? "expired"
+      : "pending";
+    const patch: Record<string, unknown> = { status: newStatus };
+    if (newStatus === "paid") patch.paid_at = new Date().toISOString();
+    const { data: bol } = await supabase
+      .from("pos_boletos")
+      .update(patch)
+      .eq("id", boletoId)
+      .select("id, status, customer_phone, amount, customer_name")
+      .maybeSingle();
+    console.log(`[mercadopago] boleto ${boletoId} -> ${newStatus} (row=${!!bol})`);
+
+    if (newStatus === "paid" && bol?.customer_phone) {
+      try {
+        await supabase.functions.invoke("blocked-buyer-sale-alert", {
+          body: {
+            adminPhone: "5533991955003",
+            message: `✅ Boleto pago!\nCliente: ${bol.customer_name}\nValor: R$ ${Number(bol.amount).toFixed(2).replace(".", ",")}\nBoleto: ${boletoId}`,
+          },
+        }).catch(() => {});
+      } catch { /* opcional */ }
+    }
+    return new Response(JSON.stringify({ ok: true, boleto: boletoId, status: newStatus }), {
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
+  }
+
   if (status !== "approved") {
     console.log(`MercadoPago status ${status} not actionable, skipping.`);
     return new Response(JSON.stringify({ ok: true, skipped: true, status }), {
