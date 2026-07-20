@@ -2142,16 +2142,32 @@ export function MassTemplateDispatcher() {
               <span className="text-xs font-medium text-blue-800">Público salvo:</span>
               <SavedAudiencePicker
                 activeId={savedAudienceMeta?.id ?? null}
-                onApply={(suffixes, meta) => {
+                onApply={(suffixes, meta, phoneList) => {
                   setSavedAudienceSuffixes(suffixes);
                   setSavedAudienceMeta(meta);
+                  if (phoneList && phoneList.length > 0) {
+                    const list: Recipient[] = phoneList.map((raw) => {
+                      const phone = String(raw).replace(/\D/g, '');
+                      return {
+                        phone,
+                        name: phone,
+                        firstName: '',
+                        lastName: '',
+                        source: 'lead' as any,
+                      };
+                    });
+                    setPhoneListRecipients(list);
+                  } else {
+                    setPhoneListRecipients(null);
+                  }
                 }}
               />
               {savedAudienceMeta && (
                 <Badge variant="secondary" className="text-[10px]">
-                  Restringindo a "{savedAudienceMeta.nome}" ({savedAudienceSuffixes?.size ?? 0} contatos)
+                  {phoneListRecipients ? "Lista fixa" : "Restringindo a"} "{savedAudienceMeta.nome}" ({savedAudienceSuffixes?.size ?? 0} contatos)
                 </Badge>
               )}
+
               <Button
                 size="sm"
                 variant="outline"
