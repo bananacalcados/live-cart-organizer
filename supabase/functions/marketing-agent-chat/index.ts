@@ -62,6 +62,7 @@ const READ_TOOLS = new Set([
   "get_dispatch_pressure",
   "preview_audience", "list_audiences",
   "list_dispatches", "get_dispatch_result", "get_leads_pool",
+  "get_touch_limits_matrix", "preview_quota_impact",
 ]);
 const PROPOSAL_TOOLS = new Set([
   "propor_decisao", "propor_acao_calendario", "propor_meta",
