@@ -138,13 +138,30 @@ async function analyzeDispatchResult(supabase: any, input: any): Promise<{ resul
   if (eH) return { result: { error: eH.message }, phoneLists: null };
 
   const histRows = hist ?? [];
+  if (!histRows.length) {
+    return { result: { error: `Nenhum dispatch_history encontrado para os IDs informados: ${ids.join(", ")}. Chame list_dispatches ANTES para obter IDs reais — não invente UUIDs.`, dispatch_ids_recebidos: ids }, phoneLists: null };
+  }
+  if (histRows.length < ids.length) {
+    const encontrados = new Set(histRows.map((r: any) => r.id));
+    const faltantes = ids.filter((x) => !encontrados.has(x));
+    return { result: { error: `IDs inexistentes em dispatch_history: ${faltantes.join(", ")}. Chame list_dispatches para obter IDs reais.`, ids_invalidos: faltantes }, phoneLists: null };
+  }
   const earliestStart = histRows.reduce((min: string | null, r: any) => {
     const dt = r.created_at || r.started_at;
     if (!dt) return min;
     return !min || dt < min ? dt : min;
   }, null as string | null);
+  // Sanity check: janela desde/ate MUITO anterior à data do disparo (ex.: LLM usou o ano errado)
+  if (input?.ate && earliestStart) {
+    const ateDt = new Date(`${input.ate}T23:59:59`);
+    const earliestDt = new Date(earliestStart);
+    if (ateDt.getTime() < earliestDt.getTime()) {
+      return { result: { error: `Janela informada (ate=${input.ate}) é ANTERIOR à data do disparo (${earliestStart.slice(0,10)}). Verifique o ANO — hoje é ${new Date().getFullYear()}. Refaça a chamada com desde/ate no ano correto.` }, phoneLists: null };
+    }
+  }
   const convFrom = input?.desde ? `${input.desde}T00:00:00` : earliestStart;
   const convTo = input?.ate ? `${input.ate}T23:59:59` : null;
+
 
   let recips: any[] = [];
   try {
