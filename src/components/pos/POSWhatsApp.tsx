@@ -2342,6 +2342,19 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
         />
       )}
 
+      {/* Boleto Dialog */}
+      {selectedPhone && (
+        <POSGenerateBoletoDialog
+          open={showBoleto}
+          onOpenChange={setShowBoleto}
+          storeId={storeId}
+          phone={selectedPhone}
+          customerName={selectedConversation?.customerName}
+          sendVia={(selectedSendNumber?.provider as 'meta' | 'zapi' | 'uazapi' | 'wasender') ?? 'zapi'}
+          selectedNumberId={selectedSendNumber?.id ?? selectedSendNumberId}
+        />
+      )}
+
       {/* Send Template Dialog */}
       {selectedPhone && selectedSendNumber?.provider === 'meta' && (
         <POSSendTemplateDialog
