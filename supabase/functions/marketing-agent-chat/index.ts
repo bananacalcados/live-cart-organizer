@@ -630,6 +630,77 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
     };
   }
 
+  if (name === "get_touch_limits_matrix") {
+    const { data, error } = await supabase
+      .from("dispatch_touch_limits")
+      .select("classificacao, cota_mensal, tipos_permitidos, min_dias_entre_toques, silencio_threshold_ignorados, observacoes")
+      .order("classificacao");
+    if (error) return { error: error.message };
+    return {
+      matriz: data ?? [],
+      como_ler: "cota_mensal = máximo de toques WhatsApp aprovados por mês para clientes dessa classificação. tipos_permitidos = só esses valores de tipo_comunicacao passam pelo motor. min_dias_entre_toques = intervalo mínimo entre 2 disparos para o mesmo cliente. classificacao 'silencio_puro' e 'silencio_reativavel' têm cota 0 (nunca recebem WhatsApp).",
+    };
+  }
+
+  if (name === "preview_quota_impact") {
+    const tipo = input?.tipo_comunicacao;
+    if (!tipo) return { error: "tipo_comunicacao é obrigatório (convite_live|oferta|reativacao|lancamento|pesquisa)" };
+    const provider = input?.provider ?? "meta_cloud";
+    const sampleSize = Math.min(Math.max(input?.sample_size ?? 20, 1), 100);
+
+    // Resolve telefones: phones[] direto OU source_ref
+    let phonesIn: string[] = Array.isArray(input?.phones) ? input.phones : [];
+    const sourceRef = input?.source_ref ?? null;
+    const src = input?.source ?? sourceRef?.source ?? null;
+    if (!phonesIn.length && sourceRef) {
+      if (src === "dispatch_result" || Array.isArray(sourceRef?.dispatch_ids)) {
+        phonesIn = await resolveDispatchSourcePhones(supabase, sourceRef);
+      } else if (src === "leads_pool" || sourceRef?.desde) {
+        phonesIn = await resolveLeadsPoolPhones(supabase, sourceRef);
+      }
+    }
+    if (!phonesIn.length) {
+      return { error: "Nenhum telefone resolvido. Envie phones[] ou source_ref válido (dispatch_result/leads_pool).", diagnostico: { source: src, source_ref: sourceRef } };
+    }
+
+    // Deduplica por sufixo8 e monta candidates
+    const seen = new Set<string>();
+    const candidates: Array<{ unified_id: null; phone: string }> = [];
+    for (const raw of phonesIn) {
+      const suf = normalizePhoneSuffix8(raw);
+      if (!suf || seen.has(suf)) continue;
+      seen.add(suf);
+      const e164 = normalizePhoneE164BR(raw) || String(raw);
+      candidates.push({ unified_id: null, phone: e164 });
+    }
+
+    // Motor de cota é o mesmo do disparo real (dispatch_quota_summary).
+    const { data, error } = await supabase.rpc("dispatch_quota_summary", {
+      p_candidates: candidates,
+      p_tipo_comunicacao: tipo,
+      p_provider: provider,
+      p_exclude_dispatch_id: null,
+      p_sample_size: sampleSize,
+    });
+    if (error) return { error: `motor de cota falhou: ${error.message}` };
+
+    const summary: any = data ?? {};
+    return {
+      tipo_comunicacao: tipo,
+      provider,
+      total_candidatos: summary.total ?? candidates.length,
+      elegiveis: summary.eligible ?? 0,
+      bloqueados_total: summary.excluded_total ?? 0,
+      bloqueados_por_motivo: summary.excluded_by_reason ?? {},
+      amostra_bloqueados: summary.sample_excluded ?? [],
+      custo_estimado_brl: summary.estimated_cost_brl ?? 0,
+      dedup_note: "phones deduplicados por sufixo de 8 dígitos antes de rodar o motor.",
+      como_usar: "Ao propor o público para disparo, comunique ao usuário o número 'elegiveis' — é o que efetivamente será entregue. 'bloqueados_por_motivo' mostra POR QUE (cota_estourada = já bateu limite mensal da classe; cooldown_ativo = ainda dentro de min_dias_entre_toques; classe_bloqueada = tipo_comunicacao não permitido para aquela classe; blacklist = bloqueado; sem_telefone = phone inválido).",
+    };
+  }
+
+
+
   const rpcMap: Record<string, { fn: string; args: (i: any) => any }> = {
     get_agent_memory: { fn: "get_agent_memory", args: (i) => ({ p_mes_ref: i.mes_ref ?? null }) },
     get_classificacao_summary: { fn: "get_classificacao_summary", args: () => ({}) },
