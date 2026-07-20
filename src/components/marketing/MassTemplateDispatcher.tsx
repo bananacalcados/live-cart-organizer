@@ -1593,16 +1593,18 @@ export function MassTemplateDispatcher() {
       if (!guardResult) throw new Error('tipo_comunicacao obrigatório');
       if (guardResult.inserted === 0) {
         toast.error("Motor de cota bloqueou todos os destinatários. Ajuste tipo de comunicação ou público.");
+        notifyQuotaBlocked(guardResult.excludedTotal, guardResult.excludedByReason);
         throw new Error('quota_zero');
       }
 
       if (editDispatchId) {
-        toast.success("✅ Disparo atualizado com sucesso");
+        toast.success(`✅ Disparo atualizado — ${guardResult.inserted} destinatários na lista`);
       } else if (mode === 'schedule') {
-        toast.success(`📅 Disparo agendado para ${new Date(scheduledDate).toLocaleString('pt-BR')}`);
+        toast.success(`📅 Disparo agendado (${guardResult.inserted} destinatários) para ${new Date(scheduledDate).toLocaleString('pt-BR')}`);
       } else {
-        toast.success("⏸️ Disparo salvo como pausado — dispare quando quiser pelo histórico");
+        toast.success(`⏸️ Disparo salvo pausado — ${guardResult.inserted} destinatários na lista`);
       }
+      notifyQuotaBlocked(guardResult.excludedTotal, guardResult.excludedByReason);
 
       setEditDispatchId(null);
       setScheduleMode('none');
