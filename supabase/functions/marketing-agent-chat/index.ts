@@ -728,19 +728,42 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
   if (kind === "propor_publico_lista") {
     let phonesIn: any[] = Array.isArray(payload.phones) ? payload.phones : [];
     const sourceRefPayload = payload.source_ref ?? null;
-    if (!phonesIn.length && (payload.source === "dispatch_result" || sourceRefPayload?.source === "dispatch_result" || Array.isArray(sourceRefPayload?.dispatch_ids))) {
+    const src = payload.source ?? sourceRefPayload?.source ?? null;
+    const rawInputCount = phonesIn.length;
+    if (!phonesIn.length && (src === "dispatch_result" || Array.isArray(sourceRefPayload?.dispatch_ids))) {
       phonesIn = await resolveDispatchSourcePhones(supabase, sourceRefPayload);
     }
+    if (!phonesIn.length && (src === "leads_pool" || (sourceRefPayload && (sourceRefPayload.desde || sourceRefPayload.canais)))) {
+      phonesIn = await resolveLeadsPoolPhones(supabase, sourceRefPayload);
+    }
+    const resolvedCount = phonesIn.length;
     const seen = new Set<string>();
     const normalized: string[] = [];
+    let invalidPhones = 0;
     for (const raw of phonesIn) {
       const e164 = normalizePhoneE164BR(raw);
       const suf = e164 ? e164.slice(-8) : normalizePhoneSuffix8(raw);
-      if (!suf || seen.has(suf)) continue;
+      if (!suf) { invalidPhones++; continue; }
+      if (seen.has(suf)) continue;
       seen.add(suf);
       normalized.push(e164 || String(raw));
     }
-    if (!normalized.length) return { error: "Nenhum telefone válido na lista" };
+    if (!normalized.length) {
+      return {
+        error: "Nenhum telefone válido na lista",
+        diagnostico: {
+          phones_recebidos_no_payload: rawInputCount,
+          phones_resolvidos_via_source_ref: resolvedCount,
+          phones_invalidos_descartados: invalidPhones,
+          source: src,
+          source_ref: sourceRefPayload,
+          dica: resolvedCount === 0
+            ? "source_ref não retornou telefones. Confirme desde/ate/canais em get_leads_pool ou dispatch_ids/bucket em get_dispatch_result antes de propor."
+            : "Todos os telefones falharam na normalização BR. Verifique o formato de origem.",
+        },
+      };
+    }
+
     const filtro = {
       mode: "phone_list",
       phones: normalized,
