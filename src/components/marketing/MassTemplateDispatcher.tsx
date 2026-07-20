@@ -998,21 +998,25 @@ export function MassTemplateDispatcher() {
 
   // Recipients after applying cooldown exclusion + público salvo (interseção por sufixo 8 díg.)
   const filteredRecipients = useMemo((): Recipient[] => {
-    let out = baseRecipients;
+    // Modo phone_list: a lista fixa é a fonte da verdade — ignora filtros de CRM/leads.
+    let out: Recipient[] = phoneListRecipients ? phoneListRecipients : baseRecipients;
     if (cooldownApplied && cooldownExcludedPhones.size > 0) {
       out = out.filter(r => {
         const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
         return !cooldownExcludedPhones.has(suffix);
       });
     }
-    if (savedAudienceSuffixes) {
+    // Só aplica intersecção por sufixo quando NÃO estamos em phone_list
+    // (nesse caso o próprio phoneListRecipients já é o filtro).
+    if (savedAudienceSuffixes && !phoneListRecipients) {
       out = out.filter(r => {
         const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
         return savedAudienceSuffixes.has(suffix);
       });
     }
     return out;
-  }, [baseRecipients, cooldownApplied, cooldownExcludedPhones, savedAudienceSuffixes]);
+  }, [baseRecipients, cooldownApplied, cooldownExcludedPhones, savedAudienceSuffixes, phoneListRecipients]);
+
 
 
   // How many of the CURRENT audience were actually removed by the cooldown
