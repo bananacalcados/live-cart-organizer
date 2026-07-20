@@ -40,6 +40,10 @@ const TOOLS_ANTHROPIC = [
   { name: "propor_atualizar_publico", description: "PROPÕE atualizar nome e/ou filtro_json de um público existente. Só grava após confirmação.", input_schema: { type: "object", properties: { id: { type: "string" }, nome: { type: "string" }, filtro_json: { type: "object" } }, required: ["id"] } },
   { name: "preview_audience", description: "READ. Calcula quantos clientes o filtro_json atinge (crm_customers_v via bc_match_audience) e devolve amostra de até 50. Use sempre ANTES de propor_publico para validar o filtro e mostrar volume ao usuário.", input_schema: { type: "object", properties: { filtro_json: { type: "object" } }, required: ["filtro_json"] } },
   { name: "list_audiences", description: "READ. Lista os públicos já salvos em campanha_publicos (id, nome, filtro_json, updated_at) para evitar duplicatas.", input_schema: { type: "object", properties: {} } },
+  { name: "list_dispatches", description: "READ. Lista disparos em massa (dispatch_history) no período: id, campaign_name/template_name, started_at, audience_source, total/sent/failed, status, provider. Use para escolher IDs a analisar depois com get_dispatch_result.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, limite: { type: "integer", description: "Padrão 30, máx 100" } }, required: ["desde", "ate"] } },
+  { name: "get_dispatch_result", description: "READ. Resultado detalhado de um ou mais disparos: buckets de status (sent/delivered/read/failed), conversão (quem comprou em pos_sales após started_at cruzando telefone), replied (quem respondeu no whatsapp após envio). Para cada bucket devolve total e amostra até 200 telefones (formato E.164 sem +). Use os telefones em propor_publico_lista para criar públicos derivados como 'não converteram' ou 'engajaram e não compraram'.", input_schema: { type: "object", properties: { dispatch_ids: { type: "array", items: { type: "string" }, description: "IDs de dispatch_history" }, sample_limit: { type: "integer", description: "Padrão 200, máx 5000 telefones por bucket." } }, required: ["dispatch_ids"] } },
+  { name: "get_leads_pool", description: "READ. Pool bruto de leads em TODAS as bases (ad_leads, event_leads, lp_leads, link_page_leads) no período, deduplicado por sufixo de 8 dígitos. Retorna telefones, canal e opcionalmente exclui quem já é cliente com compra em customers_unified. Use para propor públicos como 'leads frescos que não compraram'.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, canais: { type: "array", items: { type: "string", enum: ["ad_leads", "event_leads", "lp_leads", "link_page_leads"] }, description: "Padrão: todas" }, excluir_compradores: { type: "boolean", description: "Se true, exclui leads que já têm total_orders>0 em customers_unified" }, limite: { type: "integer", description: "Máx 10000, padrão 5000" } }, required: ["desde", "ate"] } },
+  { name: "propor_publico_lista", description: "PROPÕE criar um público em campanha_publicos a partir de uma LISTA FIXA de telefones (formato { mode: 'phone_list', phones: [...] }). Use quando o público NÃO cabe nos filtros padrão do CRM (ex.: 'quem respondeu a campanha X', 'leads recentes que não compraram'). Só grava após confirmação. Sempre mostre ao usuário quantos telefones e como foram obtidos antes de propor.", input_schema: { type: "object", properties: { nome: { type: "string" }, phones: { type: "array", items: { type: "string" }, description: "Telefones (aceita E.164, DDD+numero, com ou sem 55). O sistema normaliza." }, descricao_curta: { type: "string" } }, required: ["nome", "phones"] } },
 ];
 
 const TOOLS_OPENAI = TOOLS_ANTHROPIC.map((t) => ({
@@ -54,12 +58,14 @@ const READ_TOOLS = new Set([
   "get_stock_by_size", "get_leads_by_channel", "get_leads_lookup", "get_campaign_results",
   "get_dispatch_pressure",
   "preview_audience", "list_audiences",
+  "list_dispatches", "get_dispatch_result", "get_leads_pool",
 ]);
 const PROPOSAL_TOOLS = new Set([
   "propor_decisao", "propor_acao_calendario", "propor_meta",
   "propor_entrada_calendario", "propor_meta_mensal_calendario",
-  "propor_publico", "propor_atualizar_publico",
+  "propor_publico", "propor_atualizar_publico", "propor_publico_lista",
 ]);
+
 
 async function executeReadTool(supabase: any, name: string, input: any): Promise<any> {
   if (name === "preview_audience") {
