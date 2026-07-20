@@ -537,6 +537,12 @@ PÚBLICOS POR LISTA FIXA DE TELEFONES (quando o filtro padrão NÃO cobre):
 - O público criado aparece em Marketing → Disparos exatamente como um público normal (com badge "lista fixa"). Não passa por filtro RFM/geografia — a lista é a verdade.
 - Não misture: se o público CABE nos filtros padrão (tamanho, RFM, cidade), prefira propor_publico. phone_list é para o que NÃO cabe.
 
+REGRA CRÍTICA — NUNCA "prometa e pare":
+- Se você decidir usar phone_list (por qualquer motivo — filtro RFM voltou 0, público não cabe nos filtros, usuário pediu público derivado de disparo), você DEVE emitir o tool_use propor_publico_lista NO MESMO TURNO em que anuncia a decisão. NUNCA escreva "vou criar via lista fixa" em texto sem também chamar a tool naquele turno — isso deixa a proposta sem gravar e o usuário sem o público.
+- Se preview_audience retornar 0 (ou filtro CRM claramente errado), NÃO tente montar 5 variações do filtro. Vá direto para phone_list usando os phones que você já tem de get_dispatch_result / get_leads_pool e emita propor_publico_lista imediatamente.
+- Quando o usuário confirmou criar MÚLTIPLOS públicos, emita todos os propor_publico_lista (ou propor_publico) NO MESMO TURNO em paralelo. Não faça um por vez esperando reconfirmação — a confirmação já foi dada.
+- Antes de responder texto puro sem tool_use, cheque: "o usuário está esperando gravação AGORA?". Se sim e você não chamou nenhuma tool de proposta neste turno, você errou — chame antes de escrever o texto final.
+
 
 
 
@@ -725,7 +731,7 @@ serve(async (req) => {
     async function runAnthropic(): Promise<void> {
       const msgs: any[] = history.map((m: any) => ({ role: m.role, content: m.content }));
       let steps = 0;
-      while (steps < 8) {
+      while (steps < 16) {
         steps++;
         const resp = await callAnthropic(ANTHROPIC_API_KEY!, anthropicModel, buildSystemPrompt(), msgs);
         const blocks: any[] = resp.content || [];
@@ -756,7 +762,7 @@ serve(async (req) => {
     async function runGateway(): Promise<void> {
       const msgs: any[] = [{ role: "system", content: buildSystemPrompt() }, ...history];
       let steps = 0;
-      while (steps < 8) {
+      while (steps < 16) {
         steps++;
         const resp = await callGateway(LOVABLE_API_KEY!, gatewayModel, msgs);
         const msg = resp.choices?.[0]?.message;
