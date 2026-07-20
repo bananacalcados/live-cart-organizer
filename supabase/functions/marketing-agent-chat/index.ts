@@ -67,6 +67,24 @@ const PROPOSAL_TOOLS = new Set([
 ]);
 
 
+function normalizePhoneSuffix8(raw: any): string | null {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  if (digits.length < 8) return null;
+  return digits.slice(-8);
+}
+
+function normalizePhoneE164BR(raw: any): string | null {
+  let digits = String(raw ?? "").replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  if (digits.length >= 12 && digits.startsWith("55")) digits = digits.slice(2);
+  if (digits.length === 10) {
+    // DDD + 8 dígitos → insere 9
+    digits = digits.slice(0, 2) + "9" + digits.slice(2);
+  }
+  if (digits.length !== 11) return null;
+  return "55" + digits;
+}
+
 async function executeReadTool(supabase: any, name: string, input: any): Promise<any> {
   if (name === "preview_audience") {
     const filtro = input?.filtro_json ?? {};
@@ -94,6 +112,173 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
     if (error) return { error: error.message };
     return { publicos: data ?? [] };
   }
+  if (name === "list_dispatches") {
+    const limite = Math.min(input?.limite ?? 30, 100);
+    const { data, error } = await supabase
+      .from("dispatch_history")
+      .select("id, campaign_name, template_name, started_at, completed_at, audience_source, total_recipients, sent_count, failed_count, status, provider, tipo_comunicacao, shadow_mode")
+      .gte("started_at", input.desde)
+      .lte("started_at", input.ate + "T23:59:59")
+      .order("started_at", { ascending: false })
+      .limit(limite);
+    if (error) return { error: error.message };
+    return { disparos: data ?? [] };
+  }
+  if (name === "get_dispatch_result") {
+    const ids: string[] = Array.isArray(input?.dispatch_ids) ? input.dispatch_ids : [];
+    if (!ids.length) return { error: "dispatch_ids obrigatório" };
+    const sampleLimit = Math.min(input?.sample_limit ?? 200, 5000);
+
+    const { data: hist, error: eH } = await supabase
+      .from("dispatch_history")
+      .select("id, campaign_name, template_name, started_at, total_recipients, sent_count, failed_count, status, provider, audience_source")
+      .in("id", ids);
+    if (eH) return { error: eH.message };
+    const earliestStart = (hist ?? []).reduce((min: string | null, r: any) => {
+      if (!r.started_at) return min;
+      return !min || r.started_at < min ? r.started_at : min;
+    }, null as string | null);
+
+    const { data: recips, error: eR } = await supabase
+      .from("dispatch_recipients")
+      .select("dispatch_id, phone, status, sent_at, last_error")
+      .in("dispatch_id", ids)
+      .limit(50000);
+    if (eR) return { error: eR.message };
+
+    // Buckets por status
+    const buckets: Record<string, { phones: Set<string>; suffixes: Set<string> }> = {};
+    const suffixToPhone = new Map<string, string>();
+    const allEngagedSuffixes = new Set<string>();
+    for (const r of (recips ?? [])) {
+      const st = r.status || "pending";
+      const b = (buckets[st] ||= { phones: new Set(), suffixes: new Set() });
+      b.phones.add(r.phone);
+      const suf = normalizePhoneSuffix8(r.phone);
+      if (suf) {
+        b.suffixes.add(suf);
+        if (!suffixToPhone.has(suf)) suffixToPhone.set(suf, r.phone);
+        if (st === "sent" || st === "delivered" || st === "read") {
+          allEngagedSuffixes.add(suf);
+        }
+      }
+    }
+
+    // Conversão: pos_sales.customer_phone cujo suffix bate com engajados, criado após earliestStart
+    const convertedSuffixes = new Set<string>();
+    if (earliestStart && allEngagedSuffixes.size > 0) {
+      // Busca em batch — pega pos_sales pagas desde o start; filtra em memória por sufixo.
+      const { data: sales } = await supabase
+        .from("pos_sales")
+        .select("customer_phone, created_at")
+        .gte("created_at", earliestStart)
+        .neq("status_cancelamento", "cancelado")
+        .not("customer_phone", "is", null)
+        .limit(20000);
+      for (const s of (sales ?? [])) {
+        const suf = normalizePhoneSuffix8(s.customer_phone);
+        if (suf && allEngagedSuffixes.has(suf)) convertedSuffixes.add(suf);
+      }
+    }
+
+    // Replied: whatsapp_messages inbound cujo remetente bate por sufixo, após earliestStart
+    const repliedSuffixes = new Set<string>();
+    if (earliestStart && allEngagedSuffixes.size > 0) {
+      const { data: msgs } = await supabase
+        .from("whatsapp_messages")
+        .select("phone, direction, created_at")
+        .eq("direction", "inbound")
+        .gte("created_at", earliestStart)
+        .limit(50000);
+      for (const m of (msgs ?? [])) {
+        const suf = normalizePhoneSuffix8(m.phone);
+        if (suf && allEngagedSuffixes.has(suf)) repliedSuffixes.add(suf);
+      }
+    }
+
+    const notConvertedSuffixes = new Set<string>();
+    for (const suf of allEngagedSuffixes) if (!convertedSuffixes.has(suf)) notConvertedSuffixes.add(suf);
+
+    const sufSetToSample = (s: Set<string>) => {
+      const out: string[] = [];
+      for (const suf of s) {
+        const p = suffixToPhone.get(suf);
+        if (p) out.push(p);
+        if (out.length >= sampleLimit) break;
+      }
+      return out;
+    };
+
+    const bucketReport: any = {};
+    for (const [k, v] of Object.entries(buckets)) {
+      bucketReport[k] = { total: v.phones.size, sample: Array.from(v.phones).slice(0, Math.min(sampleLimit, 200)) };
+    }
+
+    return {
+      dispatches: hist ?? [],
+      totals_by_status: Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, v.phones.size])),
+      buckets: bucketReport,
+      engaged: { total: allEngagedSuffixes.size, note: "sent+delivered+read (dedup por sufixo 8)" },
+      converted: { total: convertedSuffixes.size, sample_phones: sufSetToSample(convertedSuffixes) },
+      not_converted: { total: notConvertedSuffixes.size, sample_phones: sufSetToSample(notConvertedSuffixes) },
+      replied: { total: repliedSuffixes.size, sample_phones: sufSetToSample(repliedSuffixes) },
+    };
+  }
+  if (name === "get_leads_pool") {
+    const canais: string[] = Array.isArray(input?.canais) && input.canais.length
+      ? input.canais
+      : ["ad_leads", "event_leads", "lp_leads", "link_page_leads"];
+    const limite = Math.min(input?.limite ?? 5000, 10000);
+    const desdeISO = input.desde;
+    const ateISO = input.ate + "T23:59:59";
+
+    const bySuffix = new Map<string, { phone: string; name: string | null; canal: string; created_at: string }>();
+
+    for (const canal of canais) {
+      const { data } = await supabase
+        .from(canal)
+        .select("phone, name, created_at")
+        .gte("created_at", desdeISO)
+        .lte("created_at", ateISO)
+        .order("created_at", { ascending: false })
+        .limit(limite);
+      for (const r of (data ?? [])) {
+        const suf = normalizePhoneSuffix8(r.phone);
+        if (!suf) continue;
+        if (!bySuffix.has(suf)) {
+          bySuffix.set(suf, { phone: r.phone, name: r.name ?? null, canal, created_at: r.created_at });
+        }
+      }
+    }
+
+    let removedBuyers = 0;
+    if (input?.excluir_compradores) {
+      const suffixes = Array.from(bySuffix.keys());
+      // Query customers_unified by suffix in chunks
+      for (let i = 0; i < suffixes.length; i += 500) {
+        const chunk = suffixes.slice(i, i + 500);
+        const { data: buyers } = await supabase
+          .from("customers_unified")
+          .select("telefone, total_orders")
+          .in("phone_suffix8", chunk)
+          .gt("total_orders", 0);
+        for (const b of (buyers ?? [])) {
+          const suf = normalizePhoneSuffix8(b.telefone);
+          if (suf && bySuffix.delete(suf)) removedBuyers++;
+        }
+      }
+    }
+
+    const leads = Array.from(bySuffix.values()).slice(0, limite);
+    return {
+      total: leads.length,
+      excluidos_por_ja_serem_compradores: removedBuyers,
+      canais_consultados: canais,
+      leads_sample: leads.slice(0, 200),
+      all_phones: leads.map((l) => l.phone),
+    };
+  }
+
   const rpcMap: Record<string, { fn: string; args: (i: any) => any }> = {
     get_agent_memory: { fn: "get_agent_memory", args: (i) => ({ p_mes_ref: i.mes_ref ?? null }) },
     get_classificacao_summary: { fn: "get_classificacao_summary", args: () => ({}) },
