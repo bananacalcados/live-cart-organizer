@@ -47,9 +47,10 @@ export function SavedAudiencePicker({ onApply, activeId }: Props) {
 
   const applyPublico = async (id: string) => {
     if (!id || id === "__none__") {
-      onApply(null, null);
+      onApply(null, null, null);
       return;
     }
+
     const row = rows.find((r) => r.id === id);
     if (!row) return;
     setApplying(true);
