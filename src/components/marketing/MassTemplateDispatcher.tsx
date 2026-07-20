@@ -1268,7 +1268,7 @@ export function MassTemplateDispatcher() {
     recipientMap: Map<string, Recipient>,
     tipo: TipoComunicacao,
     provider: string = 'meta_cloud',
-  ): Promise<{ inserted: number; summary: any } | null> => {
+  ): Promise<{ inserted: number; summary: any; excludedTotal: number; excludedByReason: Record<string, number> } | null> => {
     if (!tipo) {
       toast.error("Escolha o tipo de comunicação antes de disparar.");
       return null;
@@ -1286,6 +1286,8 @@ export function MassTemplateDispatcher() {
     // Batches de 1000 para não estourar payload em audiências grandes
     let totalInserted = 0;
     let lastSummary: any = null;
+    let excludedTotal = 0;
+    const excludedByReason: Record<string, number> = {};
     for (let i = 0; i < candidates.length; i += 1000) {
       const slice = candidates.slice(i, i + 1000);
       const { data, error } = await supabase.rpc('enqueue_dispatch_recipients_guarded', {
@@ -1304,9 +1306,37 @@ export function MassTemplateDispatcher() {
       const res = (data as any) || {};
       totalInserted += Number(res.inserted || 0);
       lastSummary = res.summary || lastSummary;
+      const s = res.summary || {};
+      excludedTotal += Number(s.excluded_total || 0);
+      const ebr = (s.excluded_by_reason || {}) as Record<string, number>;
+      for (const [k, v] of Object.entries(ebr)) {
+        excludedByReason[k] = (excludedByReason[k] || 0) + Number(v || 0);
+      }
     }
-    return { inserted: totalInserted, summary: lastSummary };
+    return { inserted: totalInserted, summary: lastSummary, excludedTotal, excludedByReason };
   };
+
+  // Warning legível pro operador: X pessoas bloqueadas pelo motor de cota + quebra por motivo.
+  const notifyQuotaBlocked = (excludedTotal: number, excludedByReason: Record<string, number>) => {
+    if (!excludedTotal) return;
+    const reasonLabels: Record<string, string> = {
+      cota_estourada: 'cota mensal atingida',
+      cooldown_ativo: 'ainda em cooldown',
+      classe_bloqueada: 'classe × tipo bloqueada',
+      min_dias_entre_toques: 'intervalo mínimo entre toques',
+      sem_telefone: 'sem telefone válido',
+      blacklist: 'bloqueado (blacklist)',
+      duplicado: 'duplicado na lista',
+    };
+    const parts = Object.entries(excludedByReason)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => `${v} ${reasonLabels[k] || k}`);
+    toast.warning(
+      `⚠️ ${excludedTotal} destinatário${excludedTotal === 1 ? '' : 's'} não pôde${excludedTotal === 1 ? '' : 'ram'} ser atingido${excludedTotal === 1 ? '' : 's'} (regra de disparos)`,
+      { description: parts.length ? parts.join(' · ') : undefined, duration: 12000 },
+    );
+  };
+
 
 
   // Mass send — background via Edge Function
@@ -1404,12 +1434,14 @@ export function MassTemplateDispatcher() {
         if (!guardResult) throw new Error('tipo_comunicacao obrigatório');
         if (guardResult.inserted === 0) {
           toast.error("Nenhum destinatário elegível — motor de cota bloqueou todos. Verifique tipo de comunicação e classificações.");
+          notifyQuotaBlocked(guardResult.excludedTotal, guardResult.excludedByReason);
           await supabase.from('dispatch_history').update({ status: 'failed' } as any).eq('id', dispatchId);
           setIsSending(false);
           return;
         }
         setSendProgress({ sent: 0, total: guardResult.inserted, failed: 0 });
         toast.success(`✅ ${guardResult.inserted} destinatários enfileirados (motor de cota aplicado).`);
+        notifyQuotaBlocked(guardResult.excludedTotal, guardResult.excludedByReason);
 
         // Só agora ativa — os destinatários elegíveis já estão inseridos pela RPC.
         const { error: actErr } = await supabase
@@ -1561,16 +1593,18 @@ export function MassTemplateDispatcher() {
       if (!guardResult) throw new Error('tipo_comunicacao obrigatório');
       if (guardResult.inserted === 0) {
         toast.error("Motor de cota bloqueou todos os destinatários. Ajuste tipo de comunicação ou público.");
+        notifyQuotaBlocked(guardResult.excludedTotal, guardResult.excludedByReason);
         throw new Error('quota_zero');
       }
 
       if (editDispatchId) {
-        toast.success("✅ Disparo atualizado com sucesso");
+        toast.success(`✅ Disparo atualizado — ${guardResult.inserted} destinatários na lista`);
       } else if (mode === 'schedule') {
-        toast.success(`📅 Disparo agendado para ${new Date(scheduledDate).toLocaleString('pt-BR')}`);
+        toast.success(`📅 Disparo agendado (${guardResult.inserted} destinatários) para ${new Date(scheduledDate).toLocaleString('pt-BR')}`);
       } else {
-        toast.success("⏸️ Disparo salvo como pausado — dispare quando quiser pelo histórico");
+        toast.success(`⏸️ Disparo salvo pausado — ${guardResult.inserted} destinatários na lista`);
       }
+      notifyQuotaBlocked(guardResult.excludedTotal, guardResult.excludedByReason);
 
       setEditDispatchId(null);
       setScheduleMode('none');
