@@ -43,7 +43,10 @@ const TOOLS_ANTHROPIC = [
   { name: "list_dispatches", description: "READ. Lista disparos em massa (dispatch_history) no período: id, campaign_name/template_name, started_at, audience_source, total/sent/failed, status, provider. Use para escolher IDs a analisar depois com get_dispatch_result.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, limite: { type: "integer", description: "Padrão 30, máx 100" } }, required: ["desde", "ate"] } },
   { name: "get_dispatch_result", description: "READ. Resultado detalhado de 1+ disparos com FATURAMENTO. Match DDD+8. Buckets consolidados (JÁ DEDUPLICADOS por telefone único; NUNCA some per-dispatch): engaged_unique, read_unique, read_not_converted_unique (quem LEU e não comprou), read_converted_unique, converted_unique, not_converted_unique (recebeu e não comprou), replied_unique, failed_unique. Use consolidated.source_refs.{bucket} em propor_publico_lista.", input_schema: { type: "object", properties: { dispatch_ids: { type: "array", items: { type: "string" }, description: "IDs de dispatch_history" }, sample_limit: { type: "integer", description: "Padrão 50, máx 500 telefones por bucket." }, desde: { type: "string", description: "YYYY-MM-DD opcional. Início da janela de conversão. Padrão: earliest started_at dos disparos." }, ate: { type: "string", description: "YYYY-MM-DD opcional. Fim da janela de conversão. Padrão: hoje." } }, required: ["dispatch_ids"] } },
   { name: "get_leads_pool", description: "READ. Pool bruto de leads em TODAS as bases (ad_leads, event_leads, lp_leads, link_page_leads) no período, deduplicado por sufixo de 8 dígitos. Retorna telefones, canal e opcionalmente exclui quem já é cliente com compra em customers_unified. Use para propor públicos como 'leads frescos que não compraram'.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, canais: { type: "array", items: { type: "string", enum: ["ad_leads", "event_leads", "lp_leads", "link_page_leads"] }, description: "Padrão: todas" }, excluir_compradores: { type: "boolean", description: "Se true, exclui leads que já têm total_orders>0 em customers_unified" }, limite: { type: "integer", description: "Máx 10000, padrão 5000" } }, required: ["desde", "ate"] } },
-  { name: "propor_publico_lista", description: "PROPÕE criar um público em campanha_publicos a partir de lista fixa. Para listas pequenas pode enviar phones[]. Para listas grandes: use source_ref e o servidor recalcula. Para disparo: source='dispatch_result', source_ref={dispatch_ids:[...], bucket:'not_converted', desde, ate}. Para leads: source='leads_pool', source_ref={desde, ate, canais?:[...], excluir_compradores?:bool}. Só grava após confirmação.", input_schema: { type: "object", properties: { nome: { type: "string" }, phones: { type: "array", items: { type: "string" }, description: "Telefones opcionais. Use apenas para listas pequenas/manuais." }, source: { type: "string", description: "dispatch_result | leads_pool | manual" }, source_ref: { type: "object", description: "Referência rastreável para recomputar a lista." }, descricao_curta: { type: "string" } }, required: ["nome"] } },
+  { name: "get_touch_limits_matrix", description: "READ. Retorna a matriz oficial de LIMITES DE DISPARO (dispatch_touch_limits): por classificação de cliente (quente/morno/frio/silencio_reativavel/silencio_puro/sem_classificacao) traz cota mensal máxima de toques, tipos_comunicacao permitidos e min_dias_entre_toques. É a MESMA regra que o motor de cota aplica no momento do disparo — use antes de propor um público para saber quantas mensagens cada segmento ainda aguenta esse mês.", input_schema: { type: "object", properties: {} } },
+  { name: "preview_quota_impact", description: "READ. SIMULA o motor de cota para uma lista/source_ref + tipo_comunicacao. Retorna quantos telefones passam (eligible), quantos são bloqueados (excluded_total) e a quebra por motivo (cota_estourada, cooldown_ativo, classe_bloqueada, min_dias_entre_toques, blacklist etc). USE SEMPRE antes de propor_publico_lista quando o público é para disparo — o número final entregue ao usuário deve ser 'eligible', não o bruto. Aceita phones[] direto OU source_ref de get_dispatch_result / get_leads_pool.", input_schema: { type: "object", properties: { tipo_comunicacao: { type: "string", enum: ["convite_live", "oferta", "reativacao", "lancamento", "pesquisa"], description: "OBRIGATÓRIO. Mesmo tipo que o disparo real usará." }, provider: { type: "string", description: "Padrão meta_cloud" }, phones: { type: "array", items: { type: "string" } }, source: { type: "string", description: "dispatch_result | leads_pool" }, source_ref: { type: "object", description: "Igual ao usado em propor_publico_lista" }, sample_size: { type: "integer", description: "Amostra de excluídos retornada. Padrão 20, máx 100." } }, required: ["tipo_comunicacao"] } },
+  { name: "propor_publico_lista", description: "PROPÕE criar um público em campanha_publicos a partir de lista fixa. Para listas pequenas pode enviar phones[]. Para listas grandes: use source_ref e o servidor recalcula. Para disparo: source='dispatch_result', source_ref={dispatch_ids:[...], bucket:'not_converted', desde, ate}. Para leads: source='leads_pool', source_ref={desde, ate, canais?:[...], excluir_compradores?:bool}. Se informar tipo_comunicacao_alvo o servidor roda preview de cota automaticamente e retorna quantos ficam elegíveis vs bloqueados. Só grava após confirmação.", input_schema: { type: "object", properties: { nome: { type: "string" }, phones: { type: "array", items: { type: "string" }, description: "Telefones opcionais. Use apenas para listas pequenas/manuais." }, source: { type: "string", description: "dispatch_result | leads_pool | manual" }, source_ref: { type: "object", description: "Referência rastreável para recomputar a lista." }, descricao_curta: { type: "string" }, tipo_comunicacao_alvo: { type: "string", enum: ["convite_live", "oferta", "reativacao", "lancamento", "pesquisa"], description: "Se informado, o servidor roda dispatch_quota_summary e devolve preview_quota junto do resultado." } }, required: ["nome"] } },
+
 ];
 
 const TOOLS_OPENAI = TOOLS_ANTHROPIC.map((t) => ({
@@ -59,6 +62,7 @@ const READ_TOOLS = new Set([
   "get_dispatch_pressure",
   "preview_audience", "list_audiences",
   "list_dispatches", "get_dispatch_result", "get_leads_pool",
+  "get_touch_limits_matrix", "preview_quota_impact",
 ]);
 const PROPOSAL_TOOLS = new Set([
   "propor_decisao", "propor_acao_calendario", "propor_meta",
@@ -626,6 +630,77 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
     };
   }
 
+  if (name === "get_touch_limits_matrix") {
+    const { data, error } = await supabase
+      .from("dispatch_touch_limits")
+      .select("classificacao, cota_mensal, tipos_permitidos, min_dias_entre_toques, silencio_threshold_ignorados, observacoes")
+      .order("classificacao");
+    if (error) return { error: error.message };
+    return {
+      matriz: data ?? [],
+      como_ler: "cota_mensal = máximo de toques WhatsApp aprovados por mês para clientes dessa classificação. tipos_permitidos = só esses valores de tipo_comunicacao passam pelo motor. min_dias_entre_toques = intervalo mínimo entre 2 disparos para o mesmo cliente. classificacao 'silencio_puro' e 'silencio_reativavel' têm cota 0 (nunca recebem WhatsApp).",
+    };
+  }
+
+  if (name === "preview_quota_impact") {
+    const tipo = input?.tipo_comunicacao;
+    if (!tipo) return { error: "tipo_comunicacao é obrigatório (convite_live|oferta|reativacao|lancamento|pesquisa)" };
+    const provider = input?.provider ?? "meta_cloud";
+    const sampleSize = Math.min(Math.max(input?.sample_size ?? 20, 1), 100);
+
+    // Resolve telefones: phones[] direto OU source_ref
+    let phonesIn: string[] = Array.isArray(input?.phones) ? input.phones : [];
+    const sourceRef = input?.source_ref ?? null;
+    const src = input?.source ?? sourceRef?.source ?? null;
+    if (!phonesIn.length && sourceRef) {
+      if (src === "dispatch_result" || Array.isArray(sourceRef?.dispatch_ids)) {
+        phonesIn = await resolveDispatchSourcePhones(supabase, sourceRef);
+      } else if (src === "leads_pool" || sourceRef?.desde) {
+        phonesIn = await resolveLeadsPoolPhones(supabase, sourceRef);
+      }
+    }
+    if (!phonesIn.length) {
+      return { error: "Nenhum telefone resolvido. Envie phones[] ou source_ref válido (dispatch_result/leads_pool).", diagnostico: { source: src, source_ref: sourceRef } };
+    }
+
+    // Deduplica por sufixo8 e monta candidates
+    const seen = new Set<string>();
+    const candidates: Array<{ unified_id: null; phone: string }> = [];
+    for (const raw of phonesIn) {
+      const suf = normalizePhoneSuffix8(raw);
+      if (!suf || seen.has(suf)) continue;
+      seen.add(suf);
+      const e164 = normalizePhoneE164BR(raw) || String(raw);
+      candidates.push({ unified_id: null, phone: e164 });
+    }
+
+    // Motor de cota é o mesmo do disparo real (dispatch_quota_summary).
+    const { data, error } = await supabase.rpc("dispatch_quota_summary", {
+      p_candidates: candidates,
+      p_tipo_comunicacao: tipo,
+      p_provider: provider,
+      p_exclude_dispatch_id: null,
+      p_sample_size: sampleSize,
+    });
+    if (error) return { error: `motor de cota falhou: ${error.message}` };
+
+    const summary: any = data ?? {};
+    return {
+      tipo_comunicacao: tipo,
+      provider,
+      total_candidatos: summary.total ?? candidates.length,
+      elegiveis: summary.eligible ?? 0,
+      bloqueados_total: summary.excluded_total ?? 0,
+      bloqueados_por_motivo: summary.excluded_by_reason ?? {},
+      amostra_bloqueados: summary.sample_excluded ?? [],
+      custo_estimado_brl: summary.estimated_cost_brl ?? 0,
+      dedup_note: "phones deduplicados por sufixo de 8 dígitos antes de rodar o motor.",
+      como_usar: "Ao propor o público para disparo, comunique ao usuário o número 'elegiveis' — é o que efetivamente será entregue. 'bloqueados_por_motivo' mostra POR QUE (cota_estourada = já bateu limite mensal da classe; cooldown_ativo = ainda dentro de min_dias_entre_toques; classe_bloqueada = tipo_comunicacao não permitido para aquela classe; blacklist = bloqueado; sem_telefone = phone inválido).",
+    };
+  }
+
+
+
   const rpcMap: Record<string, { fn: string; args: (i: any) => any }> = {
     get_agent_memory: { fn: "get_agent_memory", args: (i) => ({ p_mes_ref: i.mes_ref ?? null }) },
     get_classificacao_summary: { fn: "get_classificacao_summary", args: () => ({}) },
@@ -870,7 +945,31 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
       nome: payload.nome,
       filtro_json: filtro,
     }).select().single();
-    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos", total_telefones: normalized.length, com_nome: withName };
+    if (error) return { error: error.message };
+
+    // Preview automático de cota quando o tipo de comunicação alvo é informado.
+    let preview_quota: any = null;
+    const tipoAlvo = payload?.tipo_comunicacao_alvo;
+    if (tipoAlvo) {
+      const candidates = normalized.map((phone) => ({ unified_id: null, phone }));
+      const { data: qsum, error: qerr } = await supabase.rpc("dispatch_quota_summary", {
+        p_candidates: candidates,
+        p_tipo_comunicacao: tipoAlvo,
+        p_provider: "meta_cloud",
+        p_exclude_dispatch_id: null,
+        p_sample_size: 20,
+      });
+      preview_quota = qerr
+        ? { error: qerr.message }
+        : {
+            tipo_comunicacao: tipoAlvo,
+            total_candidatos: qsum?.total ?? normalized.length,
+            elegiveis: qsum?.eligible ?? 0,
+            bloqueados_total: qsum?.excluded_total ?? 0,
+            bloqueados_por_motivo: qsum?.excluded_by_reason ?? {},
+          };
+    }
+    return { ok: true, id: data.id, fonte: "campanha_publicos", total_telefones: normalized.length, com_nome: withName, preview_quota };
   }
   return { error: `kind desconhecido: ${kind}` };
 }
@@ -980,9 +1079,14 @@ REGRA CRÍTICA — DATAS E IDS REAIS:
 - NUNCA invente dispatch_ids. Se o usuário citar campanhas pelo NOME, chame list_dispatches(desde, ate) NO MESMO TURNO e use os IDs reais retornados. Passar UUID adivinhado para get_dispatch_result é erro grave — o tool devolverá erro explícito.
 - Se get_dispatch_result retornar {error:"Nenhum dispatch_history..."} ou {error:"IDs inexistentes..."}, PARE de inventar — chame list_dispatches e refaça com o ID correto no mesmo turno.
 
-
-
-
+REGRA CRÍTICA — LIMITE DE DISPAROS (MOTOR DE COTA):
+- Toda mensagem de WhatsApp em massa passa por um motor de cota (dispatch_touch_limits) que respeita: cota_mensal por classificação (quente/morno/frio/silencio_reativavel/silencio_puro/sem_classificacao), tipos_comunicacao permitidos por classe e min_dias_entre_toques. Silêncio puro/reativável têm cota 0 — NUNCA recebem WhatsApp.
+- Se o usuário perguntar "quanto do meu público realmente vai receber?" ou você estiver propondo um público destinado a disparo, você DEVE:
+  1) Chamar get_touch_limits_matrix() UMA vez para conhecer as regras (cache no turno).
+  2) Chamar preview_quota_impact({tipo_comunicacao, source_ref | phones}) ANTES de propor o público. O número que você comunica ao usuário é 'elegiveis', não o bruto.
+  3) Sempre que houver diferença relevante entre bruto e elegíveis, EXPLIQUE ao usuário a quebra em 'bloqueados_por_motivo' (ex.: "dos 8.928, 3.410 estão em cooldown ativo e 1.220 já bateram cota mensal → 4.298 elegíveis").
+- Ao chamar propor_publico_lista para disparo, passe também tipo_comunicacao_alvo — o servidor devolve preview_quota junto do resultado e você reporta ambos ao usuário.
+- NUNCA prometa alcance sem rodar preview_quota_impact. Prometer 8k e entregar 4k é o pior erro possível.
 
 
 FONTES DE METAS (caminho oficial — siga exatamente):
