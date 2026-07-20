@@ -381,6 +381,14 @@ async function analyzeDispatchResult(supabase: any, input: any): Promise<{ resul
   const convertedAll: string[] = [];
   const notConvertedAll: string[] = [];
   const repliedAll: string[] = [];
+  const readAll = new Set<string>();
+  const failedAll = new Set<string>();
+  for (const pd of perDispatch.values()) {
+    for (const k of pd.read_ddd8) readAll.add(k);
+    for (const k of pd.failed_ddd8) failedAll.add(k);
+  }
+  const readNotConvertedAll: string[] = [];
+  const readConvertedAll: string[] = [];
   let totalConverters = 0, totalOrders = 0, totalRevenue = 0, totalCost = 0;
   for (const h of histRows) {
     const category = String(h.template_category || "MARKETING").toUpperCase();
@@ -393,30 +401,46 @@ async function analyzeDispatchResult(supabase: any, input: any): Promise<{ resul
     else notConvertedAll.push(k);
     if (repliedGlobal.has(k)) repliedAll.push(k);
   }
+  for (const k of readAll) {
+    if (salesByKey.has(k)) readConvertedAll.push(k);
+    else readNotConvertedAll.push(k);
+  }
   const consolidatedPhones = {
     engaged: phonesFromKeys(allEngaged), converted: phonesFromKeys(convertedAll),
     not_converted: phonesFromKeys(notConvertedAll), replied: phonesFromKeys(repliedAll),
+    read: phonesFromKeys(readAll), failed: phonesFromKeys(failedAll),
+    read_not_converted: phonesFromKeys(readNotConvertedAll),
+    read_converted: phonesFromKeys(readConvertedAll),
   };
 
   return {
     result: {
       window: { desde: convFrom, ate: convTo ?? "now" },
       match_key: "DDD+8",
+      dedup_note: "TODOS os totais consolidados abaixo já são únicos por DDD+8. NUNCA some per-dispatch: quem recebeu N disparos aparece 1x aqui. Para 'quem leu e não comprou' use consolidated.read_not_converted_unique — não subtraia manualmente.",
       sales_sources: ["pos_sales via customer_id/phone", "zoppy_sales", "orders"],
       sales_status_filter: ["paid", "completed", "complete"],
       dispatches: perDispatchReport,
       overlap,
       consolidated: {
         engaged_unique: allEngaged.size,
+        read_unique: readAll.size,
+        read_not_converted_unique: readNotConvertedAll.length,
+        read_converted_unique: readConvertedAll.length,
+        failed_unique: failedAll.size,
         converted_unique: totalConverters,
         orders_total: totalOrders,
         faturamento_brl: Number(totalRevenue.toFixed(2)),
         conv_rate_engaged_pct: allEngaged.size ? Number(((totalConverters / allEngaged.size) * 100).toFixed(2)) : 0,
+        conv_rate_read_pct: readAll.size ? Number(((readConvertedAll.length / readAll.size) * 100).toFixed(2)) : 0,
         replied_unique: repliedGlobal.size,
         cost_total_brl: Number(totalCost.toFixed(2)),
         roas: totalCost > 0 ? Number((totalRevenue / totalCost).toFixed(2)) : null,
         source_refs: {
           engaged: sourceRef(ids, "engaged", defaultDesde, defaultAte),
+          read: sourceRef(ids, "read", defaultDesde, defaultAte),
+          read_not_converted: sourceRef(ids, "read_not_converted", defaultDesde, defaultAte),
+          read_converted: sourceRef(ids, "read_converted", defaultDesde, defaultAte),
           converted: sourceRef(ids, "converted", defaultDesde, defaultAte),
           not_converted: sourceRef(ids, "not_converted", defaultDesde, defaultAte),
           replied: sourceRef(ids, "replied", defaultDesde, defaultAte),
