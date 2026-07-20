@@ -138,13 +138,30 @@ async function analyzeDispatchResult(supabase: any, input: any): Promise<{ resul
   if (eH) return { result: { error: eH.message }, phoneLists: null };
 
   const histRows = hist ?? [];
+  if (!histRows.length) {
+    return { result: { error: `Nenhum dispatch_history encontrado para os IDs informados: ${ids.join(", ")}. Chame list_dispatches ANTES para obter IDs reais — não invente UUIDs.`, dispatch_ids_recebidos: ids }, phoneLists: null };
+  }
+  if (histRows.length < ids.length) {
+    const encontrados = new Set(histRows.map((r: any) => r.id));
+    const faltantes = ids.filter((x) => !encontrados.has(x));
+    return { result: { error: `IDs inexistentes em dispatch_history: ${faltantes.join(", ")}. Chame list_dispatches para obter IDs reais.`, ids_invalidos: faltantes }, phoneLists: null };
+  }
   const earliestStart = histRows.reduce((min: string | null, r: any) => {
     const dt = r.created_at || r.started_at;
     if (!dt) return min;
     return !min || dt < min ? dt : min;
   }, null as string | null);
+  // Sanity check: janela desde/ate MUITO anterior à data do disparo (ex.: LLM usou o ano errado)
+  if (input?.ate && earliestStart) {
+    const ateDt = new Date(`${input.ate}T23:59:59`);
+    const earliestDt = new Date(earliestStart);
+    if (ateDt.getTime() < earliestDt.getTime()) {
+      return { result: { error: `Janela informada (ate=${input.ate}) é ANTERIOR à data do disparo (${earliestStart.slice(0,10)}). Verifique o ANO — hoje é ${new Date().getFullYear()}. Refaça a chamada com desde/ate no ano correto.` }, phoneLists: null };
+    }
+  }
   const convFrom = input?.desde ? `${input.desde}T00:00:00` : earliestStart;
   const convTo = input?.ate ? `${input.ate}T23:59:59` : null;
+
 
   let recips: any[] = [];
   try {
@@ -796,6 +813,12 @@ REGRA CRÍTICA — NUNCA "prometa e pare":
 - Se preview_audience retornar 0 (ou filtro CRM claramente errado), NÃO tente montar 5 variações do filtro. Vá direto para phone_list usando source_ref de get_dispatch_result ou phones de get_leads_pool e emita propor_publico_lista imediatamente.
 - Quando o usuário confirmou criar MÚLTIPLOS públicos, emita todos os propor_publico_lista (ou propor_publico) NO MESMO TURNO em paralelo. Não faça um por vez esperando reconfirmação — a confirmação já foi dada.
 - Antes de responder texto puro sem tool_use, cheque: "o usuário está esperando gravação AGORA?". Se sim e você não chamou nenhuma tool de proposta neste turno, você errou — chame antes de escrever o texto final.
+
+REGRA CRÍTICA — DATAS E IDS REAIS:
+- ANO é SEMPRE ${isoDate.slice(0,4)}. NUNCA use 2024/2025 em desde/ate quando o disparo ocorreu em ${isoDate.slice(0,4)}. Se em dúvida, use o ano de CONTEXTO TEMPORAL.
+- NUNCA invente dispatch_ids. Se o usuário citar campanhas pelo NOME, chame list_dispatches(desde, ate) NO MESMO TURNO e use os IDs reais retornados. Passar UUID adivinhado para get_dispatch_result é erro grave — o tool devolverá erro explícito.
+- Se get_dispatch_result retornar {error:"Nenhum dispatch_history..."} ou {error:"IDs inexistentes..."}, PARE de inventar — chame list_dispatches e refaça com o ID correto no mesmo turno.
+
 
 
 
