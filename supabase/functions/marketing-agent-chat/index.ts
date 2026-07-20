@@ -41,9 +41,9 @@ const TOOLS_ANTHROPIC = [
   { name: "preview_audience", description: "READ. Calcula quantos clientes o filtro_json atinge (crm_customers_v via bc_match_audience) e devolve amostra de até 50. Use sempre ANTES de propor_publico para validar o filtro e mostrar volume ao usuário.", input_schema: { type: "object", properties: { filtro_json: { type: "object" } }, required: ["filtro_json"] } },
   { name: "list_audiences", description: "READ. Lista os públicos já salvos em campanha_publicos (id, nome, filtro_json, updated_at) para evitar duplicatas.", input_schema: { type: "object", properties: {} } },
   { name: "list_dispatches", description: "READ. Lista disparos em massa (dispatch_history) no período: id, campaign_name/template_name, started_at, audience_source, total/sent/failed, status, provider. Use para escolher IDs a analisar depois com get_dispatch_result.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, limite: { type: "integer", description: "Padrão 30, máx 100" } }, required: ["desde", "ate"] } },
-  { name: "get_dispatch_result", description: "READ. Resultado detalhado de 1+ disparos com FATURAMENTO. Match de telefone por DDD+8 (10 dígitos) — evita colisão entre DDDs. Buckets por status (sent/delivered/read/failed), conversão (pos_sales com status IN paid/completed no intervalo desde..ate se informado, senão desde started_at até hoje), replied (whatsapp inbound), e — quando >1 id — bloco overlap com telefones que aparecem em múltiplos disparos. Amostras compactas (default 50, máx 500). Se precisar da lista completa para propor_publico_lista, chame novamente com sample_limit maior.", input_schema: { type: "object", properties: { dispatch_ids: { type: "array", items: { type: "string" }, description: "IDs de dispatch_history" }, sample_limit: { type: "integer", description: "Padrão 50, máx 500 telefones por bucket." }, desde: { type: "string", description: "YYYY-MM-DD opcional. Início da janela de conversão. Padrão: earliest started_at dos disparos." }, ate: { type: "string", description: "YYYY-MM-DD opcional. Fim da janela de conversão. Padrão: hoje." } }, required: ["dispatch_ids"] } },
+  { name: "get_dispatch_result", description: "READ. Resultado detalhado de 1+ disparos com FATURAMENTO. Usa a mesma base do dashboard: lê TODOS os dispatch_recipients paginados, match por DDD+8, vendas em pos_sales por customer_id→pos_customers.whatsapp OU customer_phone, além de zoppy_sales e orders pagos. Buckets: engaged/read/converted/not_converted/replied/failed. Retorna source_ref por bucket; para criar público grande use propor_publico_lista com source_ref, não copie milhares de telefones.", input_schema: { type: "object", properties: { dispatch_ids: { type: "array", items: { type: "string" }, description: "IDs de dispatch_history" }, sample_limit: { type: "integer", description: "Padrão 50, máx 500 telefones por bucket." }, desde: { type: "string", description: "YYYY-MM-DD opcional. Início da janela de conversão. Padrão: earliest started_at dos disparos." }, ate: { type: "string", description: "YYYY-MM-DD opcional. Fim da janela de conversão. Padrão: hoje." } }, required: ["dispatch_ids"] } },
   { name: "get_leads_pool", description: "READ. Pool bruto de leads em TODAS as bases (ad_leads, event_leads, lp_leads, link_page_leads) no período, deduplicado por sufixo de 8 dígitos. Retorna telefones, canal e opcionalmente exclui quem já é cliente com compra em customers_unified. Use para propor públicos como 'leads frescos que não compraram'.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, canais: { type: "array", items: { type: "string", enum: ["ad_leads", "event_leads", "lp_leads", "link_page_leads"] }, description: "Padrão: todas" }, excluir_compradores: { type: "boolean", description: "Se true, exclui leads que já têm total_orders>0 em customers_unified" }, limite: { type: "integer", description: "Máx 10000, padrão 5000" } }, required: ["desde", "ate"] } },
-  { name: "propor_publico_lista", description: "PROPÕE criar um público em campanha_publicos a partir de uma LISTA FIXA de telefones (formato { mode: 'phone_list', phones: [...] }). Use quando o público NÃO cabe nos filtros padrão do CRM (ex.: 'quem respondeu a campanha X', 'leads recentes que não compraram'). Só grava após confirmação. Sempre mostre ao usuário quantos telefones e como foram obtidos antes de propor.", input_schema: { type: "object", properties: { nome: { type: "string" }, phones: { type: "array", items: { type: "string" }, description: "Telefones (aceita E.164, DDD+numero, com ou sem 55). O sistema normaliza." }, descricao_curta: { type: "string" } }, required: ["nome", "phones"] } },
+  { name: "propor_publico_lista", description: "PROPÕE criar um público em campanha_publicos a partir de lista fixa. Para listas pequenas pode enviar phones[]. Para listas grandes derivadas de disparo, prefira source_ref de get_dispatch_result (ex.: {dispatch_ids:[...], bucket:'not_converted', desde:'YYYY-MM-DD', ate:'YYYY-MM-DD'}); o servidor recalcula a lista completa no commit. Só grava após confirmação.", input_schema: { type: "object", properties: { nome: { type: "string" }, phones: { type: "array", items: { type: "string" }, description: "Telefones opcionais. Use apenas para listas pequenas/manuais." }, source: { type: "string", description: "dispatch_result | leads_pool | manual" }, source_ref: { type: "object", description: "Referência rastreável para recomputar a lista. Para disparos: dispatch_ids[], bucket, desde, ate." }, descricao_curta: { type: "string" } }, required: ["nome"] } },
 ];
 
 const TOOLS_OPENAI = TOOLS_ANTHROPIC.map((t) => ({
@@ -98,6 +98,333 @@ function normalizePhoneE164BR(raw: any): string | null {
   return "55" + digits;
 }
 
+const PAGE_SIZE = 1000;
+
+async function fetchPaginated(
+  supabase: any,
+  table: string,
+  select: string,
+  apply: (query: any) => any,
+  maxRows = 50000,
+): Promise<any[]> {
+  const rows: any[] = [];
+  let page = 0;
+  while (rows.length < maxRows) {
+    let q = supabase.from(table).select(select);
+    q = apply(q).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    const { data, error } = await q;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    rows.push(...data);
+    if (data.length < PAGE_SIZE) break;
+    page += 1;
+  }
+  return rows.slice(0, maxRows);
+}
+
+function sourceRef(dispatchIds: string[], bucket: string, desde?: string | null, ate?: string | null) {
+  return { source: "dispatch_result", dispatch_ids: dispatchIds, bucket, desde: desde ?? null, ate: ate ?? null };
+}
+
+async function analyzeDispatchResult(supabase: any, input: any): Promise<{ result: any; phoneLists: any }> {
+  const ids: string[] = Array.isArray(input?.dispatch_ids) ? input.dispatch_ids : [];
+  if (!ids.length) return { result: { error: "dispatch_ids obrigatório" }, phoneLists: null };
+  const sampleLimit = Math.min(Math.max(input?.sample_limit ?? 50, 1), 500);
+
+  const { data: hist, error: eH } = await supabase
+    .from("dispatch_history")
+    .select("id, campaign_name, template_name, created_at, started_at, total_recipients, sent_count, failed_count, status, provider, audience_source, cost_per_message, template_category")
+    .in("id", ids);
+  if (eH) return { result: { error: eH.message }, phoneLists: null };
+
+  const histRows = hist ?? [];
+  const earliestStart = histRows.reduce((min: string | null, r: any) => {
+    const dt = r.created_at || r.started_at;
+    if (!dt) return min;
+    return !min || dt < min ? dt : min;
+  }, null as string | null);
+  const convFrom = input?.desde ? `${input.desde}T00:00:00` : earliestStart;
+  const convTo = input?.ate ? `${input.ate}T23:59:59` : null;
+
+  let recips: any[] = [];
+  try {
+    recips = await fetchPaginated(
+      supabase,
+      "dispatch_recipients",
+      "dispatch_id, phone, recipient_name, status, sent_at, last_error",
+      (q) => q.in("dispatch_id", ids).order("created_at", { ascending: true }),
+      100000,
+    );
+  } catch (error: any) {
+    return { result: { error: error.message }, phoneLists: null };
+  }
+
+  type KeyBucket = { phones: Set<string>; ddd8: Set<string> };
+  type PerDispatch = { buckets: Record<string, KeyBucket>; engaged_ddd8: Set<string>; read_ddd8: Set<string>; failed_ddd8: Set<string> };
+  const perDispatch = new Map<string, PerDispatch>();
+  const ddd8ToPhone = new Map<string, string>();
+
+  for (const r of recips) {
+    const did = r.dispatch_id;
+    const pd = perDispatch.get(did) ?? { buckets: {}, engaged_ddd8: new Set<string>(), read_ddd8: new Set<string>(), failed_ddd8: new Set<string>() };
+    const st = r.status || "pending";
+    const b = (pd.buckets[st] ||= { phones: new Set<string>(), ddd8: new Set<string>() });
+    b.phones.add(r.phone);
+    const k = normalizePhoneDDD8(r.phone);
+    if (k) {
+      b.ddd8.add(k);
+      if (!ddd8ToPhone.has(k)) ddd8ToPhone.set(k, r.phone);
+      if (st === "sent" || st === "delivered" || st === "read") pd.engaged_ddd8.add(k);
+      if (st === "read") pd.read_ddd8.add(k);
+      if (st === "failed" || st === "blocked") pd.failed_ddd8.add(k);
+    }
+    perDispatch.set(did, pd);
+  }
+
+  const allEngaged = new Set<string>();
+  for (const pd of perDispatch.values()) for (const k of pd.engaged_ddd8) allEngaged.add(k);
+
+  const salesByKey = new Map<string, { orders: number; revenue: number; sources: Set<string> }>();
+  const addSale = (k: string | null, total: any, source: string) => {
+    if (!k || !allEngaged.has(k)) return;
+    const cur = salesByKey.get(k) ?? { orders: 0, revenue: 0, sources: new Set<string>() };
+    cur.orders += 1;
+    cur.revenue += Number(total ?? 0);
+    cur.sources.add(source);
+    salesByKey.set(k, cur);
+  };
+
+  if (convFrom && allEngaged.size > 0) {
+    try {
+      const posCustomerById = new Map<string, { k: string; phone: string; name: string | null }>();
+      const customers = await fetchPaginated(supabase, "pos_customers", "id, name, whatsapp", (q) => q.not("whatsapp", "is", null), 100000);
+      for (const c of customers) {
+        const k = normalizePhoneDDD8(c.whatsapp);
+        if (k) posCustomerById.set(c.id, { k, phone: c.whatsapp, name: c.name ?? null });
+      }
+
+      const posSales = await fetchPaginated(
+        supabase,
+        "pos_sales",
+        "id, total, created_at, customer_id, customer_phone, customer_name, status, status_cancelamento",
+        (q) => {
+          let qq = q.gte("created_at", convFrom).in("status", ["paid", "completed"]);
+          if (convTo) qq = qq.lte("created_at", convTo);
+          return qq;
+        },
+        100000,
+      );
+      for (const s of posSales) {
+        if (String(s.status_cancelamento ?? "").toLowerCase() === "cancelado") continue;
+        const linked = s.customer_id ? posCustomerById.get(s.customer_id) : null;
+        addSale(linked?.k || normalizePhoneDDD8(s.customer_phone), s.total, "PDV");
+      }
+
+      const zoppySales = await fetchPaginated(
+        supabase,
+        "zoppy_sales",
+        "id, total, customer_phone, completed_at, status",
+        (q) => {
+          let qq = q.gte("completed_at", convFrom).in("status", ["paid", "complete", "completed"]);
+          if (convTo) qq = qq.lte("completed_at", convTo);
+          return qq;
+        },
+        50000,
+      );
+      for (const s of zoppySales) addSale(normalizePhoneDDD8(s.customer_phone), s.total, "Shopify");
+
+      const paidStages = ["paid", "shipped", "awaiting_shipment", "awaiting_shipping", "store_pickup", "awaiting_mototaxi", "awaiting_pickup", "completed"];
+      const orders = await fetchPaginated(
+        supabase,
+        "orders",
+        "id, products, is_paid, paid_at, customer_id, stage, created_at",
+        (q) => {
+          let qq = q.eq("is_paid", true).in("stage", paidStages).gte("paid_at", convFrom);
+          if (convTo) qq = qq.lte("paid_at", convTo);
+          return qq;
+        },
+        50000,
+      );
+      const orderCustomerIds = [...new Set(orders.map((o: any) => o.customer_id).filter(Boolean))];
+      const orderCustomers = new Map<string, string>();
+      for (let i = 0; i < orderCustomerIds.length; i += 500) {
+        const chunk = orderCustomerIds.slice(i, i + 500);
+        const { data } = await supabase.from("customers").select("id, whatsapp").in("id", chunk);
+        for (const c of (data ?? [])) if (c.whatsapp) orderCustomers.set(c.id, c.whatsapp);
+      }
+      for (const o of orders) {
+        const products = Array.isArray(o.products) ? o.products : [];
+        const total = products.reduce((sum: number, p: any) => sum + Number(p?.price ?? 0) * Number(p?.quantity ?? 1), 0);
+        addSale(normalizePhoneDDD8(o.customer_id ? orderCustomers.get(o.customer_id) : null), total, "WhatsApp");
+      }
+    } catch (error: any) {
+      return { result: { error: error.message }, phoneLists: null };
+    }
+  }
+
+  const repliedGlobal = new Set<string>();
+  if (convFrom && allEngaged.size > 0) {
+    try {
+      const msgs = await fetchPaginated(
+        supabase,
+        "whatsapp_messages",
+        "phone, direction, created_at",
+        (q) => {
+          let qq = q.eq("direction", "incoming").gte("created_at", convFrom);
+          if (convTo) qq = qq.lte("created_at", convTo);
+          return qq;
+        },
+        100000,
+      );
+      for (const m of msgs) {
+        const k = normalizePhoneDDD8(m.phone);
+        if (k && allEngaged.has(k)) repliedGlobal.add(k);
+      }
+    } catch (_) {
+      // Resposta é complementar; se a tabela/coluna mudar, não derruba análise de compra.
+    }
+  }
+
+  const sampleFromKeys = (keys: Iterable<string>) => {
+    const out: string[] = [];
+    for (const k of keys) {
+      const p = ddd8ToPhone.get(k);
+      if (p) out.push(p);
+      if (out.length >= sampleLimit) break;
+    }
+    return out;
+  };
+  const phonesFromKeys = (keys: Iterable<string>) => Array.from(keys).map((k) => ddd8ToPhone.get(k)).filter(Boolean) as string[];
+
+  const perDispatchReport: any[] = [];
+  const phoneListsByDispatch: Record<string, Record<string, string[]>> = {};
+  const defaultDesde = input?.desde ?? null;
+  const defaultAte = input?.ate ?? null;
+
+  for (const h of histRows) {
+    const pd = perDispatch.get(h.id) ?? { buckets: {}, engaged_ddd8: new Set<string>(), read_ddd8: new Set<string>(), failed_ddd8: new Set<string>() };
+    const engaged = pd.engaged_ddd8;
+    const convKeys: string[] = [];
+    const notConvKeys: string[] = [];
+    const replKeys: string[] = [];
+    let converters = 0, orders = 0, revenue = 0;
+
+    for (const k of engaged) {
+      const s = salesByKey.get(k);
+      if (s) { converters += 1; orders += s.orders; revenue += s.revenue; convKeys.push(k); }
+      else notConvKeys.push(k);
+      if (repliedGlobal.has(k)) replKeys.push(k);
+    }
+
+    const category = String(h.template_category || "MARKETING").toUpperCase();
+    const costPerMessage = h.cost_per_message != null ? Number(h.cost_per_message) : (category === "UTILITY" ? 0.05 : 0.40);
+    const costTotal = Number((costPerMessage * Number(h.sent_count || engaged.size || 0)).toFixed(2));
+    phoneListsByDispatch[h.id] = {
+      engaged: phonesFromKeys(engaged), read: phonesFromKeys(pd.read_ddd8), failed: phonesFromKeys(pd.failed_ddd8),
+      converted: phonesFromKeys(convKeys), not_converted: phonesFromKeys(notConvKeys), replied: phonesFromKeys(replKeys),
+    };
+
+    const dispatchIds = [h.id];
+    perDispatchReport.push({
+      id: h.id,
+      campaign_name: h.campaign_name ?? h.template_name,
+      template_name: h.template_name,
+      started_at: h.started_at,
+      audience_source: h.audience_source,
+      status: h.status,
+      totals_by_status: Object.fromEntries(Object.entries(pd.buckets).map(([k, v]) => [k, v.phones.size])),
+      engaged: { total: engaged.size, note: "sent+delivered+read (dedup DDD+8)", source_ref: sourceRef(dispatchIds, "engaged", defaultDesde, defaultAte) },
+      read: { total: pd.read_ddd8.size, sample_phones: sampleFromKeys(pd.read_ddd8), source_ref: sourceRef(dispatchIds, "read", defaultDesde, defaultAte) },
+      converted: { total: converters, orders, faturamento_brl: Number(revenue.toFixed(2)), conv_rate_engaged_pct: engaged.size ? Number(((converters / engaged.size) * 100).toFixed(2)) : 0, sample_phones: sampleFromKeys(convKeys), source_ref: sourceRef(dispatchIds, "converted", defaultDesde, defaultAte) },
+      not_converted: { total: notConvKeys.length, sample_phones: sampleFromKeys(notConvKeys), source_ref: sourceRef(dispatchIds, "not_converted", defaultDesde, defaultAte) },
+      replied: { total: replKeys.length, sample_phones: sampleFromKeys(replKeys), source_ref: sourceRef(dispatchIds, "replied", defaultDesde, defaultAte) },
+      cost: { cost_per_message_brl: costPerMessage, total_cost_brl: costTotal, roas: costTotal > 0 ? Number((revenue / costTotal).toFixed(2)) : null },
+    });
+  }
+
+  let overlap: any = null;
+  if (perDispatch.size > 1) {
+    const count = new Map<string, number>();
+    for (const pd of perDispatch.values()) for (const k of pd.engaged_ddd8) count.set(k, (count.get(k) ?? 0) + 1);
+    const inAll: string[] = [];
+    const inTwoPlus: string[] = [];
+    const nDisp = perDispatch.size;
+    for (const [k, c] of count.entries()) {
+      if (c >= 2) inTwoPlus.push(k);
+      if (c === nDisp) inAll.push(k);
+    }
+    overlap = {
+      note: "engajados presentes em múltiplos disparos (chave DDD+8)",
+      n_disparos: nDisp,
+      in_two_or_more: { total: inTwoPlus.length, sample_phones: sampleFromKeys(inTwoPlus) },
+      in_all: { total: inAll.length, sample_phones: sampleFromKeys(inAll) },
+    };
+  }
+
+  const convertedAll: string[] = [];
+  const notConvertedAll: string[] = [];
+  const repliedAll: string[] = [];
+  let totalConverters = 0, totalOrders = 0, totalRevenue = 0, totalCost = 0;
+  for (const h of histRows) {
+    const category = String(h.template_category || "MARKETING").toUpperCase();
+    const costPerMessage = h.cost_per_message != null ? Number(h.cost_per_message) : (category === "UTILITY" ? 0.05 : 0.40);
+    totalCost += costPerMessage * Number(h.sent_count || 0);
+  }
+  for (const k of allEngaged) {
+    const s = salesByKey.get(k);
+    if (s) { totalConverters += 1; totalOrders += s.orders; totalRevenue += s.revenue; convertedAll.push(k); }
+    else notConvertedAll.push(k);
+    if (repliedGlobal.has(k)) repliedAll.push(k);
+  }
+  const consolidatedPhones = {
+    engaged: phonesFromKeys(allEngaged), converted: phonesFromKeys(convertedAll),
+    not_converted: phonesFromKeys(notConvertedAll), replied: phonesFromKeys(repliedAll),
+  };
+
+  return {
+    result: {
+      window: { desde: convFrom, ate: convTo ?? "now" },
+      match_key: "DDD+8",
+      sales_sources: ["pos_sales via customer_id/phone", "zoppy_sales", "orders"],
+      sales_status_filter: ["paid", "completed", "complete"],
+      dispatches: perDispatchReport,
+      overlap,
+      consolidated: {
+        engaged_unique: allEngaged.size,
+        converted_unique: totalConverters,
+        orders_total: totalOrders,
+        faturamento_brl: Number(totalRevenue.toFixed(2)),
+        conv_rate_engaged_pct: allEngaged.size ? Number(((totalConverters / allEngaged.size) * 100).toFixed(2)) : 0,
+        replied_unique: repliedGlobal.size,
+        cost_total_brl: Number(totalCost.toFixed(2)),
+        roas: totalCost > 0 ? Number((totalRevenue / totalCost).toFixed(2)) : null,
+        source_refs: {
+          engaged: sourceRef(ids, "engaged", defaultDesde, defaultAte),
+          converted: sourceRef(ids, "converted", defaultDesde, defaultAte),
+          not_converted: sourceRef(ids, "not_converted", defaultDesde, defaultAte),
+          replied: sourceRef(ids, "replied", defaultDesde, defaultAte),
+        },
+      },
+    },
+    phoneLists: { by_dispatch: phoneListsByDispatch, consolidated: consolidatedPhones },
+  };
+}
+
+async function resolveDispatchSourcePhones(supabase: any, ref: any): Promise<string[]> {
+  if (!ref || !Array.isArray(ref.dispatch_ids) || !ref.dispatch_ids.length) return [];
+  const bucket = String(ref.bucket || "");
+  if (!["engaged", "read", "failed", "converted", "not_converted", "replied"].includes(bucket)) return [];
+  const { phoneLists } = await analyzeDispatchResult(supabase, {
+    dispatch_ids: ref.dispatch_ids,
+    desde: ref.desde ?? undefined,
+    ate: ref.ate ?? undefined,
+    sample_limit: 1,
+  });
+  if (!phoneLists) return [];
+  if (ref.dispatch_id && phoneLists.by_dispatch?.[ref.dispatch_id]?.[bucket]) return phoneLists.by_dispatch[ref.dispatch_id][bucket];
+  return phoneLists.consolidated?.[bucket] ?? [];
+}
+
 async function executeReadTool(supabase: any, name: string, input: any): Promise<any> {
   if (name === "preview_audience") {
     const filtro = input?.filtro_json ?? {};
@@ -138,191 +465,8 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
     return { disparos: data ?? [] };
   }
   if (name === "get_dispatch_result") {
-    const ids: string[] = Array.isArray(input?.dispatch_ids) ? input.dispatch_ids : [];
-    if (!ids.length) return { error: "dispatch_ids obrigatório" };
-    const sampleLimit = Math.min(Math.max(input?.sample_limit ?? 50, 1), 500);
-
-    const { data: hist, error: eH } = await supabase
-      .from("dispatch_history")
-      .select("id, campaign_name, template_name, started_at, total_recipients, sent_count, failed_count, status, provider, audience_source")
-      .in("id", ids);
-    if (eH) return { error: eH.message };
-    const earliestStart = (hist ?? []).reduce((min: string | null, r: any) => {
-      if (!r.started_at) return min;
-      return !min || r.started_at < min ? r.started_at : min;
-    }, null as string | null);
-
-    // Janela de conversão (opcional). Se não informada, usa earliestStart .. hoje.
-    const convFrom = input?.desde ? `${input.desde}T00:00:00` : earliestStart;
-    const convTo = input?.ate ? `${input.ate}T23:59:59` : null;
-
-    const { data: recips, error: eR } = await supabase
-      .from("dispatch_recipients")
-      .select("dispatch_id, phone, status, sent_at, last_error")
-      .in("dispatch_id", ids)
-      .limit(50000);
-    if (eR) return { error: eR.message };
-
-    // Por disparo: buckets + engajados (chave DDD+8)
-    type PerDispatch = {
-      buckets: Record<string, { phones: Set<string>; ddd8: Set<string> }>;
-      engaged_ddd8: Set<string>;
-    };
-    const perDispatch = new Map<string, PerDispatch>();
-    const ddd8ToPhone = new Map<string, string>();
-
-    for (const r of (recips ?? [])) {
-      const did = r.dispatch_id;
-      const pd = perDispatch.get(did) ?? { buckets: {}, engaged_ddd8: new Set<string>() };
-      const st = r.status || "pending";
-      const b = (pd.buckets[st] ||= { phones: new Set(), ddd8: new Set() });
-      b.phones.add(r.phone);
-      const k = normalizePhoneDDD8(r.phone);
-      if (k) {
-        b.ddd8.add(k);
-        if (!ddd8ToPhone.has(k)) ddd8ToPhone.set(k, r.phone);
-        if (st === "sent" || st === "delivered" || st === "read") {
-          pd.engaged_ddd8.add(k);
-        }
-      }
-      perDispatch.set(did, pd);
-    }
-
-    // Union global de engajados p/ 1 única query de vendas/mensagens.
-    const allEngaged = new Set<string>();
-    for (const pd of perDispatch.values()) for (const k of pd.engaged_ddd8) allEngaged.add(k);
-
-    // Conversão: pos_sales.status IN ('paid','completed') na janela [convFrom, convTo]
-    const salesByKey = new Map<string, { orders: number; revenue: number }>();
-    if (convFrom && allEngaged.size > 0) {
-      let q = supabase
-        .from("pos_sales")
-        .select("customer_phone, created_at, total, status")
-        .gte("created_at", convFrom)
-        .in("status", ["paid", "completed"])
-        .not("customer_phone", "is", null)
-        .limit(20000);
-      if (convTo) q = q.lte("created_at", convTo);
-      const { data: sales } = await q;
-      for (const s of (sales ?? [])) {
-        const k = normalizePhoneDDD8(s.customer_phone);
-        if (!k || !allEngaged.has(k)) continue;
-        const cur = salesByKey.get(k) ?? { orders: 0, revenue: 0 };
-        cur.orders += 1;
-        cur.revenue += Number(s.total ?? 0);
-        salesByKey.set(k, cur);
-      }
-    }
-
-    // Replied: whatsapp_messages inbound na janela
-    const repliedGlobal = new Set<string>();
-    if (convFrom && allEngaged.size > 0) {
-      let q = supabase
-        .from("whatsapp_messages")
-        .select("phone, direction, created_at")
-        .eq("direction", "incoming")
-        .gte("created_at", convFrom)
-        .limit(50000);
-      if (convTo) q = q.lte("created_at", convTo);
-      const { data: msgs } = await q;
-      for (const m of (msgs ?? [])) {
-        const k = normalizePhoneDDD8(m.phone);
-        if (k && allEngaged.has(k)) repliedGlobal.add(k);
-      }
-    }
-
-    // Sampler compacto — retorna telefones originais até sampleLimit.
-    const sampleFromKeys = (keys: Iterable<string>) => {
-      const out: string[] = [];
-      for (const k of keys) {
-        const p = ddd8ToPhone.get(k);
-        if (p) out.push(p);
-        if (out.length >= sampleLimit) break;
-      }
-      return out;
-    };
-
-    // Report por disparo
-    const perDispatchReport: any[] = [];
-    for (const h of (hist ?? [])) {
-      const pd = perDispatch.get(h.id) ?? { buckets: {}, engaged_ddd8: new Set<string>() };
-      const engaged = pd.engaged_ddd8;
-
-      let converters = 0, orders = 0, revenue = 0;
-      const convKeys: string[] = [];
-      const notConvKeys: string[] = [];
-      const replKeys: string[] = [];
-      for (const k of engaged) {
-        const s = salesByKey.get(k);
-        if (s) { converters += 1; orders += s.orders; revenue += s.revenue; convKeys.push(k); }
-        else notConvKeys.push(k);
-        if (repliedGlobal.has(k)) replKeys.push(k);
-      }
-
-      perDispatchReport.push({
-        id: h.id,
-        campaign_name: h.campaign_name ?? h.template_name,
-        started_at: h.started_at,
-        audience_source: h.audience_source,
-        status: h.status,
-        totals_by_status: Object.fromEntries(Object.entries(pd.buckets).map(([k, v]) => [k, v.phones.size])),
-        engaged: { total: engaged.size, note: "sent+delivered+read (dedup DDD+8)" },
-        converted: {
-          total: converters,
-          orders,
-          faturamento_brl: Number(revenue.toFixed(2)),
-          conv_rate_engaged_pct: engaged.size ? Number(((converters / engaged.size) * 100).toFixed(2)) : 0,
-          sample_phones: sampleFromKeys(convKeys),
-        },
-        not_converted: { total: notConvKeys.length, sample_phones: sampleFromKeys(notConvKeys) },
-        replied: { total: replKeys.length, sample_phones: sampleFromKeys(replKeys) },
-      });
-    }
-
-    // Overlap entre disparos (apenas quando >1 id)
-    let overlap: any = null;
-    if (perDispatch.size > 1) {
-      const count = new Map<string, number>();
-      for (const pd of perDispatch.values()) {
-        for (const k of pd.engaged_ddd8) count.set(k, (count.get(k) ?? 0) + 1);
-      }
-      const inAll: string[] = [];
-      const inTwoPlus: string[] = [];
-      const nDisp = perDispatch.size;
-      for (const [k, c] of count.entries()) {
-        if (c >= 2) inTwoPlus.push(k);
-        if (c === nDisp) inAll.push(k);
-      }
-      overlap = {
-        note: "engajados presentes em múltiplos disparos (chave DDD+8)",
-        n_disparos: nDisp,
-        in_two_or_more: { total: inTwoPlus.length, sample_phones: sampleFromKeys(inTwoPlus) },
-        in_all: { total: inAll.length, sample_phones: sampleFromKeys(inAll) },
-      };
-    }
-
-    // Consolidado (dedupe por DDD+8 entre todos os disparos)
-    let totalConverters = 0, totalOrders = 0, totalRevenue = 0;
-    for (const k of allEngaged) {
-      const s = salesByKey.get(k);
-      if (s) { totalConverters += 1; totalOrders += s.orders; totalRevenue += s.revenue; }
-    }
-
-    return {
-      window: { desde: convFrom, ate: convTo ?? "now" },
-      match_key: "DDD+8",
-      sales_status_filter: ["paid", "completed"],
-      dispatches: perDispatchReport,
-      overlap,
-      consolidated: {
-        engaged_unique: allEngaged.size,
-        converted_unique: totalConverters,
-        orders_total: totalOrders,
-        faturamento_brl: Number(totalRevenue.toFixed(2)),
-        conv_rate_engaged_pct: allEngaged.size ? Number(((totalConverters / allEngaged.size) * 100).toFixed(2)) : 0,
-        replied_unique: repliedGlobal.size,
-      },
-    };
+    const { result } = await analyzeDispatchResult(supabase, input);
+    return result;
   }
   if (name === "get_leads_pool") {
     const canais: string[] = Array.isArray(input?.canais) && input.canais.length
@@ -522,7 +666,11 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
     return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos" };
   }
   if (kind === "propor_publico_lista") {
-    const phonesIn: any[] = Array.isArray(payload.phones) ? payload.phones : [];
+    let phonesIn: any[] = Array.isArray(payload.phones) ? payload.phones : [];
+    const sourceRefPayload = payload.source_ref ?? null;
+    if (!phonesIn.length && (payload.source === "dispatch_result" || sourceRefPayload?.source === "dispatch_result" || Array.isArray(sourceRefPayload?.dispatch_ids))) {
+      phonesIn = await resolveDispatchSourcePhones(supabase, sourceRefPayload);
+    }
     const seen = new Set<string>();
     const normalized: string[] = [];
     for (const raw of phonesIn) {
@@ -533,7 +681,13 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
       normalized.push(e164 || String(raw));
     }
     if (!normalized.length) return { error: "Nenhum telefone válido na lista" };
-    const filtro = { mode: "phone_list", phones: normalized, descricao: payload.descricao_curta ?? null };
+    const filtro = {
+      mode: "phone_list",
+      phones: normalized,
+      descricao: payload.descricao_curta ?? null,
+      source: payload.source ?? sourceRefPayload?.source ?? "manual",
+      source_ref: sourceRefPayload,
+    };
     const { data, error } = await supabase.from("campanha_publicos").insert({
       nome: payload.nome,
       filtro_json: filtro,
