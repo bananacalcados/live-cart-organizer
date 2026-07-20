@@ -73,6 +73,19 @@ function normalizePhoneSuffix8(raw: any): string | null {
   return digits.slice(-8);
 }
 
+// DDD (2) + 8 últimos dígitos = chave forte de match entre bases (evita colisão entre DDDs).
+// Aceita entradas com/sem 55 e com/sem o 9º dígito.
+function normalizePhoneDDD8(raw: any): string | null {
+  let d = String(raw ?? "").replace(/\D/g, "");
+  if (d.length < 10) return null;
+  if (d.length >= 12 && d.startsWith("55")) d = d.slice(2);
+  // agora esperamos 10 (fixo) ou 11 (com 9º dígito)
+  if (d.length !== 10 && d.length !== 11) return null;
+  const ddd = d.slice(0, 2);
+  const last8 = d.slice(-8);
+  return ddd + last8;
+}
+
 function normalizePhoneE164BR(raw: any): string | null {
   let digits = String(raw ?? "").replace(/\D/g, "");
   if (digits.length < 10) return null;
