@@ -187,7 +187,7 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
       const { data: msgs } = await supabase
         .from("whatsapp_messages")
         .select("phone, direction, created_at")
-        .eq("direction", "inbound")
+        .eq("direction", "incoming")
         .gte("created_at", earliestStart)
         .limit(50000);
       for (const m of (msgs ?? [])) {
