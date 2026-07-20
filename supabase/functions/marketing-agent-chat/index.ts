@@ -777,10 +777,22 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
     if (src === "dispatch_result" || Array.isArray(sourceRefPayload?.dispatch_ids)) {
       const resolved = await resolveDispatchSourcePhones(supabase, sourceRefPayload);
       if (resolved.length) phonesIn = resolved;
+      else if (sourceRefPayload) {
+        return {
+          error: "source_ref de disparo não retornou telefones; público não foi salvo para evitar lista parcial",
+          diagnostico: { phones_recebidos_no_payload: rawInputCount, source: src, source_ref: sourceRefPayload },
+        };
+      }
     }
     if (src === "leads_pool" || (sourceRefPayload && (sourceRefPayload.desde || sourceRefPayload.canais))) {
       const resolved = await resolveLeadsPoolPhones(supabase, sourceRefPayload);
       if (resolved.length) phonesIn = resolved;
+      else if (sourceRefPayload) {
+        return {
+          error: "source_ref de leads não retornou telefones; público não foi salvo para evitar lista parcial",
+          diagnostico: { phones_recebidos_no_payload: rawInputCount, source: src, source_ref: sourceRefPayload },
+        };
+      }
     }
     const resolvedCount = phonesIn.length;
     const seen = new Set<string>();
