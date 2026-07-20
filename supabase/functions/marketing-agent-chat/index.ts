@@ -945,7 +945,31 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
       nome: payload.nome,
       filtro_json: filtro,
     }).select().single();
-    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos", total_telefones: normalized.length, com_nome: withName };
+    if (error) return { error: error.message };
+
+    // Preview automático de cota quando o tipo de comunicação alvo é informado.
+    let preview_quota: any = null;
+    const tipoAlvo = payload?.tipo_comunicacao_alvo;
+    if (tipoAlvo) {
+      const candidates = normalized.map((phone) => ({ unified_id: null, phone }));
+      const { data: qsum, error: qerr } = await supabase.rpc("dispatch_quota_summary", {
+        p_candidates: candidates,
+        p_tipo_comunicacao: tipoAlvo,
+        p_provider: "meta_cloud",
+        p_exclude_dispatch_id: null,
+        p_sample_size: 20,
+      });
+      preview_quota = qerr
+        ? { error: qerr.message }
+        : {
+            tipo_comunicacao: tipoAlvo,
+            total_candidatos: qsum?.total ?? normalized.length,
+            elegiveis: qsum?.eligible ?? 0,
+            bloqueados_total: qsum?.excluded_total ?? 0,
+            bloqueados_por_motivo: qsum?.excluded_by_reason ?? {},
+          };
+    }
+    return { ok: true, id: data.id, fonte: "campanha_publicos", total_telefones: normalized.length, com_nome: withName, preview_quota };
   }
   return { error: `kind desconhecido: ${kind}` };
 }
