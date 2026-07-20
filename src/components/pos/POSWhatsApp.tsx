@@ -1943,6 +1943,10 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
                   <QrCode className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">PIX</span>
                 </Button>
+                <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1 text-orange-500" onClick={() => setShowBoleto(true)} title="Gerar Boleto" disabled={requiresInstanceSelection}>
+                  <FileText className="h-3.5 w-3.5" />
+                  <span className="hidden xl:inline">Boleto</span>
+                </Button>
                 <Button variant="ghost" size="sm" className="h-7 px-1.5 text-xs gap-1" onClick={() => setShowCatalog(true)} title="Catálogo" disabled={requiresInstanceSelection}>
                   <ShoppingBag className="h-3.5 w-3.5" />
                   <span className="hidden xl:inline">Catálogo</span>
