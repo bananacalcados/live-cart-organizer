@@ -227,6 +227,10 @@ export function MassTemplateDispatcher() {
   // Saved audience (campanha_publicos) — filtro adicional final
   const [savedAudienceSuffixes, setSavedAudienceSuffixes] = useState<Set<string> | null>(null);
   const [savedAudienceMeta, setSavedAudienceMeta] = useState<{ id: string; nome: string } | null>(null);
+  // Quando o público salvo é modo phone_list (lista fixa criada pelo Estrategista),
+  // usamos a lista bruta como fonte direta — bypass do baseRecipients (CRM/leads).
+  const [phoneListRecipients, setPhoneListRecipients] = useState<Recipient[] | null>(null);
+
   const [saveAudienceOpen, setSaveAudienceOpen] = useState(false);
 
 
