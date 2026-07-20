@@ -442,6 +442,49 @@ async function resolveDispatchSourcePhones(supabase: any, ref: any): Promise<str
   return phoneLists.consolidated?.[bucket] ?? [];
 }
 
+async function resolveLeadsPoolPhones(supabase: any, ref: any): Promise<string[]> {
+  if (!ref) return [];
+  const desde = ref.desde;
+  const ate = ref.ate;
+  if (!desde || !ate) return [];
+  const canais: string[] = Array.isArray(ref.canais) && ref.canais.length
+    ? ref.canais
+    : ["ad_leads", "event_leads", "lp_leads", "link_page_leads"];
+  const limite = Math.min(ref.limite ?? 10000, 20000);
+  const desdeISO = desde;
+  const ateISO = ate + "T23:59:59";
+  const bySuffix = new Map<string, string>();
+  for (const canal of canais) {
+    const { data } = await supabase
+      .from(canal)
+      .select("phone, created_at")
+      .gte("created_at", desdeISO)
+      .lte("created_at", ateISO)
+      .order("created_at", { ascending: false })
+      .limit(limite);
+    for (const r of (data ?? [])) {
+      const suf = normalizePhoneSuffix8(r.phone);
+      if (!suf || bySuffix.has(suf)) continue;
+      bySuffix.set(suf, r.phone);
+    }
+  }
+  if (ref.excluir_compradores) {
+    const suffixes = Array.from(bySuffix.keys());
+    for (let i = 0; i < suffixes.length; i += 500) {
+      const chunk = suffixes.slice(i, i + 500);
+      const { data: buyers } = await supabase
+        .from("customers_unified")
+        .select("phone_suffix8, total_orders")
+        .in("phone_suffix8", chunk)
+        .gt("total_orders", 0);
+      for (const b of (buyers ?? [])) {
+        if (b.phone_suffix8) bySuffix.delete(b.phone_suffix8);
+      }
+    }
+  }
+  return Array.from(bySuffix.values()).slice(0, limite);
+}
+
 async function executeReadTool(supabase: any, name: string, input: any): Promise<any> {
   if (name === "preview_audience") {
     const filtro = input?.filtro_json ?? {};
