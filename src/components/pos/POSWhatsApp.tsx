@@ -143,6 +143,7 @@ export function POSWhatsApp({ storeId, initialFilter, onExitFullScreen }: Props)
   const [showCheckout, setShowCheckout] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showPix, setShowPix] = useState(false);
+  const [showBoleto, setShowBoleto] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showStatusDialog, setShowStatusDialog] = useState(false);
   const [supportFilterActive, setSupportFilterActive] = useState(false);
