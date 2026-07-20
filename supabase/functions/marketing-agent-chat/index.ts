@@ -1079,9 +1079,14 @@ REGRA CRÍTICA — DATAS E IDS REAIS:
 - NUNCA invente dispatch_ids. Se o usuário citar campanhas pelo NOME, chame list_dispatches(desde, ate) NO MESMO TURNO e use os IDs reais retornados. Passar UUID adivinhado para get_dispatch_result é erro grave — o tool devolverá erro explícito.
 - Se get_dispatch_result retornar {error:"Nenhum dispatch_history..."} ou {error:"IDs inexistentes..."}, PARE de inventar — chame list_dispatches e refaça com o ID correto no mesmo turno.
 
-
-
-
+REGRA CRÍTICA — LIMITE DE DISPAROS (MOTOR DE COTA):
+- Toda mensagem de WhatsApp em massa passa por um motor de cota (dispatch_touch_limits) que respeita: cota_mensal por classificação (quente/morno/frio/silencio_reativavel/silencio_puro/sem_classificacao), tipos_comunicacao permitidos por classe e min_dias_entre_toques. Silêncio puro/reativável têm cota 0 — NUNCA recebem WhatsApp.
+- Se o usuário perguntar "quanto do meu público realmente vai receber?" ou você estiver propondo um público destinado a disparo, você DEVE:
+  1) Chamar get_touch_limits_matrix() UMA vez para conhecer as regras (cache no turno).
+  2) Chamar preview_quota_impact({tipo_comunicacao, source_ref | phones}) ANTES de propor o público. O número que você comunica ao usuário é 'elegiveis', não o bruto.
+  3) Sempre que houver diferença relevante entre bruto e elegíveis, EXPLIQUE ao usuário a quebra em 'bloqueados_por_motivo' (ex.: "dos 8.928, 3.410 estão em cooldown ativo e 1.220 já bateram cota mensal → 4.298 elegíveis").
+- Ao chamar propor_publico_lista para disparo, passe também tipo_comunicacao_alvo — o servidor devolve preview_quota junto do resultado e você reporta ambos ao usuário.
+- NUNCA prometa alcance sem rodar preview_quota_impact. Prometer 8k e entregar 4k é o pior erro possível.
 
 
 FONTES DE METAS (caminho oficial — siga exatamente):
