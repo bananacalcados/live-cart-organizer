@@ -45,6 +45,23 @@ export function SavedAudiencePicker({ onApply, activeId }: Props) {
     const row = rows.find((r) => r.id === id);
     if (!row) return;
     setApplying(true);
+
+    // Modo phone_list: público construído a partir de uma lista fixa de telefones
+    // (usado pelo Estrategista quando cria públicos a partir de resultado de disparo
+    // ou de leads que ainda não estão no CRM unificado). Não passa pela RPC.
+    const filtro: any = row.filtro_json;
+    if (filtro && filtro.mode === "phone_list" && Array.isArray(filtro.phones)) {
+      const suffixes = new Set<string>();
+      for (const raw of filtro.phones) {
+        const digits = String(raw || "").replace(/\D/g, "");
+        if (digits.length >= 8) suffixes.add(digits.slice(-8));
+      }
+      setApplying(false);
+      onApply(suffixes, { id: row.id, nome: row.nome });
+      toast.success(`Público "${row.nome}" aplicado (${suffixes.size} contatos — lista fixa)`);
+      return;
+    }
+
     const { data, error } = await supabase.rpc("list_campaign_audience", {
       p_filtro: row.filtro_json as any,
       p_limit: 5000,
@@ -63,6 +80,7 @@ export function SavedAudiencePicker({ onApply, activeId }: Props) {
     onApply(suffixes, { id: row.id, nome: row.nome });
     toast.success(`Público "${row.nome}" aplicado (${suffixes.size} contatos)`);
   };
+
 
   return (
     <div className="flex items-center gap-2">
