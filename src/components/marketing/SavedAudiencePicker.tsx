@@ -14,10 +14,18 @@ interface PublicoRow {
 }
 
 interface Props {
-  /** Chamado com o Set de sufixos de 8 dígitos permitidos, ou null quando limpo. */
-  onApply: (allowedPhoneSuffix8: Set<string> | null, meta: { id: string; nome: string } | null) => void;
+  /** Chamado com o Set de sufixos de 8 dígitos permitidos, ou null quando limpo.
+   *  Para públicos em modo phone_list (lista fixa criada pelo Estrategista), também
+   *  passa a lista bruta de telefones — o Dispatcher usa como fonte direta, sem filtrar
+   *  por CRM/leads. */
+  onApply: (
+    allowedPhoneSuffix8: Set<string> | null,
+    meta: { id: string; nome: string } | null,
+    phoneList?: string[] | null,
+  ) => void;
   activeId: string | null;
 }
+
 
 export function SavedAudiencePicker({ onApply, activeId }: Props) {
   const [rows, setRows] = useState<PublicoRow[]>([]);
