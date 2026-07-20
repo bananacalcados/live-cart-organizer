@@ -158,7 +158,7 @@ export function POSGenerateBoletoDialog({
         await posSendText({
           provider: sendVia,
           phone,
-          text: `⚡ *Pagar via PIX (mesmo valor):*\n\n${result.pixQrCode}`,
+          message: `⚡ *Pagar via PIX (mesmo valor):*\n\n${result.pixQrCode}`,
           numberId: selectedNumberId ?? null,
         });
       }
