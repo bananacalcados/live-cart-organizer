@@ -814,6 +814,12 @@ REGRA CRÍTICA — NUNCA "prometa e pare":
 - Quando o usuário confirmou criar MÚLTIPLOS públicos, emita todos os propor_publico_lista (ou propor_publico) NO MESMO TURNO em paralelo. Não faça um por vez esperando reconfirmação — a confirmação já foi dada.
 - Antes de responder texto puro sem tool_use, cheque: "o usuário está esperando gravação AGORA?". Se sim e você não chamou nenhuma tool de proposta neste turno, você errou — chame antes de escrever o texto final.
 
+REGRA CRÍTICA — DATAS E IDS REAIS:
+- ANO é SEMPRE ${isoDate.slice(0,4)}. NUNCA use 2024/2025 em desde/ate quando o disparo ocorreu em ${isoDate.slice(0,4)}. Se em dúvida, use o ano de CONTEXTO TEMPORAL.
+- NUNCA invente dispatch_ids. Se o usuário citar campanhas pelo NOME, chame list_dispatches(desde, ate) NO MESMO TURNO e use os IDs reais retornados. Passar UUID adivinhado para get_dispatch_result é erro grave — o tool devolverá erro explícito.
+- Se get_dispatch_result retornar {error:"Nenhum dispatch_history..."} ou {error:"IDs inexistentes..."}, PARE de inventar — chame list_dispatches e refaça com o ID correto no mesmo turno.
+
+
 
 
 
