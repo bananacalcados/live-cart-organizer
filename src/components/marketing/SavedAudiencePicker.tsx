@@ -116,7 +116,7 @@ export function SavedAudiencePicker({ onApply, activeId }: Props) {
         </Select>
       </div>
       {activeId && (
-        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onApply(null, null)}>
+        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onApply(null, null, null)}>
           <X className="h-3 w-3" />
         </Button>
       )}
