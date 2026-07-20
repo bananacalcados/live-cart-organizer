@@ -739,6 +739,7 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
     const resolvedCount = phonesIn.length;
     const seen = new Set<string>();
     const normalized: string[] = [];
+    const suffixList: string[] = [];
     let invalidPhones = 0;
     for (const raw of phonesIn) {
       const e164 = normalizePhoneE164BR(raw);
@@ -747,6 +748,7 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
       if (seen.has(suf)) continue;
       seen.add(suf);
       normalized.push(e164 || String(raw));
+      suffixList.push(suf);
     }
     if (!normalized.length) {
       return {
@@ -764,9 +766,44 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
       };
     }
 
+    // Enriquece nome via customers_unified (phone_suffix8) + fallback leads
+    const nameBySuffix = new Map<string, string>();
+    for (let i = 0; i < suffixList.length; i += 500) {
+      const chunk = suffixList.slice(i, i + 500);
+      const { data } = await supabase
+        .from("customers_unified")
+        .select("phone_suffix8, name")
+        .in("phone_suffix8", chunk);
+      for (const r of (data ?? []) as any[]) {
+        const nm = String(r?.name ?? "").trim();
+        if (r?.phone_suffix8 && nm && !nameBySuffix.has(r.phone_suffix8)) {
+          nameBySuffix.set(r.phone_suffix8, nm);
+        }
+      }
+    }
+    const missingSuffixes = suffixList.filter((s) => !nameBySuffix.has(s));
+    if (missingSuffixes.length && missingSuffixes.length <= 2000) {
+      const missSet = new Set(missingSuffixes);
+      for (const tbl of ["ad_leads", "event_leads", "lp_leads", "link_page_leads"]) {
+        const { data } = await supabase.from(tbl).select("name, phone").limit(20000);
+        for (const r of (data ?? []) as any[]) {
+          const suf = normalizePhoneSuffix8(r?.phone);
+          if (!suf || !missSet.has(suf) || nameBySuffix.has(suf)) continue;
+          const nm = String(r?.name ?? "").trim();
+          if (nm) nameBySuffix.set(suf, nm);
+        }
+      }
+    }
+    const entries = normalized.map((phone, i) => ({
+      phone,
+      name: nameBySuffix.get(suffixList[i]) || "",
+    }));
+    const withName = entries.filter((e) => e.name).length;
+
     const filtro = {
       mode: "phone_list",
       phones: normalized,
+      entries,
       descricao: payload.descricao_curta ?? null,
       source: payload.source ?? sourceRefPayload?.source ?? "manual",
       source_ref: sourceRefPayload,
@@ -775,7 +812,7 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
       nome: payload.nome,
       filtro_json: filtro,
     }).select().single();
-    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos", total_telefones: normalized.length };
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos", total_telefones: normalized.length, com_nome: withName };
   }
   return { error: `kind desconhecido: ${kind}` };
 }
