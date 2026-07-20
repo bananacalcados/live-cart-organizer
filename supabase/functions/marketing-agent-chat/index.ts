@@ -43,7 +43,7 @@ const TOOLS_ANTHROPIC = [
   { name: "list_dispatches", description: "READ. Lista disparos em massa (dispatch_history) no período: id, campaign_name/template_name, started_at, audience_source, total/sent/failed, status, provider. Use para escolher IDs a analisar depois com get_dispatch_result.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, limite: { type: "integer", description: "Padrão 30, máx 100" } }, required: ["desde", "ate"] } },
   { name: "get_dispatch_result", description: "READ. Resultado detalhado de 1+ disparos com FATURAMENTO. Usa a mesma base do dashboard: lê TODOS os dispatch_recipients paginados, match por DDD+8, vendas em pos_sales por customer_id→pos_customers.whatsapp OU customer_phone, além de zoppy_sales e orders pagos. Buckets: engaged/read/converted/not_converted/replied/failed. Retorna source_ref por bucket; para criar público grande use propor_publico_lista com source_ref, não copie milhares de telefones.", input_schema: { type: "object", properties: { dispatch_ids: { type: "array", items: { type: "string" }, description: "IDs de dispatch_history" }, sample_limit: { type: "integer", description: "Padrão 50, máx 500 telefones por bucket." }, desde: { type: "string", description: "YYYY-MM-DD opcional. Início da janela de conversão. Padrão: earliest started_at dos disparos." }, ate: { type: "string", description: "YYYY-MM-DD opcional. Fim da janela de conversão. Padrão: hoje." } }, required: ["dispatch_ids"] } },
   { name: "get_leads_pool", description: "READ. Pool bruto de leads em TODAS as bases (ad_leads, event_leads, lp_leads, link_page_leads) no período, deduplicado por sufixo de 8 dígitos. Retorna telefones, canal e opcionalmente exclui quem já é cliente com compra em customers_unified. Use para propor públicos como 'leads frescos que não compraram'.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, canais: { type: "array", items: { type: "string", enum: ["ad_leads", "event_leads", "lp_leads", "link_page_leads"] }, description: "Padrão: todas" }, excluir_compradores: { type: "boolean", description: "Se true, exclui leads que já têm total_orders>0 em customers_unified" }, limite: { type: "integer", description: "Máx 10000, padrão 5000" } }, required: ["desde", "ate"] } },
-  { name: "propor_publico_lista", description: "PROPÕE criar um público em campanha_publicos a partir de lista fixa. Para listas pequenas pode enviar phones[]. Para listas grandes derivadas de disparo, prefira source_ref de get_dispatch_result (ex.: {dispatch_ids:[...], bucket:'not_converted', desde:'YYYY-MM-DD', ate:'YYYY-MM-DD'}); o servidor recalcula a lista completa no commit. Só grava após confirmação.", input_schema: { type: "object", properties: { nome: { type: "string" }, phones: { type: "array", items: { type: "string" }, description: "Telefones opcionais. Use apenas para listas pequenas/manuais." }, source: { type: "string", description: "dispatch_result | leads_pool | manual" }, source_ref: { type: "object", description: "Referência rastreável para recomputar a lista. Para disparos: dispatch_ids[], bucket, desde, ate." }, descricao_curta: { type: "string" } }, required: ["nome"] } },
+  { name: "propor_publico_lista", description: "PROPÕE criar um público em campanha_publicos a partir de lista fixa. Para listas pequenas pode enviar phones[]. Para listas grandes: use source_ref e o servidor recalcula. Para disparo: source='dispatch_result', source_ref={dispatch_ids:[...], bucket:'not_converted', desde, ate}. Para leads: source='leads_pool', source_ref={desde, ate, canais?:[...], excluir_compradores?:bool}. Só grava após confirmação.", input_schema: { type: "object", properties: { nome: { type: "string" }, phones: { type: "array", items: { type: "string" }, description: "Telefones opcionais. Use apenas para listas pequenas/manuais." }, source: { type: "string", description: "dispatch_result | leads_pool | manual" }, source_ref: { type: "object", description: "Referência rastreável para recomputar a lista." }, descricao_curta: { type: "string" } }, required: ["nome"] } },
 ];
 
 const TOOLS_OPENAI = TOOLS_ANTHROPIC.map((t) => ({
@@ -442,6 +442,49 @@ async function resolveDispatchSourcePhones(supabase: any, ref: any): Promise<str
   return phoneLists.consolidated?.[bucket] ?? [];
 }
 
+async function resolveLeadsPoolPhones(supabase: any, ref: any): Promise<string[]> {
+  if (!ref) return [];
+  const desde = ref.desde;
+  const ate = ref.ate;
+  if (!desde || !ate) return [];
+  const canais: string[] = Array.isArray(ref.canais) && ref.canais.length
+    ? ref.canais
+    : ["ad_leads", "event_leads", "lp_leads", "link_page_leads"];
+  const limite = Math.min(ref.limite ?? 10000, 20000);
+  const desdeISO = desde;
+  const ateISO = ate + "T23:59:59";
+  const bySuffix = new Map<string, string>();
+  for (const canal of canais) {
+    const { data } = await supabase
+      .from(canal)
+      .select("phone, created_at")
+      .gte("created_at", desdeISO)
+      .lte("created_at", ateISO)
+      .order("created_at", { ascending: false })
+      .limit(limite);
+    for (const r of (data ?? [])) {
+      const suf = normalizePhoneSuffix8(r.phone);
+      if (!suf || bySuffix.has(suf)) continue;
+      bySuffix.set(suf, r.phone);
+    }
+  }
+  if (ref.excluir_compradores) {
+    const suffixes = Array.from(bySuffix.keys());
+    for (let i = 0; i < suffixes.length; i += 500) {
+      const chunk = suffixes.slice(i, i + 500);
+      const { data: buyers } = await supabase
+        .from("customers_unified")
+        .select("phone_suffix8, total_orders")
+        .in("phone_suffix8", chunk)
+        .gt("total_orders", 0);
+      for (const b of (buyers ?? [])) {
+        if (b.phone_suffix8) bySuffix.delete(b.phone_suffix8);
+      }
+    }
+  }
+  return Array.from(bySuffix.values()).slice(0, limite);
+}
+
 async function executeReadTool(supabase: any, name: string, input: any): Promise<any> {
   if (name === "preview_audience") {
     const filtro = input?.filtro_json ?? {};
@@ -685,19 +728,42 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
   if (kind === "propor_publico_lista") {
     let phonesIn: any[] = Array.isArray(payload.phones) ? payload.phones : [];
     const sourceRefPayload = payload.source_ref ?? null;
-    if (!phonesIn.length && (payload.source === "dispatch_result" || sourceRefPayload?.source === "dispatch_result" || Array.isArray(sourceRefPayload?.dispatch_ids))) {
+    const src = payload.source ?? sourceRefPayload?.source ?? null;
+    const rawInputCount = phonesIn.length;
+    if (!phonesIn.length && (src === "dispatch_result" || Array.isArray(sourceRefPayload?.dispatch_ids))) {
       phonesIn = await resolveDispatchSourcePhones(supabase, sourceRefPayload);
     }
+    if (!phonesIn.length && (src === "leads_pool" || (sourceRefPayload && (sourceRefPayload.desde || sourceRefPayload.canais)))) {
+      phonesIn = await resolveLeadsPoolPhones(supabase, sourceRefPayload);
+    }
+    const resolvedCount = phonesIn.length;
     const seen = new Set<string>();
     const normalized: string[] = [];
+    let invalidPhones = 0;
     for (const raw of phonesIn) {
       const e164 = normalizePhoneE164BR(raw);
       const suf = e164 ? e164.slice(-8) : normalizePhoneSuffix8(raw);
-      if (!suf || seen.has(suf)) continue;
+      if (!suf) { invalidPhones++; continue; }
+      if (seen.has(suf)) continue;
       seen.add(suf);
       normalized.push(e164 || String(raw));
     }
-    if (!normalized.length) return { error: "Nenhum telefone válido na lista" };
+    if (!normalized.length) {
+      return {
+        error: "Nenhum telefone válido na lista",
+        diagnostico: {
+          phones_recebidos_no_payload: rawInputCount,
+          phones_resolvidos_via_source_ref: resolvedCount,
+          phones_invalidos_descartados: invalidPhones,
+          source: src,
+          source_ref: sourceRefPayload,
+          dica: resolvedCount === 0
+            ? "source_ref não retornou telefones. Confirme desde/ate/canais em get_leads_pool ou dispatch_ids/bucket em get_dispatch_result antes de propor."
+            : "Todos os telefones falharam na normalização BR. Verifique o formato de origem.",
+        },
+      };
+    }
+
     const filtro = {
       mode: "phone_list",
       phones: normalized,
