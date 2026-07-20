@@ -1434,12 +1434,14 @@ export function MassTemplateDispatcher() {
         if (!guardResult) throw new Error('tipo_comunicacao obrigatório');
         if (guardResult.inserted === 0) {
           toast.error("Nenhum destinatário elegível — motor de cota bloqueou todos. Verifique tipo de comunicação e classificações.");
+          notifyQuotaBlocked(guardResult.excludedTotal, guardResult.excludedByReason);
           await supabase.from('dispatch_history').update({ status: 'failed' } as any).eq('id', dispatchId);
           setIsSending(false);
           return;
         }
         setSendProgress({ sent: 0, total: guardResult.inserted, failed: 0 });
         toast.success(`✅ ${guardResult.inserted} destinatários enfileirados (motor de cota aplicado).`);
+        notifyQuotaBlocked(guardResult.excludedTotal, guardResult.excludedByReason);
 
         // Só agora ativa — os destinatários elegíveis já estão inseridos pela RPC.
         const { error: actErr } = await supabase
