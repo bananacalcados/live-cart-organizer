@@ -2142,17 +2142,21 @@ export function MassTemplateDispatcher() {
               <span className="text-xs font-medium text-blue-800">Público salvo:</span>
               <SavedAudiencePicker
                 activeId={savedAudienceMeta?.id ?? null}
-                onApply={(suffixes, meta, phoneList) => {
+                onApply={(suffixes, meta, phoneEntries) => {
                   setSavedAudienceSuffixes(suffixes);
                   setSavedAudienceMeta(meta);
-                  if (phoneList && phoneList.length > 0) {
-                    const list: Recipient[] = phoneList.map((raw) => {
-                      const phone = String(raw).replace(/\D/g, '');
+                  if (phoneEntries && phoneEntries.length > 0) {
+                    const list: Recipient[] = phoneEntries.map((entry) => {
+                      const phone = String(entry.phone).replace(/\D/g, '');
+                      const fullName = String(entry.name || '').trim();
+                      const parts = fullName.split(/\s+/).filter(Boolean);
+                      const firstName = parts[0] || '';
+                      const lastName = parts.slice(1).join(' ');
                       return {
                         phone,
-                        name: phone,
-                        firstName: '',
-                        lastName: '',
+                        name: fullName || phone,
+                        firstName,
+                        lastName,
                         source: 'lead' as any,
                       };
                     });
