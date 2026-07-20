@@ -41,7 +41,7 @@ const TOOLS_ANTHROPIC = [
   { name: "preview_audience", description: "READ. Calcula quantos clientes o filtro_json atinge (crm_customers_v via bc_match_audience) e devolve amostra de até 50. Use sempre ANTES de propor_publico para validar o filtro e mostrar volume ao usuário.", input_schema: { type: "object", properties: { filtro_json: { type: "object" } }, required: ["filtro_json"] } },
   { name: "list_audiences", description: "READ. Lista os públicos já salvos em campanha_publicos (id, nome, filtro_json, updated_at) para evitar duplicatas.", input_schema: { type: "object", properties: {} } },
   { name: "list_dispatches", description: "READ. Lista disparos em massa (dispatch_history) no período: id, campaign_name/template_name, started_at, audience_source, total/sent/failed, status, provider. Use para escolher IDs a analisar depois com get_dispatch_result.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, limite: { type: "integer", description: "Padrão 30, máx 100" } }, required: ["desde", "ate"] } },
-  { name: "get_dispatch_result", description: "READ. Resultado detalhado de 1+ disparos com FATURAMENTO. Usa a mesma base do dashboard: lê TODOS os dispatch_recipients paginados, match por DDD+8, vendas em pos_sales por customer_id→pos_customers.whatsapp OU customer_phone, além de zoppy_sales e orders pagos. Buckets: engaged/read/converted/not_converted/replied/failed. Retorna source_ref por bucket; para criar público grande use propor_publico_lista com source_ref, não copie milhares de telefones.", input_schema: { type: "object", properties: { dispatch_ids: { type: "array", items: { type: "string" }, description: "IDs de dispatch_history" }, sample_limit: { type: "integer", description: "Padrão 50, máx 500 telefones por bucket." }, desde: { type: "string", description: "YYYY-MM-DD opcional. Início da janela de conversão. Padrão: earliest started_at dos disparos." }, ate: { type: "string", description: "YYYY-MM-DD opcional. Fim da janela de conversão. Padrão: hoje." } }, required: ["dispatch_ids"] } },
+  { name: "get_dispatch_result", description: "READ. Resultado detalhado de 1+ disparos com FATURAMENTO. Match DDD+8. Buckets consolidados (JÁ DEDUPLICADOS por telefone único; NUNCA some per-dispatch): engaged_unique, read_unique, read_not_converted_unique (quem LEU e não comprou), read_converted_unique, converted_unique, not_converted_unique (recebeu e não comprou), replied_unique, failed_unique. Use consolidated.source_refs.{bucket} em propor_publico_lista.", input_schema: { type: "object", properties: { dispatch_ids: { type: "array", items: { type: "string" }, description: "IDs de dispatch_history" }, sample_limit: { type: "integer", description: "Padrão 50, máx 500 telefones por bucket." }, desde: { type: "string", description: "YYYY-MM-DD opcional. Início da janela de conversão. Padrão: earliest started_at dos disparos." }, ate: { type: "string", description: "YYYY-MM-DD opcional. Fim da janela de conversão. Padrão: hoje." } }, required: ["dispatch_ids"] } },
   { name: "get_leads_pool", description: "READ. Pool bruto de leads em TODAS as bases (ad_leads, event_leads, lp_leads, link_page_leads) no período, deduplicado por sufixo de 8 dígitos. Retorna telefones, canal e opcionalmente exclui quem já é cliente com compra em customers_unified. Use para propor públicos como 'leads frescos que não compraram'.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, canais: { type: "array", items: { type: "string", enum: ["ad_leads", "event_leads", "lp_leads", "link_page_leads"] }, description: "Padrão: todas" }, excluir_compradores: { type: "boolean", description: "Se true, exclui leads que já têm total_orders>0 em customers_unified" }, limite: { type: "integer", description: "Máx 10000, padrão 5000" } }, required: ["desde", "ate"] } },
   { name: "propor_publico_lista", description: "PROPÕE criar um público em campanha_publicos a partir de lista fixa. Para listas pequenas pode enviar phones[]. Para listas grandes: use source_ref e o servidor recalcula. Para disparo: source='dispatch_result', source_ref={dispatch_ids:[...], bucket:'not_converted', desde, ate}. Para leads: source='leads_pool', source_ref={desde, ate, canais?:[...], excluir_compradores?:bool}. Só grava após confirmação.", input_schema: { type: "object", properties: { nome: { type: "string" }, phones: { type: "array", items: { type: "string" }, description: "Telefones opcionais. Use apenas para listas pequenas/manuais." }, source: { type: "string", description: "dispatch_result | leads_pool | manual" }, source_ref: { type: "object", description: "Referência rastreável para recomputar a lista." }, descricao_curta: { type: "string" } }, required: ["nome"] } },
 ];
@@ -381,6 +381,14 @@ async function analyzeDispatchResult(supabase: any, input: any): Promise<{ resul
   const convertedAll: string[] = [];
   const notConvertedAll: string[] = [];
   const repliedAll: string[] = [];
+  const readAll = new Set<string>();
+  const failedAll = new Set<string>();
+  for (const pd of perDispatch.values()) {
+    for (const k of pd.read_ddd8) readAll.add(k);
+    for (const k of pd.failed_ddd8) failedAll.add(k);
+  }
+  const readNotConvertedAll: string[] = [];
+  const readConvertedAll: string[] = [];
   let totalConverters = 0, totalOrders = 0, totalRevenue = 0, totalCost = 0;
   for (const h of histRows) {
     const category = String(h.template_category || "MARKETING").toUpperCase();
@@ -393,30 +401,46 @@ async function analyzeDispatchResult(supabase: any, input: any): Promise<{ resul
     else notConvertedAll.push(k);
     if (repliedGlobal.has(k)) repliedAll.push(k);
   }
+  for (const k of readAll) {
+    if (salesByKey.has(k)) readConvertedAll.push(k);
+    else readNotConvertedAll.push(k);
+  }
   const consolidatedPhones = {
     engaged: phonesFromKeys(allEngaged), converted: phonesFromKeys(convertedAll),
     not_converted: phonesFromKeys(notConvertedAll), replied: phonesFromKeys(repliedAll),
+    read: phonesFromKeys(readAll), failed: phonesFromKeys(failedAll),
+    read_not_converted: phonesFromKeys(readNotConvertedAll),
+    read_converted: phonesFromKeys(readConvertedAll),
   };
 
   return {
     result: {
       window: { desde: convFrom, ate: convTo ?? "now" },
       match_key: "DDD+8",
+      dedup_note: "TODOS os totais consolidados abaixo já são únicos por DDD+8. NUNCA some per-dispatch: quem recebeu N disparos aparece 1x aqui. Para 'quem leu e não comprou' use consolidated.read_not_converted_unique — não subtraia manualmente.",
       sales_sources: ["pos_sales via customer_id/phone", "zoppy_sales", "orders"],
       sales_status_filter: ["paid", "completed", "complete"],
       dispatches: perDispatchReport,
       overlap,
       consolidated: {
         engaged_unique: allEngaged.size,
+        read_unique: readAll.size,
+        read_not_converted_unique: readNotConvertedAll.length,
+        read_converted_unique: readConvertedAll.length,
+        failed_unique: failedAll.size,
         converted_unique: totalConverters,
         orders_total: totalOrders,
         faturamento_brl: Number(totalRevenue.toFixed(2)),
         conv_rate_engaged_pct: allEngaged.size ? Number(((totalConverters / allEngaged.size) * 100).toFixed(2)) : 0,
+        conv_rate_read_pct: readAll.size ? Number(((readConvertedAll.length / readAll.size) * 100).toFixed(2)) : 0,
         replied_unique: repliedGlobal.size,
         cost_total_brl: Number(totalCost.toFixed(2)),
         roas: totalCost > 0 ? Number((totalRevenue / totalCost).toFixed(2)) : null,
         source_refs: {
           engaged: sourceRef(ids, "engaged", defaultDesde, defaultAte),
+          read: sourceRef(ids, "read", defaultDesde, defaultAte),
+          read_not_converted: sourceRef(ids, "read_not_converted", defaultDesde, defaultAte),
+          read_converted: sourceRef(ids, "read_converted", defaultDesde, defaultAte),
           converted: sourceRef(ids, "converted", defaultDesde, defaultAte),
           not_converted: sourceRef(ids, "not_converted", defaultDesde, defaultAte),
           replied: sourceRef(ids, "replied", defaultDesde, defaultAte),
@@ -430,7 +454,7 @@ async function analyzeDispatchResult(supabase: any, input: any): Promise<{ resul
 async function resolveDispatchSourcePhones(supabase: any, ref: any): Promise<string[]> {
   if (!ref || !Array.isArray(ref.dispatch_ids) || !ref.dispatch_ids.length) return [];
   const bucket = String(ref.bucket || "");
-  if (!["engaged", "read", "failed", "converted", "not_converted", "replied"].includes(bucket)) return [];
+  if (!["engaged", "read", "failed", "converted", "not_converted", "replied", "read_not_converted", "read_converted"].includes(bucket)) return [];
   const { phoneLists } = await analyzeDispatchResult(supabase, {
     dispatch_ids: ref.dispatch_ids,
     desde: ref.desde ?? undefined,
