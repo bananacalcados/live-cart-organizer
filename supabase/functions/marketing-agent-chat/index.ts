@@ -421,8 +421,28 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
       .update(update).eq("id", payload.id).select().single();
     return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos" };
   }
+  if (kind === "propor_publico_lista") {
+    const phonesIn: any[] = Array.isArray(payload.phones) ? payload.phones : [];
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    for (const raw of phonesIn) {
+      const e164 = normalizePhoneE164BR(raw);
+      const suf = e164 ? e164.slice(-8) : normalizePhoneSuffix8(raw);
+      if (!suf || seen.has(suf)) continue;
+      seen.add(suf);
+      normalized.push(e164 || String(raw));
+    }
+    if (!normalized.length) return { error: "Nenhum telefone válido na lista" };
+    const filtro = { mode: "phone_list", phones: normalized, descricao: payload.descricao_curta ?? null };
+    const { data, error } = await supabase.from("campanha_publicos").insert({
+      nome: payload.nome,
+      filtro_json: filtro,
+    }).select().single();
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos", total_telefones: normalized.length };
+  }
   return { error: `kind desconhecido: ${kind}` };
 }
+
 
 function getMonthBounds(mesRef: string): { start: string; end: string } {
   const [year, month] = mesRef.split("-").map(Number);
