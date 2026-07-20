@@ -227,6 +227,10 @@ export function MassTemplateDispatcher() {
   // Saved audience (campanha_publicos) — filtro adicional final
   const [savedAudienceSuffixes, setSavedAudienceSuffixes] = useState<Set<string> | null>(null);
   const [savedAudienceMeta, setSavedAudienceMeta] = useState<{ id: string; nome: string } | null>(null);
+  // Quando o público salvo é modo phone_list (lista fixa criada pelo Estrategista),
+  // usamos a lista bruta como fonte direta — bypass do baseRecipients (CRM/leads).
+  const [phoneListRecipients, setPhoneListRecipients] = useState<Recipient[] | null>(null);
+
   const [saveAudienceOpen, setSaveAudienceOpen] = useState(false);
 
 
@@ -994,21 +998,25 @@ export function MassTemplateDispatcher() {
 
   // Recipients after applying cooldown exclusion + público salvo (interseção por sufixo 8 díg.)
   const filteredRecipients = useMemo((): Recipient[] => {
-    let out = baseRecipients;
+    // Modo phone_list: a lista fixa é a fonte da verdade — ignora filtros de CRM/leads.
+    let out: Recipient[] = phoneListRecipients ? phoneListRecipients : baseRecipients;
     if (cooldownApplied && cooldownExcludedPhones.size > 0) {
       out = out.filter(r => {
         const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
         return !cooldownExcludedPhones.has(suffix);
       });
     }
-    if (savedAudienceSuffixes) {
+    // Só aplica intersecção por sufixo quando NÃO estamos em phone_list
+    // (nesse caso o próprio phoneListRecipients já é o filtro).
+    if (savedAudienceSuffixes && !phoneListRecipients) {
       out = out.filter(r => {
         const suffix = r.phone?.replace(/\D/g, '').slice(-8) || '';
         return savedAudienceSuffixes.has(suffix);
       });
     }
     return out;
-  }, [baseRecipients, cooldownApplied, cooldownExcludedPhones, savedAudienceSuffixes]);
+  }, [baseRecipients, cooldownApplied, cooldownExcludedPhones, savedAudienceSuffixes, phoneListRecipients]);
+
 
 
   // How many of the CURRENT audience were actually removed by the cooldown
@@ -2134,16 +2142,32 @@ export function MassTemplateDispatcher() {
               <span className="text-xs font-medium text-blue-800">Público salvo:</span>
               <SavedAudiencePicker
                 activeId={savedAudienceMeta?.id ?? null}
-                onApply={(suffixes, meta) => {
+                onApply={(suffixes, meta, phoneList) => {
                   setSavedAudienceSuffixes(suffixes);
                   setSavedAudienceMeta(meta);
+                  if (phoneList && phoneList.length > 0) {
+                    const list: Recipient[] = phoneList.map((raw) => {
+                      const phone = String(raw).replace(/\D/g, '');
+                      return {
+                        phone,
+                        name: phone,
+                        firstName: '',
+                        lastName: '',
+                        source: 'lead' as any,
+                      };
+                    });
+                    setPhoneListRecipients(list);
+                  } else {
+                    setPhoneListRecipients(null);
+                  }
                 }}
               />
               {savedAudienceMeta && (
                 <Badge variant="secondary" className="text-[10px]">
-                  Restringindo a "{savedAudienceMeta.nome}" ({savedAudienceSuffixes?.size ?? 0} contatos)
+                  {phoneListRecipients ? "Lista fixa" : "Restringindo a"} "{savedAudienceMeta.nome}" ({savedAudienceSuffixes?.size ?? 0} contatos)
                 </Badge>
               )}
+
               <Button
                 size="sm"
                 variant="outline"

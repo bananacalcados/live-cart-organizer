@@ -14,10 +14,18 @@ interface PublicoRow {
 }
 
 interface Props {
-  /** Chamado com o Set de sufixos de 8 dígitos permitidos, ou null quando limpo. */
-  onApply: (allowedPhoneSuffix8: Set<string> | null, meta: { id: string; nome: string } | null) => void;
+  /** Chamado com o Set de sufixos de 8 dígitos permitidos, ou null quando limpo.
+   *  Para públicos em modo phone_list (lista fixa criada pelo Estrategista), também
+   *  passa a lista bruta de telefones — o Dispatcher usa como fonte direta, sem filtrar
+   *  por CRM/leads. */
+  onApply: (
+    allowedPhoneSuffix8: Set<string> | null,
+    meta: { id: string; nome: string } | null,
+    phoneList?: string[] | null,
+  ) => void;
   activeId: string | null;
 }
+
 
 export function SavedAudiencePicker({ onApply, activeId }: Props) {
   const [rows, setRows] = useState<PublicoRow[]>([]);
@@ -39,12 +47,34 @@ export function SavedAudiencePicker({ onApply, activeId }: Props) {
 
   const applyPublico = async (id: string) => {
     if (!id || id === "__none__") {
-      onApply(null, null);
+      onApply(null, null, null);
       return;
     }
+
     const row = rows.find((r) => r.id === id);
     if (!row) return;
     setApplying(true);
+
+    // Modo phone_list: público construído a partir de uma lista fixa de telefones
+    // (usado pelo Estrategista quando cria públicos a partir de resultado de disparo
+    // ou de leads que ainda não estão no CRM unificado). Não passa pela RPC.
+    const filtro: any = row.filtro_json;
+    if (filtro && filtro.mode === "phone_list" && Array.isArray(filtro.phones)) {
+      const suffixes = new Set<string>();
+      const normalized: string[] = [];
+      for (const raw of filtro.phones) {
+        const digits = String(raw || "").replace(/\D/g, "");
+        if (digits.length >= 8) {
+          suffixes.add(digits.slice(-8));
+          normalized.push(String(raw));
+        }
+      }
+      setApplying(false);
+      onApply(suffixes, { id: row.id, nome: row.nome }, normalized);
+      toast.success(`Público "${row.nome}" aplicado (${suffixes.size} contatos — lista fixa)`);
+      return;
+    }
+
     const { data, error } = await supabase.rpc("list_campaign_audience", {
       p_filtro: row.filtro_json as any,
       p_limit: 5000,
@@ -60,9 +90,11 @@ export function SavedAudiencePicker({ onApply, activeId }: Props) {
       const digits = String(r.phone || "").replace(/\D/g, "");
       if (digits.length >= 8) suffixes.add(digits.slice(-8));
     }
-    onApply(suffixes, { id: row.id, nome: row.nome });
+    onApply(suffixes, { id: row.id, nome: row.nome }, null);
     toast.success(`Público "${row.nome}" aplicado (${suffixes.size} contatos)`);
+
   };
+
 
   return (
     <div className="flex items-center gap-2">
@@ -84,7 +116,7 @@ export function SavedAudiencePicker({ onApply, activeId }: Props) {
         </Select>
       </div>
       {activeId && (
-        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onApply(null, null)}>
+        <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => onApply(null, null, null)}>
           <X className="h-3 w-3" />
         </Button>
       )}

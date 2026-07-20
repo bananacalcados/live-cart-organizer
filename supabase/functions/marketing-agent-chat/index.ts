@@ -40,6 +40,10 @@ const TOOLS_ANTHROPIC = [
   { name: "propor_atualizar_publico", description: "PROPÕE atualizar nome e/ou filtro_json de um público existente. Só grava após confirmação.", input_schema: { type: "object", properties: { id: { type: "string" }, nome: { type: "string" }, filtro_json: { type: "object" } }, required: ["id"] } },
   { name: "preview_audience", description: "READ. Calcula quantos clientes o filtro_json atinge (crm_customers_v via bc_match_audience) e devolve amostra de até 50. Use sempre ANTES de propor_publico para validar o filtro e mostrar volume ao usuário.", input_schema: { type: "object", properties: { filtro_json: { type: "object" } }, required: ["filtro_json"] } },
   { name: "list_audiences", description: "READ. Lista os públicos já salvos em campanha_publicos (id, nome, filtro_json, updated_at) para evitar duplicatas.", input_schema: { type: "object", properties: {} } },
+  { name: "list_dispatches", description: "READ. Lista disparos em massa (dispatch_history) no período: id, campaign_name/template_name, started_at, audience_source, total/sent/failed, status, provider. Use para escolher IDs a analisar depois com get_dispatch_result.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, limite: { type: "integer", description: "Padrão 30, máx 100" } }, required: ["desde", "ate"] } },
+  { name: "get_dispatch_result", description: "READ. Resultado detalhado de um ou mais disparos: buckets de status (sent/delivered/read/failed), conversão (quem comprou em pos_sales após started_at cruzando telefone), replied (quem respondeu no whatsapp após envio). Para cada bucket devolve total e amostra até 200 telefones (formato E.164 sem +). Use os telefones em propor_publico_lista para criar públicos derivados como 'não converteram' ou 'engajaram e não compraram'.", input_schema: { type: "object", properties: { dispatch_ids: { type: "array", items: { type: "string" }, description: "IDs de dispatch_history" }, sample_limit: { type: "integer", description: "Padrão 200, máx 5000 telefones por bucket." } }, required: ["dispatch_ids"] } },
+  { name: "get_leads_pool", description: "READ. Pool bruto de leads em TODAS as bases (ad_leads, event_leads, lp_leads, link_page_leads) no período, deduplicado por sufixo de 8 dígitos. Retorna telefones, canal e opcionalmente exclui quem já é cliente com compra em customers_unified. Use para propor públicos como 'leads frescos que não compraram'.", input_schema: { type: "object", properties: { desde: { type: "string", description: "YYYY-MM-DD" }, ate: { type: "string", description: "YYYY-MM-DD" }, canais: { type: "array", items: { type: "string", enum: ["ad_leads", "event_leads", "lp_leads", "link_page_leads"] }, description: "Padrão: todas" }, excluir_compradores: { type: "boolean", description: "Se true, exclui leads que já têm total_orders>0 em customers_unified" }, limite: { type: "integer", description: "Máx 10000, padrão 5000" } }, required: ["desde", "ate"] } },
+  { name: "propor_publico_lista", description: "PROPÕE criar um público em campanha_publicos a partir de uma LISTA FIXA de telefones (formato { mode: 'phone_list', phones: [...] }). Use quando o público NÃO cabe nos filtros padrão do CRM (ex.: 'quem respondeu a campanha X', 'leads recentes que não compraram'). Só grava após confirmação. Sempre mostre ao usuário quantos telefones e como foram obtidos antes de propor.", input_schema: { type: "object", properties: { nome: { type: "string" }, phones: { type: "array", items: { type: "string" }, description: "Telefones (aceita E.164, DDD+numero, com ou sem 55). O sistema normaliza." }, descricao_curta: { type: "string" } }, required: ["nome", "phones"] } },
 ];
 
 const TOOLS_OPENAI = TOOLS_ANTHROPIC.map((t) => ({
@@ -54,12 +58,32 @@ const READ_TOOLS = new Set([
   "get_stock_by_size", "get_leads_by_channel", "get_leads_lookup", "get_campaign_results",
   "get_dispatch_pressure",
   "preview_audience", "list_audiences",
+  "list_dispatches", "get_dispatch_result", "get_leads_pool",
 ]);
 const PROPOSAL_TOOLS = new Set([
   "propor_decisao", "propor_acao_calendario", "propor_meta",
   "propor_entrada_calendario", "propor_meta_mensal_calendario",
-  "propor_publico", "propor_atualizar_publico",
+  "propor_publico", "propor_atualizar_publico", "propor_publico_lista",
 ]);
+
+
+function normalizePhoneSuffix8(raw: any): string | null {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  if (digits.length < 8) return null;
+  return digits.slice(-8);
+}
+
+function normalizePhoneE164BR(raw: any): string | null {
+  let digits = String(raw ?? "").replace(/\D/g, "");
+  if (digits.length < 10) return null;
+  if (digits.length >= 12 && digits.startsWith("55")) digits = digits.slice(2);
+  if (digits.length === 10) {
+    // DDD + 8 dígitos → insere 9
+    digits = digits.slice(0, 2) + "9" + digits.slice(2);
+  }
+  if (digits.length !== 11) return null;
+  return "55" + digits;
+}
 
 async function executeReadTool(supabase: any, name: string, input: any): Promise<any> {
   if (name === "preview_audience") {
@@ -88,6 +112,174 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
     if (error) return { error: error.message };
     return { publicos: data ?? [] };
   }
+  if (name === "list_dispatches") {
+    const limite = Math.min(input?.limite ?? 30, 100);
+    const { data, error } = await supabase
+      .from("dispatch_history")
+      .select("id, campaign_name, template_name, started_at, completed_at, audience_source, total_recipients, sent_count, failed_count, status, provider, tipo_comunicacao, shadow_mode")
+      .gte("started_at", input.desde)
+      .lte("started_at", input.ate + "T23:59:59")
+      .order("started_at", { ascending: false })
+      .limit(limite);
+    if (error) return { error: error.message };
+    return { disparos: data ?? [] };
+  }
+  if (name === "get_dispatch_result") {
+    const ids: string[] = Array.isArray(input?.dispatch_ids) ? input.dispatch_ids : [];
+    if (!ids.length) return { error: "dispatch_ids obrigatório" };
+    const sampleLimit = Math.min(input?.sample_limit ?? 200, 5000);
+
+    const { data: hist, error: eH } = await supabase
+      .from("dispatch_history")
+      .select("id, campaign_name, template_name, started_at, total_recipients, sent_count, failed_count, status, provider, audience_source")
+      .in("id", ids);
+    if (eH) return { error: eH.message };
+    const earliestStart = (hist ?? []).reduce((min: string | null, r: any) => {
+      if (!r.started_at) return min;
+      return !min || r.started_at < min ? r.started_at : min;
+    }, null as string | null);
+
+    const { data: recips, error: eR } = await supabase
+      .from("dispatch_recipients")
+      .select("dispatch_id, phone, status, sent_at, last_error")
+      .in("dispatch_id", ids)
+      .limit(50000);
+    if (eR) return { error: eR.message };
+
+    // Buckets por status
+    const buckets: Record<string, { phones: Set<string>; suffixes: Set<string> }> = {};
+    const suffixToPhone = new Map<string, string>();
+    const allEngagedSuffixes = new Set<string>();
+    for (const r of (recips ?? [])) {
+      const st = r.status || "pending";
+      const b = (buckets[st] ||= { phones: new Set(), suffixes: new Set() });
+      b.phones.add(r.phone);
+      const suf = normalizePhoneSuffix8(r.phone);
+      if (suf) {
+        b.suffixes.add(suf);
+        if (!suffixToPhone.has(suf)) suffixToPhone.set(suf, r.phone);
+        if (st === "sent" || st === "delivered" || st === "read") {
+          allEngagedSuffixes.add(suf);
+        }
+      }
+    }
+
+    // Conversão: pos_sales.customer_phone cujo suffix bate com engajados, criado após earliestStart
+    const convertedSuffixes = new Set<string>();
+    if (earliestStart && allEngagedSuffixes.size > 0) {
+      // Busca em batch — pega pos_sales pagas desde o start; filtra em memória por sufixo.
+      const { data: sales } = await supabase
+        .from("pos_sales")
+        .select("customer_phone, created_at")
+        .gte("created_at", earliestStart)
+        .neq("status_cancelamento", "cancelado")
+        .not("customer_phone", "is", null)
+        .limit(20000);
+      for (const s of (sales ?? [])) {
+        const suf = normalizePhoneSuffix8(s.customer_phone);
+        if (suf && allEngagedSuffixes.has(suf)) convertedSuffixes.add(suf);
+      }
+    }
+
+    // Replied: whatsapp_messages inbound cujo remetente bate por sufixo, após earliestStart
+    const repliedSuffixes = new Set<string>();
+    if (earliestStart && allEngagedSuffixes.size > 0) {
+      const { data: msgs } = await supabase
+        .from("whatsapp_messages")
+        .select("phone, direction, created_at")
+        .eq("direction", "incoming")
+        .gte("created_at", earliestStart)
+        .limit(50000);
+      for (const m of (msgs ?? [])) {
+        const suf = normalizePhoneSuffix8(m.phone);
+        if (suf && allEngagedSuffixes.has(suf)) repliedSuffixes.add(suf);
+      }
+    }
+
+    const notConvertedSuffixes = new Set<string>();
+    for (const suf of allEngagedSuffixes) if (!convertedSuffixes.has(suf)) notConvertedSuffixes.add(suf);
+
+    const sufSetToSample = (s: Set<string>) => {
+      const out: string[] = [];
+      for (const suf of s) {
+        const p = suffixToPhone.get(suf);
+        if (p) out.push(p);
+        if (out.length >= sampleLimit) break;
+      }
+      return out;
+    };
+
+    const bucketReport: any = {};
+    for (const [k, v] of Object.entries(buckets)) {
+      bucketReport[k] = { total: v.phones.size, sample: Array.from(v.phones).slice(0, Math.min(sampleLimit, 200)) };
+    }
+
+    return {
+      dispatches: hist ?? [],
+      totals_by_status: Object.fromEntries(Object.entries(buckets).map(([k, v]) => [k, v.phones.size])),
+      buckets: bucketReport,
+      engaged: { total: allEngagedSuffixes.size, note: "sent+delivered+read (dedup por sufixo 8)" },
+      converted: { total: convertedSuffixes.size, sample_phones: sufSetToSample(convertedSuffixes) },
+      not_converted: { total: notConvertedSuffixes.size, sample_phones: sufSetToSample(notConvertedSuffixes) },
+      replied: { total: repliedSuffixes.size, sample_phones: sufSetToSample(repliedSuffixes) },
+    };
+  }
+  if (name === "get_leads_pool") {
+    const canais: string[] = Array.isArray(input?.canais) && input.canais.length
+      ? input.canais
+      : ["ad_leads", "event_leads", "lp_leads", "link_page_leads"];
+    const limite = Math.min(input?.limite ?? 5000, 10000);
+    const desdeISO = input.desde;
+    const ateISO = input.ate + "T23:59:59";
+
+    const bySuffix = new Map<string, { phone: string; name: string | null; canal: string; created_at: string }>();
+
+    for (const canal of canais) {
+      const { data } = await supabase
+        .from(canal)
+        .select("phone, name, created_at")
+        .gte("created_at", desdeISO)
+        .lte("created_at", ateISO)
+        .order("created_at", { ascending: false })
+        .limit(limite);
+      for (const r of (data ?? [])) {
+        const suf = normalizePhoneSuffix8(r.phone);
+        if (!suf) continue;
+        if (!bySuffix.has(suf)) {
+          bySuffix.set(suf, { phone: r.phone, name: r.name ?? null, canal, created_at: r.created_at });
+        }
+      }
+    }
+
+    let removedBuyers = 0;
+    if (input?.excluir_compradores) {
+      const suffixes = Array.from(bySuffix.keys());
+      // Query customers_unified by suffix in chunks
+      for (let i = 0; i < suffixes.length; i += 500) {
+        const chunk = suffixes.slice(i, i + 500);
+        const { data: buyers } = await supabase
+          .from("customers_unified")
+          .select("phone_suffix8, total_orders")
+          .in("phone_suffix8", chunk)
+          .gt("total_orders", 0);
+        for (const b of (buyers ?? [])) {
+          const suf = b.phone_suffix8;
+          if (suf && bySuffix.delete(suf)) removedBuyers++;
+        }
+
+      }
+    }
+
+    const leads = Array.from(bySuffix.values()).slice(0, limite);
+    return {
+      total: leads.length,
+      excluidos_por_ja_serem_compradores: removedBuyers,
+      canais_consultados: canais,
+      leads_sample: leads.slice(0, 200),
+      all_phones: leads.map((l) => l.phone),
+    };
+  }
+
   const rpcMap: Record<string, { fn: string; args: (i: any) => any }> = {
     get_agent_memory: { fn: "get_agent_memory", args: (i) => ({ p_mes_ref: i.mes_ref ?? null }) },
     get_classificacao_summary: { fn: "get_classificacao_summary", args: () => ({}) },
@@ -229,8 +421,28 @@ async function commitProposal(supabase: any, kind: string, payload: any, convers
       .update(update).eq("id", payload.id).select().single();
     return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos" };
   }
+  if (kind === "propor_publico_lista") {
+    const phonesIn: any[] = Array.isArray(payload.phones) ? payload.phones : [];
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    for (const raw of phonesIn) {
+      const e164 = normalizePhoneE164BR(raw);
+      const suf = e164 ? e164.slice(-8) : normalizePhoneSuffix8(raw);
+      if (!suf || seen.has(suf)) continue;
+      seen.add(suf);
+      normalized.push(e164 || String(raw));
+    }
+    if (!normalized.length) return { error: "Nenhum telefone válido na lista" };
+    const filtro = { mode: "phone_list", phones: normalized, descricao: payload.descricao_curta ?? null };
+    const { data, error } = await supabase.from("campanha_publicos").insert({
+      nome: payload.nome,
+      filtro_json: filtro,
+    }).select().single();
+    return error ? { error: error.message } : { ok: true, id: data.id, fonte: "campanha_publicos", total_telefones: normalized.length };
+  }
   return { error: `kind desconhecido: ${kind}` };
 }
+
 
 function getMonthBounds(mesRef: string): { start: string; end: string } {
   const [year, month] = mesRef.split("-").map(Number);
@@ -315,6 +527,17 @@ PÚBLICOS REUTILIZÁVEIS (campanha_publicos):
 - NUNCA invente segmento RFM — use apenas os que aparecerem em get_rfm_summary.por_segmento.
 - Tamanhos vão como strings (ex.: "36", "37"). DDDs como strings ("33", "31").
 - Para editar público existente use propor_atualizar_publico (id obrigatório).
+
+PÚBLICOS POR LISTA FIXA DE TELEFONES (quando o filtro padrão NÃO cobre):
+- Use quando o público for baseado em resultado de disparo (converteu / não converteu / respondeu / engajou) OU em leads que ainda não existem em customers_unified.
+- Fluxo:
+  1) Descubra a base: list_dispatches(desde, ate) para pegar IDs; depois get_dispatch_result(dispatch_ids) para buckets (sent/delivered/read, converted, not_converted, replied). OU get_leads_pool(desde, ate, excluir_compradores) para leads frescos.
+  2) Escolha o bucket certo. Explique ao usuário quantos telefones e como foram obtidos (ex.: "leads captados 10–20/jul que ainda não compraram — 342 telefones").
+  3) Chame propor_publico_lista(nome, phones, descricao_curta). Só grava após "ok".
+- O público criado aparece em Marketing → Disparos exatamente como um público normal (com badge "lista fixa"). Não passa por filtro RFM/geografia — a lista é a verdade.
+- Não misture: se o público CABE nos filtros padrão (tamanho, RFM, cidade), prefira propor_publico. phone_list é para o que NÃO cabe.
+
+
 
 
 
