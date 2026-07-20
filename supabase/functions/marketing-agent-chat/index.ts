@@ -259,13 +259,14 @@ async function executeReadTool(supabase: any, name: string, input: any): Promise
         const chunk = suffixes.slice(i, i + 500);
         const { data: buyers } = await supabase
           .from("customers_unified")
-          .select("telefone, total_orders")
+          .select("phone_suffix8, total_orders")
           .in("phone_suffix8", chunk)
           .gt("total_orders", 0);
         for (const b of (buyers ?? [])) {
-          const suf = normalizePhoneSuffix8(b.telefone);
+          const suf = b.phone_suffix8;
           if (suf && bySuffix.delete(suf)) removedBuyers++;
         }
+
       }
     }
 
