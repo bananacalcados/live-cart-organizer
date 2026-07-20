@@ -36,6 +36,7 @@ import { CreateSupportTicketDialog } from "@/components/CreateSupportTicketDialo
 import { ExportConversationDialog } from "@/components/chat/ExportConversationDialog";
 import { POSWhatsAppCheckoutDialog } from "./POSWhatsAppCheckoutDialog";
 import { POSWhatsAppPixDialog } from "./POSWhatsAppPixDialog";
+import { POSGenerateBoletoDialog } from "./POSGenerateBoletoDialog";
 import { POSWhatsAppSellerGate } from "./POSWhatsAppSellerGate";
 import { SellerTaskReminderPopup } from "./SellerTaskReminderPopup";
 
