@@ -61,12 +61,16 @@ export function SavedAudiencePicker({ onApply, activeId }: Props) {
     const filtro: any = row.filtro_json;
     if (filtro && filtro.mode === "phone_list" && Array.isArray(filtro.phones)) {
       const suffixes = new Set<string>();
+      const normalized: string[] = [];
       for (const raw of filtro.phones) {
         const digits = String(raw || "").replace(/\D/g, "");
-        if (digits.length >= 8) suffixes.add(digits.slice(-8));
+        if (digits.length >= 8) {
+          suffixes.add(digits.slice(-8));
+          normalized.push(String(raw));
+        }
       }
       setApplying(false);
-      onApply(suffixes, { id: row.id, nome: row.nome });
+      onApply(suffixes, { id: row.id, nome: row.nome }, normalized);
       toast.success(`Público "${row.nome}" aplicado (${suffixes.size} contatos — lista fixa)`);
       return;
     }
@@ -86,8 +90,9 @@ export function SavedAudiencePicker({ onApply, activeId }: Props) {
       const digits = String(r.phone || "").replace(/\D/g, "");
       if (digits.length >= 8) suffixes.add(digits.slice(-8));
     }
-    onApply(suffixes, { id: row.id, nome: row.nome });
+    onApply(suffixes, { id: row.id, nome: row.nome }, null);
     toast.success(`Público "${row.nome}" aplicado (${suffixes.size} contatos)`);
+
   };
 
 
