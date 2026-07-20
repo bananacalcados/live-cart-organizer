@@ -731,7 +731,7 @@ serve(async (req) => {
     async function runAnthropic(): Promise<void> {
       const msgs: any[] = history.map((m: any) => ({ role: m.role, content: m.content }));
       let steps = 0;
-      while (steps < 8) {
+      while (steps < 16) {
         steps++;
         const resp = await callAnthropic(ANTHROPIC_API_KEY!, anthropicModel, buildSystemPrompt(), msgs);
         const blocks: any[] = resp.content || [];
@@ -762,7 +762,7 @@ serve(async (req) => {
     async function runGateway(): Promise<void> {
       const msgs: any[] = [{ role: "system", content: buildSystemPrompt() }, ...history];
       let steps = 0;
-      while (steps < 8) {
+      while (steps < 16) {
         steps++;
         const resp = await callGateway(LOVABLE_API_KEY!, gatewayModel, msgs);
         const msg = resp.choices?.[0]?.message;
