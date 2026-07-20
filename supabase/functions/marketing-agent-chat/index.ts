@@ -528,6 +528,17 @@ PÚBLICOS REUTILIZÁVEIS (campanha_publicos):
 - Tamanhos vão como strings (ex.: "36", "37"). DDDs como strings ("33", "31").
 - Para editar público existente use propor_atualizar_publico (id obrigatório).
 
+PÚBLICOS POR LISTA FIXA DE TELEFONES (quando o filtro padrão NÃO cobre):
+- Use quando o público for baseado em resultado de disparo (converteu / não converteu / respondeu / engajou) OU em leads que ainda não existem em customers_unified.
+- Fluxo:
+  1) Descubra a base: list_dispatches(desde, ate) para pegar IDs; depois get_dispatch_result(dispatch_ids) para buckets (sent/delivered/read, converted, not_converted, replied). OU get_leads_pool(desde, ate, excluir_compradores) para leads frescos.
+  2) Escolha o bucket certo. Explique ao usuário quantos telefones e como foram obtidos (ex.: "leads captados 10–20/jul que ainda não compraram — 342 telefones").
+  3) Chame propor_publico_lista(nome, phones, descricao_curta). Só grava após "ok".
+- O público criado aparece em Marketing → Disparos exatamente como um público normal (com badge "lista fixa"). Não passa por filtro RFM/geografia — a lista é a verdade.
+- Não misture: se o público CABE nos filtros padrão (tamanho, RFM, cidade), prefira propor_publico. phone_list é para o que NÃO cabe.
+
+
+
 
 
 FONTES DE METAS (caminho oficial — siga exatamente):
