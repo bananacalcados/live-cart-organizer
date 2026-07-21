@@ -12,11 +12,12 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Tag, DollarSign, AlertTriangle, Save, Award, Eye, ArrowRightLeft } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Tag, DollarSign, AlertTriangle, Save, Award, Eye, ArrowRightLeft, Palette, Ruler } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { ManageLinkedProductsDialog } from "@/components/inventory/ManageLinkedProductsDialog";
 import { TransferProductsDialog } from "@/components/inventory/TransferProductsDialog";
+import { ColorSizeManager } from "@/components/inventory/ColorSizeManager";
 
 interface Category {
   id: string;
@@ -258,9 +259,18 @@ export default function InventoryCategories() {
         <TabsList>
           <TabsTrigger value="categories"><Tag className="h-4 w-4 mr-2" />Categorias ({categories.length})</TabsTrigger>
           <TabsTrigger value="brands"><Award className="h-4 w-4 mr-2" />Marcas ({brands.length})</TabsTrigger>
+          <TabsTrigger value="colors"><Palette className="h-4 w-4 mr-2" />Cores</TabsTrigger>
+          <TabsTrigger value="sizes"><Ruler className="h-4 w-4 mr-2" />Tamanhos</TabsTrigger>
           <TabsTrigger value="tiers"><DollarSign className="h-4 w-4 mr-2" />Faixas de Preço ({tiers.length})</TabsTrigger>
           <TabsTrigger value="review"><AlertTriangle className="h-4 w-4 mr-2" />Revisar Classificação</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="colors" className="mt-4">
+          <ColorSizeManager kind="color" />
+        </TabsContent>
+        <TabsContent value="sizes" className="mt-4">
+          <ColorSizeManager kind="size" />
+        </TabsContent>
 
         {/* ===== CATEGORIES ===== */}
         <TabsContent value="categories" className="mt-4">

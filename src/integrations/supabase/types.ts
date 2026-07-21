@@ -14086,6 +14086,33 @@ export type Database = {
         }
         Relationships: []
       }
+      product_colors: {
+        Row: {
+          created_at: string
+          hex: string | null
+          id: string
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          hex?: string | null
+          id?: string
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          hex?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       product_dedup_index: {
         Row: {
           created_at: string
@@ -14257,6 +14284,36 @@ export type Database = {
           },
         ]
       }
+      product_sizes: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          numeric_value: number | null
+          size_group: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          numeric_value?: number | null
+          size_group?: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          numeric_value?: number | null
+          size_group?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       product_stock_movements: {
         Row: {
           created_at: string
@@ -14334,6 +14391,7 @@ export type Database = {
       product_variants: {
         Row: {
           color: string | null
+          color_id: string | null
           cost_price_override: number | null
           created_at: string
           gtin: string | null
@@ -14345,6 +14403,7 @@ export type Database = {
           sale_price_override: number | null
           shopify_variant_id: string | null
           size: string | null
+          size_id: string | null
           sku: string
           tiny_imported_at: string | null
           tiny_variant_id: string | null
@@ -14353,6 +14412,7 @@ export type Database = {
         }
         Insert: {
           color?: string | null
+          color_id?: string | null
           cost_price_override?: number | null
           created_at?: string
           gtin?: string | null
@@ -14364,6 +14424,7 @@ export type Database = {
           sale_price_override?: number | null
           shopify_variant_id?: string | null
           size?: string | null
+          size_id?: string | null
           sku: string
           tiny_imported_at?: string | null
           tiny_variant_id?: string | null
@@ -14372,6 +14433,7 @@ export type Database = {
         }
         Update: {
           color?: string | null
+          color_id?: string | null
           cost_price_override?: number | null
           created_at?: string
           gtin?: string | null
@@ -14383,6 +14445,7 @@ export type Database = {
           sale_price_override?: number | null
           shopify_variant_id?: string | null
           size?: string | null
+          size_id?: string | null
           sku?: string
           tiny_imported_at?: string | null
           tiny_variant_id?: string | null
@@ -14391,10 +14454,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "product_variants_color_id_fkey"
+            columns: ["color_id"]
+            isOneToOne: false
+            referencedRelation: "product_colors"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "product_variants_master_id_fkey"
             columns: ["master_id"]
             isOneToOne: false
             referencedRelation: "products_master"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_variants_size_id_fkey"
+            columns: ["size_id"]
+            isOneToOne: false
+            referencedRelation: "product_sizes"
             referencedColumns: ["id"]
           },
         ]
@@ -20031,6 +20108,14 @@ export type Database = {
         }[]
       }
       merge_master_duplicates: { Args: { p_limit?: number }; Returns: Json }
+      merge_product_color: {
+        Args: { _source_id: string; _target_id: string }
+        Returns: undefined
+      }
+      merge_product_size: {
+        Args: { _source_id: string; _target_id: string }
+        Returns: undefined
+      }
       merge_selected_masters: {
         Args: { p_source_ids: string[]; p_target_id: string }
         Returns: Json
@@ -20382,6 +20467,7 @@ export type Database = {
       show_trgm: { Args: { "": string }; Returns: string[] }
       simulate_classificacao_disparo: { Args: never; Returns: Json }
       simulate_merge_unified_duplicates: { Args: never; Returns: Json }
+      slugify_dict: { Args: { _input: string }; Returns: string }
       snapshot_group_message_exposure: {
         Args: {
           p_group_campaign_id: string

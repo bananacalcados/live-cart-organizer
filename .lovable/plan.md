@@ -1,83 +1,109 @@
+# Saúde do Estoque — Score de 6 Pilares
 
-## Diagnóstico — como o estoque funciona hoje
+Implementação da análise consolidada de saúde do estoque na aba **Dashboard > Saúde > Visão Geral**, com nota por loja e global, filtro de horizonte (30d / 60d / 90d, padrão 60d), previsão de faturamento e normalização de cores/tamanhos.
 
-Existem **três tabelas** envolvidas, com papéis diferentes, e o espelhamento entre elas é **parcial**:
+## Fase 1 — Dicionários de Cor e Tamanho
 
-| Tabela | O que é | Onde aparece |
-|---|---|---|
-| `products_master` (+ `product_variants`) | Cadastro "cabeça" do produto Legacy (SKU root, NCM, peso, dimensão, custo, venda, imagens, marca, categoria) e suas variações (cor/tamanho/GTIN/SKU) | Aba **Legacy** |
-| `product_master_data` (PMD) | Cabeçalho paralelo do Catálogo Unificado, com quase os MESMOS campos, chaveado por `parent_sku` | Aba **Catálogo Unificado** |
-| `pos_products` | Estoque físico por loja (Centro, Perola, Site/Live) — 1 linha por variação × loja | PDV, dashboards, vendas, Shopify |
+Criar fonte única para cor e tamanho, hoje texto livre em `product_variants`.
 
-**Chave comum:** `products_master.sku_root = product_master_data.parent_sku`. Hoje 456 vs 460 (4 órfãos no PMD, incluindo o "Babuches Banana" que você apagou no Legacy).
+**Banco:**
+- `product_colors` (id, name, slug, hex, created_at)
+- `product_sizes` (id, label, numeric_value, size_group ['adulto','infantil','outro'], created_at)
+- Adicionar `color_id` e `size_id` (nullable) em `product_variants` — mantém colunas texto pra não quebrar nada.
+- Trigger `trg_auto_link_color_size_variants`: ao inserir/atualizar variante, se `color`/`size` texto vier preenchido e `color_id`/`size_id` não, faz upsert no dicionário (slug = lowercase sem acento) e vincula.
+- Backfill: agrupa variantes existentes por slug e vincula automaticamente (fusão agressiva conforme aprovado).
 
-### O que já espelha automaticamente
+**UI:**
+- Duas novas sub-abas em `InventoryCategories.tsx`: **Cores** e **Tamanhos**.
+- CRUD + botão "Fundir em…" pra resolver duplicatas remanescentes (move `color_id`/`size_id` das variantes e deleta o registro origem).
 
-- **Nome do Legacy → `pos_products.name`**: trigger `trg_master_name_to_pos` / `sync_master_to_pos`.
-- **`pos_products` → Legacy (`products_master` + `product_variants`)**: trigger `trg_pos_to_catalog` / `sync_pos_product_to_estoque` cria pai/variação no Legacy quando surge algo novo no PDV.
-- **Custo do Legacy → `pos_products`**: trigger `trg_mirror_pos_product_cost_price`.
-- **Estoque do PDV → dashboard**: trigger `trg_sync_pos_product_to_estoque`, cache multi-loja.
-- **Vendas do PDV**: dão baixa em `pos_products` via `apply_pos_sale_stock_movement` (memória: Shopify mirror ativo).
+## Fase 2 — Curvas ABC
 
-### O que NÃO espelha (causa dos seus bugs)
+View materializada `mv_product_abc_curve` recalculada 1x/dia (cron):
+- Faturamento por `parent_sku` no horizonte selecionado (30/60/90d) a partir de `pos_sale_items` × `pos_sales` (status pago).
+- Ordenação decrescente, acumulado percentual → classifica em A (≤70%), B (≤90%), C (>90%).
+- Coluna `store_id` pra permitir curva por loja + global.
+- Filtro no topo do dashboard troca o horizonte lendo direto (não precisa recalcular a view; a view guarda os 3 horizontes lado a lado).
 
-1. **`products_master` ↔ `product_master_data` não têm nenhum trigger de sincronização.**
-   - Editar nome/NCM/peso/dimensão/marca/categoria/custo/venda/imagens no Legacy **não atualiza** o Unificado, e vice-versa.
-   - **Deletar** no Legacy **não deleta** no Unificado (por isso o Babuches Banana continua na aba Unificado).
-   - Só o **nome** vaza indiretamente via `pos_products` (Legacy→POS→dashboard), mas o cabeçalho do Unificado (PMD) fica congelado.
+## Fase 3 — Score de 6 Pilares
 
-2. **GTIN/dimensões por variação**: alterar `product_variants.gtin/sku` no Legacy não reflete em `pos_products.barcode/sku`. Idem preço de venda por variação.
+Edge function `calculate-inventory-health` (chamada do front, cacheada por 10min):
 
-3. **Estoque na aba Legacy** usa `product_variants.initial_stock` (fotografia antiga), enquanto o Unificado soma `pos_products.stock` em tempo real. Por isso os dois "totais" divergem.
+| # | Pilar | Peso | Cálculo |
+|---|---|---|---|
+| 1 | Cobertura Curva A | 30% | % de tamanhos esperados presentes nos SKUs Curva A, ponderado por participação no faturamento |
+| 2 | Cobertura Curva B | 12% | Mesmo cálculo, Curva B |
+| 3 | Cobertura ponderada por tamanho | 20% | % grade completa, cada tamanho pesa pela participação real nas vendas do horizonte |
+| 4 | Frescor / idade | 10% | % de SKUs com venda ou entrada nos últimos 60d |
+| 5 | Giro (sell-through) | 18% | vendas_30d ÷ estoque_médio, normalizado 0–100 |
+| 6 | Ruptura recente | 10% | Curva A/B zerado ≥3 dias em tamanho ≥8% de participação nos últimos 14d |
 
-4. **Exclusão em massa** no Legacy remove `products_master` + `product_variants`, mas nunca toca em PMD nem em `pos_products` — deixa "fantasmas" nas duas abas.
+Score final = soma ponderada 0–100.
 
-## Plano de correção — 4 etapas incrementais
+**Resultado por loja + consolidada** (consolidada = média ponderada pelo faturamento da loja).
 
-### Etapa 1 — Unificar a fonte de verdade do cabeçalho (Legacy ↔ Unificado)
+## Fase 4 — UI Visão Geral
 
-Criar **triggers bidirecionais** entre `products_master` e `product_master_data`, com guarda `is_sync_in_progress()` (padrão já usado no projeto) para evitar loop.
+Substituir topo da aba Saúde por:
 
-Campos espelhados nos dois sentidos:
-`name, description, brand, brand_id, category, category_id, ncm, cest, origem, unidade, cost_price, sale_price, weight_kg, height_cm, width_cm, length_cm, images, shopify_product_id, tiny_product_id, is_active, needs_review, review_reason`.
+```text
++------------------------------------------------------------------+
+| Filtros: [Loja: Todas ▼] [Horizonte Curva: 60d ▼]  [Atualizar]  |
++------------------------------------------------------------------+
+| Score consolidado                                                |
+| ████████████████████░░░░░░░  72 / 100   B                        |
+|                                                    [expandir ▼] |
++------------------------------------------------------------------+
+  ao expandir:
+  Cobertura Curva A     ████████░░  78
+  Cobertura Curva B     ██████░░░░  61
+  Cobertura por tamanho ███████░░░  70
+  Frescor               █████████░  88
+  Giro                  █████░░░░░  52
+  Ruptura recente       ████████░░  75
+```
 
-- `AFTER INSERT/UPDATE ON products_master` → upsert em `product_master_data` (`parent_sku = sku_root`).
-- `AFTER INSERT/UPDATE ON product_master_data` → upsert em `products_master` (usando `sku_root = parent_sku`; cria SKU root se não existir).
-- `AFTER DELETE ON products_master` → delete em `product_master_data` pelo `parent_sku`.
-- `AFTER DELETE ON product_master_data` → delete em `products_master` pelo `sku_root` (com `product_variants` caindo por `ON DELETE CASCADE` que já existe).
+Barra principal + expansão com nota por pilar. Cada pilar tem tooltip explicando o cálculo e link "ver SKUs afetados" (drill-down).
 
-**Backfill inicial:**
-- Reconciliar as 456 linhas hoje divergentes (Legacy vence para os pais que existem nos dois lados).
-- Limpar os 4 órfãos do PMD (incluindo o Babuches Banana que você já apagou no Legacy).
+**Card lateral — Previsão de Faturamento:**
+- `potencial_mensal = Σ (estoque_SKU × preço × giro_esperado_categoria)` usando os últimos 60d.
+- Mostra "com o estoque atual, mês projeta R$ X" + gap vs. meta do mês (lê `monthly_goals`).
+- Card secundário: "Capital preso em Curva C parada há +90d: R$ Y".
 
-### Etapa 2 — Espelhar variações e o que chega ao PDV
+## Fase 5 — Sazonalidade (placeholder)
 
-- Trigger `AFTER UPDATE ON product_variants` para propagar `sku`, `gtin`, `color`, `size`, `sale_price_override`, `cost_price_override` para as linhas correspondentes em `pos_products` (match por `tiny_variant_id` → `sku` → `gtin`, mesma ordem que `sync_master_to_pos` já usa).
-- Ajustar `sync_master_to_pos` para espelhar também `weight_kg`, `dimensions`, `ncm`, `cost_price` (não só nome) — mantém a mesma guarda anti-loop.
+- Tabela `category_seasonality_index` (category_id, month, index_value) — vazia hoje.
+- Job mensal (cron) só liga quando houver ≥12 meses de histórico. Enquanto isso, todos os índices ficam neutros (1.0) e não afetam a nota.
+- Deixa a infra pronta pra ativação futura sem retrabalho.
 
-### Etapa 3 — Estoque exibido no Legacy vira "tempo real"
+## Detalhes técnicos
 
-Trocar a leitura do card Legacy: em vez de `product_variants.initial_stock`, somar `pos_products.stock` agrupado por `master_id` (via join GTIN/SKU/tiny_id). Isso faz Legacy e Unificado mostrarem exatamente o mesmo número, sempre atualizado por venda.
+**Migrations:**
+1. `product_colors`, `product_sizes` + colunas em `product_variants` + trigger + backfill.
+2. `mv_product_abc_curve` (materialized view) + função `refresh_abc_curve()` + cron diário.
+3. `category_seasonality_index` (schema apenas).
+4. Índices em `pos_sale_items(parent_sku, created_at)` e `pos_sales(status, created_at)` se ainda não existirem.
 
-### Etapa 4 — Exclusão robusta
+**Edge functions:**
+- `calculate-inventory-health` — recebe `{ store_id?, horizon }`, devolve `{ overall, pillars: [...], affected_skus: {...} }`. Cache 10min em `app_settings` por chave.
 
-- No frontend (`LegacyProductsList.deleteMaster` e `UnifiedProductsList` bulk delete): a exclusão passa a chamar uma única RPC `delete_master_cascade(sku_root)` que apaga em ordem: `product_variants` → `products_master` → `product_master_data` → (opcional) desativa `pos_products` para não sumir histórico de vendas (memória: `pos_products` inativo = sem estoque; se ganhar estoque, reativa sozinho).
-- Bulk delete idem, usando uma RPC array-in.
+**Front:**
+- `src/lib/inventoryHealth.ts` — types + fetcher com cache local.
+- `src/components/inventory/InventoryHealthScoreCard.tsx` — barra principal + expansão.
+- `src/components/inventory/InventoryRevenueForecast.tsx` — card de previsão.
+- `src/components/inventory/InventoryColorSizeManager.tsx` — sub-abas em Categorias.
+- Alterar `src/components/inventory/InventoryHealthDashboard.tsx` pra montar tudo no topo, filtros globais.
 
-## Análise de risco (o que pode quebrar)
+**Sem quebrar nada:**
+- Colunas texto de cor/tamanho preservadas.
+- Score é aditivo: se algum pilar não tiver dado suficiente, ele fica neutro (50) e o peso é redistribuído nos outros.
+- View materializada refresca em background; UI cai em cache se falhar.
 
-| Risco | Probabilidade | Como mitigo |
-|---|---|---|
-| **Loop infinito** entre os dois novos triggers e o `sync_master_to_pos` existente | Média | Usar a mesma flag `app.sync_in_progress` já usada pelo `sync_master_to_pos` e `sync_pos_product_to_estoque`; testo com uma edição real antes de liberar. |
-| **Backfill inicial** sobrescreve dados divergentes (ex.: nome diferente nos dois lados) | Alta em teoria; baixa na prática (456/456 já batem) | Regra explícita: **Legacy vence** no backfill. Rodo um `SELECT` de diffs antes de aplicar e te envio a lista dos casos onde os cabeçalhos divergem para você aprovar. |
-| Deletar em cascata apagar produto que ainda tem venda no histórico | Média | Não apago `pos_products`, só desativo (`is_active=false`); vendas passadas continuam consultáveis. O trigger de reativação por estoque continua valendo. |
-| Estoque "tempo real" no Legacy ficar mais lento | Baixa | Índices já existem em `pos_products(sku, barcode, tiny_id)`; a query é a mesma agregação que o Unificado já roda hoje. |
-| Espelhamento de custo/preço no Legacy sobrescrever override manual por variação | Média | Espelho apenas os campos do **pai**; overrides continuam em `product_variants` (já é o comportamento atual). |
-| Fluxos que dependem só de PMD (edge functions `create-master-product-pos`, `delete-master-products`, `apply_catalog_sync_from_pos` — este último já foi removido) | Baixa | Com o espelhamento, escrever em qualquer um dos dois lados fica equivalente. Reviso essas edge functions no mesmo turno para garantir. |
-| Shopify (sync de estoque compartilhado) | Muito baixa | O trigger que dispara `shopify-mirror-stock` está em `pos_products`; não muda. Fica ainda mais consistente porque o cabeçalho passa a ser único. |
+## Ordem de entrega
 
-**Áreas que NÃO serão mexidas** (para não regredir): `apply_pos_sale_stock_movement`, `shopify-mirror-stock`, trigger de reativação por estoque, dedup por barcode, expedição/Tiny (já desacoplado), NF-e golden payload, fluxos de troca/devolução.
+1. Migration Fase 1 (dicionários) + UI de fusão.
+2. Migration Fase 2 (curvas ABC).
+3. Edge function + UI Fase 3/4 (score + previsão).
+4. Migration Fase 5 (só schema).
 
-## Recomendação
-
-Aprovar a Etapa 1 primeiro (espelhamento de cabeçalho + backfill + limpeza do Babuches Banana). É o que resolve 100% do que você descreveu no bug. Depois seguimos com 2, 3 e 4 sem risco cumulativo — cada etapa é independente e reversível (drop trigger volta ao estado atual).
+Cada fase entregue e testada antes da próxima. Confirma pra começar pela Fase 1?
