@@ -111,6 +111,11 @@ export function LegacyProductsList() {
     const term = search.trim();
     let query = supabase.from("products_master").select("*");
 
+  async function load() {
+    setLoading(true);
+    const term = search.trim();
+    let query = supabase.from("products_master").select("*");
+
     if (term) {
       const { data: variantHits } = await supabase
         .from("product_variants")
@@ -123,7 +128,17 @@ export function LegacyProductsList() {
       query = query.or(orParts.join(","));
     }
 
-    const { data, error } = await query.order("created_at", { ascending: false }).limit(200);
+    // Filtros avançados server-side
+    if (filters.brandId) query = query.eq("brand_id", filters.brandId);
+    if (filters.categoryId) query = query.eq("category_id", filters.categoryId);
+    if (filters.createdFrom) query = query.gte("created_at", filters.createdFrom);
+    if (filters.createdTo) query = query.lte("created_at", filters.createdTo + "T23:59:59");
+    if (filters.priceMin) query = query.gte("sale_price", Number(filters.priceMin));
+    if (filters.priceMax) query = query.lte("sale_price", Number(filters.priceMax));
+    if (filters.noCost) query = query.or("cost_price.is.null,cost_price.eq.0");
+    if (filters.noPrice) query = query.or("sale_price.is.null,sale_price.eq.0");
+
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(500);
     if (error) {
       toast.error("Erro ao carregar produtos: " + error.message);
       setLoading(false);
