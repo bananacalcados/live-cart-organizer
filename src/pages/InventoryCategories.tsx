@@ -261,6 +261,7 @@ export default function InventoryCategories() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="categories"><Tag className="h-4 w-4 mr-2" />Categorias ({categories.length})</TabsTrigger>
+          <TabsTrigger value="brands"><Award className="h-4 w-4 mr-2" />Marcas ({brands.length})</TabsTrigger>
           <TabsTrigger value="tiers"><DollarSign className="h-4 w-4 mr-2" />Faixas de Preço ({tiers.length})</TabsTrigger>
           <TabsTrigger value="review"><AlertTriangle className="h-4 w-4 mr-2" />Revisar Classificação</TabsTrigger>
         </TabsList>
