@@ -62,20 +62,27 @@ export function InventoryHealthScoreCard({ storeId }: { storeId: string | null }
   const [expanded, setExpanded] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
+  const [computedAt, setComputedAt] = useState<string | null>(null);
+  const [cached, setCached] = useState<boolean>(false);
+
+  const load = async (force = false) => {
     setLoading(true);
     setError(null);
-    const { data: res, error: err } = await supabase.rpc("calculate_inventory_health", {
-      p_horizon_days: horizon,
-      p_store_id: storeId,
+    const { data: res, error: err } = await supabase.functions.invoke("calculate-inventory-health", {
+      body: { horizon_days: horizon, store_id: storeId, force },
     });
     if (err) setError(err.message);
-    else setData(res as unknown as HealthResult);
+    else if ((res as any)?.error) setError((res as any).error);
+    else {
+      setData(res as unknown as HealthResult);
+      setComputedAt((res as any)?.computed_at ?? null);
+      setCached(Boolean((res as any)?.cached));
+    }
     setLoading(false);
   };
 
   useEffect(() => {
-    load();
+    load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [horizon, storeId]);
 
@@ -102,7 +109,7 @@ export function InventoryHealthScoreCard({ storeId }: { storeId: string | null }
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-8">
+                <Button variant="outline" size="sm" onClick={() => load(true)} disabled={loading} className="h-8">
                   <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
                 </Button>
               </div>
