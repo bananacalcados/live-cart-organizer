@@ -829,6 +829,8 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                           />
                         </div>
                         <div className="col-span-1">
+                          <Label className="text-[10px] text-muted-foreground">
+                            Est{delta !== 0 && (
                               <span className={delta > 0 ? "text-green-600" : "text-destructive"}>
                                 ({delta > 0 ? "+" : ""}{delta})
                               </span>
