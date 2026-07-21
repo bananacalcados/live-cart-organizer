@@ -27,7 +27,9 @@ interface MasterData {
   name: string | null;
   description: string | null;
   brand: string | null;
+  brand_id: string | null;
   category: string | null;
+  category_id: string | null;
   ncm: string | null;
   cfop: string | null;
   cest: string | null;
@@ -37,6 +39,8 @@ interface MasterData {
   is_active: boolean;
   needs_review: boolean;
   review_reason: string | null;
+  shopify_product_id: string | null;
+  created_at: string | null;
 }
 
 interface PosSku {
