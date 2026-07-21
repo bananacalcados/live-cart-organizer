@@ -52,6 +52,8 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
   const [name, setName] = useState(initial?.name || "");
   const [description, setDescription] = useState(initial?.description || "");
   const [brand, setBrand] = useState(initial?.brand || "");
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [newBrandMode, setNewBrandMode] = useState(false);
   const [category, setCategory] = useState(initial?.category || "");
   const [categoryId, setCategoryId] = useState<string>("");
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
@@ -94,7 +96,21 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
           else setNewCategoryMode(true);
         }
       });
+    supabase
+      .from("product_brands" as any)
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => {
+        const bs = ((data || []) as any) as { id: string; name: string }[];
+        setBrands(bs);
+        if (initial?.brand) {
+          const match = bs.find((b) => b.name.toLowerCase() === initial.brand!.toLowerCase());
+          if (!match) setNewBrandMode(true);
+        }
+      });
   }, [open]);
+
 
   // Filhos
   const initialVariants: VariantRow[] = (initial?.items || []).map((it) => ({
@@ -207,6 +223,12 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
 
     setSaving(true);
     try {
+      // Se digitou uma marca nova, cadastra no catálogo de marcas (idempotente)
+      const brandTrim = brand.trim();
+      if (brandTrim && !brands.some((b) => b.name.toLowerCase() === brandTrim.toLowerCase())) {
+        const slug = brandTrim.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        await supabase.from("product_brands" as any).insert({ name: brandTrim, slug } as any);
+      }
       const { data, error } = await supabase.rpc("create_product_with_variants", {
         p_master: {
           name,
@@ -286,7 +308,43 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
               </div>
               <div>
                 <Label>Marca</Label>
-                <Input value={brand} onChange={(e) => setBrand(e.target.value)} />
+                {newBrandMode ? (
+                  <div className="flex gap-1">
+                    <Input
+                      value={brand}
+                      onChange={(e) => setBrand(e.target.value)}
+                      placeholder="Nova marca"
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setNewBrandMode(false); setBrand(""); }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    value={brand ? (brands.find((b) => b.name === brand)?.id || "__custom__") : ""}
+                    onValueChange={(v) => {
+                      if (v === "__new__") { setNewBrandMode(true); setBrand(""); return; }
+                      const b = brands.find((x) => x.id === v);
+                      if (b) setBrand(b.name);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a marca" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {brands.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__new__" className="text-primary font-medium">+ Criar nova marca</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div>
                 <Label>Categoria</Label>
