@@ -393,7 +393,51 @@ export function LegacyProductsList() {
       toast.error("Erro ao excluir: " + err.message);
     } finally {
       setBulkDeleting(false);
+  }
+
+  async function bulkPrintLabels() {
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    const { data, error } = await supabase
+      .from("product_variants")
+      .select("id,sku,gtin,color,size,master_id")
+      .in("master_id", ids);
+    if (error) { toast.error("Erro ao carregar variações: " + error.message); return; }
+    const nameById = new Map(items.map(i => [i.id, i.name] as const));
+    const labels: LabelItem[] = (data || []).map((v: any) => ({
+      id: v.id,
+      sku: v.sku || "",
+      gtin: v.gtin || null,
+      size: v.size || null,
+      color: v.color || null,
+      name: nameById.get(v.master_id) || undefined,
+    }));
+    if (labels.length === 0) { toast.error("Nenhuma variação encontrada para os produtos selecionados."); return; }
+    setBulkLabelItems(labels);
+  }
+
+  async function bulkSendShopify() {
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    if (!confirm(`Enviar/atualizar ${ids.length} produto(s) na Shopify?`)) return;
+    setBulkShopifyRunning(true);
+    let ok = 0, fail = 0;
+    for (const id of ids) {
+      const m = items.find(i => i.id === id);
+      const fn = m?.shopify_product_id ? "update-master-product-shopify" : "create-master-product-shopify";
+      try {
+        const { error } = await supabase.functions.invoke(fn, { body: { master_id: id } });
+        if (error) throw error;
+        ok++;
+      } catch (e: any) {
+        fail++;
+        console.error("Shopify bulk falhou p/", id, e);
+      }
     }
+    setBulkShopifyRunning(false);
+    toast.success(`Shopify: ${ok} OK · ${fail} falhas`, { duration: 8000 });
+    await load();
+  }
   }
 
   function openUnify() {
