@@ -230,7 +230,10 @@ export default function InventoryCategories() {
     () => Object.values(counts).reduce((a, b) => a + b, 0),
     [counts]
   );
-  const uncategorized = counts["__none__"] || 0;
+  const totalBrandLinked = useMemo(
+    () => Object.values(brandCounts).reduce((a, b) => a + b, 0),
+    [brandCounts]
+  );
 
   return (
     <div className="container mx-auto p-4 max-w-6xl">
