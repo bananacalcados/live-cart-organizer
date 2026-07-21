@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -20,7 +20,8 @@ interface Props {
 }
 
 interface Row {
-  parent_sku: string;
+  id: string;
+  sku_root: string;
   name: string;
   brand: string | null;
   category: string | null;
@@ -37,7 +38,6 @@ export function ManageLinkedProductsDialog({
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"linked" | "add">("linked");
 
-  // add tab
   const [search, setSearch] = useState("");
   const [candidates, setCandidates] = useState<Row[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -46,8 +46,8 @@ export function ManageLinkedProductsDialog({
   async function loadLinked() {
     setLoading(true);
     const { data } = await supabase
-      .from("product_master_data")
-      .select("parent_sku,name,brand,category,cost_price,sale_price,images")
+      .from("products_master")
+      .select("id,sku_root,name,brand,category,cost_price,sale_price,images")
       .eq(idCol, entityId)
       .order("name")
       .limit(500);
@@ -58,24 +58,18 @@ export function ManageLinkedProductsDialog({
   async function loadCandidates() {
     setLoading(true);
     let q = supabase
-      .from("product_master_data")
-      .select("parent_sku,name,brand,category,cost_price,sale_price,images")
-      .neq(idCol, entityId)
+      .from("products_master")
+      .select("id,sku_root,name,brand,category,cost_price,sale_price,images")
       .order("name")
       .limit(200);
-    if (search.trim()) {
-      q = q.or(`name.ilike.%${search.trim()}%,parent_sku.ilike.%${search.trim()}%`);
+    const term = search.trim();
+    if (term) {
+      q = q.or(`name.ilike.%${term}%,sku_root.ilike.%${term}%,brand.ilike.%${term}%`);
     } else {
-      // when no search, prefer products that DON'T have this field yet
-      q = supabase
-        .from("product_master_data")
-        .select("parent_sku,name,brand,category,cost_price,sale_price,images")
-        .is(idCol, null)
-        .order("name")
-        .limit(200);
+      q = q.is(idCol, null);
     }
     const { data } = await q;
-    setCandidates((data || []) as any);
+    setCandidates(((data || []) as any).filter((r: Row) => (r as any)[idCol] !== entityId));
     setSelected(new Set());
     setLoading(false);
   }
@@ -85,21 +79,23 @@ export function ManageLinkedProductsDialog({
     setTab("linked");
     setSearch("");
     loadLinked();
+     
   }, [open, entityId]);
 
   useEffect(() => {
     if (!open || tab !== "add") return;
     const t = setTimeout(loadCandidates, 250);
     return () => clearTimeout(t);
+     
   }, [tab, search, open]);
 
   async function linkSelected() {
     if (selected.size === 0) return;
     setSaving(true);
     const { error } = await supabase
-      .from("product_master_data")
+      .from("products_master")
       .update({ [idCol]: entityId } as any)
-      .in("parent_sku", Array.from(selected));
+      .in("id", Array.from(selected));
     setSaving(false);
     if (error) { toast.error(error.message); return; }
     toast.success(`${selected.size} produto(s) vinculado(s)`);
@@ -109,11 +105,11 @@ export function ManageLinkedProductsDialog({
     onChanged?.();
   }
 
-  async function unlink(sku: string) {
+  async function unlink(id: string) {
     const { error } = await supabase
-      .from("product_master_data")
+      .from("products_master")
       .update({ [idCol]: null, [mode === "category" ? "category" : "brand"]: null } as any)
-      .eq("parent_sku", sku);
+      .eq("id", id);
     if (error) { toast.error(error.message); return; }
     toast.success("Removido");
     await loadLinked();
@@ -155,20 +151,20 @@ export function ManageLinkedProductsDialog({
             ) : (
               <div className="divide-y">
                 {linked.map(p => (
-                  <div key={p.parent_sku} className="flex items-center gap-3 py-2 px-1">
+                  <div key={p.id} className="flex items-center gap-3 py-2 px-1">
                     {p.images?.[0] && (
                       <img src={p.images[0]} className="h-10 w-10 rounded object-cover" alt="" />
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{p.name}</p>
                       <div className="flex gap-1 mt-0.5 flex-wrap">
-                        <Badge variant="outline" className="text-[10px]">{p.parent_sku}</Badge>
+                        <Badge variant="outline" className="text-[10px]">{p.sku_root}</Badge>
                         {mode === "category" && p.brand && <Badge variant="secondary" className="text-[10px]">{p.brand}</Badge>}
                         {mode === "brand" && p.category && <Badge variant="secondary" className="text-[10px]">{p.category}</Badge>}
                         {p.sale_price != null && <Badge variant="outline" className="text-[10px]">R$ {Number(p.sale_price).toFixed(2)}</Badge>}
                       </div>
                     </div>
-                    <Button size="icon" variant="ghost" onClick={() => unlink(p.parent_sku)} title="Remover">
+                    <Button size="icon" variant="ghost" onClick={() => unlink(p.id)} title="Remover">
                       <X className="h-4 w-4 text-destructive" />
                     </Button>
                   </div>
@@ -183,7 +179,7 @@ export function ManageLinkedProductsDialog({
             <div className="relative">
               <Search className="h-4 w-4 absolute left-3 top-3 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome ou SKU..."
+                placeholder="Buscar por nome, SKU ou marca..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9"
@@ -197,15 +193,15 @@ export function ManageLinkedProductsDialog({
               ) : (
                 <div className="divide-y">
                   {candidates.map(p => {
-                    const checked = selected.has(p.parent_sku);
+                    const checked = selected.has(p.id);
                     return (
-                      <label key={p.parent_sku} className="flex items-center gap-3 py-2 px-1 cursor-pointer hover:bg-muted/50">
+                      <label key={p.id} className="flex items-center gap-3 py-2 px-1 cursor-pointer hover:bg-muted/50">
                         <input
                           type="checkbox"
                           checked={checked}
                           onChange={() => {
                             const s = new Set(selected);
-                            checked ? s.delete(p.parent_sku) : s.add(p.parent_sku);
+                            checked ? s.delete(p.id) : s.add(p.id);
                             setSelected(s);
                           }}
                         />
@@ -215,7 +211,7 @@ export function ManageLinkedProductsDialog({
                         <div className="flex-1 min-w-0">
                           <p className="text-sm truncate">{p.name}</p>
                           <div className="flex gap-1 flex-wrap">
-                            <Badge variant="outline" className="text-[10px]">{p.parent_sku}</Badge>
+                            <Badge variant="outline" className="text-[10px]">{p.sku_root}</Badge>
                             {mode === "category" && p.category && <Badge variant="secondary" className="text-[10px]">atual: {p.category}</Badge>}
                             {mode === "brand" && p.brand && <Badge variant="secondary" className="text-[10px]">atual: {p.brand}</Badge>}
                           </div>
