@@ -7766,6 +7766,33 @@ export type Database = {
           },
         ]
       }
+      inventory_health_cache: {
+        Row: {
+          computed_at: string
+          created_at: string
+          horizon_days: number
+          id: string
+          payload: Json
+          store_id: string | null
+        }
+        Insert: {
+          computed_at?: string
+          created_at?: string
+          horizon_days: number
+          id?: string
+          payload: Json
+          store_id?: string | null
+        }
+        Update: {
+          computed_at?: string
+          created_at?: string
+          horizon_days?: number
+          id?: string
+          payload?: Json
+          store_id?: string | null
+        }
+        Relationships: []
+      }
       inventory_incremental_runs: {
         Row: {
           created_at: string
