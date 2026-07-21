@@ -828,9 +828,7 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                             onChange={(val) => updateVariant(idx, { size: val })}
                           />
                         </div>
-                        <div className="col-span-2">
-                          <Label className="text-[10px] text-muted-foreground">
-                            Estoque {delta !== 0 && (
+                        <div className="col-span-1">
                               <span className={delta > 0 ? "text-green-600" : "text-destructive"}>
                                 ({delta > 0 ? "+" : ""}{delta})
                               </span>
