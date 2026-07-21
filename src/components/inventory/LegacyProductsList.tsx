@@ -627,7 +627,7 @@ export function LegacyProductsList() {
           </div>
 
           <div className="divide-y">
-            {items.map((p) => {
+            {filteredItems.map((p) => {
               const s = summary[p.id];
               const isOpen = expanded.has(p.id);
               const vrows = variants[p.id];
