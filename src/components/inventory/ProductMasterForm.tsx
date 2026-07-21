@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { generateEan13, normalizeColorForSku } from "@/lib/ean13";
 import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
+import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
 
 interface VariantRow {
   color: string;
