@@ -102,6 +102,12 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       .eq("is_simulation", false)
       .order("name")
       .then(({ data }) => setStores((data || []) as any));
+    supabase
+      .from("product_brands" as any)
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setBrands(((data || []) as any) as { id: string; name: string }[]));
   }, [open]);
 
   async function loadData() {
