@@ -599,7 +599,7 @@ export function InventoryGradeCoverage() {
             <div className="space-y-3">
               {modalCategory?.parents.map((p) => {
                 const sizeMap = stockBySize.get(p.parent_sku) || new Map<number, number>();
-                const range = getGradeRange(p.gender);
+                const range = p.expectedSizes.length > 0 ? p.expectedSizes : getGradeRange(p.gender);
                 const bucket = healthBucket(p.coveragePct, p.isComplete);
                 return (
                   <div key={p.parent_sku} className="border rounded-lg p-3">
