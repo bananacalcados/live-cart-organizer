@@ -814,18 +814,18 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                       <div key={v.id || `new-${idx}`} className="grid grid-cols-12 gap-2 items-end p-2 rounded bg-muted/40">
                         <div className="col-span-3">
                           <Label className="text-[10px] text-muted-foreground">Cor</Label>
-                          <Input
-                            className="h-8"
+                          <ColorSizeCombobox
+                            kind="color"
                             value={v.color}
-                            onChange={(e) => updateVariant(idx, { color: sanitizeColorInput(e.target.value) })}
+                            onChange={(val) => updateVariant(idx, { color: val })}
                           />
                         </div>
-                        <div className="col-span-1">
+                        <div className="col-span-2">
                           <Label className="text-[10px] text-muted-foreground">Tam</Label>
-                          <Input
-                            className="h-8"
+                          <ColorSizeCombobox
+                            kind="size"
                             value={v.size}
-                            onChange={(e) => updateVariant(idx, { size: sanitizeSizeInput(e.target.value) })}
+                            onChange={(val) => updateVariant(idx, { size: val })}
                           />
                         </div>
                         <div className="col-span-2">
