@@ -164,7 +164,7 @@ export function LegacyProductsList() {
     const t = setTimeout(() => { load(); }, search ? 350 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, filters]);
 
   // Lojas físicas para o diálogo de sincronizar estoque
   useEffect(() => {
