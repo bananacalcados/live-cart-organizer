@@ -302,7 +302,43 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
               </div>
               <div>
                 <Label>Marca</Label>
-                <Input value={brand} onChange={(e) => setBrand(e.target.value)} />
+                {newBrandMode ? (
+                  <div className="flex gap-1">
+                    <Input
+                      value={brand}
+                      onChange={(e) => setBrand(e.target.value)}
+                      placeholder="Nova marca"
+                      autoFocus
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setNewBrandMode(false); setBrand(""); }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    value={brand ? (brands.find((b) => b.name === brand)?.id || "__custom__") : ""}
+                    onValueChange={(v) => {
+                      if (v === "__new__") { setNewBrandMode(true); setBrand(""); return; }
+                      const b = brands.find((x) => x.id === v);
+                      if (b) setBrand(b.name);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a marca" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {brands.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__new__" className="text-primary font-medium">+ Criar nova marca</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div>
                 <Label>Categoria</Label>
