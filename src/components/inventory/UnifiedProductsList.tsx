@@ -274,7 +274,7 @@ export function UnifiedProductsList() {
   }, [masters, posProducts, search, filter, storeFilter, filters]);
 
   // Reset to first page when filter/search changes
-  useEffect(() => { setPage(0); }, [search, filter, storeFilter]);
+  useEffect(() => { setPage(0); }, [search, filter, storeFilter, filters]);
 
   const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
   const pageItems = grouped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
