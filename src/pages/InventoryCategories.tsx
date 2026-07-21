@@ -56,15 +56,25 @@ const fixed = (value: unknown, digits = 2) => toNumber(value).toFixed(digits);
 const GENDER_OPTIONS = ["masculino", "feminino", "unissex", "infantil"];
 const AGE_OPTIONS = ["adulto", "infantil"];
 
+interface Brand {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+}
+
 export default function InventoryCategories() {
   const [tab, setTab] = useState("categories");
   const [categories, setCategories] = useState<Category[]>([]);
   const [tiers, setTiers] = useState<PriceTier[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [brandCounts, setBrandCounts] = useState<Record<string, number>>({});
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const [editingCat, setEditingCat] = useState<Partial<Category> | null>(null);
   const [editingTier, setEditingTier] = useState<Partial<PriceTier> | null>(null);
+  const [editingBrand, setEditingBrand] = useState<Partial<Brand> | null>(null);
 
   const [reviewItems, setReviewItems] = useState<ReviewProduct[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
