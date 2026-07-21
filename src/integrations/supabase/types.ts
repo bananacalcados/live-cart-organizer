@@ -19254,6 +19254,10 @@ export type Database = {
         Returns: number
       }
       bc_phone_key: { Args: { p: string }; Returns: string }
+      calculate_inventory_health: {
+        Args: { p_horizon_days?: number; p_store_id?: string }
+        Returns: Json
+      }
       calculate_rfm_scores: { Args: never; Returns: Json }
       calculate_rfm_scores_unified: { Args: never; Returns: Json }
       campaign_buyer_detail: { Args: { p_envio_id: string }; Returns: Json }
