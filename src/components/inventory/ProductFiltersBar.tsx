@@ -157,6 +157,41 @@ export function ProductFiltersBar({ value, onChange }: Props) {
               Sem categoria
             </label>
           </div>
+          <div className="border-t pt-2 space-y-1">
+            <Label className="text-xs">Presença</Label>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={local.inShopify} onChange={e => setLocal({ ...local, inShopify: e.target.checked, notInShopify: e.target.checked ? false : local.notInShopify })} />
+                Na Shopify
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={local.notInShopify} onChange={e => setLocal({ ...local, notInShopify: e.target.checked, inShopify: e.target.checked ? false : local.inShopify })} />
+                Fora Shopify
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={local.inPos} onChange={e => setLocal({ ...local, inPos: e.target.checked, notInPos: e.target.checked ? false : local.notInPos })} />
+                No PDV
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={local.notInPos} onChange={e => setLocal({ ...local, notInPos: e.target.checked, inPos: e.target.checked ? false : local.inPos })} />
+                Fora PDV
+              </label>
+            </div>
+          </div>
+          <div className="border-t pt-2 space-y-1">
+            <Label className="text-xs">Variações</Label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number" min="1" step="1" placeholder="máx. variações"
+                value={local.maxVariants}
+                onChange={e => setLocal({ ...local, maxVariants: e.target.value })}
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={local.noVariants} onChange={e => setLocal({ ...local, noVariants: e.target.checked })} />
+              Sem variações
+            </label>
+          </div>
           <div className="flex gap-2 justify-end pt-1 border-t">
             <Button variant="ghost" size="sm" onClick={clear}>Limpar</Button>
             <Button size="sm" onClick={apply}>Aplicar</Button>
@@ -174,7 +209,18 @@ export function ProductFiltersBar({ value, onChange }: Props) {
 
 /** Reusable client-side filter predicate for a row with the standard fields. */
 export function matchesProductFilters(
-  row: { brand_id?: string | null; category_id?: string | null; brand?: string | null; category?: string | null; created_at?: string | null; cost_price?: number | string | null; sale_price?: number | string | null },
+  row: {
+    brand_id?: string | null;
+    category_id?: string | null;
+    brand?: string | null;
+    category?: string | null;
+    created_at?: string | null;
+    cost_price?: number | string | null;
+    sale_price?: number | string | null;
+    shopify_product_id?: string | null;
+    in_pos?: boolean;
+    variant_count?: number;
+  },
   f: ProductFilters,
 ): boolean {
   if (f.brandId && row.brand_id !== f.brandId) return false;
@@ -189,5 +235,12 @@ export function matchesProductFilters(
   if (f.priceMax && !(sale <= Number(f.priceMax))) return false;
   if (f.noBrand && (row.brand_id || (row.brand && row.brand.trim()))) return false;
   if (f.noCategory && (row.category_id || (row.category && row.category.trim()))) return false;
+  if (f.inShopify && !row.shopify_product_id) return false;
+  if (f.notInShopify && row.shopify_product_id) return false;
+  if (f.inPos && !row.in_pos) return false;
+  if (f.notInPos && row.in_pos) return false;
+  const vc = Number(row.variant_count ?? 0);
+  if (f.noVariants && vc !== 0) return false;
+  if (f.maxVariants && !(vc <= Number(f.maxVariants))) return false;
   return true;
 }
