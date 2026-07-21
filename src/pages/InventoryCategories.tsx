@@ -82,25 +82,67 @@ export default function InventoryCategories() {
 
   async function loadAll() {
     setLoading(true);
-    const [{ data: cats }, { data: tr }] = await Promise.all([
+    const [{ data: cats }, { data: tr }, { data: brs }] = await Promise.all([
       supabase.from("product_categories").select("*").order("priority"),
       supabase.from("price_tiers").select("*").order("sort_order"),
+      supabase.from("product_brands" as any).select("*").order("name"),
     ]);
     setCategories((cats || []) as any);
     setTiers((tr || []) as any);
+    setBrands(((brs || []) as any) as Brand[]);
 
-    // counts per category
+    // counts per category & brand
     const { data: cnts } = await supabase
-      .from("pos_products")
-      .select("category_id");
-    const map: Record<string, number> = {};
+      .from("product_master_data")
+      .select("category, brand");
+    const catMap: Record<string, number> = {};
+    const brandMap: Record<string, number> = {};
     (cnts || []).forEach((r: any) => {
+      const k = r.category || "__none__";
+      catMap[k] = (catMap[k] || 0) + 1;
+      if (r.brand) {
+        const bk = String(r.brand).trim().toLowerCase();
+        brandMap[bk] = (brandMap[bk] || 0) + 1;
+      }
+    });
+    // Categoria count baseia-se em pos_products.category_id ainda? Manter contagem antiga também:
+    const { data: posCnts } = await supabase.from("pos_products").select("category_id");
+    const map: Record<string, number> = {};
+    (posCnts || []).forEach((r: any) => {
       const k = r.category_id || "__none__";
       map[k] = (map[k] || 0) + 1;
     });
     setCounts(map);
+    setBrandCounts(brandMap);
     setLoading(false);
   }
+
+  async function saveBrand() {
+    if (!editingBrand?.name) { toast.error("Nome obrigatório"); return; }
+    const name = editingBrand.name.trim();
+    const slug = (editingBrand.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
+    const payload: any = { name, slug, is_active: editingBrand.is_active ?? true };
+    const { error } = editingBrand.id
+      ? await supabase.from("product_brands" as any).update(payload).eq("id", editingBrand.id)
+      : await supabase.from("product_brands" as any).insert(payload);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Salvo");
+    setEditingBrand(null);
+    loadAll();
+  }
+
+  async function deleteBrand(b: Brand) {
+    const inUse = brandCounts[b.name.trim().toLowerCase()] || 0;
+    const msg = inUse > 0
+      ? `A marca "${b.name}" está em ${inUse} produto(s). Excluir mesmo assim? Os produtos ficarão sem marca cadastrada (o texto no produto continua, mas some do seletor).`
+      : `Excluir a marca "${b.name}"?`;
+    if (!confirm(msg)) return;
+    const { error } = await supabase.from("product_brands" as any).delete().eq("id", b.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Marca excluída");
+    loadAll();
+  }
+
 
   async function loadReview() {
     setReviewLoading(true);
