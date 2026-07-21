@@ -439,7 +439,8 @@ export function LegacyProductsList() {
     setBulkShopifyRunning(false);
     toast.success(`Shopify: ${ok} OK · ${fail} falhas`, { duration: 8000 });
     await load();
-  }
+
+
   }
 
   function openUnify() {
