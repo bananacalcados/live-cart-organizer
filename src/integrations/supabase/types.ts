@@ -19069,6 +19069,7 @@ export type Database = {
       }
     }
     Functions: {
+      _pm_pmd_sync_in_progress: { Args: never; Returns: boolean }
       add_business_days: {
         Args: { p_days: number; p_start: string }
         Returns: string
