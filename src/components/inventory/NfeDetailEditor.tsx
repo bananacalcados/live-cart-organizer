@@ -17,6 +17,7 @@ import { Loader2, Save, Package, Plus, Trash2, FileText, Link2, Store as StoreIc
 import { toast } from "sonner";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ExistingParentSearchDialog } from "./ExistingParentSearchDialog";
+import { ColorSizeCombobox } from "./ColorSizeCombobox";
 
 interface Invoice {
   id: string;
@@ -491,13 +492,21 @@ export function NfeDetailEditor({
                           </div>
                           <div>
                             <Label className="text-[10px]">Cor</Label>
-                            <Input className="h-8" value={it.parsed_color || ""} disabled={isLinked}
-                              onChange={(e) => updateItem(it.id, { parsed_color: e.target.value })} />
+                            <ColorSizeCombobox
+                              kind="color"
+                              value={it.parsed_color || ""}
+                              disabled={isLinked}
+                              onChange={(val) => updateItem(it.id, { parsed_color: val })}
+                            />
                           </div>
                           <div>
                             <Label className="text-[10px]">Tamanho</Label>
-                            <Input className="h-8" value={it.parsed_size || ""} disabled={isLinked}
-                              onChange={(e) => updateItem(it.id, { parsed_size: e.target.value })} />
+                            <ColorSizeCombobox
+                              kind="size"
+                              value={it.parsed_size || ""}
+                              disabled={isLinked}
+                              onChange={(val) => updateItem(it.id, { parsed_size: val })}
+                            />
                           </div>
                         </div>
                       </CardContent>

@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { generateEan13, normalizeColorForSku } from "@/lib/ean13";
 import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
+import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
 
 interface VariantRow {
   color: string;
@@ -545,20 +546,18 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
                   <div key={idx} className="grid grid-cols-12 gap-2 items-center p-2 rounded bg-muted/40">
                     <div className="col-span-3">
                       <Label className="text-[10px] text-muted-foreground">Cor</Label>
-                      <Input
-                        className="h-8"
+                      <ColorSizeCombobox
+                        kind="color"
                         value={v.color}
-                        onChange={(e) => updateVariant(idx, { color: sanitizeColorInput(e.target.value) })}
-                        placeholder="Preto"
+                        onChange={(val) => updateVariant(idx, { color: val })}
                       />
                     </div>
                     <div className="col-span-2">
                       <Label className="text-[10px] text-muted-foreground">Tamanho</Label>
-                      <Input
-                        className="h-8"
+                      <ColorSizeCombobox
+                        kind="size"
                         value={v.size}
-                        onChange={(e) => updateVariant(idx, { size: sanitizeSizeInput(e.target.value) })}
-                        placeholder="39"
+                        onChange={(val) => updateVariant(idx, { size: val })}
                       />
                     </div>
                     <div className="col-span-2">
