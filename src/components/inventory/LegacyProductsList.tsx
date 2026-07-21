@@ -105,6 +105,8 @@ export function LegacyProductsList() {
 
   // Filtros avançados
   const [filters, setFilters] = useState<ProductFilters>(emptyProductFilters);
+  // sku_root presente em pos_products (para filtro "No PDV" / "Fora PDV")
+  const [posPresent, setPosPresent] = useState<Set<string>>(new Set());
 
   async function load() {
     setLoading(true);
@@ -135,6 +137,8 @@ export function LegacyProductsList() {
     if (filters.noPrice) query = query.or("sale_price.is.null,sale_price.eq.0");
     if (filters.noBrand) query = query.is("brand_id", null).or("brand.is.null,brand.eq.");
     if (filters.noCategory) query = query.is("category_id", null).or("category.is.null,category.eq.");
+    if (filters.inShopify) query = query.not("shopify_product_id", "is", null);
+    if (filters.notInShopify) query = query.is("shopify_product_id", null);
 
     const { data, error } = await query.order("created_at", { ascending: false }).limit(500);
     if (error) {
@@ -156,8 +160,27 @@ export function LegacyProductsList() {
         map[r.master_id] = { variant_count: r.variant_count || 0, total_stock: toNumber(r.total_stock) };
       });
       setSummary(map);
+
+      // Presença no PDV via parent_sku = sku_root
+      const roots = Array.from(new Set(list.map((d) => d.sku_root).filter(Boolean)));
+      if (roots.length > 0) {
+        const present = new Set<string>();
+        const CHUNK = 200;
+        for (let i = 0; i < roots.length; i += CHUNK) {
+          const slice = roots.slice(i, i + CHUNK);
+          const { data: pos } = await supabase
+            .from("pos_products")
+            .select("parent_sku")
+            .in("parent_sku", slice);
+          (pos || []).forEach((r: any) => { if (r.parent_sku) present.add(r.parent_sku); });
+        }
+        setPosPresent(present);
+      } else {
+        setPosPresent(new Set());
+      }
     } else {
       setSummary({});
+      setPosPresent(new Set());
     }
     setLoading(false);
   }
@@ -497,16 +520,39 @@ export function LegacyProductsList() {
   }
 
   const selectedCount = selected.size;
+
+  // Aplica os filtros que dependem de dados agregados (variações + presença PDV).
+  const filteredItems = useMemo(() => {
+    return items.filter((p) => {
+      const s = summary[p.id];
+      return matchesProductFilters(
+        {
+          brand_id: p.brand_id,
+          category_id: p.category_id,
+          brand: p.brand,
+          category: p.category,
+          created_at: p.created_at,
+          cost_price: p.cost_price,
+          sale_price: p.sale_price,
+          shopify_product_id: p.shopify_product_id,
+          in_pos: posPresent.has(p.sku_root),
+          variant_count: s?.variant_count ?? 0,
+        },
+        filters,
+      );
+    });
+  }, [items, summary, posPresent, filters]);
+
   const allVisibleSelected = useMemo(
-    () => items.length > 0 && items.every((i) => selected.has(i.id)),
-    [items, selected]
+    () => filteredItems.length > 0 && filteredItems.every((i) => selected.has(i.id)),
+    [filteredItems, selected]
   );
 
   function toggleSelectAll() {
     if (allVisibleSelected) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(items.map((i) => i.id)));
+      setSelected(new Set(filteredItems.map((i) => i.id)));
     }
   }
 
@@ -559,11 +605,11 @@ export function LegacyProductsList() {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="text-center py-20">
           <Package className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
           <h2 className="text-lg font-semibold text-muted-foreground">
-            {search ? "Nenhum produto encontrado" : "Nenhum produto cadastrado"}
+            {search ? "Nenhum produto encontrado" : "Nenhum produto para os filtros atuais"}
           </h2>
         </div>
       ) : (
@@ -581,7 +627,7 @@ export function LegacyProductsList() {
           </div>
 
           <div className="divide-y">
-            {items.map((p) => {
+            {filteredItems.map((p) => {
               const s = summary[p.id];
               const isOpen = expanded.has(p.id);
               const vrows = variants[p.id];

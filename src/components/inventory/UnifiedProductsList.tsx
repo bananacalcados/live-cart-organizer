@@ -20,13 +20,16 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
+import { ProductFiltersBar, matchesProductFilters, emptyProductFilters, type ProductFilters } from "./ProductFiltersBar";
 
 interface MasterData {
   parent_sku: string;
   name: string | null;
   description: string | null;
   brand: string | null;
+  brand_id: string | null;
   category: string | null;
+  category_id: string | null;
   ncm: string | null;
   cfop: string | null;
   cest: string | null;
@@ -36,6 +39,8 @@ interface MasterData {
   is_active: boolean;
   needs_review: boolean;
   review_reason: string | null;
+  shopify_product_id: string | null;
+  created_at: string | null;
 }
 
 interface PosSku {
@@ -119,6 +124,7 @@ export function UnifiedProductsList() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "review" | "ok">("all");
   const [storeFilter, setStoreFilter] = useState<string>("all");
+  const [filters, setFilters] = useState<ProductFilters>(emptyProductFilters);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editing, setEditing] = useState<MasterData | null>(null);
   const [editingSku, setEditingSku] = useState<PosSku | null>(null);
@@ -242,11 +248,33 @@ export function UnifiedProductsList() {
     }
     if (filter === "review") arr = arr.filter((g) => g.master?.needs_review);
     if (filter === "ok") arr = arr.filter((g) => g.master && !g.master.needs_review);
+    // Filtros avançados (marca/categoria/preço/data/Shopify/PDV/variações)
+    arr = arr.filter((g) => {
+      const m = g.master;
+      const variantCount = new Set(
+        g.skus.map((s) => `${(s.color || s.variant || "").trim()}||${(s.size || "").trim()}`)
+      ).size;
+      return matchesProductFilters(
+        {
+          brand_id: m?.brand_id ?? null,
+          category_id: m?.category_id ?? null,
+          brand: m?.brand ?? null,
+          category: m?.category ?? null,
+          created_at: m?.created_at ?? null,
+          cost_price: m?.cost_price ?? null,
+          sale_price: m?.sale_price ?? null,
+          shopify_product_id: m?.shopify_product_id ?? null,
+          in_pos: g.skus.length > 0,
+          variant_count: variantCount,
+        },
+        filters,
+      );
+    });
     return arr.sort((a, b) => (a.master?.name || a.parent_sku).localeCompare(b.master?.name || b.parent_sku));
-  }, [masters, posProducts, search, filter, storeFilter]);
+  }, [masters, posProducts, search, filter, storeFilter, filters]);
 
   // Reset to first page when filter/search changes
-  useEffect(() => { setPage(0); }, [search, filter, storeFilter]);
+  useEffect(() => { setPage(0); }, [search, filter, storeFilter, filters]);
 
   const totalPages = Math.max(1, Math.ceil(grouped.length / PAGE_SIZE));
   const pageItems = grouped.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -365,6 +393,7 @@ export function UnifiedProductsList() {
               ))}
             </SelectContent>
           </Select>
+          <ProductFiltersBar value={filters} onChange={setFilters} />
         </CardContent>
       </Card>
 
