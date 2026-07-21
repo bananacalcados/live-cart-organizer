@@ -547,6 +547,42 @@ export default function InventoryCategories() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ===== BRAND EDIT DIALOG ===== */}
+      <Dialog open={!!editingBrand} onOpenChange={(o) => !o && setEditingBrand(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editingBrand?.id ? "Editar" : "Nova"} marca</DialogTitle></DialogHeader>
+          {editingBrand && (
+            <div className="space-y-3">
+              <div>
+                <Label>Nome</Label>
+                <Input
+                  value={editingBrand.name || ""}
+                  onChange={e => setEditingBrand({ ...editingBrand, name: e.target.value })}
+                  placeholder="Ex: Modare"
+                />
+              </div>
+              <div>
+                <Label>Ativa</Label>
+                <Select
+                  value={(editingBrand.is_active ?? true) ? "yes" : "no"}
+                  onValueChange={v => setEditingBrand({ ...editingBrand, is_active: v === "yes" })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Sim</SelectItem>
+                    <SelectItem value="no">Não (oculta do seletor)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingBrand(null)}>Cancelar</Button>
+            <Button onClick={saveBrand}><Save className="h-4 w-4 mr-1" /> Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
