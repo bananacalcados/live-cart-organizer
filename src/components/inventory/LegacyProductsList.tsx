@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
-import { ProductLabelPrintDialog } from "./ProductLabelPrintDialog";
+import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
+import { ProductFiltersBar, matchesProductFilters, emptyProductFilters, type ProductFilters } from "./ProductFiltersBar";
 import { toast } from "sonner";
 
 interface Master {
