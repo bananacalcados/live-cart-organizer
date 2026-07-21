@@ -591,6 +591,37 @@ export default function InventoryCategories() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {manage && (
+        <ManageLinkedProductsDialog
+          open={!!manage}
+          onOpenChange={(o) => !o && setManage(null)}
+          mode={manage.mode}
+          entityId={manage.id}
+          entityName={manage.name}
+          onChanged={loadAll}
+        />
+      )}
+      {transferBrand && (
+        <TransferProductsDialog
+          open={!!transferBrand}
+          onOpenChange={(o) => !o && setTransferBrand(null)}
+          mode="brand"
+          from={{ id: transferBrand.id, name: transferBrand.name }}
+          candidates={brands.map(b => ({ id: b.id, name: b.name }))}
+          onDone={loadAll}
+        />
+      )}
+      {transferCat && (
+        <TransferProductsDialog
+          open={!!transferCat}
+          onOpenChange={(o) => !o && setTransferCat(null)}
+          mode="category"
+          from={{ id: transferCat.id, name: transferCat.name }}
+          candidates={categories.map(c => ({ id: c.id, name: c.name }))}
+          onDone={loadAll}
+        />
+      )}
     </div>
   );
 }
