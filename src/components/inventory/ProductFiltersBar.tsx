@@ -134,6 +134,14 @@ export function ProductFiltersBar({ value, onChange }: Props) {
               <input type="checkbox" checked={local.noPrice} onChange={e => setLocal({ ...local, noPrice: e.target.checked })} />
               Sem preço de venda
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={local.noBrand} onChange={e => setLocal({ ...local, noBrand: e.target.checked })} />
+              Sem marca
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={local.noCategory} onChange={e => setLocal({ ...local, noCategory: e.target.checked })} />
+              Sem categoria
+            </label>
           </div>
           <div className="flex gap-2 justify-end pt-1 border-t">
             <Button variant="ghost" size="sm" onClick={clear}>Limpar</Button>
