@@ -12,9 +12,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Tag, DollarSign, AlertTriangle, Save, Award } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Tag, DollarSign, AlertTriangle, Save, Award, Eye, ArrowRightLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
+import { ManageLinkedProductsDialog } from "@/components/inventory/ManageLinkedProductsDialog";
+import { TransferProductsDialog } from "@/components/inventory/TransferProductsDialog";
 
 interface Category {
   id: string;
