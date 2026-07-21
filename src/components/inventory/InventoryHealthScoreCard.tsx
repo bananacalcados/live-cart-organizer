@@ -109,7 +109,7 @@ export function InventoryHealthScoreCard({ storeId }: { storeId: string | null }
                     ))}
                   </SelectContent>
                 </Select>
-                <Button variant="outline" size="sm" onClick={load} disabled={loading} className="h-8">
+                <Button variant="outline" size="sm" onClick={() => load(true)} disabled={loading} className="h-8">
                   <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
                 </Button>
               </div>
