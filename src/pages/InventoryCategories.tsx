@@ -315,7 +315,7 @@ export default function InventoryCategories() {
           {loading ? <Loader2 className="animate-spin" /> : (
             <div className="grid gap-2">
               {brands.map(b => {
-                const used = brandCounts[b.name.trim().toLowerCase()] || 0;
+                const used = brandCounts[b.id] || 0;
                 return (
                   <Card key={b.id}>
                     <CardContent className="p-4 flex items-center justify-between gap-3">
@@ -328,6 +328,12 @@ export default function InventoryCategories() {
                         <p className="text-xs text-muted-foreground mt-1">slug: {b.slug}</p>
                       </div>
                       <div className="flex gap-1">
+                        <Button size="sm" variant="outline" onClick={() => setManage({ mode: "brand", id: b.id, name: b.name })}>
+                          <Eye className="h-4 w-4 mr-1" /> Produtos
+                        </Button>
+                        <Button size="icon" variant="ghost" title="Transferir todos para outra marca" onClick={() => setTransferBrand(b)}>
+                          <ArrowRightLeft className="h-4 w-4" />
+                        </Button>
                         <Button size="icon" variant="ghost" onClick={() => setEditingBrand(b)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
