@@ -285,6 +285,12 @@ export default function InventoryCategories() {
                       </p>
                     </div>
                     <div className="flex gap-1">
+                      <Button size="sm" variant="outline" onClick={() => setManage({ mode: "category", id: c.id, name: c.name })}>
+                        <Eye className="h-4 w-4 mr-1" /> Produtos
+                      </Button>
+                      <Button size="icon" variant="ghost" title="Transferir todos" onClick={() => setTransferCat(c)}>
+                        <ArrowRightLeft className="h-4 w-4" />
+                      </Button>
                       <Button size="icon" variant="ghost" onClick={() => setEditingCat(c)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
