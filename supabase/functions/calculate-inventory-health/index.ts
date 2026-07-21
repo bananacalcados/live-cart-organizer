@@ -52,10 +52,9 @@ Deno.serve(async (req) => {
 
     // 3) Replace cache row (unique index uses COALESCE — simpler to delete+insert)
     const computed_at = new Date().toISOString();
-    await admin.from('inventory_health_cache')
-      .delete()
-      .eq('horizon_days', horizon)
-      .eq('store_id', storeId as any);
+    await applyStoreFilter(
+      admin.from('inventory_health_cache').delete().eq('horizon_days', horizon)
+    );
     await admin.from('inventory_health_cache')
       .insert({ store_id: storeId, horizon_days: horizon, payload, computed_at });
 
