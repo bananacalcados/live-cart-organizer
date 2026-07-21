@@ -764,6 +764,16 @@ function MasterEditDialog({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    Promise.all([
+      supabase.from("product_brands" as any).select("id,name").eq("is_active", true).order("name"),
+      supabase.from("product_categories").select("id,name").eq("is_active", true).order("name"),
+    ]).then(([b, c]) => {
+      setBrands(((b.data || []) as any) as { id: string; name: string }[]);
+      setCategories(((c.data || []) as any) as { id: string; name: string }[]);
+    });
+  }, []);
+
+  useEffect(() => {
     if (!master) return;
     setName(master.name || "");
     setDescription(master.description || "");
@@ -774,7 +784,11 @@ function MasterEditDialog({
     setCest(master.cest || "");
     setCost(master.cost_price?.toString() || "");
     setSale(master.sale_price?.toString() || "");
-  }, [master]);
+    const bName = (master.brand || "").toString();
+    setNewBrandMode(!!bName && !brands.some((b) => b.name.toLowerCase() === bName.toLowerCase()));
+    const cName = (master.category || "").toString();
+    setNewCategoryMode(!!cName && !categories.some((c) => c.name.toLowerCase() === cName.toLowerCase()));
+  }, [master, brands, categories]);
 
   async function save() {
     if (!master) return;
