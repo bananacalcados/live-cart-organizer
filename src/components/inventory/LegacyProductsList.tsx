@@ -393,7 +393,9 @@ export function LegacyProductsList() {
       toast.error("Erro ao excluir: " + err.message);
     } finally {
       setBulkDeleting(false);
+    }
   }
+
 
   async function bulkPrintLabels() {
     if (selected.size === 0) return;
