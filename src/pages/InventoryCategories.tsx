@@ -77,6 +77,9 @@ export default function InventoryCategories() {
   const [editingCat, setEditingCat] = useState<Partial<Category> | null>(null);
   const [editingTier, setEditingTier] = useState<Partial<PriceTier> | null>(null);
   const [editingBrand, setEditingBrand] = useState<Partial<Brand> | null>(null);
+  const [manage, setManage] = useState<{ mode: "category" | "brand"; id: string; name: string } | null>(null);
+  const [transferBrand, setTransferBrand] = useState<Brand | null>(null);
+  const [transferCat, setTransferCat] = useState<Category | null>(null);
 
   const [reviewItems, setReviewItems] = useState<ReviewProduct[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
