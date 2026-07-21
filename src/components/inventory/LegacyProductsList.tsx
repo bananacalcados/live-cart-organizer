@@ -405,14 +405,12 @@ export function LegacyProductsList() {
       .select("id,sku,gtin,color,size,master_id")
       .in("master_id", ids);
     if (error) { toast.error("Erro ao carregar variações: " + error.message); return; }
-    const nameById = new Map(items.map(i => [i.id, i.name] as const));
     const labels: LabelItem[] = (data || []).map((v: any) => ({
       id: v.id,
       sku: v.sku || "",
       gtin: v.gtin || null,
       size: v.size || null,
       color: v.color || null,
-      name: nameById.get(v.master_id) || undefined,
     }));
     if (labels.length === 0) { toast.error("Nenhuma variação encontrada para os produtos selecionados."); return; }
     setBulkLabelItems(labels);
