@@ -102,7 +102,7 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
       .eq("is_active", true)
       .order("name")
       .then(({ data }) => {
-        const bs = (data || []) as { id: string; name: string }[];
+        const bs = ((data || []) as any) as { id: string; name: string }[];
         setBrands(bs);
         if (initial?.brand) {
           const match = bs.find((b) => b.name.toLowerCase() === initial.brand!.toLowerCase());
