@@ -19,7 +19,7 @@ import { Loader2, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Search, Downl
 import { cn } from "@/lib/utils";
 import {
   computeParentSummaries, healthBucket, parseSizeFromName, getGradeRange,
-  type ParentSummary, type VariantRow,
+  type ParentSummary, type VariantRow, type LegacyParentMeta,
 } from "@/lib/gradeCoverage";
 
 type Category = { id: string; name: string };
