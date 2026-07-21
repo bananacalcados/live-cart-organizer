@@ -135,6 +135,8 @@ export function LegacyProductsList() {
     if (filters.noPrice) query = query.or("sale_price.is.null,sale_price.eq.0");
     if (filters.noBrand) query = query.is("brand_id", null).or("brand.is.null,brand.eq.");
     if (filters.noCategory) query = query.is("category_id", null).or("category.is.null,category.eq.");
+    if (filters.inShopify) query = query.not("shopify_product_id", "is", null);
+    if (filters.notInShopify) query = query.is("shopify_product_id", null);
 
     const { data, error } = await query.order("created_at", { ascending: false }).limit(500);
     if (error) {
