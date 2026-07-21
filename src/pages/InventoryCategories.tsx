@@ -125,9 +125,9 @@ export default function InventoryCategories() {
   }
 
   async function deleteBrand(b: Brand) {
-    const inUse = brandCounts[b.name.trim().toLowerCase()] || 0;
+    const inUse = brandCounts[b.id] || 0;
     const msg = inUse > 0
-      ? `A marca "${b.name}" está em ${inUse} produto(s). Excluir mesmo assim? Os produtos ficarão sem marca cadastrada (o texto no produto continua, mas some do seletor).`
+      ? `A marca "${b.name}" está em ${inUse} produto(s). Excluir mesmo assim? Os produtos ficarão sem marca vinculada.`
       : `Excluir a marca "${b.name}"?`;
     if (!confirm(msg)) return;
     const { error } = await supabase.from("product_brands" as any).delete().eq("id", b.id);
