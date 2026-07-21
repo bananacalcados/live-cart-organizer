@@ -19535,6 +19535,34 @@ export type Database = {
       gen_unique_variant_sku: { Args: { p_base: string }; Returns: string }
       generate_ean13_barcode: { Args: never; Returns: string }
       generate_ean13_internal: { Args: never; Returns: string }
+      get_abc_curve_products: {
+        Args: { p_days?: number; p_store_id?: string }
+        Returns: {
+          abc_class: string
+          brand: string
+          category: string
+          cum_pct: number
+          master_name: string
+          parent_sku: string
+          qty: number
+          rank: number
+          revenue: number
+          revenue_pct: number
+          sales_count: number
+        }[]
+      }
+      get_abc_curve_sizes: {
+        Args: { p_days?: number; p_store_id?: string }
+        Returns: {
+          abc_class: string
+          cum_pct: number
+          qty: number
+          rank: number
+          revenue: number
+          revenue_pct: number
+          size_label: string
+        }[]
+      }
       get_active_mp_account: {
         Args: never
         Returns: {
