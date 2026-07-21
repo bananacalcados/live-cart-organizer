@@ -19,16 +19,17 @@ Deno.serve(async (req) => {
     }
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const cacheKey = storeId ?? '00000000-0000-0000-0000-000000000000';
+
+    const applyStoreFilter = <T extends { eq: any; is: any }>(q: T): T =>
+      (storeId === null ? q.is('store_id', null) : q.eq('store_id', storeId));
 
     // 1) Try cache
     if (!force) {
-      const { data: cached } = await admin
-        .from('inventory_health_cache')
-        .select('payload, computed_at')
-        .eq('horizon_days', horizon)
-        .eq('store_id', storeId as any)
-        .maybeSingle();
+      const { data: cached } = await applyStoreFilter(
+        admin.from('inventory_health_cache')
+          .select('payload, computed_at')
+          .eq('horizon_days', horizon)
+      ).maybeSingle();
 
       if (cached) {
         const age = Date.now() - new Date(cached.computed_at).getTime();
