@@ -124,6 +124,11 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       setName(master.name || "");
       setDescription(master.description || "");
       setBrand(master.brand || "");
+      {
+        const bName = (master.brand || "").toString();
+        const bMatch = brands.find((b) => b.name.toLowerCase() === bName.toLowerCase());
+        setNewBrandMode(!!bName && !bMatch);
+      }
       setCategory(master.category || "");
       {
         const catName = (master.category || "").toString();
