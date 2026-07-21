@@ -605,11 +605,11 @@ export function LegacyProductsList() {
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <div className="text-center py-20">
           <Package className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
           <h2 className="text-lg font-semibold text-muted-foreground">
-            {search ? "Nenhum produto encontrado" : "Nenhum produto cadastrado"}
+            {search ? "Nenhum produto encontrado" : "Nenhum produto para os filtros atuais"}
           </h2>
         </div>
       ) : (
