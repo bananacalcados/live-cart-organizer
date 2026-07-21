@@ -100,6 +100,11 @@ export function LegacyProductsList() {
   // Exclusão em massa
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkLabelItems, setBulkLabelItems] = useState<LabelItem[] | null>(null);
+  const [bulkShopifyRunning, setBulkShopifyRunning] = useState(false);
+
+  // Filtros avançados
+  const [filters, setFilters] = useState<ProductFilters>(emptyProductFilters);
 
   async function load() {
     setLoading(true);
