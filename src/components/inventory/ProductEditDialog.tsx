@@ -21,6 +21,7 @@ import { Loader2, Save, Trash2, Plus, Upload, X, Package, Sparkles, Store as Sto
 import { toast } from "sonner";
 import { generateEan13, isValidEan13 } from "@/lib/ean13";
 import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
+import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
 
 interface VariantRow {
   id?: string;                 // existente
