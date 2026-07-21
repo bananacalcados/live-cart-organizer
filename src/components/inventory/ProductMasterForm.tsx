@@ -223,6 +223,12 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
 
     setSaving(true);
     try {
+      // Se digitou uma marca nova, cadastra no catálogo de marcas (idempotente)
+      const brandTrim = brand.trim();
+      if (brandTrim && !brands.some((b) => b.name.toLowerCase() === brandTrim.toLowerCase())) {
+        const slug = brandTrim.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        await supabase.from("product_brands" as any).insert({ name: brandTrim, slug } as any);
+      }
       const { data, error } = await supabase.rpc("create_product_with_variants", {
         p_master: {
           name,
