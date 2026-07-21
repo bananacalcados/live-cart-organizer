@@ -1240,60 +1240,12 @@ export default function Inventory() {
                 <BarChart3 className="h-3 w-3" /> Dashboard
               </Button>
               <Button
-                variant={inventoryMode === "health" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setInventoryMode("health")}
-                className="text-xs h-7 gap-1"
-              >
-                <Activity className="h-3 w-3" /> Saúde
-              </Button>
-              <Button
-                variant={inventoryMode === "analytics" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setInventoryMode("analytics")}
-                className="text-xs h-7 gap-1"
-              >
-                <Search className="h-3 w-3" /> Análise
-              </Button>
-              <Button
-                variant={inventoryMode === "ai" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setInventoryMode("ai")}
-                className="text-xs h-7 gap-1"
-              >
-                <Sparkles className="h-3 w-3" /> Análise IA
-              </Button>
-              <Button
                 variant={inventoryMode === "bulk" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setInventoryMode("bulk")}
                 className="text-xs h-7 gap-1"
               >
                 <Sparkles className="h-3 w-3" /> Ações em Massa
-              </Button>
-              <Button
-                variant={inventoryMode === "shopify" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setInventoryMode("shopify")}
-                className="text-xs h-7 gap-1"
-              >
-                <ShoppingBag className="h-3 w-3" /> Vincular Shopify
-              </Button>
-              <Button
-                variant={inventoryMode === "depara" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setInventoryMode("depara")}
-                className="text-xs h-7 gap-1"
-              >
-                <Link2 className="h-3 w-3" /> De-para Vendas
-              </Button>
-              <Button
-                variant={inventoryMode === "divergencias" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setInventoryMode("divergencias")}
-                className="text-xs h-7 gap-1"
-              >
-                <GitMerge className="h-3 w-3" /> Divergências PDV
               </Button>
               {selectedStoreId && (
                 <>
