@@ -18,8 +18,9 @@ import {
 import { Loader2, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Search, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  computeParentSummaries, healthBucket, parseSizeFromName, getGradeRange,
-  type ParentSummary, type VariantRow, type LegacyParentMeta,
+  healthBucket, getGradeRange,
+  computeColorSummaries,
+  type ParentSummary, type MasterMeta, type PosSkuAgg,
 } from "@/lib/gradeCoverage";
 
 type Category = { id: string; name: string };
