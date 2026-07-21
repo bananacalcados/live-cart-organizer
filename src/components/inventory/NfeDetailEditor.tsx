@@ -17,6 +17,7 @@ import { Loader2, Save, Package, Plus, Trash2, FileText, Link2, Store as StoreIc
 import { toast } from "sonner";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ExistingParentSearchDialog } from "./ExistingParentSearchDialog";
+import { ColorSizeCombobox } from "./ColorSizeCombobox";
 
 interface Invoice {
   id: string;
