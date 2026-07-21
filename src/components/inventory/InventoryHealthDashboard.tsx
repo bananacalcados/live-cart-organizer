@@ -13,6 +13,7 @@ import { Loader2, RefreshCw, Activity, AlertTriangle, Boxes, Package, DollarSign
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { InventoryGradeCoverage } from "./InventoryGradeCoverage";
+import { InventoryHealthScoreCard } from "./InventoryHealthScoreCard";
 
 type Category = { id: string; name: string; slug: string };
 type PriceTier = { id: string; label: string; min_price: number | null; max_price: number | null; color: string | null };
