@@ -18,8 +18,9 @@ import {
 import { Loader2, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Search, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  computeParentSummaries, healthBucket, parseSizeFromName, getGradeRange,
-  type ParentSummary, type VariantRow, type LegacyParentMeta,
+  healthBucket, getGradeRange,
+  computeColorSummaries,
+  type ParentSummary, type MasterMeta, type PosSkuAgg,
 } from "@/lib/gradeCoverage";
 
 type Category = { id: string; name: string };
@@ -46,8 +47,8 @@ const fmtMoney = (v: number) =>
 export function InventoryGradeCoverage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
-  const [rows, setRows] = useState<VariantRow[]>([]);
-  const [legacyMap, setLegacyMap] = useState<Map<string, LegacyParentMeta>>(new Map());
+  const [masters, setMasters] = useState<MasterMeta[]>([]);
+  const [posRows, setPosRows] = useState<{ sku: string; store_id: string | null; stock: number; price: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [storeFilter, setStoreFilter] = useState<string>("all");
@@ -67,10 +68,10 @@ export function InventoryGradeCoverage() {
   }, []);
 
   const loadLegacy = useCallback(async () => {
-    // Load ALL Legacy masters + variants and build a parent_sku (=sku_root) map.
     const pageSize = 1000;
+    // 1) Masters
     let from = 0;
-    const masters: any[] = [];
+    const mastersRaw: any[] = [];
     while (true) {
       const { data, error } = await supabase
         .from("products_master")
@@ -78,113 +79,139 @@ export function InventoryGradeCoverage() {
         .eq("is_active", true)
         .range(from, from + pageSize - 1);
       if (error || !data || data.length === 0) break;
-      masters.push(...data);
+      mastersRaw.push(...data);
       if (data.length < pageSize) break;
       from += pageSize;
     }
-    const idToRoot = new Map<string, string>();
-    for (const m of masters) if (m.sku_root) idToRoot.set(m.id, m.sku_root);
+    const idToMaster = new Map<string, any>();
+    for (const m of mastersRaw) idToMaster.set(m.id, m);
 
-    // Variants — collect real sizes per master.
+    // 2) Variants: color + size + sku
     from = 0;
-    const variantSizes = new Map<string, Set<number>>(); // sku_root -> sizes
+    // master_id -> color -> { sizes:Set, skuBySize:{} }
+    const byMaster = new Map<string, Map<string, { sizes: Set<number>; skuBySize: Record<number, string> }>>();
     while (true) {
       const { data, error } = await supabase
         .from("product_variants")
-        .select("master_id, size, is_active")
+        .select("master_id, sku, color, size, is_active")
         .eq("is_active", true)
         .range(from, from + pageSize - 1);
       if (error || !data || data.length === 0) break;
       for (const v of data as any[]) {
-        const root = idToRoot.get(v.master_id);
-        if (!root) continue;
+        if (!idToMaster.has(v.master_id)) continue;
         const n = Number(v.size);
         if (!Number.isFinite(n)) continue;
-        const set = variantSizes.get(root) || new Set<number>();
-        set.add(n);
-        variantSizes.set(root, set);
+        const color = (v.color || "").trim();
+        let colors = byMaster.get(v.master_id);
+        if (!colors) { colors = new Map(); byMaster.set(v.master_id, colors); }
+        let entry = colors.get(color);
+        if (!entry) { entry = { sizes: new Set(), skuBySize: {} }; colors.set(color, entry); }
+        entry.sizes.add(n);
+        if (v.sku) entry.skuBySize[n] = v.sku;
       }
       if (data.length < pageSize) break;
       from += pageSize;
     }
 
-    const map = new Map<string, LegacyParentMeta>();
-    for (const m of masters) {
+    const out: MasterMeta[] = [];
+    for (const m of mastersRaw) {
       if (!m.sku_root) continue;
-      map.set(m.sku_root, {
-        displayName: m.name,
+      const colors = byMaster.get(m.id);
+      const colorArr = colors
+        ? Array.from(colors.entries()).map(([color, v]) => ({
+            color,
+            sizes: Array.from(v.sizes).sort((a, b) => a - b),
+            skuBySize: v.skuBySize,
+          }))
+        : [];
+      out.push({
+        sku_root: m.sku_root,
+        name: m.name,
         category_id: m.category_id,
         gender: m.gender,
-        variantSizes: Array.from(variantSizes.get(m.sku_root) || []),
+        colors: colorArr,
       });
     }
-    setLegacyMap(map);
+    setMasters(out);
   }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     const pageSize = 1000;
     let from = 0;
-    const all: VariantRow[] = [];
+    const all: { sku: string; store_id: string | null; stock: number; price: number }[] = [];
     while (true) {
       const { data, error } = await supabase
         .from("pos_products")
-        .select("parent_sku, name, stock, price, cost_price, category_id, gender, store_id, sku")
+        .select("sku, stock, price, store_id")
         .range(from, from + pageSize - 1);
       if (error || !data || data.length === 0) break;
-      all.push(...(data as any[]).map((r) => ({
-        ...r,
-        stock: toNumber(r.stock),
-        price: toNumber(r.price),
-        cost_price: toNumber(r.cost_price),
-      })));
+      for (const r of data as any[]) {
+        if (!r.sku) continue;
+        all.push({
+          sku: r.sku,
+          store_id: r.store_id,
+          stock: toNumber(r.stock),
+          price: toNumber(r.price),
+        });
+      }
       if (data.length < pageSize) break;
       from += pageSize;
     }
-    setRows(all);
+    setPosRows(all);
     setLoading(false);
   }, []);
 
   useEffect(() => { loadMeta(); loadLegacy(); loadData(); }, [loadMeta, loadLegacy, loadData]);
 
-  // Apply filters BEFORE grouping (store filter affects which variants count).
-  // NOTE: gender/category filters use Legacy metadata when the parent exists in
-  // Legacy, so filtering is consistent with what's displayed.
-  const filteredRows = useMemo(() => {
-    return rows.filter(r => {
-      if (storeFilter !== "all" && r.store_id !== storeFilter) return false;
-      const legacy = r.parent_sku ? legacyMap.get(r.parent_sku) : undefined;
-      const gender = legacy?.gender ?? r.gender ?? "";
-      const category = legacy?.category_id ?? r.category_id;
-      if (genderFilter !== "all" && gender !== genderFilter) return false;
-      if (categoryFilter !== "all" && category !== categoryFilter) return false;
+  // Aggregate pos stock by sku, honoring the store filter.
+  const posBySku = useMemo(() => {
+    const m = new Map<string, PosSkuAgg>();
+    for (const r of posRows) {
+      if (storeFilter !== "all" && r.store_id !== storeFilter) continue;
+      const cur = m.get(r.sku) || { stock: 0, price: 0 };
+      cur.stock += r.stock;
+      // Keep the highest non-zero price we see as reference (prices may differ by store).
+      if (r.price > cur.price) cur.price = r.price;
+      m.set(r.sku, cur);
+    }
+    return m;
+  }, [posRows, storeFilter]);
+
+  // Filter masters by gender/category before summarising.
+  const filteredMasters = useMemo(() => {
+    return masters.filter(m => {
+      if (genderFilter !== "all" && (m.gender || "") !== genderFilter) return false;
+      if (categoryFilter !== "all" && (m.category_id || "uncat") !== categoryFilter) return false;
       return true;
     });
-  }, [rows, storeFilter, genderFilter, categoryFilter, legacyMap]);
+  }, [masters, genderFilter, categoryFilter]);
 
-  // Only include products registered in Legacy — hides ghost pos_products rows.
   const allSummaries = useMemo(
-    () => computeParentSummaries(filteredRows, { legacyMap, onlyLegacy: true }),
-    [filteredRows, legacyMap],
+    () => computeColorSummaries(filteredMasters, posBySku),
+    [filteredMasters, posBySku],
   );
-  // Exclude parents with zero total stock — likely discontinued, not a health signal.
   const summaries = useMemo(() => allSummaries.filter(p => p.totalPairs > 0), [allSummaries]);
   const inactiveSummaries = useMemo(() => allSummaries.filter(p => p.totalPairs === 0), [allSummaries]);
 
-  // parent_sku -> Map<size, totalStock> for the grade detail modal
+  // key (parent_sku = `${sku_root}::${color}`) -> Map<size, stock>
   const stockBySize = useMemo(() => {
-    const m = new Map<string, Map<number, number>>();
-    for (const r of filteredRows) {
-      const key = r.parent_sku || `__${r.name || "?"}`;
-      const size = parseSizeFromName(r.name);
-      if (size == null) continue;
-      const stk = Number(r.stock ?? 0);
-      const inner = m.get(key) || new Map<number, number>();
-      inner.set(size, (inner.get(size) || 0) + stk);
-      m.set(key, inner);
+    const result = new Map<string, Map<number, number>>();
+    for (const m of filteredMasters) {
+      const groups = m.colors.length > 0 ? m.colors : [];
+      for (const g of groups) {
+        const key = `${m.sku_root}::${g.color || "_"}`;
+        const inner = new Map<number, number>();
+        for (const size of g.sizes) {
+          const sku = g.skuBySize[size];
+          const agg = sku ? posBySku.get(sku) : undefined;
+          inner.set(size, agg?.stock || 0);
+        }
+        result.set(key, inner);
+      }
     }
-    return m;
-  }, [filteredRows]);
+    return result;
+  }, [filteredMasters, posBySku]);
 
   const modalCategory = useMemo(() => {
     if (!modalCatId) return null;

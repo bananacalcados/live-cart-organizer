@@ -162,3 +162,77 @@ export function healthBucket(pct: number, isComplete: boolean): HealthBucket {
   if (pct >= 50) return "broken";
   return "critical";
 }
+
+// ============================================================================
+// Color-aware summaries: group by (master, color) using product_variants as the
+// source of truth for expected sizes and pos_products.sku as the join key for
+// stock. This models "1 modelo × 1 cor = 1 grade" instead of collapsing all
+// colors of a parent_sku into a single row (which hides colors with stock when
+// another color is empty).
+// ============================================================================
+
+export type MasterColorMeta = {
+  color: string; // "" for masters without a color axis
+  sizes: number[];
+  /** size -> variant sku (used to match pos_products.sku for stock). */
+  skuBySize: Record<number, string>;
+};
+
+export type MasterMeta = {
+  sku_root: string;
+  name: string;
+  category_id: string | null;
+  gender: string | null;
+  colors: MasterColorMeta[];
+};
+
+export type PosSkuAgg = { stock: number; price: number };
+
+/** Build summaries at the (master × color) grain.
+ *  `posBySku` must already contain stock aggregated across the selected stores. */
+export function computeColorSummaries(
+  masters: MasterMeta[],
+  posBySku: Map<string, PosSkuAgg>,
+): ParentSummary[] {
+  const out: ParentSummary[] = [];
+  for (const m of masters) {
+    const groups: MasterColorMeta[] =
+      m.colors.length > 0 ? m.colors : [{ color: "", sizes: [], skuBySize: {} }];
+    for (const g of groups) {
+      const expected = [...g.sizes].sort((a, b) => a - b);
+      let totalPairs = 0;
+      let saleValue = 0;
+      const present = new Set<number>();
+      for (const size of expected) {
+        const sku = g.skuBySize[size];
+        if (!sku) continue;
+        const agg = posBySku.get(sku);
+        if (!agg) continue;
+        if (agg.stock > 0) {
+          present.add(size);
+          totalPairs += agg.stock;
+          saleValue += agg.stock * (agg.price || 0);
+        }
+      }
+      const missing = expected.filter((sz) => !present.has(sz));
+      const coverage =
+        expected.length === 0 ? 0 : (present.size / expected.length) * 100;
+      const displayName = g.color ? `${m.name} · ${g.color}` : m.name;
+      out.push({
+        parent_sku: `${m.sku_root}::${g.color || "_"}`,
+        displayName,
+        category_id: m.category_id,
+        gender: m.gender,
+        expectedSizes: expected,
+        presentSizes: expected.filter((s) => present.has(s)),
+        missingSizes: missing,
+        totalPairs,
+        saleValue,
+        isComplete: expected.length > 0 && missing.length === 0,
+        coveragePct: coverage,
+        inLegacy: true,
+      });
+    }
+  }
+  return out;
+}
