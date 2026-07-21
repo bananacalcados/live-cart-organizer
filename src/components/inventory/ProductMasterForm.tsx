@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { generateEan13, normalizeColorForSku } from "@/lib/ean13";
 import { sanitizeSizeInput, sanitizeColorInput, isValidSize, isValidColor } from "@/lib/variantValidation";
 import { ColorSizeCombobox } from "@/components/inventory/ColorSizeCombobox";
+import { ColorSizeMultiCombobox } from "@/components/inventory/ColorSizeMultiCombobox";
 
 interface VariantRow {
   color: string;
@@ -491,19 +492,21 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
             <CardContent className="space-y-2">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
                 <div>
-                  <Label className="text-xs">Cores (separadas por vírgula)</Label>
-                  <Input
-                    value={matrixColors}
-                    onChange={(e) => setMatrixColors(e.target.value)}
-                    placeholder="Preto, Branco, Vermelho"
+                  <Label className="text-xs">Cores</Label>
+                  <ColorSizeMultiCombobox
+                    kind="color"
+                    values={matrixColors ? matrixColors.split(",").map((c) => c.trim()).filter(Boolean) : []}
+                    onChange={(vals) => setMatrixColors(vals.join(", "))}
+                    placeholder="Selecionar cores..."
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Tamanhos (separados por vírgula)</Label>
-                  <Input
-                    value={matrixSizes}
-                    onChange={(e) => setMatrixSizes(e.target.value)}
-                    placeholder="35, 36, 37, 38, 39, 40"
+                  <Label className="text-xs">Tamanhos</Label>
+                  <ColorSizeMultiCombobox
+                    kind="size"
+                    values={matrixSizes ? matrixSizes.split(",").map((s) => s.trim()).filter(Boolean) : []}
+                    onChange={(vals) => setMatrixSizes(vals.join(", "))}
+                    placeholder="Selecionar tamanhos..."
                   />
                 </div>
                 <Button onClick={generateMatrix} variant="secondary" size="sm">
