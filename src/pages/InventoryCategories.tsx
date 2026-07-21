@@ -96,28 +96,16 @@ export default function InventoryCategories() {
     setTiers((tr || []) as any);
     setBrands(((brs || []) as any) as Brand[]);
 
-    // counts per category & brand
-    const { data: cnts } = await supabase
-      .from("product_master_data")
-      .select("category, brand");
+    // counts via RPCs (baseadas em category_id/brand_id em product_master_data)
+    const [{ data: catRpc }, { data: brandRpc }] = await Promise.all([
+      supabase.rpc("count_products_by_category" as any),
+      supabase.rpc("count_products_by_brand" as any),
+    ]);
     const catMap: Record<string, number> = {};
+    (catRpc as any[] || []).forEach((r: any) => { catMap[r.category_id] = Number(r.total) || 0; });
     const brandMap: Record<string, number> = {};
-    (cnts || []).forEach((r: any) => {
-      const k = r.category || "__none__";
-      catMap[k] = (catMap[k] || 0) + 1;
-      if (r.brand) {
-        const bk = String(r.brand).trim().toLowerCase();
-        brandMap[bk] = (brandMap[bk] || 0) + 1;
-      }
-    });
-    // Categoria count baseia-se em pos_products.category_id ainda? Manter contagem antiga também:
-    const { data: posCnts } = await supabase.from("pos_products").select("category_id");
-    const map: Record<string, number> = {};
-    (posCnts || []).forEach((r: any) => {
-      const k = r.category_id || "__none__";
-      map[k] = (map[k] || 0) + 1;
-    });
-    setCounts(map);
+    (brandRpc as any[] || []).forEach((r: any) => { brandMap[r.brand_id] = Number(r.total) || 0; });
+    setCounts(catMap);
     setBrandCounts(brandMap);
     setLoading(false);
   }
