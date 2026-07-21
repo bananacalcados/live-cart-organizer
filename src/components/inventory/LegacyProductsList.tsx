@@ -30,13 +30,16 @@ interface Master {
   sku_root: string;
   name: string;
   brand: string | null;
+  brand_id: string | null;
   category: string | null;
+  category_id: string | null;
   cost_price: number | string | null;
   sale_price: number | string | null;
   is_active: boolean;
   shopify_product_id: string | null;
   tiny_product_id: string | null;
   created_at: string;
+  images: string[] | null;
 }
 
 interface Summary {
