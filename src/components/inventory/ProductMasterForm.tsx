@@ -96,7 +96,21 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
           else setNewCategoryMode(true);
         }
       });
+    supabase
+      .from("product_brands" as any)
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => {
+        const bs = (data || []) as { id: string; name: string }[];
+        setBrands(bs);
+        if (initial?.brand) {
+          const match = bs.find((b) => b.name.toLowerCase() === initial.brand!.toLowerCase());
+          if (!match) setNewBrandMode(true);
+        }
+      });
   }, [open]);
+
 
   // Filhos
   const initialVariants: VariantRow[] = (initial?.items || []).map((it) => ({
