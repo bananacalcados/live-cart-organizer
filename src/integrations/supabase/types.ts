@@ -14512,6 +14512,7 @@ export type Database = {
           age_group: string | null
           auto_classified: boolean
           brand: string | null
+          brand_id: string | null
           category: string | null
           category_id: string | null
           cest: string | null
@@ -14548,6 +14549,7 @@ export type Database = {
           age_group?: string | null
           auto_classified?: boolean
           brand?: string | null
+          brand_id?: string | null
           category?: string | null
           category_id?: string | null
           cest?: string | null
@@ -14584,6 +14586,7 @@ export type Database = {
           age_group?: string | null
           auto_classified?: boolean
           brand?: string | null
+          brand_id?: string | null
           category?: string | null
           category_id?: string | null
           cest?: string | null
@@ -14617,6 +14620,13 @@ export type Database = {
           width_cm?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "products_master_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "product_brands"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_master_category_id_fkey"
             columns: ["category_id"]
