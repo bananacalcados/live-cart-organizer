@@ -23,12 +23,20 @@ export interface ProductFilters {
   noPrice: boolean;
   noBrand: boolean;
   noCategory: boolean;
+  inShopify: boolean;
+  notInShopify: boolean;
+  inPos: boolean;
+  notInPos: boolean;
+  maxVariants: string;  // "" or integer as string; variant_count <= X
+  noVariants: boolean;  // variant_count == 0
 }
 
 export const emptyProductFilters: ProductFilters = {
   brandId: "", categoryId: "", createdFrom: "", createdTo: "",
   priceMin: "", priceMax: "", noCost: false, noPrice: false,
   noBrand: false, noCategory: false,
+  inShopify: false, notInShopify: false, inPos: false, notInPos: false,
+  maxVariants: "", noVariants: false,
 };
 
 export function countActive(f: ProductFilters) {
@@ -41,6 +49,12 @@ export function countActive(f: ProductFilters) {
   if (f.noPrice) n++;
   if (f.noBrand) n++;
   if (f.noCategory) n++;
+  if (f.inShopify) n++;
+  if (f.notInShopify) n++;
+  if (f.inPos) n++;
+  if (f.notInPos) n++;
+  if (f.maxVariants) n++;
+  if (f.noVariants) n++;
   return n;
 }
 
