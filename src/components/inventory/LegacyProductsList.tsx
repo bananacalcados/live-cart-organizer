@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import { ProductMasterForm } from "./ProductMasterForm";
 import { ProductEditDialog } from "./ProductEditDialog";
-import { ProductLabelPrintDialog } from "./ProductLabelPrintDialog";
+import { ProductLabelPrintDialog, type LabelItem } from "./ProductLabelPrintDialog";
+import { ProductFiltersBar, matchesProductFilters, emptyProductFilters, type ProductFilters } from "./ProductFiltersBar";
 import { toast } from "sonner";
 
 interface Master {
@@ -29,13 +30,16 @@ interface Master {
   sku_root: string;
   name: string;
   brand: string | null;
+  brand_id: string | null;
   category: string | null;
+  category_id: string | null;
   cost_price: number | string | null;
   sale_price: number | string | null;
   is_active: boolean;
   shopify_product_id: string | null;
   tiny_product_id: string | null;
   created_at: string;
+  images: string[] | null;
 }
 
 interface Summary {
@@ -96,11 +100,17 @@ export function LegacyProductsList() {
   // Exclusão em massa
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkLabelItems, setBulkLabelItems] = useState<LabelItem[] | null>(null);
+  const [bulkShopifyRunning, setBulkShopifyRunning] = useState(false);
+
+  // Filtros avançados
+  const [filters, setFilters] = useState<ProductFilters>(emptyProductFilters);
 
   async function load() {
     setLoading(true);
     const term = search.trim();
     let query = supabase.from("products_master").select("*");
+
 
     if (term) {
       const { data: variantHits } = await supabase
@@ -114,7 +124,17 @@ export function LegacyProductsList() {
       query = query.or(orParts.join(","));
     }
 
-    const { data, error } = await query.order("created_at", { ascending: false }).limit(200);
+    // Filtros avançados server-side
+    if (filters.brandId) query = query.eq("brand_id", filters.brandId);
+    if (filters.categoryId) query = query.eq("category_id", filters.categoryId);
+    if (filters.createdFrom) query = query.gte("created_at", filters.createdFrom);
+    if (filters.createdTo) query = query.lte("created_at", filters.createdTo + "T23:59:59");
+    if (filters.priceMin) query = query.gte("sale_price", Number(filters.priceMin));
+    if (filters.priceMax) query = query.lte("sale_price", Number(filters.priceMax));
+    if (filters.noCost) query = query.or("cost_price.is.null,cost_price.eq.0");
+    if (filters.noPrice) query = query.or("sale_price.is.null,sale_price.eq.0");
+
+    const { data, error } = await query.order("created_at", { ascending: false }).limit(500);
     if (error) {
       toast.error("Erro ao carregar produtos: " + error.message);
       setLoading(false);
@@ -144,7 +164,7 @@ export function LegacyProductsList() {
     const t = setTimeout(() => { load(); }, search ? 350 : 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, filters]);
 
   // Lojas físicas para o diálogo de sincronizar estoque
   useEffect(() => {
@@ -376,6 +396,51 @@ export function LegacyProductsList() {
     }
   }
 
+
+  async function bulkPrintLabels() {
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    const { data, error } = await supabase
+      .from("product_variants")
+      .select("id,sku,gtin,color,size,master_id")
+      .in("master_id", ids);
+    if (error) { toast.error("Erro ao carregar variações: " + error.message); return; }
+    const labels: LabelItem[] = (data || []).map((v: any) => ({
+      id: v.id,
+      sku: v.sku || "",
+      gtin: v.gtin || null,
+      size: v.size || null,
+      color: v.color || null,
+    }));
+    if (labels.length === 0) { toast.error("Nenhuma variação encontrada para os produtos selecionados."); return; }
+    setBulkLabelItems(labels);
+  }
+
+  async function bulkSendShopify() {
+    if (selected.size === 0) return;
+    const ids = Array.from(selected);
+    if (!confirm(`Enviar/atualizar ${ids.length} produto(s) na Shopify?`)) return;
+    setBulkShopifyRunning(true);
+    let ok = 0, fail = 0;
+    for (const id of ids) {
+      const m = items.find(i => i.id === id);
+      const fn = m?.shopify_product_id ? "update-master-product-shopify" : "create-master-product-shopify";
+      try {
+        const { error } = await supabase.functions.invoke(fn, { body: { master_id: id } });
+        if (error) throw error;
+        ok++;
+      } catch (e: any) {
+        fail++;
+        console.error("Shopify bulk falhou p/", id, e);
+      }
+    }
+    setBulkShopifyRunning(false);
+    toast.success(`Shopify: ${ok} OK · ${fail} falhas`, { duration: 8000 });
+    await load();
+
+
+  }
+
   function openUnify() {
     if (selected.size < 1) {
       toast.error("Selecione ao menos um produto para unificar.");
@@ -455,6 +520,7 @@ export function LegacyProductsList() {
             className="pl-8"
           />
         </div>
+        <ProductFiltersBar value={filters} onChange={setFilters} />
         <Button variant="outline" onClick={backfillCosts} disabled={backfilling} className="gap-1">
           {backfilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           Importar custos do estoque
@@ -466,10 +532,17 @@ export function LegacyProductsList() {
 
       {/* barra de seleção / unificar */}
       {selectedCount > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border bg-primary/5 px-3 py-2">
+        <div className="flex items-center justify-between gap-3 rounded-lg border bg-primary/5 px-3 py-2 flex-wrap">
           <span className="text-sm font-medium">{selectedCount} produto(s) selecionado(s)</span>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Limpar</Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={bulkPrintLabels}>
+              <Tag className="h-4 w-4" /> Etiqueta em massa
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={bulkSendShopify} disabled={bulkShopifyRunning}>
+              {bulkShopifyRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className="h-4 w-4" />}
+              Enviar à Shopify
+            </Button>
             <Button size="sm" variant="destructive" className="gap-1" onClick={() => setBulkDeleteOpen(true)}>
               <Trash2 className="h-4 w-4" /> Excluir selecionados
             </Button>
@@ -780,6 +853,12 @@ export function LegacyProductsList() {
       <ProductMasterForm open={showForm} onOpenChange={setShowForm} onCreated={() => load()} />
       <ProductEditDialog masterId={editingId} open={!!editingId} onOpenChange={(v) => !v && setEditingId(null)} onSaved={() => load()} />
       <ProductLabelPrintDialog masterId={labelPrintId} open={!!labelPrintId} onOpenChange={(v) => !v && setLabelPrintId(null)} />
+      <ProductLabelPrintDialog
+        items={bulkLabelItems || undefined}
+        productName={`${selected.size} produtos selecionados`}
+        open={!!bulkLabelItems}
+        onOpenChange={(v) => !v && setBulkLabelItems(null)}
+      />
 
       <LegacyVariantEditDialog
         data={editingVariant}
