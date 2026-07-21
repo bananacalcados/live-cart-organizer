@@ -247,15 +247,22 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
           images,
           is_active: true,
         } as any,
-        p_variants: variants.map((v) => ({
-          color: v.color,
-          size: v.size,
-          cost_price_override: v.cost_price_override?.toString(),
-          sale_price_override: v.sale_price_override?.toString(),
-          weight_kg_override: v.weight_kg_override?.toString(),
-          initial_stock: v.initial_stock,
-          is_active: true,
-        })) as any,
+        p_variants: variants.map((v) => {
+          // Herança automática: se a variação não tem preço próprio, herda do pai.
+          const parentCost = parseFloat(costPrice);
+          const parentSale = parseFloat(salePrice);
+          const cost = v.cost_price_override ?? (isFinite(parentCost) ? parentCost : undefined);
+          const sale = v.sale_price_override ?? (isFinite(parentSale) ? parentSale : undefined);
+          return {
+            color: v.color,
+            size: v.size,
+            cost_price_override: cost?.toString(),
+            sale_price_override: sale?.toString(),
+            weight_kg_override: v.weight_kg_override?.toString(),
+            initial_stock: v.initial_stock,
+            is_active: true,
+          };
+        }) as any,
       });
       if (error) throw error;
       const masterId = data as string;
