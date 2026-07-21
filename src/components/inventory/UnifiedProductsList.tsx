@@ -248,8 +248,30 @@ export function UnifiedProductsList() {
     }
     if (filter === "review") arr = arr.filter((g) => g.master?.needs_review);
     if (filter === "ok") arr = arr.filter((g) => g.master && !g.master.needs_review);
+    // Filtros avançados (marca/categoria/preço/data/Shopify/PDV/variações)
+    arr = arr.filter((g) => {
+      const m = g.master;
+      const variantCount = new Set(
+        g.skus.map((s) => `${(s.color || s.variant || "").trim()}||${(s.size || "").trim()}`)
+      ).size;
+      return matchesProductFilters(
+        {
+          brand_id: m?.brand_id ?? null,
+          category_id: m?.category_id ?? null,
+          brand: m?.brand ?? null,
+          category: m?.category ?? null,
+          created_at: m?.created_at ?? null,
+          cost_price: m?.cost_price ?? null,
+          sale_price: m?.sale_price ?? null,
+          shopify_product_id: m?.shopify_product_id ?? null,
+          in_pos: g.skus.length > 0,
+          variant_count: variantCount,
+        },
+        filters,
+      );
+    });
     return arr.sort((a, b) => (a.master?.name || a.parent_sku).localeCompare(b.master?.name || b.parent_sku));
-  }, [masters, posProducts, search, filter, storeFilter]);
+  }, [masters, posProducts, search, filter, storeFilter, filters]);
 
   // Reset to first page when filter/search changes
   useEffect(() => { setPage(0); }, [search, filter, storeFilter]);
