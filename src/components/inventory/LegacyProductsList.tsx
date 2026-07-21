@@ -520,16 +520,39 @@ export function LegacyProductsList() {
   }
 
   const selectedCount = selected.size;
+
+  // Aplica os filtros que dependem de dados agregados (variações + presença PDV).
+  const filteredItems = useMemo(() => {
+    return items.filter((p) => {
+      const s = summary[p.id];
+      return matchesProductFilters(
+        {
+          brand_id: p.brand_id,
+          category_id: p.category_id,
+          brand: p.brand,
+          category: p.category,
+          created_at: p.created_at,
+          cost_price: p.cost_price,
+          sale_price: p.sale_price,
+          shopify_product_id: p.shopify_product_id,
+          in_pos: posPresent.has(p.sku_root),
+          variant_count: s?.variant_count ?? 0,
+        },
+        filters,
+      );
+    });
+  }, [items, summary, posPresent, filters]);
+
   const allVisibleSelected = useMemo(
-    () => items.length > 0 && items.every((i) => selected.has(i.id)),
-    [items, selected]
+    () => filteredItems.length > 0 && filteredItems.every((i) => selected.has(i.id)),
+    [filteredItems, selected]
   );
 
   function toggleSelectAll() {
     if (allVisibleSelected) {
       setSelected(new Set());
     } else {
-      setSelected(new Set(items.map((i) => i.id)));
+      setSelected(new Set(filteredItems.map((i) => i.id)));
     }
   }
 
