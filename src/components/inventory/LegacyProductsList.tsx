@@ -111,10 +111,6 @@ export function LegacyProductsList() {
     const term = search.trim();
     let query = supabase.from("products_master").select("*");
 
-  async function load() {
-    setLoading(true);
-    const term = search.trim();
-    let query = supabase.from("products_master").select("*");
 
     if (term) {
       const { data: variantHits } = await supabase
