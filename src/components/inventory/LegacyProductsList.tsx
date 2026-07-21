@@ -115,14 +115,23 @@ export function LegacyProductsList() {
 
 
     if (term) {
-      const { data: variantHits } = await supabase
-        .from("product_variants")
-        .select("master_id")
-        .or(`sku.ilike.%${term}%,gtin.ilike.%${term}%`)
-        .limit(200);
+      const [{ data: variantHits }, { data: posHits }] = await Promise.all([
+        supabase
+          .from("product_variants")
+          .select("master_id")
+          .or(`sku.ilike.%${term}%,gtin.ilike.%${term}%`)
+          .limit(200),
+        supabase
+          .from("pos_products")
+          .select("parent_sku")
+          .or(`barcode.ilike.%${term}%,sku.ilike.%${term}%`)
+          .limit(500),
+      ]);
       const masterIds = Array.from(new Set((variantHits || []).map((v: any) => v.master_id).filter(Boolean)));
+      const posRoots = Array.from(new Set((posHits || []).map((p: any) => p.parent_sku).filter(Boolean)));
       const orParts = [`name.ilike.%${term}%`, `sku_root.ilike.%${term}%`, `brand.ilike.%${term}%`];
       if (masterIds.length > 0) orParts.push(`id.in.(${masterIds.join(",")})`);
+      if (posRoots.length > 0) orParts.push(`sku_root.in.(${posRoots.map((r) => `"${r}"`).join(",")})`);
       query = query.or(orParts.join(","));
     }
 
