@@ -21,11 +21,14 @@ export interface ProductFilters {
   priceMax: string;
   noCost: boolean;
   noPrice: boolean;
+  noBrand: boolean;
+  noCategory: boolean;
 }
 
 export const emptyProductFilters: ProductFilters = {
   brandId: "", categoryId: "", createdFrom: "", createdTo: "",
   priceMin: "", priceMax: "", noCost: false, noPrice: false,
+  noBrand: false, noCategory: false,
 };
 
 export function countActive(f: ProductFilters) {
@@ -36,6 +39,8 @@ export function countActive(f: ProductFilters) {
   if (f.priceMin || f.priceMax) n++;
   if (f.noCost) n++;
   if (f.noPrice) n++;
+  if (f.noBrand) n++;
+  if (f.noCategory) n++;
   return n;
 }
 
