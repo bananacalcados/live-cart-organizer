@@ -1312,15 +1312,37 @@ export default function Inventory() {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : inventoryMode === "dashboard" ? (
-          <InventoryDashboard />
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList>
+              <TabsTrigger value="overview" className="gap-1"><BarChart3 className="h-3 w-3" /> Visão Geral</TabsTrigger>
+              <TabsTrigger value="health" className="gap-1"><Activity className="h-3 w-3" /> Saúde</TabsTrigger>
+              <TabsTrigger value="analytics" className="gap-1"><Search className="h-3 w-3" /> Análise</TabsTrigger>
+              <TabsTrigger value="ai" className="gap-1"><Sparkles className="h-3 w-3" /> Análise IA</TabsTrigger>
+            </TabsList>
+            <TabsContent value="overview" className="mt-4"><InventoryDashboard /></TabsContent>
+            <TabsContent value="health" className="mt-4"><InventoryHealthDashboard /></TabsContent>
+            <TabsContent value="analytics" className="mt-4"><InventoryAnalytics /></TabsContent>
+            <TabsContent value="ai" className="mt-4"><InventoryAIAnalysis /></TabsContent>
+          </Tabs>
+        ) : inventoryMode === "bulk" ? (
+          <Tabs defaultValue="bulk" className="w-full">
+            <TabsList>
+              <TabsTrigger value="bulk" className="gap-1"><Sparkles className="h-3 w-3" /> Ações</TabsTrigger>
+              <TabsTrigger value="shopify" className="gap-1"><ShoppingBag className="h-3 w-3" /> Vincular Shopify</TabsTrigger>
+              <TabsTrigger value="depara" className="gap-1"><Link2 className="h-3 w-3" /> De-para Vendas</TabsTrigger>
+              <TabsTrigger value="divergencias" className="gap-1"><GitMerge className="h-3 w-3" /> Divergências PDV</TabsTrigger>
+            </TabsList>
+            <TabsContent value="bulk" className="mt-4"><InventoryBulkActions /></TabsContent>
+            <TabsContent value="shopify" className="mt-4"><ShopifyLinkManager /></TabsContent>
+            <TabsContent value="depara" className="mt-4"><SaleUnmatchedItems /></TabsContent>
+            <TabsContent value="divergencias" className="mt-4"><InventoryPosDivergences /></TabsContent>
+          </Tabs>
         ) : inventoryMode === "health" ? (
           <InventoryHealthDashboard />
         ) : inventoryMode === "analytics" ? (
           <InventoryAnalytics />
         ) : inventoryMode === "ai" ? (
           <InventoryAIAnalysis />
-        ) : inventoryMode === "bulk" ? (
-          <InventoryBulkActions />
         ) : inventoryMode === "shopify" ? (
           <ShopifyLinkManager />
         ) : inventoryMode === "depara" ? (
