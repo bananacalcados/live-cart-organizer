@@ -245,7 +245,7 @@ export default function InventoryCategories() {
           <div>
             <h1 className="text-2xl font-bold">Categorias & Classificação</h1>
             <p className="text-sm text-muted-foreground">
-              {totalProducts.toLocaleString("pt-BR")} produtos · {uncategorized} sem categoria
+              {totalProducts.toLocaleString("pt-BR")} produtos vinculados em categorias · {totalBrandLinked.toLocaleString("pt-BR")} em marcas
             </p>
           </div>
         </div>
