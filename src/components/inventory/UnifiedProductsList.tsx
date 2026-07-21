@@ -393,6 +393,7 @@ export function UnifiedProductsList() {
               ))}
             </SelectContent>
           </Select>
+          <ProductFiltersBar value={filters} onChange={setFilters} />
         </CardContent>
       </Card>
 
