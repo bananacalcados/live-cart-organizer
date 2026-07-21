@@ -12,7 +12,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Tag, DollarSign, AlertTriangle, Save } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Tag, DollarSign, AlertTriangle, Save, Award } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 
@@ -56,15 +56,25 @@ const fixed = (value: unknown, digits = 2) => toNumber(value).toFixed(digits);
 const GENDER_OPTIONS = ["masculino", "feminino", "unissex", "infantil"];
 const AGE_OPTIONS = ["adulto", "infantil"];
 
+interface Brand {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+}
+
 export default function InventoryCategories() {
   const [tab, setTab] = useState("categories");
   const [categories, setCategories] = useState<Category[]>([]);
   const [tiers, setTiers] = useState<PriceTier[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [brandCounts, setBrandCounts] = useState<Record<string, number>>({});
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const [editingCat, setEditingCat] = useState<Partial<Category> | null>(null);
   const [editingTier, setEditingTier] = useState<Partial<PriceTier> | null>(null);
+  const [editingBrand, setEditingBrand] = useState<Partial<Brand> | null>(null);
 
   const [reviewItems, setReviewItems] = useState<ReviewProduct[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -72,25 +82,67 @@ export default function InventoryCategories() {
 
   async function loadAll() {
     setLoading(true);
-    const [{ data: cats }, { data: tr }] = await Promise.all([
+    const [{ data: cats }, { data: tr }, { data: brs }] = await Promise.all([
       supabase.from("product_categories").select("*").order("priority"),
       supabase.from("price_tiers").select("*").order("sort_order"),
+      supabase.from("product_brands" as any).select("*").order("name"),
     ]);
     setCategories((cats || []) as any);
     setTiers((tr || []) as any);
+    setBrands(((brs || []) as any) as Brand[]);
 
-    // counts per category
+    // counts per category & brand
     const { data: cnts } = await supabase
-      .from("pos_products")
-      .select("category_id");
-    const map: Record<string, number> = {};
+      .from("product_master_data")
+      .select("category, brand");
+    const catMap: Record<string, number> = {};
+    const brandMap: Record<string, number> = {};
     (cnts || []).forEach((r: any) => {
+      const k = r.category || "__none__";
+      catMap[k] = (catMap[k] || 0) + 1;
+      if (r.brand) {
+        const bk = String(r.brand).trim().toLowerCase();
+        brandMap[bk] = (brandMap[bk] || 0) + 1;
+      }
+    });
+    // Categoria count baseia-se em pos_products.category_id ainda? Manter contagem antiga também:
+    const { data: posCnts } = await supabase.from("pos_products").select("category_id");
+    const map: Record<string, number> = {};
+    (posCnts || []).forEach((r: any) => {
       const k = r.category_id || "__none__";
       map[k] = (map[k] || 0) + 1;
     });
     setCounts(map);
+    setBrandCounts(brandMap);
     setLoading(false);
   }
+
+  async function saveBrand() {
+    if (!editingBrand?.name) { toast.error("Nome obrigatório"); return; }
+    const name = editingBrand.name.trim();
+    const slug = (editingBrand.slug || name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
+    const payload: any = { name, slug, is_active: editingBrand.is_active ?? true };
+    const { error } = editingBrand.id
+      ? await supabase.from("product_brands" as any).update(payload).eq("id", editingBrand.id)
+      : await supabase.from("product_brands" as any).insert(payload);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Salvo");
+    setEditingBrand(null);
+    loadAll();
+  }
+
+  async function deleteBrand(b: Brand) {
+    const inUse = brandCounts[b.name.trim().toLowerCase()] || 0;
+    const msg = inUse > 0
+      ? `A marca "${b.name}" está em ${inUse} produto(s). Excluir mesmo assim? Os produtos ficarão sem marca cadastrada (o texto no produto continua, mas some do seletor).`
+      : `Excluir a marca "${b.name}"?`;
+    if (!confirm(msg)) return;
+    const { error } = await supabase.from("product_brands" as any).delete().eq("id", b.id);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Marca excluída");
+    loadAll();
+  }
+
 
   async function loadReview() {
     setReviewLoading(true);
@@ -209,6 +261,7 @@ export default function InventoryCategories() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
           <TabsTrigger value="categories"><Tag className="h-4 w-4 mr-2" />Categorias ({categories.length})</TabsTrigger>
+          <TabsTrigger value="brands"><Award className="h-4 w-4 mr-2" />Marcas ({brands.length})</TabsTrigger>
           <TabsTrigger value="tiers"><DollarSign className="h-4 w-4 mr-2" />Faixas de Preço ({tiers.length})</TabsTrigger>
           <TabsTrigger value="review"><AlertTriangle className="h-4 w-4 mr-2" />Revisar Classificação</TabsTrigger>
         </TabsList>
@@ -246,6 +299,47 @@ export default function InventoryCategories() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ===== BRANDS ===== */}
+        <TabsContent value="brands" className="mt-4">
+          <div className="flex justify-end mb-3">
+            <Button onClick={() => setEditingBrand({ is_active: true })}>
+              <Plus className="h-4 w-4 mr-1" /> Nova marca
+            </Button>
+          </div>
+          {loading ? <Loader2 className="animate-spin" /> : (
+            <div className="grid gap-2">
+              {brands.map(b => {
+                const used = brandCounts[b.name.trim().toLowerCase()] || 0;
+                return (
+                  <Card key={b.id}>
+                    <CardContent className="p-4 flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold">{b.name}</span>
+                          <Badge variant="outline">{used.toLocaleString("pt-BR")} produtos</Badge>
+                          {!b.is_active && <Badge variant="secondary">inativa</Badge>}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">slug: {b.slug}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="ghost" onClick={() => setEditingBrand(b)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => deleteBrand(b)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+              {brands.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground py-8">Nenhuma marca cadastrada.</p>
+              )}
             </div>
           )}
         </TabsContent>
@@ -450,6 +544,42 @@ export default function InventoryCategories() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setReviewing(null)}>Cancelar</Button>
             <Button onClick={saveReview}><Save className="h-4 w-4 mr-1" /> Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== BRAND EDIT DIALOG ===== */}
+      <Dialog open={!!editingBrand} onOpenChange={(o) => !o && setEditingBrand(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editingBrand?.id ? "Editar" : "Nova"} marca</DialogTitle></DialogHeader>
+          {editingBrand && (
+            <div className="space-y-3">
+              <div>
+                <Label>Nome</Label>
+                <Input
+                  value={editingBrand.name || ""}
+                  onChange={e => setEditingBrand({ ...editingBrand, name: e.target.value })}
+                  placeholder="Ex: Modare"
+                />
+              </div>
+              <div>
+                <Label>Ativa</Label>
+                <Select
+                  value={(editingBrand.is_active ?? true) ? "yes" : "no"}
+                  onValueChange={v => setEditingBrand({ ...editingBrand, is_active: v === "yes" })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="yes">Sim</SelectItem>
+                    <SelectItem value="no">Não (oculta do seletor)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingBrand(null)}>Cancelar</Button>
+            <Button onClick={saveBrand}><Save className="h-4 w-4 mr-1" /> Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
