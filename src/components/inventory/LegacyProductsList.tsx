@@ -160,8 +160,27 @@ export function LegacyProductsList() {
         map[r.master_id] = { variant_count: r.variant_count || 0, total_stock: toNumber(r.total_stock) };
       });
       setSummary(map);
+
+      // Presença no PDV via parent_sku = sku_root
+      const roots = Array.from(new Set(list.map((d) => d.sku_root).filter(Boolean)));
+      if (roots.length > 0) {
+        const present = new Set<string>();
+        const CHUNK = 200;
+        for (let i = 0; i < roots.length; i += CHUNK) {
+          const slice = roots.slice(i, i + CHUNK);
+          const { data: pos } = await supabase
+            .from("pos_products")
+            .select("parent_sku")
+            .in("parent_sku", slice);
+          (pos || []).forEach((r: any) => { if (r.parent_sku) present.add(r.parent_sku); });
+        }
+        setPosPresent(present);
+      } else {
+        setPosPresent(new Set());
+      }
     } else {
       setSummary({});
+      setPosPresent(new Set());
     }
     setLoading(false);
   }
