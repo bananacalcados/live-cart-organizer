@@ -160,7 +160,7 @@ export function ProductFiltersBar({ value, onChange }: Props) {
 
 /** Reusable client-side filter predicate for a row with the standard fields. */
 export function matchesProductFilters(
-  row: { brand_id?: string | null; category_id?: string | null; created_at?: string | null; cost_price?: number | string | null; sale_price?: number | string | null },
+  row: { brand_id?: string | null; category_id?: string | null; brand?: string | null; category?: string | null; created_at?: string | null; cost_price?: number | string | null; sale_price?: number | string | null },
   f: ProductFilters,
 ): boolean {
   if (f.brandId && row.brand_id !== f.brandId) return false;
@@ -173,5 +173,7 @@ export function matchesProductFilters(
   if (f.noPrice && sale > 0) return false;
   if (f.priceMin && !(sale >= Number(f.priceMin))) return false;
   if (f.priceMax && !(sale <= Number(f.priceMax))) return false;
+  if (f.noBrand && (row.brand_id || (row.brand && row.brand.trim()))) return false;
+  if (f.noCategory && (row.category_id || (row.category && row.category.trim()))) return false;
   return true;
 }
