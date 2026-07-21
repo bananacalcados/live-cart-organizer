@@ -303,6 +303,47 @@ export default function InventoryCategories() {
           )}
         </TabsContent>
 
+        {/* ===== BRANDS ===== */}
+        <TabsContent value="brands" className="mt-4">
+          <div className="flex justify-end mb-3">
+            <Button onClick={() => setEditingBrand({ is_active: true })}>
+              <Plus className="h-4 w-4 mr-1" /> Nova marca
+            </Button>
+          </div>
+          {loading ? <Loader2 className="animate-spin" /> : (
+            <div className="grid gap-2">
+              {brands.map(b => {
+                const used = brandCounts[b.name.trim().toLowerCase()] || 0;
+                return (
+                  <Card key={b.id}>
+                    <CardContent className="p-4 flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold">{b.name}</span>
+                          <Badge variant="outline">{used.toLocaleString("pt-BR")} produtos</Badge>
+                          {!b.is_active && <Badge variant="secondary">inativa</Badge>}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">slug: {b.slug}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="ghost" onClick={() => setEditingBrand(b)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button size="icon" variant="ghost" onClick={() => deleteBrand(b)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+              {brands.length === 0 && (
+                <p className="text-center text-sm text-muted-foreground py-8">Nenhuma marca cadastrada.</p>
+              )}
+            </div>
+          )}
+        </TabsContent>
+
         {/* ===== PRICE TIERS ===== */}
         <TabsContent value="tiers" className="mt-4">
           <div className="flex justify-end mb-3">
