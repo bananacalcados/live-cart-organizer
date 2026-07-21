@@ -475,6 +475,7 @@ export function LegacyProductsList() {
             className="pl-8"
           />
         </div>
+        <ProductFiltersBar value={filters} onChange={setFilters} />
         <Button variant="outline" onClick={backfillCosts} disabled={backfilling} className="gap-1">
           {backfilling ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           Importar custos do estoque
@@ -486,10 +487,17 @@ export function LegacyProductsList() {
 
       {/* barra de seleção / unificar */}
       {selectedCount > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border bg-primary/5 px-3 py-2">
+        <div className="flex items-center justify-between gap-3 rounded-lg border bg-primary/5 px-3 py-2 flex-wrap">
           <span className="text-sm font-medium">{selectedCount} produto(s) selecionado(s)</span>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Limpar</Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={bulkPrintLabels}>
+              <Tag className="h-4 w-4" /> Etiqueta em massa
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={bulkSendShopify} disabled={bulkShopifyRunning}>
+              {bulkShopifyRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShoppingBag className="h-4 w-4" />}
+              Enviar à Shopify
+            </Button>
             <Button size="sm" variant="destructive" className="gap-1" onClick={() => setBulkDeleteOpen(true)}>
               <Trash2 className="h-4 w-4" /> Excluir selecionados
             </Button>
