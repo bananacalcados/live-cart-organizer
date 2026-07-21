@@ -53,6 +53,8 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [brand, setBrand] = useState("");
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [newBrandMode, setNewBrandMode] = useState(false);
   const [category, setCategory] = useState("");
   const [categoryId, setCategoryId] = useState<string>("");
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
@@ -100,6 +102,12 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       .eq("is_simulation", false)
       .order("name")
       .then(({ data }) => setStores((data || []) as any));
+    supabase
+      .from("product_brands" as any)
+      .select("id, name")
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setBrands(((data || []) as any) as { id: string; name: string }[]));
   }, [open]);
 
   async function loadData() {
@@ -116,6 +124,11 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
       setName(master.name || "");
       setDescription(master.description || "");
       setBrand(master.brand || "");
+      {
+        const bName = (master.brand || "").toString();
+        const bMatch = brands.find((b) => b.name.toLowerCase() === bName.toLowerCase());
+        setNewBrandMode(!!bName && !bMatch);
+      }
       setCategory(master.category || "");
       {
         const catName = (master.category || "").toString();
@@ -570,7 +583,46 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                 </div>
                 <div>
                   <Label>Marca</Label>
-                  <Input value={brand} onChange={(e) => setBrand(e.target.value)} />
+                  {newBrandMode ? (
+                    <div className="flex gap-1">
+                      <Input
+                        value={brand}
+                        onChange={(e) => setBrand(e.target.value)}
+                        placeholder="Nova marca"
+                        autoFocus
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setNewBrandMode(false); setBrand(""); }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={brand ? (brands.find((b) => b.name.toLowerCase() === brand.toLowerCase())?.id || "__custom__") : ""}
+                      onValueChange={(v) => {
+                        if (v === "__new__") { setNewBrandMode(true); setBrand(""); return; }
+                        const b = brands.find((x) => x.id === v);
+                        if (b) setBrand(b.name);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a marca" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {brand && !brands.some((b) => b.name.toLowerCase() === brand.toLowerCase()) && (
+                          <SelectItem value="__custom__">{brand} (atual)</SelectItem>
+                        )}
+                        {brands.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                        ))}
+                        <SelectItem value="__new__" className="text-primary font-medium">+ Criar nova marca</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div>
                   <Label>Categoria</Label>

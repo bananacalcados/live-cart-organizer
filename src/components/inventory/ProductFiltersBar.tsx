@@ -21,11 +21,14 @@ export interface ProductFilters {
   priceMax: string;
   noCost: boolean;
   noPrice: boolean;
+  noBrand: boolean;
+  noCategory: boolean;
 }
 
 export const emptyProductFilters: ProductFilters = {
   brandId: "", categoryId: "", createdFrom: "", createdTo: "",
   priceMin: "", priceMax: "", noCost: false, noPrice: false,
+  noBrand: false, noCategory: false,
 };
 
 export function countActive(f: ProductFilters) {
@@ -36,6 +39,8 @@ export function countActive(f: ProductFilters) {
   if (f.priceMin || f.priceMax) n++;
   if (f.noCost) n++;
   if (f.noPrice) n++;
+  if (f.noBrand) n++;
+  if (f.noCategory) n++;
   return n;
 }
 
@@ -129,6 +134,14 @@ export function ProductFiltersBar({ value, onChange }: Props) {
               <input type="checkbox" checked={local.noPrice} onChange={e => setLocal({ ...local, noPrice: e.target.checked })} />
               Sem preço de venda
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={local.noBrand} onChange={e => setLocal({ ...local, noBrand: e.target.checked })} />
+              Sem marca
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={local.noCategory} onChange={e => setLocal({ ...local, noCategory: e.target.checked })} />
+              Sem categoria
+            </label>
           </div>
           <div className="flex gap-2 justify-end pt-1 border-t">
             <Button variant="ghost" size="sm" onClick={clear}>Limpar</Button>
@@ -147,7 +160,7 @@ export function ProductFiltersBar({ value, onChange }: Props) {
 
 /** Reusable client-side filter predicate for a row with the standard fields. */
 export function matchesProductFilters(
-  row: { brand_id?: string | null; category_id?: string | null; created_at?: string | null; cost_price?: number | string | null; sale_price?: number | string | null },
+  row: { brand_id?: string | null; category_id?: string | null; brand?: string | null; category?: string | null; created_at?: string | null; cost_price?: number | string | null; sale_price?: number | string | null },
   f: ProductFilters,
 ): boolean {
   if (f.brandId && row.brand_id !== f.brandId) return false;
@@ -160,5 +173,7 @@ export function matchesProductFilters(
   if (f.noPrice && sale > 0) return false;
   if (f.priceMin && !(sale >= Number(f.priceMin))) return false;
   if (f.priceMax && !(sale <= Number(f.priceMax))) return false;
+  if (f.noBrand && (row.brand_id || (row.brand && row.brand.trim()))) return false;
+  if (f.noCategory && (row.category_id || (row.category && row.category.trim()))) return false;
   return true;
 }

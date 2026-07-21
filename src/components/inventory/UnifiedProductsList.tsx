@@ -751,13 +751,27 @@ function MasterEditDialog({
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [brand, setBrand] = useState("");
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [newBrandMode, setNewBrandMode] = useState(false);
   const [category, setCategory] = useState("");
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [newCategoryMode, setNewCategoryMode] = useState(false);
   const [ncm, setNcm] = useState("");
   const [cfop, setCfop] = useState("");
   const [cest, setCest] = useState("");
   const [cost, setCost] = useState("");
   const [sale, setSale] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from("product_brands" as any).select("id,name").eq("is_active", true).order("name"),
+      supabase.from("product_categories").select("id,name").eq("is_active", true).order("name"),
+    ]).then(([b, c]) => {
+      setBrands(((b.data || []) as any) as { id: string; name: string }[]);
+      setCategories(((c.data || []) as any) as { id: string; name: string }[]);
+    });
+  }, []);
 
   useEffect(() => {
     if (!master) return;
@@ -770,7 +784,11 @@ function MasterEditDialog({
     setCest(master.cest || "");
     setCost(master.cost_price?.toString() || "");
     setSale(master.sale_price?.toString() || "");
-  }, [master]);
+    const bName = (master.brand || "").toString();
+    setNewBrandMode(!!bName && !brands.some((b) => b.name.toLowerCase() === bName.toLowerCase()));
+    const cName = (master.category || "").toString();
+    setNewCategoryMode(!!cName && !categories.some((c) => c.name.toLowerCase() === cName.toLowerCase()));
+  }, [master, brands, categories]);
 
   async function save() {
     if (!master) return;
@@ -843,11 +861,57 @@ function MasterEditDialog({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Marca</Label>
-                  <Input value={brand} onChange={(e) => setBrand(e.target.value)} />
+                  {newBrandMode ? (
+                    <div className="flex gap-1">
+                      <Input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Nova marca" autoFocus />
+                      <Button type="button" variant="ghost" size="sm" onClick={() => { setNewBrandMode(false); setBrand(""); }}>Cancelar</Button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={brand ? (brands.find((b) => b.name.toLowerCase() === brand.toLowerCase())?.id || "__custom__") : ""}
+                      onValueChange={(v) => {
+                        if (v === "__new__") { setNewBrandMode(true); setBrand(""); return; }
+                        const b = brands.find((x) => x.id === v);
+                        if (b) setBrand(b.name);
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Selecione a marca" /></SelectTrigger>
+                      <SelectContent>
+                        {brand && !brands.some((b) => b.name.toLowerCase() === brand.toLowerCase()) && (
+                          <SelectItem value="__custom__">{brand} (atual)</SelectItem>
+                        )}
+                        {brands.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                        <SelectItem value="__new__" className="text-primary font-medium">+ Criar nova marca</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div>
                   <Label>Categoria</Label>
-                  <Input value={category} onChange={(e) => setCategory(e.target.value)} />
+                  {newCategoryMode ? (
+                    <div className="flex gap-1">
+                      <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Nova categoria" autoFocus />
+                      <Button type="button" variant="ghost" size="sm" onClick={() => { setNewCategoryMode(false); setCategory(""); }}>Cancelar</Button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={category ? (categories.find((c) => c.name.toLowerCase() === category.toLowerCase())?.id || "__custom__") : ""}
+                      onValueChange={(v) => {
+                        if (v === "__new__") { setNewCategoryMode(true); setCategory(""); return; }
+                        const c = categories.find((x) => x.id === v);
+                        if (c) setCategory(c.name);
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Selecione a categoria" /></SelectTrigger>
+                      <SelectContent>
+                        {category && !categories.some((c) => c.name.toLowerCase() === category.toLowerCase()) && (
+                          <SelectItem value="__custom__">{category} (atual)</SelectItem>
+                        )}
+                        {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                        <SelectItem value="__new__" className="text-primary font-medium">+ Criar nova categoria</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
             </TabsContent>
