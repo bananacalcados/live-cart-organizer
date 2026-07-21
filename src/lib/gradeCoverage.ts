@@ -44,6 +44,16 @@ export type VariantRow = {
   sku?: string | null;
 };
 
+/** Optional per-parent overrides fed from Legacy (products_master + product_variants).
+ *  When provided, we prefer these over what we can guess from pos_products names. */
+export type LegacyParentMeta = {
+  displayName?: string | null;
+  category_id?: string | null;
+  gender?: string | null;
+  /** Real registered sizes from product_variants. If empty, falls back to gender range. */
+  variantSizes?: number[];
+};
+
 export type ParentSummary = {
   parent_sku: string;
   displayName: string;
@@ -56,10 +66,20 @@ export type ParentSummary = {
   saleValue: number;
   isComplete: boolean;
   coveragePct: number; // 0-100
+  /** true when this parent_sku exists in Legacy (products_master). */
+  inLegacy: boolean;
 };
 
-/** Group variants by parent_sku and compute grade coverage per parent. */
-export function computeParentSummaries(rows: VariantRow[]): ParentSummary[] {
+/** Group variants by parent_sku and compute grade coverage per parent.
+ *  When `legacyMap` is provided, uses Legacy metadata (name/gender/category/sizes)
+ *  as the source of truth and, if `onlyLegacy` is true, drops any parent_sku not
+ *  registered in Legacy. */
+export function computeParentSummaries(
+  rows: VariantRow[],
+  opts?: { legacyMap?: Map<string, LegacyParentMeta>; onlyLegacy?: boolean },
+): ParentSummary[] {
+  const legacyMap = opts?.legacyMap;
+  const onlyLegacy = !!opts?.onlyLegacy;
   const map = new Map<string, VariantRow[]>();
   for (const r of rows) {
     const key = r.parent_sku || `__${r.name || "?"}`;
@@ -68,9 +88,17 @@ export function computeParentSummaries(rows: VariantRow[]): ParentSummary[] {
   }
   const out: ParentSummary[] = [];
   for (const [parent_sku, variants] of map.entries()) {
+    const legacy = legacyMap?.get(parent_sku);
+    const inLegacy = !!legacy;
+    if (onlyLegacy && !inLegacy) continue;
+
     const first = variants[0];
-    const gender = first.gender;
-    const expected = getGradeRange(gender);
+    const gender = legacy?.gender ?? first.gender;
+    const category_id = legacy?.category_id ?? first.category_id;
+    const expected =
+      legacy?.variantSizes && legacy.variantSizes.length > 0
+        ? [...legacy.variantSizes].sort((a, b) => a - b)
+        : getGradeRange(gender);
     const present = new Set<number>();
     let totalPairs = 0;
     let saleValue = 0;
@@ -86,10 +114,12 @@ export function computeParentSummaries(rows: VariantRow[]): ParentSummary[] {
     const presentArr = expected.filter(sz => present.has(sz));
     const missing = expected.filter(sz => !present.has(sz));
     const coverage = expected.length === 0 ? 0 : (presentArr.length / expected.length) * 100;
+    const displayName =
+      (legacy?.displayName && legacy.displayName.trim()) || cleanDisplayName(first.name);
     out.push({
       parent_sku,
-      displayName: cleanDisplayName(first.name),
-      category_id: first.category_id,
+      displayName,
+      category_id,
       gender,
       expectedSizes: expected,
       presentSizes: presentArr,
@@ -98,20 +128,28 @@ export function computeParentSummaries(rows: VariantRow[]): ParentSummary[] {
       saleValue,
       isComplete: missing.length === 0,
       coveragePct: coverage,
+      inLegacy,
     });
   }
   return out;
 }
 
-/** Strip the trailing " - SIZE" / " - COLOR - SIZE" tail from name for display. */
+/** Strip the trailing " - SIZE" / " - COLOR - SIZE" / " - SIZE - COLOR" tail so a
+ *  variant name reads as a parent name. Drops up to 3 trailing "qualifier"
+ *  tokens — sizes (numeric) or short non-numeric words (colors like "Branco",
+ *  "Preto Pele", "Vinho"). */
 function cleanDisplayName(name: string | null | undefined): string {
   if (!name) return "—";
-  const parts = name.split("-").map(p => p.trim());
-  // Drop trailing tokens that are pure size (numeric)
-  while (parts.length > 1) {
+  const parts = name.split("-").map(p => p.trim()).filter(Boolean);
+  let dropped = 0;
+  while (parts.length > 1 && dropped < 3) {
     const last = parts[parts.length - 1];
-    if (SIZE_RE.test(last)) parts.pop();
-    else break;
+    const isSize = SIZE_RE.test(last);
+    const looksLikeColor = !/\d/.test(last) && last.length > 0 && last.length <= 20;
+    if (isSize || looksLikeColor) {
+      parts.pop();
+      dropped++;
+    } else break;
   }
   return parts.join(" - ");
 }

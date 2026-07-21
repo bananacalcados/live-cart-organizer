@@ -19,7 +19,7 @@ import { Loader2, RefreshCw, AlertTriangle, CheckCircle2, XCircle, Search, Downl
 import { cn } from "@/lib/utils";
 import {
   computeParentSummaries, healthBucket, parseSizeFromName, getGradeRange,
-  type ParentSummary, type VariantRow,
+  type ParentSummary, type VariantRow, type LegacyParentMeta,
 } from "@/lib/gradeCoverage";
 
 type Category = { id: string; name: string };
@@ -47,6 +47,7 @@ export function InventoryGradeCoverage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [stores, setStores] = useState<Store[]>([]);
   const [rows, setRows] = useState<VariantRow[]>([]);
+  const [legacyMap, setLegacyMap] = useState<Map<string, LegacyParentMeta>>(new Map());
   const [loading, setLoading] = useState(true);
 
   const [storeFilter, setStoreFilter] = useState<string>("all");
@@ -63,6 +64,61 @@ export function InventoryGradeCoverage() {
     ]);
     setCategories((cats.data as any) || []);
     setStores((st.data as any) || []);
+  }, []);
+
+  const loadLegacy = useCallback(async () => {
+    // Load ALL Legacy masters + variants and build a parent_sku (=sku_root) map.
+    const pageSize = 1000;
+    let from = 0;
+    const masters: any[] = [];
+    while (true) {
+      const { data, error } = await supabase
+        .from("products_master")
+        .select("id, sku_root, name, category_id, gender, is_active")
+        .eq("is_active", true)
+        .range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      masters.push(...data);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+    const idToRoot = new Map<string, string>();
+    for (const m of masters) if (m.sku_root) idToRoot.set(m.id, m.sku_root);
+
+    // Variants — collect real sizes per master.
+    from = 0;
+    const variantSizes = new Map<string, Set<number>>(); // sku_root -> sizes
+    while (true) {
+      const { data, error } = await supabase
+        .from("product_variants")
+        .select("master_id, size, is_active")
+        .eq("is_active", true)
+        .range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      for (const v of data as any[]) {
+        const root = idToRoot.get(v.master_id);
+        if (!root) continue;
+        const n = Number(v.size);
+        if (!Number.isFinite(n)) continue;
+        const set = variantSizes.get(root) || new Set<number>();
+        set.add(n);
+        variantSizes.set(root, set);
+      }
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+
+    const map = new Map<string, LegacyParentMeta>();
+    for (const m of masters) {
+      if (!m.sku_root) continue;
+      map.set(m.sku_root, {
+        displayName: m.name,
+        category_id: m.category_id,
+        gender: m.gender,
+        variantSizes: Array.from(variantSizes.get(m.sku_root) || []),
+      });
+    }
+    setLegacyMap(map);
   }, []);
 
   const loadData = useCallback(async () => {
@@ -89,19 +145,28 @@ export function InventoryGradeCoverage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { loadMeta(); loadData(); }, [loadMeta, loadData]);
+  useEffect(() => { loadMeta(); loadLegacy(); loadData(); }, [loadMeta, loadLegacy, loadData]);
 
-  // Apply filters BEFORE grouping (store filter affects which variants count)
+  // Apply filters BEFORE grouping (store filter affects which variants count).
+  // NOTE: gender/category filters use Legacy metadata when the parent exists in
+  // Legacy, so filtering is consistent with what's displayed.
   const filteredRows = useMemo(() => {
     return rows.filter(r => {
       if (storeFilter !== "all" && r.store_id !== storeFilter) return false;
-      if (genderFilter !== "all" && (r.gender || "") !== genderFilter) return false;
-      if (categoryFilter !== "all" && r.category_id !== categoryFilter) return false;
+      const legacy = r.parent_sku ? legacyMap.get(r.parent_sku) : undefined;
+      const gender = legacy?.gender ?? r.gender ?? "";
+      const category = legacy?.category_id ?? r.category_id;
+      if (genderFilter !== "all" && gender !== genderFilter) return false;
+      if (categoryFilter !== "all" && category !== categoryFilter) return false;
       return true;
     });
-  }, [rows, storeFilter, genderFilter, categoryFilter]);
+  }, [rows, storeFilter, genderFilter, categoryFilter, legacyMap]);
 
-  const allSummaries = useMemo(() => computeParentSummaries(filteredRows), [filteredRows]);
+  // Only include products registered in Legacy — hides ghost pos_products rows.
+  const allSummaries = useMemo(
+    () => computeParentSummaries(filteredRows, { legacyMap, onlyLegacy: true }),
+    [filteredRows, legacyMap],
+  );
   // Exclude parents with zero total stock — likely discontinued, not a health signal.
   const summaries = useMemo(() => allSummaries.filter(p => p.totalPairs > 0), [allSummaries]);
   const inactiveSummaries = useMemo(() => allSummaries.filter(p => p.totalPairs === 0), [allSummaries]);
@@ -534,7 +599,7 @@ export function InventoryGradeCoverage() {
             <div className="space-y-3">
               {modalCategory?.parents.map((p) => {
                 const sizeMap = stockBySize.get(p.parent_sku) || new Map<number, number>();
-                const range = getGradeRange(p.gender);
+                const range = p.expectedSizes.length > 0 ? p.expectedSizes : getGradeRange(p.gender);
                 const bucket = healthBucket(p.coveragePct, p.isComplete);
                 return (
                   <div key={p.parent_sku} className="border rounded-lg p-3">
