@@ -583,7 +583,46 @@ export function ProductEditDialog({ masterId, open, onOpenChange, onSaved }: Pro
                 </div>
                 <div>
                   <Label>Marca</Label>
-                  <Input value={brand} onChange={(e) => setBrand(e.target.value)} />
+                  {newBrandMode ? (
+                    <div className="flex gap-1">
+                      <Input
+                        value={brand}
+                        onChange={(e) => setBrand(e.target.value)}
+                        placeholder="Nova marca"
+                        autoFocus
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setNewBrandMode(false); setBrand(""); }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  ) : (
+                    <Select
+                      value={brand ? (brands.find((b) => b.name.toLowerCase() === brand.toLowerCase())?.id || "__custom__") : ""}
+                      onValueChange={(v) => {
+                        if (v === "__new__") { setNewBrandMode(true); setBrand(""); return; }
+                        const b = brands.find((x) => x.id === v);
+                        if (b) setBrand(b.name);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a marca" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {brand && !brands.some((b) => b.name.toLowerCase() === brand.toLowerCase()) && (
+                          <SelectItem value="__custom__">{brand} (atual)</SelectItem>
+                        )}
+                        {brands.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                        ))}
+                        <SelectItem value="__new__" className="text-primary font-medium">+ Criar nova marca</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div>
                   <Label>Categoria</Label>
