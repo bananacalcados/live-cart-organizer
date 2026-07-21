@@ -52,6 +52,8 @@ export function ProductMasterForm({ open, onOpenChange, onCreated, initial, init
   const [name, setName] = useState(initial?.name || "");
   const [description, setDescription] = useState(initial?.description || "");
   const [brand, setBrand] = useState(initial?.brand || "");
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [newBrandMode, setNewBrandMode] = useState(false);
   const [category, setCategory] = useState(initial?.category || "");
   const [categoryId, setCategoryId] = useState<string>("");
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
