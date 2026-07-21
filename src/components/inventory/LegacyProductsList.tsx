@@ -105,6 +105,8 @@ export function LegacyProductsList() {
 
   // Filtros avançados
   const [filters, setFilters] = useState<ProductFilters>(emptyProductFilters);
+  // sku_root presente em pos_products (para filtro "No PDV" / "Fora PDV")
+  const [posPresent, setPosPresent] = useState<Set<string>>(new Set());
 
   async function load() {
     setLoading(true);
