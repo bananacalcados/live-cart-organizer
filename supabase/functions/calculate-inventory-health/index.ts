@@ -49,24 +49,14 @@ Deno.serve(async (req) => {
       return json({ error: error.message }, 500);
     }
 
-    // 3) Upsert cache
+    // 3) Replace cache row (unique index uses COALESCE — simpler to delete+insert)
     const computed_at = new Date().toISOString();
-    const { error: upsertErr } = await admin
-      .from('inventory_health_cache')
-      .upsert(
-        { store_id: storeId, horizon_days: horizon, payload, computed_at },
-        { onConflict: 'store_id,horizon_days' } as any,
-      );
-
-    // fallback: delete+insert if unique on COALESCE (partial index) fails upsert
-    if (upsertErr) {
-      await admin.from('inventory_health_cache')
-        .delete()
-        .eq('horizon_days', horizon)
-        .eq('store_id', storeId as any);
-      await admin.from('inventory_health_cache')
-        .insert({ store_id: storeId, horizon_days: horizon, payload, computed_at });
-    }
+    await admin.from('inventory_health_cache')
+      .delete()
+      .eq('horizon_days', horizon)
+      .eq('store_id', storeId as any);
+    await admin.from('inventory_health_cache')
+      .insert({ store_id: storeId, horizon_days: horizon, payload, computed_at });
 
     return json({ ...(payload as any), cached: false, computed_at });
   } catch (e) {
