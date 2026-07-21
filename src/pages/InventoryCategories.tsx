@@ -12,9 +12,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Tag, DollarSign, AlertTriangle, Save, Award } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Loader2, Tag, DollarSign, AlertTriangle, Save, Award, Eye, ArrowRightLeft } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
+import { ManageLinkedProductsDialog } from "@/components/inventory/ManageLinkedProductsDialog";
+import { TransferProductsDialog } from "@/components/inventory/TransferProductsDialog";
 
 interface Category {
   id: string;
@@ -75,6 +77,9 @@ export default function InventoryCategories() {
   const [editingCat, setEditingCat] = useState<Partial<Category> | null>(null);
   const [editingTier, setEditingTier] = useState<Partial<PriceTier> | null>(null);
   const [editingBrand, setEditingBrand] = useState<Partial<Brand> | null>(null);
+  const [manage, setManage] = useState<{ mode: "category" | "brand"; id: string; name: string } | null>(null);
+  const [transferBrand, setTransferBrand] = useState<Brand | null>(null);
+  const [transferCat, setTransferCat] = useState<Category | null>(null);
 
   const [reviewItems, setReviewItems] = useState<ReviewProduct[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -91,28 +96,16 @@ export default function InventoryCategories() {
     setTiers((tr || []) as any);
     setBrands(((brs || []) as any) as Brand[]);
 
-    // counts per category & brand
-    const { data: cnts } = await supabase
-      .from("product_master_data")
-      .select("category, brand");
+    // counts via RPCs (baseadas em category_id/brand_id em product_master_data)
+    const [{ data: catRpc }, { data: brandRpc }] = await Promise.all([
+      supabase.rpc("count_products_by_category" as any),
+      supabase.rpc("count_products_by_brand" as any),
+    ]);
     const catMap: Record<string, number> = {};
+    (catRpc as any[] || []).forEach((r: any) => { catMap[r.category_id] = Number(r.total) || 0; });
     const brandMap: Record<string, number> = {};
-    (cnts || []).forEach((r: any) => {
-      const k = r.category || "__none__";
-      catMap[k] = (catMap[k] || 0) + 1;
-      if (r.brand) {
-        const bk = String(r.brand).trim().toLowerCase();
-        brandMap[bk] = (brandMap[bk] || 0) + 1;
-      }
-    });
-    // Categoria count baseia-se em pos_products.category_id ainda? Manter contagem antiga também:
-    const { data: posCnts } = await supabase.from("pos_products").select("category_id");
-    const map: Record<string, number> = {};
-    (posCnts || []).forEach((r: any) => {
-      const k = r.category_id || "__none__";
-      map[k] = (map[k] || 0) + 1;
-    });
-    setCounts(map);
+    (brandRpc as any[] || []).forEach((r: any) => { brandMap[r.brand_id] = Number(r.total) || 0; });
+    setCounts(catMap);
     setBrandCounts(brandMap);
     setLoading(false);
   }
@@ -132,9 +125,9 @@ export default function InventoryCategories() {
   }
 
   async function deleteBrand(b: Brand) {
-    const inUse = brandCounts[b.name.trim().toLowerCase()] || 0;
+    const inUse = brandCounts[b.id] || 0;
     const msg = inUse > 0
-      ? `A marca "${b.name}" está em ${inUse} produto(s). Excluir mesmo assim? Os produtos ficarão sem marca cadastrada (o texto no produto continua, mas some do seletor).`
+      ? `A marca "${b.name}" está em ${inUse} produto(s). Excluir mesmo assim? Os produtos ficarão sem marca vinculada.`
       : `Excluir a marca "${b.name}"?`;
     if (!confirm(msg)) return;
     const { error } = await supabase.from("product_brands" as any).delete().eq("id", b.id);
@@ -237,7 +230,10 @@ export default function InventoryCategories() {
     () => Object.values(counts).reduce((a, b) => a + b, 0),
     [counts]
   );
-  const uncategorized = counts["__none__"] || 0;
+  const totalBrandLinked = useMemo(
+    () => Object.values(brandCounts).reduce((a, b) => a + b, 0),
+    [brandCounts]
+  );
 
   return (
     <div className="container mx-auto p-4 max-w-6xl">
@@ -249,7 +245,7 @@ export default function InventoryCategories() {
           <div>
             <h1 className="text-2xl font-bold">Categorias & Classificação</h1>
             <p className="text-sm text-muted-foreground">
-              {totalProducts.toLocaleString("pt-BR")} produtos · {uncategorized} sem categoria
+              {totalProducts.toLocaleString("pt-BR")} produtos vinculados em categorias · {totalBrandLinked.toLocaleString("pt-BR")} em marcas
             </p>
           </div>
         </div>
@@ -289,6 +285,12 @@ export default function InventoryCategories() {
                       </p>
                     </div>
                     <div className="flex gap-1">
+                      <Button size="sm" variant="outline" onClick={() => setManage({ mode: "category", id: c.id, name: c.name })}>
+                        <Eye className="h-4 w-4 mr-1" /> Produtos
+                      </Button>
+                      <Button size="icon" variant="ghost" title="Transferir todos" onClick={() => setTransferCat(c)}>
+                        <ArrowRightLeft className="h-4 w-4" />
+                      </Button>
                       <Button size="icon" variant="ghost" onClick={() => setEditingCat(c)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -313,7 +315,7 @@ export default function InventoryCategories() {
           {loading ? <Loader2 className="animate-spin" /> : (
             <div className="grid gap-2">
               {brands.map(b => {
-                const used = brandCounts[b.name.trim().toLowerCase()] || 0;
+                const used = brandCounts[b.id] || 0;
                 return (
                   <Card key={b.id}>
                     <CardContent className="p-4 flex items-center justify-between gap-3">
@@ -326,6 +328,12 @@ export default function InventoryCategories() {
                         <p className="text-xs text-muted-foreground mt-1">slug: {b.slug}</p>
                       </div>
                       <div className="flex gap-1">
+                        <Button size="sm" variant="outline" onClick={() => setManage({ mode: "brand", id: b.id, name: b.name })}>
+                          <Eye className="h-4 w-4 mr-1" /> Produtos
+                        </Button>
+                        <Button size="icon" variant="ghost" title="Transferir todos para outra marca" onClick={() => setTransferBrand(b)}>
+                          <ArrowRightLeft className="h-4 w-4" />
+                        </Button>
                         <Button size="icon" variant="ghost" onClick={() => setEditingBrand(b)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -583,6 +591,37 @@ export default function InventoryCategories() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {manage && (
+        <ManageLinkedProductsDialog
+          open={!!manage}
+          onOpenChange={(o) => !o && setManage(null)}
+          mode={manage.mode}
+          entityId={manage.id}
+          entityName={manage.name}
+          onChanged={loadAll}
+        />
+      )}
+      {transferBrand && (
+        <TransferProductsDialog
+          open={!!transferBrand}
+          onOpenChange={(o) => !o && setTransferBrand(null)}
+          mode="brand"
+          from={{ id: transferBrand.id, name: transferBrand.name }}
+          candidates={brands.map(b => ({ id: b.id, name: b.name }))}
+          onDone={loadAll}
+        />
+      )}
+      {transferCat && (
+        <TransferProductsDialog
+          open={!!transferCat}
+          onOpenChange={(o) => !o && setTransferCat(null)}
+          mode="category"
+          from={{ id: transferCat.id, name: transferCat.name }}
+          candidates={categories.map(c => ({ id: c.id, name: c.name }))}
+          onDone={loadAll}
+        />
+      )}
     </div>
   );
 }

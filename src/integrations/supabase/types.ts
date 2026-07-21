@@ -14149,7 +14149,9 @@ export type Database = {
       product_master_data: {
         Row: {
           brand: string | null
+          brand_id: string | null
           category: string | null
+          category_id: string | null
           cest: string | null
           cfop: string | null
           classe_produto: string | null
@@ -14178,7 +14180,9 @@ export type Database = {
         }
         Insert: {
           brand?: string | null
+          brand_id?: string | null
           category?: string | null
+          category_id?: string | null
           cest?: string | null
           cfop?: string | null
           classe_produto?: string | null
@@ -14207,7 +14211,9 @@ export type Database = {
         }
         Update: {
           brand?: string | null
+          brand_id?: string | null
           category?: string | null
+          category_id?: string | null
           cest?: string | null
           cfop?: string | null
           classe_produto?: string | null
@@ -14234,7 +14240,22 @@ export type Database = {
           weight_kg?: number | null
           width_cm?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "product_master_data_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "product_brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_master_data_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_stock_movements: {
         Row: {
@@ -14491,6 +14512,7 @@ export type Database = {
           age_group: string | null
           auto_classified: boolean
           brand: string | null
+          brand_id: string | null
           category: string | null
           category_id: string | null
           cest: string | null
@@ -14527,6 +14549,7 @@ export type Database = {
           age_group?: string | null
           auto_classified?: boolean
           brand?: string | null
+          brand_id?: string | null
           category?: string | null
           category_id?: string | null
           cest?: string | null
@@ -14563,6 +14586,7 @@ export type Database = {
           age_group?: string | null
           auto_classified?: boolean
           brand?: string | null
+          brand_id?: string | null
           category?: string | null
           category_id?: string | null
           cest?: string | null
@@ -14596,6 +14620,13 @@ export type Database = {
           width_cm?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "products_master_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "product_brands"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_master_category_id_fkey"
             columns: ["category_id"]
@@ -19284,6 +19315,20 @@ export type Database = {
         Returns: number
       }
       count_campaign_audience: { Args: { p_filtro: Json }; Returns: number }
+      count_products_by_brand: {
+        Args: never
+        Returns: {
+          brand_id: string
+          total: number
+        }[]
+      }
+      count_products_by_category: {
+        Args: never
+        Returns: {
+          category_id: string
+          total: number
+        }[]
+      }
       create_meta_capi_vault_secret: {
         Args: { p_secret: string }
         Returns: string
@@ -20003,6 +20048,7 @@ export type Database = {
       norm_email: { Args: { raw: string }; Returns: string }
       norm_instagram: { Args: { raw: string }; Returns: string }
       norm_phone_br: { Args: { raw: string }; Returns: string }
+      norm_txt: { Args: { t: string }; Returns: string }
       normalize_address_key: {
         Args: { p_cep: string; p_number: string }
         Returns: string
@@ -20353,6 +20399,14 @@ export type Database = {
         Returns: undefined
       }
       title_case_color: { Args: { p_color: string }; Returns: string }
+      transfer_products_brand: {
+        Args: { p_from: string; p_to: string }
+        Returns: number
+      }
+      transfer_products_category: {
+        Args: { p_from: string; p_to: string }
+        Returns: number
+      }
       try_claim_scheduled_message: {
         Args: { p_lock_duration_seconds?: number; p_message_id: string }
         Returns: {

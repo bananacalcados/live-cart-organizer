@@ -1,118 +1,69 @@
-## Objetivo
 
-Permitir que o Estrategista (aba Marketing → Estratégia) consiga:
+# Plano — Categorias, Marcas, Filtros e Ações em Massa
 
-1. Ler o resultado de uma ou várias campanhas de disparo (quem recebeu, leu, respondeu, comprou depois, falhou).
-2. Ler leads que ainda não compraram (`ad_leads`, `event_leads`, `lp_leads`, `link_page_leads`) por período/canal.
-3. Criar um público reutilizável a partir dessas listas e salvá-lo em Disparos — mesmo quando o público é uma **lista fixa de telefones**, não um filtro RFM.
+## Diagnóstico raiz
 
-Sem quebrar nada: hoje `campanha_publicos.filtro_json` só aceita filtros de `crm_customers_v`. Vamos **estender** o formato aceitando um novo modo `{ mode: "phone_list", phones: [...] }`, mantendo 100% compatível com o modo atual (filtro CRM).
+Hoje `product_master_data` guarda **`category`** e **`brand`** como texto livre. As abas "Categorias" e "Marcas" mostram `0 produtos` porque a contagem tenta casar por `category_id`/`brand_id` (que não existem) ou pelo nome exato, mas os produtos foram salvos com variações de grafia ("Banana", "Banana calçados", "Banana Calcados"). Nada está de fato vinculado — apenas convivem strings soltas.
 
----
-
-## Parte 1 — Novas tools de leitura no agente
-
-Arquivo: `supabase/functions/marketing-agent-chat/index.ts`.
-
-Adicionar 3 tools READ (sem escrita):
-
-### `list_dispatches`
-Lista campanhas de disparo do período com métricas agregadas.
-- Args: `desde`, `ate`, `query` (opcional, casa em `campaign_name` ou `template_name`).
-- Fonte: `dispatch_history` + agregação de `dispatch_recipients` por status.
-- Retorna: `id`, `campaign_name`, `template_name`, `started_at`, `total_recipients`, `sent`, `delivered`, `read`, `failed`, `replied` (via join com `whatsapp_messages` por `wamid` quando existir).
-
-### `get_dispatch_result`
-Detalhe de uma campanha específica.
-- Args: `dispatch_id` **ou** `campaign_name`. Aceita array `dispatch_ids` para combinar várias.
-- Retorna: contagem por status + amostra (≤50) de telefones por bucket:
-  - `received` (sent/delivered/read)
-  - `read`
-  - `replied` (cruza `dispatch_recipients.message_wamid` com `whatsapp_messages` do mesmo telefone posterior ao envio, `from_me=false`)
-  - `failed` / `not_delivered`
-  - `converted` (comprou depois do envio: cruza sufixo 8-díg. com `pos_sales.created_at > sent_at` — respeitando o mesmo padrão de match usado no CRM)
-  - `not_converted` (recebeu e leu, mas não comprou no período)
-
-### `get_leads_pool`
-Puxa leads não-clientes por período/canal para virarem público.
-- Args: `desde`, `ate`, `sources[]` (subset de `ad_leads`, `event_leads`, `lp_leads`, `link_page_leads`), `only_never_purchased` (default true — exclui quem tem venda em `pos_sales`).
-- Retorna: contagem + amostra + total de telefones únicos normalizados.
-
-Todas as tools normalizam telefone com o mesmo `extractPhoneKey` do `_shared/dispatch-attribution.ts` (sufixo 8 díg. + DDD).
+Para não quebrar nada, mantemos as colunas de texto existentes e adicionamos IDs em paralelo com sincronização automática.
 
 ---
 
-## Parte 2 — Público por lista de telefones (`phone_list`)
+## Etapa 1 — Vincular Categoria e Marca (base de dados)
 
-Extensão mínima e retrocompatível de `campanha_publicos.filtro_json`.
+**Objetivo:** deixar contagem correta e vincular sem quebrar telas antigas.
 
-Formato hoje (mantido):
-```json
-{ "include": {...}, "exclude": {...} }
-```
+1. Adicionar `category_id` e `brand_id` em `product_master_data` (FK opcional).
+2. Backfill: casar por `slug(name)` normalizado (lowercase, sem acento) contra `product_categories`/`product_brands`.
+3. Trigger `BEFORE INSERT/UPDATE`: quando `category`/`brand` (texto) muda, resolver o ID; quando `category_id`/`brand_id` muda, preencher o texto. Mantém as duas colunas coerentes → telas antigas continuam funcionando.
+4. RPC `count_products_by_category()` e `count_products_by_brand()` para as abas usarem os totais reais.
 
-Novo formato aceito:
-```json
-{
-  "mode": "phone_list",
-  "source": "dispatch_result" | "leads_pool" | "manual",
-  "source_ref": { "dispatch_ids": [...], "bucket": "not_converted" },
-  "phones": ["3399...", ...]   // telefones já normalizados (E.164 sem símbolos)
-}
-```
+## Etapa 2 — Categorias: listar produtos + vincular pela aba
 
-### Onde adaptar o consumo
-Localizar consumidores de `campanha_publicos.filtro_json` (essencialmente `MassTemplateDispatcher` e RPC `bc_match_audience`):
+Na sub-aba "Categorias" (Estoque):
+- Card da categoria vira expansível: ao clicar mostra lista dos produtos vinculados (nome, SKU pai, marca, preço, imagem).
+- Botão **"+ Vincular produtos"** abre modal com busca em `product_master_data` (multi-select) → grava `category_id` em lote.
+- Botão **"Remover da categoria"** por linha.
+- Contagem `X produtos` passa a refletir o real (via RPC).
 
-1. **Frontend Disparos** (`MassTemplateDispatcher.tsx`): ao carregar um público, se `filtro_json.mode === "phone_list"`, pular a chamada de `bc_match_audience` e usar `phones` direto como destinatários (mesma pipeline já usada quando o operador cola telefones manualmente).
-2. **Preview/contagem**: exibir `phones.length` como total.
-3. **`bc_match_audience`** e demais RPCs: **não** precisam mudar — só serão chamadas para o modo antigo.
+## Etapa 3 — Marcas: listar produtos + transferir marca inteira
 
-Isso garante zero impacto em públicos existentes.
+Mesma UX das categorias, mais:
+- Botão **"Transferir todos para outra marca"** no card → dropdown com marcas de destino → confirma → `UPDATE product_master_data SET brand_id = destino WHERE brand_id = origem` (transacional). Trigger da Etapa 1 já espelha o texto.
+- Isso resolve os duplicados "Banana / Banana Calcados / Banana calçados": user transfere tudo para a marca canônica e depois exclui as vazias.
 
-### Nova tool de escrita: `propor_publico_lista`
-- Args: `nome`, `descricao_curta`, `source` (`dispatch_result`|`leads_pool`|`manual`), `source_ref` (jsonb livre com o filtro usado), `phones[]`.
-- Fluxo idêntico a `propor_publico`: propõe → usuário confirma → grava em `campanha_publicos` com o novo `filtro_json`.
-- Validação server-side: dedup de telefones, remove entradas na `identity_blacklist` (sufixo 8 díg.), aplica normalização E.164 BR.
+## Etapa 4 — Espelhamento nas outras abas
 
-O `propor_publico` atual (filtro RFM) continua igual — só ganha um irmão.
+- `UnifiedProductsList` e `LegacyProductsList` já leem `category`/`brand` de `product_master_data`. Como a trigger da Etapa 1 sincroniza texto ↔ ID, qualquer mudança em Categorias/Marcas aparece automaticamente nessas abas sem código extra.
+- Adicionar `refetch` nos hooks quando o realtime de `product_master_data` disparar.
 
----
+## Etapa 5 — Filtros no Legacy e Catálogo Unificado
 
-## Parte 3 — Instruções no system prompt do agente
+Barra de filtros compartilhada com:
+- Data de criação (range)
+- Data de entrada de estoque (via `product_stock_movements` tipo entrada, min date por produto)
+- Marca (select vinculado a `product_brands`)
+- Categoria (select vinculado a `product_categories`)
+- Sem preço de custo (`cost_price IS NULL OR = 0`)
+- Sem preço de venda (`sale_price IS NULL OR = 0`)
+- Faixa de preço (min/max sobre `sale_price`)
 
-Adicionar ao prompt em `marketing-agent-chat/index.ts` (bloco PÚBLICOS):
+Implementação: um único componente `ProductFilterBar` reutilizado nas duas listas, estado local + query params, sem alterar o schema.
 
-- Quando o usuário pedir "quem recebeu campanha X mas não comprou":
-  1. `list_dispatches` para achar o `dispatch_id`.
-  2. `get_dispatch_result` com `bucket: "not_converted"`.
-  3. `propor_publico_lista` com os `phones` retornados.
-- Quando o usuário pedir "leads frescos de julho que nunca compraram":
-  1. `get_leads_pool` com `sources` e `only_never_purchased=true`.
-  2. `propor_publico_lista`.
-- Sempre citar `source_ref` para rastreabilidade.
-- Se a lista tiver > 5.000 telefones, avisar o usuário antes de propor.
+## Etapa 6 — Ações em massa no Legacy
+
+Adicionar ao menu de seleção múltipla (além de Limpar/Excluir/Unificar):
+- **Imprimir etiquetas** → reaproveita `ProductLabelPrintDialog` recebendo array de SKUs/variações.
+- **Enviar para Shopify** → chama edge function existente de sync Shopify em loop (com progress toast). Se não existir uma "bulk", criamos wrapper que itera na função single.
+- Também espelhar essas duas ações no Catálogo Unificado (bônus barato).
 
 ---
 
-## Parte 4 — Sem quebra
+## Ordem de entrega (para não quebrar nada)
 
-- Nada muda em `campanha_publicos` schema (é `jsonb`, aceita qualquer shape).
-- Sem migration de dados.
-- Consumidores antigos (RFM) intactos. Único ajuste real de código no front é um `if (filtro_json.mode === "phone_list") { … }` cedo no fluxo de Disparos.
-- Tools novas são READ-ONLY exceto `propor_publico_lista`, que passa pelo mesmo two-step confirm dos demais `propor_*`.
+- **PR 1 (schema):** Etapa 1 — colunas + trigger + backfill + RPCs.
+- **PR 2 (UI Cat/Marca):** Etapas 2, 3, 4.
+- **PR 3 (Filtros):** Etapa 5.
+- **PR 4 (Bulk):** Etapa 6.
 
----
-
-## Detalhes técnicos (para a implementação)
-
-Arquivos previstos:
-- `supabase/functions/marketing-agent-chat/index.ts` — 3 tools READ + 1 tool WRITE + trechos de prompt + `commitProposal` novo case `propor_publico_lista`.
-- `src/components/marketing/MassTemplateDispatcher.tsx` — branch para carregar público modo `phone_list` (bypass do `bc_match_audience`, usa `phones` direto).
-- `src/components/pos/audience/AudienceFilterBuilder.tsx` (só leitura defensiva) — mostrar badge "Lista fixa (N telefones)" quando `mode === "phone_list"`, sem tentar renderizar filtros.
-
-RPC opcional (fase 2, se ficar lento no front): `bc_audience_from_phone_list(p_phones text[])` retornando `unified_customer_id` quando existir — puramente para dashboards. Não bloqueia envio.
-
-Conversão (bucket `converted`): cruza `dispatch_recipients.sent_at` com `pos_sales.created_at` por sufixo 8-díg. do telefone, janela `[sent_at, sent_at + 14 dias]`. Configurável via arg opcional `janela_conversao_dias` (default 14).
-
-Custo: nenhuma alteração em tabelas, só leituras + inserts em `campanha_publicos`.
+Cada PR é independente e mantém o comportamento atual até a UI ser plugada. Confirma que posso começar pela PR 1?
