@@ -259,9 +259,18 @@ export default function InventoryCategories() {
         <TabsList>
           <TabsTrigger value="categories"><Tag className="h-4 w-4 mr-2" />Categorias ({categories.length})</TabsTrigger>
           <TabsTrigger value="brands"><Award className="h-4 w-4 mr-2" />Marcas ({brands.length})</TabsTrigger>
+          <TabsTrigger value="colors"><Palette className="h-4 w-4 mr-2" />Cores</TabsTrigger>
+          <TabsTrigger value="sizes"><Ruler className="h-4 w-4 mr-2" />Tamanhos</TabsTrigger>
           <TabsTrigger value="tiers"><DollarSign className="h-4 w-4 mr-2" />Faixas de Preço ({tiers.length})</TabsTrigger>
           <TabsTrigger value="review"><AlertTriangle className="h-4 w-4 mr-2" />Revisar Classificação</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="colors" className="mt-4">
+          <ColorSizeManager kind="color" />
+        </TabsContent>
+        <TabsContent value="sizes" className="mt-4">
+          <ColorSizeManager kind="size" />
+        </TabsContent>
 
         {/* ===== CATEGORIES ===== */}
         <TabsContent value="categories" className="mt-4">
