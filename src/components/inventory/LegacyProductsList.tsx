@@ -853,6 +853,12 @@ export function LegacyProductsList() {
       <ProductMasterForm open={showForm} onOpenChange={setShowForm} onCreated={() => load()} />
       <ProductEditDialog masterId={editingId} open={!!editingId} onOpenChange={(v) => !v && setEditingId(null)} onSaved={() => load()} />
       <ProductLabelPrintDialog masterId={labelPrintId} open={!!labelPrintId} onOpenChange={(v) => !v && setLabelPrintId(null)} />
+      <ProductLabelPrintDialog
+        items={bulkLabelItems || undefined}
+        productName={`${selected.size} produtos selecionados`}
+        open={!!bulkLabelItems}
+        onOpenChange={(v) => !v && setBulkLabelItems(null)}
+      />
 
       <LegacyVariantEditDialog
         data={editingVariant}
