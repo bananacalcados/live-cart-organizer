@@ -591,12 +591,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
               A imagem selecionada será aplicada no card {shopifyPickerIdx !== null ? shopifyPickerIdx + 1 : ""}.
             </DialogDescription>
           </DialogHeader>
-          <ProductSelector
-            selectedProducts={[]}
-            onAddProduct={handleShopifyPick}
-            onRemoveProduct={() => {}}
-            onUpdateQuantity={() => {}}
-          />
+          <ShopifyImagePicker onPick={handleShopifyImagePick} />
         </DialogContent>
       </Dialog>
     </Dialog>
