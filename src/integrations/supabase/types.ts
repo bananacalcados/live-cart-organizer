@@ -5253,6 +5253,8 @@ export type Database = {
           is_active: boolean
           is_live_broadcasting: boolean
           live_active_until: string | null
+          live_broadcast_started_at: string | null
+          live_url_updated_at: string | null
           manual_pos_routing: boolean
           meta_template_body_variables: Json | null
           meta_template_header_variable: string | null
@@ -5292,6 +5294,8 @@ export type Database = {
           is_active?: boolean
           is_live_broadcasting?: boolean
           live_active_until?: string | null
+          live_broadcast_started_at?: string | null
+          live_url_updated_at?: string | null
           manual_pos_routing?: boolean
           meta_template_body_variables?: Json | null
           meta_template_header_variable?: string | null
@@ -5331,6 +5335,8 @@ export type Database = {
           is_active?: boolean
           is_live_broadcasting?: boolean
           live_active_until?: string | null
+          live_broadcast_started_at?: string | null
+          live_url_updated_at?: string | null
           manual_pos_routing?: boolean
           meta_template_body_variables?: Json | null
           meta_template_header_variable?: string | null

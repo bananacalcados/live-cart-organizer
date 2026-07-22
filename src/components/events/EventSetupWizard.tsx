@@ -766,26 +766,42 @@ function LiveActivationStep({ event }: { event: any }) {
     setSavingUrl(true);
     const { error } = await supabase
       .from("events")
-      .update({ instagram_live_url: trimmed || null })
+      .update({
+        instagram_live_url: trimmed || null,
+        live_url_updated_at: trimmed ? new Date().toISOString() : null,
+      })
       .eq("id", event.id);
     setSavingUrl(false);
     if (error) toast.error(error.message);
-    else toast.success("Link da live salvo.");
+    else toast.success("Link da live salvo. TTL de 3h reiniciado.");
   };
 
   const toggleBroadcasting = async (next: boolean) => {
+    if (next) {
+      const trimmed = igUrl.trim();
+      if (!trimmed) {
+        toast.error("Cole o link da live antes de ativar.");
+        return;
+      }
+      const ok = window.confirm(
+        "Confirmar link da live?\n\n" + trimmed + "\n\nEle expira automaticamente em 3h.",
+      );
+      if (!ok) return;
+    }
     setTogglingBroadcast(true);
-    const { error } = await supabase
-      .from("events")
-      .update({ is_live_broadcasting: next })
-      .eq("id", event.id);
+    const patch: Record<string, unknown> = { is_live_broadcasting: next };
+    if (next) {
+      patch.live_broadcast_started_at = new Date().toISOString();
+      patch.live_url_updated_at = new Date().toISOString();
+    }
+    const { error } = await supabase.from("events").update(patch).eq("id", event.id);
     setTogglingBroadcast(false);
     if (error) {
       toast.error(error.message);
       return;
     }
     setBroadcasting(next);
-    toast.success(next ? "Marcado como AO VIVO — redirecionadores agora apontam pra este evento." : "Broadcasting desativado.");
+    toast.success(next ? "AO VIVO ativado — expira em 3h." : "Broadcasting desativado.");
   };
 
   return (
