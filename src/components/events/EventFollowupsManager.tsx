@@ -163,7 +163,14 @@ function ConfigCard({
                   onChange({ template_name: v, template_language: t?.language || "pt_BR" });
                 }}>
                   <SelectTrigger><SelectValue placeholder="Selecionar template" /></SelectTrigger>
-                  <SelectContent>{templates.map((t) => <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{templates.map((t) => (
+                    <SelectItem key={t.name} value={t.name}>
+                      <span className="flex items-center gap-2">
+                        <span>{t.name}</span>
+                        {t.category && <CategoryBadge category={t.category} />}
+                      </span>
+                    </SelectItem>
+                  ))}</SelectContent>
                 </Select>
               ) : (
                 <Input value={config.template_name ?? ""} onChange={(e) => onChange({ template_name: e.target.value })} placeholder="nome_do_template" />
