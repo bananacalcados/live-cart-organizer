@@ -278,7 +278,12 @@ const Index = () => {
             <TabsContent value="ig-comments">
               {currentEventId && <LiveCommentsHistory eventId={currentEventId} />}
             </TabsContent>
+
+            <TabsContent value="followups">
+              {currentEventId && <EventFollowupsManager eventId={currentEventId} />}
+            </TabsContent>
           </Tabs>
+
         </main>
 
         <OrderDialogDb
