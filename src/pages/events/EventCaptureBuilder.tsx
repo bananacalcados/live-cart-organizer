@@ -434,16 +434,16 @@ export default function EventCaptureBuilder() {
               </div>
               <div>
                 <Label>Mensagem de boas-vindas</Label>
-                <Textarea
+                <RichTextEditor
                   value={selectedTB.welcome_message || ''}
-                  onChange={(e) => setSelectedTB({ ...selectedTB, welcome_message: e.target.value })}
+                  onChange={(html) => setSelectedTB({ ...selectedTB, welcome_message: html })}
                 />
               </div>
               <div>
                 <Label>Mensagem de sucesso</Label>
-                <Textarea
+                <RichTextEditor
                   value={selectedTB.success_message || ''}
-                  onChange={(e) => setSelectedTB({ ...selectedTB, success_message: e.target.value })}
+                  onChange={(html) => setSelectedTB({ ...selectedTB, success_message: html })}
                 />
               </div>
               <div>
