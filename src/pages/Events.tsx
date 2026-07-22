@@ -962,6 +962,10 @@ const Events = () => {
           <TabsContent value="redirects">
             <LiveRedirectManager />
           </TabsContent>
+
+          <TabsContent value="carousel-templates">
+            <EventCarouselTemplatesTab />
+          </TabsContent>
         </Tabs>
 
       </main>
