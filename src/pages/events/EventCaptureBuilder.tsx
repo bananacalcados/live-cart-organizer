@@ -11,6 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { Loader2, Plus, Trash2, ExternalLink, Upload, ArrowLeft, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import LeadCohortPanel from '@/components/events/LeadCohortPanel';
+import { RichTextEditor } from '@/components/RichTextEditor';
 
 interface LP {
   id: string;
