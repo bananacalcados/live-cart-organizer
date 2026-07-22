@@ -8,9 +8,9 @@ import { Order } from "@/types/order";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
+import { EventCrossellDialog } from "./events/EventCrossellDialog";
 import { IdCard, ClipboardList, Headphones, Images } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import type { DbOrder } from "@/types/database";
 
 interface WhatsAppChatDialogProps {
