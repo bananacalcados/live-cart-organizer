@@ -8,9 +8,9 @@ import { Order } from "@/types/order";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
+import { EventCrossellDialog } from "./events/EventCrossellDialog";
 import { IdCard, ClipboardList, Headphones, Images } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import type { DbOrder } from "@/types/database";
 
 interface WhatsAppChatDialogProps {
@@ -61,6 +61,7 @@ export function WhatsAppChatDialog({
   const withSidebar = showSidebar ?? wide;
   const [fichaOpen, setFichaOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [crossellOpen, setCrossellOpen] = useState(false);
 
   const fichaOrder = {
     id: order.id,
@@ -91,11 +92,10 @@ export function WhatsAppChatDialog({
                   icon={Images}
                   label="Crossell"
                   tone="accent"
-                  onClick={() =>
-                    toast.info("Crossell chegará na Etapa 3 do plano.", {
-                      description: "Templates de carrossel do evento serão enviados por aqui.",
-                    })
-                  }
+                  onClick={() => {
+                    if (!order.whatsapp) return;
+                    setCrossellOpen(true);
+                  }}
                 />
                 <CreateSupportTicketDialog
                   phone={order.whatsapp}
@@ -130,6 +130,14 @@ export function WhatsAppChatDialog({
             fallbackWhatsapp={order.whatsapp}
             fallbackInstagram={order.instagramHandle}
           />
+          {order.whatsapp && (
+            <EventCrossellDialog
+              open={crossellOpen}
+              onOpenChange={setCrossellOpen}
+              phone={order.whatsapp}
+              customerName={order.instagramHandle || undefined}
+            />
+          )}
         </>
       )}
     </>
