@@ -1,66 +1,100 @@
-# Redirecionador de Link para Live do Instagram
 
-## Onde cada coisa vai ficar
+# Cross-sell no módulo Eventos + Templates API de carrossel
 
-### 1) Painel principal do módulo Eventos (nível global — vale pra todos os eventos)
-Nova aba **"Redirecionadores de Live"** dentro de `EventsDashboard` (mesmo nível de "Eventos", "Follow-ups", etc.).
+Objetivo: replicar (e melhorar) o fluxo de carrossel do PDV > Online > Automações dentro do módulo Eventos, e usar esses templates num novo botão de **Cross-sell** dentro do chat de WhatsApp do evento, que também será redesenhado.
 
-Conteúdo:
-- **Lista de redirecionadores** criados (cada um com nome livre, ex.: "Disparo VIP 18h", "Stories orgânico", "Grupos frios").
-- Botão **"Criar redirecionador"** → abre modal pedindo apenas: `nome` + `slug` (auto-gerado, editável). O link público fica `checkout.bananacalcados.com.br/live/{slug}` e **nunca muda**.
-- Cada linha mostra: nome, slug copiável, total de cliques, últimos 7 dias, status (ativo/pausado), ações (editar nome, pausar, excluir).
-- Ao clicar num redirecionador → abre **Dashboard do link** com:
-  - Cliques totais / únicos por telefone
-  - Filtro por **data** (range picker)
-  - Filtro por **evento** (quais eventos estavam ativos com esse link no período)
-  - Filtro por **origem** (`utm_source` — qual disparo)
-  - Cruzamento com `live_viewers` e `pos_sales` do período → taxa estimada de entrada na live e conversão em venda
-  - Timeline de cliques por hora (pra ver cauda longa)
+---
 
-O destino do redirect é **sempre lido do evento atualmente marcado como "AO VIVO"** (ver item 2). Ou seja: o redirecionador é o link estável; o evento ao vivo é quem define pra onde ele aponta naquele momento.
+## Etapa 1 — Aba "Templates API" no módulo Eventos
 
-### 2) Dentro de cada Evento — campo do link do Instagram
-Novo campo no `EventSetupWizard` (modal "Configurar Live") **e** um card rápido no topo do painel do evento (`Index.tsx`, ao lado do toggle de automação):
+Local: nova aba na página principal de Eventos (ao lado de Follow-ups, Redirecionador Live, etc.).
 
-- **"Link do Instagram Live"** — input pra colar a URL extraída do IG.
-- Validação leve (precisa parecer URL do instagram.com).
-- Botão **"Testar link"** (abre em nova aba).
-- Toggle **"Esta live está AO VIVO agora"** — quando ligado, esse evento passa a ser o alvo dos redirecionadores. Apenas 1 evento pode estar "ao vivo" por vez (ao ligar num, desliga nos outros).
-- Quando nenhum evento estiver marcado como ao vivo, o redirecionador cai na página "Não estamos ao vivo" (Fase 3).
+Reaproveitar a base já existente:
+- `carousel-ladder-create` (edge function) — cria template de carrossel na Meta.
+- `templates_carrossel` (tabela) — persistência de degraus.
+- `CampaignCardsEditor.tsx` / `CampaignBuilder.tsx` (PDV) — editor de cards com corpo, legenda por card, quantidade de cards, botões (QUICK_REPLY, URL, PHONE_NUMBER), upload de imagem-exemplo.
+- `MetaTemplateConfigurator.tsx` (Eventos) — picker de variáveis já usado nos follow-ups.
 
-Campos novos em `events`: `instagram_live_url text`, `is_live_broadcasting bool default false`.
+O que criar de novo em `src/components/events/`:
+- `EventCarouselTemplatesTab.tsx` — lista de templates carrossel do evento com status (PENDING/APPROVED/REJECTED, puxado ao vivo via `meta-whatsapp-get-templates` como o `EventFollowupsManager` já faz).
+- `EventCarouselTemplateEditor.tsx` — formulário completo:
+  - Seletor de **instância WhatsApp (WABA)** — obrigatório antes de qualquer edição.
+  - Nome do modelo.
+  - Quantidade de cards (2–10).
+  - Corpo do topo com variáveis nomeadas (`{{nome}}`, `{{primeiro_nome}}`, `{{tamanho}}`, `{{vendedora}}`, `{{livre_N}}`) + emojis (reutiliza `EmojiPickerButton` + `MetaTemplateConfigurator`).
+  - Legenda por card (com variáveis).
+  - Botões por card (texto livre + URL / QUICK_REPLY / PHONE_NUMBER).
+  - Upload de imagem-exemplo (usada só para aprovação Meta).
+  - Preview em tempo real usando `CarouselMessageBubble`.
+  - Submissão pela edge `carousel-ladder-create` já pronta.
 
-## Fases de implementação
+Ajustes de dados:
+- Adicionar coluna `scope text default 'pos'` em `templates_carrossel` (`'pos' | 'event'`) e opcionalmente `event_id uuid null` para permitir agrupamento por evento — sem quebrar o PDV (default mantém escopo atual).
+- Aba Templates lista apenas escopo `event`, filtrando por instância selecionada e status ao vivo.
 
-**Fase 1 — MVP (esta rodada)**
-- Migração: tabela `live_redirect_links` (id, name, slug único, is_active, click_count, created_at); colunas `instagram_live_url` e `is_live_broadcasting` em `events`.
-- Edge function `live-redirect` (pública): lê slug → busca evento com `is_live_broadcasting=true` → devolve 302 pro `instagram_live_url` (com deep-link `intent://` no Android e `instagram://` no iOS, fallback pra `https://instagram.com/...`). Se nenhum evento ativo, devolve HTML simples "em breve".
-- Rota pública `/live/:slug` no app que chama a edge function.
-- UI: aba "Redirecionadores de Live" no `EventsDashboard` com CRUD + contador simples.
-- UI: campo do link IG + toggle "AO VIVO" no `EventSetupWizard` e card no topo do painel do evento.
-- Log de cliques em nova tabela `live_redirect_clicks` (redirect_id, event_id no momento, phone se veio `?lead=`, utm_source, user_agent, created_at).
+---
 
-**Fase 2 — Dashboard rico**
-- Página de detalhes do redirecionador com filtros (data, evento, utm) e cruzamentos com `live_viewers` / `pos_sales`.
+## Etapa 2 — Redesign do modal de chat de WhatsApp do Evento
 
-**Fase 3 — Página "Não estamos ao vivo"**
-- HTML dedicado com captura de telefone (grava em `lp_leads` origem `live_notify`) e botão "Me avisar por WhatsApp".
+Escopo: componente `WhatsAppChat` + wrapper `WhatsAppChatDialog` (usado por `EventPaymentCardsBar`, `EventCustomerOrdersDialog`, `EventLiveCommentsPanel`).
 
-**Fase 4 (opcional) — Push via OneSignal**
-Só depois das fases 1–3 validadas.
+Mudanças:
+1. `WhatsAppChatDialog` (Eventos): alargar/aumentar — de `max-w-md h-[600px]` para algo como `max-w-5xl w-[92vw] h-[88vh]`, mantendo comportamento no PDV via prop `size="wide"` (ou novo `EventWhatsAppChatDialog` para não afetar POS).
+2. Nova **barra lateral vertical** dentro de `WhatsAppChat` (renderizada só no modo `event`):
+   - Botões grandes, com ícone + label, agrupados: **Pausar IA**, **Ficha do cliente**, **Ver pedido**, **Editar pedido**, **Checkout**, **PIX**, **Follow-ups**, **Cross-sell (novo)**, **Ticket de suporte**, **Excluir conversa**.
+   - Isso substitui a barra de ícones no topo (que hoje fica apertada), deixando o header limpo.
+3. Manter identidade visual do chat WhatsApp (fundo verde/tinta) e responsivo (colapsa em ícones em telas menores).
 
-## Detalhes técnicos
+---
 
-- Redirect com `Cache-Control: no-store` mas cache em memória do edge de 15s.
-- Slug validado (`^[a-z0-9-]+$`), único.
-- `live_redirect_clicks` com índice em `(redirect_id, created_at)` pra o dashboard rodar rápido.
-- Sem chamada a API do IG (não expõe presença) — cruzamento é sempre com nossas próprias tabelas.
-- RLS: `live_redirect_links` e `live_redirect_clicks` `authenticated` full; edge function usa service role pra insert de clique.
+## Etapa 3 — Botão Cross-sell no chat
 
-## Fora de escopo
+Novo componente `EventCrossellDialog.tsx` acionado pelo botão da sidebar. Fluxo:
+1. Detecta a instância vinculada à conversa (`useConversationInstance` → `boundNumberId`).
+2. Busca em `templates_carrossel` **apenas** os templates com `whatsapp_number_id = boundNumberId` **e** escopo `event` **e** `meta_status='APPROVED'`.
+   - Regra reforçada: se a live tem uma instância principal (`events.whatsapp_number_id`), prioriza essa; se o chat estiver em instância diferente, mostra aviso.
+3. Usuário escolhe o template → renderiza `MetaTemplateConfigurator` para o corpo do topo e a legenda de cada card (variáveis nomeadas).
+4. Para cada card, o usuário faz upload da foto do produto:
+   - **Do computador** (input file → `uploadMediaToStorage`, já usado no chat).
+   - **Da Shopify** — abrir um `ShopifyProductPicker` (novo, reaproveitando padrão de `POSTinyProductPicker`/inventário Shopify): busca produtos, mostra thumbs, ao selecionar copia a URL do primeiro asset. Cada card exibe preview 1:1.
+5. Botão "Enviar cross-sell":
+   - Chama `meta-whatsapp-send-template` (edge existente para templates Meta) montando `components` com HEADER IMAGE de cada card (link direto) + BODY com variáveis + botões conforme aprovado.
+   - Grava a mensagem em `whatsapp_messages` com `template_type='carousel'` para o `CarouselMessageBubble` renderizar no histórico.
+   - Respeita `boundNumberId` (guarda anti-cross-instance já existente).
 
-- Detecção automática de "live caiu" (Fase 5 futura).
-- Push notifications (Fase 4, decidir depois).
-- Alterar `group-redirect-link` existente (usaremos como referência, mas o novo é independente).
+---
 
-Se aprovar, começo pela Fase 1 completa (migração + edge function + rota + as duas UIs) num único turno.
+## Etapa 4 — Detalhes que sugiro incluir para não passar em branco
+
+- **Segmentação de destinatários** no cross-sell: além de disparo unitário no chat, permitir "disparar para todos os clientes PAGOS deste evento" (filtro `pos_sales.status in ('paid','completed','pending_pickup')` cruzado com `event_id`), reutilizando o `enqueue_dispatch_recipients_guarded` para respeitar quotas anti-ban e Ravena bypass.
+- **Rate limit + quiet hours**: obedecer regras já ativas (`Livete Quiet Hours` 22h–08h) e o motor anti-ban dos disparos.
+- **Métricas do cross-sell**: nova coluna `crossell_id` (opcional) em `dispatch_history` ou tabela dedicada `event_crossell_dispatches` — para medir cliques (via `link_pages_v2` shortlinks nos botões URL), pedidos gerados e faturamento atribuído, integrando com `event_buyer_origin_matrix`.
+- **Prévia real do card antes de enviar** (reusar `CarouselMessageBubble`) e validador que impede envio se algum card ficar sem imagem.
+- **Rotação de vendedora (`{{vendedora}}`)** já existente no PDV — replicar para não perder personalização.
+- **Auditoria**: log em `ai_conversation_logs` de cada envio (quem, template, instância, cliente) para investigação posterior.
+- **Reuso no PDV**: como o editor será igual, deixar `EventCarouselTemplateEditor` genérico com prop `scope`, para futuramente unificar com o do PDV sem duplicar código.
+- **Fallback quando template ainda não foi aprovado**: badge PENDING claro na lista, bloqueando uso no cross-sell.
+
+---
+
+## Detalhes técnicos (dev)
+
+Arquivos novos:
+- `src/components/events/EventCarouselTemplatesTab.tsx`
+- `src/components/events/EventCarouselTemplateEditor.tsx`
+- `src/components/events/EventCrossellDialog.tsx`
+- `src/components/events/EventWhatsAppSidebar.tsx`
+- `src/components/events/ShopifyProductPicker.tsx`
+- (opcional) `src/components/events/EventWhatsAppChatDialog.tsx` (wrapper wide-mode)
+
+Arquivos alterados:
+- `src/components/WhatsAppChat.tsx` — aceitar prop `variant="event"` para renderizar sidebar + slots de ações extras.
+- `src/components/events/EventInnerDashboard.tsx` — nova aba "Templates API".
+- `EventPaymentCardsBar.tsx`, `EventCustomerOrdersDialog.tsx`, `EventLiveCommentsPanel.tsx` — trocar para o dialog wide + `variant="event"`.
+
+Backend:
+- Migration: `ALTER TABLE templates_carrossel ADD COLUMN scope text NOT NULL DEFAULT 'pos'`, `ADD COLUMN event_id uuid NULL REFERENCES events(id)`, índice `(scope, whatsapp_number_id)`.
+- Edge `carousel-ladder-create`: aceitar `scope` e `event_id` opcionais e persistir.
+- (Opcional Etapa 4) Nova edge `event-crossell-send` para orquestrar envio em massa com quotas + registrar métricas.
+
+Nenhuma quebra no PDV: escopo default preserva comportamento existente; o dialog atual do WhatsApp continua funcionando por prop opcional.
