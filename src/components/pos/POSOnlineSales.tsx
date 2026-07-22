@@ -120,6 +120,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [discountValue, setDiscountValue] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
   const [shippingValue, setShippingValue] = useState("");
+  const [checkoutNoInterestInstallments, setCheckoutNoInterestInstallments] = useState("");
   const [hasGift, setHasGift] = useState(false);
   const [giftDescription, setGiftDescription] = useState("");
   
