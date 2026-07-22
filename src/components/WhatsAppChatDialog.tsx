@@ -130,6 +130,14 @@ export function WhatsAppChatDialog({
             fallbackWhatsapp={order.whatsapp}
             fallbackInstagram={order.instagramHandle}
           />
+          {order.whatsapp && (
+            <EventCrossellDialog
+              open={crossellOpen}
+              onOpenChange={setCrossellOpen}
+              phone={order.whatsapp}
+              customerName={order.instagramHandle || undefined}
+            />
+          )}
         </>
       )}
     </>
