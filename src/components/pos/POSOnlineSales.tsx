@@ -120,6 +120,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
   const [discountValue, setDiscountValue] = useState("");
   const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
   const [shippingValue, setShippingValue] = useState("");
+  const [checkoutNoInterestInstallments, setCheckoutNoInterestInstallments] = useState("");
   const [hasGift, setHasGift] = useState(false);
   const [giftDescription, setGiftDescription] = useState("");
   
@@ -458,6 +459,12 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
             compare_at_price: c.compareAtPrice,
             quantity: c.quantity,
           })),
+          ...(gateway === "store-checkout" && Number(checkoutNoInterestInstallments) > 0 ? {
+            installment_override: {
+              interest_free_installments: Math.min(12, Math.max(1, Number(checkoutNoInterestInstallments))),
+              source: "pos_online_hub",
+            },
+          } : {}),
         },
         notes: deliveryNotes || null,
       };
@@ -627,6 +634,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     setDiscountValue("");
     setDiscountType("fixed");
     setShippingValue("");
+    setCheckoutNoInterestInstallments("");
     setHasGift(false);
     setGiftDescription("");
   };
@@ -1030,6 +1038,23 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                   min="0"
                   step="0.01"
                 />
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    💳 Parcelas sem juros no link de checkout (opcional)
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Padrão da loja (ex.: 6x)"
+                    value={checkoutNoInterestInstallments}
+                    onChange={e => setCheckoutNoInterestInstallments(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                    className="h-8 text-xs"
+                    min={1}
+                    max={12}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Aplica somente ao botão "Checkout Loja". Vazio = usar padrão.
+                  </p>
+                </div>
                 {(discountAmount > 0 || shippingAmount > 0) && (
                   <div className="space-y-0.5 px-1">
                     <div className="flex justify-between text-xs">
