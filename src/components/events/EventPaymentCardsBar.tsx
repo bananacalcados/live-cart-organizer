@@ -646,7 +646,7 @@ export function EventPaymentCardsBar({ orders }: EventPaymentCardsBarProps) {
 
       {/* Chat de WhatsApp na instância da conversa */}
       {chatOrder?.whatsapp && (
-        <WhatsAppChatDialog open={chatOpen} onOpenChange={setChatOpen} order={chatOrder} />
+        <WhatsAppChatDialog open={chatOpen} onOpenChange={setChatOpen} order={chatOrder} wide />
       )}
 
       {/* DM do Instagram (quando não há WhatsApp) */}

@@ -340,7 +340,7 @@ export function EventCustomerOrdersDialog({
         />
       )}
       {chatOrder?.whatsapp && (
-        <WhatsAppChatDialog open={chatOpen} onOpenChange={setChatOpen} order={chatOrder} />
+        <WhatsAppChatDialog open={chatOpen} onOpenChange={setChatOpen} order={chatOrder} wide />
       )}
       {igHandle && <InstagramDMChat open={igOpen} onOpenChange={setIgOpen} username={igHandle} />}
     </>
