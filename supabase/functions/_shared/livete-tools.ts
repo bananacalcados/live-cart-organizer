@@ -410,8 +410,8 @@ export async function executeToolCall(
       // Deactivate AI session
       await supabase.from('automation_ai_sessions').update({ is_active: false }).eq('phone', phone);
 
-      // Deactivate follow-ups
-      await supabase.from('livete_followups').update({ is_active: false, completed_at: new Date().toISOString() }).eq('order_id', orderId);
+      // Legacy livete_followups removed — new engine (event_followup_dispatches) auto-skips paid/cancelled orders.
+
 
       // Check if customer should be banned (3+ cancellations)
       let banWarning = '';
