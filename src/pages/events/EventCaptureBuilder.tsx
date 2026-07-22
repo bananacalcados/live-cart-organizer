@@ -475,11 +475,10 @@ export default function EventCaptureBuilder() {
                         </select>
                         <Button size="icon" variant="ghost" onClick={() => removeStep(idx)}><Trash2 className="h-3 w-3" /></Button>
                       </div>
-                      <Textarea
-                        value={step.text}
-                        onChange={(e) => updateStep(idx, { text: e.target.value })}
-                        placeholder="Texto da mensagem/pergunta"
-                        rows={2}
+                      <RichTextEditor
+                        value={step.text || ''}
+                        onChange={(html) => updateStep(idx, { text: html })}
+                        minHeight={60}
                       />
                       {(step.type === 'ask_name' || step.type === 'ask_phone') && (
                         <Input
