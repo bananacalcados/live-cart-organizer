@@ -459,6 +459,12 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
             compare_at_price: c.compareAtPrice,
             quantity: c.quantity,
           })),
+          ...(gateway === "store-checkout" && Number(checkoutNoInterestInstallments) > 0 ? {
+            installment_override: {
+              interest_free_installments: Math.min(12, Math.max(1, Number(checkoutNoInterestInstallments))),
+              source: "pos_online_hub",
+            },
+          } : {}),
         },
         notes: deliveryNotes || null,
       };
