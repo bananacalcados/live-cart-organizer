@@ -428,15 +428,23 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
                     {topVars.map((v, i) => (
                       <div key={i} className="space-y-1">
                         <Label className="text-xs">Variável {`{{${i + 1}}}`}</Label>
-                        <Input
-                          value={v}
-                          onChange={(e) =>
-                            setTopVars((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))
-                          }
-                          placeholder={`Valor para {{${i + 1}}}`}
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            value={v}
+                            onChange={(e) =>
+                              setTopVars((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))
+                            }
+                            placeholder={`Valor para {{${i + 1}}}`}
+                          />
+                          <VarPicker
+                            onPick={(val) =>
+                              setTopVars((prev) => prev.map((x, j) => (j === i ? (x ? `${x} ${val}` : val) : x)))
+                            }
+                          />
+                        </div>
                       </div>
                     ))}
+
                   </div>
                 )}
 
