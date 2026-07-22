@@ -141,7 +141,8 @@ export function CarouselTemplatesLadder({ scope = "pos", eventId = null }: Carou
     const { data } = await supabase
       .from("templates_carrossel")
       .select("nome")
-      .eq("whatsapp_number_id", numberId);
+      .eq("whatsapp_number_id", numberId)
+      .eq("scope", scope);
     const names = Array.from(
       new Set((data || []).map((r: { nome: string | null }) => (r.nome || "Padrão").trim())),
     );
@@ -155,6 +156,7 @@ export function CarouselTemplatesLadder({ scope = "pos", eventId = null }: Carou
       .from("templates_carrossel")
       .select("*")
       .eq("whatsapp_number_id", numberId)
+      .eq("scope", scope)
       .order("nome", { ascending: true });
     const map: Record<number, LadderRow[]> = {};
     (data || []).forEach((r: LadderRow) => {
