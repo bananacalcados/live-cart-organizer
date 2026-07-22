@@ -21,6 +21,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { DbEvent } from "@/types/database";
 import { MetaTemplateConfigurator } from "./MetaTemplateConfigurator";
+import { EventFollowupsManager } from "./EventFollowupsManager";
 import { InitialMessageEditor, type IgBlockButtonsEntry } from "./InitialMessageEditor";
 import { IgAutomationsManager, type IgAutomation } from "./IgAutomationsManager";
 import { LiveActiveToggleButton } from "./LiveActiveToggleButton";
@@ -52,7 +53,7 @@ interface Props {
   onCompleted: () => void;
 }
 
-type StepKey = "general" | "shipping" | "template" | "installments" | "crossell" | "live";
+type StepKey = "general" | "shipping" | "template" | "installments" | "crossell" | "followups" | "live";
 
 const STEPS: { key: StepKey; title: string; icon: typeof Truck }[] = [
   { key: "general", title: "Identificação", icon: Tag },
@@ -60,6 +61,7 @@ const STEPS: { key: StepKey; title: string; icon: typeof Truck }[] = [
   { key: "template", title: "Mensagem", icon: FileText },
   { key: "installments", title: "Parcelamento", icon: CreditCard },
   { key: "crossell", title: "Crossell", icon: ShoppingBag },
+  { key: "followups", title: "Follow-ups", icon: Calendar },
   { key: "live", title: "Ativar Live", icon: Radio },
 ];
 
@@ -697,6 +699,17 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
           )}
 
 
+          {currentStep.key === "followups" && (
+            <div className="space-y-3">
+              {event?.id ? (
+                <EventFollowupsManager eventId={event.id} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Salve o evento (avançando pelos passos anteriores) para configurar follow-ups.
+                </p>
+              )}
+            </div>
+          )}
 
           {currentStep.key === "live" && (
             <div className="space-y-4">

@@ -27,8 +27,8 @@ import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
-import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings, Bell } from "lucide-react";
-import { EventFollowupsManager } from "@/components/events/EventFollowupsManager";
+import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings } from "lucide-react";
+
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -235,10 +235,6 @@ const Index = () => {
                   <Instagram className="h-3 w-3" />
                   Comentários IG
                 </TabsTrigger>
-                <TabsTrigger value="followups" className="gap-1">
-                  <Bell className="h-3 w-3" />
-                  Follow-ups
-                </TabsTrigger>
               </TabsList>
 
             </div>
@@ -277,10 +273,6 @@ const Index = () => {
 
             <TabsContent value="ig-comments">
               {currentEventId && <LiveCommentsHistory eventId={currentEventId} />}
-            </TabsContent>
-
-            <TabsContent value="followups">
-              {currentEventId && <EventFollowupsManager eventId={currentEventId} />}
             </TabsContent>
           </Tabs>
 

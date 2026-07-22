@@ -174,7 +174,7 @@ function ConfigCard({
               <Select value={config.whatsapp_number_id ?? "auto"} onValueChange={(v) => onChange({ whatsapp_number_id: v === "auto" ? null : v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">Automática</SelectItem>
+                  <SelectItem value="auto">Automática (mesma da 1ª mensagem da live)</SelectItem>
                   {numbers.map((n) => <SelectItem key={n.id} value={n.id}>{n.label}</SelectItem>)}
                 </SelectContent>
               </Select>

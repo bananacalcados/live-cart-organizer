@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
 
   const { data: due, error } = await supabase
     .from("event_followup_dispatches")
-    .select("*, config:event_followup_configs(*), order:orders(id,is_paid,stage,phone,customer_id,event_id,last_customer_message_at,instagram_username)")
+    .select("*, config:event_followup_configs(*), order:orders(id,is_paid,stage,phone,customer_id,event_id,last_customer_message_at,instagram_username,event:events(whatsapp_number_id))")
     .eq("status", "pending")
     .lte("scheduled_at", nowIso)
     .order("scheduled_at", { ascending: true })
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
             phone: ord.phone,
             templateName: cfg.template_name,
             language: cfg.template_language || "pt_BR",
-            whatsappNumberId: cfg.whatsapp_number_id || null,
+            whatsappNumberId: cfg.whatsapp_number_id || ord.event?.whatsapp_number_id || null,
             components: buildComponents(cfg.template_variables, ord),
           }),
         });
