@@ -63,7 +63,12 @@ function emptyCardValues(): BtnValue[] {
   return Array.from({ length: MAX_CARDS }, () => ({ text: "" }));
 }
 
-export function CarouselTemplatesLadder() {
+export interface CarouselTemplatesLadderProps {
+  scope?: "pos" | "event";
+  eventId?: string | null;
+}
+
+export function CarouselTemplatesLadder({ scope = "pos", eventId = null }: CarouselTemplatesLadderProps = {}) {
   const [numbers, setNumbers] = useState<MetaNumber[]>([]);
   const [numberId, setNumberId] = useState<string>("");
   const [models, setModels] = useState<string[]>([]);
