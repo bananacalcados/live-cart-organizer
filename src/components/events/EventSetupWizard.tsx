@@ -743,3 +743,116 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
     </Dialog>
   );
 }
+
+/* ─────────── Live activation step ─────────── */
+
+function LiveActivationStep({ event }: { event: any }) {
+  const [igUrl, setIgUrl] = useState<string>(event?.instagram_live_url ?? "");
+  const [broadcasting, setBroadcasting] = useState<boolean>(!!event?.is_live_broadcasting);
+  const [savingUrl, setSavingUrl] = useState(false);
+  const [togglingBroadcast, setTogglingBroadcast] = useState(false);
+
+  useEffect(() => {
+    setIgUrl(event?.instagram_live_url ?? "");
+    setBroadcasting(!!event?.is_live_broadcasting);
+  }, [event?.id, event?.instagram_live_url, event?.is_live_broadcasting]);
+
+  const saveUrl = async () => {
+    const trimmed = igUrl.trim();
+    if (trimmed && !/^https?:\/\/(www\.)?instagram\.com\//i.test(trimmed)) {
+      toast.error("Cole o link completo da live do Instagram (https://www.instagram.com/...).");
+      return;
+    }
+    setSavingUrl(true);
+    const { error } = await supabase
+      .from("events")
+      .update({ instagram_live_url: trimmed || null })
+      .eq("id", event.id);
+    setSavingUrl(false);
+    if (error) toast.error(error.message);
+    else toast.success("Link da live salvo.");
+  };
+
+  const toggleBroadcasting = async (next: boolean) => {
+    setTogglingBroadcast(true);
+    const { error } = await supabase
+      .from("events")
+      .update({ is_live_broadcasting: next })
+      .eq("id", event.id);
+    setTogglingBroadcast(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setBroadcasting(next);
+    toast.success(next ? "Marcado como AO VIVO — redirecionadores agora apontam pra este evento." : "Broadcasting desativado.");
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Ative a Live para que os comentários ao vivo do Instagram cheguem neste evento em
+        tempo real. (Expira automaticamente em 8h e pode ser religada.)
+      </p>
+
+      <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-4">
+        <div className="flex items-center gap-2">
+          <Radio className="h-5 w-5 text-accent" />
+          <div>
+            <div className="text-sm font-medium">Comentários da Live</div>
+            <div className="text-xs text-muted-foreground">
+              Liga o recebimento ao vivo dos comentários do Instagram.
+            </div>
+          </div>
+        </div>
+        <LiveActiveToggleButton eventId={event.id} size="default" />
+      </div>
+
+      {/* IG live link + broadcasting */}
+      <div className="rounded-lg border p-4 space-y-3">
+        <div>
+          <Label className="text-sm font-medium">Link da Live do Instagram</Label>
+          <p className="text-xs text-muted-foreground mb-2">
+            Cole o link da transmissão (aba "Compartilhar" no IG). É pra onde os
+            redirecionadores vão mandar quem clicar.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              placeholder="https://www.instagram.com/usuario/live/..."
+              value={igUrl}
+              onChange={(e) => setIgUrl(e.target.value)}
+            />
+            <Button onClick={saveUrl} disabled={savingUrl}>
+              {savingUrl ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-start justify-between gap-3 border-t pt-3">
+          <div>
+            <div className="text-sm font-medium">Marcar como "AO VIVO agora"</div>
+            <div className="text-xs text-muted-foreground">
+              Só um evento pode estar ao vivo por vez. Os redirecionadores públicos
+              vão abrir o link deste evento enquanto isso estiver ligado.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => toggleBroadcasting(!broadcasting)}
+            disabled={togglingBroadcast || (!igUrl.trim() && !broadcasting)}
+            className={`shrink-0 h-9 px-4 rounded-md text-sm font-semibold transition-colors ${
+              broadcasting
+                ? "bg-red-600 text-white hover:bg-red-700"
+                : "bg-muted hover:bg-muted/70"
+            } disabled:opacity-50`}
+          >
+            {togglingBroadcast ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : broadcasting ? "⏹ Encerrar" : "🔴 Ativar AO VIVO"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
