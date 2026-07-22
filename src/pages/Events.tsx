@@ -735,6 +735,9 @@ const Events = () => {
             <TabsTrigger value="redirects" className="gap-1">
               <Send className="h-4 w-4" /> Redirecionador Live
             </TabsTrigger>
+            <TabsTrigger value="carousel-templates" className="gap-1">
+              <Images className="h-4 w-4" /> Templates API
+            </TabsTrigger>
           </TabsList>
 
 
