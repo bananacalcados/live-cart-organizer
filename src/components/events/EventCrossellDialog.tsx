@@ -38,6 +38,7 @@ interface DbTemplate {
   meta_status: string;
   whatsapp_number_id: string | null;
   event_id: string | null;
+  scope: string;
 }
 
 interface MetaComponent {
