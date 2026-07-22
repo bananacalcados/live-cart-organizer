@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,11 +15,22 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Images, Upload, AlertCircle, Send } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Loader2, Images, Store, AlertCircle, Send, Variable } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useConversationInstance } from "@/hooks/useConversationInstance";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
+import { ProductSelector } from "@/components/ProductSelector";
+import type { DbOrderProduct } from "@/types/database";
+import type { Order } from "@/types/order";
 import { toast } from "sonner";
 
 interface EventCrossellDialogProps {
@@ -27,7 +38,18 @@ interface EventCrossellDialogProps {
   onOpenChange: (open: boolean) => void;
   phone: string;
   customerName?: string;
+  /** Pedido de contexto para variáveis (nome, @, valores, checkout). */
+  order?: Order;
 }
+
+interface VariableOption {
+  key: string;
+  label: string;
+  value: string;
+}
+
+const formatBRL = (n: number) =>
+  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 interface DbTemplate {
   id: string;
@@ -70,7 +92,7 @@ interface CardState {
   uploading: boolean;
 }
 
-export function EventCrossellDialog({ open, onOpenChange, phone, customerName }: EventCrossellDialogProps) {
+export function EventCrossellDialog({ open, onOpenChange, phone, customerName, order }: EventCrossellDialogProps) {
   const { boundNumberId, boundNumber, effectiveNumberId, effectiveNumber } = useConversationInstance(phone);
   const { numbers } = useWhatsAppNumberStore();
 
@@ -88,6 +110,33 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
   const [topVars, setTopVars] = useState<string[]>([]);
   const [cards, setCards] = useState<CardState[]>([]);
   const [sending, setSending] = useState(false);
+
+  // Shopify product picker (per card)
+  const [shopifyPickerIdx, setShopifyPickerIdx] = useState<number | null>(null);
+
+  // Variáveis disponíveis do cadastro/pedido
+  const variableOptions = useMemo<VariableOption[]>(() => {
+    const opts: VariableOption[] = [];
+    const name = order?.instagramHandle || customerName || "";
+    if (name) {
+      opts.push({ key: "nome", label: "Nome do cliente", value: name.replace(/^@/, "") });
+      opts.push({ key: "instagram", label: "@ Instagram", value: name.startsWith("@") ? name : `@${name}` });
+    }
+    if (phone) opts.push({ key: "telefone", label: "Telefone", value: phone });
+    const products = order?.products || [];
+    if (products.length > 0) {
+      const subtotal = products.reduce((s, p) => s + (p.price || 0) * (p.quantity || 1), 0);
+      const compareTotal = products.reduce((s, p) => s + (p.price || 0) * (p.quantity || 1), 0);
+      opts.push({ key: "valor_produtos", label: "Valor dos produtos", value: formatBRL(subtotal) });
+      opts.push({ key: "valor_compra", label: "Valor da compra", value: formatBRL(subtotal) });
+      opts.push({ key: "desconto", label: "Desconto", value: formatBRL(Math.max(compareTotal - subtotal, 0)) });
+      opts.push({ key: "qtd_itens", label: "Qtd. de itens", value: String(products.reduce((s, p) => s + (p.quantity || 1), 0)) });
+      opts.push({ key: "primeiro_produto", label: "1º produto", value: products[0].title || "" });
+    }
+    if (order?.cartLink) opts.push({ key: "link_checkout", label: "Link do checkout", value: order.cartLink });
+    return opts;
+  }, [order, customerName, phone]);
+
 
   // Load approved event templates for the bound instance
   useEffect(() => {
@@ -199,6 +248,19 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
     if (!url) toast.error(`Falha no upload do card ${idx + 1}`);
   };
 
+  const handleShopifyPick = (p: DbOrderProduct) => {
+    if (shopifyPickerIdx === null) return;
+    if (!p.image) {
+      toast.error("Este produto não tem imagem");
+      return;
+    }
+    const idx = shopifyPickerIdx;
+    setCards((prev) => prev.map((c, i) => (i === idx ? { ...c, imageUrl: p.image! } : c)));
+    setShopifyPickerIdx(null);
+    toast.success(`Imagem do produto aplicada no card ${idx + 1}`);
+  };
+
+
   const canSend =
     !!metaTemplate &&
     !!numberId &&
@@ -257,7 +319,45 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
     }
   };
 
+  const VarPicker = ({ onPick, disabled }: { onPick: (v: string) => void; disabled?: boolean }) => {
+    if (variableOptions.length === 0) return null;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            className="h-8 gap-1 text-xs shrink-0"
+          >
+            <Variable className="h-3.5 w-3.5" />
+            Variável
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuLabel>Inserir do cadastro</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {variableOptions.map((opt) => (
+            <DropdownMenuItem
+              key={opt.key}
+              onSelect={(e) => {
+                e.preventDefault();
+                onPick(opt.value);
+              }}
+              className="flex flex-col items-start gap-0.5"
+            >
+              <span className="text-xs font-medium">{opt.label}</span>
+              <span className="text-[10px] text-muted-foreground truncate max-w-full">{opt.value}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   return (
+
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl sm:max-w-3xl w-[95vw] h-[85vh] p-0 gap-0 flex flex-col overflow-hidden">
         <DialogHeader className="p-4 border-b shrink-0">
@@ -328,15 +428,23 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
                     {topVars.map((v, i) => (
                       <div key={i} className="space-y-1">
                         <Label className="text-xs">Variável {`{{${i + 1}}}`}</Label>
-                        <Input
-                          value={v}
-                          onChange={(e) =>
-                            setTopVars((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))
-                          }
-                          placeholder={`Valor para {{${i + 1}}}`}
-                        />
+                        <div className="flex gap-2">
+                          <Input
+                            value={v}
+                            onChange={(e) =>
+                              setTopVars((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))
+                            }
+                            placeholder={`Valor para {{${i + 1}}}`}
+                          />
+                          <VarPicker
+                            onPick={(val) =>
+                              setTopVars((prev) => prev.map((x, j) => (j === i ? (x ? `${x} ${val}` : val) : x)))
+                            }
+                          />
+                        </div>
                       </div>
                     ))}
+
                   </div>
                 )}
 
@@ -374,16 +482,27 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
                             />
                             {card.uploading && <Loader2 className="h-4 w-4 animate-spin" />}
                           </div>
-                          <Input
-                            className="mt-1"
-                            placeholder="…ou cole uma URL de imagem"
-                            value={card.imageUrl}
-                            onChange={(e) =>
-                              setCards((prev) =>
-                                prev.map((c, i) => (i === idx ? { ...c, imageUrl: e.target.value } : c)),
-                              )
-                            }
-                          />
+                          <div className="flex gap-2 mt-1">
+                            <Input
+                              placeholder="…ou cole uma URL de imagem"
+                              value={card.imageUrl}
+                              onChange={(e) =>
+                                setCards((prev) =>
+                                  prev.map((c, i) => (i === idx ? { ...c, imageUrl: e.target.value } : c)),
+                                )
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-xs shrink-0"
+                              onClick={() => setShopifyPickerIdx(idx)}
+                            >
+                              <Store className="h-3.5 w-3.5" />
+                              Shopify
+                            </Button>
+                          </div>
                         </div>
 
                         {cardBodyText && (
@@ -394,29 +513,48 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
                             {card.bodyVars.map((v, i) => (
                               <div key={i} className="space-y-1">
                                 <Label className="text-xs">Variável {`{{${i + 1}}}`}</Label>
-                                <Textarea
-                                  rows={2}
-                                  value={v}
-                                  onChange={(e) =>
-                                    setCards((prev) =>
-                                      prev.map((c, j) =>
-                                        j === idx
-                                          ? {
-                                              ...c,
-                                              bodyVars: c.bodyVars.map((x, k) =>
-                                                k === i ? e.target.value : x,
-                                              ),
-                                            }
-                                          : c,
-                                      ),
-                                    )
-                                  }
-                                  placeholder={`Valor para {{${i + 1}}}`}
-                                />
+                                <div className="flex gap-2 items-start">
+                                  <Textarea
+                                    rows={2}
+                                    value={v}
+                                    onChange={(e) =>
+                                      setCards((prev) =>
+                                        prev.map((c, j) =>
+                                          j === idx
+                                            ? {
+                                                ...c,
+                                                bodyVars: c.bodyVars.map((x, k) =>
+                                                  k === i ? e.target.value : x,
+                                                ),
+                                              }
+                                            : c,
+                                        ),
+                                      )
+                                    }
+                                    placeholder={`Valor para {{${i + 1}}}`}
+                                  />
+                                  <VarPicker
+                                    onPick={(val) =>
+                                      setCards((prev) =>
+                                        prev.map((c, j) =>
+                                          j === idx
+                                            ? {
+                                                ...c,
+                                                bodyVars: c.bodyVars.map((x, k) =>
+                                                  k === i ? (x ? `${x} ${val}` : val) : x,
+                                                ),
+                                              }
+                                            : c,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </div>
                               </div>
                             ))}
                           </div>
                         )}
+
                       </div>
                     );
                   })}
@@ -443,6 +581,28 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Seletor de imagem via Shopify */}
+      <Dialog
+        open={shopifyPickerIdx !== null}
+        onOpenChange={(o) => { if (!o) setShopifyPickerIdx(null); }}
+      >
+        <DialogContent className="max-w-2xl sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Escolher imagem de produto Shopify</DialogTitle>
+            <DialogDescription>
+              A imagem selecionada será aplicada no card {shopifyPickerIdx !== null ? shopifyPickerIdx + 1 : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          <ProductSelector
+            selectedProducts={[]}
+            onAddProduct={handleShopifyPick}
+            onRemoveProduct={() => {}}
+            onUpdateQuantity={() => {}}
+          />
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
+
