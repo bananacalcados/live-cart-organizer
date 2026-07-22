@@ -230,6 +230,10 @@ serve(async (req) => {
         if (change.field === 'message_template_status_update') {
           const v = change.value || {};
           const templateId = String(v.message_template_id ?? '');
+          const templateName = v.message_template_name ?? null;
+          const event = String(v.event ?? '').toUpperCase();
+          // Meta sends events like APPROVED, REJECTED, FLAGGED, PAUSED, PENDING_DELETION
+          const metaStatus = event || 'PENDING';
           if (templateId) {
             try {
               await supabase
@@ -237,7 +241,7 @@ serve(async (req) => {
                 .upsert(
                   {
                     template_id: templateId,
-                    template_name: v.message_template_name ?? null,
+                    template_name: templateName,
                     language: v.message_template_language ?? null,
                     event: v.event ?? null,
                     rejected_reason: v.reason ?? v.rejected_reason ?? null,
@@ -248,6 +252,21 @@ serve(async (req) => {
                 );
             } catch (e) {
               console.error('[meta-wa] template status upsert falhou:', (e as Error).message);
+            }
+          }
+          // Espelha o status na tabela templates_carrossel (match por template_id = name).
+          if (templateName) {
+            try {
+              await supabase
+                .from('templates_carrossel')
+                .update({
+                  meta_status: metaStatus,
+                  aprovado: metaStatus === 'APPROVED',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('template_id', templateName);
+            } catch (e) {
+              console.error('[meta-wa] templates_carrossel sync falhou:', (e as Error).message);
             }
           }
           await markSkip(`template_status_update:${v.event ?? 'unknown'}`);
