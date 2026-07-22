@@ -319,7 +319,45 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
     }
   };
 
+  const VarPicker = ({ onPick, disabled }: { onPick: (v: string) => void; disabled?: boolean }) => {
+    if (variableOptions.length === 0) return null;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={disabled}
+            className="h-8 gap-1 text-xs shrink-0"
+          >
+            <Variable className="h-3.5 w-3.5" />
+            Variável
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuLabel>Inserir do cadastro</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {variableOptions.map((opt) => (
+            <DropdownMenuItem
+              key={opt.key}
+              onSelect={(e) => {
+                e.preventDefault();
+                onPick(opt.value);
+              }}
+              className="flex flex-col items-start gap-0.5"
+            >
+              <span className="text-xs font-medium">{opt.label}</span>
+              <span className="text-[10px] text-muted-foreground truncate max-w-full">{opt.value}</span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   return (
+
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl sm:max-w-3xl w-[95vw] h-[85vh] p-0 gap-0 flex flex-col overflow-hidden">
         <DialogHeader className="p-4 border-b shrink-0">
