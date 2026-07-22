@@ -61,6 +61,7 @@ export function WhatsAppChatDialog({
   const withSidebar = showSidebar ?? wide;
   const [fichaOpen, setFichaOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [crossellOpen, setCrossellOpen] = useState(false);
 
   const fichaOrder = {
     id: order.id,
