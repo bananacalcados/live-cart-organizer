@@ -78,18 +78,35 @@ export function EventFollowupsManager({ eventId }: { eventId: string }) {
   };
 
   const saveAll = async () => {
-    const payload = configs.map((c, i) => {
-      const { id, ...rest } = c;
-      const row: any = { ...rest, order_index: i };
-      if (id) row.id = id; // só inclui id quando existe (evita null → not-null violation)
-      return row;
-    });
-    const { error } = await supabase.from("event_followup_configs").upsert(payload).select();
-    if (error) return toast.error(`Erro: ${error.message}`);
+    // Split: new rows go via INSERT (sem id — deixa o default gen_random_uuid() agir),
+    // existentes via UPDATE individual. Um upsert misto envia id:null nas linhas novas
+    // porque o PostgREST normaliza o schema pelo primeiro objeto, quebrando a NOT NULL.
+    const news = configs.map((c, i) => ({ c, i })).filter(({ c }) => !c.id);
+    const olds = configs.map((c, i) => ({ c, i })).filter(({ c }) => !!c.id);
+
+    if (news.length) {
+      const rows = news.map(({ c, i }) => {
+        const { id, ...rest } = c as any;
+        return { ...rest, order_index: i };
+      });
+      const { error } = await supabase.from("event_followup_configs").insert(rows);
+      if (error) return toast.error(`Erro ao criar: ${error.message}`);
+    }
+
+    for (const { c, i } of olds) {
+      const { id, ...rest } = c as any;
+      const { error } = await supabase
+        .from("event_followup_configs")
+        .update({ ...rest, order_index: i })
+        .eq("id", id);
+      if (error) return toast.error(`Erro ao atualizar: ${error.message}`);
+    }
+
     const { data: refreshed } = await supabase.from("event_followup_configs").select("*").eq("event_id", eventId).order("order_index");
     setConfigs((refreshed || []) as any);
     toast.success("Follow-ups salvos");
   };
+
 
   if (loading) return <div className="p-6 text-muted-foreground">Carregando…</div>;
 
