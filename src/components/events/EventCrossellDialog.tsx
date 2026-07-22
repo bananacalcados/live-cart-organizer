@@ -29,6 +29,7 @@ import { useConversationInstance } from "@/hooks/useConversationInstance";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { ProductSelector } from "@/components/ProductSelector";
+import { ShopifyImagePicker } from "@/components/events/ShopifyImagePicker";
 import type { DbOrderProduct } from "@/types/database";
 import type { Order } from "@/types/order";
 import { toast } from "sonner";
@@ -248,17 +249,14 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
     if (!url) toast.error(`Falha no upload do card ${idx + 1}`);
   };
 
-  const handleShopifyPick = (p: DbOrderProduct) => {
+  const handleShopifyImagePick = (imageUrl: string) => {
     if (shopifyPickerIdx === null) return;
-    if (!p.image) {
-      toast.error("Este produto não tem imagem");
-      return;
-    }
     const idx = shopifyPickerIdx;
-    setCards((prev) => prev.map((c, i) => (i === idx ? { ...c, imageUrl: p.image! } : c)));
+    setCards((prev) => prev.map((c, i) => (i === idx ? { ...c, imageUrl } : c)));
     setShopifyPickerIdx(null);
-    toast.success(`Imagem do produto aplicada no card ${idx + 1}`);
+    toast.success(`Imagem aplicada no card ${idx + 1}`);
   };
+
 
 
   const canSend =
@@ -594,12 +592,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
               A imagem selecionada será aplicada no card {shopifyPickerIdx !== null ? shopifyPickerIdx + 1 : ""}.
             </DialogDescription>
           </DialogHeader>
-          <ProductSelector
-            selectedProducts={[]}
-            onAddProduct={handleShopifyPick}
-            onRemoveProduct={() => {}}
-            onUpdateQuantity={() => {}}
-          />
+          <ShopifyImagePicker onPick={handleShopifyImagePick} />
         </DialogContent>
       </Dialog>
     </Dialog>
