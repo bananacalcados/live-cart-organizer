@@ -165,6 +165,12 @@ export function POSWhatsAppCheckoutDialog({
           items_detail: cart.map(c => ({
             title: c.title, variant: c.variantLabel, unit_price: c.price, quantity: c.quantity,
           })),
+          ...(Number(noInterestInstallments) > 0 ? {
+            installment_override: {
+              interest_free_installments: Math.min(12, Math.max(1, Number(noInterestInstallments))),
+              source: "pos_whatsapp_checkout",
+            },
+          } : {}),
         },
       };
       const { data: sale, error } = await supabase.from("pos_sales").insert(salePayload as any).select("id").single();
