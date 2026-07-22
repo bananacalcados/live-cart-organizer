@@ -42,7 +42,7 @@ const emptyIg = (event_id: string, order: number): Config => ({
 export function EventFollowupsManager({ eventId }: { eventId: string }) {
   const [configs, setConfigs] = useState<Config[]>([]);
   const [numbers, setNumbers] = useState<{ id: string; label: string }[]>([]);
-  const [templates, setTemplates] = useState<{ name: string; language: string }[]>([]);
+  const [templates, setTemplates] = useState<{ name: string; language: string; category?: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -55,9 +55,9 @@ export function EventFollowupsManager({ eventId }: { eventId: string }) {
       setConfigs((cfgs || []) as any);
       setNumbers((nums || []).map((n: any) => ({ id: n.id, label: n.display_name || n.phone_number })));
       try {
-        const { data: tpl } = await supabase.functions.invoke("meta-whatsapp-get-templates");
+        const { data: tpl } = await supabase.functions.invoke("meta-whatsapp-get-templates", { body: { status: "APPROVED" } });
         if (tpl?.templates) {
-          setTemplates(tpl.templates.map((t: any) => ({ name: t.name, language: t.language || "pt_BR" })));
+          setTemplates(tpl.templates.map((t: any) => ({ name: t.name, language: t.language || "pt_BR", category: t.category })));
         }
       } catch { /* opcional */ }
       setLoading(false);
@@ -131,12 +131,24 @@ export function EventFollowupsManager({ eventId }: { eventId: string }) {
   );
 }
 
+function CategoryBadge({ category }: { category: string }) {
+  const c = category.toUpperCase();
+  const map: Record<string, { label: string; cls: string }> = {
+    UTILITY: { label: "UTILIDADE", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+    MARKETING: { label: "MARKETING", cls: "bg-orange-100 text-orange-700 border-orange-200" },
+    AUTHENTICATION: { label: "SERVIÇO", cls: "bg-green-100 text-green-700 border-green-200" },
+    SERVICE: { label: "SERVIÇO", cls: "bg-green-100 text-green-700 border-green-200" },
+  };
+  const m = map[c] || { label: c, cls: "bg-muted text-muted-foreground border-border" };
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold ${m.cls}`}>{m.label}</span>;
+}
+
 function ConfigCard({
   config, idx, numbers, templates, onChange, onRemove,
 }: {
   config: Config; idx: number;
   numbers: { id: string; label: string }[];
-  templates: { name: string; language: string }[];
+  templates: { name: string; language: string; category?: string }[];
   onChange: (patch: Partial<Config>) => void;
   onRemove: () => void;
 }) {
@@ -163,7 +175,14 @@ function ConfigCard({
                   onChange({ template_name: v, template_language: t?.language || "pt_BR" });
                 }}>
                   <SelectTrigger><SelectValue placeholder="Selecionar template" /></SelectTrigger>
-                  <SelectContent>{templates.map((t) => <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{templates.map((t) => (
+                    <SelectItem key={t.name} value={t.name}>
+                      <span className="flex items-center gap-2">
+                        <span>{t.name}</span>
+                        {t.category && <CategoryBadge category={t.category} />}
+                      </span>
+                    </SelectItem>
+                  ))}</SelectContent>
                 </Select>
               ) : (
                 <Input value={config.template_name ?? ""} onChange={(e) => onChange({ template_name: e.target.value })} placeholder="nome_do_template" />
