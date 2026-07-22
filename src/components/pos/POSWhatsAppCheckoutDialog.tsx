@@ -233,6 +233,7 @@ export function POSWhatsAppCheckoutDialog({
       setCouponApplied(null);
       setCouponCode("");
       setShippingValue("");
+      setNoInterestInstallments("");
     } catch {
       toast.error("Erro ao enviar");
     } finally {
