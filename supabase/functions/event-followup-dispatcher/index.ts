@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
             phone: ord.phone,
             templateName: cfg.template_name,
             language: cfg.template_language || "pt_BR",
-            whatsappNumberId: cfg.whatsapp_number_id || null,
+            whatsappNumberId: cfg.whatsapp_number_id || ord.event?.whatsapp_number_id || null,
             components: buildComponents(cfg.template_variables, ord),
           }),
         });
