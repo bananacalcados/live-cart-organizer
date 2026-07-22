@@ -45,6 +45,8 @@ import { IgAutomationsManager, type IgAutomation } from "@/components/events/IgA
 import { EventFollowupTemplates, type FollowupTemplate } from "@/components/events/EventFollowupTemplates";
 import { EventSetupWizard, EVENT_DRAFT_NAME } from "@/components/events/EventSetupWizard";
 import { ParticipantScorePanel } from "@/components/events/ParticipantScorePanel";
+import { LiveRedirectManager } from "@/components/events/LiveRedirectManager";
+
 import { DbEvent } from "@/types/database";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -729,7 +731,11 @@ const Events = () => {
             <TabsTrigger value="participants" className="gap-1">
               <Trophy className="h-4 w-4" /> Participante Score
             </TabsTrigger>
+            <TabsTrigger value="redirects" className="gap-1">
+              <Send className="h-4 w-4" /> Redirecionador Live
+            </TabsTrigger>
           </TabsList>
+
 
           <TabsContent value="events">
             <EventCustomerOrderSearch />
@@ -948,7 +954,12 @@ const Events = () => {
           <TabsContent value="participants">
             <ParticipantScorePanel />
           </TabsContent>
+
+          <TabsContent value="redirects">
+            <LiveRedirectManager />
+          </TabsContent>
         </Tabs>
+
       </main>
 
       <EventSetupWizard

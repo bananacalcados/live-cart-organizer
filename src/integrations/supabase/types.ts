@@ -5247,9 +5247,11 @@ export type Database = {
           ig_initial_message_buttons: Json
           initial_message_blocks: Json
           initial_message_enabled: boolean
+          instagram_live_url: string | null
           installment_max: number | null
           installment_min_value: number | null
           is_active: boolean
+          is_live_broadcasting: boolean
           live_active_until: string | null
           manual_pos_routing: boolean
           meta_template_body_variables: Json | null
@@ -5284,9 +5286,11 @@ export type Database = {
           ig_initial_message_buttons?: Json
           initial_message_blocks?: Json
           initial_message_enabled?: boolean
+          instagram_live_url?: string | null
           installment_max?: number | null
           installment_min_value?: number | null
           is_active?: boolean
+          is_live_broadcasting?: boolean
           live_active_until?: string | null
           manual_pos_routing?: boolean
           meta_template_body_variables?: Json | null
@@ -5321,9 +5325,11 @@ export type Database = {
           ig_initial_message_buttons?: Json
           initial_message_blocks?: Json
           initial_message_enabled?: boolean
+          instagram_live_url?: string | null
           installment_max?: number | null
           installment_min_value?: number | null
           is_active?: boolean
+          is_live_broadcasting?: boolean
           live_active_until?: string | null
           manual_pos_routing?: boolean
           meta_template_body_variables?: Json | null
@@ -8919,6 +8925,87 @@ export type Database = {
           id?: string
           phone?: string
           verified?: boolean
+        }
+        Relationships: []
+      }
+      live_redirect_clicks: {
+        Row: {
+          created_at: string
+          event_id: string | null
+          id: string
+          phone: string | null
+          redirect_id: string
+          target_url: string | null
+          user_agent: string | null
+          utm_source: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          phone?: string | null
+          redirect_id: string
+          target_url?: string | null
+          user_agent?: string | null
+          utm_source?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          phone?: string | null
+          redirect_id?: string
+          target_url?: string | null
+          user_agent?: string | null
+          utm_source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "live_redirect_clicks_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "live_redirect_clicks_redirect_id_fkey"
+            columns: ["redirect_id"]
+            isOneToOne: false
+            referencedRelation: "live_redirect_links"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      live_redirect_links: {
+        Row: {
+          click_count: number
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          click_count?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          click_count?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+          updated_at?: string
         }
         Relationships: []
       }

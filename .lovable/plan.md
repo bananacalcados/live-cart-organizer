@@ -1,62 +1,66 @@
-# Parcelamento sem juros — Checkout do WhatsApp (PDV)
+# Redirecionador de Link para Live do Instagram
 
-## Contexto — como o Eventos resolveu o bug de "não estava logado como admin"
+## Onde cada coisa vai ficar
 
-No módulo Eventos, o override de parcelamento é lido pelo `TransparentCheckout` via a RPC `get_event_installment_config(p_event_id)`. Ela é **SECURITY DEFINER** com `GRANT EXECUTE ... TO anon, authenticated`. Isso foi criado exatamente porque a tabela `events` tem RLS bloqueando `anon` — antes disso, clientes deslogados abriam o link e recebiam 10× **com** juros porque o `SELECT` direto retornava `null`. Depois o `useMemo` `installmentConfig` mescla a config base (`app_settings`) com o override do evento, usando `Math.max` tanto em `max_installments` quanto em `interest_free_installments`.
+### 1) Painel principal do módulo Eventos (nível global — vale pra todos os eventos)
+Nova aba **"Redirecionadores de Live"** dentro de `EventsDashboard` (mesmo nível de "Eventos", "Follow-ups", etc.).
 
-**Vamos aplicar exatamente o mesmo padrão** no checkout do WhatsApp: gravar o override na venda + expor via RPC SECURITY DEFINER + mesclar no `StoreCheckout`.
+Conteúdo:
+- **Lista de redirecionadores** criados (cada um com nome livre, ex.: "Disparo VIP 18h", "Stories orgânico", "Grupos frios").
+- Botão **"Criar redirecionador"** → abre modal pedindo apenas: `nome` + `slug` (auto-gerado, editável). O link público fica `checkout.bananacalcados.com.br/live/{slug}` e **nunca muda**.
+- Cada linha mostra: nome, slug copiável, total de cliques, últimos 7 dias, status (ativo/pausado), ações (editar nome, pausar, excluir).
+- Ao clicar num redirecionador → abre **Dashboard do link** com:
+  - Cliques totais / únicos por telefone
+  - Filtro por **data** (range picker)
+  - Filtro por **evento** (quais eventos estavam ativos com esse link no período)
+  - Filtro por **origem** (`utm_source` — qual disparo)
+  - Cruzamento com `live_viewers` e `pos_sales` do período → taxa estimada de entrada na live e conversão em venda
+  - Timeline de cliques por hora (pra ver cauda longa)
 
-## Onde o link nasce e onde é consumido
+O destino do redirect é **sempre lido do evento atualmente marcado como "AO VIVO"** (ver item 2). Ou seja: o redirecionador é o link estável; o evento ao vivo é quem define pra onde ele aponta naquele momento.
 
-- **Origem**: `POSWhatsAppCheckoutDialog.tsx` cria uma linha em `pos_sales` (status `online_pending`, `payment_gateway=store-checkout`) e monta a URL `https://checkout.bananacalcados.com.br/checkout-loja/{storeId}/{saleId}`.
-- **Destino**: `src/pages/StoreCheckout.tsx` carrega essa venda e usa `installmentConfig` (hoje só do `app_settings`) no `CardPaymentForm`. **Não existe hoje** override por venda — é aqui que vamos plugar.
+### 2) Dentro de cada Evento — campo do link do Instagram
+Novo campo no `EventSetupWizard` (modal "Configurar Live") **e** um card rápido no topo do painel do evento (`Index.tsx`, ao lado do toggle de automação):
 
-## Diferença de UX pedida pelo usuário
+- **"Link do Instagram Live"** — input pra colar a URL extraída do IG.
+- Validação leve (precisa parecer URL do instagram.com).
+- Botão **"Testar link"** (abre em nova aba).
+- Toggle **"Esta live está AO VIVO agora"** — quando ligado, esse evento passa a ser o alvo dos redirecionadores. Apenas 1 evento pode estar "ao vivo" por vez (ao ligar num, desliga nos outros).
+- Quando nenhum evento estiver marcado como ao vivo, o redirecionador cai na página "Não estamos ao vivo" (Fase 3).
 
-Diferente do Eventos (que pede valor mínimo de compra), aqui o vendedor escolhe **exatamente quantas parcelas sem juros** para aquela venda específica, **sem valor mínimo**. Default = herdar a config global (nada muda).
+Campos novos em `events`: `instagram_live_url text`, `is_live_broadcasting bool default false`.
 
----
+## Fases de implementação
 
-## Etapa 1 — UI no diálogo do checkout do chat
+**Fase 1 — MVP (esta rodada)**
+- Migração: tabela `live_redirect_links` (id, name, slug único, is_active, click_count, created_at); colunas `instagram_live_url` e `is_live_broadcasting` em `events`.
+- Edge function `live-redirect` (pública): lê slug → busca evento com `is_live_broadcasting=true` → devolve 302 pro `instagram_live_url` (com deep-link `intent://` no Android e `instagram://` no iOS, fallback pra `https://instagram.com/...`). Se nenhum evento ativo, devolve HTML simples "em breve".
+- Rota pública `/live/:slug` no app que chama a edge function.
+- UI: aba "Redirecionadores de Live" no `EventsDashboard` com CRUD + contador simples.
+- UI: campo do link IG + toggle "AO VIVO" no `EventSetupWizard` e card no topo do painel do evento.
+- Log de cliques em nova tabela `live_redirect_clicks` (redirect_id, event_id no momento, phone se veio `?lead=`, utm_source, user_agent, created_at).
 
-Arquivo: `src/components/pos/POSWhatsAppCheckoutDialog.tsx`.
+**Fase 2 — Dashboard rico**
+- Página de detalhes do redirecionador com filtros (data, evento, utm) e cruzamentos com `live_viewers` / `pos_sales`.
 
-- Novo campo compacto no bloco de "Desconto & Frete": `Parcelas sem juros (opcional)` — `Input type="number"` de 1 a 12, vazio = usar padrão.
-- Ao clicar "Gerar link", incluir no `payment_details` uma chave nova:
-  ```
-  installment_override: { interest_free_installments: N, source: "pos_whatsapp_checkout" }
-  ```
-- Nada muda no fluxo se o campo ficar vazio (compatibilidade total com links já gerados).
+**Fase 3 — Página "Não estamos ao vivo"**
+- HTML dedicado com captura de telefone (grava em `lp_leads` origem `live_notify`) e botão "Me avisar por WhatsApp".
 
-## Etapa 2 — RPC SECURITY DEFINER para o cliente anônimo
+**Fase 4 (opcional) — Push via OneSignal**
+Só depois das fases 1–3 validadas.
 
-Nova migração criando `get_sale_installment_override(p_sale_id uuid)`:
+## Detalhes técnicos
 
-- Lê `payment_details->'installment_override'` de `pos_sales`.
-- Retorna `jsonb` com `interest_free_installments` (int) e opcional `max_installments` (para uso futuro).
-- `GRANT EXECUTE ... TO anon, authenticated`.
-- Motivo (**crítico, é a mesma armadilha do Eventos**): `pos_sales` tem RLS. Sem essa RPC, o cliente deslogado lê `null` e cai no default de 6× sem juros, exatamente o mesmo bug que aconteceu no Eventos antes da correção.
+- Redirect com `Cache-Control: no-store` mas cache em memória do edge de 15s.
+- Slug validado (`^[a-z0-9-]+$`), único.
+- `live_redirect_clicks` com índice em `(redirect_id, created_at)` pra o dashboard rodar rápido.
+- Sem chamada a API do IG (não expõe presença) — cruzamento é sempre com nossas próprias tabelas.
+- RLS: `live_redirect_links` e `live_redirect_clicks` `authenticated` full; edge function usa service role pra insert de clique.
 
-## Etapa 3 — Consumir o override no StoreCheckout
+## Fora de escopo
 
-Arquivo: `src/pages/StoreCheckout.tsx`.
+- Detecção automática de "live caiu" (Fase 5 futura).
+- Push notifications (Fase 4, decidir depois).
+- Alterar `group-redirect-link` existente (usaremos como referência, mas o novo é independente).
 
-- Novo `useEffect` após carregar a venda: chama `supabase.rpc("get_sale_installment_override", { p_sale_id: saleId })` e guarda em state.
-- No cálculo de `installmentConfig`, aplicar `Math.max(base.interest_free_installments, override.interest_free_installments)` e o mesmo para `max_installments` se vier — mesmo padrão do `TransparentCheckout` (linhas 1579–1595).
-- Assim, se o vendedor pediu 10× sem juros, o `<Select>` de parcelas mostra "10× de R$ X sem juros" mesmo quando o cliente está deslogado.
-
-## Etapa 4 — Verificação (sem quebrar nada)
-
-- Gerar um link **sem** preencher o campo → checkout deve continuar com a config atual (6× sem juros / 12× com juros).
-- Gerar um link **com** 10 sem juros → abrir em aba anônima, confirmar que o `<Select>` mostra "10× ... sem juros" e que o cálculo bate (sem `hasInterest`).
-- Rodar `bunx vitest run` para os testes existentes de checkout continuarem passando.
-
----
-
-## Fora do escopo desta rodada
-
-- Alterar o parcelamento no fluxo do módulo Eventos.
-- Mudança em `TransparentCheckout` (esse fluxo é dos eventos/live, não do link do chat do PDV).
-- Persistir preferências de parcelamento por vendedor ou por cliente.
-
-Se aprovar, executo Etapa 1 + 2 + 3 no mesmo turno (o volume é pequeno) e valido em seguida.
+Se aprovar, começo pela Fase 1 completa (migração + edge function + rota + as duas UIs) num único turno.
