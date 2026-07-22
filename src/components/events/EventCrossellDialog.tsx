@@ -248,17 +248,14 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
     if (!url) toast.error(`Falha no upload do card ${idx + 1}`);
   };
 
-  const handleShopifyPick = (p: DbOrderProduct) => {
+  const handleShopifyImagePick = (imageUrl: string) => {
     if (shopifyPickerIdx === null) return;
-    if (!p.image) {
-      toast.error("Este produto não tem imagem");
-      return;
-    }
     const idx = shopifyPickerIdx;
-    setCards((prev) => prev.map((c, i) => (i === idx ? { ...c, imageUrl: p.image! } : c)));
+    setCards((prev) => prev.map((c, i) => (i === idx ? { ...c, imageUrl } : c)));
     setShopifyPickerIdx(null);
-    toast.success(`Imagem do produto aplicada no card ${idx + 1}`);
+    toast.success(`Imagem aplicada no card ${idx + 1}`);
   };
+
 
 
   const canSend =
