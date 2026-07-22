@@ -14,6 +14,72 @@ export type Database = {
   }
   public: {
     Tables: {
+      _legacy_livete_followups: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          event_id: string | null
+          id: string
+          is_active: boolean
+          last_client_message_at: string | null
+          max_levels: number
+          next_reminder_at: string | null
+          order_id: string | null
+          phone: string
+          reminder_level: number
+          stage_atendimento: string | null
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          is_active?: boolean
+          last_client_message_at?: string | null
+          max_levels?: number
+          next_reminder_at?: string | null
+          order_id?: string | null
+          phone: string
+          reminder_level?: number
+          stage_atendimento?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          is_active?: boolean
+          last_client_message_at?: string | null
+          max_levels?: number
+          next_reminder_at?: string | null
+          order_id?: string | null
+          phone?: string
+          reminder_level?: number
+          stage_atendimento?: string | null
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "livete_followups_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "livete_followups_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ad_campaign_nurture_steps: {
         Row: {
           campaign_id: string
@@ -4595,6 +4661,161 @@ export type Database = {
           },
         ]
       }
+      event_followup_configs: {
+        Row: {
+          buttons: Json
+          channel: string
+          created_at: string
+          delay_minutes: number
+          enabled: boolean
+          event_id: string
+          id: string
+          message_text: string | null
+          order_index: number
+          stop_on_paid: boolean
+          stop_on_reply: boolean
+          template_language: string | null
+          template_name: string | null
+          template_variables: Json
+          trigger_source: string
+          updated_at: string
+          whatsapp_number_id: string | null
+        }
+        Insert: {
+          buttons?: Json
+          channel: string
+          created_at?: string
+          delay_minutes?: number
+          enabled?: boolean
+          event_id: string
+          id?: string
+          message_text?: string | null
+          order_index?: number
+          stop_on_paid?: boolean
+          stop_on_reply?: boolean
+          template_language?: string | null
+          template_name?: string | null
+          template_variables?: Json
+          trigger_source?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Update: {
+          buttons?: Json
+          channel?: string
+          created_at?: string
+          delay_minutes?: number
+          enabled?: boolean
+          event_id?: string
+          id?: string
+          message_text?: string | null
+          order_index?: number
+          stop_on_paid?: boolean
+          stop_on_reply?: boolean
+          template_language?: string | null
+          template_name?: string | null
+          template_variables?: Json
+          trigger_source?: string
+          updated_at?: string
+          whatsapp_number_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_followup_configs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_followup_configs_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_followup_configs_whatsapp_number_id_fkey"
+            columns: ["whatsapp_number_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_numbers_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_followup_dispatches: {
+        Row: {
+          attempts: number
+          channel: string
+          config_id: string
+          created_at: string
+          error_message: string | null
+          event_id: string
+          id: string
+          meta_message_id: string | null
+          order_id: string
+          scheduled_at: string
+          sent_at: string | null
+          skip_reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          channel: string
+          config_id: string
+          created_at?: string
+          error_message?: string | null
+          event_id: string
+          id?: string
+          meta_message_id?: string | null
+          order_id: string
+          scheduled_at: string
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          channel?: string
+          config_id?: string
+          created_at?: string
+          error_message?: string | null
+          event_id?: string
+          id?: string
+          meta_message_id?: string | null
+          order_id?: string
+          scheduled_at?: string
+          sent_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_followup_dispatches_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "event_followup_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_followup_dispatches_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_followup_dispatches_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_landing_pages: {
         Row: {
           config_json: Json
@@ -8807,72 +9028,6 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "live_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      livete_followups: {
-        Row: {
-          completed_at: string | null
-          created_at: string
-          event_id: string | null
-          id: string
-          is_active: boolean
-          last_client_message_at: string | null
-          max_levels: number
-          next_reminder_at: string | null
-          order_id: string | null
-          phone: string
-          reminder_level: number
-          stage_atendimento: string | null
-          updated_at: string
-          whatsapp_number_id: string | null
-        }
-        Insert: {
-          completed_at?: string | null
-          created_at?: string
-          event_id?: string | null
-          id?: string
-          is_active?: boolean
-          last_client_message_at?: string | null
-          max_levels?: number
-          next_reminder_at?: string | null
-          order_id?: string | null
-          phone: string
-          reminder_level?: number
-          stage_atendimento?: string | null
-          updated_at?: string
-          whatsapp_number_id?: string | null
-        }
-        Update: {
-          completed_at?: string | null
-          created_at?: string
-          event_id?: string | null
-          id?: string
-          is_active?: boolean
-          last_client_message_at?: string | null
-          max_levels?: number
-          next_reminder_at?: string | null
-          order_id?: string | null
-          phone?: string
-          reminder_level?: number
-          stage_atendimento?: string | null
-          updated_at?: string
-          whatsapp_number_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "livete_followups_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "livete_followups_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
             referencedColumns: ["id"]
           },
         ]

@@ -1,86 +1,107 @@
-# Matriz de Origem — Dashboard da Live
 
-Adiciona ao dashboard interno de cada evento (Eventos > Live) uma matriz que classifica **compradores** e **não-compradores** por origem (Lead novo / Cliente antigo / Totalmente novo), com drill-down modal para investigar canal de aquisição.
+# Plano — Follow-ups configuráveis por evento (Meta Templates)
 
-Nada do que existe hoje é alterado. Toda a lógica nova entra em uma RPC separada e um card novo no `EventInnerDashboard`.
+## Contexto rápido
+
+Hoje quem manda as mensagens "Oi @fulana! Ainda posso te ajudar…" é a função `livete-followup-cron`, que gera texto livre via IA e envia direto. Isso quebra fora da janela de 24h da Meta API e ainda dispara para quem nunca respondeu — foi o que apareceu no print. Vamos **eliminar** esse fluxo e substituir por um motor que só envia **templates Meta aprovados**, com regras definidas por você em cada evento.
 
 ---
 
-## 1. Regra-mãe de matching (crítica)
+## Bugs do dashboard — status
 
-Como no evento o pedido nasce com `@instagram` e nossas bases (`customers_unified`, `lp_leads`, `event_leads`, `catalog_lead_registrations`, `chat_contacts`, `zoppy_customers`, `ravena_customers`) não guardam `@`, o único vínculo confiável é telefone.
+- **Scroll do modal "Clientes recorrentes"**: corrigido (ScrollArea agora respeita o limite do dialog).
+- **Não-compradores zerados**: corrigido. A RPC `event_buyer_origin_matrix` agora também considera pedidos da tabela `orders` do evento com `is_paid = false` (os "contacted", "incomplete_order" etc.), classificando cada um pelo mesmo motor (Lead → 1ª compra / Cliente antigo / Totalmente novo). Os seus 11 pedidos não pagos passam a aparecer.
 
-Padrão obrigatório (já usado no CRM):
-- Normaliza para dígitos, remove 55 inicial.
-- Chave de match = **DDD (2 díg.) + últimos 8 dígitos**.
-- Compara sempre por essa chave, nunca pelo telefone bruto.
+---
 
-Uma função SQL utilitária `event_phone_key(text)` centraliza isso e é reusada em todas as buscas do relatório.
+## Novo motor — visão geral
 
-## 2. Definição de cada bucket
+Cada evento passa a ter uma aba **"Automações de Follow-up"** (dentro de EventDetails), com duas listas dinâmicas:
 
-Para cada comprador do evento (fonte: `orders`/`pos_sales` do evento + `catalog_lead_registrations` com status `paid`):
+**A. WhatsApp — Recuperação de carrinho / pedido não pago**  
+Você adiciona quantos follow-ups quiser. Cada linha:
+- Template Meta (dropdown com os templates aprovados da sua conta WABA).
+- Variáveis do template (nome, link do carrinho, valor — mapeadas automaticamente para as colunas do pedido).
+- Instância Meta que envia (Pérola / Centro / Site).
+- Tempo de espera (ex.: 30 min, 2h, 6h) — contado a partir do envio do template inicial de carrinho.
+- Condição de parada: se o cliente respondeu OU pagou OU foi cancelado → não envia.
 
-- **Lead que virou cliente (1ª compra)**: existe em alguma tabela de lead (`lp_leads`, `event_leads`, `catalog_lead_registrations` de eventos anteriores, `chat_contacts` marcado como lead) **e** não tem venda anterior à data do evento em `pos_sales`/`orders`/`zoppy_sales`.
-- **Cliente recorrente**: tem pelo menos 1 venda anterior à data do evento (em `customers_unified.total_purchases > 0` OU `pos_sales`/`zoppy_sales` anteriores).
-- **Totalmente novo**: não bate em nenhum lead nem tem compra anterior.
+**B. Instagram — Pedido incompleto (sem WhatsApp)**  
+Mesma lista dinâmica. Cada linha:
+- Texto da DM (com placeholders `{first_name}`, `{cart_link}`) — IG não usa "templates", é mensagem livre porque o pedido nasceu por DM (janela 24h ainda aberta).
+- Botões opcionais (ex.: "Enviar meu WhatsApp").
+- Tempo após criação do pedido incompleto.
+- Para automaticamente quando o cliente informar WhatsApp.
 
-Para não-compradores (fonte: `catalog_lead_registrations` do evento com `status != 'paid'` + `event_leads` do evento sem venda vinculada + `live_comments` classificados como `order` sem pedido pago):
+---
 
-- Aplica mesmos 3 buckets acima usando o telefone.
-- Extra: motivo aparente (`abandoned_cart`, `checkout_started`, `only_comment`, `registered_only`).
+## Regra do gatilho (confirmado por você)
 
-## 3. Origem / canal de aquisição
+- **Carrinho abandonado / não respondeu template inicial** → conta a partir do envio do template inicial (`orders.checkout_started_at` / `last_sent_message_at`).
+- **Respondeu mas não pagou** → conta a partir da última mensagem recebida do cliente (`orders.last_customer_message_at`).
+- O motor escolhe automaticamente qual gatilho usar por pedido.
 
-Para o drill-down, cada pessoa recebe uma lista ordenada de "trilhas":
+---
 
-- Lead: qual tabela captou primeiro (`lp_leads.source`, `event_leads.source_event_id`, `catalog_lead_registrations.catalog_page_id`, `chat_contacts.origin`, typebot vs LP vs grupo VIP).
-- Cliente: `customers_unified.acquisition_channel` + primeira venda (`pos_sales.channel`/`link_origin`) + presença em `zoppy_customers`/`ravena_customers`.
-- Hábito: contagem de compras online vs presencial nos últimos 12 meses (`pos_sales.channel`).
+## O que vai ser deletado
 
-## 4. Backend
+Confirmado por você: **deletar de vez**, sem manter código legado.
 
-Nova RPC `event_buyer_origin_matrix(p_event_id uuid)` retorna JSON:
+- Edge function `livete-followup-cron` (gerava texto livre via IA).
+- Cron job que a invoca.
+- Chamadas em `_shared/livete-tools.ts` que criam/desativam `livete_followups`.
+- Edge function `automation-pos-followups-cron` (segue o mesmo padrão de texto livre).
+- Edge function `chat-payment-followup` (idem).
+- Tabela `livete_followups` fica preservada só como histórico legível (renomeada `_legacy_livete_followups`) — evita quebrar auditoria antiga; não recebe mais escrita.
 
-```
-{
-  buyers: { leads_first_purchase, existing_customers, brand_new, total },
-  non_buyers: { leads_first_purchase, existing_customers, brand_new, total, by_reason },
-  buyer_list: [{ phone_key, name, instagram, bucket, order_id, value, sources[], first_seen_at }],
-  non_buyer_list: [{ phone_key, name, instagram, bucket, reason, sources[], last_activity_at }]
-}
-```
+---
 
-Implementação:
-- CTE `evt_people` unindo compradores e não-compradores do evento com `event_phone_key(whatsapp)`.
-- LEFT JOINs contra `customers_unified`, `lp_leads`, `event_leads`, `catalog_lead_registrations` (excluindo o evento atual), `zoppy_customers`, `ravena_customers`, `chat_contacts` — todos por `phone_key`.
-- Classificação em `CASE` dentro da CTE final.
-- `STABLE`, `SECURITY DEFINER`, `SET search_path=public`, grant apenas para `authenticated`.
+## Detalhes técnicos
 
-Índices adicionais (idempotentes) em colunas de telefone das tabelas de leads/clientes se não existirem, usando expressão `(regexp_replace(phone, '\D','','g'))` — só cria se faltar; não altera o que já existe.
+### 1. Banco
 
-## 5. Frontend
+Nova tabela **`event_followup_configs`** (config por evento):
+- `event_id`, `channel` (`whatsapp` | `instagram`), `order_index`, `enabled`
+- `template_name` (nulo p/ IG), `template_language`, `template_variables` (jsonb com mapeamento)
+- `message_text`, `buttons` (jsonb, p/ IG)
+- `whatsapp_number_id` (qual instância envia)
+- `delay_minutes`, `trigger_source` (`initial_template` | `last_customer_reply` | `incomplete_order_created`)
+- `stop_on_reply`, `stop_on_paid`
 
-- `src/components/events/EventBuyerOriginMatrix.tsx` (novo): 2 cards lado a lado — "Compradores por origem" e "Não-compradores por origem", cada um com 3 blocos clicáveis + total.
-- Ao clicar em qualquer bloco → `EventOriginDrilldownDialog.tsx` (novo) abre com a lista (nome, @, telefone mascarado, valor, bucket, fontes, botões WhatsApp/Instagram já no padrão do `EventCartsPanel`).
-- Filtro secundário no drilldown: por bucket, por canal (typebot/LP/VIP/Zoppy/Ravena/PDV), busca por @.
-- Integração: adicionar `<EventBuyerOriginMatrix eventId={eventId} />` logo abaixo do grid existente em `EventInnerDashboard.tsx`. Nenhuma métrica atual é removida ou movida.
-- Loading, empty e error states isolados — se a RPC falhar, o resto do dashboard continua funcionando (try/catch local, card mostra fallback).
+Nova tabela **`event_followup_dispatches`** (fila/histórico de execução, uma linha por (order × config)):
+- `config_id`, `order_id`, `scheduled_at`, `sent_at`, `status` (`pending`/`sent`/`skipped`/`failed`), `skip_reason`, `meta_message_id`
 
-## 6. Cuidados para não quebrar nada
+Índices: `(status, scheduled_at)` e `(config_id, order_id)` UNIQUE (garante 1 envio por config × pedido).
 
-- Nenhuma alteração em tabelas existentes (só CREATE INDEX IF NOT EXISTS e CREATE FUNCTION).
-- Não mexe em `event_inner_dashboard` (a RPC que já alimenta o dashboard).
-- Componentes novos e isolados; import adicional em um único ponto (`EventInnerDashboard.tsx`).
-- Matching por `phone_key` já validado no CRM (mem: Phone Formatting DDD+8).
-- Ravena/Zoppy tratados como fonte de leitura apenas (respeita a regra de bypass já existente).
+### 2. Edge functions
 
-## 7. Entregáveis por fase
+- **`event-followup-scheduler`** (cron 1 min): varre `orders` não pagos dos eventos ativos → cria linhas `pending` em `event_followup_dispatches` conforme configs, respeitando gatilho.
+- **`event-followup-dispatcher`** (cron 1 min): pega `pending` com `scheduled_at <= now()`, revalida (não pago, não respondeu depois do gate), envia via `meta-whatsapp-send-template` ou `instagram-dm-send` / `instagram-dm-send-buttons`, grava resultado.
+- Ambas respeitam quiet hours (22h–8h BRT) e `blocked_contacts`.
 
-```text
-Fase 1  SQL: event_phone_key() + índices + RPC event_buyer_origin_matrix
-Fase 2  UI: EventBuyerOriginMatrix + EventOriginDrilldownDialog
-Fase 3  Integração no EventInnerDashboard + QA em 2 eventos reais
-```
+### 3. Front-end
 
-Confirma que sigo com a Fase 1?
+Nova aba **"Follow-ups"** em `EventDetails.tsx`, componente `EventFollowupsManager.tsx`:
+- Duas seções (WhatsApp / Instagram) com lista drag-to-reorder.
+- Botão "+ Adicionar follow-up".
+- Dropdown de templates puxa de `meta-whatsapp-get-templates`.
+- Preview do template renderizado com variáveis de exemplo.
+- Toggle de ativar/desativar por linha.
+- Painel de "Últimos disparos" (últimos 20 registros de `event_followup_dispatches`).
+
+### 4. Migração de dados
+
+- Migração DROP das 3 functions antigas + rename da tabela `livete_followups`.
+- Nada é migrado automaticamente para as novas tabelas — você configura os templates evento a evento (é o ponto do plano).
+
+---
+
+## Ordem de execução (após aprovar)
+
+1. Migração: criar tabelas novas, renomear `livete_followups`, dropar cron antigo.
+2. Deletar edge functions `livete-followup-cron`, `automation-pos-followups-cron`, `chat-payment-followup` e limpar chamadas em `_shared/livete-tools.ts`.
+3. Implementar `event-followup-scheduler` + `event-followup-dispatcher` + crons.
+4. Implementar `EventFollowupsManager.tsx` e integrar na aba do evento.
+5. Smoke test: criar 1 config no evento LIVE atual, verificar agendamento e disparo em ambiente real.
+
+Aprova? Se quiser mudar algo (adicionar campo, mudar quiet hours, etc.), me diz antes de eu começar.
