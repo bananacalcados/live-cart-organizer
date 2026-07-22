@@ -19539,8 +19539,10 @@ export type Database = {
         }
         Returns: Json
       }
+      event_buyer_origin_matrix: { Args: { p_event_id: string }; Returns: Json }
       event_inner_dashboard: { Args: { p_event_id: string }; Returns: Json }
       event_lead_cohorts: { Args: { p_event_id: string }; Returns: Json }
+      event_phone_key: { Args: { p_phone: string }; Returns: string }
       execute_merge_unified_duplicates: {
         Args: { p_dry_run?: boolean; p_rule?: string }
         Returns: Json
