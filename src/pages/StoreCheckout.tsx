@@ -1058,6 +1058,7 @@ export default function StoreCheckout() {
     if (!storeId || !saleId) { setLoading(false); return; }
     loadSale();
     loadInstallmentConfig();
+    loadInstallmentOverride();
     // Mark checkout_step = 0 when the checkout page loads
     cpUpdateSale(saleId, { checkout_step: 0 });
   }, [storeId, saleId]);
