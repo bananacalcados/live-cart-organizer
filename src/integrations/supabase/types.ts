@@ -20089,6 +20089,10 @@ export type Database = {
       get_reactivation_candidates: { Args: { p_limit?: number }; Returns: Json }
       get_registration_by_cpf: { Args: { p_cpf: string }; Returns: Json }
       get_rfm_summary: { Args: never; Returns: Json }
+      get_sale_installment_override: {
+        Args: { p_sale_id: string }
+        Returns: Json
+      }
       get_sales_vs_goals: { Args: { p_mes_ref: string }; Returns: Json }
       get_shadow_report: {
         Args: { p_ate: string; p_desde: string }

@@ -1058,6 +1058,7 @@ export default function StoreCheckout() {
     if (!storeId || !saleId) { setLoading(false); return; }
     loadSale();
     loadInstallmentConfig();
+    loadInstallmentOverride();
     // Mark checkout_step = 0 when the checkout page loads
     cpUpdateSale(saleId, { checkout_step: 0 });
   }, [storeId, saleId]);
@@ -1161,12 +1162,25 @@ export default function StoreCheckout() {
       const { data } = await supabase.from("app_settings").select("value").eq("key", "installment_config").maybeSingle();
       if (data?.value) {
         const config = data.value as any;
-        setInstallmentConfig({
+        setInstallmentConfig(prev => ({
           max_installments: config.max_installments || 12,
-          interest_free_installments: config.interest_free_installments || 6,
+          interest_free_installments: Math.max(prev.interest_free_installments, config.interest_free_installments || 6),
           monthly_interest_rate: config.monthly_interest_rate || 2.49,
-        });
+        }));
       }
+    } catch {}
+  };
+
+  const loadInstallmentOverride = async () => {
+    try {
+      const { data } = await supabase.rpc("get_sale_installment_override", { p_sale_id: saleId! });
+      const ov = (data || {}) as { interest_free_installments?: number | null; max_installments?: number | null };
+      if (!ov.interest_free_installments && !ov.max_installments) return;
+      setInstallmentConfig(prev => ({
+        ...prev,
+        max_installments: Math.max(prev.max_installments, ov.max_installments || 0),
+        interest_free_installments: Math.max(prev.interest_free_installments, ov.interest_free_installments || 0),
+      }));
     } catch {}
   };
 

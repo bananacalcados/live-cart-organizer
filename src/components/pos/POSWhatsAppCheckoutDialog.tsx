@@ -55,6 +55,7 @@ export function POSWhatsAppCheckoutDialog({
   const [couponCode, setCouponCode] = useState("");
   const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number; label: string; type: string } | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [noInterestInstallments, setNoInterestInstallments] = useState("");
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -164,6 +165,12 @@ export function POSWhatsAppCheckoutDialog({
           items_detail: cart.map(c => ({
             title: c.title, variant: c.variantLabel, unit_price: c.price, quantity: c.quantity,
           })),
+          ...(Number(noInterestInstallments) > 0 ? {
+            installment_override: {
+              interest_free_installments: Math.min(12, Math.max(1, Number(noInterestInstallments))),
+              source: "pos_whatsapp_checkout",
+            },
+          } : {}),
         },
       };
       const { data: sale, error } = await supabase.from("pos_sales").insert(salePayload as any).select("id").single();
@@ -226,6 +233,7 @@ export function POSWhatsAppCheckoutDialog({
       setCouponApplied(null);
       setCouponCode("");
       setShippingValue("");
+      setNoInterestInstallments("");
     } catch {
       toast.error("Erro ao enviar");
     } finally {
@@ -366,6 +374,23 @@ export function POSWhatsAppCheckoutDialog({
                       <Checkbox checked={freeShipping} onCheckedChange={(v) => { setFreeShipping(!!v); if (v) setShippingValue(""); }} id="free-ship" />
                       <Label htmlFor="free-ship" className="text-[10px] cursor-pointer">Frete Grátis</Label>
                     </div>
+                  </div>
+
+
+                  <div>
+                    <Label className="text-[10px]">Parcelas sem juros (opcional)</Label>
+                    <Input
+                      value={noInterestInstallments}
+                      onChange={(e) => setNoInterestInstallments(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                      placeholder="Padrão da loja"
+                      className="h-7 text-xs"
+                      type="number"
+                      min={1}
+                      max={12}
+                    />
+                    <p className="text-[9px] text-muted-foreground mt-0.5">
+                      Vazio = usar limite padrão. Máx 12×.
+                    </p>
                   </div>
 
                 {/* Totals */}
