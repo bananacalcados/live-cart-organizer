@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { LiveBroadcastBanner } from "./LiveBroadcastBanner";
 
 interface RedirectLink {
   id: string;
