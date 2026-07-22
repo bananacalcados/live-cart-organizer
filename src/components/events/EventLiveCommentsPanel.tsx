@@ -972,6 +972,7 @@ export function EventLiveCommentsPanel({ eventId }: Props) {
           open={waChatOpen}
           onOpenChange={setWaChatOpen}
           order={waChatOrder}
+          wide
         />
       )}
 
