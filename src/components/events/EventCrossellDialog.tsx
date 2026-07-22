@@ -92,7 +92,7 @@ interface CardState {
   uploading: boolean;
 }
 
-export function EventCrossellDialog({ open, onOpenChange, phone, customerName }: EventCrossellDialogProps) {
+export function EventCrossellDialog({ open, onOpenChange, phone, customerName, order }: EventCrossellDialogProps) {
   const { boundNumberId, boundNumber, effectiveNumberId, effectiveNumber } = useConversationInstance(phone);
   const { numbers } = useWhatsAppNumberStore();
 
@@ -110,6 +110,33 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
   const [topVars, setTopVars] = useState<string[]>([]);
   const [cards, setCards] = useState<CardState[]>([]);
   const [sending, setSending] = useState(false);
+
+  // Shopify product picker (per card)
+  const [shopifyPickerIdx, setShopifyPickerIdx] = useState<number | null>(null);
+
+  // Variáveis disponíveis do cadastro/pedido
+  const variableOptions = useMemo<VariableOption[]>(() => {
+    const opts: VariableOption[] = [];
+    const name = order?.instagramHandle || customerName || "";
+    if (name) {
+      opts.push({ key: "nome", label: "Nome do cliente", value: name.replace(/^@/, "") });
+      opts.push({ key: "instagram", label: "@ Instagram", value: name.startsWith("@") ? name : `@${name}` });
+    }
+    if (phone) opts.push({ key: "telefone", label: "Telefone", value: phone });
+    const products = order?.products || [];
+    if (products.length > 0) {
+      const subtotal = products.reduce((s, p) => s + (p.price || 0) * (p.quantity || 1), 0);
+      const compareTotal = products.reduce((s, p) => s + (p.price || 0) * (p.quantity || 1), 0);
+      opts.push({ key: "valor_produtos", label: "Valor dos produtos", value: formatBRL(subtotal) });
+      opts.push({ key: "valor_compra", label: "Valor da compra", value: formatBRL(subtotal) });
+      opts.push({ key: "desconto", label: "Desconto", value: formatBRL(Math.max(compareTotal - subtotal, 0)) });
+      opts.push({ key: "qtd_itens", label: "Qtd. de itens", value: String(products.reduce((s, p) => s + (p.quantity || 1), 0)) });
+      opts.push({ key: "primeiro_produto", label: "1º produto", value: products[0].title || "" });
+    }
+    if (order?.cartLink) opts.push({ key: "link_checkout", label: "Link do checkout", value: order.cartLink });
+    return opts;
+  }, [order, customerName, phone]);
+
 
   // Load approved event templates for the bound instance
   useEffect(() => {
