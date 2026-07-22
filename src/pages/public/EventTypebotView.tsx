@@ -209,15 +209,14 @@ export default function EventTypebotView() {
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.from === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-2 whitespace-pre-line ${
+                className={`max-w-[80%] rounded-2xl px-4 py-2 whitespace-pre-line prose prose-sm prose-invert max-w-none [&_p]:my-0 ${
                   m.from === 'user'
                     ? 'text-slate-900 font-medium'
                     : 'bg-white/10 text-white'
                 }`}
                 style={m.from === 'user' ? { background: primary } : undefined}
-              >
-                {m.text}
-              </div>
+                dangerouslySetInnerHTML={{ __html: m.text }}
+              />
             </div>
           ))}
           {submitting && (
