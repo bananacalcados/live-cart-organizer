@@ -303,7 +303,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
                   <SelectContent>
                     {templates.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
-                        {t.nome || t.template_id} · {t.qtd_cards} cards
+                        [{t.scope === "event" ? "Evento" : "PDV"}] {t.nome || t.template_id} · {t.qtd_cards} cards
                       </SelectItem>
                     ))}
                   </SelectContent>
