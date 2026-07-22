@@ -29,6 +29,7 @@ import { useConversationInstance } from "@/hooks/useConversationInstance";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
 import { ProductSelector } from "@/components/ProductSelector";
+import { ShopifyImagePicker } from "@/components/events/ShopifyImagePicker";
 import type { DbOrderProduct } from "@/types/database";
 import type { Order } from "@/types/order";
 import { toast } from "sonner";
