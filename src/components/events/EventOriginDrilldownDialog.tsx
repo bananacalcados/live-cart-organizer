@@ -133,7 +133,7 @@ export function EventOriginDrilldownDialog({
           </div>
         </div>
 
-        <ScrollArea className="flex-1 -mx-6 px-6">
+        <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
           <div className="space-y-2 py-2">
             {filtered.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-8">
