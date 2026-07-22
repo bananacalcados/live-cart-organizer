@@ -729,7 +729,11 @@ const Events = () => {
             <TabsTrigger value="participants" className="gap-1">
               <Trophy className="h-4 w-4" /> Participante Score
             </TabsTrigger>
+            <TabsTrigger value="redirects" className="gap-1">
+              <Send className="h-4 w-4" /> Redirecionador Live
+            </TabsTrigger>
           </TabsList>
+
 
           <TabsContent value="events">
             <EventCustomerOrderSearch />
