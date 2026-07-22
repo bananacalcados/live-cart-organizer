@@ -341,7 +341,29 @@ serve(async (req) => {
         tiny_product_id: item.tiny_id ? String(item.tiny_id) : null,
       }));
 
-      await supabase.from('pos_sale_items').insert(saleItems);
+      // HARD-FAIL if items don't persist — the sale is USELESS without items
+      // (no stock movement, no dashboards, no NF-e). Retry once, then throw.
+      let itemsErr: any = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const { error } = await supabase.from('pos_sale_items').insert(saleItems);
+        if (!error) { itemsErr = null; break; }
+        itemsErr = error;
+        console.error(`[pos-tiny-create-sale] items insert attempt ${attempt + 1} failed:`, error);
+        await new Promise((r) => setTimeout(r, 250));
+      }
+      if (itemsErr) {
+        // Verify — trigger cascade sometimes rejects the batch response but rows persist
+        const { count } = await supabase
+          .from('pos_sale_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('sale_id', saleId);
+        if (!count || count === 0) {
+          // Roll back the empty sale so it doesn't pollute dashboards
+          await supabase.from('pos_sales').delete().eq('id', saleId);
+          throw new Error(`Falha ao gravar itens da venda: ${itemsErr.message || itemsErr}`);
+        }
+        console.warn(`[pos-tiny-create-sale] items insert reported error but ${count} rows persisted for sale ${saleId}`);
+      }
 
       // Update local stock cache (pos_products)
       for (const item of items) {
