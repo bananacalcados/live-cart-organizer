@@ -1,107 +1,62 @@
+# Parcelamento sem juros — Checkout do WhatsApp (PDV)
 
-# Plano — Follow-ups configuráveis por evento (Meta Templates)
+## Contexto — como o Eventos resolveu o bug de "não estava logado como admin"
 
-## Contexto rápido
+No módulo Eventos, o override de parcelamento é lido pelo `TransparentCheckout` via a RPC `get_event_installment_config(p_event_id)`. Ela é **SECURITY DEFINER** com `GRANT EXECUTE ... TO anon, authenticated`. Isso foi criado exatamente porque a tabela `events` tem RLS bloqueando `anon` — antes disso, clientes deslogados abriam o link e recebiam 10× **com** juros porque o `SELECT` direto retornava `null`. Depois o `useMemo` `installmentConfig` mescla a config base (`app_settings`) com o override do evento, usando `Math.max` tanto em `max_installments` quanto em `interest_free_installments`.
 
-Hoje quem manda as mensagens "Oi @fulana! Ainda posso te ajudar…" é a função `livete-followup-cron`, que gera texto livre via IA e envia direto. Isso quebra fora da janela de 24h da Meta API e ainda dispara para quem nunca respondeu — foi o que apareceu no print. Vamos **eliminar** esse fluxo e substituir por um motor que só envia **templates Meta aprovados**, com regras definidas por você em cada evento.
+**Vamos aplicar exatamente o mesmo padrão** no checkout do WhatsApp: gravar o override na venda + expor via RPC SECURITY DEFINER + mesclar no `StoreCheckout`.
 
----
+## Onde o link nasce e onde é consumido
 
-## Bugs do dashboard — status
+- **Origem**: `POSWhatsAppCheckoutDialog.tsx` cria uma linha em `pos_sales` (status `online_pending`, `payment_gateway=store-checkout`) e monta a URL `https://checkout.bananacalcados.com.br/checkout-loja/{storeId}/{saleId}`.
+- **Destino**: `src/pages/StoreCheckout.tsx` carrega essa venda e usa `installmentConfig` (hoje só do `app_settings`) no `CardPaymentForm`. **Não existe hoje** override por venda — é aqui que vamos plugar.
 
-- **Scroll do modal "Clientes recorrentes"**: corrigido (ScrollArea agora respeita o limite do dialog).
-- **Não-compradores zerados**: corrigido. A RPC `event_buyer_origin_matrix` agora também considera pedidos da tabela `orders` do evento com `is_paid = false` (os "contacted", "incomplete_order" etc.), classificando cada um pelo mesmo motor (Lead → 1ª compra / Cliente antigo / Totalmente novo). Os seus 11 pedidos não pagos passam a aparecer.
+## Diferença de UX pedida pelo usuário
 
----
-
-## Novo motor — visão geral
-
-Cada evento passa a ter uma aba **"Automações de Follow-up"** (dentro de EventDetails), com duas listas dinâmicas:
-
-**A. WhatsApp — Recuperação de carrinho / pedido não pago**  
-Você adiciona quantos follow-ups quiser. Cada linha:
-- Template Meta (dropdown com os templates aprovados da sua conta WABA).
-- Variáveis do template (nome, link do carrinho, valor — mapeadas automaticamente para as colunas do pedido).
-- Instância Meta que envia (Pérola / Centro / Site).
-- Tempo de espera (ex.: 30 min, 2h, 6h) — contado a partir do envio do template inicial de carrinho.
-- Condição de parada: se o cliente respondeu OU pagou OU foi cancelado → não envia.
-
-**B. Instagram — Pedido incompleto (sem WhatsApp)**  
-Mesma lista dinâmica. Cada linha:
-- Texto da DM (com placeholders `{first_name}`, `{cart_link}`) — IG não usa "templates", é mensagem livre porque o pedido nasceu por DM (janela 24h ainda aberta).
-- Botões opcionais (ex.: "Enviar meu WhatsApp").
-- Tempo após criação do pedido incompleto.
-- Para automaticamente quando o cliente informar WhatsApp.
+Diferente do Eventos (que pede valor mínimo de compra), aqui o vendedor escolhe **exatamente quantas parcelas sem juros** para aquela venda específica, **sem valor mínimo**. Default = herdar a config global (nada muda).
 
 ---
 
-## Regra do gatilho (confirmado por você)
+## Etapa 1 — UI no diálogo do checkout do chat
 
-- **Carrinho abandonado / não respondeu template inicial** → conta a partir do envio do template inicial (`orders.checkout_started_at` / `last_sent_message_at`).
-- **Respondeu mas não pagou** → conta a partir da última mensagem recebida do cliente (`orders.last_customer_message_at`).
-- O motor escolhe automaticamente qual gatilho usar por pedido.
+Arquivo: `src/components/pos/POSWhatsAppCheckoutDialog.tsx`.
 
----
+- Novo campo compacto no bloco de "Desconto & Frete": `Parcelas sem juros (opcional)` — `Input type="number"` de 1 a 12, vazio = usar padrão.
+- Ao clicar "Gerar link", incluir no `payment_details` uma chave nova:
+  ```
+  installment_override: { interest_free_installments: N, source: "pos_whatsapp_checkout" }
+  ```
+- Nada muda no fluxo se o campo ficar vazio (compatibilidade total com links já gerados).
 
-## O que vai ser deletado
+## Etapa 2 — RPC SECURITY DEFINER para o cliente anônimo
 
-Confirmado por você: **deletar de vez**, sem manter código legado.
+Nova migração criando `get_sale_installment_override(p_sale_id uuid)`:
 
-- Edge function `livete-followup-cron` (gerava texto livre via IA).
-- Cron job que a invoca.
-- Chamadas em `_shared/livete-tools.ts` que criam/desativam `livete_followups`.
-- Edge function `automation-pos-followups-cron` (segue o mesmo padrão de texto livre).
-- Edge function `chat-payment-followup` (idem).
-- Tabela `livete_followups` fica preservada só como histórico legível (renomeada `_legacy_livete_followups`) — evita quebrar auditoria antiga; não recebe mais escrita.
+- Lê `payment_details->'installment_override'` de `pos_sales`.
+- Retorna `jsonb` com `interest_free_installments` (int) e opcional `max_installments` (para uso futuro).
+- `GRANT EXECUTE ... TO anon, authenticated`.
+- Motivo (**crítico, é a mesma armadilha do Eventos**): `pos_sales` tem RLS. Sem essa RPC, o cliente deslogado lê `null` e cai no default de 6× sem juros, exatamente o mesmo bug que aconteceu no Eventos antes da correção.
 
----
+## Etapa 3 — Consumir o override no StoreCheckout
 
-## Detalhes técnicos
+Arquivo: `src/pages/StoreCheckout.tsx`.
 
-### 1. Banco
+- Novo `useEffect` após carregar a venda: chama `supabase.rpc("get_sale_installment_override", { p_sale_id: saleId })` e guarda em state.
+- No cálculo de `installmentConfig`, aplicar `Math.max(base.interest_free_installments, override.interest_free_installments)` e o mesmo para `max_installments` se vier — mesmo padrão do `TransparentCheckout` (linhas 1579–1595).
+- Assim, se o vendedor pediu 10× sem juros, o `<Select>` de parcelas mostra "10× de R$ X sem juros" mesmo quando o cliente está deslogado.
 
-Nova tabela **`event_followup_configs`** (config por evento):
-- `event_id`, `channel` (`whatsapp` | `instagram`), `order_index`, `enabled`
-- `template_name` (nulo p/ IG), `template_language`, `template_variables` (jsonb com mapeamento)
-- `message_text`, `buttons` (jsonb, p/ IG)
-- `whatsapp_number_id` (qual instância envia)
-- `delay_minutes`, `trigger_source` (`initial_template` | `last_customer_reply` | `incomplete_order_created`)
-- `stop_on_reply`, `stop_on_paid`
+## Etapa 4 — Verificação (sem quebrar nada)
 
-Nova tabela **`event_followup_dispatches`** (fila/histórico de execução, uma linha por (order × config)):
-- `config_id`, `order_id`, `scheduled_at`, `sent_at`, `status` (`pending`/`sent`/`skipped`/`failed`), `skip_reason`, `meta_message_id`
-
-Índices: `(status, scheduled_at)` e `(config_id, order_id)` UNIQUE (garante 1 envio por config × pedido).
-
-### 2. Edge functions
-
-- **`event-followup-scheduler`** (cron 1 min): varre `orders` não pagos dos eventos ativos → cria linhas `pending` em `event_followup_dispatches` conforme configs, respeitando gatilho.
-- **`event-followup-dispatcher`** (cron 1 min): pega `pending` com `scheduled_at <= now()`, revalida (não pago, não respondeu depois do gate), envia via `meta-whatsapp-send-template` ou `instagram-dm-send` / `instagram-dm-send-buttons`, grava resultado.
-- Ambas respeitam quiet hours (22h–8h BRT) e `blocked_contacts`.
-
-### 3. Front-end
-
-Nova aba **"Follow-ups"** em `EventDetails.tsx`, componente `EventFollowupsManager.tsx`:
-- Duas seções (WhatsApp / Instagram) com lista drag-to-reorder.
-- Botão "+ Adicionar follow-up".
-- Dropdown de templates puxa de `meta-whatsapp-get-templates`.
-- Preview do template renderizado com variáveis de exemplo.
-- Toggle de ativar/desativar por linha.
-- Painel de "Últimos disparos" (últimos 20 registros de `event_followup_dispatches`).
-
-### 4. Migração de dados
-
-- Migração DROP das 3 functions antigas + rename da tabela `livete_followups`.
-- Nada é migrado automaticamente para as novas tabelas — você configura os templates evento a evento (é o ponto do plano).
+- Gerar um link **sem** preencher o campo → checkout deve continuar com a config atual (6× sem juros / 12× com juros).
+- Gerar um link **com** 10 sem juros → abrir em aba anônima, confirmar que o `<Select>` mostra "10× ... sem juros" e que o cálculo bate (sem `hasInterest`).
+- Rodar `bunx vitest run` para os testes existentes de checkout continuarem passando.
 
 ---
 
-## Ordem de execução (após aprovar)
+## Fora do escopo desta rodada
 
-1. Migração: criar tabelas novas, renomear `livete_followups`, dropar cron antigo.
-2. Deletar edge functions `livete-followup-cron`, `automation-pos-followups-cron`, `chat-payment-followup` e limpar chamadas em `_shared/livete-tools.ts`.
-3. Implementar `event-followup-scheduler` + `event-followup-dispatcher` + crons.
-4. Implementar `EventFollowupsManager.tsx` e integrar na aba do evento.
-5. Smoke test: criar 1 config no evento LIVE atual, verificar agendamento e disparo em ambiente real.
+- Alterar o parcelamento no fluxo do módulo Eventos.
+- Mudança em `TransparentCheckout` (esse fluxo é dos eventos/live, não do link do chat do PDV).
+- Persistir preferências de parcelamento por vendedor ou por cliente.
 
-Aprova? Se quiser mudar algo (adicionar campo, mudar quiet hours, etc.), me diz antes de eu começar.
+Se aprovar, executo Etapa 1 + 2 + 3 no mesmo turno (o volume é pequeno) e valido em seguida.
