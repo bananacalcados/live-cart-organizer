@@ -53,7 +53,7 @@ interface Props {
   onCompleted: () => void;
 }
 
-type StepKey = "general" | "shipping" | "template" | "installments" | "crossell" | "live";
+type StepKey = "general" | "shipping" | "template" | "installments" | "crossell" | "followups" | "live";
 
 const STEPS: { key: StepKey; title: string; icon: typeof Truck }[] = [
   { key: "general", title: "Identificação", icon: Tag },
@@ -61,6 +61,7 @@ const STEPS: { key: StepKey; title: string; icon: typeof Truck }[] = [
   { key: "template", title: "Mensagem", icon: FileText },
   { key: "installments", title: "Parcelamento", icon: CreditCard },
   { key: "crossell", title: "Crossell", icon: ShoppingBag },
+  { key: "followups", title: "Follow-ups", icon: Calendar },
   { key: "live", title: "Ativar Live", icon: Radio },
 ];
 
