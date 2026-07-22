@@ -55,9 +55,9 @@ export function EventFollowupsManager({ eventId }: { eventId: string }) {
       setConfigs((cfgs || []) as any);
       setNumbers((nums || []).map((n: any) => ({ id: n.id, label: n.display_name || n.phone_number })));
       try {
-        const { data: tpl } = await supabase.functions.invoke("meta-whatsapp-get-templates");
+        const { data: tpl } = await supabase.functions.invoke("meta-whatsapp-get-templates", { body: { status: "APPROVED" } });
         if (tpl?.templates) {
-          setTemplates(tpl.templates.map((t: any) => ({ name: t.name, language: t.language || "pt_BR" })));
+          setTemplates(tpl.templates.map((t: any) => ({ name: t.name, language: t.language || "pt_BR", category: t.category })));
         }
       } catch { /* opcional */ }
       setLoading(false);
