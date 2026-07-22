@@ -1233,6 +1233,7 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
           open={showChatDialog}
           onOpenChange={setShowChatDialog}
           order={orderForDialog}
+          wide
         />
       )}
 

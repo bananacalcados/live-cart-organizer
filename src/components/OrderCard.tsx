@@ -175,6 +175,7 @@ export function OrderCard({ order, onEdit, onDelete, isDragging }: OrderCardProp
           open={showChatDialog}
           onOpenChange={setShowChatDialog}
           order={order}
+          wide
         />
       )}
     </div>
