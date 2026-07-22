@@ -262,6 +262,8 @@ export function CarouselTemplatesLadder({ scope = "pos", eventId = null }: Carou
           topBody: top,
           cardBody: legend,
           cards: buildCards(qtd),
+          scope,
+          eventId,
         },
       });
       if (error) throw error;
