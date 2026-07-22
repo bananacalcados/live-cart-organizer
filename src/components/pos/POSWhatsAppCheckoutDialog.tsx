@@ -355,43 +355,44 @@ export function POSWhatsAppCheckoutDialog({
                 </div>
 
                 {/* Discount & Shipping */}
-                <div className="space-y-2 border-t pt-2">
-                  <div className="flex gap-1">
+                <div className="space-y-4 border-t pt-4">
+                  <div className="flex gap-2">
                     <div className="flex-1">
-                      <Label className="text-[10px]">Desconto</Label>
-                      <div className="flex gap-1">
-                        <Input value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} placeholder="0" className="h-7 text-xs" type="number" />
-                        <button onClick={() => setDiscountType(discountType === "fixed" ? "percent" : "fixed")} className="h-7 px-2 rounded bg-muted text-[10px] font-bold shrink-0">
+                      <Label className="text-base font-bold">Desconto</Label>
+                      <div className="flex gap-1 mt-1">
+                        <Input value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} placeholder="0" className="h-12 text-lg font-bold" type="number" />
+                        <button onClick={() => setDiscountType(discountType === "fixed" ? "percent" : "fixed")} className="h-12 px-3 rounded bg-muted text-base font-bold shrink-0">
                           {discountType === "fixed" ? "R$" : "%"}
                         </button>
                       </div>
                     </div>
                     <div className="flex-1">
-                      <Label className="text-[10px]">Frete</Label>
-                      <Input value={shippingValue} onChange={(e) => setShippingValue(e.target.value)} placeholder="0" className="h-7 text-xs" type="number" disabled={freeShipping} />
+                      <Label className="text-base font-bold">Frete</Label>
+                      <Input value={shippingValue} onChange={(e) => setShippingValue(e.target.value)} placeholder="0" className="h-12 text-lg font-bold mt-1" type="number" disabled={freeShipping} />
                     </div>
-                    <div className="flex items-end gap-1.5 pb-0.5">
+                    <div className="flex items-end gap-1.5 pb-3">
                       <Checkbox checked={freeShipping} onCheckedChange={(v) => { setFreeShipping(!!v); if (v) setShippingValue(""); }} id="free-ship" />
-                      <Label htmlFor="free-ship" className="text-[10px] cursor-pointer">Frete Grátis</Label>
+                      <Label htmlFor="free-ship" className="text-sm font-bold cursor-pointer">Frete Grátis</Label>
                     </div>
                   </div>
 
 
                   <div>
-                    <Label className="text-[10px]">Parcelas sem juros (opcional)</Label>
+                    <Label className="text-base font-bold">Parcelas sem juros (opcional)</Label>
                     <Input
                       value={noInterestInstallments}
                       onChange={(e) => setNoInterestInstallments(e.target.value.replace(/\D/g, "").slice(0, 2))}
                       placeholder="Padrão da loja"
-                      className="h-7 text-xs"
+                      className="h-12 text-lg font-bold mt-1"
                       type="number"
                       min={1}
                       max={12}
                     />
-                    <p className="text-[9px] text-muted-foreground mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-1">
                       Vazio = usar limite padrão. Máx 12×.
                     </p>
                   </div>
+
 
                 {/* Totals */}
                 <div className="border-t pt-2 space-y-1">
