@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,11 +15,22 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Images, Upload, AlertCircle, Send } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Loader2, Images, Store, AlertCircle, Send, Variable } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useConversationInstance } from "@/hooks/useConversationInstance";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
 import { uploadMediaToStorage } from "@/components/MediaAttachmentPicker";
+import { ProductSelector } from "@/components/ProductSelector";
+import type { DbOrderProduct } from "@/types/database";
+import type { Order } from "@/types/order";
 import { toast } from "sonner";
 
 interface EventCrossellDialogProps {
@@ -27,7 +38,18 @@ interface EventCrossellDialogProps {
   onOpenChange: (open: boolean) => void;
   phone: string;
   customerName?: string;
+  /** Pedido de contexto para variáveis (nome, @, valores, checkout). */
+  order?: Order;
 }
+
+interface VariableOption {
+  key: string;
+  label: string;
+  value: string;
+}
+
+const formatBRL = (n: number) =>
+  n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 interface DbTemplate {
   id: string;
