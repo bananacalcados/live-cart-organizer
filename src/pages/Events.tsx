@@ -952,7 +952,12 @@ const Events = () => {
           <TabsContent value="participants">
             <ParticipantScorePanel />
           </TabsContent>
+
+          <TabsContent value="redirects">
+            <LiveRedirectManager />
+          </TabsContent>
         </Tabs>
+
       </main>
 
       <EventSetupWizard
