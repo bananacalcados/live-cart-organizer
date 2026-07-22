@@ -92,11 +92,10 @@ export function WhatsAppChatDialog({
                   icon={Images}
                   label="Crossell"
                   tone="accent"
-                  onClick={() =>
-                    toast.info("Crossell chegará na Etapa 3 do plano.", {
-                      description: "Templates de carrossel do evento serão enviados por aqui.",
-                    })
-                  }
+                  onClick={() => {
+                    if (!order.whatsapp) return;
+                    setCrossellOpen(true);
+                  }}
                 />
                 <CreateSupportTicketDialog
                   phone={order.whatsapp}
