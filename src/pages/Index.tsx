@@ -27,8 +27,8 @@ import { useDbOrderStore } from "@/stores/dbOrderStore";
 import { DbOrder } from "@/types/database";
 import { OrderStage } from "@/types/order";
 import { isOrderMarkedPaid } from "@/lib/orderPaymentStages";
-import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings, Bell } from "lucide-react";
-import { EventFollowupsManager } from "@/components/events/EventFollowupsManager";
+import { Calendar, Search, Trophy, Tag, MessageSquare, ShoppingCart, Zap, Instagram, Settings } from "lucide-react";
+
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
