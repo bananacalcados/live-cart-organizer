@@ -136,8 +136,10 @@ export function WhatsAppChatDialog({
               onOpenChange={setCrossellOpen}
               phone={order.whatsapp}
               customerName={order.instagramHandle || undefined}
+              order={order}
             />
           )}
+
         </>
       )}
     </>
