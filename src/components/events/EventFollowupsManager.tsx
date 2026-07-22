@@ -42,7 +42,7 @@ const emptyIg = (event_id: string, order: number): Config => ({
 export function EventFollowupsManager({ eventId }: { eventId: string }) {
   const [configs, setConfigs] = useState<Config[]>([]);
   const [numbers, setNumbers] = useState<{ id: string; label: string }[]>([]);
-  const [templates, setTemplates] = useState<{ name: string; language: string }[]>([]);
+  const [templates, setTemplates] = useState<{ name: string; language: string; category?: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
