@@ -38,6 +38,7 @@ interface DbTemplate {
   meta_status: string;
   whatsapp_number_id: string | null;
   event_id: string | null;
+  scope: string;
 }
 
 interface MetaComponent {
@@ -96,9 +97,10 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
       setLoadingTemplates(true);
       let q = supabase
         .from("templates_carrossel")
-        .select("id,nome,template_id,template_language,qtd_cards,meta_status,whatsapp_number_id,event_id")
-        .eq("scope", "event")
+        .select("id,nome,template_id,template_language,qtd_cards,meta_status,whatsapp_number_id,event_id,scope")
+        .in("scope", ["event", "pos"])
         .eq("meta_status", "APPROVED")
+        .order("scope", { ascending: true })
         .order("qtd_cards", { ascending: true });
       if (numberId) q = q.eq("whatsapp_number_id", numberId);
       const { data, error } = await q;
@@ -301,7 +303,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
                   <SelectContent>
                     {templates.map((t) => (
                       <SelectItem key={t.id} value={t.id}>
-                        {t.nome || t.template_id} · {t.qtd_cards} cards
+                        [{t.scope === "event" ? "Evento" : "PDV"}] {t.nome || t.template_id} · {t.qtd_cards} cards
                       </SelectItem>
                     ))}
                   </SelectContent>
