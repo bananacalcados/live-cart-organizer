@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWhatsAppNumberStore } from "@/stores/whatsappNumberStore";
-import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, Monitor, Send, Store, Target, Trophy } from "lucide-react";
+import { Plus, Calendar, Trash2, Edit2, Play, Users, ShoppingBag, AlertCircle, MessageCircle, Truck, Home, AlertTriangle, Search, Loader2, UserCheck, Copy, Check, Monitor, Send, Store, Target, Trophy, Images } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +46,7 @@ import { EventFollowupTemplates, type FollowupTemplate } from "@/components/even
 import { EventSetupWizard, EVENT_DRAFT_NAME } from "@/components/events/EventSetupWizard";
 import { ParticipantScorePanel } from "@/components/events/ParticipantScorePanel";
 import { LiveRedirectManager } from "@/components/events/LiveRedirectManager";
+import { EventCarouselTemplatesTab } from "@/components/events/EventCarouselTemplatesTab";
 
 import { DbEvent } from "@/types/database";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -734,6 +735,9 @@ const Events = () => {
             <TabsTrigger value="redirects" className="gap-1">
               <Send className="h-4 w-4" /> Redirecionador Live
             </TabsTrigger>
+            <TabsTrigger value="carousel-templates" className="gap-1">
+              <Images className="h-4 w-4" /> Templates API
+            </TabsTrigger>
           </TabsList>
 
 
@@ -957,6 +961,10 @@ const Events = () => {
 
           <TabsContent value="redirects">
             <LiveRedirectManager />
+          </TabsContent>
+
+          <TabsContent value="carousel-templates">
+            <EventCarouselTemplatesTab />
           </TabsContent>
         </Tabs>
 

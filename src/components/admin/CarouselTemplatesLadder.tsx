@@ -63,7 +63,12 @@ function emptyCardValues(): BtnValue[] {
   return Array.from({ length: MAX_CARDS }, () => ({ text: "" }));
 }
 
-export function CarouselTemplatesLadder() {
+export interface CarouselTemplatesLadderProps {
+  scope?: "pos" | "event";
+  eventId?: string | null;
+}
+
+export function CarouselTemplatesLadder({ scope = "pos", eventId = null }: CarouselTemplatesLadderProps = {}) {
   const [numbers, setNumbers] = useState<MetaNumber[]>([]);
   const [numberId, setNumberId] = useState<string>("");
   const [models, setModels] = useState<string[]>([]);
@@ -136,7 +141,8 @@ export function CarouselTemplatesLadder() {
     const { data } = await supabase
       .from("templates_carrossel")
       .select("nome")
-      .eq("whatsapp_number_id", numberId);
+      .eq("whatsapp_number_id", numberId)
+      .eq("scope", scope);
     const names = Array.from(
       new Set((data || []).map((r: { nome: string | null }) => (r.nome || "Padrão").trim())),
     );
@@ -150,6 +156,7 @@ export function CarouselTemplatesLadder() {
       .from("templates_carrossel")
       .select("*")
       .eq("whatsapp_number_id", numberId)
+      .eq("scope", scope)
       .order("nome", { ascending: true });
     const map: Record<number, LadderRow[]> = {};
     (data || []).forEach((r: LadderRow) => {
@@ -185,7 +192,7 @@ export function CarouselTemplatesLadder() {
   useEffect(() => { loadNumbers(); loadSellers(); }, []);
 
   // When the instance changes, reload its models + ladder.
-  useEffect(() => { loadModels(); loadRows(); }, [numberId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadModels(); loadRows(); }, [numberId, scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -255,6 +262,8 @@ export function CarouselTemplatesLadder() {
           topBody: top,
           cardBody: legend,
           cards: buildCards(qtd),
+          scope,
+          eventId,
         },
       });
       if (error) throw error;

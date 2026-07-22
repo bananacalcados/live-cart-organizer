@@ -35,7 +35,12 @@ serve(async (req) => {
       cardBody,
       cards: cardsInput,
       modelo,
+      scope: scopeInput,
+      eventId,
     } = body as Record<string, unknown>;
+
+    const scope = scopeInput === "event" ? "event" : "pos";
+    const eventIdVal = typeof eventId === "string" && eventId ? eventId : null;
 
     const modelName = (typeof modelo === "string" && modelo.trim()) ? modelo.trim() : "Padrão";
     const modelSlug = modelName
@@ -96,10 +101,11 @@ serve(async (req) => {
 
     // 3) Monta os componentes do carrossel.
     const lang = (language as string) || 'pt_BR';
+    const prefix = scope === "event" ? "evento_" : "";
     const name = (templateName as string) ||
       (modelSlug === "padrao"
-        ? `carrossel_escada_${cards}cards`
-        : `carrossel_${modelSlug}_${cards}cards`);
+        ? `${prefix}carrossel_escada_${cards}cards`
+        : `${prefix}carrossel_${modelSlug}_${cards}cards`);
 
     const textComponent = (comp: TextComp) => {
       const c: Record<string, unknown> = { type: 'BODY', text: comp.text };
@@ -161,8 +167,10 @@ serve(async (req) => {
         aprovado: metaStatus === 'APPROVED',
         meta_status: metaStatus,
         whatsapp_number_id: (whatsappNumberId as string) || null,
+        scope,
+        event_id: eventIdVal,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'whatsapp_number_id,nome,qtd_cards' });
+      }, { onConflict: 'scope,whatsapp_number_id,nome,qtd_cards' });
     if (upErr) {
       console.error('Upsert templates_carrossel error:', upErr);
       return json({ error: 'Template criado na Meta, mas falhou ao salvar na escada', details: upErr.message }, 500);

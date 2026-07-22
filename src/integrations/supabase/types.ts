@@ -16679,11 +16679,13 @@ export type Database = {
           aprovado: boolean
           category_last_synced_at: string | null
           created_at: string
+          event_id: string | null
           id: string
           meta_status: string
           nome: string
           observacao: string | null
           qtd_cards: number
+          scope: string
           template_category: string | null
           template_id: string
           template_language: string
@@ -16694,11 +16696,13 @@ export type Database = {
           aprovado?: boolean
           category_last_synced_at?: string | null
           created_at?: string
+          event_id?: string | null
           id?: string
           meta_status?: string
           nome?: string
           observacao?: string | null
           qtd_cards: number
+          scope?: string
           template_category?: string | null
           template_id: string
           template_language?: string
@@ -16709,11 +16713,13 @@ export type Database = {
           aprovado?: boolean
           category_last_synced_at?: string | null
           created_at?: string
+          event_id?: string | null
           id?: string
           meta_status?: string
           nome?: string
           observacao?: string | null
           qtd_cards?: number
+          scope?: string
           template_category?: string | null
           template_id?: string
           template_language?: string
@@ -16721,6 +16727,13 @@ export type Database = {
           whatsapp_number_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "templates_carrossel_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "templates_carrossel_whatsapp_number_id_fkey"
             columns: ["whatsapp_number_id"]
@@ -20561,11 +20574,13 @@ export type Database = {
           aprovado: boolean
           category_last_synced_at: string | null
           created_at: string
+          event_id: string | null
           id: string
           meta_status: string
           nome: string
           observacao: string | null
           qtd_cards: number
+          scope: string
           template_category: string | null
           template_id: string
           template_language: string
