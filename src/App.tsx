@@ -39,7 +39,9 @@ const DoseTriplaCatalog = lazy(() => import("./pages/DoseTriplaCatalog"));
 const StoreCheckout = lazy(() => import("./pages/StoreCheckout"));
 const LinkPageView = lazy(() => import("./pages/LinkPageView"));
 const VipGroupRedirectPage = lazy(() => import("./pages/VipGroupRedirectPage"));
+const LiveRedirectPage = lazy(() => import("./pages/LiveRedirectPage"));
 const LiveConsumidorLP = lazy(() => import("./pages/LiveConsumidorLP"));
+
 const CatalogLeadPage = lazy(() => import("./pages/CatalogLeadPage"));
 const EventCatalogPage = lazy(() => import("./pages/EventCatalogPage"));
 const EmailMarketing = lazy(() => import("./pages/EmailMarketing"));
@@ -94,7 +96,9 @@ const App = () => (
               <Route path="/cat/:slug" element={<CatalogLeadPage />} />
               <Route path="/evento/:slug" element={<EventCatalogPage />} />
               <Route path="/vip/:slug" element={<VipGroupRedirectPage />} />
+              <Route path="/ao-vivo/:slug" element={<LiveRedirectPage />} />
               <Route path="/live-consumidor" element={<LiveConsumidorLP />} />
+
               <Route path="/live-ortopedicos" element={<LiveOrtopedicosLP />} />
               <Route path="/live-ortopedicos-abril" element={<LiveOrtopedicosAbrilLP />} />
               <Route path="/r/:token" element={<ReviewReferralPage />} />

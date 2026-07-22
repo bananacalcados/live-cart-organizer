@@ -712,25 +712,9 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
           )}
 
           {currentStep.key === "live" && (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Ative a Live para que os comentários ao vivo do Instagram cheguem neste evento em
-                tempo real. (Expira automaticamente em 8h e pode ser religada.)
-              </p>
-              <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-4">
-                <div className="flex items-center gap-2">
-                  <Radio className="h-5 w-5 text-accent" />
-                  <div>
-                    <div className="text-sm font-medium">Comentários da Live</div>
-                    <div className="text-xs text-muted-foreground">
-                      Liga o recebimento ao vivo dos comentários do Instagram.
-                    </div>
-                  </div>
-                </div>
-                <LiveActiveToggleButton eventId={event.id} size="default" />
-              </div>
-            </div>
+            <LiveActivationStep event={event} />
           )}
+
         </div>
 
         {/* Footer navigation */}
