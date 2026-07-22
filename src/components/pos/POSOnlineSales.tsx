@@ -634,6 +634,7 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
     setDiscountValue("");
     setDiscountType("fixed");
     setShippingValue("");
+    setCheckoutNoInterestInstallments("");
     setHasGift(false);
     setGiftDescription("");
   };
