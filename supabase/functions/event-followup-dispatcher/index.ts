@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
         sent++;
       } else if (cfg.channel === "instagram") {
         if (!ord.instagram_username) { await markSkipped(supabase, row.id, "no_ig_username"); skipped++; continue; }
-        const resp = await fetch(`${SUPABASE_URL}/functions/v1/instagram-send-dm`, {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/instagram-dm-send`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
