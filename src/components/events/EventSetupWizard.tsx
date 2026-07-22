@@ -699,6 +699,17 @@ export function EventSetupWizard({ event, open, onOpenChange, onCompleted }: Pro
           )}
 
 
+          {currentStep.key === "followups" && (
+            <div className="space-y-3">
+              {event?.id ? (
+                <EventFollowupsManager eventId={event.id} />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Salve o evento (avançando pelos passos anteriores) para configurar follow-ups.
+                </p>
+              )}
+            </div>
+          )}
 
           {currentStep.key === "live" && (
             <div className="space-y-4">
