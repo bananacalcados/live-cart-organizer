@@ -101,10 +101,11 @@ serve(async (req) => {
 
     // 3) Monta os componentes do carrossel.
     const lang = (language as string) || 'pt_BR';
+    const prefix = scope === "event" ? "evento_" : "";
     const name = (templateName as string) ||
       (modelSlug === "padrao"
-        ? `carrossel_escada_${cards}cards`
-        : `carrossel_${modelSlug}_${cards}cards`);
+        ? `${prefix}carrossel_escada_${cards}cards`
+        : `${prefix}carrossel_${modelSlug}_${cards}cards`);
 
     const textComponent = (comp: TextComp) => {
       const c: Record<string, unknown> = { type: 'BODY', text: comp.text };
