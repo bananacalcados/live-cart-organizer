@@ -167,8 +167,10 @@ serve(async (req) => {
         aprovado: metaStatus === 'APPROVED',
         meta_status: metaStatus,
         whatsapp_number_id: (whatsappNumberId as string) || null,
+        scope,
+        event_id: eventIdVal,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'whatsapp_number_id,nome,qtd_cards' });
+      }, { onConflict: 'scope,whatsapp_number_id,nome,qtd_cards' });
     if (upErr) {
       console.error('Upsert templates_carrossel error:', upErr);
       return json({ error: 'Template criado na Meta, mas falhou ao salvar na escada', details: upErr.message }, 500);
