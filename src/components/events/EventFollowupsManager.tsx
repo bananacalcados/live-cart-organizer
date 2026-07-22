@@ -136,7 +136,7 @@ function ConfigCard({
 }: {
   config: Config; idx: number;
   numbers: { id: string; label: string }[];
-  templates: { name: string; language: string }[];
+  templates: { name: string; language: string; category?: string }[];
   onChange: (patch: Partial<Config>) => void;
   onRemove: () => void;
 }) {
