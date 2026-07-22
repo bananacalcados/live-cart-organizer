@@ -147,6 +147,7 @@ export function LiveRedirectManager() {
 
   return (
     <div className="space-y-4">
+      <LiveBroadcastBanner />
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Radio className="h-5 w-5 text-accent" />
