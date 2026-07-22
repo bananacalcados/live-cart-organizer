@@ -78,7 +78,12 @@ export function EventFollowupsManager({ eventId }: { eventId: string }) {
   };
 
   const saveAll = async () => {
-    const payload = configs.map((c, i) => ({ ...c, order_index: i }));
+    const payload = configs.map((c, i) => {
+      const { id, ...rest } = c;
+      const row: any = { ...rest, order_index: i };
+      if (id) row.id = id; // só inclui id quando existe (evita null → not-null violation)
+      return row;
+    });
     const { error } = await supabase.from("event_followup_configs").upsert(payload).select();
     if (error) return toast.error(`Erro: ${error.message}`);
     const { data: refreshed } = await supabase.from("event_followup_configs").select("*").eq("event_id", eventId).order("order_index");
