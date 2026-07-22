@@ -482,16 +482,27 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
                             />
                             {card.uploading && <Loader2 className="h-4 w-4 animate-spin" />}
                           </div>
-                          <Input
-                            className="mt-1"
-                            placeholder="…ou cole uma URL de imagem"
-                            value={card.imageUrl}
-                            onChange={(e) =>
-                              setCards((prev) =>
-                                prev.map((c, i) => (i === idx ? { ...c, imageUrl: e.target.value } : c)),
-                              )
-                            }
-                          />
+                          <div className="flex gap-2 mt-1">
+                            <Input
+                              placeholder="…ou cole uma URL de imagem"
+                              value={card.imageUrl}
+                              onChange={(e) =>
+                                setCards((prev) =>
+                                  prev.map((c, i) => (i === idx ? { ...c, imageUrl: e.target.value } : c)),
+                                )
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-xs shrink-0"
+                              onClick={() => setShopifyPickerIdx(idx)}
+                            >
+                              <Store className="h-3.5 w-3.5" />
+                              Shopify
+                            </Button>
+                          </div>
                         </div>
 
                         {cardBodyText && (
@@ -502,29 +513,48 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName, o
                             {card.bodyVars.map((v, i) => (
                               <div key={i} className="space-y-1">
                                 <Label className="text-xs">Variável {`{{${i + 1}}}`}</Label>
-                                <Textarea
-                                  rows={2}
-                                  value={v}
-                                  onChange={(e) =>
-                                    setCards((prev) =>
-                                      prev.map((c, j) =>
-                                        j === idx
-                                          ? {
-                                              ...c,
-                                              bodyVars: c.bodyVars.map((x, k) =>
-                                                k === i ? e.target.value : x,
-                                              ),
-                                            }
-                                          : c,
-                                      ),
-                                    )
-                                  }
-                                  placeholder={`Valor para {{${i + 1}}}`}
-                                />
+                                <div className="flex gap-2 items-start">
+                                  <Textarea
+                                    rows={2}
+                                    value={v}
+                                    onChange={(e) =>
+                                      setCards((prev) =>
+                                        prev.map((c, j) =>
+                                          j === idx
+                                            ? {
+                                                ...c,
+                                                bodyVars: c.bodyVars.map((x, k) =>
+                                                  k === i ? e.target.value : x,
+                                                ),
+                                              }
+                                            : c,
+                                        ),
+                                      )
+                                    }
+                                    placeholder={`Valor para {{${i + 1}}}`}
+                                  />
+                                  <VarPicker
+                                    onPick={(val) =>
+                                      setCards((prev) =>
+                                        prev.map((c, j) =>
+                                          j === idx
+                                            ? {
+                                                ...c,
+                                                bodyVars: c.bodyVars.map((x, k) =>
+                                                  k === i ? (x ? `${x} ${val}` : val) : x,
+                                                ),
+                                              }
+                                            : c,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </div>
                               </div>
                             ))}
                           </div>
                         )}
+
                       </div>
                     );
                   })}
