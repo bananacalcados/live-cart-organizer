@@ -43,6 +43,24 @@ serve(async (req) => {
     const r = await uazapiInstance("/send/text", token, { method: "POST", body: payload });
     if (!r.ok) {
       console.error("uazapi send error:", r.data);
+      const detailMsg = String(r.data?.error || r.data?.message || "").toLowerCase();
+      const notOnWhatsapp =
+        detailMsg.includes("not on whatsapp") ||
+        detailMsg.includes("is not on whatsapp") ||
+        detailMsg.includes("não está no whatsapp");
+      if (notOnWhatsapp) {
+        return new Response(
+          JSON.stringify({
+            error: "number_not_on_whatsapp",
+            message: "Este número não possui WhatsApp.",
+            details: r.data,
+          }),
+          {
+            status: 422,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
       return new Response(JSON.stringify({ error: "Failed to send message", details: r.data }), {
         status: r.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
