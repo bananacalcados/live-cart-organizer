@@ -35,7 +35,12 @@ serve(async (req) => {
       cardBody,
       cards: cardsInput,
       modelo,
+      scope: scopeInput,
+      eventId,
     } = body as Record<string, unknown>;
+
+    const scope = scopeInput === "event" ? "event" : "pos";
+    const eventIdVal = typeof eventId === "string" && eventId ? eventId : null;
 
     const modelName = (typeof modelo === "string" && modelo.trim()) ? modelo.trim() : "Padrão";
     const modelSlug = modelName
