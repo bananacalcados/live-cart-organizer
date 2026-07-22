@@ -71,16 +71,16 @@ export function WhatsAppChatDialog({
   } as unknown as DbOrder;
 
   const dialogClass = wide
-    ? "max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden gap-0 border-0 bg-transparent shadow-2xl"
-    : "max-w-md h-[600px] p-0 overflow-hidden gap-0 border-0 bg-transparent shadow-2xl";
+    ? "max-w-5xl sm:max-w-5xl w-[95vw] h-[85vh] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block"
+    : "max-w-md sm:max-w-md w-[95vw] h-[600px] p-0 gap-0 overflow-hidden border bg-background shadow-2xl block";
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className={dialogClass}>
-          <div className="flex h-full w-full">
+          <div className="flex h-full w-full bg-background">
             {withSidebar && (
-              <aside className="flex w-16 flex-col items-stretch gap-1 border-r border-border/50 bg-card/95 px-1.5 py-3 backdrop-blur">
+              <aside className="flex w-16 shrink-0 flex-col items-stretch gap-1 border-r border-border/50 bg-card px-1.5 py-3">
                 <SidebarButton icon={IdCard} label="Ficha" onClick={() => setFichaOpen(true)} />
                 <SidebarButton
                   icon={ClipboardList}
@@ -113,7 +113,7 @@ export function WhatsAppChatDialog({
                 />
               </aside>
             )}
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 h-full">
               <WhatsAppChat order={order} onBack={() => onOpenChange(false)} />
             </div>
           </div>
