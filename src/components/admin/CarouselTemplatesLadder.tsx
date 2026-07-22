@@ -192,7 +192,7 @@ export function CarouselTemplatesLadder({ scope = "pos", eventId = null }: Carou
   useEffect(() => { loadNumbers(); loadSellers(); }, []);
 
   // When the instance changes, reload its models + ladder.
-  useEffect(() => { loadModels(); loadRows(); }, [numberId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadModels(); loadRows(); }, [numberId, scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
