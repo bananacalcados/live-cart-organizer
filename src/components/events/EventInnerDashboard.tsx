@@ -118,7 +118,7 @@ export function EventInnerDashboard({ eventId }: Props) {
   ];
 
   return (
-    <div className="container py-2">
+    <div className="container py-2 space-y-2">
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
         {metrics.map((m) => (
           <Card key={m.label} className="p-3">
@@ -131,6 +131,7 @@ export function EventInnerDashboard({ eventId }: Props) {
           </Card>
         ))}
       </div>
+      <EventBuyerOriginMatrix eventId={eventId} />
     </div>
   );
 }
