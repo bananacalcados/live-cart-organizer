@@ -1037,6 +1037,23 @@ export function POSOnlineSales({ storeId, sellers }: Props) {
                   min="0"
                   step="0.01"
                 />
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    💳 Parcelas sem juros no link de checkout (opcional)
+                  </Label>
+                  <Input
+                    type="number"
+                    placeholder="Padrão da loja (ex.: 6x)"
+                    value={checkoutNoInterestInstallments}
+                    onChange={e => setCheckoutNoInterestInstallments(e.target.value.replace(/\D/g, "").slice(0, 2))}
+                    className="h-8 text-xs"
+                    min={1}
+                    max={12}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Aplica somente ao botão "Checkout Loja". Vazio = usar padrão.
+                  </p>
+                </div>
                 {(discountAmount > 0 || shippingAmount > 0) && (
                   <div className="space-y-0.5 px-1">
                     <div className="flex justify-between text-xs">
