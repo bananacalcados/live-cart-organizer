@@ -8,7 +8,7 @@ import { Order } from "@/types/order";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { OrderDetailsDialog } from "./OrderDetailsDialog";
 import { CreateSupportTicketDialog } from "./CreateSupportTicketDialog";
-import { Sparkles, IdCard, ClipboardList, Headphones, Images } from "lucide-react";
+import { IdCard, ClipboardList, Headphones, Images } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import type { DbOrder } from "@/types/database";
@@ -17,7 +17,7 @@ interface WhatsAppChatDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   order: Order;
-  /** Renders wider/taller layout with a vertical sidebar of quick actions (Events module). */
+  /** Wider/taller layout with a vertical sidebar of quick actions (Events module). */
   wide?: boolean;
   /** Show the vertical action sidebar. Defaults to `wide`. */
   showSidebar?: boolean;
@@ -26,8 +26,10 @@ interface WhatsAppChatDialogProps {
 interface SidebarButtonProps {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  onClick: () => void;
+  onClick?: () => void;
   tone?: "default" | "accent";
+  asChild?: boolean;
+  children?: React.ReactNode;
 }
 
 function SidebarButton({ icon: Icon, label, onClick, tone = "default" }: SidebarButtonProps) {
@@ -37,7 +39,7 @@ function SidebarButton({ icon: Icon, label, onClick, tone = "default" }: Sidebar
       onClick={onClick}
       title={label}
       className={cn(
-        "group flex w-full flex-col items-center gap-1 rounded-lg px-1.5 py-2 text-[10px] font-medium transition-colors",
+        "flex w-full flex-col items-center gap-1 rounded-lg px-1.5 py-2 text-[10px] font-medium transition-colors",
         tone === "accent"
           ? "bg-accent/10 text-accent hover:bg-accent/20"
           : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -59,7 +61,6 @@ export function WhatsAppChatDialog({
   const withSidebar = showSidebar ?? wide;
   const [fichaOpen, setFichaOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [supportOpen, setSupportOpen] = useState(false);
 
   const fichaOrder = {
     id: order.id,
@@ -80,11 +81,7 @@ export function WhatsAppChatDialog({
           <div className="flex h-full w-full">
             {withSidebar && (
               <aside className="flex w-16 flex-col items-stretch gap-1 border-r border-border/50 bg-card/95 px-1.5 py-3 backdrop-blur">
-                <SidebarButton
-                  icon={IdCard}
-                  label="Ficha"
-                  onClick={() => setFichaOpen(true)}
-                />
+                <SidebarButton icon={IdCard} label="Ficha" onClick={() => setFichaOpen(true)} />
                 <SidebarButton
                   icon={ClipboardList}
                   label="Pedido"
@@ -100,14 +97,23 @@ export function WhatsAppChatDialog({
                     })
                   }
                 />
-                <SidebarButton
-                  icon={Headphones}
-                  label="Suporte"
-                  onClick={() => setSupportOpen(true)}
+                <CreateSupportTicketDialog
+                  phone={order.whatsapp}
+                  customerName={order.instagramHandle || undefined}
+                  trigger={
+                    <button
+                      type="button"
+                      title="Suporte"
+                      className="flex w-full flex-col items-center gap-1 rounded-lg px-1.5 py-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <Headphones className="h-5 w-5" />
+                      <span className="leading-tight">Suporte</span>
+                    </button>
+                  }
                 />
               </aside>
             )}
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 flex-1">
               <WhatsAppChat order={order} onBack={() => onOpenChange(false)} />
             </div>
           </div>
@@ -124,22 +130,6 @@ export function WhatsAppChatDialog({
             fallbackWhatsapp={order.whatsapp}
             fallbackInstagram={order.instagramHandle}
           />
-          {supportOpen && (
-            <CreateSupportTicketDialog
-              phone={order.whatsapp}
-              customerName={order.instagramHandle || undefined}
-              trigger={
-                <button
-                  ref={(el) => {
-                    // auto-open once mounted
-                    if (el && supportOpen) el.click();
-                  }}
-                  className="hidden"
-                />
-              }
-              onCreated={() => setSupportOpen(false)}
-            />
-          )}
         </>
       )}
     </>
