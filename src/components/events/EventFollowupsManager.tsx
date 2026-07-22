@@ -230,8 +230,8 @@ function ConfigCard({
               <div className="flex items-center justify-between">
                 <Label>Mensagem DM</Label>
                 <Select value="" onValueChange={insertIgToken}>
-                  <SelectTrigger className="w-[240px] h-8">
-                    <SelectValue placeholder={<span className="flex items-center gap-1 text-xs"><Variable className="h-3 w-3" /> Inserir variável</span> as any} />
+                  <SelectTrigger className="w-[220px] h-8 text-xs">
+                    <div className="flex items-center gap-1"><Variable className="h-3 w-3" /> Inserir variável</div>
                   </SelectTrigger>
                   <SelectContent>
                     {AVAILABLE_TOKENS.map((t) => (
