@@ -75,7 +75,7 @@ export function EventCrossellDialog({ open, onOpenChange, phone, customerName }:
 
   const numberId = boundNumberId || effectiveNumberId;
   const numberLabel =
-    boundNumber?.display_name || effectiveNumber?.display_name || numbers.find((n) => n.id === numberId)?.display_name || "instância";
+    boundNumber?.label || effectiveNumber?.label || numbers.find((n) => n.id === numberId)?.label || "instância";
 
   const [templates, setTemplates] = useState<DbTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
