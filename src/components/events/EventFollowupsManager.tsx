@@ -131,6 +131,18 @@ export function EventFollowupsManager({ eventId }: { eventId: string }) {
   );
 }
 
+function CategoryBadge({ category }: { category: string }) {
+  const c = category.toUpperCase();
+  const map: Record<string, { label: string; cls: string }> = {
+    UTILITY: { label: "UTILIDADE", cls: "bg-blue-100 text-blue-700 border-blue-200" },
+    MARKETING: { label: "MARKETING", cls: "bg-orange-100 text-orange-700 border-orange-200" },
+    AUTHENTICATION: { label: "SERVIÇO", cls: "bg-green-100 text-green-700 border-green-200" },
+    SERVICE: { label: "SERVIÇO", cls: "bg-green-100 text-green-700 border-green-200" },
+  };
+  const m = map[c] || { label: c, cls: "bg-muted text-muted-foreground border-border" };
+  return <span className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold ${m.cls}`}>{m.label}</span>;
+}
+
 function ConfigCard({
   config, idx, numbers, templates, onChange, onRemove,
 }: {
