@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
 
   const { data: due, error } = await supabase
     .from("event_followup_dispatches")
-    .select("*, config:event_followup_configs(*), order:orders(id,is_paid,stage,phone,customer_id,customer_unified_id,event_id,last_customer_message_at,cart_link,checkout_token,products,discount_value,shipping_cost,event:events(whatsapp_number_id))")
+    .select("*, config:event_followup_configs(*), order:orders(id,is_paid,stage,customer_id,customer_unified_id,event_id,last_customer_message_at,cart_link,checkout_token,products,discount_value,shipping_cost,event:events(whatsapp_number_id))")
     .eq("status", "pending")
     .lte("scheduled_at", nowIso)
     .order("scheduled_at", { ascending: true })
