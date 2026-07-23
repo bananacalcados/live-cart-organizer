@@ -18,6 +18,7 @@ import { ptBR } from "date-fns/locale";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
+import { EventBuyerOriginMatrix } from "./EventBuyerOriginMatrix";
 
 type PeriodFilter = "day" | "week" | "month" | "quarter" | "semester" | "year" | "custom";
 type StoreFilter = "all" | "site" | "pos_perola" | "pos_centro";
