@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
 
   const { data: due, error } = await supabase
     .from("event_followup_dispatches")
-    .select("*, config:event_followup_configs(*), order:orders(id,is_paid,stage,phone,customer_id,customer_unified_id,event_id,last_customer_message_at,cart_link,checkout_token,products,discount_value,shipping_cost,event:events(whatsapp_number_id))")
+    .select("*, config:event_followup_configs(*), order:orders(id,is_paid,stage,customer_id,customer_unified_id,event_id,last_customer_message_at,cart_link,checkout_token,products,discount_value,shipping_cost,event:events(whatsapp_number_id))")
     .eq("status", "pending")
     .lte("scheduled_at", nowIso)
     .order("scheduled_at", { ascending: true })
@@ -56,30 +56,33 @@ Deno.serve(async (req) => {
     // Enrich: customer + ig handle
     let customerName = "";
     let igHandle = "";
+    let phone = "";
     if (ord.customer_id) {
       const { data: c } = await supabase.from("customers")
-        .select("name, instagram_handle").eq("id", ord.customer_id).maybeSingle();
-      customerName = (c as any)?.name || "";
+        .select("instagram_handle, whatsapp").eq("id", ord.customer_id).maybeSingle();
       igHandle = (c as any)?.instagram_handle || "";
+      phone = (c as any)?.whatsapp || "";
     }
-    if ((!customerName || !igHandle) && ord.customer_unified_id) {
+    if ((!phone || !igHandle) && ord.customer_unified_id) {
       const { data: cu } = await supabase.from("customers_unified")
-        .select("instagram_handle").eq("id", ord.customer_unified_id).maybeSingle();
+        .select("name, instagram_handle, phone_e164").eq("id", ord.customer_unified_id).maybeSingle();
+      customerName = customerName || (cu as any)?.name || "";
       igHandle = igHandle || (cu as any)?.instagram_handle || "";
+      phone = phone || (cu as any)?.phone_e164 || "";
     }
 
     const ctx = buildTokenContext(ord, customerName, igHandle);
 
     try {
       if (cfg.channel === "whatsapp") {
-        if (!ord.phone || !cfg.template_name) {
-          await markSkipped(supabase, row.id, !ord.phone ? "no_phone" : "no_template"); skipped++; continue;
+        if (!phone || !cfg.template_name) {
+          await markSkipped(supabase, row.id, !phone ? "no_phone" : "no_template"); skipped++; continue;
         }
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/meta-whatsapp-send-template`, {
           method: "POST",
           headers: { "Authorization": `Bearer ${SERVICE_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            phone: ord.phone,
+            phone,
             templateName: cfg.template_name,
             language: cfg.template_language || "pt_BR",
             whatsappNumberId: cfg.whatsapp_number_id || ord.event?.whatsapp_number_id || null,
