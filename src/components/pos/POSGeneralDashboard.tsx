@@ -109,7 +109,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [salesRows, setSalesRows] = useState<any[]>([]);
   const [goals, setGoals] = useState<GoalRow[]>([]);
-  const [paymentModal, setPaymentModal] = useState<{ open: boolean; bucket: string }>({ open: false, bucket: "" });
+  const [paymentModal, setPaymentModal] = useState<{ open: boolean; bucket: string; storeId?: string | null }>({ open: false, bucket: "", storeId: null });
   const [expandedStore, setExpandedStore] = useState<string | null>(null);
 
   const periodRange = useMemo(() => {
@@ -286,7 +286,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
   // Sales filtered by current modal bucket
   const modalSales = useMemo(() => {
     if (!paymentModal.open) return [];
-    return salesRows.filter(r => bucketPayment(r.payment_method, r.sale_type) === paymentModal.bucket);
+    return salesRows.filter(r =>
+      bucketPayment(r.payment_method, r.sale_type) === paymentModal.bucket &&
+      (!paymentModal.storeId || r.store_id === paymentModal.storeId)
+    );
   }, [paymentModal, salesRows]);
 
   // Per-store payment breakdown
@@ -692,7 +695,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
                                   <button
                                     key={p.name}
                                     type="button"
-                                    onClick={() => setPaymentModal({ open: true, bucket: p.name })}
+                                    onClick={() => setPaymentModal({ open: true, bucket: p.name, storeId: s.id })}
                                     className={`text-left bg-gradient-to-br ${style.gradient} border border-zinc-700/60 rounded p-2 hover:border-zinc-500 transition-colors`}
                                   >
                                     <div className="flex items-center gap-1 mb-0.5">
@@ -733,8 +736,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
 
       <POSPaymentSalesModal
         open={paymentModal.open}
-        onClose={() => setPaymentModal({ open: false, bucket: "" })}
-        title={`Vendas — ${paymentModal.bucket}`}
+        onClose={() => setPaymentModal({ open: false, bucket: "", storeId: null })}
+        title={`Vendas — ${paymentModal.bucket}${paymentModal.storeId ? ` · ${storesById.get(paymentModal.storeId) || ""}` : ""}`}
         bucketName={paymentModal.bucket}
         sales={modalSales}
         storesById={storesById}
