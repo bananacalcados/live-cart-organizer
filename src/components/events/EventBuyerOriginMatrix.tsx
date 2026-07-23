@@ -293,12 +293,16 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
   );
 }
 
+const brl = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 function OriginTile({
   label,
   value,
   total,
   icon: Icon,
   tone,
+  subtitle,
   onClick,
 }: {
   label: string;
@@ -306,6 +310,7 @@ function OriginTile({
   total: number;
   icon: any;
   tone: string;
+  subtitle?: string;
   onClick: () => void;
 }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
@@ -322,6 +327,10 @@ function OriginTile({
       </div>
       <p className="text-xl font-bold leading-tight">{value}</p>
       <p className="text-[10px] text-muted-foreground">{pct}% do total</p>
+      {subtitle && (
+        <p className="text-[10px] font-medium text-primary mt-0.5">{subtitle}</p>
+      )}
     </button>
   );
 }
+
