@@ -295,6 +295,20 @@ export function EventsDashboard() {
               </CardContent>
             </Card>
           )}
+
+          {/* Matriz agregada de compradores por origem (todos os eventos do período) */}
+          {(() => {
+            const [from, to] = getDateRange(period, customFrom, customTo);
+            return (
+              <EventBuyerOriginMatrix
+                range={{
+                  from: from.toISOString(),
+                  to: to.toISOString(),
+                  channel: store === "all" ? null : store,
+                }}
+              />
+            );
+          })()}
         </>
       )}
     </div>
