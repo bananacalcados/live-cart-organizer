@@ -10,10 +10,12 @@ import {
 } from "./EventOriginDrilldownDialog";
 
 interface Props {
-  eventId: string;
+  eventId?: string;
+  range?: { from: string; to: string; channel?: string | null };
 }
 
 interface MatrixData {
+  events_count?: number;
   buyers: {
     total: number;
     lead_first_purchase: number;
@@ -39,7 +41,7 @@ interface DrilldownState {
   title: string;
 }
 
-export function EventBuyerOriginMatrix({ eventId }: Props) {
+export function EventBuyerOriginMatrix({ eventId, range }: Props) {
   const [data, setData] = useState<MatrixData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,14 +53,17 @@ export function EventBuyerOriginMatrix({ eventId }: Props) {
   });
 
   const load = useCallback(async () => {
-    if (!eventId) return;
+    if (!eventId && !range) return;
     setLoading(true);
     setError(null);
     try {
-      const { data: res, error } = await supabase.rpc(
-        "event_buyer_origin_matrix" as any,
-        { p_event_id: eventId },
-      );
+      const { data: res, error } = eventId
+        ? await supabase.rpc("event_buyer_origin_matrix" as any, { p_event_id: eventId })
+        : await supabase.rpc("events_buyer_origin_matrix_range" as any, {
+            p_from: range!.from,
+            p_to: range!.to,
+            p_channel: range!.channel ?? null,
+          });
       if (error) throw error;
       setData(res as unknown as MatrixData);
     } catch (e: any) {
@@ -66,7 +71,7 @@ export function EventBuyerOriginMatrix({ eventId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [eventId]);
+  }, [eventId, range?.from, range?.to, range?.channel]);
 
   useEffect(() => {
     load();
