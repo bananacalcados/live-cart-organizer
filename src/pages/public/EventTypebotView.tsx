@@ -8,11 +8,23 @@ import { Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { initMetaPixel, trackPageView, trackPixelEvent } from '@/lib/metaPixel';
 
+interface StepOption { label: string; value: string; }
+interface StepCondition {
+  allowed_values?: string[];
+  on_fail?: 'end_flow' | 'skip_to_step';
+  fail_message?: string;
+  skip_to_step_id?: string;
+  save_lead_when_disqualified?: boolean;
+}
 interface Step {
   id: string;
-  type: 'message' | 'ask_name' | 'ask_phone' | 'final';
+  type: 'message' | 'ask_name' | 'ask_phone' | 'ask_choice' | 'ask_multichoice' | 'final';
   text: string;
   placeholder?: string;
+  field_key?: string;
+  options?: StepOption[];
+  required?: boolean;
+  condition?: StepCondition | null;
 }
 
 interface TypebotData {
@@ -39,8 +51,10 @@ export default function EventTypebotView() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [stepIdx, setStepIdx] = useState(0);
   const [input, setInput] = useState('');
-  const [collected, setCollected] = useState<{ name?: string; phone?: string }>({});
+  const [multiSelected, setMultiSelected] = useState<string[]>([]);
+  const [collected, setCollected] = useState<{ name?: string; phone?: string; custom_fields: Record<string, any> }>({ custom_fields: {} });
   const [done, setDone] = useState<any>(null);
+  const [ended, setEnded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -69,6 +83,11 @@ export default function EventTypebotView() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
+
+  // Reset multi-selection when moving between steps
+  useEffect(() => {
+    setMultiSelected([]);
+  }, [stepIdx]);
 
   // Meta Pixel — PageView on mount
   useEffect(() => {
@@ -99,7 +118,10 @@ export default function EventTypebotView() {
   const steps: Step[] = tb.flow_json?.steps || [];
   const currentStep = steps[stepIdx];
 
-  async function submitFinal(updated: { name?: string; phone?: string }) {
+  async function submitFinal(
+    updated: { name?: string; phone?: string; custom_fields: Record<string, any> },
+    opts: { disqualified?: boolean } = {},
+  ) {
     if (!tb) return;
     setSubmitting(true);
     try {
@@ -115,43 +137,50 @@ export default function EventTypebotView() {
           utm_source: search.get('utm_source'),
           utm_medium: search.get('utm_medium'),
           utm_campaign: search.get('utm_campaign'),
+          custom_fields: updated.custom_fields,
+          disqualified: opts.disqualified === true,
         },
       });
       if (error) throw error;
       setDone(data);
-      setMessages((m) => [...m, { from: 'bot', text: tb.success_message }]);
-
-      // Meta Pixel — Lead (browser + CAPI dedupe via event_id)
-      try {
-        const phoneDigits = (updated.phone || '').replace(/\D/g, '');
-        const today = new Date().toISOString().slice(0, 10);
-        const eventId = `lead_${phoneDigits}_${tb.event_id}_${today}`;
-        trackPixelEvent(
-          'Lead',
-          {
-            content_name: tb.name,
-            content_category: 'typebot_lead',
-            content_ids: [tb.slug],
-          },
-          { eventID: eventId },
-        );
-        supabase.functions.invoke('meta-capi-lead', {
-          body: {
-            phone: phoneDigits,
-            event_name: 'Lead',
-            campaign_id: tb.event_id,
-            campaign_slug: tb.slug,
-            campaign_name: tb.name,
-            full_name: updated.name,
-            source_url: window.location.href,
-          },
-        }).catch((e) => console.warn('[meta-capi-lead] invoke error', e));
-      } catch (e) {
-        console.warn('[typebot-pixel] lead error', e);
+      if (data?.skipped) {
+        // Backend chose not to persist a disqualified lead
+      } else {
+        setMessages((m) => [...m, { from: 'bot', text: tb.success_message }]);
       }
 
-      // Auto-redirect to VIP group immediately if link is configured
-      if (data?.vip_group_link) {
+      // Meta Pixel — Lead (skip when disqualified)
+      if (!opts.disqualified) {
+        try {
+          const phoneDigits = (updated.phone || '').replace(/\D/g, '');
+          const today = new Date().toISOString().slice(0, 10);
+          const eventId = `lead_${phoneDigits}_${tb.event_id}_${today}`;
+          trackPixelEvent(
+            'Lead',
+            {
+              content_name: tb.name,
+              content_category: 'typebot_lead',
+              content_ids: [tb.slug],
+            },
+            { eventID: eventId },
+          );
+          supabase.functions.invoke('meta-capi-lead', {
+            body: {
+              phone: phoneDigits,
+              event_name: 'Lead',
+              campaign_id: tb.event_id,
+              campaign_slug: tb.slug,
+              campaign_name: tb.name,
+              full_name: updated.name,
+              source_url: window.location.href,
+            },
+          }).catch((e) => console.warn('[meta-capi-lead] invoke error', e));
+        } catch (e) {
+          console.warn('[typebot-pixel] lead error', e);
+        }
+      }
+
+      if (data?.vip_group_link && !opts.disqualified) {
         window.location.href = data.vip_group_link;
       }
     } catch (e: any) {
@@ -161,7 +190,26 @@ export default function EventTypebotView() {
     }
   }
 
-  function handleAnswer() {
+  function advanceTo(nextIdx: number, updatedCollected: typeof collected) {
+    setStepIdx(nextIdx);
+    const next = steps[nextIdx];
+    if (next) {
+      setTimeout(() => setMessages((m) => [...m, { from: 'bot', text: next.text }]), 400);
+      if (next.type === 'final') {
+        setTimeout(() => submitFinal(updatedCollected), 800);
+      }
+    } else {
+      submitFinal(updatedCollected);
+    }
+  }
+
+  function commitAnswer(answerLabel: string, updatedCollected: typeof collected) {
+    setCollected(updatedCollected);
+    setMessages((m) => [...m, { from: 'user', text: answerLabel }]);
+    setInput('');
+  }
+
+  function handleTextAnswer() {
     if (!currentStep) return;
     const value = input.trim();
     if (!value) return;
@@ -171,28 +219,74 @@ export default function EventTypebotView() {
       return;
     }
 
-    const newCollected = { ...collected };
-    if (currentStep.type === 'ask_name') newCollected.name = value;
-    if (currentStep.type === 'ask_phone') newCollected.phone = value;
+    const updated = { ...collected, custom_fields: { ...collected.custom_fields } };
+    if (currentStep.type === 'ask_name') updated.name = value;
+    if (currentStep.type === 'ask_phone') updated.phone = value;
 
-    setCollected(newCollected);
-    setMessages((m) => [...m, { from: 'user', text: value }]);
-    setInput('');
-
-    const nextIdx = stepIdx + 1;
-    setStepIdx(nextIdx);
-
-    const next = steps[nextIdx];
-    if (next) {
-      setTimeout(() => setMessages((m) => [...m, { from: 'bot', text: next.text }]), 400);
-      if (next.type === 'final') {
-        setTimeout(() => submitFinal(newCollected), 800);
-      }
-    } else {
-      // No more steps — submit
-      submitFinal(newCollected);
-    }
+    commitAnswer(value, updated);
+    advanceTo(stepIdx + 1, updated);
   }
+
+  function handleChoiceSingle(opt: StepOption) {
+    if (!currentStep) return;
+    const key = currentStep.field_key || `step_${currentStep.id}`;
+    const updated = {
+      ...collected,
+      custom_fields: { ...collected.custom_fields, [key]: opt.value },
+    };
+    commitAnswer(opt.label, updated);
+
+    // Evaluate condition
+    const cond = currentStep.condition;
+    if (cond && Array.isArray(cond.allowed_values) && cond.allowed_values.length > 0) {
+      const passes = cond.allowed_values.includes(opt.value);
+      if (!passes) {
+        const failMsg = cond.fail_message || 'Obrigada pelo interesse!';
+        setTimeout(() => setMessages((m) => [...m, { from: 'bot', text: failMsg }]), 400);
+        if (cond.on_fail === 'skip_to_step' && cond.skip_to_step_id) {
+          const targetIdx = steps.findIndex((s) => s.id === cond.skip_to_step_id);
+          if (targetIdx >= 0) {
+            advanceTo(targetIdx, updated);
+            return;
+          }
+        }
+        // end_flow (default)
+        setEnded(true);
+        if (cond.save_lead_when_disqualified) {
+          setTimeout(() => submitFinal(updated, { disqualified: true }), 600);
+        }
+        return;
+      }
+    }
+
+    advanceTo(stepIdx + 1, updated);
+  }
+
+  function handleChoiceMulti() {
+    if (!currentStep) return;
+    if (currentStep.required && multiSelected.length === 0) {
+      toast.error('Selecione pelo menos uma opção');
+      return;
+    }
+    const opts = currentStep.options || [];
+    const labels = opts.filter((o) => multiSelected.includes(o.value)).map((o) => o.label).join(', ');
+    const key = currentStep.field_key || `step_${currentStep.id}`;
+    const updated = {
+      ...collected,
+      custom_fields: { ...collected.custom_fields, [key]: multiSelected },
+    };
+    commitAnswer(labels || '(nenhuma)', updated);
+    advanceTo(stepIdx + 1, updated);
+  }
+
+  function toggleMulti(value: string) {
+    setMultiSelected((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+  }
+
+  const showTextInput =
+    currentStep && (currentStep.type === 'ask_name' || currentStep.type === 'ask_phone');
+  const showChoiceSingle = currentStep && currentStep.type === 'ask_choice';
+  const showChoiceMulti = currentStep && currentStep.type === 'ask_multichoice';
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: bg }}>
@@ -204,15 +298,13 @@ export default function EventTypebotView() {
         <div
           ref={scrollRef}
           className="flex-1 overflow-y-auto space-y-2 p-2"
-          style={{ maxHeight: 'calc(100vh - 220px)' }}
+          style={{ maxHeight: 'calc(100vh - 260px)' }}
         >
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.from === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`max-w-[80%] rounded-2xl px-4 py-2 whitespace-pre-line prose prose-sm prose-invert max-w-none [&_p]:my-0 ${
-                  m.from === 'user'
-                    ? 'text-slate-900 font-medium'
-                    : 'bg-white/10 text-white'
+                  m.from === 'user' ? 'text-slate-900 font-medium' : 'bg-white/10 text-white'
                 }`}
                 style={m.from === 'user' ? { background: primary } : undefined}
                 dangerouslySetInnerHTML={{ __html: m.text }}
@@ -235,19 +327,67 @@ export default function EventTypebotView() {
               <p className="text-sm text-white/70 mt-2">{tb.success_message}</p>
             )}
           </Card>
-        ) : currentStep && currentStep.type !== 'message' && currentStep.type !== 'final' ? (
+        ) : ended ? (
+          <Card className="bg-white/5 border-white/10 p-4 mt-4 text-white text-center">
+            <p className="text-sm text-white/80">Pode fechar essa janela.</p>
+          </Card>
+        ) : showTextInput ? (
           <div className="flex gap-2 mt-4">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAnswer()}
-              placeholder={currentStep.placeholder || 'Digite aqui...'}
+              onKeyDown={(e) => e.key === 'Enter' && handleTextAnswer()}
+              placeholder={currentStep!.placeholder || 'Digite aqui...'}
               className="bg-white/10 border-white/20 text-white"
               autoFocus
               disabled={submitting}
             />
-            <Button onClick={handleAnswer} style={{ background: primary }} className="text-slate-900" disabled={submitting}>
+            <Button onClick={handleTextAnswer} style={{ background: primary }} className="text-slate-900" disabled={submitting}>
               <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : showChoiceSingle ? (
+          <div className="flex flex-wrap gap-2 mt-4 justify-center">
+            {(currentStep!.options || []).map((opt) => (
+              <Button
+                key={opt.value}
+                onClick={() => handleChoiceSingle(opt)}
+                disabled={submitting}
+                className="text-slate-900"
+                style={{ background: primary }}
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
+        ) : showChoiceMulti ? (
+          <div className="mt-4 space-y-2">
+            <div className="flex flex-wrap gap-2 justify-center">
+              {(currentStep!.options || []).map((opt) => {
+                const active = multiSelected.includes(opt.value);
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => toggleMulti(opt.value)}
+                    disabled={submitting}
+                    className={`px-3 py-1.5 rounded-full text-sm border transition ${
+                      active ? 'text-slate-900' : 'text-white bg-white/10 border-white/20'
+                    }`}
+                    style={active ? { background: primary, borderColor: primary } : undefined}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+            <Button
+              onClick={handleChoiceMulti}
+              disabled={submitting}
+              style={{ background: primary }}
+              className="w-full text-slate-900"
+            >
+              Confirmar
             </Button>
           </div>
         ) : null}

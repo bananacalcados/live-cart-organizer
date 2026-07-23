@@ -1,100 +1,115 @@
 
-# Cross-sell no módulo Eventos + Templates API de carrossel
+# Melhorias no Typebot: Perguntas Estruturadas + Condições de Avanço
 
-Objetivo: replicar (e melhorar) o fluxo de carrossel do PDV > Online > Automações dentro do módulo Eventos, e usar esses templates num novo botão de **Cross-sell** dentro do chat de WhatsApp do evento, que também será redesenhado.
+Duas melhorias no criador de Typebot (Marketing → Eventos → Captação) que não alteram fluxos existentes — todos os steps atuais (`ask_name`, `ask_phone`, `message`, `final`) continuam funcionando exatamente como hoje.
 
----
+## 1. Novos tipos de pergunta (com respostas padronizadas)
 
-## Etapa 1 — Aba "Templates API" no módulo Eventos
+Adicionar 2 novos tipos de step no builder:
 
-Local: nova aba na página principal de Eventos (ao lado de Follow-ups, Redirecionador Live, etc.).
+- **`ask_choice`** — pergunta de escolha única (radio / botões). Ex.: "Você compra online?" → Sim / Não.
+- **`ask_multichoice`** — múltipla escolha (checkboxes). Ex.: "Quais tamanhos você usa?" → 34, 35, 36...
 
-Reaproveitar a base já existente:
-- `carousel-ladder-create` (edge function) — cria template de carrossel na Meta.
-- `templates_carrossel` (tabela) — persistência de degraus.
-- `CampaignCardsEditor.tsx` / `CampaignBuilder.tsx` (PDV) — editor de cards com corpo, legenda por card, quantidade de cards, botões (QUICK_REPLY, URL, PHONE_NUMBER), upload de imagem-exemplo.
-- `MetaTemplateConfigurator.tsx` (Eventos) — picker de variáveis já usado nos follow-ups.
+Cada pergunta desse tipo grava a resposta em um **campo customizado** identificado por uma `field_key` (ex.: `tamanho_calcado`, `cidade`, `compra_online`). O admin escolhe a key ao criar a pergunta ou seleciona uma existente de uma lista de sugestões (tamanho, numeração, cor preferida, cidade, faixa etária…).
 
-O que criar de novo em `src/components/events/`:
-- `EventCarouselTemplatesTab.tsx` — lista de templates carrossel do evento com status (PENDING/APPROVED/REJECTED, puxado ao vivo via `meta-whatsapp-get-templates` como o `EventFollowupsManager` já faz).
-- `EventCarouselTemplateEditor.tsx` — formulário completo:
-  - Seletor de **instância WhatsApp (WABA)** — obrigatório antes de qualquer edição.
-  - Nome do modelo.
-  - Quantidade de cards (2–10).
-  - Corpo do topo com variáveis nomeadas (`{{nome}}`, `{{primeiro_nome}}`, `{{tamanho}}`, `{{vendedora}}`, `{{livre_N}}`) + emojis (reutiliza `EmojiPickerButton` + `MetaTemplateConfigurator`).
-  - Legenda por card (com variáveis).
-  - Botões por card (texto livre + URL / QUICK_REPLY / PHONE_NUMBER).
-  - Upload de imagem-exemplo (usada só para aprovação Meta).
-  - Preview em tempo real usando `CarouselMessageBubble`.
-  - Submissão pela edge `carousel-ladder-create` já pronta.
+### Onde as respostas ficam salvas
 
-Ajustes de dados:
-- Adicionar coluna `scope text default 'pos'` em `templates_carrossel` (`'pos' | 'event'`) e opcionalmente `event_id uuid null` para permitir agrupamento por evento — sem quebrar o PDV (default mantém escopo atual).
-- Aba Templates lista apenas escopo `event`, filtrando por instância selecionada e status ao vivo.
+Uma única coluna nova `event_leads.custom_fields JSONB` (default `'{}'`). Exemplo de conteúdo:
+```json
+{ "tamanho_calcado": "36", "cidade": "Valadares", "compra_online": "sim" }
+```
+Index GIN em `custom_fields` para permitir filtros rápidos.
 
----
+Nada é adicionado às colunas fixas atuais — leads antigos ficam com `{}` e continuam válidos.
 
-## Etapa 2 — Redesign do modal de chat de WhatsApp do Evento
+### Filtro para disparos
 
-Escopo: componente `WhatsAppChat` + wrapper `WhatsAppChatDialog` (usado por `EventPaymentCardsBar`, `EventCustomerOrdersDialog`, `EventLiveCommentsPanel`).
+Na tela de **Disparos → Público** (audience builder) adicionar um novo filtro **"Campo personalizado do Typebot"**:
+- Selecionar `field_key` (lista deduplicada a partir dos typebots existentes).
+- Operador `=`, `≠`, `contém`, `um de [lista]`.
+- Ex.: leads com `tamanho_calcado ∈ {35, 36, 37}` → dispara campanha específica.
 
-Mudanças:
-1. `WhatsAppChatDialog` (Eventos): alargar/aumentar — de `max-w-md h-[600px]` para algo como `max-w-5xl w-[92vw] h-[88vh]`, mantendo comportamento no PDV via prop `size="wide"` (ou novo `EventWhatsAppChatDialog` para não afetar POS).
-2. Nova **barra lateral vertical** dentro de `WhatsAppChat` (renderizada só no modo `event`):
-   - Botões grandes, com ícone + label, agrupados: **Pausar IA**, **Ficha do cliente**, **Ver pedido**, **Editar pedido**, **Checkout**, **PIX**, **Follow-ups**, **Cross-sell (novo)**, **Ticket de suporte**, **Excluir conversa**.
-   - Isso substitui a barra de ícones no topo (que hoje fica apertada), deixando o header limpo.
-3. Manter identidade visual do chat WhatsApp (fundo verde/tinta) e responsivo (colapsa em ícones em telas menores).
+O agente IA de marketing (`propor_publico_lista`) também ganha acesso via nova ferramenta `filter_leads_by_custom_field`.
 
----
+## 2. Condições de avanço / disqualificação
 
-## Etapa 3 — Botão Cross-sell no chat
+Cada pergunta do tipo `ask_choice` ganha campo opcional **"Condição para continuar"**:
+- **Continuar se resposta ∈ [opções permitidas]** → segue o fluxo normal.
+- **Caso contrário** → executa uma ação configurável:
+  - `end_flow`: encerra com mensagem custom (ex.: "Obrigada! Essa promoção é só para Valadares 😊") e **NÃO grava lead** (ou grava com flag `disqualified=true`, à escolha do admin — default: não grava).
+  - `skip_to_step`: pula para um step específico.
 
-Novo componente `EventCrossellDialog.tsx` acionado pelo botão da sidebar. Fluxo:
-1. Detecta a instância vinculada à conversa (`useConversationInstance` → `boundNumberId`).
-2. Busca em `templates_carrossel` **apenas** os templates com `whatsapp_number_id = boundNumberId` **e** escopo `event` **e** `meta_status='APPROVED'`.
-   - Regra reforçada: se a live tem uma instância principal (`events.whatsapp_number_id`), prioriza essa; se o chat estiver em instância diferente, mostra aviso.
-3. Usuário escolhe o template → renderiza `MetaTemplateConfigurator` para o corpo do topo e a legenda de cada card (variáveis nomeadas).
-4. Para cada card, o usuário faz upload da foto do produto:
-   - **Do computador** (input file → `uploadMediaToStorage`, já usado no chat).
-   - **Da Shopify** — abrir um `ShopifyProductPicker` (novo, reaproveitando padrão de `POSTinyProductPicker`/inventário Shopify): busca produtos, mostra thumbs, ao selecionar copia a URL do primeiro asset. Cada card exibe preview 1:1.
-5. Botão "Enviar cross-sell":
-   - Chama `meta-whatsapp-send-template` (edge existente para templates Meta) montando `components` com HEADER IMAGE de cada card (link direto) + BODY com variáveis + botões conforme aprovado.
-   - Grava a mensagem em `whatsapp_messages` com `template_type='carousel'` para o `CarouselMessageBubble` renderizar no histórico.
-   - Respeita `boundNumberId` (guarda anti-cross-instance já existente).
+Ex.: "Você mora em Valadares?" → Não → encerra sem salvar lead → economiza SMS/WhatsApp/estoque de leads inúteis.
 
----
+Nova coluna `event_leads.disqualified BOOLEAN DEFAULT false` (só usada quando admin optar por gravar mesmo assim, para análise).
 
-## Etapa 4 — Detalhes que sugiro incluir para não passar em branco
+## Interface do Builder
 
-- **Segmentação de destinatários** no cross-sell: além de disparo unitário no chat, permitir "disparar para todos os clientes PAGOS deste evento" (filtro `pos_sales.status in ('paid','completed','pending_pickup')` cruzado com `event_id`), reutilizando o `enqueue_dispatch_recipients_guarded` para respeitar quotas anti-ban e Ravena bypass.
-- **Rate limit + quiet hours**: obedecer regras já ativas (`Livete Quiet Hours` 22h–08h) e o motor anti-ban dos disparos.
-- **Métricas do cross-sell**: nova coluna `crossell_id` (opcional) em `dispatch_history` ou tabela dedicada `event_crossell_dispatches` — para medir cliques (via `link_pages_v2` shortlinks nos botões URL), pedidos gerados e faturamento atribuído, integrando com `event_buyer_origin_matrix`.
-- **Prévia real do card antes de enviar** (reusar `CarouselMessageBubble`) e validador que impede envio se algum card ficar sem imagem.
-- **Rotação de vendedora (`{{vendedora}}`)** já existente no PDV — replicar para não perder personalização.
-- **Auditoria**: log em `ai_conversation_logs` de cada envio (quem, template, instância, cliente) para investigação posterior.
-- **Reuso no PDV**: como o editor será igual, deixar `EventCarouselTemplateEditor` genérico com prop `scope`, para futuramente unificar com o do PDV sem duplicar código.
-- **Fallback quando template ainda não foi aprovado**: badge PENDING claro na lista, bloqueando uso no cross-sell.
+Na tela `EventCaptureBuilder`, ao adicionar step:
+- Dropdown de tipo ganha 2 opções novas: **"Escolha única"** e **"Múltipla escolha"**.
+- Painel de edição da pergunta mostra:
+  - Texto da pergunta
+  - `field_key` (input com autocomplete das keys já usadas)
+  - Lista editável de opções (label + value)
+  - Toggle "Obrigatória"
+  - Seção **"Condição"** (só em escolha única): escolher opções válidas + ação se inválido + mensagem final.
 
----
+## Frontend público (`EventTypebotView`)
 
-## Detalhes técnicos (dev)
+- Renderiza botões/checkboxes ao invés do input de texto quando `step.type ∈ ('ask_choice','ask_multichoice')`.
+- Guarda as respostas em `collected.custom_fields`.
+- Avalia condição antes de avançar; se disqualificado, exibe a mensagem final e para (não chama `event-lead-capture`, ou chama com flag `disqualified`).
 
-Arquivos novos:
-- `src/components/events/EventCarouselTemplatesTab.tsx`
-- `src/components/events/EventCarouselTemplateEditor.tsx`
-- `src/components/events/EventCrossellDialog.tsx`
-- `src/components/events/EventWhatsAppSidebar.tsx`
-- `src/components/events/ShopifyProductPicker.tsx`
-- (opcional) `src/components/events/EventWhatsAppChatDialog.tsx` (wrapper wide-mode)
+## Backend (`event-lead-capture`)
 
-Arquivos alterados:
-- `src/components/WhatsAppChat.tsx` — aceitar prop `variant="event"` para renderizar sidebar + slots de ações extras.
-- `src/components/events/EventInnerDashboard.tsx` — nova aba "Templates API".
-- `EventPaymentCardsBar.tsx`, `EventCustomerOrdersDialog.tsx`, `EventLiveCommentsPanel.tsx` — trocar para o dialog wide + `variant="event"`.
+- Aceita novos campos: `custom_fields` (obj) e `disqualified` (bool).
+- Grava em `event_leads.custom_fields` e `event_leads.disqualified`.
+- Se `disqualified=true` e admin configurou "não gravar", retorna sucesso sem inserir.
+- Zero mudança para chamadas antigas (parâmetros são opcionais).
 
-Backend:
-- Migration: `ALTER TABLE templates_carrossel ADD COLUMN scope text NOT NULL DEFAULT 'pos'`, `ADD COLUMN event_id uuid NULL REFERENCES events(id)`, índice `(scope, whatsapp_number_id)`.
-- Edge `carousel-ladder-create`: aceitar `scope` e `event_id` opcionais e persistir.
-- (Opcional Etapa 4) Nova edge `event-crossell-send` para orquestrar envio em massa com quotas + registrar métricas.
+## Detalhes técnicos
 
-Nenhuma quebra no PDV: escopo default preserva comportamento existente; o dialog atual do WhatsApp continua funcionando por prop opcional.
+**Migration (única, aditiva):**
+```sql
+ALTER TABLE public.event_leads
+  ADD COLUMN IF NOT EXISTS custom_fields JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS disqualified BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_event_leads_custom_fields
+  ON public.event_leads USING GIN (custom_fields);
+```
+
+**Shape do step novo em `flow_json.steps`:**
+```ts
+{
+  id: string,
+  type: 'ask_choice' | 'ask_multichoice',
+  text: string,
+  field_key: string,           // ex.: 'tamanho_calcado'
+  options: { label: string, value: string }[],
+  required?: boolean,
+  condition?: {                // só ask_choice
+    allowed_values: string[],
+    on_fail: 'end_flow' | 'skip_to_step',
+    fail_message?: string,
+    skip_to_step_id?: string,
+    save_lead_when_disqualified?: boolean, // default false
+  }
+}
+```
+
+**Arquivos tocados:**
+- `supabase/migrations/*` — migration acima.
+- `src/pages/events/EventCaptureBuilder.tsx` — novo editor de step + condição.
+- `src/pages/public/EventTypebotView.tsx` — render de choice/multichoice + avaliação de condição.
+- `supabase/functions/event-lead-capture/index.ts` — persistência de `custom_fields`/`disqualified`.
+- Audience builder de disparos (arquivo em `src/components/marketing/…`) — novo filtro "Campo personalizado".
+- Agente IA marketing (`marketing-agent-chat` edge function) — tool `filter_leads_by_custom_field`.
+
+## Compatibilidade / risco
+
+- Tudo aditivo: colunas novas com default, tipos de step novos ignorados pelo código antigo (se algum caiu).
+- Nenhum step existente é alterado.
+- Leads antigos continuam válidos (`custom_fields = {}`, `disqualified = false`).
+- Se o admin não usar os novos tipos, o typebot funciona idêntico ao de hoje.
+
+Posso seguir com essa implementação?

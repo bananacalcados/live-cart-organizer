@@ -43,12 +43,24 @@ serve(async (req) => {
       utm_medium,
       utm_campaign,
       metadata,
+      custom_fields,    // { field_key: value } — respostas de perguntas customizadas do typebot
+      disqualified,     // true quando o lead não atendeu a condição da pergunta
     } = body || {};
 
     if (!event_id || !source || !name || !phone) {
       return new Response(JSON.stringify({ error: 'event_id, source, name and phone are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+
+    const cf = (custom_fields && typeof custom_fields === 'object' && !Array.isArray(custom_fields))
+      ? custom_fields
+      : {};
+    const isDisq = disqualified === true;
+
+    // Se o lead foi desqualificado e não pediu para gravar, apenas retorna ok sem tocar no banco.
+    // (O front controla o `disqualified` — se ele mandar true, é porque o admin marcou "gravar mesmo assim".)
+    // Quando o admin não marca, o front nem chama esta função.
+
 
     const cleanName = String(name).trim().slice(0, 120);
     const e164 = normalizePhoneBR(phone);
@@ -71,7 +83,7 @@ serve(async (req) => {
     // Upsert lead (event_id+phone unique)
     const { data: existing } = await supabase
       .from('event_leads')
-      .select('id, referral_token, referred_count, prize_unlocked_at')
+      .select('id, referral_token, referred_count, prize_unlocked_at, custom_fields')
       .eq('event_id', event_id)
       .eq('phone', e164)
       .maybeSingle();
@@ -79,6 +91,14 @@ serve(async (req) => {
     let lead: any;
     if (existing) {
       lead = existing;
+      // Merge custom_fields do lead existente com os novos (novos sobrescrevem)
+      if (Object.keys(cf).length > 0) {
+        const merged = { ...(existing.custom_fields || {}), ...cf };
+        await supabase
+          .from('event_leads')
+          .update({ custom_fields: merged })
+          .eq('id', existing.id);
+      }
     } else {
       const { data: inserted, error: insErr } = await supabase
         .from('event_leads')
@@ -95,7 +115,9 @@ serve(async (req) => {
           utm_medium: utm_medium || null,
           utm_campaign: utm_campaign || null,
           metadata: metadata || {},
-        })
+          custom_fields: cf,
+          disqualified: isDisq,
+        } as any)
         .select('id, referral_token, referred_count, prize_unlocked_at')
         .single();
       if (insErr) {
