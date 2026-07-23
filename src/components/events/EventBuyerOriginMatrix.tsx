@@ -149,6 +149,7 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
               total={data.buyers.total}
               icon={Sparkles}
               tone="text-amber-600"
+              subtitle={avgLead > 0 ? `Ticket médio ${brl(avgLead)}` : undefined}
               onClick={() =>
                 openDrill(
                   "buyer",
@@ -163,6 +164,7 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
               total={data.buyers.total}
               icon={Star}
               tone="text-emerald-600"
+              subtitle={avgRecurring > 0 ? `Ticket médio ${brl(avgRecurring)}` : undefined}
               onClick={() =>
                 openDrill(
                   "buyer",
@@ -177,6 +179,7 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
               total={data.buyers.total}
               icon={User}
               tone="text-blue-600"
+              subtitle={avgBrandNew > 0 ? `Ticket médio ${brl(avgBrandNew)}` : undefined}
               onClick={() =>
                 openDrill(
                   "buyer",
