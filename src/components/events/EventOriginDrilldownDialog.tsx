@@ -153,14 +153,23 @@ export function EventOriginDrilldownDialog({
 function PersonRow({ person, kind }: { person: OriginPerson; kind: "buyer" | "non_buyer" }) {
   const s = person.sources || {};
   const tags: string[] = [];
-  if (s.in_customers_unified) tags.push(`Cadastro CRM${s.total_orders_unified ? ` • ${s.total_orders_unified} pedidos` : ""}`);
+  const priorSales = s.prior_sales || 0;
+  if (priorSales > 0) {
+    tags.push(`${priorSales} compra(s) ANTES desta live`);
+  } else if (person.bucket === "lead_first_purchase" && kind === "buyer") {
+    tags.push("1ª compra nesta live");
+  }
+  if (s.in_customers_unified && s.total_orders_unified) {
+    tags.push(`CRM: ${s.total_orders_unified} pedido(s) no total`);
+  } else if (s.in_customers_unified) {
+    tags.push("Cadastro CRM");
+  }
   if (s.rfm_segment) tags.push(`RFM: ${s.rfm_segment}`);
   if (s.lp_leads_tags) tags.push(`LP: ${s.lp_leads_tags}`);
   if (s.event_leads_sources) tags.push(`Evento: ${s.event_leads_sources}`);
   if (s.prior_catalog_reg) tags.push("Cadastro em live anterior");
   if (s.in_chat_contacts) tags.push("Contato WhatsApp");
   if (s.in_zoppy) tags.push("Base Zoppy");
-  if ((s.prior_sales || 0) > 0) tags.push(`${s.prior_sales} compra(s) anterior(es)`);
 
   const openWa = () => {
     const p = person.phone_key.replace(/\D/g, "");
