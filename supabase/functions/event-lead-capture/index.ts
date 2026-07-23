@@ -83,7 +83,7 @@ serve(async (req) => {
     // Upsert lead (event_id+phone unique)
     const { data: existing } = await supabase
       .from('event_leads')
-      .select('id, referral_token, referred_count, prize_unlocked_at')
+      .select('id, referral_token, referred_count, prize_unlocked_at, custom_fields')
       .eq('event_id', event_id)
       .eq('phone', e164)
       .maybeSingle();
@@ -91,6 +91,14 @@ serve(async (req) => {
     let lead: any;
     if (existing) {
       lead = existing;
+      // Merge custom_fields do lead existente com os novos (novos sobrescrevem)
+      if (Object.keys(cf).length > 0) {
+        const merged = { ...(existing.custom_fields || {}), ...cf };
+        await supabase
+          .from('event_leads')
+          .update({ custom_fields: merged })
+          .eq('id', existing.id);
+      }
     } else {
       const { data: inserted, error: insErr } = await supabase
         .from('event_leads')
@@ -107,7 +115,9 @@ serve(async (req) => {
           utm_medium: utm_medium || null,
           utm_campaign: utm_campaign || null,
           metadata: metadata || {},
-        })
+          custom_fields: cf,
+          disqualified: isDisq,
+        } as any)
         .select('id, referral_token, referred_count, prize_unlocked_at')
         .single();
       if (insErr) {
