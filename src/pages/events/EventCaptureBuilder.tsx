@@ -832,13 +832,3 @@ function ChoiceStepEditor({
     </div>
   );
 }
-  if (block.type === 'cta') {
-    return (
-      <div className="space-y-2">
-        <Input value={block.text || ''} onChange={(e) => onChange({ text: e.target.value })} placeholder="Texto do botão" />
-        <Input value={block.url || ''} onChange={(e) => onChange({ url: e.target.value })} placeholder="URL" />
-      </div>
-    );
-  }
-  return null;
-}
