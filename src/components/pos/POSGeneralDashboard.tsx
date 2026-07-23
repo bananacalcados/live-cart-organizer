@@ -286,7 +286,10 @@ export function POSGeneralDashboard({ onBack }: Props) {
   // Sales filtered by current modal bucket
   const modalSales = useMemo(() => {
     if (!paymentModal.open) return [];
-    return salesRows.filter(r => bucketPayment(r.payment_method, r.sale_type) === paymentModal.bucket);
+    return salesRows.filter(r =>
+      bucketPayment(r.payment_method, r.sale_type) === paymentModal.bucket &&
+      (!paymentModal.storeId || r.store_id === paymentModal.storeId)
+    );
   }, [paymentModal, salesRows]);
 
   // Per-store payment breakdown
