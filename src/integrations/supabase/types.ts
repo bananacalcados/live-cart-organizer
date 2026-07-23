@@ -4884,6 +4884,8 @@ export type Database = {
       event_leads: {
         Row: {
           created_at: string
+          custom_fields: Json
+          disqualified: boolean
           event_id: string
           id: string
           instagram: string | null
@@ -4906,6 +4908,8 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          custom_fields?: Json
+          disqualified?: boolean
           event_id: string
           id?: string
           instagram?: string | null
@@ -4928,6 +4932,8 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          custom_fields?: Json
+          disqualified?: boolean
           event_id?: string
           id?: string
           instagram?: string | null
