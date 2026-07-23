@@ -106,6 +106,16 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
   const buyerList = data.buyer_list || [];
   const nonBuyerList = data.non_buyer_list || [];
 
+  const avgTicket = (bucket: OriginBucket) => {
+    const rows = buyerList.filter((p) => p.bucket === bucket && (p.value ?? 0) > 0);
+    if (rows.length === 0) return 0;
+    const sum = rows.reduce((s, p) => s + (Number(p.value) || 0), 0);
+    return sum / rows.length;
+  };
+  const avgLead = avgTicket("lead_first_purchase");
+  const avgRecurring = avgTicket("existing_customer");
+  const avgBrandNew = avgTicket("brand_new");
+
   return (
     <div className="container py-2 space-y-3">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -139,6 +149,7 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
               total={data.buyers.total}
               icon={Sparkles}
               tone="text-amber-600"
+              subtitle={avgLead > 0 ? `Ticket médio ${brl(avgLead)}` : undefined}
               onClick={() =>
                 openDrill(
                   "buyer",
@@ -153,6 +164,7 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
               total={data.buyers.total}
               icon={Star}
               tone="text-emerald-600"
+              subtitle={avgRecurring > 0 ? `Ticket médio ${brl(avgRecurring)}` : undefined}
               onClick={() =>
                 openDrill(
                   "buyer",
@@ -167,6 +179,7 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
               total={data.buyers.total}
               icon={User}
               tone="text-blue-600"
+              subtitle={avgBrandNew > 0 ? `Ticket médio ${brl(avgBrandNew)}` : undefined}
               onClick={() =>
                 openDrill(
                   "buyer",
@@ -280,12 +293,16 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
   );
 }
 
+const brl = (v: number) =>
+  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
 function OriginTile({
   label,
   value,
   total,
   icon: Icon,
   tone,
+  subtitle,
   onClick,
 }: {
   label: string;
@@ -293,6 +310,7 @@ function OriginTile({
   total: number;
   icon: any;
   tone: string;
+  subtitle?: string;
   onClick: () => void;
 }) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
@@ -309,6 +327,10 @@ function OriginTile({
       </div>
       <p className="text-xl font-bold leading-tight">{value}</p>
       <p className="text-[10px] text-muted-foreground">{pct}% do total</p>
+      {subtitle && (
+        <p className="text-[10px] font-medium text-primary mt-0.5">{subtitle}</p>
+      )}
     </button>
   );
 }
+
