@@ -736,8 +736,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
 
       <POSPaymentSalesModal
         open={paymentModal.open}
-        onClose={() => setPaymentModal({ open: false, bucket: "" })}
-        title={`Vendas — ${paymentModal.bucket}`}
+        onClose={() => setPaymentModal({ open: false, bucket: "", storeId: null })}
+        title={`Vendas — ${paymentModal.bucket}${paymentModal.storeId ? ` · ${storesById.get(paymentModal.storeId) || ""}` : ""}`}
         bucketName={paymentModal.bucket}
         sales={modalSales}
         storesById={storesById}
