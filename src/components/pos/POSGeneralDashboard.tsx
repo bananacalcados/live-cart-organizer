@@ -695,7 +695,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
                                   <button
                                     key={p.name}
                                     type="button"
-                                    onClick={() => setPaymentModal({ open: true, bucket: p.name })}
+                                    onClick={() => setPaymentModal({ open: true, bucket: p.name, storeId: s.id })}
                                     className={`text-left bg-gradient-to-br ${style.gradient} border border-zinc-700/60 rounded p-2 hover:border-zinc-500 transition-colors`}
                                   >
                                     <div className="flex items-center gap-1 mb-0.5">
