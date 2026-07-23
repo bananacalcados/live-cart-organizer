@@ -106,6 +106,16 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
   const buyerList = data.buyer_list || [];
   const nonBuyerList = data.non_buyer_list || [];
 
+  const avgTicket = (bucket: OriginBucket) => {
+    const rows = buyerList.filter((p) => p.bucket === bucket && (p.value ?? 0) > 0);
+    if (rows.length === 0) return 0;
+    const sum = rows.reduce((s, p) => s + (Number(p.value) || 0), 0);
+    return sum / rows.length;
+  };
+  const avgLead = avgTicket("lead_first_purchase");
+  const avgRecurring = avgTicket("existing_customer");
+  const avgBrandNew = avgTicket("brand_new");
+
   return (
     <div className="container py-2 space-y-3">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
