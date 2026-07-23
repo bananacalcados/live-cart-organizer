@@ -665,6 +665,16 @@ function BlockEditor({ block, hero, onChange }: { block: any; hero: string | nul
   }
   if (block.type === 'form') {
     return <Input value={block.cta || ''} onChange={(e) => onChange({ cta: e.target.value })} placeholder="Texto do botão (ex: Garantir lugar)" />;
+  }
+  if (block.type === 'cta') {
+    return (
+      <div className="space-y-2">
+        <Input value={block.text || ''} onChange={(e) => onChange({ text: e.target.value })} placeholder="Texto do botão" />
+        <Input value={block.url || ''} onChange={(e) => onChange({ url: e.target.value })} placeholder="URL" />
+      </div>
+    );
+  }
+  return null;
 }
 
 const FIELD_KEY_SUGGESTIONS = [
