@@ -471,6 +471,8 @@ export default function EventCaptureBuilder() {
                           <option value="message">Mensagem</option>
                           <option value="ask_name">Pergunta: Nome</option>
                           <option value="ask_phone">Pergunta: WhatsApp</option>
+                          <option value="ask_choice">Pergunta: Escolha única</option>
+                          <option value="ask_multichoice">Pergunta: Múltipla escolha</option>
                           <option value="final">Final (envia)</option>
                         </select>
                         <Button size="icon" variant="ghost" onClick={() => removeStep(idx)}><Trash2 className="h-3 w-3" /></Button>
@@ -486,6 +488,13 @@ export default function EventCaptureBuilder() {
                           value={step.placeholder || ''}
                           onChange={(e) => updateStep(idx, { placeholder: e.target.value })}
                           placeholder="Placeholder do input"
+                        />
+                      )}
+                      {(step.type === 'ask_choice' || step.type === 'ask_multichoice') && (
+                        <ChoiceStepEditor
+                          step={step}
+                          isSingle={step.type === 'ask_choice'}
+                          onChange={(patch) => updateStep(idx, patch)}
                         />
                       )}
                     </Card>
