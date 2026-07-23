@@ -118,7 +118,9 @@ export function EventBuyerOriginMatrix({ eventId, range }: Props) {
                 Compradores por origem
               </h3>
               <p className="text-[11px] text-muted-foreground">
-                Quem eram os {data.buyers.total} clientes desta live antes da compra
+                {range
+                  ? `Quem eram os ${data.buyers.total} clientes de ${data.events_count ?? 0} live(s) do período antes da compra`
+                  : `Quem eram os ${data.buyers.total} clientes desta live antes da compra`}
               </p>
             </div>
             <button
