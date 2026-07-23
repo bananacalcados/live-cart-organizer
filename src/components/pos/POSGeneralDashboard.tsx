@@ -109,7 +109,7 @@ export function POSGeneralDashboard({ onBack }: Props) {
   const [stores, setStores] = useState<{ id: string; name: string }[]>([]);
   const [salesRows, setSalesRows] = useState<any[]>([]);
   const [goals, setGoals] = useState<GoalRow[]>([]);
-  const [paymentModal, setPaymentModal] = useState<{ open: boolean; bucket: string }>({ open: false, bucket: "" });
+  const [paymentModal, setPaymentModal] = useState<{ open: boolean; bucket: string; storeId?: string | null }>({ open: false, bucket: "", storeId: null });
   const [expandedStore, setExpandedStore] = useState<string | null>(null);
 
   const periodRange = useMemo(() => {
