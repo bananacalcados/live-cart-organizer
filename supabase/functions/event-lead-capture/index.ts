@@ -43,12 +43,24 @@ serve(async (req) => {
       utm_medium,
       utm_campaign,
       metadata,
+      custom_fields,    // { field_key: value } — respostas de perguntas customizadas do typebot
+      disqualified,     // true quando o lead não atendeu a condição da pergunta
     } = body || {};
 
     if (!event_id || !source || !name || !phone) {
       return new Response(JSON.stringify({ error: 'event_id, source, name and phone are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
+
+    const cf = (custom_fields && typeof custom_fields === 'object' && !Array.isArray(custom_fields))
+      ? custom_fields
+      : {};
+    const isDisq = disqualified === true;
+
+    // Se o lead foi desqualificado e não pediu para gravar, apenas retorna ok sem tocar no banco.
+    // (O front controla o `disqualified` — se ele mandar true, é porque o admin marcou "gravar mesmo assim".)
+    // Quando o admin não marca, o front nem chama esta função.
+
 
     const cleanName = String(name).trim().slice(0, 120);
     const e164 = normalizePhoneBR(phone);
