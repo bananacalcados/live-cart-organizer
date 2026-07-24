@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Search, Plus, Trash2, Save, CreditCard } from "lucide-react";
+import { Loader2, Search, Plus, Trash2, Save, CreditCard, MapPin } from "lucide-react";
 import { ExpOrder, SHIPPING_OPTIONS, brl } from "./expeditionTypes";
 
 interface Props {
@@ -67,6 +67,38 @@ export function ExpAvulsoEditDialog({ order, storeId, open, onOpenChange, onSave
     state: "",
   });
   const [shipping, setShipping] = useState<string>("");
+  const [cepLoading, setCepLoading] = useState(false);
+
+  const lookupCep = async (rawCep?: string) => {
+    const cep = onlyDigits(rawCep ?? form.cep);
+    if (cep.length !== 8) {
+      toast.error("Digite um CEP com 8 dígitos");
+      return;
+    }
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await res.json();
+      if (data?.erro) {
+        toast.error("CEP não encontrado");
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        cep,
+        address: data.logradouro || f.address,
+        neighborhood: data.bairro || f.neighborhood,
+        city: data.localidade || f.city,
+        state: (data.uf || f.state || "").toUpperCase(),
+        complement: f.complement || data.complemento || "",
+      }));
+      toast.success("Endereço preenchido pelo CEP");
+    } catch (e: any) {
+      toast.error("Falha ao consultar CEP");
+    } finally {
+      setCepLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -401,7 +433,27 @@ export function ExpAvulsoEditDialog({ order, storeId, open, onOpenChange, onSave
               <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <Label>CEP</Label>
-                  <Input value={form.cep} onChange={(e) => setForm({ ...form, cep: e.target.value })} />
+                  <div className="flex gap-2">
+                    <Input
+                      value={form.cep}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setForm({ ...form, cep: v });
+                        if (onlyDigits(v).length === 8) lookupCep(v);
+                      }}
+                      onBlur={() => onlyDigits(form.cep).length === 8 && lookupCep()}
+                      placeholder="00000-000"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => lookupCep()}
+                      disabled={cepLoading}
+                      title="Buscar endereço pelo CEP"
+                    >
+                      {cepLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
                 <div className="md:col-span-2">
                   <Label>Endereço</Label>
