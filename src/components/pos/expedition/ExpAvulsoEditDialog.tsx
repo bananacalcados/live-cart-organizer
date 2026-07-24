@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Search, Plus, Trash2, Save, CreditCard } from "lucide-react";
+import { Loader2, Search, Plus, Trash2, Save, CreditCard, MapPin } from "lucide-react";
 import { ExpOrder, SHIPPING_OPTIONS, brl } from "./expeditionTypes";
 
 interface Props {
