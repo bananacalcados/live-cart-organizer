@@ -546,7 +546,16 @@ export function POSExpedition({ storeId, storeName }: Props) {
                   >
                     <div className="p-4 cursor-pointer" onClick={() => toggleExpand(o)}>
                       <div className="flex items-start justify-between gap-3 flex-wrap">
-                        <div className="min-w-0">
+                        {stage !== "conferencia" && stage !== "concluido" && (
+                          <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selected.has(o.id)}
+                              onCheckedChange={() => toggleSelect(o.id)}
+                              disabled={o.is_avulso && !o.avulso_ready}
+                            />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-2xl font-black text-pos-text truncate">
                               {o.customer_name || "Sem nome"}
