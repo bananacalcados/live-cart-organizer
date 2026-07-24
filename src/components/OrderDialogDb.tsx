@@ -70,6 +70,26 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
   const [pixCode, setPixCode] = useState<string>("");
   const [isCreatingShopifyOrder, setIsCreatingShopifyOrder] = useState(false);
   const [banReason, setBanReason] = useState("");
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookup, setLookup] = useState<any | null>(null);
+
+  const runGatewayLookup = async () => {
+    if (!editingOrder?.id) return;
+    setLookupLoading(true);
+    setLookup(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("gateway-payment-lookup", {
+        body: { orderId: editingOrder.id },
+      });
+      if (error) throw error;
+      setLookup(data);
+      if (data?.warning) toast.info(data.warning);
+    } catch (e: any) {
+      toast.error(`Falha ao consultar gateway: ${e.message || e}`);
+    } finally {
+      setLookupLoading(false);
+    }
+  };
   
   // Discount and extras
   const [discountType, setDiscountType] = useState<DiscountType | "">("");
