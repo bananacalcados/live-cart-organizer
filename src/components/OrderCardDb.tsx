@@ -619,44 +619,6 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
                 {order.customer?.instagram_handle}
               </button>
             </div>
-            {/* Botão para abrir/editar os dados que o cliente preencheu no link de checkout */}
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setShowFichaDialog(true); }}
-              className="mt-0.5 inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm hover:bg-red-700"
-              title="Ver/editar os dados cadastrais do cliente"
-            >
-              <UserCheck className="h-3 w-3" />
-              VER DADOS
-            </button>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <p className="text-[11px] text-muted-foreground truncate font-mono">
-                ID: {order.id}
-              </p>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  try {
-                    await navigator.clipboard.writeText(order.id);
-                    toast.success("ID do pedido copiado!");
-                  } catch {
-                    window.prompt("Copie o ID do pedido:", order.id);
-                  }
-                }}
-                title="Copiar ID do pedido"
-              >
-                <ClipboardCopy className="h-3 w-3" />
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(order.created_at), {
-                addSuffix: true,
-                locale: ptBR,
-              })}
-            </p>
           </div>
         </div>
       </div>
