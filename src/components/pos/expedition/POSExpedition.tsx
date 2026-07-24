@@ -455,6 +455,19 @@ export function POSExpedition({ storeId, storeName }: Props) {
           }}
         />
       )}
+
+      {avulsoOrder && (
+        <ExpAvulsoEditDialog
+          order={avulsoOrder}
+          storeId={storeId}
+          open={!!avulsoOrder}
+          onOpenChange={(v) => !v && setAvulsoOrder(null)}
+          onSaved={() => {
+            setAvulsoOrder(null);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }
