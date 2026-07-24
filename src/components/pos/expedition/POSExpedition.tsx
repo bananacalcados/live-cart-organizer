@@ -387,7 +387,119 @@ export function POSExpedition({ storeId, storeName }: Props) {
             );
           })}
         </div>
+
+        {showFilters && (
+          <div className="mt-4 p-3 rounded-xl bg-pos-elevated border-2 border-pos-border">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div>
+                <label className="text-xs font-bold text-pos-muted-text uppercase">Origem</label>
+                <Select value={filterOrigin} onValueChange={setFilterOrigin}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="live">Live</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                    <SelectItem value="online">Online / Link</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-pos-muted-text uppercase">Tipo</label>
+                <Select value={filterAvulso} onValueChange={setFilterAvulso}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="normal">Só normais</SelectItem>
+                    <SelectItem value="avulso">Só avulsos</SelectItem>
+                    <SelectItem value="avulso_pending">Avulsos pendentes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-pos-muted-text uppercase">Envio</label>
+                <Select value={filterShipping} onValueChange={setFilterShipping}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="carrier">Transportadora/Correios</SelectItem>
+                    <SelectItem value="moto">Mototáxi</SelectItem>
+                    <SelectItem value="pickup">Retirada na loja</SelectItem>
+                    <SelectItem value="none">Sem envio definido</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-pos-muted-text uppercase">Período</label>
+                <Select value={filterPeriod} onValueChange={setFilterPeriod}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="today">Últimas 24h</SelectItem>
+                    <SelectItem value="7d">Últimos 7 dias</SelectItem>
+                    <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-pos-muted-text uppercase">Testes</label>
+                <Select value={filterTest} onValueChange={setFilterTest}>
+                  <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="hide">Ocultar testes</SelectItem>
+                    <SelectItem value="all">Incluir testes</SelectItem>
+                    <SelectItem value="only">Só testes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setFilterOrigin("all");
+                  setFilterAvulso("all");
+                  setFilterShipping("all");
+                  setFilterPeriod("all");
+                  setFilterTest("hide");
+                }}
+              >
+                <X className="h-4 w-4 mr-1" /> Limpar filtros
+              </Button>
+              <span className="text-sm font-semibold text-pos-muted-text">
+                {filtered.length} de {orders.length} pedido(s)
+              </span>
+            </div>
+          </div>
+        )}
       </div>
+
+      {stage !== "conferencia" && stage !== "concluido" && filtered.length > 0 && (
+        <div className="px-4 py-2 bg-pos-elevated border-b border-pos-border flex items-center gap-3 flex-wrap">
+          <Button size="sm" variant="ghost" onClick={selectAllVisible}>
+            {selected.size > 0 ? <CheckSquare className="h-4 w-4 mr-1" /> : <Square className="h-4 w-4 mr-1" />}
+            {selected.size > 0 ? "Limpar seleção" : "Selecionar todos"}
+          </Button>
+          {selected.size > 0 && (
+            <>
+              <span className="text-sm font-bold text-pos-text">
+                {selected.size} selecionado(s) — {bulkEligible.length} pronto(s) para avançar
+              </span>
+              <Button
+                size="sm"
+                className="ml-auto bg-exp-prep hover:bg-exp-prep/90 text-white font-black"
+                disabled={bulkBusy || bulkEligible.length === 0}
+                onClick={bulkAdvance}
+              >
+                {bulkBusy ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ChevronRight className="h-4 w-4 mr-1" />}
+                AVANÇAR {bulkEligible.length} EM MASSA
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
+
 
       {/* List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
