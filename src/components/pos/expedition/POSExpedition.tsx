@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, MapPin, Store } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, MapPin, Store, Pencil } from "lucide-react";
 import {
   EXP_STAGES,
   ExpOrder,
@@ -17,6 +17,7 @@ import {
   trackingLink,
 } from "./expeditionTypes";
 import { ExpConferenceDialog } from "./ExpConferenceDialog";
+import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
 
 interface Props {
   storeId: string;
@@ -48,6 +49,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [conferenceOrder, setConferenceOrder] = useState<ExpOrder | null>(null);
+  const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
   const [stockByBarcode, setStockByBarcode] = useState<Record<string, { store: string; stock: number }[]>>({});
 
   const loadCounts = async () => {
@@ -124,6 +126,10 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const advance = async (o: ExpOrder, target?: ExpStage) => {
     const to = target || nextStage(o.expedition_stage);
     if (!to) return;
+    if (o.expedition_stage === "novo" && o.is_avulso && !o.avulso_ready) {
+      toast.error("Pedido avulso: edite e complete produto, dados do cliente e envio antes de avançar");
+      return;
+    }
     setBusyId(o.id);
     try {
       const patch: any = { expedition_stage: to };
@@ -306,6 +312,14 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             <Badge className={`${stageStyles[stage].chip} text-white text-sm font-bold`}>
                               {ORIGIN_LABEL[o.origin]}
                             </Badge>
+                            {o.is_avulso && (
+                              <Badge className="bg-amber-500 text-white text-sm font-black">AVULSO</Badge>
+                            )}
+                            {o.is_avulso && !o.avulso_ready && stage === "novo" && (
+                              <Badge variant="outline" className="text-sm font-bold border-amber-500 text-amber-600">
+                                Dados pendentes
+                              </Badge>
+                            )}
                             {o.event_name && (
                               <Badge variant="outline" className="text-sm font-bold">{o.event_name}</Badge>
                             )}
@@ -340,11 +354,22 @@ export function POSExpedition({ storeId, storeName }: Props) {
                         </div>
 
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {stage === "novo" && o.is_avulso && (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-2 border-amber-500 text-amber-600 text-base font-black"
+                              onClick={() => setAvulsoOrder(o)}
+                            >
+                              <Pencil className="h-5 w-5 mr-1" /> EDITAR PEDIDO
+                            </Button>
+                          )}
                           {stage === "novo" && (
                             <Button
                               size="lg"
                               className="bg-exp-new hover:bg-exp-new/90 text-white text-base font-black"
-                              disabled={busyId === o.id}
+                              disabled={busyId === o.id || (o.is_avulso && !o.avulso_ready)}
+                              title={o.is_avulso && !o.avulso_ready ? "Complete os dados do pedido avulso" : undefined}
                               onClick={() => advance(o)}
                             >
                               {busyId === o.id ? <Loader2 className="h-5 w-5 animate-spin" /> : <PlayCircle className="h-5 w-5 mr-1" />}
@@ -426,6 +451,19 @@ export function POSExpedition({ storeId, storeName }: Props) {
           onOpenChange={(v) => !v && setConferenceOrder(null)}
           onFinished={() => {
             setConferenceOrder(null);
+            load();
+          }}
+        />
+      )}
+
+      {avulsoOrder && (
+        <ExpAvulsoEditDialog
+          order={avulsoOrder}
+          storeId={storeId}
+          open={!!avulsoOrder}
+          onOpenChange={(v) => !v && setAvulsoOrder(null)}
+          onSaved={() => {
+            setAvulsoOrder(null);
             load();
           }}
         />

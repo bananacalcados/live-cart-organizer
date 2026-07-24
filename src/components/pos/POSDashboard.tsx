@@ -140,6 +140,7 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
         .from("pos_sales")
         .select("id, total, seller_id, status, sale_type, subtotal, discount, payment_details, paid_at, created_at, revenue_attribution, event_id, customer_name, customer_phone, payment_method, customer_cpf")
         .eq("store_id", storeId)
+        .eq("expedition_stage", "concluido")
         .in("status", revenueStatuses)
         .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`);
 

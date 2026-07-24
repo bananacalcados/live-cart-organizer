@@ -88,6 +88,7 @@ export function POSStoreScaledGoals({ storeId, periodStart, periodEnd, periodLab
           .eq("is_active", true).eq("goal_type", "seller_revenue").not("seller_id", "is", null),
         supabase.from("pos_sales")
           .select("id, store_id, seller_id, sale_type, total, shipping_cost, payment_details")
+          .eq("expedition_stage", "concluido")
           .in("status", REVENUE_STATUSES)
           .neq("revenue_attribution", "site_pickup_only")
           .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)

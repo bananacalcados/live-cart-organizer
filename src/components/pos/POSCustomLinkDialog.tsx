@@ -152,6 +152,7 @@ export function POSCustomLinkDialog({ storeId, sellers }: Props) {
       const payment_details: Record<string, unknown> = {
         link_origin: "custom_link",
         is_custom_amount: true,
+        is_avulso: true,
         free_shipping: true,
         shipping_amount: 0,
         seller_name: sellerObj?.name || "",
