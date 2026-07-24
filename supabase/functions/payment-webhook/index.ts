@@ -282,7 +282,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     console.log(`[mercadopago] No order by mp_id. Trying external_reference=${externalRef}`);
     const { data: refOrder, error: refOrderErr } = await supabase
       .from("orders")
-      .select("id, is_paid, pickup_store_id")
+      .select("id, is_paid, pickup_store_id, products, discount_type, discount_value, shipping_cost, free_shipping")
       .eq("id", externalRef)
       .maybeSingle();
 
