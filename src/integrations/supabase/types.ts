@@ -11917,6 +11917,51 @@ export type Database = {
           },
         ]
       }
+      pos_expedition_checks: {
+        Row: {
+          barcode: string | null
+          checked_by: string | null
+          checked_by_name: string | null
+          created_at: string
+          feet_ok: boolean
+          has_defect: boolean
+          id: string
+          notes: string | null
+          sale_id: string
+          sale_item_id: string | null
+          scanned: boolean
+          updated_at: string
+        }
+        Insert: {
+          barcode?: string | null
+          checked_by?: string | null
+          checked_by_name?: string | null
+          created_at?: string
+          feet_ok?: boolean
+          has_defect?: boolean
+          id?: string
+          notes?: string | null
+          sale_id: string
+          sale_item_id?: string | null
+          scanned?: boolean
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string | null
+          checked_by?: string | null
+          checked_by_name?: string | null
+          created_at?: string
+          feet_ok?: boolean
+          has_defect?: boolean
+          id?: string
+          notes?: string | null
+          sale_id?: string
+          sale_item_id?: string | null
+          scanned?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pos_gamification: {
         Row: {
           badges: Json
@@ -13045,6 +13090,7 @@ export type Database = {
           checkout_step: number | null
           conditional_signed_at: string | null
           conditional_status: string | null
+          courier_name: string | null
           created_at: string
           crediario_due_date: string | null
           crediario_gateway: string | null
@@ -13063,6 +13109,9 @@ export type Database = {
           customer_unified_id: string | null
           discount: number
           event_id: string | null
+          expedition_finished_at: string | null
+          expedition_group_id: string | null
+          expedition_stage: string | null
           expedition_status: string
           external_order_id: string | null
           external_source: string | null
@@ -13086,11 +13135,13 @@ export type Database = {
           payment_link: string | null
           payment_method: string | null
           payment_method_detail: string | null
+          pickup_store_id: string | null
           revenue_attribution: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_type: string
           seller_id: string | null
           shipped_at: string | null
           shipping_address: Json | null
+          shipping_carrier: string | null
           shipping_cost: number
           shipping_notes: string | null
           source_order_id: string | null
@@ -13114,6 +13165,7 @@ export type Database = {
           checkout_step?: number | null
           conditional_signed_at?: string | null
           conditional_status?: string | null
+          courier_name?: string | null
           created_at?: string
           crediario_due_date?: string | null
           crediario_gateway?: string | null
@@ -13132,6 +13184,9 @@ export type Database = {
           customer_unified_id?: string | null
           discount?: number
           event_id?: string | null
+          expedition_finished_at?: string | null
+          expedition_group_id?: string | null
+          expedition_stage?: string | null
           expedition_status?: string
           external_order_id?: string | null
           external_source?: string | null
@@ -13155,11 +13210,13 @@ export type Database = {
           payment_link?: string | null
           payment_method?: string | null
           payment_method_detail?: string | null
+          pickup_store_id?: string | null
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_type?: string
           seller_id?: string | null
           shipped_at?: string | null
           shipping_address?: Json | null
+          shipping_carrier?: string | null
           shipping_cost?: number
           shipping_notes?: string | null
           source_order_id?: string | null
@@ -13183,6 +13240,7 @@ export type Database = {
           checkout_step?: number | null
           conditional_signed_at?: string | null
           conditional_status?: string | null
+          courier_name?: string | null
           created_at?: string
           crediario_due_date?: string | null
           crediario_gateway?: string | null
@@ -13201,6 +13259,9 @@ export type Database = {
           customer_unified_id?: string | null
           discount?: number
           event_id?: string | null
+          expedition_finished_at?: string | null
+          expedition_group_id?: string | null
+          expedition_stage?: string | null
           expedition_status?: string
           external_order_id?: string | null
           external_source?: string | null
@@ -13224,11 +13285,13 @@ export type Database = {
           payment_link?: string | null
           payment_method?: string | null
           payment_method_detail?: string | null
+          pickup_store_id?: string | null
           revenue_attribution?: Database["public"]["Enums"]["pos_revenue_attribution"]
           sale_type?: string
           seller_id?: string | null
           shipped_at?: string | null
           shipping_address?: Json | null
+          shipping_carrier?: string | null
           shipping_cost?: number
           shipping_notes?: string | null
           source_order_id?: string | null
