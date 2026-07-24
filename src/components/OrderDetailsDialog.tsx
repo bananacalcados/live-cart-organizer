@@ -135,6 +135,25 @@ export function OrderDetailsDialog({
   const [loading, setLoading] = useState(false);
   const [reg, setReg] = useState<Registration | null>(null);
   const [order, setOrder] = useState<OrderRow | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookup, setLookup] = useState<any | null>(null);
+
+  const runLookup = async () => {
+    setLookupLoading(true);
+    setLookup(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("gateway-payment-lookup", {
+        body: { orderId },
+      });
+      if (error) throw error;
+      setLookup(data);
+      if (data?.warning) toast.info(data.warning);
+    } catch (e: any) {
+      toast.error(`Falha ao consultar gateway: ${e.message || e}`);
+    } finally {
+      setLookupLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!open || !orderId) return;
