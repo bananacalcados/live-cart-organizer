@@ -147,6 +147,8 @@ export function POSGeneralDashboard({ onBack }: Props) {
           // Status de fulfillment (envio/mototaxi/retirada/enviado) ficam em db_orders.stage,
           // então mover card no kanban NÃO remove a venda paga deste dashboard.
           // - usa paid_at quando existir, senão created_at (vendas físicas legadas)
+          // Só entra no faturamento após a expedição concluída (vendas online/live)
+          .eq("expedition_stage", "concluido")
           .in("status", ["completed", "pending_sync", "paid"])
           .neq("revenue_attribution", "site_pickup_only")
           .or(`and(paid_at.gte.${startIso},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${startIso},created_at.lte.${endIso})`)
