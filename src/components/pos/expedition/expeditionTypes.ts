@@ -138,7 +138,7 @@ export async function fetchExpeditionOrders(
     orderIds.length
       ? supabase
           .from("orders")
-          .select("id, delivery_method, is_pickup, pickup_store_id, instagram_handle")
+          .select("id, delivery_method, is_pickup, pickup_store_id")
           .in("id", orderIds as string[])
       : Promise.resolve({ data: [] as any[] }),
   ]);
@@ -161,7 +161,7 @@ export async function fetchExpeditionOrders(
       origin: getOrigin(s),
       seller_name: s.seller_id ? sellerMap.get(s.seller_id) || null : null,
       event_name: s.event_id ? eventMap.get(s.event_id) || null : null,
-      instagram: src?.instagram_handle || s.payment_details?.instagram || null,
+      instagram: s.payment_details?.instagram || null,
       delivery_method:
         s.shipping_carrier ||
         (src?.is_pickup ? "Retirada na loja" : src?.delivery_method) ||
