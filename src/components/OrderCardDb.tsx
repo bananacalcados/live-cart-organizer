@@ -1250,6 +1250,13 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         order={order}
       />
 
+      <OrderFullViewDialog
+        open={showFullViewDialog}
+        onOpenChange={setShowFullViewDialog}
+        order={order}
+      />
+
+
       {order.customer?.whatsapp && (
         <WhatsAppChatDialog
           open={showChatDialog}
