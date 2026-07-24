@@ -27,6 +27,7 @@ import { POSPickupOrders } from "@/components/pos/POSPickupOrders";
 import { POSTeamChat } from "@/components/pos/POSTeamChat";
 import { POSSlowMovingProducts } from "@/components/pos/POSSlowMovingProducts";
 import { POSShipments } from "@/components/pos/POSShipments";
+import { POSExpedition } from "@/components/pos/expedition/POSExpedition";
 import { POSSellerDashboard } from "@/components/pos/POSSellerDashboard";
 import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineHub } from "@/components/pos/POSOnlineHub";
@@ -36,7 +37,7 @@ import { POSMetaPixelDashboard } from "@/components/pos/POSMetaPixelDashboard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "seller-dashboard" | "customers" | "meta-pixel";
+type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "expedition" | "seller-dashboard" | "customers" | "meta-pixel";
 
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
@@ -46,6 +47,7 @@ const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badg
   { id: "dashboard", label: "Dashboard", icon: BarChart3, priority: true },
   { id: "sales", label: "Venda", icon: ShoppingCart, priority: true },
   { id: "daily", label: "Pedidos", icon: BarChart3, priority: true },
+  { id: "expedition", label: "Expedição", icon: Truck, priority: true },
   { id: "online", label: "Online", icon: Globe, priority: true },
   { id: "shipments", label: "Envios", icon: Truck, priority: true, badge: true },
   { id: "pickups", label: "Retiradas", icon: Package, priority: true, badge: true },
@@ -309,6 +311,7 @@ export default function POS() {
         {section === "whatsapp" && <POSWhatsApp storeId={selectedStore} initialFilter={whatsappFilter as any} onExitFullScreen={!isMobile ? () => setSection("dashboard") : undefined} />}
         {section === "online" && <POSOnlineHub storeId={selectedStore} sellers={sellers} />}
         {section === "daily" && <POSDailySales storeId={selectedStore} />}
+        {section === "expedition" && <POSExpedition storeId={selectedStore} />}
         {section === "pickups" && <POSPickupOrders storeId={selectedStore} />}
         {section === "meta-pixel" && (
           <POSMetaPixelDashboard storeId={selectedStore} onBack={() => setSection("dashboard")} />

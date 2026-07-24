@@ -73,6 +73,13 @@ export default {
           elevated: "hsl(var(--pos-elevated))",
           border: "hsl(var(--pos-border))",
         },
+        exp: {
+          new: "hsl(var(--exp-new))",
+          prep: "hsl(var(--exp-prep))",
+          pick: "hsl(var(--exp-pick))",
+          check: "hsl(var(--exp-check))",
+          done: "hsl(var(--exp-done))",
+        },
         stage: {
           incomplete: "hsl(var(--stage-incomplete))",
           "awaiting-confirm": "hsl(var(--stage-awaiting-confirm))",
