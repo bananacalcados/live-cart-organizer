@@ -74,6 +74,8 @@ export interface ExpOrder {
   delivery_method?: string | null;
   items: ExpItem[];
   origin: ExpOrigin;
+  is_avulso: boolean;
+  avulso_ready: boolean;
 }
 
 export const getOrigin = (sale: any): ExpOrigin => {
@@ -82,6 +84,20 @@ export const getOrigin = (sale: any): ExpOrigin => {
   if (lo === "whatsapp_chat" || lo === "chat") return "whatsapp";
   return "online";
 };
+
+/** Cobranças sem produto (link avulso / PIX avulso do WhatsApp) */
+export const isAvulsoSale = (sale: any): boolean => {
+  const pd = sale?.payment_details || {};
+  if (pd.is_avulso === true) return true;
+  if (pd.is_custom_amount === true) return true;
+  if (pd.link_origin === "custom_link") return true;
+  if ((sale?.notes || "").toLowerCase().includes("avulso")) return true;
+  return false;
+};
+
+/** Avulso só pode avançar após o vendedor completar produto + dados + envio */
+export const isAvulsoReady = (sale: any): boolean =>
+  sale?.payment_details?.avulso_completed === true;
 
 export const SHIPPING_OPTIONS = [
   "Correios PAC",
