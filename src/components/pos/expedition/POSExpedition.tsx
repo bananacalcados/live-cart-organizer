@@ -49,6 +49,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [conferenceOrder, setConferenceOrder] = useState<ExpOrder | null>(null);
+  const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
   const [stockByBarcode, setStockByBarcode] = useState<Record<string, { store: string; stock: number }[]>>({});
 
   const loadCounts = async () => {
