@@ -54,6 +54,18 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
   const [stockByBarcode, setStockByBarcode] = useState<Record<string, { store: string; stock: number }[]>>({});
   const [testBusy, setTestBusy] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterOrigin, setFilterOrigin] = useState<string>("all");
+  const [filterAvulso, setFilterAvulso] = useState<string>("all");
+  const [filterShipping, setFilterShipping] = useState<string>("all");
+  const [filterTest, setFilterTest] = useState<string>("hide");
+  const [filterPeriod, setFilterPeriod] = useState<string>("all");
+
+  useEffect(() => {
+    setSelected(new Set());
+  }, [stage, storeId]);
 
   const runTestAction = async (action: "create" | "purge") => {
     if (action === "purge" && !confirm("Excluir TODOS os pedidos de teste?")) return;
