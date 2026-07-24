@@ -13,6 +13,8 @@ import { InstagramDMChat } from "./events/InstagramDMChat";
 import { SendToPOSDialog } from "./SendToPOSDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { GatewayPaymentLookupButton } from "./GatewayPaymentLookupButton";
+import { OrderFullViewDialog } from "./OrderFullViewDialog";
+
 
 import { Order } from "@/types/order";
 import { toast } from "sonner";
@@ -73,6 +75,8 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
   const [showIgChatDialog, setShowIgChatDialog] = useState(false);
   const [showPOSDialog, setShowPOSDialog] = useState(false);
   const [showFichaDialog, setShowFichaDialog] = useState(false);
+  const [showFullViewDialog, setShowFullViewDialog] = useState(false);
+
   const [hasRegistration, setHasRegistration] = useState(false);
   const [hasShopifyOrder, setHasShopifyOrder] = useState<boolean | null>(null);
   const [shopifyOrderName, setShopifyOrderName] = useState<string | null>(null);
@@ -1066,6 +1070,21 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
           <GatewayPaymentLookupButton orderId={order.id} compact />
 
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs gap-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowFullViewDialog(true);
+            }}
+          >
+            <Package className="h-3 w-3" />
+            Ver Pedido
+          </Button>
+
+
+
 
           {/* Fulfillment buttons for paid orders */}
           {(order.is_paid || order.paid_externally) && order.stage === 'paid' && (
@@ -1232,6 +1251,13 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
         onOpenChange={setShowFichaDialog}
         order={order}
       />
+
+      <OrderFullViewDialog
+        open={showFullViewDialog}
+        onOpenChange={setShowFullViewDialog}
+        order={order}
+      />
+
 
       {order.customer?.whatsapp && (
         <WhatsAppChatDialog
