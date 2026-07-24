@@ -13,6 +13,8 @@ import { InstagramDMChat } from "./events/InstagramDMChat";
 import { SendToPOSDialog } from "./SendToPOSDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
 import { GatewayPaymentLookupButton } from "./GatewayPaymentLookupButton";
+import { OrderFullViewDialog } from "./OrderFullViewDialog";
+
 
 import { Order } from "@/types/order";
 import { toast } from "sonner";
