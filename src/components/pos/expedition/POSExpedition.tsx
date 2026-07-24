@@ -342,11 +342,22 @@ export function POSExpedition({ storeId, storeName }: Props) {
                         </div>
 
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {stage === "novo" && o.is_avulso && (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-2 border-amber-500 text-amber-600 text-base font-black"
+                              onClick={() => setAvulsoOrder(o)}
+                            >
+                              <Pencil className="h-5 w-5 mr-1" /> EDITAR PEDIDO
+                            </Button>
+                          )}
                           {stage === "novo" && (
                             <Button
                               size="lg"
                               className="bg-exp-new hover:bg-exp-new/90 text-white text-base font-black"
-                              disabled={busyId === o.id}
+                              disabled={busyId === o.id || (o.is_avulso && !o.avulso_ready)}
+                              title={o.is_avulso && !o.avulso_ready ? "Complete os dados do pedido avulso" : undefined}
                               onClick={() => advance(o)}
                             >
                               {busyId === o.id ? <Loader2 className="h-5 w-5 animate-spin" /> : <PlayCircle className="h-5 w-5 mr-1" />}
