@@ -520,7 +520,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               extraUpdates.paid_externally = true;
               extraUpdates.is_paid = true;
               extraUpdates.paid_at = new Date().toISOString();
+              (extraUpdates as any).payment_confirmed_source = 'manual';
             }
+
             if (isPickup) {
               extraUpdates.is_pickup = true;
               if (pickupStoreId) extraUpdates.pickup_store_id = pickupStoreId;
