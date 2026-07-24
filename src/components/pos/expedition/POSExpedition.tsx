@@ -325,6 +325,15 @@ export function POSExpedition({ storeId, storeName }: Props) {
               <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
             </Button>
             <Button
+              variant={showFilters ? "default" : "outline"}
+              size="lg"
+              onClick={() => setShowFilters((v) => !v)}
+              title="Filtros"
+            >
+              <Filter className="h-5 w-5" />
+              <span className="ml-2 font-bold">Filtros</span>
+            </Button>
+            <Button
               variant="outline"
               size="lg"
               onClick={() => runTestAction("create")}
