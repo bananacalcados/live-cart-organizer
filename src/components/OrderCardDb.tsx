@@ -619,44 +619,6 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
                 {order.customer?.instagram_handle}
               </button>
             </div>
-            {/* Botão para abrir/editar os dados que o cliente preencheu no link de checkout */}
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setShowFichaDialog(true); }}
-              className="mt-0.5 inline-flex items-center gap-1 rounded-md bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm hover:bg-red-700"
-              title="Ver/editar os dados cadastrais do cliente"
-            >
-              <UserCheck className="h-3 w-3" />
-              VER DADOS
-            </button>
-            <div className="flex items-center gap-1.5 min-w-0">
-              <p className="text-[11px] text-muted-foreground truncate font-mono">
-                ID: {order.id}
-              </p>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  try {
-                    await navigator.clipboard.writeText(order.id);
-                    toast.success("ID do pedido copiado!");
-                  } catch {
-                    window.prompt("Copie o ID do pedido:", order.id);
-                  }
-                }}
-                title="Copiar ID do pedido"
-              >
-                <ClipboardCopy className="h-3 w-3" />
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(order.created_at), {
-                addSuffix: true,
-                locale: ptBR,
-              })}
-            </p>
           </div>
         </div>
       </div>
@@ -682,10 +644,6 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
       {/* Badges for Registration, Paid Externally, Gift, Free Shipping, Discount */}
       <div className="flex flex-wrap gap-1 mb-3">
-        {/* Data em que o card/pedido foi montado */}
-        <Badge variant="outline" className="text-[10px] bg-muted/50 text-muted-foreground border-border">
-          📅 {format(new Date(order.created_at), "dd/MM/yyyy")}
-        </Badge>
         {/* Status do link de checkout — só exibe enquanto o pedido não está pago */}
         {!order.is_paid && !order.paid_externally && linkStep >= 0 && (
           linkStep === 0 ? (
@@ -729,69 +687,14 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             Sem Shopify
           </Badge>
         )}
-        {hasRegistration && (
-          <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
-            <UserCheck className="h-3 w-3 mr-1" />
-            Dados Cadastrados
-          </Badge>
-        )}
         {order.paid_externally && (
           <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30">
             <Wallet className="h-3 w-3 mr-1" />
             Pago Externo
           </Badge>
         )}
-        {/* Forma de pagamento (somente quando PAGO) — tags separadas: gateway + método (+ parcelas) */}
-        {(order.is_paid || order.paid_externally) && (() => {
-          const gateway = order.mercadopago_payment_id ? 'Mercado Pago'
-            : order.pagarme_order_id ? 'Pagar.me'
-            : order.appmax_order_id ? 'AppMax'
-            : order.vindi_transaction_id ? 'Vindi'
-            : order.pos_sale_id ? 'PDV'
-            : null;
 
-          const label = (order.payment_method_label || '').toLowerCase();
-          // Parcelas: coluna installments → texto "Cartão de Crédito 6x" → fallback do checkout
-          const parsedFromLabel = parseInt((label.match(/(\d+)\s*x/) || [])[1] || '', 10);
-          const installments = order.installments && order.installments > 0
-            ? order.installments
-            : (!isNaN(parsedFromLabel) && parsedFromLabel > 0 ? parsedFromLabel
-            : (checkoutInstallments || 0));
 
-          // Identifica o método: 1) pela label, 2) por parcelas, 3) pelo checkout
-          const cm = (checkoutMethod || '').toLowerCase();
-          let method: 'pix' | 'card' | null = null;
-          if (label.includes('pix')) method = 'pix';
-          else if (label.includes('cart') || label.includes('crédito') || label.includes('credito') || label.includes('débito') || label.includes('debito') || installments > 1) method = 'card';
-          else if (cm === 'pix') method = 'pix';
-          else if (cm === 'card' || cm === 'credit_card' || cm === 'debit_card') method = 'card';
-
-          // Nada identificado e sem gateway → não mostra nada
-          if (!gateway && !method) return null;
-
-          return (
-            <>
-              {gateway && (
-                <Badge variant="secondary" className="text-[10px] bg-muted text-muted-foreground border-border">
-                  <Store className="h-3 w-3 mr-1" />
-                  {gateway}
-                </Badge>
-              )}
-              {method === 'pix' && (
-                <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
-                  <DollarSign className="h-3 w-3 mr-1" />
-                  PIX
-                </Badge>
-              )}
-              {method === 'card' && (
-                <Badge variant="secondary" className="text-[10px] bg-stage-contacted/20 text-stage-contacted border-stage-contacted/30">
-                  <CreditCard className="h-3 w-3 mr-1" />
-                  CARTÃO{installments > 0 ? ` ${installments}x` : ''}
-                </Badge>
-              )}
-            </>
-          );
-        })()}
 
         {order.has_gift && (
           <Badge variant="secondary" className="text-[10px] bg-accent/20 text-accent border-accent/30">
