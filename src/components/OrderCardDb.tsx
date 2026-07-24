@@ -1066,6 +1066,21 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
 
           <GatewayPaymentLookupButton orderId={order.id} compact />
 
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-xs gap-1"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowFullViewDialog(true);
+            }}
+          >
+            <Package className="h-3 w-3" />
+            Ver Pedido
+          </Button>
+
+
+
 
           {/* Fulfillment buttons for paid orders */}
           {(order.is_paid || order.paid_externally) && order.stage === 'paid' && (
