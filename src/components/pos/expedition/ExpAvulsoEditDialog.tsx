@@ -67,6 +67,38 @@ export function ExpAvulsoEditDialog({ order, storeId, open, onOpenChange, onSave
     state: "",
   });
   const [shipping, setShipping] = useState<string>("");
+  const [cepLoading, setCepLoading] = useState(false);
+
+  const lookupCep = async (rawCep?: string) => {
+    const cep = onlyDigits(rawCep ?? form.cep);
+    if (cep.length !== 8) {
+      toast.error("Digite um CEP com 8 dígitos");
+      return;
+    }
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await res.json();
+      if (data?.erro) {
+        toast.error("CEP não encontrado");
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        cep,
+        address: data.logradouro || f.address,
+        neighborhood: data.bairro || f.neighborhood,
+        city: data.localidade || f.city,
+        state: (data.uf || f.state || "").toUpperCase(),
+        complement: f.complement || data.complemento || "",
+      }));
+      toast.success("Endereço preenchido pelo CEP");
+    } catch (e: any) {
+      toast.error("Falha ao consultar CEP");
+    } finally {
+      setCepLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!open) return;
