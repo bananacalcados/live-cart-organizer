@@ -47,7 +47,7 @@ const SECTIONS: { id: POSSection; label: string; icon: typeof ShoppingCart; badg
   { id: "dashboard", label: "Dashboard", icon: BarChart3, priority: true },
   { id: "sales", label: "Venda", icon: ShoppingCart, priority: true },
   { id: "daily", label: "Pedidos", icon: BarChart3, priority: true },
-  { id: "expedition", label: "Expedição", icon: Truck, priority: true, badge: true },
+  { id: "expedition", label: "Expedição", icon: Truck, priority: true },
   { id: "online", label: "Online", icon: Globe, priority: true },
   { id: "shipments", label: "Envios", icon: Truck, priority: true, badge: true },
   { id: "pickups", label: "Retiradas", icon: Package, priority: true, badge: true },
