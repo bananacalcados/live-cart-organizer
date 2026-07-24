@@ -27,6 +27,7 @@ import { POSPickupOrders } from "@/components/pos/POSPickupOrders";
 import { POSTeamChat } from "@/components/pos/POSTeamChat";
 import { POSSlowMovingProducts } from "@/components/pos/POSSlowMovingProducts";
 import { POSShipments } from "@/components/pos/POSShipments";
+import { POSExpedition } from "@/components/pos/expedition/POSExpedition";
 import { POSSellerDashboard } from "@/components/pos/POSSellerDashboard";
 import { POSDashboard } from "@/components/pos/POSDashboard";
 import { POSOnlineHub } from "@/components/pos/POSOnlineHub";
