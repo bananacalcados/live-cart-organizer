@@ -1125,15 +1125,21 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 <Wallet className="h-4 w-4 text-primary" />
                 <div>
                   <span>Pago Fora (Yampi/Shopify)</span>
-                  <p className="text-xs text-muted-foreground font-normal">PIX direto, dinheiro, etc.</p>
+                  <p className="text-xs text-muted-foreground font-normal">
+                    {(editingOrder as any)?.payment_confirmed_source === 'gateway_webhook'
+                      ? 'Pagamento confirmado pelo gateway — não pode ser alterado.'
+                      : 'PIX direto, dinheiro, etc.'}
+                  </p>
                 </div>
               </Label>
               <Switch
                 id="paidExternally"
                 checked={paidExternally}
                 onCheckedChange={setPaidExternally}
+                disabled={(editingOrder as any)?.payment_confirmed_source === 'gateway_webhook'}
               />
             </div>
+
             {editingOrder && editingOrder.is_paid && !isPhysicalEvent && (
               <Button
                 type="button"
