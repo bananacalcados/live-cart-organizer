@@ -308,6 +308,14 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             <Badge className={`${stageStyles[stage].chip} text-white text-sm font-bold`}>
                               {ORIGIN_LABEL[o.origin]}
                             </Badge>
+                            {o.is_avulso && (
+                              <Badge className="bg-amber-500 text-white text-sm font-black">AVULSO</Badge>
+                            )}
+                            {o.is_avulso && !o.avulso_ready && stage === "novo" && (
+                              <Badge variant="outline" className="text-sm font-bold border-amber-500 text-amber-600">
+                                Dados pendentes
+                              </Badge>
+                            )}
                             {o.event_name && (
                               <Badge variant="outline" className="text-sm font-bold">{o.event_name}</Badge>
                             )}
