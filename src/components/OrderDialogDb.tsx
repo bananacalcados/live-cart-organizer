@@ -52,7 +52,7 @@ interface OrderDialogDbProps {
 }
 
 export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefillInstagram, prefillCommentId }: OrderDialogDbProps) {
-  const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, banCustomer, customers } = useCustomerStore();
+  const { findCustomerByInstagram, findCustomerByWhatsApp, createOrUpdateCustomer, banCustomer, unbanCustomer, customers } = useCustomerStore();
   const { createOrder, updateOrder, findActiveOrderByCustomer, orders } = useDbOrderStore();
 
   const [instagramHandle, setInstagramHandle] = useState("");
