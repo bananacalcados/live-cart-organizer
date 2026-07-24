@@ -139,15 +139,37 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return orders;
-    return orders.filter(
-      (o) =>
+    return orders.filter((o) => {
+      if (filterTest === "hide" && o.is_test) return false;
+      if (filterTest === "only" && !o.is_test) return false;
+      if (filterOrigin !== "all" && o.origin !== filterOrigin) return false;
+      if (filterAvulso === "avulso" && !o.is_avulso) return false;
+      if (filterAvulso === "avulso_pending" && (!o.is_avulso || o.avulso_ready)) return false;
+      if (filterAvulso === "normal" && o.is_avulso) return false;
+      if (filterShipping !== "all") {
+        const dm = (o.delivery_method || o.shipping_carrier || "").toLowerCase();
+        if (filterShipping === "pickup" && !dm.includes("retirada")) return false;
+        if (filterShipping === "moto" && !dm.includes("moto")) return false;
+        if (filterShipping === "carrier" && (dm.includes("retirada") || dm.includes("moto") || !dm)) return false;
+        if (filterShipping === "none" && dm) return false;
+      }
+      if (filterPeriod !== "all") {
+        const created = new Date(o.created_at).getTime();
+        const now = Date.now();
+        const day = 86400000;
+        const map: Record<string, number> = { today: 1, "7d": 7, "30d": 30 };
+        const days = map[filterPeriod] || 0;
+        if (days && now - created > days * day) return false;
+      }
+      if (!q) return true;
+      return (
         (o.customer_name || "").toLowerCase().includes(q) ||
         (o.customer_phone || "").includes(q) ||
         (o.tracking_code || "").toLowerCase().includes(q) ||
-        o.items.some((i) => (i.product_name || "").toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q)),
-    );
-  }, [orders, search]);
+        o.items.some((i) => (i.product_name || "").toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q))
+      );
+    });
+  }, [orders, search, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod]);
 
   const groups = useMemo(() => {
     const map = new Map<string, ExpOrder[]>();
