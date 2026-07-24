@@ -433,7 +433,27 @@ export function ExpAvulsoEditDialog({ order, storeId, open, onOpenChange, onSave
               <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <Label>CEP</Label>
-                  <Input value={form.cep} onChange={(e) => setForm({ ...form, cep: e.target.value })} />
+                  <div className="flex gap-2">
+                    <Input
+                      value={form.cep}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setForm({ ...form, cep: v });
+                        if (onlyDigits(v).length === 8) lookupCep(v);
+                      }}
+                      onBlur={() => onlyDigits(form.cep).length === 8 && lookupCep()}
+                      placeholder="00000-000"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => lookupCep()}
+                      disabled={cepLoading}
+                      title="Buscar endereço pelo CEP"
+                    >
+                      {cepLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
                 <div className="md:col-span-2">
                   <Label>Endereço</Label>
