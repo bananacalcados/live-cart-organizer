@@ -1062,6 +1062,9 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             </Button>
           )}
 
+          <GatewayPaymentLookupButton orderId={order.id} compact />
+
+
           {/* Fulfillment buttons for paid orders */}
           {(order.is_paid || order.paid_externally) && order.stage === 'paid' && (
             <div className="flex gap-1.5 mt-1.5">
