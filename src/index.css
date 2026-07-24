@@ -92,6 +92,13 @@
     --shadow-pos-card: 0 1px 2px hsl(0 0% 0% / 0.04), 0 8px 24px -12px hsl(0 0% 0% / 0.12);
     --shadow-pos-inset: inset 0 1px 0 hsl(0 0% 100% / 0.9), inset 0 -1px 0 hsl(0 0% 0% / 0.05);
 
+    /* Expedição PDV — etapas vibrantes */
+    --exp-new: 265 85% 58%;
+    --exp-prep: 200 95% 45%;
+    --exp-pick: 160 84% 39%;
+    --exp-check: 32 100% 50%;
+    --exp-done: 142 71% 40%;
+
     /* Shadows */
     --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.05);
     --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.08);
