@@ -93,6 +93,7 @@ export function POSStoreGoalCards({ storeId }: Props) {
           supabase.from("pos_sales")
             .select("total, paid_at, created_at")
             .eq("store_id", storeId)
+            .eq("expedition_stage", "concluido")
             .in("status", REVENUE_STATUSES)
             .neq("revenue_attribution", "site_pickup_only")
             .or(`and(paid_at.gte.${monthStart.toISOString()},paid_at.lte.${endIso}),and(paid_at.is.null,created_at.gte.${monthStart.toISOString()},created_at.lte.${endIso})`)
