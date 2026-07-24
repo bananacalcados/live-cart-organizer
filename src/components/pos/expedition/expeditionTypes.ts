@@ -175,6 +175,8 @@ export async function fetchExpeditionOrders(
       ...s,
       items: itemsBySale.get(s.id) || [],
       origin: getOrigin(s),
+      is_avulso: isAvulsoSale(s),
+      avulso_ready: isAvulsoReady(s),
       seller_name: s.seller_id ? sellerMap.get(s.seller_id) || null : null,
       event_name: s.event_id ? eventMap.get(s.event_id) || null : null,
       instagram: s.payment_details?.instagram || null,
