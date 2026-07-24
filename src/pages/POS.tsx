@@ -36,7 +36,7 @@ import { POSMetaPixelDashboard } from "@/components/pos/POSMetaPixelDashboard";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
-type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "seller-dashboard" | "customers" | "meta-pixel";
+type POSSection = "dashboard" | "sales" | "online" | "cash" | "returns" | "chat" | "requests" | "config" | "whatsapp" | "daily" | "searches" | "pickups" | "checkout" | "slowmoving" | "shipments" | "expedition" | "seller-dashboard" | "customers" | "meta-pixel";
 
 type WhatsAppFilter = "unanswered" | "new" | undefined;
 
