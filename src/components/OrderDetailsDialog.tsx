@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Loader2,
   User,
@@ -12,6 +13,9 @@ import {
   CreditCard,
   Copy,
   Package,
+  ShieldCheck,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
