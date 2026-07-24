@@ -729,12 +729,6 @@ export function OrderCardDb({ order, onEdit, onDelete, isDragging }: OrderCardDb
             Sem Shopify
           </Badge>
         )}
-        {hasRegistration && (
-          <Badge variant="secondary" className="text-[10px] bg-stage-paid/20 text-stage-paid border-stage-paid/30">
-            <UserCheck className="h-3 w-3 mr-1" />
-            Dados Cadastrados
-          </Badge>
-        )}
         {order.paid_externally && (
           <Badge variant="secondary" className="text-[10px] bg-primary/20 text-primary border-primary/30">
             <Wallet className="h-3 w-3 mr-1" />
