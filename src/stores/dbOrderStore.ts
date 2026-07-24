@@ -336,25 +336,38 @@ export const useDbOrderStore = create<DbOrderStore>()((set, get) => ({
     const previousStage = order.stage;
     const updates: Record<string, unknown> = { stage: newStage };
     const stateUpdates: Partial<DbOrder> = { stage: newStage };
-    
-    // If moving to paid, mark as paid
+
+    // Block reverting a payment confirmed by real gateway webhook
+    const isGatewayConfirmed = (order as any).payment_confirmed_source === 'gateway_webhook';
+    if (isGatewayConfirmed && newStage !== 'paid' && !isPaidOrderStage(newStage) && order.stage === 'paid') {
+      toast.error('Pagamento confirmado pelo gateway — não pode ser revertido pelo Kanban.');
+      return;
+    }
+
+    // If moving to paid, mark as paid (manual)
     if (newStage === 'paid' && !order.is_paid) {
       const paidAt = new Date().toISOString();
       updates.is_paid = true;
       updates.paid_at = paidAt;
+      (updates as any).payment_confirmed_source = 'manual';
       stateUpdates.is_paid = true;
       stateUpdates.paid_at = paidAt;
+      (stateUpdates as any).payment_confirmed_source = 'manual';
       notifyPaymentConfirmed(orderId, 'events-kanban-drag');
     }
 
-    // Post-paid stages should keep payment flags
     // If moving away from paid manually to a pre-paid stage, clear payment flags
     if (newStage !== 'paid' && !isPaidOrderStage(newStage) && order.is_paid && order.stage === 'paid') {
       updates.is_paid = false;
       updates.paid_at = null;
+      (updates as any).paid_externally = false;
+      (updates as any).payment_confirmed_source = null;
       stateUpdates.is_paid = false;
       stateUpdates.paid_at = undefined;
+      (stateUpdates as any).paid_externally = false;
+      (stateUpdates as any).payment_confirmed_source = null;
     }
+
 
     try {
       const { error } = await supabase
