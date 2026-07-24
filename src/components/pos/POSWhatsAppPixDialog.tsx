@@ -87,6 +87,8 @@ export function POSWhatsAppPixDialog({
           customer_name: customerName || null,
           customer_phone: phone,
           description: description || "PIX WhatsApp",
+          is_avulso: true,
+          link_origin: "whatsapp_chat",
         },
       } as any).select("id").single();
       if (saleErr || !sale) throw new Error("Erro ao criar registro");
