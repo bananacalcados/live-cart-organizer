@@ -12,6 +12,8 @@ import { WhatsAppChatDialog } from "./WhatsAppChatDialog";
 import { InstagramDMChat } from "./events/InstagramDMChat";
 import { SendToPOSDialog } from "./SendToPOSDialog";
 import { CustomerFichaDialog } from "./CustomerFichaDialog";
+import { GatewayPaymentLookupButton } from "./GatewayPaymentLookupButton";
+
 import { Order } from "@/types/order";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
