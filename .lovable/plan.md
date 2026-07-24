@@ -1,115 +1,52 @@
+# Plano — Status de pagamento reversível quando NÃO veio de webhook
 
-# Melhorias no Typebot: Perguntas Estruturadas + Condições de Avanço
+## Problema
+Hoje qualquer pedido marcado como "pago" (seja pelo webhook do gateway, seja arrastado manualmente para a coluna Pago) grava `is_paid=true` na mesma coluna. O link público (`/checkout/order/:orderId`) só olha `is_paid` — então, quando alguém move manualmente por engano, o cliente vê "Pago" no link e, mesmo se voltarmos o pedido para outra coluna no Kanban, o link continua verde porque `is_paid` fica travado em `true`.
 
-Duas melhorias no criador de Typebot (Marketing → Eventos → Captação) que não alteram fluxos existentes — todos os steps atuais (`ask_name`, `ask_phone`, `message`, `final`) continuam funcionando exatamente como hoje.
+## Ideia central
+Registrar **de onde veio a confirmação** do pagamento. Se veio de webhook real de gateway, o status é imutável. Se foi manual (arrastado, marcado à mão, live, etc.), o status pode ser desfeito e o link volta a mostrar "pendente".
 
-## 1. Novos tipos de pergunta (com respostas padronizadas)
+## Mudanças
 
-Adicionar 2 novos tipos de step no builder:
+### 1. Banco (`orders`)
+- Nova coluna `payment_confirmed_source text` com valores:
+  - `gateway_webhook` — confirmado por webhook real (MP, AppMax, Pagar.me, PayPal, Yampi, Vindi, Shopify).
+  - `manual` — marcado pelo operador (drag no Kanban, botão "marcar como pago", `paid_externally`, live).
+  - `null` — não pago.
+- Trigger `trg_orders_payment_source_guard` em `BEFORE UPDATE`:
+  - Se `OLD.payment_confirmed_source = 'gateway_webhook'` e o novo update tenta mexer em `is_paid`, `paid_externally`, `stage` (para tirar do pago) ou `payment_confirmed_source` → bloqueia (RAISE EXCEPTION).
+  - Se o update marca como pago (is_paid true / paid_externally true / stage∈paid_stages) e `payment_confirmed_source` não veio setado explicitamente → default = `manual`.
+- Backfill inicial:
+  - Pedidos com `mercadopago_payment_id`, `appmax_transaction_id`, `pagarme_charge_id`, `paypal_order_id`, `yampi_order_id`, `vindi_charge_id`, `shopify_order_id` **preenchidos** → `payment_confirmed_source = 'gateway_webhook'`.
+  - Demais pedidos pagos → `manual`.
 
-- **`ask_choice`** — pergunta de escolha única (radio / botões). Ex.: "Você compra online?" → Sim / Não.
-- **`ask_multichoice`** — múltipla escolha (checkboxes). Ex.: "Quais tamanhos você usa?" → 34, 35, 36...
+### 2. Edge functions de webhook (setam `gateway_webhook`)
+Ajustar cada função que confirma pagamento para escrever `payment_confirmed_source: 'gateway_webhook'` no mesmo UPDATE que marca `is_paid=true`:
+- `mercadopago-check-payment`, `mercadopago-poll-pending`, `payment-webhook`, `appmax-webhook`, `pagarme-webhook`, `paypal-webhook`, `yampi-webhook`, `shopify-webhook`, `livete-payment-confirmation` (quando disparada por webhook, não por operador).
 
-Cada pergunta desse tipo grava a resposta em um **campo customizado** identificado por uma `field_key` (ex.: `tamanho_calcado`, `cidade`, `compra_online`). O admin escolhe a key ao criar a pergunta ou seleciona uma existente de uma lista de sugestões (tamanho, numeração, cor preferida, cidade, faixa etária…).
+### 3. Fluxos manuais (setam `manual`)
+- Drag & drop no Kanban do evento.
+- Botão "marcar como pago" no `OrderDetailsDialog`.
+- Toggle `paid_externally`.
+- Qualquer script/RPC administrativa.
+Todos passam a enviar `payment_confirmed_source: 'manual'` junto com o update.
 
-### Onde as respostas ficam salvas
+### 4. Reversão ("desmarcar pago")
+- No Kanban do evento e no `OrderDetailsDialog`, quando `payment_confirmed_source = 'manual'`:
+  - Mostrar ação **"Desfazer pagamento"** que faz UPDATE `is_paid=false, paid_externally=false, paid_at=null, stage='awaiting_payment', payment_confirmed_source=null`.
+  - Ao arrastar de "Pago" para outra coluna no Kanban → executa a mesma limpeza.
+- Quando `payment_confirmed_source = 'gateway_webhook'`:
+  - Ação de reversão fica desabilitada com tooltip "Pagamento confirmado pelo gateway — não pode ser alterado".
+  - Drag para fora da coluna Pago é bloqueado no front + rejeitado no trigger.
 
-Uma única coluna nova `event_leads.custom_fields JSONB` (default `'{}'`). Exemplo de conteúdo:
-```json
-{ "tamanho_calcado": "36", "cidade": "Valadares", "compra_online": "sim" }
-```
-Index GIN em `custom_fields` para permitir filtros rápidos.
-
-Nada é adicionado às colunas fixas atuais — leads antigos ficam com `{}` e continuam válidos.
-
-### Filtro para disparos
-
-Na tela de **Disparos → Público** (audience builder) adicionar um novo filtro **"Campo personalizado do Typebot"**:
-- Selecionar `field_key` (lista deduplicada a partir dos typebots existentes).
-- Operador `=`, `≠`, `contém`, `um de [lista]`.
-- Ex.: leads com `tamanho_calcado ∈ {35, 36, 37}` → dispara campanha específica.
-
-O agente IA de marketing (`propor_publico_lista`) também ganha acesso via nova ferramenta `filter_leads_by_custom_field`.
-
-## 2. Condições de avanço / disqualificação
-
-Cada pergunta do tipo `ask_choice` ganha campo opcional **"Condição para continuar"**:
-- **Continuar se resposta ∈ [opções permitidas]** → segue o fluxo normal.
-- **Caso contrário** → executa uma ação configurável:
-  - `end_flow`: encerra com mensagem custom (ex.: "Obrigada! Essa promoção é só para Valadares 😊") e **NÃO grava lead** (ou grava com flag `disqualified=true`, à escolha do admin — default: não grava).
-  - `skip_to_step`: pula para um step específico.
-
-Ex.: "Você mora em Valadares?" → Não → encerra sem salvar lead → economiza SMS/WhatsApp/estoque de leads inúteis.
-
-Nova coluna `event_leads.disqualified BOOLEAN DEFAULT false` (só usada quando admin optar por gravar mesmo assim, para análise).
-
-## Interface do Builder
-
-Na tela `EventCaptureBuilder`, ao adicionar step:
-- Dropdown de tipo ganha 2 opções novas: **"Escolha única"** e **"Múltipla escolha"**.
-- Painel de edição da pergunta mostra:
-  - Texto da pergunta
-  - `field_key` (input com autocomplete das keys já usadas)
-  - Lista editável de opções (label + value)
-  - Toggle "Obrigatória"
-  - Seção **"Condição"** (só em escolha única): escolher opções válidas + ação se inválido + mensagem final.
-
-## Frontend público (`EventTypebotView`)
-
-- Renderiza botões/checkboxes ao invés do input de texto quando `step.type ∈ ('ask_choice','ask_multichoice')`.
-- Guarda as respostas em `collected.custom_fields`.
-- Avalia condição antes de avançar; se disqualificado, exibe a mensagem final e para (não chama `event-lead-capture`, ou chama com flag `disqualified`).
-
-## Backend (`event-lead-capture`)
-
-- Aceita novos campos: `custom_fields` (obj) e `disqualified` (bool).
-- Grava em `event_leads.custom_fields` e `event_leads.disqualified`.
-- Se `disqualified=true` e admin configurou "não gravar", retorna sucesso sem inserir.
-- Zero mudança para chamadas antigas (parâmetros são opcionais).
+### 5. Link público do cliente (`TransparentCheckout`)
+Nenhuma mudança de regra: continua lendo `is_paid`. Como agora o "desfazer" zera `is_paid`, o link automaticamente volta a mostrar "pendente" quando a marcação manual é revertida.
 
 ## Detalhes técnicos
+- Índice `CREATE INDEX ON orders (payment_confirmed_source) WHERE payment_confirmed_source IS NOT NULL;` para o Kanban filtrar rápido.
+- Trigger em `SECURITY DEFINER` com `SET search_path=public`, permitindo bypass só via role `service_role` (usada pelos webhooks) — evita que um cliente autenticado consiga forçar `gateway_webhook`.
+- `OrderCard`/`OrderDetailsDialog` recebem badge visual: cadeado quando `gateway_webhook`, ícone editável quando `manual`.
+- Testes: reproduzir cenário live (marca manual → volta coluna → link volta a pendente) e cenário webhook (tenta arrastar → bloqueado, link permanece pago).
 
-**Migration (única, aditiva):**
-```sql
-ALTER TABLE public.event_leads
-  ADD COLUMN IF NOT EXISTS custom_fields JSONB NOT NULL DEFAULT '{}'::jsonb,
-  ADD COLUMN IF NOT EXISTS disqualified BOOLEAN NOT NULL DEFAULT false;
-CREATE INDEX IF NOT EXISTS idx_event_leads_custom_fields
-  ON public.event_leads USING GIN (custom_fields);
-```
-
-**Shape do step novo em `flow_json.steps`:**
-```ts
-{
-  id: string,
-  type: 'ask_choice' | 'ask_multichoice',
-  text: string,
-  field_key: string,           // ex.: 'tamanho_calcado'
-  options: { label: string, value: string }[],
-  required?: boolean,
-  condition?: {                // só ask_choice
-    allowed_values: string[],
-    on_fail: 'end_flow' | 'skip_to_step',
-    fail_message?: string,
-    skip_to_step_id?: string,
-    save_lead_when_disqualified?: boolean, // default false
-  }
-}
-```
-
-**Arquivos tocados:**
-- `supabase/migrations/*` — migration acima.
-- `src/pages/events/EventCaptureBuilder.tsx` — novo editor de step + condição.
-- `src/pages/public/EventTypebotView.tsx` — render de choice/multichoice + avaliação de condição.
-- `supabase/functions/event-lead-capture/index.ts` — persistência de `custom_fields`/`disqualified`.
-- Audience builder de disparos (arquivo em `src/components/marketing/…`) — novo filtro "Campo personalizado".
-- Agente IA marketing (`marketing-agent-chat` edge function) — tool `filter_leads_by_custom_field`.
-
-## Compatibilidade / risco
-
-- Tudo aditivo: colunas novas com default, tipos de step novos ignorados pelo código antigo (se algum caiu).
-- Nenhum step existente é alterado.
-- Leads antigos continuam válidos (`custom_fields = {}`, `disqualified = false`).
-- Se o admin não usar os novos tipos, o typebot funciona idêntico ao de hoje.
-
-Posso seguir com essa implementação?
+## Fora do escopo
+- Não altera lógica de baixa de estoque, NF-e, ou envio de mensagens automáticas de pagamento confirmado. Só o **status exibido** e a **possibilidade de reversão**.

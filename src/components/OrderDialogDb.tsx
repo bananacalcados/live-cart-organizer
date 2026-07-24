@@ -454,11 +454,19 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           is_delivery: isDelivery,
         } as any;
         
-        // If marking as paid externally, also mark as paid
+        // If marking as paid externally, also mark as paid (manual source)
         if (paidExternally && !editingOrder.is_paid) {
           orderUpdates.is_paid = true;
           orderUpdates.paid_at = new Date().toISOString();
+          (orderUpdates as any).payment_confirmed_source = 'manual';
         }
+        // If unchecking paid_externally and payment wasn't confirmed by gateway → clear
+        if (!paidExternally && editingOrder.paid_externally && (editingOrder as any).payment_confirmed_source !== 'gateway_webhook') {
+          orderUpdates.is_paid = false;
+          orderUpdates.paid_at = null;
+          (orderUpdates as any).payment_confirmed_source = null;
+        }
+
         
         await updateOrder(editingOrder.id, orderUpdates);
 
@@ -512,7 +520,9 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
               extraUpdates.paid_externally = true;
               extraUpdates.is_paid = true;
               extraUpdates.paid_at = new Date().toISOString();
+              (extraUpdates as any).payment_confirmed_source = 'manual';
             }
+
             if (isPickup) {
               extraUpdates.is_pickup = true;
               if (pickupStoreId) extraUpdates.pickup_store_id = pickupStoreId;
@@ -1115,15 +1125,21 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
                 <Wallet className="h-4 w-4 text-primary" />
                 <div>
                   <span>Pago Fora (Yampi/Shopify)</span>
-                  <p className="text-xs text-muted-foreground font-normal">PIX direto, dinheiro, etc.</p>
+                  <p className="text-xs text-muted-foreground font-normal">
+                    {(editingOrder as any)?.payment_confirmed_source === 'gateway_webhook'
+                      ? 'Pagamento confirmado pelo gateway — não pode ser alterado.'
+                      : 'PIX direto, dinheiro, etc.'}
+                  </p>
                 </div>
               </Label>
               <Switch
                 id="paidExternally"
                 checked={paidExternally}
                 onCheckedChange={setPaidExternally}
+                disabled={(editingOrder as any)?.payment_confirmed_source === 'gateway_webhook'}
               />
             </div>
+
             {editingOrder && editingOrder.is_paid && !isPhysicalEvent && (
               <Button
                 type="button"

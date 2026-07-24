@@ -1038,7 +1038,7 @@ serve(async (req) => {
       }) || (recentBlocking.gateway === "mercadopago" ? "PIX" : (params.installments > 1 ? `Cartão de Crédito ${params.installments}x` : "Cartão de Crédito"));
       const paidAt = new Date().toISOString();
       if (orderSource === "orders") {
-        await supabase.from("orders").update({ is_paid: true, paid_at: paidAt, stage: "paid", payment_method_label: paymentLabel, installments: params.installments }).eq("id", params.orderId).eq("is_paid", false);
+        await supabase.from("orders").update({ is_paid: true, payment_confirmed_source: 'gateway_webhook', paid_at: paidAt, stage: "paid", payment_method_label: paymentLabel, installments: params.installments }).eq("id", params.orderId).eq("is_paid", false);
         await syncOrderPaymentToPosSale(supabase, {
           orderId: params.orderId,
           paymentMethodLabel: paymentLabel,
@@ -1211,7 +1211,7 @@ serve(async (req) => {
         const { error: updErr } = await supabase
           .from("orders")
           .update({
-            is_paid: true,
+            is_paid: true, payment_confirmed_source: 'gateway_webhook',
             paid_at: paidAt,
             stage: "paid",
             payment_method_label: paymentLabel,
