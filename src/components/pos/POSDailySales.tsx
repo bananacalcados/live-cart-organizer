@@ -229,6 +229,7 @@ export function POSDailySales({ storeId }: Props) {
           .from("pos_sales")
           .select(selectFields)
           .eq("store_id", storeId)
+          .eq("expedition_stage", "concluido")
           .gte("created_at", start.toISOString())
           .lte("created_at", end.toISOString())
           .not("status", "in", '("paid","completed","pending_sync")')
@@ -237,6 +238,7 @@ export function POSDailySales({ storeId }: Props) {
           .from("pos_sales")
           .select(selectFields)
           .eq("store_id", storeId)
+          .eq("expedition_stage", "concluido")
           .in("status", ["paid", "completed", "pending_sync"])
           .or(`and(paid_at.gte.${start.toISOString()},paid_at.lte.${end.toISOString()}),and(paid_at.is.null,created_at.gte.${start.toISOString()},created_at.lte.${end.toISOString()})`)
           .order("created_at", { ascending: false }),
