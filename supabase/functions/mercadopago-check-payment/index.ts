@@ -179,7 +179,7 @@ serve(async (req) => {
         await supabase
           .from("orders")
           .update({
-            is_paid: true,
+            is_paid: true, payment_confirmed_source: 'gateway_webhook',
             paid_at: paidAt,
             stage: "paid",
             payment_method_label: payLabel,

@@ -70,7 +70,7 @@ serve(async (req) => {
           const { error: updateError } = await supabase
             .from("orders")
             .update({
-              is_paid: true,
+              is_paid: true, payment_confirmed_source: 'gateway_webhook',
               paid_at: new Date().toISOString(),
               stage: "paid",
             })
@@ -120,7 +120,7 @@ serve(async (req) => {
               const { error: updateError } = await supabase
                 .from("orders")
                 .update({
-                  is_paid: true,
+                  is_paid: true, payment_confirmed_source: 'gateway_webhook',
                   paid_at: new Date().toISOString(),
                   stage: "paid",
                 })
