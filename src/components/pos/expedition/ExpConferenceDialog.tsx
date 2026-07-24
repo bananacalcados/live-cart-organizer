@@ -54,7 +54,7 @@ export function ExpConferenceDialog({ order, open, onOpenChange, onFinished }: P
 
     supabase
       .from("whatsapp_numbers_safe")
-      .select("id, display_name, phone_number")
+      .select("id, label, phone_display")
       .eq("is_active", true)
       .then(({ data }) => {
         setNumbers(data || []);
@@ -324,7 +324,7 @@ export function ExpConferenceDialog({ order, open, onOpenChange, onFinished }: P
                     <SelectContent>
                       {numbers.map((n) => (
                         <SelectItem key={n.id} value={n.id} className="text-base">
-                          {n.display_name || n.phone_number}
+                          {n.label || n.phone_display}
                         </SelectItem>
                       ))}
                     </SelectContent>
