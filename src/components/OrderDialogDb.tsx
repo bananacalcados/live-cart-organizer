@@ -454,11 +454,19 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           is_delivery: isDelivery,
         } as any;
         
-        // If marking as paid externally, also mark as paid
+        // If marking as paid externally, also mark as paid (manual source)
         if (paidExternally && !editingOrder.is_paid) {
           orderUpdates.is_paid = true;
           orderUpdates.paid_at = new Date().toISOString();
+          (orderUpdates as any).payment_confirmed_source = 'manual';
         }
+        // If unchecking paid_externally and payment wasn't confirmed by gateway → clear
+        if (!paidExternally && editingOrder.paid_externally && (editingOrder as any).payment_confirmed_source !== 'gateway_webhook') {
+          orderUpdates.is_paid = false;
+          orderUpdates.paid_at = null;
+          (orderUpdates as any).payment_confirmed_source = null;
+        }
+
         
         await updateOrder(editingOrder.id, orderUpdates);
 
