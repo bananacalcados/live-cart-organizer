@@ -270,7 +270,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
   console.log(`[mercadopago] Searching for order with mercadopago_payment_id=${mpIdStr}`);
   const { data: orders, error: orderSearchErr } = await supabase
     .from("orders")
-    .select("id, is_paid, pickup_store_id")
+    .select("id, is_paid, pickup_store_id, products, discount_type, discount_value, shipping_cost, free_shipping")
     .filter("mercadopago_payment_id", "eq", mpIdStr)
     .limit(1);
   if (orderSearchErr) console.error("[mercadopago] order search error:", orderSearchErr);
@@ -282,7 +282,7 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
     console.log(`[mercadopago] No order by mp_id. Trying external_reference=${externalRef}`);
     const { data: refOrder, error: refOrderErr } = await supabase
       .from("orders")
-      .select("id, is_paid, pickup_store_id")
+      .select("id, is_paid, pickup_store_id, products, discount_type, discount_value, shipping_cost, free_shipping")
       .eq("id", externalRef)
       .maybeSingle();
 
@@ -305,6 +305,38 @@ async function handleMercadoPago(req: Request, supabase: any, supabaseUrl: strin
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });
     }
+
+    // ── Guard anti-ID-órfão: exige match de valor OU external_reference ──
+    const prods = (order as any).products || [];
+    const subtotal = prods.reduce((s: number, p: any) => s + (Number(p.price) || 0) * (Number(p.quantity) || 0), 0);
+    const disc = (order as any).discount_type && (order as any).discount_value
+      ? (order as any).discount_type === "percentage"
+        ? subtotal * (Number((order as any).discount_value) / 100)
+        : Number((order as any).discount_value)
+      : 0;
+    const shipping = (order as any).free_shipping ? 0 : Number((order as any).shipping_cost || 0);
+    const expected = Math.max(0, subtotal - disc + shipping);
+    const mpAmount = Number(mpPayment.transaction_amount || 0);
+    const extRef = String(mpPayment.external_reference || "");
+    const amountOk = expected > 0 && Math.abs(mpAmount - expected) < 0.01;
+    const refOk = extRef === order.id;
+
+    if (!amountOk && !refOk) {
+      const reason = `mp_amount=${mpAmount} vs order_total=${expected} | external_ref='${extRef}' vs order.id='${order.id}'`;
+      console.warn(`[mercadopago] REJEITADO — ID órfão suspeito. ${reason}`);
+      await supabase.from("ai_error_logs").insert({
+        source: "payment-webhook",
+        error_type: "orphan_mp_payment_id",
+        error_message: `Pagamento MP ${mpIdStr} rejeitado para order ${order.id}: ${reason}`,
+        context: { orderId: order.id, mpPaymentId: mpIdStr, mpAmount, expected, extRef },
+      }).catch(() => {});
+      // Limpa a associação órfã para não travar futuras tentativas
+      await supabase.from("orders").update({ mercadopago_payment_id: null }).eq("id", order.id);
+      return new Response(JSON.stringify({ ok: true, skipped: true, reason: "amount_or_ref_mismatch", detail: reason }), {
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
+    }
+
 
     const mpTypeId = String(mpPayment.payment_type_id || "");
     const mpMethodId = String(mpPayment.payment_method_id || "");

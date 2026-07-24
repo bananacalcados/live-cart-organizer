@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Loader2,
   User,
@@ -12,6 +13,9 @@ import {
   CreditCard,
   Copy,
   Package,
+  ShieldCheck,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -131,6 +135,25 @@ export function OrderDetailsDialog({
   const [loading, setLoading] = useState(false);
   const [reg, setReg] = useState<Registration | null>(null);
   const [order, setOrder] = useState<OrderRow | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookup, setLookup] = useState<any | null>(null);
+
+  const runLookup = async () => {
+    setLookupLoading(true);
+    setLookup(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("gateway-payment-lookup", {
+        body: { orderId },
+      });
+      if (error) throw error;
+      setLookup(data);
+      if (data?.warning) toast.info(data.warning);
+    } catch (e: any) {
+      toast.error(`Falha ao consultar gateway: ${e.message || e}`);
+    } finally {
+      setLookupLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!open || !orderId) return;
@@ -299,6 +322,108 @@ export function OrderDetailsDialog({
               <div className="mt-1 border-t pt-2 flex items-center justify-between">
                 <span className="text-sm font-semibold">Total do Pedido</span>
                 <span className="text-base font-bold text-primary">{fmtMoney(total)}</span>
+              </div>
+
+              {/* Consulta no gateway */}
+              <div className="mt-3 border-t pt-2 space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={runLookup}
+                  disabled={lookupLoading}
+                >
+                  {lookupLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="h-3.5 w-3.5 mr-2" />
+                  )}
+                  Verificar pagamento no gateway
+                </Button>
+
+                {lookup && (
+                  <div className="rounded-md bg-muted/40 p-2 text-xs space-y-2">
+                    {lookup.warning && (
+                      <p className="text-amber-600 flex items-start gap-1">
+                        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                        {lookup.warning}
+                      </p>
+                    )}
+                    {(lookup.gateways || []).map((g: any, i: number) => (
+                      <div key={i} className="space-y-1 border rounded p-2 bg-background">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold uppercase text-[10px] tracking-wide">
+                            {g.gateway} {g.account ? `· ${g.account}` : ""}
+                          </span>
+                          {g.status && (
+                            <Badge
+                              variant={
+                                g.status === "approved"
+                                  ? "default"
+                                  : g.status === "not_found"
+                                    ? "destructive"
+                                    : "secondary"
+                              }
+                              className="text-[10px]"
+                            >
+                              {g.status}
+                            </Badge>
+                          )}
+                        </div>
+                        {g.error && (
+                          <p className="text-destructive flex items-start gap-1">
+                            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                            {g.error}
+                          </p>
+                        )}
+                        {typeof g.amount === "number" && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Valor no gateway</span>
+                            <span className={g.amountMatches ? "text-emerald-600 font-medium" : "text-destructive font-medium"}>
+                              {fmtMoney(g.amount)} {g.amountMatches ? "✓" : `≠ ${fmtMoney(lookup.expectedTotal || 0)}`}
+                            </span>
+                          </div>
+                        )}
+                        {g.externalReference !== undefined && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Ref. externa</span>
+                            <span className={g.referenceMatches ? "text-emerald-600" : "text-destructive"}>
+                              {g.externalReference || "—"} {g.referenceMatches ? "✓" : "≠ order.id"}
+                            </span>
+                          </div>
+                        )}
+                        {g.dateApproved && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Aprovado em</span>
+                            <span>{new Date(g.dateApproved).toLocaleString("pt-BR")}</span>
+                          </div>
+                        )}
+                        {g.payer?.email && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Pagador</span>
+                            <span className="truncate max-w-[60%] text-right">{g.payer.email}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">ID</span>
+                          <span className="font-mono">{g.paymentId}</span>
+                        </div>
+                        {g.receiptUrl && (
+                          <a
+                            href={g.receiptUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-primary hover:underline"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Abrir no {g.gateway}
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </section>
           </div>
