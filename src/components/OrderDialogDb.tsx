@@ -610,8 +610,23 @@ export function OrderDialogDb({ open, onOpenChange, editingOrder, eventId, prefi
           {isBanned && (
             <Alert className="border-destructive/50 bg-destructive/10">
               <Ban className="h-4 w-4 text-destructive" />
-              <AlertDescription className="text-sm text-destructive">
-                <strong>Cliente banido!</strong> {existingCustomer?.ban_reason || editingOrder?.customer?.ban_reason || 'Sem motivo especificado'}
+              <AlertDescription className="text-sm text-destructive flex items-center justify-between gap-3">
+                <span>
+                  <strong>Cliente banido!</strong> {existingCustomer?.ban_reason || editingOrder?.customer?.ban_reason || 'Sem motivo especificado'}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={async () => {
+                    const cid = editingOrder?.customer?.id || existingCustomer?.id;
+                    if (!cid) return;
+                    await unbanCustomer(cid);
+                    toast.success("Cliente desbanido");
+                  }}
+                >
+                  Desbanir
+                </Button>
               </AlertDescription>
             </Alert>
           )}
