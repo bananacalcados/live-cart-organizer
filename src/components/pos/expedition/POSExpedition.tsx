@@ -257,6 +257,47 @@ export function POSExpedition({ storeId, storeName }: Props) {
     if (open && stage === "separacao") loadStock(o);
   };
 
+  const bulkEligible = useMemo(
+    () => filtered.filter((o) => selected.has(o.id) && !(o.is_avulso && !o.avulso_ready) && stage !== "conferencia" && stage !== "concluido"),
+    [filtered, selected, stage],
+  );
+
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+
+  const selectAllVisible = () => {
+    const eligible = filtered.filter((o) => !(o.is_avulso && !o.avulso_ready));
+    if (selected.size === eligible.length) setSelected(new Set());
+    else setSelected(new Set(eligible.map((o) => o.id)));
+  };
+
+  const bulkAdvance = async () => {
+    if (!bulkEligible.length) return;
+    const to = nextStage(stage);
+    if (!to) return;
+    setBulkBusy(true);
+    try {
+      const patch: any = { expedition_stage: to };
+      if (to === "concluido") patch.expedition_finished_at = new Date().toISOString();
+      const { error } = await supabase
+        .from("pos_sales")
+        .update(patch)
+        .in("id", bulkEligible.map((o) => o.id));
+      if (error) throw error;
+      toast.success(`${bulkEligible.length} pedido(s) movidos para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
+      setSelected(new Set());
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao avançar em massa");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-pos-bg">
       {/* Header */}
