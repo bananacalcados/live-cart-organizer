@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, MapPin, Store, Pencil } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, MapPin, Store, Pencil, FlaskConical, Trash2 } from "lucide-react";
 import {
   EXP_STAGES,
   ExpOrder,
@@ -51,6 +51,29 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [conferenceOrder, setConferenceOrder] = useState<ExpOrder | null>(null);
   const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
   const [stockByBarcode, setStockByBarcode] = useState<Record<string, { store: string; stock: number }[]>>({});
+  const [testBusy, setTestBusy] = useState(false);
+
+  const runTestAction = async (action: "create" | "purge") => {
+    if (action === "purge" && !confirm("Excluir TODOS os pedidos de teste?")) return;
+    setTestBusy(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("pos-expedition-test-orders", {
+        body: { action, store_id: storeId },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      toast.success(
+        action === "create"
+          ? `${(data as any)?.created?.length || 0} pedidos de teste criados`
+          : `${(data as any)?.deleted || 0} pedidos de teste excluídos`,
+      );
+      await load();
+    } catch (e: any) {
+      toast.error(e?.message || "Falha na ação de teste");
+    } finally {
+      setTestBusy(false);
+    }
+  };
 
   const loadCounts = async () => {
     const { data } = await supabase
@@ -224,6 +247,27 @@ export function POSExpedition({ storeId, storeName }: Props) {
             <Button variant="outline" size="lg" onClick={load} disabled={loading}>
               <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
             </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => runTestAction("create")}
+              disabled={testBusy}
+              title="Criar pedidos fake em cada método de venda online"
+            >
+              {testBusy ? <Loader2 className="h-5 w-5 animate-spin" /> : <FlaskConical className="h-5 w-5" />}
+              <span className="ml-2 font-bold">Criar teste</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => runTestAction("purge")}
+              disabled={testBusy}
+              className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              title="Excluir todos os pedidos de teste"
+            >
+              <Trash2 className="h-5 w-5" />
+              <span className="ml-2 font-bold">Limpar teste</span>
+            </Button>
           </div>
         </div>
 
@@ -312,6 +356,9 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             <Badge className={`${stageStyles[stage].chip} text-white text-sm font-bold`}>
                               {ORIGIN_LABEL[o.origin]}
                             </Badge>
+                            {o.is_test && (
+                              <Badge className="bg-fuchsia-600 text-white text-sm font-black">TESTE</Badge>
+                            )}
                             {o.is_avulso && (
                               <Badge className="bg-amber-500 text-white text-sm font-black">AVULSO</Badge>
                             )}
