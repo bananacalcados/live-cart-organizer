@@ -10842,6 +10842,7 @@ export type Database = {
           pagarme_order_id: string | null
           paid_at: string | null
           paid_externally: boolean | null
+          payment_confirmed_source: string | null
           payment_method_label: string | null
           pickup_store_id: string | null
           pos_sale_id: string | null
@@ -10893,6 +10894,7 @@ export type Database = {
           pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
+          payment_confirmed_source?: string | null
           payment_method_label?: string | null
           pickup_store_id?: string | null
           pos_sale_id?: string | null
@@ -10944,6 +10946,7 @@ export type Database = {
           pagarme_order_id?: string | null
           paid_at?: string | null
           paid_externally?: boolean | null
+          payment_confirmed_source?: string | null
           payment_method_label?: string | null
           pickup_store_id?: string | null
           pos_sale_id?: string | null
