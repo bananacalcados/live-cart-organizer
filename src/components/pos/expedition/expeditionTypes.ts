@@ -76,6 +76,7 @@ export interface ExpOrder {
   origin: ExpOrigin;
   is_avulso: boolean;
   avulso_ready: boolean;
+  is_test?: boolean;
 }
 
 export const getOrigin = (sale: any): ExpOrigin => {
@@ -176,6 +177,7 @@ export async function fetchExpeditionOrders(
       items: itemsBySale.get(s.id) || [],
       origin: getOrigin(s),
       is_avulso: isAvulsoSale(s),
+      is_test: s.payment_details?.is_test === true,
       avulso_ready: isAvulsoReady(s),
       seller_name: s.seller_id ? sellerMap.get(s.seller_id) || null : null,
       event_name: s.event_id ? eventMap.get(s.event_id) || null : null,
