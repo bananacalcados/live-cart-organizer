@@ -126,6 +126,10 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const advance = async (o: ExpOrder, target?: ExpStage) => {
     const to = target || nextStage(o.expedition_stage);
     if (!to) return;
+    if (o.expedition_stage === "novo" && o.is_avulso && !o.avulso_ready) {
+      toast.error("Pedido avulso: edite e complete produto, dados do cliente e envio antes de avançar");
+      return;
+    }
     setBusyId(o.id);
     try {
       const patch: any = { expedition_stage: to };
