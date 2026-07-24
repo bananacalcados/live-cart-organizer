@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, MapPin, Store } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, MapPin, Store, Pencil } from "lucide-react";
 import {
   EXP_STAGES,
   ExpOrder,
@@ -17,6 +17,7 @@ import {
   trackingLink,
 } from "./expeditionTypes";
 import { ExpConferenceDialog } from "./ExpConferenceDialog";
+import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
 
 interface Props {
   storeId: string;
