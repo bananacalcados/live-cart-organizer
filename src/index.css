@@ -157,6 +157,12 @@
     --pos-elevated: 0 0% 12%;
     --pos-border: 0 0% 18%;
 
+    --exp-new: 265 85% 68%;
+    --exp-prep: 200 95% 55%;
+    --exp-pick: 160 74% 48%;
+    --exp-check: 32 100% 58%;
+    --exp-done: 142 61% 50%;
+
     --sidebar-background: 0 0% 4%;
     --sidebar-foreground: 45 10% 92%;
     --sidebar-primary: 48 95% 55%;
