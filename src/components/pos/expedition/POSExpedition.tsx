@@ -60,7 +60,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [filterOrigin, setFilterOrigin] = useState<string>("all");
   const [filterAvulso, setFilterAvulso] = useState<string>("all");
   const [filterShipping, setFilterShipping] = useState<string>("all");
-  const [filterTest, setFilterTest] = useState<string>("hide");
+  const [filterTest, setFilterTest] = useState<string>("include");
   const [filterPeriod, setFilterPeriod] = useState<string>("all");
 
   useEffect(() => {
