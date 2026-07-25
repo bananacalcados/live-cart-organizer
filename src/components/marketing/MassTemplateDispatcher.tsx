@@ -1600,6 +1600,14 @@ export function MassTemplateDispatcher() {
         throw new Error('quota_zero');
       }
 
+      // Garante que a "Lista" exibida no relatório = elegíveis pós-motor de cota.
+      await supabase
+        .from('dispatch_history')
+        .update({ total_recipients: guardResult.inserted } as any)
+        .eq('id', dispatchId);
+
+
+
       if (editDispatchId) {
         toast.success(`✅ Disparo atualizado — ${guardResult.inserted} destinatários na lista`);
       } else if (mode === 'schedule') {
