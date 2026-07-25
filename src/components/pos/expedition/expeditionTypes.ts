@@ -15,6 +15,12 @@ export const nextStage = (s: ExpStage): ExpStage | null => {
   return idx >= 0 && idx < EXP_STAGES.length - 1 ? EXP_STAGES[idx + 1].id : null;
 };
 
+export const prevStage = (s: ExpStage): ExpStage | null => {
+  const idx = EXP_STAGES.findIndex((e) => e.id === s);
+  return idx > 0 ? EXP_STAGES[idx - 1].id : null;
+};
+
+
 export type ExpOrigin = "live" | "whatsapp" | "online";
 
 export const ORIGIN_LABEL: Record<ExpOrigin, string> = {
