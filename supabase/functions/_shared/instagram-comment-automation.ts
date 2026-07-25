@@ -306,6 +306,22 @@ export async function processCommentAutomation(
 
   const commentTextLower = comment.text.toLowerCase().trim();
 
+  // ── Tipo de mídia efetivo ─────────────────────────────────────────────
+  // Se o webhook veio de `live_comments` já sabemos que é LIVE. Caso o
+  // media_product_type não tenha vindo no payload, consultamos a Graph API —
+  // sem isso o fallback "post" faz regras de post responderem durante lives.
+  let effectiveMediaType = comment.isLive ? "live" : comment.mediaType;
+  if (!comment.isLive) {
+    const raw = (comment.mediaType || "").toLowerCase().trim();
+    const known = ["live", "reels", "reel", "igtv", "story", "stories", "feed", "ad", "carousel_album", "image", "video"];
+    if (!raw || !known.includes(raw)) {
+      const fetched = await fetchCommentMediaProductType(comment.commentId, pageAccessToken);
+      if (fetched) effectiveMediaType = fetched;
+    }
+  }
+  const normalizedMediaType = normMediaType(effectiveMediaType);
+  console.log(`[ig-comment-automation] media type: raw=${comment.mediaType} effective=${normalizedMediaType}`);
+
   // Lazily fetched once and reused across rules (undefined = not yet fetched).
   let postThumb: PostThumb | null | undefined = undefined;
 
@@ -313,7 +329,7 @@ export async function processCommentAutomation(
 
   for (const rule of rules as Rule[]) {
     // Check media type match (normalizado: FEED/AD/IMAGE/etc. = post)
-    if (!rule.media_types.some(mt => normMediaType(mt) === normMediaType(comment.mediaType))) {
+    if (!rule.media_types.some(mt => normMediaType(mt) === normalizedMediaType)) {
       continue;
     }
 
