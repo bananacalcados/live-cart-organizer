@@ -546,7 +546,18 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
       {/* List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {stage === "separacao" && !loading && filtered.length > 0 && (
+          <>
+            <ExpPickingList orders={filtered} stage={stage} onRefresh={load} />
+            <details className="rounded-xl bg-pos-elevated border-2 border-pos-border p-3">
+              <summary className="cursor-pointer text-base font-black text-pos-text">
+                Ver pedidos desta etapa ({filtered.length})
+              </summary>
+            </details>
+          </>
+        )}
         {loading ? (
+
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-10 w-10 animate-spin text-exp-prep" />
           </div>
