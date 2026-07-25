@@ -8,6 +8,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { DbOrder } from "@/types/database";
 import { normalizeBRPhone } from "@/lib/phoneUtils";
+import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
+
+/** Cadastro considerado "aproveitável": tem nome, CPF e endereço real (sem placeholders). */
+function isRegUsable(r: any): boolean {
+  const txt = (v: any) => String(v || "").trim();
+  const cep = txt(r?.cep).replace(/\D/g, "");
+  return Boolean(
+    txt(r?.full_name) &&
+      txt(r?.cpf).replace(/\D/g, "").length === 11 &&
+      cep && cep !== "00000000" &&
+      txt(r?.address) && txt(r?.address) !== "Pendente" &&
+      txt(r?.city) && txt(r?.city) !== "Pendente",
+  );
+}
 
 interface CustomerFichaDialogProps {
   open: boolean;
@@ -64,7 +78,7 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
           .eq("order_id", order.id)
           .maybeSingle();
 
-        if (reg) {
+        if (reg && isRegUsable(reg)) {
           setForm({
             full_name: reg.full_name || "",
             cpf: reg.cpf || "",
@@ -179,7 +193,27 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
         .upsert(payload, { onConflict: "order_id" });
       if (error) throw error;
 
-      toast.success("Ficha do cliente salva com sucesso");
+      // Frete: garante a regra do evento (valor fixo / grátis acima de X) no pedido,
+      // já que ao ir direto para o pagamento a etapa de frete é pulada.
+      const subtotal = (order.products || []).reduce(
+        (acc: number, p: any) => acc + Number(p.price || 0) * Number(p.quantity || 1),
+        0,
+      );
+      const applied = await ensureEventShippingOnOrder({
+        orderId: order.id,
+        eventId: order.event_id,
+        subtotal,
+        currentShippingCost: order.shipping_cost,
+        currentFreeShipping: order.free_shipping,
+      });
+
+      toast.success(
+        applied
+          ? applied.freeShipping
+            ? "Ficha salva — frete grátis aplicado (regra do evento)"
+            : `Ficha salva — frete de R$ ${applied.shippingCost.toFixed(2)} aplicado ao pedido`
+          : "Ficha do cliente salva com sucesso",
+      );
     } catch (e: any) {
       console.error(e);
       toast.error(`Erro ao salvar ficha: ${e?.message || e}`);
