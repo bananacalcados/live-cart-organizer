@@ -30,6 +30,7 @@ import { ImageCropDialog } from "@/components/ImageCropDialog";
 import { SavedAudiencePicker } from "@/components/marketing/SavedAudiencePicker";
 import { SaveAudienceDialog } from "@/components/marketing/SaveAudienceDialog";
 import type { AudienceFilter } from "@/components/pos/audience/AudienceFilterBuilder";
+import { TouchLimitsReference } from "@/components/marketing/TouchLimitsReference";
 
 /**
  * Extrai o DDD (2 dígitos) de um telefone em qualquer formato.
@@ -1838,8 +1839,10 @@ export function MassTemplateDispatcher() {
         </Select>
       </div>
 
+      <TouchLimitsReference />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Column 1: Template + Variables */}
+
         <Card className="lg:col-span-1">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
