@@ -271,8 +271,10 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
 
       {lines.map((l) => {
         const done = separated[l.key] || 0;
-        const locs = (l.barcode && stock[l.barcode]) || (l.sku && stock[l.sku]) || [];
-        const res = (l.barcode && resolved[l.barcode]) || (l.sku && resolved[l.sku]) || null;
+        const bc = (l.barcode || "").trim();
+        const sk = (l.sku || "").trim();
+        const locs = stock[bc] || stock[sk] || [];
+        const res = resolved[bc] || resolved[sk] || null;
         const displayName = res?.name || l.product_name;
         const displayVariant = res?.variant || l.variant_name;
         const displaySize = res?.size || l.size;
