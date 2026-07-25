@@ -309,16 +309,19 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
       // Aggregate the summary cards (Lidas / Não lidas / Entrega / Leitura) from a
       // status map, using dispatch_recipients.status as the fast, live source.
       const aggregateAndSet = (statusMap: Record<string, string>) => {
-        const agg = { read: 0, delivered: 0, sent: 0, failed: 0 };
+        const agg = { read: 0, delivered: 0, sent: 0, failed: 0, pending: 0 };
         for (const r of allRecipients) {
           let p = r.phone.replace(/\D/g, '');
           if (!p.startsWith('55')) p = '55' + p;
-          const live = statusMap[p] || r.status || 'sent';
+          const live = statusMap[p] || r.status || 'pending';
           if (live === 'read') agg.read++;
           else if (live === 'delivered') agg.delivered++;
           else if (live === 'failed') agg.failed++;
-          else agg.sent++;
+          else if (live === 'sent') agg.sent++;
+          else agg.pending++; // pending/leased — ainda NÃO disparado
         }
+        // "Disparados" = apenas o que saiu de fato. Nunca contar fila pendente.
+        const reallyDispatched = agg.read + agg.delivered + agg.sent + agg.failed;
         setSelectedDispatch(prev =>
           prev && prev.id === dispatch.id
             ? {
@@ -329,14 +332,15 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                   delivered: agg.delivered,
                   sent: agg.sent,
                   failed: agg.failed || prev.stats?.failed || 0,
-                  dispatched: prev.stats?.dispatched || prev.sent_count || allRecipients.length,
+                  dispatched: prev.sent_count || reallyDispatched,
                   interactions: prev.stats?.interactions || 0,
-                  total: prev.stats?.total || allRecipients.length,
+                  total: prev.total_recipients || allRecipients.length,
                 },
               }
             : prev
         );
       };
+
 
       // STEP 1 — show numbers INSTANTLY from dispatch_recipients.status. The Meta
       // webhook already updates this column per recipient (via message_wamid), so
