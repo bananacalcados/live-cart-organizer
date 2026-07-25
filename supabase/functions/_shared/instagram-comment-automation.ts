@@ -6,8 +6,30 @@ interface CommentData {
   fromId: string;
   username: string | null;
   text: string;
-  mediaType: string; // post, REELS, etc
+  mediaType: string; // post, REELS, LIVE, etc
   mediaId?: string | null; // the post/reel id the comment belongs to
+  isLive?: boolean; // true when the webhook field was live_comments
+}
+
+/**
+ * Resolve o media_product_type real do comentário na Graph API.
+ * O webhook nem sempre entrega `media.media_product_type` — quando falta,
+ * assumir "post" faz regras de post dispararem em comentários de LIVE.
+ */
+async function fetchCommentMediaProductType(
+  commentId: string,
+  token: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://graph.instagram.com/v25.0/${commentId}?fields=media{id,media_product_type}&access_token=${token}`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.media?.media_product_type || null;
+  } catch {
+    return null;
+  }
 }
 
 interface PostThumb {
