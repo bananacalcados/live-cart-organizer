@@ -574,34 +574,75 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
             </p>
             <ExpShippingFields value={shipping} onChange={setShipping} />
             {!isMototaxi(carrier) && !isPickup(carrier) && (
-              <div>
-                <Label className="text-base font-bold">Código de rastreio</Label>
-                <Input value={tracking} onChange={(e) => setTracking(e.target.value)} className="h-12 text-base" placeholder="Ex: AA123456789BR" />
+              <div className="grid md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-base font-bold">Código de rastreio</Label>
+                  <Input value={tracking} onChange={(e) => setTracking(e.target.value)} className="h-12 text-base" placeholder="Ex: AA123456789BR" />
+                </div>
+                <div>
+                  <Label className="text-base font-bold">Prazo de entrega (dias úteis)</Label>
+                  <Input
+                    value={deliveryDays}
+                    onChange={(e) => setDeliveryDays(e.target.value)}
+                    className="h-12 text-base"
+                    placeholder="Ex: 5 a 8"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="text-base font-bold">Link de rastreio</Label>
+                  <Input
+                    value={trackingUrl}
+                    onChange={(e) => setTrackingUrl(e.target.value)}
+                    className="h-12 text-base"
+                    placeholder={tracking.trim() ? trackingLink(tracking.trim()) : "https://..."}
+                  />
+                </div>
               </div>
             )}
 
 
             {isCarrierWithTracking(carrier) && (
-              <div className="flex items-end gap-2 flex-wrap">
-                <div className="min-w-[220px]">
-                  <Label className="text-base font-bold">Instância WhatsApp</Label>
-                  <Select value={numberId} onValueChange={setNumberId}>
-                    <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      {numbers.map((n) => (
-                        <SelectItem key={n.id} value={n.id} className="text-base">
-                          {n.label || n.phone_display}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <div className="space-y-3">
+                <div className="flex items-end gap-2 flex-wrap">
+                  <div className="min-w-[240px] flex-1">
+                    <Label className="text-base font-bold">Mensagem de rastreio</Label>
+                    <Select value={templateId} onValueChange={setTemplateId}>
+                      <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Selecione a mensagem" /></SelectTrigger>
+                      <SelectContent>
+                        {templates.map((t) => (
+                          <SelectItem key={t.id} value={t.id} className="text-base">
+                            {t.name}{t.is_default ? " (padrão)" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button variant="outline" className="h-12 font-bold" onClick={() => setShowTplEditor(true)}>
+                    <Pencil className="h-4 w-4 mr-1" /> Editar / criar mensagem
+                  </Button>
                 </div>
-                <Button onClick={sendTrackingWa} disabled={sendingWa} variant="outline" className="h-12 font-bold">
-                  {sendingWa ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
-                  Enviar rastreio no WhatsApp
-                </Button>
+                <div className="flex items-end gap-2 flex-wrap">
+                  <div className="min-w-[220px]">
+                    <Label className="text-base font-bold">Instância WhatsApp</Label>
+                    <Select value={numberId} onValueChange={setNumberId}>
+                      <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {numbers.map((n) => (
+                          <SelectItem key={n.id} value={n.id} className="text-base">
+                            {n.label || n.phone_display}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button onClick={sendTrackingWa} disabled={sendingWa} variant="outline" className="h-12 font-bold">
+                    {sendingWa ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+                    Enviar rastreio no WhatsApp
+                  </Button>
+                </div>
               </div>
             )}
+
           </div>
 
           <Button
