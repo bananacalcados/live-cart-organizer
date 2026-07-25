@@ -74,35 +74,46 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
     return [...map.values()].sort((a, b) => a.product_name.localeCompare(b.product_name));
   }, [orders]);
 
-  useEffect(() => {
+  const loadStock = async () => {
     const barcodes = lines.map((l) => l.barcode).filter(Boolean) as string[];
     const skus = lines.map((l) => l.sku).filter(Boolean) as string[];
     if (!barcodes.length && !skus.length) return;
-    (async () => {
-      try {
-        const filters: string[] = [];
-        if (barcodes.length) filters.push(`barcode.in.(${barcodes.map((b) => `"${b}"`).join(",")})`);
-        if (skus.length) filters.push(`sku.in.(${skus.map((s) => `"${s}"`).join(",")})`);
-        const { data } = await supabase
-          .from("pos_products")
-          .select("barcode, sku, stock, pos_stores(name)")
-          .or(filters.join(","))
-          .limit(1000);
-        const map: Record<string, { store: string; stock: number }[]> = {};
-        for (const r of (data || []) as any[]) {
-          const storeName = r.pos_stores?.name || "Loja";
-          for (const k of [r.barcode, r.sku].filter(Boolean)) {
-            const arr = map[k] || [];
-            arr.push({ store: storeName, stock: Number(r.stock) || 0 });
-            map[k] = arr;
-          }
+    try {
+      const filters: string[] = [];
+      if (barcodes.length) filters.push(`barcode.in.(${barcodes.map((b) => `"${b}"`).join(",")})`);
+      if (skus.length) filters.push(`sku.in.(${skus.map((s) => `"${s}"`).join(",")})`);
+      const { data } = await supabase
+        .from("pos_products")
+        .select("id, barcode, sku, stock, store_id, pos_stores!inner(name, is_simulation, is_active)")
+        .or(filters.join(","))
+        .eq("pos_stores.is_simulation", false)
+        .eq("pos_stores.is_active", true)
+        .limit(1000);
+      const map: Record<string, StockRow[]> = {};
+      for (const r of (data || []) as any[]) {
+        const row: StockRow = {
+          product_id: r.id,
+          store_id: r.store_id,
+          store: r.pos_stores?.name || "Loja",
+          stock: Number(r.stock) || 0,
+        };
+        for (const k of [r.barcode, r.sku].filter(Boolean)) {
+          const arr = map[k] || [];
+          arr.push(row);
+          map[k] = arr;
         }
-        setStock(map);
-      } catch {
-        /* best-effort */
       }
-    })();
+      setStock(map);
+    } catch {
+      /* best-effort */
+    }
+  };
+
+  useEffect(() => {
+    loadStock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines]);
+
 
   /** Pedidos totalmente cobertos pelas quantidades já separadas. */
   const readyOrderIds = useMemo(() => {
