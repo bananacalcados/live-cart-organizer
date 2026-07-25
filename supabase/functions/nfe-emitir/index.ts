@@ -45,6 +45,19 @@ const UF_MAP: Record<string, string> = {
 };
 
 const digits = (s: any) => String(s ?? "").replace(/\D/g, "");
+// Validação de CPF (dígitos verificadores) — SEFAZ rejeita 237 quando não confere.
+const isValidCpf = (v: any) => {
+  const cpf = digits(v);
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  const calc = (len: number) => {
+    let sum = 0;
+    for (let i = 0; i < len; i++) sum += Number(cpf[i]) * (len + 1 - i);
+    const rest = (sum * 10) % 11;
+    return rest === 10 ? 0 : rest;
+  };
+  return calc(9) === Number(cpf[9]) && calc(10) === Number(cpf[10]);
+};
+
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const sanitize = (s: string) => String(s ?? "")
   .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -319,7 +332,14 @@ Deno.serve(async (req) => {
     }
 
     const cpfDest = digits(order.customer_cpf);
-    if (!cpfDest || cpfDest.length !== 11) throw new Error("Pedido sem CPF válido do destinatário");
+    if (!cpfDest || cpfDest.length !== 11) throw new Error("Pedido sem CPF válido do destinatário (11 dígitos)");
+    // Valida dígitos verificadores para não gastar numeração com "Rejeição 237: CPF do destinatário inválido"
+    if (!isValidCpf(cpfDest)) {
+      throw new Error(
+        `CPF do destinatário inválido (${cpfDest}) — dígito verificador não confere. Corrija o CPF do cliente em "Editar dados do pedido / NF-e" e emita novamente.`,
+      );
+    }
+
 
     const ship = (order.shipping_address || {}) as any;
     const ufDestino = ufFromProvince(ship.province) || "MG";

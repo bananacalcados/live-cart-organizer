@@ -14,6 +14,8 @@ import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { extractEdgeError } from "@/lib/edgeFunctionError";
+import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+
 
 interface Props {
   order: ExpOrder;
@@ -42,6 +44,27 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const carrier = shipping.carrier;
   const courier = shipping.courier;
   const [nfeStatus, setNfeStatus] = useState<string | null>(null);
+  const [nfeReject, setNfeReject] = useState<string | null>(null);
+
+  // Busca o último documento fiscal do pedido para exibir status e o MOTIVO REAL da rejeição.
+  const loadNfeStatus = async () => {
+    const { data } = await supabase
+      .from("fiscal_documents")
+      .select("status, numero, rejection_code, rejection_message")
+      .eq("pos_sale_id", order.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setNfeStatus(data ? `${data.status}${data.numero ? ` nº ${data.numero}` : ""}` : null);
+    const msg = (data as any)?.rejection_message || null;
+    const code = (data as any)?.rejection_code || null;
+    setNfeReject(
+      data && data.status === "rejected" && (msg || code)
+        ? [code ? `Rejeição ${code}` : null, msg].filter(Boolean).join(": ")
+        : null,
+    );
+  };
+
   const [emitting, setEmitting] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [sendingWa, setSendingWa] = useState(false);
@@ -58,14 +81,8 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
     for (const it of order.items) init[it.id] = { scanned: false, feet_ok: false, has_defect: false };
     setChecks(init);
 
-    supabase
-      .from("fiscal_documents")
-      .select("status, numero")
-      .eq("pos_sale_id", order.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => setNfeStatus(data ? `${data.status}${data.numero ? ` nº ${data.numero}` : ""}` : null));
+    void loadNfeStatus();
+
 
     supabase
       .from("whatsapp_numbers_safe")
@@ -156,25 +173,45 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
 
 
   const emitNfe = async () => {
+    // Pré-validação local: evita rejeição 237 (CPF do destinatário inválido) na SEFAZ.
+    const cpf = order.customer_cpf || (order.payment_details as any)?.customer_cpf || "";
+    if (!isValidCpf(cpf)) {
+      const msg = onlyDigitsCpf(cpf)
+        ? `CPF do cliente inválido (${formatCpf(cpf)}) — dígito verificador não confere. Corrija em "Editar dados do pedido / NF-e".`
+        : 'Pedido sem CPF do destinatário. Informe em "Editar dados do pedido / NF-e".';
+      setNfeReject(msg);
+      toast.error(msg, { duration: 12000 });
+      return;
+    }
     setEmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke("nfe-emitir", { body: { sale_id: order.id } });
       if (error) {
-        toast.error(await extractEdgeError(error, "Erro ao emitir NF-e"), { duration: 12000 });
+        const msg = await extractEdgeError(error, "Erro ao emitir NF-e");
+        setNfeReject(msg);
+        toast.error(msg, { duration: 12000 });
+        await loadNfeStatus();
         return;
       }
       if ((data as any)?.error) {
+        setNfeReject((data as any).error);
         toast.error((data as any).error, { duration: 12000 });
+        await loadNfeStatus();
         return;
       }
+      setNfeReject(null);
       setNfeStatus(`authorized${(data as any)?.numero ? ` nº ${(data as any).numero}` : ""}`);
       toast.success("NF-e autorizada");
     } catch (e: any) {
-      toast.error(await extractEdgeError(e, "Erro ao emitir NF-e"), { duration: 12000 });
+      const msg = await extractEdgeError(e, "Erro ao emitir NF-e");
+      setNfeReject(msg);
+      toast.error(msg, { duration: 12000 });
+      await loadNfeStatus();
     } finally {
       setEmitting(false);
     }
   };
+
 
   const sendTrackingWa = async () => {
     const phone = (order.customer_phone || "").replace(/\D/g, "");
@@ -365,9 +402,20 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
                 <Pencil className="h-4 w-4 mr-1" /> Editar dados do pedido / NF-e
               </Button>
             </div>
-            <p className="mt-2 text-sm font-semibold text-pos-muted-text">
-              Rejeição de endereço? Corrija os dados aqui e emita novamente.
-            </p>
+            {nfeReject ? (
+              <div className="mt-2 rounded-lg border-2 border-destructive/50 bg-destructive/10 p-3">
+                <p className="text-sm font-black text-destructive">Motivo da rejeição</p>
+                <p className="text-sm font-semibold text-destructive break-words">{nfeReject}</p>
+                <p className="mt-1 text-xs font-semibold text-pos-muted-text">
+                  Corrija em "Editar dados do pedido / NF-e" e emita novamente.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm font-semibold text-pos-muted-text">
+                Deu rejeição? O motivo exato aparece aqui — corrija os dados e emita novamente.
+              </p>
+            )}
+
           </div>
 
           {/* Envio */}

@@ -10,6 +10,8 @@ import { Loader2, MapPin, Save, Pencil } from "lucide-react";
 import { ExpOrder, isPickup } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { saveExpeditionShippingCost } from "./shippingCost";
+import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+
 
 interface Props {
   order: ExpOrder;
@@ -115,8 +117,14 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
     }
   };
 
+  const cpfDigits = onlyDigitsCpf(form.cpf);
+  const cpfInvalid = cpfDigits.length > 0 && !isValidCpf(cpfDigits);
+
   const save = async () => {
     if (!form.name.trim()) return toast.error("Informe o nome do cliente");
+    if (cpfInvalid)
+      return toast.error("CPF do cliente inválido — confira os números antes de salvar (a NF-e será rejeitada).");
+
     if (!isPickup(shipping.carrier) && shipping.carrier) {
       if (onlyDigits(form.cep).length !== 8) return toast.error("CEP inválido (obrigatório para NF-e)");
       if (!form.address.trim()) return toast.error("Informe o logradouro (obrigatório para NF-e)");
@@ -199,8 +207,20 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
               </div>
               <div>
                 <Label>CPF</Label>
-                <Input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} />
+                <Input
+                  value={form.cpf}
+                  onChange={(e) => setForm({ ...form, cpf: formatCpf(e.target.value) })}
+                  inputMode="numeric"
+                  placeholder="000.000.000-00"
+                  className={cpfInvalid ? "border-destructive focus-visible:ring-destructive" : ""}
+                />
+                {cpfInvalid && (
+                  <p className="mt-1 text-sm font-bold text-destructive">
+                    CPF inválido (dígito verificador não confere) — a SEFAZ vai rejeitar a NF-e.
+                  </p>
+                )}
               </div>
+
               <div>
                 <Label>Telefone</Label>
                 <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
