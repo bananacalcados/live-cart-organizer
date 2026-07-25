@@ -549,11 +549,10 @@ export function POSExpedition({ storeId, storeName }: Props) {
         {stage === "separacao" && !loading && filtered.length > 0 && (
           <>
             <ExpPickingList orders={filtered} stage={stage} onRefresh={load} />
-            <details className="rounded-xl bg-pos-elevated border-2 border-pos-border p-3">
-              <summary className="cursor-pointer text-base font-black text-pos-text">
-                Ver pedidos desta etapa ({filtered.length})
-              </summary>
-            </details>
+            <p className="text-base font-black text-pos-text uppercase pt-2">
+              Pedidos desta etapa ({filtered.length})
+            </p>
+
           </>
         )}
         {loading ? (
