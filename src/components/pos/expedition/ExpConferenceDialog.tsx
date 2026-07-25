@@ -209,7 +209,9 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
     if (!carrier) return toast.error("Selecione a forma de envio");
     if (isCarrierWithTracking(carrier) && !tracking.trim())
       return toast.error("Informe o código de rastreio");
-    if (carrier === "Mototaxi" && !courier.trim()) return toast.error("Informe o entregador");
+    if (isMototaxi(carrier) && !courier.trim()) return toast.error("Informe o entregador");
+    if (!isPickup(carrier) && !(Number(shipping.cost) >= 0))
+      return toast.error("Informe o valor do envio");
 
     setFinishing(true);
     try {
@@ -237,6 +239,17 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         })
         .eq("id", order.id);
       if (error) throw error;
+
+      await saveExpeditionShippingCost({
+        saleId: order.id,
+        storeId: storeId || order.store_id,
+        carrier,
+        courierProviderId: shipping.courierProviderId,
+        courierName: courier,
+        cost: Number(shipping.cost) || 0,
+        customerName: order.customer_name,
+      });
+
 
       toast.success("Expedição concluída — pedido liberado na aba PEDIDOS");
       onFinished();
