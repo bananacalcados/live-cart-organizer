@@ -434,7 +434,7 @@ function StepIdentification({ form, setForm, onNext }: { form: CustomerFormData;
     if (!form.fullName.trim()) newErrors.fullName = "Nome é obrigatório";
     else if (form.fullName.trim().split(/\s+/).length < 2) newErrors.fullName = "Informe nome e sobrenome";
 
-    const emailTrimmed = form.email.trim();
+    const emailTrimmed = normalizeEmailInput(form.email);
     if (!emailTrimmed) newErrors.email = "E-mail é obrigatório";
     else if (!isValidEmail(emailTrimmed)) newErrors.email = "E-mail inválido (ex: nome@email.com)";
 
@@ -450,7 +450,7 @@ function StepIdentification({ form, setForm, onNext }: { form: CustomerFormData;
       toast.error("Corrija os campos destacados");
       return;
     }
-    // Sanitize email before proceeding
+    // Sanitize email before proceeding (corrige typos como "@gmail.coma")
     setForm({ ...form, email: emailTrimmed });
     onNext();
   };
