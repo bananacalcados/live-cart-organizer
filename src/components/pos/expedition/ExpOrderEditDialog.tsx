@@ -199,8 +199,20 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
               </div>
               <div>
                 <Label>CPF</Label>
-                <Input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} />
+                <Input
+                  value={form.cpf}
+                  onChange={(e) => setForm({ ...form, cpf: formatCpf(e.target.value) })}
+                  inputMode="numeric"
+                  placeholder="000.000.000-00"
+                  className={cpfInvalid ? "border-destructive focus-visible:ring-destructive" : ""}
+                />
+                {cpfInvalid && (
+                  <p className="mt-1 text-sm font-bold text-destructive">
+                    CPF inválido (dígito verificador não confere) — a SEFAZ vai rejeitar a NF-e.
+                  </p>
+                )}
               </div>
+
               <div>
                 <Label>Telefone</Label>
                 <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
