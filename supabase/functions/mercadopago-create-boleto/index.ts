@@ -203,7 +203,7 @@ serve(async (req) => {
       external_reference: externalRef,
       notification_url: `${supabaseUrl}/functions/v1/payment-webhook?gateway=mercadopago`,
       payer: {
-        email: String(customer_email),
+        email: payerEmailSafe,
         first_name: firstName,
         last_name: lastName,
         identification: { type: "CPF", number: cpf },
