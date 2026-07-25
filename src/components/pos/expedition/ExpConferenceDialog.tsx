@@ -58,14 +58,8 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
     for (const it of order.items) init[it.id] = { scanned: false, feet_ok: false, has_defect: false };
     setChecks(init);
 
-    supabase
-      .from("fiscal_documents")
-      .select("status, numero")
-      .eq("pos_sale_id", order.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => setNfeStatus(data ? `${data.status}${data.numero ? ` nº ${data.numero}` : ""}` : null));
+    void loadNfeStatus();
+
 
     supabase
       .from("whatsapp_numbers_safe")
