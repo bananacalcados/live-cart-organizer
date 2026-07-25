@@ -17,6 +17,8 @@ import { POSGoalsManagerDialog } from "./POSGoalsManagerDialog";
 import { POSPaymentSalesModal } from "./POSPaymentSalesModal";
 import { POSTaskManagerDialog } from "./POSTaskManagerDialog";
 import { POSSellerTaskProgress } from "./POSSellerTaskProgress";
+import { DeliveryCostsCard } from "./DeliveryCostsCard";
+
 import { POSSellerLinkPageProgress } from "./POSSellerLinkPageProgress";
 import { POSPayrollTab } from "./POSPayrollTab";
 import { POSFiscalTab } from "./POSFiscalTab";
