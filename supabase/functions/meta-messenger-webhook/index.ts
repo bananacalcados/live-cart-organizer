@@ -653,8 +653,9 @@ serve(async (req) => {
                 fromId,
                 username: senderName,
                 text,
-                mediaType,
+                mediaType: isLiveComment ? 'LIVE' : mediaType,
                 mediaId: comment.media?.id || null,
+                isLive: isLiveComment,
               });
               if (automationResult.actions.length > 0) {
                 console.log(`Comment automations triggered: ${automationResult.actions.join(', ')}`);
