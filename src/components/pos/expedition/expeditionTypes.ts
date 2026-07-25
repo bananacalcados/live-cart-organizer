@@ -77,7 +77,33 @@ export interface ExpOrder {
   is_avulso: boolean;
   avulso_ready: boolean;
   is_test?: boolean;
+  /** Telefone do cliente já resolvido (venda ou metadados do link/PIX). */
+  resolved_phone?: string | null;
+  /** Vendedor(a) que gerou o link/PIX — venda, metadados do link ou atendimento no chat. */
+  seller_label?: string | null;
+  seller_source?: "sale" | "link" | "chat" | null;
+  /** Instância de WhatsApp em que a conversa/link aconteceu. */
+  wa_number_id?: string | null;
+  wa_instance_label?: string | null;
 }
+
+/**
+ * A Expedição só existe para pedidos PAGOS.
+ * Links de pagamento/PIX gerados e ainda não quitados ficam em `online_pending`
+ * (ou `pending` / `pending_pickup` / `payment_failed`) e NÃO podem aparecer aqui.
+ */
+export const UNPAID_STATUSES = ["online_pending", "pending", "pending_pickup", "payment_failed", "cancelled"];
+export const PAID_FILTER = "paid_at.not.is.null,status.in.(completed,paid,pending_sync)";
+
+export const onlyDigits = (v?: string | null) => (v || "").replace(/\D/g, "");
+
+export const salePhone = (sale: any): string | null => {
+  const pd = sale?.payment_details || {};
+  const raw = sale?.customer_phone || pd.customer_phone || pd.customer_whatsapp || "";
+  const d = onlyDigits(raw);
+  return d.length >= 8 ? d : null;
+};
+
 
 export const getOrigin = (sale: any): ExpOrigin => {
   if (sale.sale_type === "live") return "live";
@@ -131,7 +157,8 @@ export async function fetchExpeditionOrders(
     .eq("store_id", storeId)
     .eq("expedition_stage", stage)
     .in("sale_type", ["live", "online"])
-    .neq("status", "cancelled")
+    .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
+    .or(PAID_FILTER)
     .order("created_at", { ascending: stage !== "concluido" })
     .limit(400);
 
@@ -143,8 +170,11 @@ export async function fetchExpeditionOrders(
   const sellerIds = [...new Set(rows.map((s) => s.seller_id).filter(Boolean))];
   const eventIds = [...new Set(rows.map((s) => s.event_id).filter(Boolean))];
   const orderIds = [...new Set(rows.map((s) => s.source_order_id).filter(Boolean))];
+  const phones = [...new Set(rows.map((s) => salePhone(s)).filter(Boolean))] as string[];
+  const suffixes = [...new Set(phones.map((p) => p.slice(-8)))].slice(0, 80);
+  const suffixOr = suffixes.map((s) => `phone.ilike.%${s}`).join(",");
 
-  const [itemsRes, sellersRes, eventsRes, ordersRes] = await Promise.all([
+  const [itemsRes, sellersRes, eventsRes, ordersRes, msgsRes, assignRes, instRes] = await Promise.all([
     supabase.from("pos_sale_items").select("*").in("sale_id", ids),
     sellerIds.length
       ? supabase.from("pos_sellers").select("id, name").in("id", sellerIds as string[])
@@ -158,6 +188,24 @@ export async function fetchExpeditionOrders(
           .select("id, delivery_method, is_pickup, pickup_store_id")
           .in("id", orderIds as string[])
       : Promise.resolve({ data: [] as any[] }),
+    suffixOr
+      ? supabase
+          .from("whatsapp_messages")
+          .select("phone, whatsapp_number_id, created_at")
+          .not("whatsapp_number_id", "is", null)
+          .or(suffixOr)
+          .order("created_at", { ascending: false })
+          .limit(1500)
+      : Promise.resolve({ data: [] as any[] }),
+    suffixOr
+      ? supabase
+          .from("chat_conversation_assignments")
+          .select("phone, assigned_name, whatsapp_number_id, updated_at")
+          .or(suffixOr)
+          .order("updated_at", { ascending: false })
+          .limit(300)
+      : Promise.resolve({ data: [] as any[] }),
+    supabase.from("whatsapp_numbers_safe").select("id, label, phone_display"),
   ]);
 
   const itemsBySale = new Map<string, ExpItem[]>();
@@ -169,9 +217,31 @@ export async function fetchExpeditionOrders(
   const sellerMap = new Map((sellersRes.data || []).map((s: any) => [s.id, s.name]));
   const eventMap = new Map((eventsRes.data || []).map((e: any) => [e.id, e.name]));
   const orderMap = new Map((ordersRes.data || []).map((o: any) => [o.id, o]));
+  const instMap = new Map(
+    ((instRes as any).data || []).map((i: any) => [i.id, i.label || i.phone_display || "Instância"]),
+  );
+
+  // Última instância usada por sufixo de telefone (regra: conversa = telefone + instância)
+  const instBySuffix = new Map<string, string>();
+  for (const m of ((msgsRes as any).data || []) as any[]) {
+    const suf = onlyDigits(m.phone).slice(-8);
+    if (suf && !instBySuffix.has(suf)) instBySuffix.set(suf, m.whatsapp_number_id);
+  }
+  const attendantBySuffix = new Map<string, string>();
+  for (const a of ((assignRes as any).data || []) as any[]) {
+    const suf = onlyDigits(a.phone).slice(-8);
+    if (suf && a.assigned_name && !attendantBySuffix.has(suf)) attendantBySuffix.set(suf, a.assigned_name);
+  }
 
   return rows.map((s) => {
     const src = s.source_order_id ? orderMap.get(s.source_order_id) : null;
+    const phone = salePhone(s);
+    const suf = phone ? phone.slice(-8) : "";
+    const saleSeller = s.seller_id ? sellerMap.get(s.seller_id) || null : null;
+    const linkSeller = s.payment_details?.seller_name || null;
+    const chatSeller = suf ? attendantBySuffix.get(suf) || null : null;
+    const seller_label = saleSeller || linkSeller || chatSeller;
+    const waId = suf ? instBySuffix.get(suf) || null : null;
     return {
       ...s,
       items: itemsBySale.get(s.id) || [],
@@ -179,7 +249,12 @@ export async function fetchExpeditionOrders(
       is_avulso: isAvulsoSale(s),
       is_test: s.payment_details?.is_test === true,
       avulso_ready: isAvulsoReady(s),
-      seller_name: s.seller_id ? sellerMap.get(s.seller_id) || null : null,
+      seller_name: saleSeller,
+      seller_label,
+      seller_source: saleSeller ? "sale" : linkSeller ? "link" : chatSeller ? "chat" : null,
+      resolved_phone: phone,
+      wa_number_id: waId,
+      wa_instance_label: waId ? instMap.get(waId) || null : null,
       event_name: s.event_id ? eventMap.get(s.event_id) || null : null,
       instagram: s.payment_details?.instagram || null,
       delivery_method:
@@ -190,6 +265,7 @@ export async function fetchExpeditionOrders(
     } as ExpOrder;
   });
 }
+
 
 export const customerKey = (o: ExpOrder) =>
   (o.customer_id ||

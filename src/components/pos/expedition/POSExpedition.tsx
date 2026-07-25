@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, User, MessageCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -17,9 +17,13 @@ import {
   fetchExpeditionOrders,
   nextStage,
   trackingLink,
+  UNPAID_STATUSES,
+  PAID_FILTER,
 } from "./expeditionTypes";
 import { ExpConferenceDialog } from "./ExpConferenceDialog";
 import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
+import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
+
 
 interface Props {
   storeId: string;
@@ -52,6 +56,8 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [conferenceOrder, setConferenceOrder] = useState<ExpOrder | null>(null);
   const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
+  const [chatOrder, setChatOrder] = useState<ExpOrder | null>(null);
+
   const [stockByBarcode, setStockByBarcode] = useState<Record<string, { store: string; stock: number }[]>>({});
   const [testBusy, setTestBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -95,12 +101,14 @@ export function POSExpedition({ storeId, storeName }: Props) {
       .select("expedition_stage")
       .eq("store_id", storeId)
       .in("sale_type", ["live", "online"])
-      .neq("status", "cancelled")
+      .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
+      .or(PAID_FILTER)
       .in("expedition_stage", ["novo", "preparacao", "separacao", "conferencia"]);
     const c: Record<string, number> = {};
     for (const r of (data || []) as any[]) c[r.expedition_stage] = (c[r.expedition_stage] || 0) + 1;
     setCounts(c);
   };
+
 
   const load = async () => {
     if (!storeId) return;
@@ -588,6 +596,28 @@ export function POSExpedition({ storeId, storeName }: Props) {
                               </span>
                             )}
                           </div>
+                          <div className="mt-1 text-sm font-bold text-pos-muted-text flex items-center gap-3 flex-wrap">
+                            {o.seller_label && (
+                              <span className="flex items-center gap-1">
+                                <User className="h-4 w-4" />
+                                {o.seller_label}
+                                <span className="font-medium opacity-70">
+                                  ({o.seller_source === "sale" ? "vendedora da venda" : o.seller_source === "link" ? "enviou o link/PIX" : "atendimento"})
+                                </span>
+                              </span>
+                            )}
+                            {o.resolved_phone && (
+                              <span className="flex items-center gap-1">
+                                <MessageCircle className="h-4 w-4" /> {o.resolved_phone}
+                              </span>
+                            )}
+                            {o.wa_instance_label && (
+                              <Badge variant="outline" className="text-xs font-bold">
+                                {o.wa_instance_label}
+                              </Badge>
+                            )}
+                          </div>
+
                           {o.shipping_address?.city && (
                             <div className="mt-1 text-sm font-medium text-pos-muted-text flex items-center gap-1">
                               <MapPin className="h-4 w-4" />
@@ -608,6 +638,18 @@ export function POSExpedition({ storeId, storeName }: Props) {
                         </div>
 
                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                          {o.resolved_phone && (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-2 border-emerald-500 text-emerald-600 text-base font-black"
+                              onClick={() => setChatOrder(o)}
+                              title={o.wa_instance_label ? `Conversa em ${o.wa_instance_label}` : "Abrir conversa"}
+                            >
+                              <MessageCircle className="h-5 w-5 mr-1" /> WHATSAPP
+                            </Button>
+                          )}
+
                           {stage === "novo" && o.is_avulso && (
                             <Button
                               size="lg"
@@ -722,6 +764,24 @@ export function POSExpedition({ storeId, storeName }: Props) {
           }}
         />
       )}
+
+      {chatOrder && (
+        <WhatsAppChatDialog
+          open={!!chatOrder}
+          onOpenChange={(v) => !v && setChatOrder(null)}
+          order={{
+            id: chatOrder.id,
+            instagramHandle: chatOrder.instagram || chatOrder.customer_name || "",
+            whatsapp: chatOrder.resolved_phone || "",
+            products: [],
+            stage: "paid",
+            createdAt: new Date(chatOrder.created_at),
+            updatedAt: new Date(chatOrder.created_at),
+          } as any}
+          wide
+        />
+      )}
+
     </div>
   );
 }
