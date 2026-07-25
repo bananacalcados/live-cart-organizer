@@ -237,7 +237,9 @@ Deno.serve(async (req) => {
     };
 
     // ─── 4. LIVE SOURCE — from orders (paid cards) ───
-    // Live confirmed sale = orders.is_paid = true AND stage <> 'cancelled'.
+    // Venda confirmada = is_paid OR paid_externally OR stage pago-like (o card pode
+    // ter sido pago fora do checkout — antes esses pedidos sumiam do painel).
+    const PAID_LIKE_STAGES = ["paid","awaiting_shipping","awaiting_mototaxi","awaiting_pickup","shipped","completed"];
     type OrderRow = {
       id: string; event_id: string | null; customer_id: string | null;
       paid_at: string | null; pos_sale_id: string | null; shopify_order_id: string | null;
@@ -248,21 +250,25 @@ Deno.serve(async (req) => {
     while (true) {
       const { data } = await supabase
         .from("orders")
-        .select("id, event_id, customer_id, paid_at, pos_sale_id, shopify_order_id, products, discount_type, discount_value, is_paid, stage")
-        .eq("is_paid", true)
+        .select("id, event_id, customer_id, paid_at, pos_sale_id, shopify_order_id, products, discount_type, discount_value, is_paid, paid_externally, stage, created_at, updated_at")
+        .or(`is_paid.eq.true,paid_externally.eq.true,stage.in.(${PAID_LIKE_STAGES.join(",")})`)
         .neq("stage", "cancelled")
         .range(off, off + 999);
       if (!data || data.length === 0) break;
       for (const o of data as any[]) {
         paidCards.push({
           id: o.id, event_id: o.event_id, customer_id: o.customer_id,
-          paid_at: o.paid_at, pos_sale_id: o.pos_sale_id, shopify_order_id: o.shopify_order_id,
+          // Data da venda: paid_at quando existe; senão updated_at/created_at,
+          // para o pedido não cair fora do filtro de período (antes virava 1970).
+          paid_at: o.paid_at || o.updated_at || o.created_at,
+          pos_sale_id: o.pos_sale_id, shopify_order_id: o.shopify_order_id,
           products: o.products, discount_type: o.discount_type, discount_value: o.discount_value,
         });
       }
       if (data.length < 1000) break;
       off += 1000;
     }
+
 
     // Card value: linked pos_sale total when present, else subtotal(products) − discount.
     const cardSubtotal = (o: OrderRow): number => {
