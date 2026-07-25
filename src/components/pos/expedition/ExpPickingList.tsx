@@ -281,9 +281,20 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
                     </Badge>
                   )}
                 </div>
-                <p className="mt-2 text-sm font-semibold text-pos-muted-text">
-                  {l.orders.length} pedido(s)
-                </p>
+                <div className="mt-2 flex items-center gap-3">
+                  <p className="text-sm font-semibold text-pos-muted-text">{l.orders.length} pedido(s)</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 font-bold"
+                    disabled={!locs.length}
+                    onClick={() => setAdjustLine(l)}
+                  >
+                    <Pencil className="h-3 w-3 mr-1" /> Ajustar estoque
+                  </Button>
+                </div>
+
+
 
               </div>
               <div className="text-right shrink-0">
