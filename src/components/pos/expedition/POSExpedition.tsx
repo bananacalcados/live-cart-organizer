@@ -26,6 +26,7 @@ import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
 import { ExpPickingList } from "./ExpPickingList";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
+import { ExpTrackingSendDialog } from "./ExpTrackingSendDialog";
 
 
 
@@ -62,6 +63,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
   const [chatOrder, setChatOrder] = useState<ExpOrder | null>(null);
   const [editOrder, setEditOrder] = useState<ExpOrder | null>(null);
+  const [trackingOrder, setTrackingOrder] = useState<ExpOrder | null>(null);
 
 
 
@@ -175,11 +177,21 @@ export function POSExpedition({ storeId, storeName }: Props) {
         if (filterShipping === "carrier" && (dm.includes("retirada") || dm.includes("moto") || !dm)) return false;
         if (filterShipping === "none" && dm) return false;
       }
-      if (filterPeriod !== "all") {
+      if (filterPeriod === "day") {
+        // Dia específico do calendário (00:00 às 23:59 do dia escolhido).
+        if (filterDay) {
+          const created = new Date(o.created_at);
+          const [y, m, d] = filterDay.split("-").map(Number);
+          const start = new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0).getTime();
+          const end = start + 86400000;
+          const t = created.getTime();
+          if (t < start || t >= end) return false;
+        }
+      } else if (filterPeriod !== "all") {
         const created = new Date(o.created_at).getTime();
         const now = Date.now();
         const day = 86400000;
-        const map: Record<string, number> = { today: 1, "7d": 7, "30d": 30 };
+        const map: Record<string, number> = { today: 1, "7d": 7, "30d": 30, "90d": 90, "180d": 180, "365d": 365 };
         const days = map[filterPeriod] || 0;
         if (days && now - created > days * day) return false;
       }
@@ -191,7 +203,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
         o.items.some((i) => (i.product_name || "").toLowerCase().includes(q) || (i.sku || "").toLowerCase().includes(q))
       );
     });
-  }, [orders, search, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod]);
+  }, [orders, search, filterTest, filterOrigin, filterAvulso, filterShipping, filterPeriod, filterDay]);
 
   const groups = useMemo(() => {
     const map = new Map<string, ExpOrder[]>();
@@ -480,8 +492,20 @@ export function POSExpedition({ storeId, storeName }: Props) {
                     <SelectItem value="today">Últimas 24h</SelectItem>
                     <SelectItem value="7d">Últimos 7 dias</SelectItem>
                     <SelectItem value="30d">Últimos 30 dias</SelectItem>
+                    <SelectItem value="90d">Últimos 90 dias</SelectItem>
+                    <SelectItem value="180d">Últimos 6 meses</SelectItem>
+                    <SelectItem value="365d">Último ano</SelectItem>
+                    <SelectItem value="day">Dia específico…</SelectItem>
                   </SelectContent>
                 </Select>
+                {filterPeriod === "day" && (
+                  <Input
+                    type="date"
+                    value={filterDay}
+                    onChange={(e) => setFilterDay(e.target.value)}
+                    className="mt-2 h-10"
+                  />
+                )}
               </div>
               <div>
                 <label className="text-xs font-bold text-pos-muted-text uppercase">Testes</label>
