@@ -204,7 +204,7 @@ export const usePixNotificationStore = create<PixNotificationState>((set, get) =
       // Mapas auxiliares para exibir a ORIGEM do pedido no card (loja + instância).
       const [{ data: numRows }, { data: storeRows }] = await Promise.all([
         supabase.from("whatsapp_numbers").select("id, label"),
-        supabase.from("pos_stores").select("id, name"),
+        supabase.from("pos_stores").select("id, name").eq("is_simulation", false),
       ]);
       const instanceLabelById = new Map<string, string>();
       (numRows || []).forEach((n: any) => instanceLabelById.set(String(n.id), n.label));

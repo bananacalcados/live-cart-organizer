@@ -83,7 +83,7 @@ export function POSCustomersList({ onOpenProfile }: Props) {
 
   // Load stores + sellers once
   useEffect(() => {
-    supabase.from("pos_stores").select("id, name").order("name").then(({ data }) => {
+    supabase.from("pos_stores").select("id, name").eq("is_simulation", false).order("name").then(({ data }) => {
       setStores((data as any[]) || []);
     });
     supabase.from("pos_sellers").select("id, name, store_id").eq("is_active", true).order("name").then(({ data }) => {

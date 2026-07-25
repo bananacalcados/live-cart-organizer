@@ -92,7 +92,7 @@ export function POSCustomer360({ storeId, initialQuery }: Props) {
 
   // Load store map once
   useEffect(() => {
-    supabase.from("pos_stores").select("id, name").then(({ data }) => {
+    supabase.from("pos_stores").select("id, name").eq("is_simulation", false).then(({ data }) => {
       const m: Record<string, string> = {};
       (data || []).forEach((s: any) => { m[s.id] = s.name; });
       setStores(m);
