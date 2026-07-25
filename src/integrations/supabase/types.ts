@@ -19806,6 +19806,7 @@ export type Database = {
         Args: { p_barcode: string; p_parent_sku: string }
         Returns: Json
       }
+      delete_unsent_dispatch: { Args: { p_dispatch_id: string }; Returns: Json }
       dispatch_quota_summary: {
         Args: {
           p_candidates: Json

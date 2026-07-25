@@ -575,6 +575,26 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
     loadHistory();
   };
 
+  // Um disparo só pode ser apagado se NUNCA enviou nada.
+  const canDeleteDispatch = (d: DispatchRecord) => {
+    const dispatched = d.stats?.dispatched || d.sent_count || 0;
+    return d.status !== 'sending' && dispatched === 0 && (d.failed_count || 0) === 0;
+  };
+
+  const handleDeleteDispatch = async (dispatch: DispatchRecord, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Apagar definitivamente "${dispatch.campaign_name || dispatch.template_name}"? Essa campanha não teve nenhum envio.`)) return;
+    try {
+      const { data, error } = await supabase.rpc('delete_unsent_dispatch' as any, { p_dispatch_id: dispatch.id });
+      const res = data as { ok?: boolean; error?: string } | null;
+      if (error || res?.ok === false) throw new Error(res?.error || error?.message || 'Falha ao apagar');
+      setDispatches(prev => prev.filter(x => x.id !== dispatch.id));
+      toast.success('Campanha apagada');
+    } catch (err) {
+      toast.error('Erro ao apagar: ' + (err as Error).message);
+    }
+  };
+
   const fetchDispatchRecipients = async (dispatchId: string) => {
     let recs: { phone: string; recipient_name: string | null }[] = [];
     let dupPage = 0;
@@ -903,6 +923,17 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                               <Button variant="ghost" size="sm" className="h-7 px-2">
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
+                              {canDeleteDispatch(d) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-destructive"
+                                  title="Apagar campanha (nenhum envio realizado)"
+                                  onClick={(e) => handleDeleteDispatch(d, e)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
                             </>
                           )}
                         </div>
