@@ -417,7 +417,58 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
             CONCLUIR EXPEDIÇÃO
           </Button>
         </div>
+
+        {/* Vincular código de barras desconhecido a um item do pedido */}
+        <Dialog open={!!linkCode} onOpenChange={(v) => !v && setLinkCode(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black flex items-center gap-2">
+                <Link2 className="h-5 w-5 text-exp-check" /> Vincular código {linkCode}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-base font-semibold text-pos-muted-text">
+                Este código não está cadastrado no item. Selecione o produto correspondente para vincular
+                permanentemente — as próximas bipagens vão funcionar.
+              </p>
+              <Select value={linkItemId} onValueChange={setLinkItemId}>
+                <SelectTrigger className="h-12 text-base">
+                  <SelectValue placeholder="Selecione o item do pedido" />
+                </SelectTrigger>
+                <SelectContent>
+                  {order.items
+                    .filter((i) => !checks[i.id]?.scanned)
+                    .map((i) => (
+                      <SelectItem key={i.id} value={i.id} className="text-base">
+                        {[i.product_name, i.variant_name, i.size && `Tam ${i.size}`].filter(Boolean).join(" • ")}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setLinkCode(null)}>
+                  Cancelar
+                </Button>
+                <Button onClick={confirmLink} disabled={linking} className="font-black bg-exp-check text-white">
+                  {linking ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Link2 className="h-4 w-4 mr-1" />}
+                  VINCULAR E BIPAR
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {showEdit && (
+          <ExpOrderEditDialog
+            order={order}
+            storeId={storeId || order.store_id}
+            open={showEdit}
+            onOpenChange={setShowEdit}
+            onSaved={() => setShowEdit(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
+
 }
