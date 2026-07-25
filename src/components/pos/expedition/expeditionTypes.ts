@@ -149,32 +149,42 @@ export async function fetchExpeditionOrders(
   storeId: string,
   stage: ExpStage,
 ): Promise<ExpOrder[]> {
-  const { data: sales, error } = await supabase
-    .from("pos_sales")
-    .select(
-      "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id",
-    )
-    .eq("store_id", storeId)
-    .eq("expedition_stage", stage)
-    .in("sale_type", ["live", "online"])
-    .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
-    .or(PAID_FILTER)
-    .order("created_at", { ascending: stage !== "concluido" })
-    .limit(400);
+  const SALE_COLS =
+    "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id";
 
-  if (error) throw error;
+  const baseQuery = () =>
+    supabase
+      .from("pos_sales")
+      .select(SALE_COLS)
+      .eq("store_id", storeId)
+      .eq("expedition_stage", stage)
+      .in("sale_type", ["live", "online"])
+      .order("created_at", { ascending: stage !== "concluido" })
+      .limit(400);
+
+  let { data: sales, error } = await baseQuery()
+    .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
+    .or(PAID_FILTER);
+
+  // Fallback defensivo: se o filtro composto falhar no PostgREST, ainda exibimos
+  // a aba (apenas com o filtro simples de status não-pagos).
+  if (error) {
+    const retry = await baseQuery().not("status", "in", `(${UNPAID_STATUSES.join(",")})`);
+    if (retry.error) throw retry.error;
+    sales = retry.data as any;
+  }
+
   const rows = (sales || []) as any[];
   if (!rows.length) return [];
+
 
   const ids = rows.map((s) => s.id);
   const sellerIds = [...new Set(rows.map((s) => s.seller_id).filter(Boolean))];
   const eventIds = [...new Set(rows.map((s) => s.event_id).filter(Boolean))];
   const orderIds = [...new Set(rows.map((s) => s.source_order_id).filter(Boolean))];
   const phones = [...new Set(rows.map((s) => salePhone(s)).filter(Boolean))] as string[];
-  const suffixes = [...new Set(phones.map((p) => p.slice(-8)))].slice(0, 80);
-  const suffixOr = suffixes.map((s) => `phone.ilike.%${s}`).join(",");
 
-  const [itemsRes, sellersRes, eventsRes, ordersRes, msgsRes, assignRes, instRes] = await Promise.all([
+  const [itemsRes, sellersRes, eventsRes, ordersRes] = await Promise.all([
     supabase.from("pos_sale_items").select("*").in("sale_id", ids),
     sellerIds.length
       ? supabase.from("pos_sellers").select("id, name").in("id", sellerIds as string[])
@@ -188,24 +198,6 @@ export async function fetchExpeditionOrders(
           .select("id, delivery_method, is_pickup, pickup_store_id")
           .in("id", orderIds as string[])
       : Promise.resolve({ data: [] as any[] }),
-    suffixOr
-      ? supabase
-          .from("whatsapp_messages")
-          .select("phone, whatsapp_number_id, created_at")
-          .not("whatsapp_number_id", "is", null)
-          .or(suffixOr)
-          .order("created_at", { ascending: false })
-          .limit(1500)
-      : Promise.resolve({ data: [] as any[] }),
-    suffixOr
-      ? supabase
-          .from("chat_conversation_assignments")
-          .select("phone, assigned_name, whatsapp_number_id, updated_at")
-          .or(suffixOr)
-          .order("updated_at", { ascending: false })
-          .limit(300)
-      : Promise.resolve({ data: [] as any[] }),
-    supabase.from("whatsapp_numbers_safe").select("id, label, phone_display"),
   ]);
 
   const itemsBySale = new Map<string, ExpItem[]>();
@@ -217,21 +209,37 @@ export async function fetchExpeditionOrders(
   const sellerMap = new Map((sellersRes.data || []).map((s: any) => [s.id, s.name]));
   const eventMap = new Map((eventsRes.data || []).map((e: any) => [e.id, e.name]));
   const orderMap = new Map((ordersRes.data || []).map((o: any) => [o.id, o]));
-  const instMap = new Map(
-    ((instRes as any).data || []).map((i: any) => [i.id, i.label || i.phone_display || "Instância"]),
-  );
 
-  // Última instância usada por sufixo de telefone (regra: conversa = telefone + instância)
-  const instBySuffix = new Map<string, string>();
-  for (const m of ((msgsRes as any).data || []) as any[]) {
-    const suf = onlyDigits(m.phone).slice(-8);
-    if (suf && !instBySuffix.has(suf)) instBySuffix.set(suf, m.whatsapp_number_id);
-  }
+  // Enriquecimento opcional (atendente do chat + instância). NUNCA pode derrubar a lista:
+  // é consultado por telefone exato e qualquer falha é ignorada.
+  const instMap = new Map<string, string>();
   const attendantBySuffix = new Map<string, string>();
-  for (const a of ((assignRes as any).data || []) as any[]) {
-    const suf = onlyDigits(a.phone).slice(-8);
-    if (suf && a.assigned_name && !attendantBySuffix.has(suf)) attendantBySuffix.set(suf, a.assigned_name);
+  const instBySuffix = new Map<string, string>();
+  if (phones.length) {
+    try {
+      const [assignRes, instRes] = await Promise.all([
+        supabase
+          .from("chat_conversation_assignments")
+          .select("phone, assigned_name, whatsapp_number_id, updated_at")
+          .in("phone", phones.slice(0, 200))
+          .order("updated_at", { ascending: false })
+          .limit(300),
+        supabase.from("whatsapp_numbers_safe").select("id, label, phone_display"),
+      ]);
+      for (const i of ((instRes as any).data || []) as any[]) {
+        instMap.set(i.id, i.label || i.phone_display || "Instância");
+      }
+      for (const a of ((assignRes as any).data || []) as any[]) {
+        const suf = onlyDigits(a.phone).slice(-8);
+        if (!suf) continue;
+        if (a.assigned_name && !attendantBySuffix.has(suf)) attendantBySuffix.set(suf, a.assigned_name);
+        if (a.whatsapp_number_id && !instBySuffix.has(suf)) instBySuffix.set(suf, a.whatsapp_number_id);
+      }
+    } catch {
+      /* enriquecimento é best-effort */
+    }
   }
+
 
   return rows.map((s) => {
     const src = s.source_order_id ? orderMap.get(s.source_order_id) : null;
