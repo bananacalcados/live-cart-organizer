@@ -834,6 +834,20 @@ export function POSExpedition({ storeId, storeName }: Props) {
         />
       )}
 
+      {editOrder && (
+        <ExpOrderEditDialog
+          order={editOrder}
+          storeId={storeId}
+          open={!!editOrder}
+          onOpenChange={(v) => !v && setEditOrder(null)}
+          onSaved={() => {
+            setEditOrder(null);
+            load();
+          }}
+        />
+      )}
+
+
       {chatOrder && (
         <WhatsAppChatDialog
           open={!!chatOrder}
