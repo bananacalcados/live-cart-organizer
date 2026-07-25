@@ -11,6 +11,8 @@ import { ExpOrder, isPickup } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+import { isOnlineOnlyStore } from "@/lib/pos/onlineStore";
+
 
 
 interface Props {
