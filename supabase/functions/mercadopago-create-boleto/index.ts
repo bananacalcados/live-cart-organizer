@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import QRCode from "https://esm.sh/qrcode@1.5.3";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
+import { resolvePayerEmail } from "../_shared/payer-email.ts";
 
 // Boleto Mercado Pago sob demanda (vendedor no chat do PDV).
 // Fluxo:
