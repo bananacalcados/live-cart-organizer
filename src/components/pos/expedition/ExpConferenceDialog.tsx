@@ -42,6 +42,27 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const carrier = shipping.carrier;
   const courier = shipping.courier;
   const [nfeStatus, setNfeStatus] = useState<string | null>(null);
+  const [nfeReject, setNfeReject] = useState<string | null>(null);
+
+  // Busca o último documento fiscal do pedido para exibir status e o MOTIVO REAL da rejeição.
+  const loadNfeStatus = async () => {
+    const { data } = await supabase
+      .from("fiscal_documents")
+      .select("status, numero, rejection_code, rejection_message")
+      .eq("pos_sale_id", order.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setNfeStatus(data ? `${data.status}${data.numero ? ` nº ${data.numero}` : ""}` : null);
+    const msg = (data as any)?.rejection_message || null;
+    const code = (data as any)?.rejection_code || null;
+    setNfeReject(
+      data && data.status === "rejected" && (msg || code)
+        ? [code ? `Rejeição ${code}` : null, msg].filter(Boolean).join(": ")
+        : null,
+    );
+  };
+
   const [emitting, setEmitting] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [sendingWa, setSendingWa] = useState(false);
