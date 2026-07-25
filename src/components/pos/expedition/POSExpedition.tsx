@@ -811,6 +811,8 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
       {conferenceOrder && (
         <ExpConferenceDialog
+          storeId={storeId}
+
           order={conferenceOrder}
           open={!!conferenceOrder}
           onOpenChange={(v) => !v && setConferenceOrder(null)}
