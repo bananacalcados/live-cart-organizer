@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import CrossellModal, { type CrossellBlock } from "@/components/checkout/CrossellModal";
+import { ensureEventShippingOnOrder } from "@/lib/eventShipping";
 
 interface OrderProduct {
   title: string;
@@ -1702,28 +1703,91 @@ export default function TransparentCheckout() {
 
       // Pré-preenche a partir do cadastro deste pedido (já buscado em paralelo acima).
       const orderReg = orderRegRes.data as any;
+      let form: CustomerFormData | null = null;
 
       if (orderReg) {
         setRegistrationId(orderReg.id);
-        const formData = mapRegistrationToCustomerForm(orderReg);
-        setCustomerForm(formData);
+        form = mapRegistrationToCustomerForm(orderReg);
+      }
 
+      // Cliente recorrente: se o cadastro deste pedido não existe ou está incompleto,
+      // reaproveita o ÚLTIMO cadastro completo do mesmo cliente (compras anteriores).
+      const isComplete = (f: CustomerFormData | null) =>
+        Boolean(f && f.fullName && f.cpf && f.whatsapp && hasCompleteAddress(f));
+
+      if (order.customer_id && !isComplete(form)) {
+        const { data: prevReg } = await supabase
+          .rpc("get_customer_checkout_prefill" as any, { p_customer_id: order.customer_id });
+        if (prevReg) {
+          const prevForm = mapRegistrationToCustomerForm(prevReg);
+          form = form
+            ? (Object.fromEntries(
+                (Object.keys(prevForm) as (keyof CustomerFormData)[]).map((k) => [
+                  k,
+                  (form as CustomerFormData)[k]?.toString().trim() ? (form as CustomerFormData)[k] : prevForm[k],
+                ]),
+              ) as unknown as CustomerFormData)
+            : prevForm;
+
+          // Grava o cadastro reaproveitado neste pedido, para que NF-e/expedição
+          // e o pagamento já tenham os dados sem a cliente digitar de novo.
+          if (isComplete(form) && !orderId?.startsWith("live-")) {
+            void cpUpsertRegistration({
+              order_id: order.id,
+              full_name: form.fullName.trim(),
+              email: form.email.trim(),
+              cpf: form.cpf.replace(/\D/g, ""),
+              whatsapp: form.whatsapp.replace(/\D/g, ""),
+              cep: form.cep.replace(/\D/g, ""),
+              address: form.address.trim(),
+              address_number: form.addressNumber.trim(),
+              complement: form.complement.trim(),
+              neighborhood: form.neighborhood.trim(),
+              city: form.city.trim(),
+              state: form.state.trim().toUpperCase(),
+              ...(order.customer_id ? { customer_id: order.customer_id } : {}),
+            });
+          }
+        }
+      }
+
+      if (form) {
+        setCustomerForm(form);
         // Auto-advance to the last completed step
-        const hasIdentification = formData.fullName && formData.cpf && formData.whatsapp;
-        const hasAddress = formData.cep && formData.city && formData.state && formData.address;
+        const hasIdentification = form.fullName && form.cpf && form.whatsapp;
+        const hasAddress = hasCompleteAddress(form);
         if (hasIdentification && hasAddress) {
           setCurrentStep(3);
+
+          // Frete: ao pular a etapa 2, aplica a regra do evento (fixo / grátis acima de X)
+          // para nunca ir ao pagamento com frete zerado por engano.
+          const applied = await ensureEventShippingOnOrder({
+            orderId: order.id,
+            eventId: order.event_id,
+            subtotal,
+            currentShippingCost: order.shipping_cost,
+            currentFreeShipping: order.free_shipping,
+          });
+          if (applied) {
+            setOrderData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    freeShipping: applied.freeShipping,
+                    shippingCost: applied.shippingCost,
+                    totalAmount:
+                      Math.round(
+                        Math.max(0, prev.subtotal - prev.discountAmount + applied.shippingCost) * 100,
+                      ) / 100,
+                  }
+                : prev,
+            );
+          }
         } else if (hasIdentification) {
           setCurrentStep(2);
         }
-      } else if (order.customer_id) {
-        const { data: prevReg } = await supabase
-          .rpc('get_latest_registration_by_customer', { p_customer_id: order.customer_id })
-          .maybeSingle();
-        if (prevReg) {
-          setCustomerForm(mapRegistrationToCustomerForm(prevReg));
-        }
       }
+
     } catch (error) {
       console.error("Error loading order:", error);
     } finally {

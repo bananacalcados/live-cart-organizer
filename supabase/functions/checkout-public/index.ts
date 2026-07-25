@@ -83,6 +83,7 @@ const ORDER_PATCH_KEYS = new Set([
   "notes",
   "shipping_cost",
   "free_shipping",
+  "shipping_info",
   "cart_link",
 ]);
 

@@ -19922,6 +19922,10 @@ export type Database = {
       extract_phone_ddd_suffix: { Args: { raw_phone: string }; Returns: string }
       extract_phone_suffix8: { Args: { phone_input: string }; Returns: string }
       finalize_completed_dispatches: { Args: never; Returns: number }
+      find_customer_prefill_by_phone: {
+        Args: { p_phone: string }
+        Returns: Json
+      }
       find_or_create_unified_customer: {
         Args: {
           p_cpf?: string
@@ -20052,6 +20056,10 @@ export type Database = {
           whatsapp_number_id: string
         }[]
       }
+      get_customer_checkout_prefill: {
+        Args: { p_customer_id: string }
+        Returns: Json
+      }
       get_customer_last_address: {
         Args: { p_customer_id: string }
         Returns: Json
@@ -20113,6 +20121,10 @@ export type Database = {
           dispatch_id: string
           pending_count: number
         }[]
+      }
+      get_event_checkout_shipping: {
+        Args: { p_event_id: string }
+        Returns: Json
       }
       get_event_installment_config: {
         Args: { p_event_id: string }
