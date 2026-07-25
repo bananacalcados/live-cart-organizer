@@ -96,18 +96,25 @@ export function POSExpedition({ storeId, storeName }: Props) {
   };
 
   const loadCounts = async () => {
-    const { data } = await supabase
-      .from("pos_sales")
-      .select("expedition_stage")
-      .eq("store_id", storeId)
-      .in("sale_type", ["live", "online"])
+    const base = () =>
+      supabase
+        .from("pos_sales")
+        .select("expedition_stage")
+        .eq("store_id", storeId)
+        .in("sale_type", ["live", "online"])
+        .in("expedition_stage", ["novo", "preparacao", "separacao", "conferencia"]);
+    let { data, error } = await base()
       .not("status", "in", `(${UNPAID_STATUSES.join(",")})`)
-      .or(PAID_FILTER)
-      .in("expedition_stage", ["novo", "preparacao", "separacao", "conferencia"]);
+      .or(PAID_FILTER);
+    if (error) {
+      const retry = await base().not("status", "in", `(${UNPAID_STATUSES.join(",")})`);
+      data = retry.data as any;
+    }
     const c: Record<string, number> = {};
     for (const r of (data || []) as any[]) c[r.expedition_stage] = (c[r.expedition_stage] || 0) + 1;
     setCounts(c);
   };
+
 
 
   const load = async () => {
