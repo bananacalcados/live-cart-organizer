@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Loader2, ScanBarcode, FileText, Truck, Send, Link2, Pencil } from "lucide-react";
+import { CheckCircle2, Loader2, ScanBarcode, FileText, Truck, Send, Link2, Pencil, Copy, Download, FileCode2 } from "lucide-react";
+import { openFiscalDocument } from "@/lib/openFiscalDocument";
+
 import { ExpOrder, brl, isCarrierWithTracking, isMototaxi, isPickup, trackingLink } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
