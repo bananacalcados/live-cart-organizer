@@ -402,9 +402,20 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
                 <Pencil className="h-4 w-4 mr-1" /> Editar dados do pedido / NF-e
               </Button>
             </div>
-            <p className="mt-2 text-sm font-semibold text-pos-muted-text">
-              Rejeição de endereço? Corrija os dados aqui e emita novamente.
-            </p>
+            {nfeReject ? (
+              <div className="mt-2 rounded-lg border-2 border-destructive/50 bg-destructive/10 p-3">
+                <p className="text-sm font-black text-destructive">Motivo da rejeição</p>
+                <p className="text-sm font-semibold text-destructive break-words">{nfeReject}</p>
+                <p className="mt-1 text-xs font-semibold text-pos-muted-text">
+                  Corrija em "Editar dados do pedido / NF-e" e emita novamente.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm font-semibold text-pos-muted-text">
+                Deu rejeição? O motivo exato aparece aqui — corrija os dados e emita novamente.
+              </p>
+            )}
+
           </div>
 
           {/* Envio */}
