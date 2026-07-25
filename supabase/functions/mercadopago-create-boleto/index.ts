@@ -146,6 +146,13 @@ serve(async (req) => {
     const firstName = nameParts.shift() || "Cliente";
     const lastName = nameParts.join(" ") || "Banana";
 
+    // E-mail saneado (corrige typos e evita 400 "payer.email must be a valid email")
+    const emailResolution = resolvePayerEmail({ email: customer_email, phone: customer_phone, cpf });
+    const payerEmailSafe = emailResolution.email;
+    if (emailResolution.fallbackUsed) {
+      console.warn(`[mp-boleto] E-mail ajustado/substituído (original inválido) → ${payerEmailSafe}`);
+    }
+
     // 1) INSERT pos_boletos (pending)
     const authHeader = req.headers.get("authorization") || "";
     let createdBy: string | null = null;
