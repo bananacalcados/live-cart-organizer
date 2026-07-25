@@ -1839,8 +1839,10 @@ export function MassTemplateDispatcher() {
         </Select>
       </div>
 
+      <TouchLimitsReference />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Column 1: Template + Variables */}
+
         <Card className="lg:col-span-1">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
