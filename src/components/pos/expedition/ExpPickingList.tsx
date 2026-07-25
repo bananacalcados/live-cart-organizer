@@ -267,8 +267,9 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
                   )}
                 </div>
                 <p className="mt-2 text-sm font-semibold text-pos-muted-text">
-                  Pedidos: {l.orders.map((o) => `${o.customer} (${o.qty})`).join(" • ")}
+                  {l.orders.length} pedido(s)
                 </p>
+
               </div>
               <div className="text-right shrink-0">
                 <p className="text-3xl font-black text-pos-text">{l.quantity}</p>
