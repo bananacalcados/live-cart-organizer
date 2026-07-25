@@ -1406,7 +1406,7 @@ export function MassTemplateDispatcher() {
             rfm: rfmFilter, state: stateFilter, city: cityFilter,
             ddd: dddFilter, region: regionFilter, campaign: leadCampaignFilter,
           } as any,
-          total_recipients: phones.length,
+          total_recipients: 0,
           rendered_message: renderedMessage || null,
           variables_config: variables as any,
           force_resend: forceResend,
