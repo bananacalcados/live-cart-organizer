@@ -226,6 +226,27 @@ export function POSExpedition({ storeId, storeName }: Props) {
     }
   };
 
+  /** Volta o pedido para a etapa anterior (permite corrigir dados/NF-e). */
+  const goBack = async (o: ExpOrder) => {
+    const to = prevStage(o.expedition_stage);
+    if (!to) return;
+    setBusyId(o.id);
+    try {
+      const { error } = await supabase
+        .from("pos_sales")
+        .update({ expedition_stage: to, expedition_finished_at: null })
+        .eq("id", o.id);
+      if (error) throw error;
+      toast.success(`Pedido voltou para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao voltar etapa");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+
   const unifyGroup = async (list: ExpOrder[]) => {
     if (list.length < 2) return;
     const gid = list[0].expedition_group_id || crypto.randomUUID();
