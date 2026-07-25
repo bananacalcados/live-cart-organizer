@@ -78,11 +78,20 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
             city: reg.city || "",
             state: reg.state || "",
           });
-        } else if (order.customer_id) {
-          // 2. Fallback to last registration of customer
-          const { data: prev } = await supabase
-            .rpc("get_latest_registration_by_customer", { p_customer_id: order.customer_id })
-            .maybeSingle();
+        } else if (order.customer_id || order.customer?.whatsapp) {
+          // 2. Cliente recorrente: reaproveita o último cadastro COMPLETO
+          //    (por cliente e, se não achar, pelo WhatsApp).
+          let prev: any = null;
+          if (order.customer_id) {
+            const { data } = await supabase
+              .rpc("get_customer_checkout_prefill" as any, { p_customer_id: order.customer_id });
+            prev = data || null;
+          }
+          if (!prev && order.customer?.whatsapp) {
+            const { data } = await supabase
+              .rpc("find_customer_prefill_by_phone" as any, { p_phone: order.customer.whatsapp });
+            prev = data || null;
+          }
           if (prev) {
             setForm({
               full_name: (prev as any).full_name || "",
