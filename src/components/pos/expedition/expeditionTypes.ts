@@ -211,12 +211,26 @@ export async function fetchExpeditionOrders(
   const rows = (sales || []) as any[];
   if (!rows.length) return [];
 
+  // Loja 100% online (Site/Live) não tem vendedora humana: nenhuma venda dela
+  // pode ser atribuída a vendedora/atendente.
+  let storeIsOnlineOnly = false;
+  try {
+    const { data: storeRow } = await supabase
+      .from("pos_stores")
+      .select("name")
+      .eq("id", storeId)
+      .maybeSingle();
+    storeIsOnlineOnly = isOnlineOnlyStore((storeRow as any)?.name);
+  } catch {
+    /* best-effort */
+  }
 
   const ids = rows.map((s) => s.id);
   const sellerIds = [...new Set(rows.map((s) => s.seller_id).filter(Boolean))];
   const eventIds = [...new Set(rows.map((s) => s.event_id).filter(Boolean))];
   const orderIds = [...new Set(rows.map((s) => s.source_order_id).filter(Boolean))];
   const phones = [...new Set(rows.map((s) => salePhone(s)).filter(Boolean))] as string[];
+
 
   const [itemsRes, sellersRes, eventsRes, ordersRes] = await Promise.all([
     supabase.from("pos_sale_items").select("*").in("sale_id", ids),
