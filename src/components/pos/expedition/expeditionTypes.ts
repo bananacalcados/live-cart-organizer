@@ -77,7 +77,33 @@ export interface ExpOrder {
   is_avulso: boolean;
   avulso_ready: boolean;
   is_test?: boolean;
+  /** Telefone do cliente já resolvido (venda ou metadados do link/PIX). */
+  resolved_phone?: string | null;
+  /** Vendedor(a) que gerou o link/PIX — venda, metadados do link ou atendimento no chat. */
+  seller_label?: string | null;
+  seller_source?: "sale" | "link" | "chat" | null;
+  /** Instância de WhatsApp em que a conversa/link aconteceu. */
+  wa_number_id?: string | null;
+  wa_instance_label?: string | null;
 }
+
+/**
+ * A Expedição só existe para pedidos PAGOS.
+ * Links de pagamento/PIX gerados e ainda não quitados ficam em `online_pending`
+ * (ou `pending` / `pending_pickup` / `payment_failed`) e NÃO podem aparecer aqui.
+ */
+export const UNPAID_STATUSES = ["online_pending", "pending", "pending_pickup", "payment_failed", "cancelled"];
+export const PAID_FILTER = "paid_at.not.is.null,status.in.(completed,paid,pending_sync)";
+
+export const onlyDigits = (v?: string | null) => (v || "").replace(/\D/g, "");
+
+export const salePhone = (sale: any): string | null => {
+  const pd = sale?.payment_details || {};
+  const raw = sale?.customer_phone || pd.customer_phone || pd.customer_whatsapp || "";
+  const d = onlyDigits(raw);
+  return d.length >= 8 ? d : null;
+};
+
 
 export const getOrigin = (sale: any): ExpOrigin => {
   if (sale.sale_type === "live") return "live";
