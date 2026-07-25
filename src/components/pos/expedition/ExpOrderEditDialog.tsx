@@ -50,9 +50,23 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
     courierProviderId: "",
     cost: "",
   });
+  const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
+  const [sellerId, setSellerId] = useState<string>("");
 
   useEffect(() => {
     if (!open) return;
+    supabase
+      .from("pos_sellers")
+      .select("id, name")
+      .eq("store_id", storeId)
+      .eq("is_active", true)
+      .order("name")
+      .then(({ data }) => setSellers((data as any) || []));
+  }, [open, storeId]);
+
+  useEffect(() => {
+    if (!open) return;
+    setSellerId(order.seller_id || "");
     setForm({
       name: order.customer_name || pd.customer_name || "",
       phone: order.customer_phone || pd.customer_phone || "",
@@ -74,6 +88,8 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, order.id]);
+
+
 
   const lookupCep = async (rawCep?: string) => {
     const cep = onlyDigits(rawCep ?? form.cep);
