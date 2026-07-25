@@ -30,6 +30,7 @@ import { ImageCropDialog } from "@/components/ImageCropDialog";
 import { SavedAudiencePicker } from "@/components/marketing/SavedAudiencePicker";
 import { SaveAudienceDialog } from "@/components/marketing/SaveAudienceDialog";
 import type { AudienceFilter } from "@/components/pos/audience/AudienceFilterBuilder";
+import { TouchLimitsReference } from "@/components/marketing/TouchLimitsReference";
 
 /**
  * Extrai o DDD (2 dígitos) de um telefone em qualquer formato.
