@@ -345,7 +345,22 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ExpStockAdjustDialog
+        open={!!adjustLine}
+        onOpenChange={(v) => !v && setAdjustLine(null)}
+        title={[adjustLine?.product_name, adjustLine?.variant_name, adjustLine?.size && `Tam ${adjustLine?.size}`]
+          .filter(Boolean)
+          .join(" • ")}
+        rows={
+          (adjustLine &&
+            ((adjustLine.barcode && stock[adjustLine.barcode]) || (adjustLine.sku && stock[adjustLine.sku]) || [])) ||
+          []
+        }
+        onDone={loadStock}
+      />
     </div>
+
   );
 }
 
