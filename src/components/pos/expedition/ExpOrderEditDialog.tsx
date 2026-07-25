@@ -54,9 +54,16 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
   });
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
   const [sellerId, setSellerId] = useState<string>("");
+  const [onlineOnlyStore, setOnlineOnlyStore] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    supabase
+      .from("pos_stores")
+      .select("name")
+      .eq("id", storeId)
+      .maybeSingle()
+      .then(({ data }) => setOnlineOnlyStore(isOnlineOnlyStore((data as any)?.name)));
     supabase
       .from("pos_sellers")
       .select("id, name")
@@ -65,6 +72,7 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
       .order("name")
       .then(({ data }) => setSellers((data as any) || []));
   }, [open, storeId]);
+
 
   useEffect(() => {
     if (!open) return;
