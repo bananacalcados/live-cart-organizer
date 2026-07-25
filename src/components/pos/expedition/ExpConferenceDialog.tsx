@@ -171,25 +171,45 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
 
 
   const emitNfe = async () => {
+    // Pré-validação local: evita rejeição 237 (CPF do destinatário inválido) na SEFAZ.
+    const cpf = order.customer_cpf || (order.payment_details as any)?.customer_cpf || "";
+    if (!isValidCpf(cpf)) {
+      const msg = onlyDigitsCpf(cpf)
+        ? `CPF do cliente inválido (${formatCpf(cpf)}) — dígito verificador não confere. Corrija em "Editar dados do pedido / NF-e".`
+        : 'Pedido sem CPF do destinatário. Informe em "Editar dados do pedido / NF-e".';
+      setNfeReject(msg);
+      toast.error(msg, { duration: 12000 });
+      return;
+    }
     setEmitting(true);
     try {
       const { data, error } = await supabase.functions.invoke("nfe-emitir", { body: { sale_id: order.id } });
       if (error) {
-        toast.error(await extractEdgeError(error, "Erro ao emitir NF-e"), { duration: 12000 });
+        const msg = await extractEdgeError(error, "Erro ao emitir NF-e");
+        setNfeReject(msg);
+        toast.error(msg, { duration: 12000 });
+        await loadNfeStatus();
         return;
       }
       if ((data as any)?.error) {
+        setNfeReject((data as any).error);
         toast.error((data as any).error, { duration: 12000 });
+        await loadNfeStatus();
         return;
       }
+      setNfeReject(null);
       setNfeStatus(`authorized${(data as any)?.numero ? ` nº ${(data as any).numero}` : ""}`);
       toast.success("NF-e autorizada");
     } catch (e: any) {
-      toast.error(await extractEdgeError(e, "Erro ao emitir NF-e"), { duration: 12000 });
+      const msg = await extractEdgeError(e, "Erro ao emitir NF-e");
+      setNfeReject(msg);
+      toast.error(msg, { duration: 12000 });
+      await loadNfeStatus();
     } finally {
       setEmitting(false);
     }
   };
+
 
   const sendTrackingWa = async () => {
     const phone = (order.customer_phone || "").replace(/\D/g, "");
