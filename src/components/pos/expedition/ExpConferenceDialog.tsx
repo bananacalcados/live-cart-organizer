@@ -18,7 +18,7 @@ import { ExpTrackingTemplateEditor, TrackingTemplate } from "./ExpTrackingTempla
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { extractEdgeError } from "@/lib/edgeFunctionError";
 import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
-import { posSendText } from "@/lib/pos/posWhatsappSend";
+import { sendTrackingWhatsApp } from "@/lib/pos/trackingSend";
 import { TrackingVarValues, formatShippingAddress, renderTrackingMessage } from "@/lib/pos/trackingMessage";
 
 
@@ -328,18 +328,9 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
     setSendingWa(true);
     try {
       const message = renderTrackingMessage(tpl.body, trackingValues).trim();
-      const { data: num } = await supabase
-        .from("whatsapp_numbers_safe")
-        .select("provider")
-        .eq("id", numberId)
-        .maybeSingle();
-      // Rota correta por provider (meta | zapi | uazapi | wasender) — antes caía sempre no zapi.
-      const messageId = await posSendText({
-        provider: (num as any)?.provider,
-        phone,
-        message,
-        numberId,
-      });
+      // Rota por provider real + x-force-instance (a expedidora escolhe a instância
+      // conscientemente; sem isso o instance-guard devolvia 409 e nada era enviado).
+      const messageId = await sendTrackingWhatsApp({ phone, message, numberId });
       if (!messageId) throw new Error("O provedor não confirmou o envio da mensagem");
       // Persiste o link/prazo informados para não perder o dado ao fechar o modal.
       await supabase
@@ -353,7 +344,7 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
       toast.success("Rastreio enviado no WhatsApp");
 
     } catch (e: any) {
-      toast.error(e?.message || "Erro ao enviar rastreio");
+      toast.error(e?.message || "Erro ao enviar rastreio", { duration: 10000 });
     } finally {
       setSendingWa(false);
     }
