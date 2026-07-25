@@ -71,30 +71,37 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
     (async () => {
       setLoading(true);
       try {
-        // 1. Try the registration of THIS order
+        // 1. Cadastro DESTE pedido (mesmo parcial) — nunca é descartado.
         const { data: reg } = await supabase
           .from("customer_registrations")
           .select("full_name,cpf,email,whatsapp,cep,address,address_number,complement,neighborhood,city,state")
           .eq("order_id", order.id)
           .maybeSingle();
 
-        if (reg && isRegUsable(reg)) {
-          setForm({
-            full_name: reg.full_name || "",
-            cpf: reg.cpf || "",
-            email: reg.email || "",
-            whatsapp: reg.whatsapp || order.customer?.whatsapp || "",
-            cep: reg.cep || "",
-            address: reg.address || "",
-            address_number: reg.address_number || "",
-            complement: reg.complement || "",
-            neighborhood: reg.neighborhood || "",
-            city: reg.city || "",
-            state: reg.state || "",
-          });
-        } else if (order.customer_id || order.customer?.whatsapp) {
-          // 2. Cliente recorrente: reaproveita o último cadastro COMPLETO
-          //    (por cliente e, se não achar, pelo WhatsApp).
+        const clean = (v: any) => {
+          const s = String(v ?? "").trim();
+          if (!s || s === "Pendente" || s === "0" || s === "00000000") return "";
+          return s;
+        };
+        const fromRow = (r: any): Form => ({
+          full_name: clean(r?.full_name),
+          cpf: clean(r?.cpf),
+          email: clean(r?.email),
+          whatsapp: clean(r?.whatsapp),
+          cep: clean(r?.cep),
+          address: clean(r?.address),
+          address_number: clean(r?.address_number),
+          complement: clean(r?.complement),
+          neighborhood: clean(r?.neighborhood),
+          city: clean(r?.city),
+          state: clean(r?.state),
+        });
+
+        const base = reg ? fromRow(reg) : { ...EMPTY };
+
+        // 2. Cliente recorrente: só preenche os campos que ficaram vazios.
+        const needsFill = !isRegUsable(reg);
+        if (needsFill && (order.customer_id || order.customer?.whatsapp)) {
           let prev: any = null;
           if (order.customer_id) {
             const { data } = await supabase
@@ -107,25 +114,15 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
             prev = data || null;
           }
           if (prev) {
-            setForm({
-              full_name: (prev as any).full_name || "",
-              cpf: (prev as any).cpf || "",
-              email: (prev as any).email || "",
-              whatsapp: (prev as any).whatsapp || order.customer?.whatsapp || "",
-              cep: (prev as any).cep || "",
-              address: (prev as any).address || "",
-              address_number: (prev as any).address_number || "",
-              complement: (prev as any).complement || "",
-              neighborhood: (prev as any).neighborhood || "",
-              city: (prev as any).city || "",
-              state: (prev as any).state || "",
+            const p = fromRow(prev);
+            (Object.keys(base) as (keyof Form)[]).forEach((k) => {
+              if (!base[k] && p[k]) base[k] = p[k];
             });
-          } else {
-            setForm({ ...EMPTY, whatsapp: order.customer?.whatsapp || "" });
           }
-        } else {
-          setForm({ ...EMPTY, whatsapp: order.customer?.whatsapp || "" });
         }
+
+        if (!base.whatsapp) base.whatsapp = order.customer?.whatsapp || "";
+        setForm(base);
       } catch (e) {
         console.error("[CustomerFicha] load error:", e);
       } finally {
@@ -133,6 +130,7 @@ export function CustomerFichaDialog({ open, onOpenChange, order }: CustomerFicha
       }
     })();
   }, [open, order.id, order.customer_id, order.customer?.whatsapp]);
+
 
   const handleChange = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((p) => ({ ...p, [k]: e.target.value }));
