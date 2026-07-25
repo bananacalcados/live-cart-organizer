@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, User, MessageCircle } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, User, MessageCircle, Send } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -77,6 +77,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [filterShipping, setFilterShipping] = useState<string>("all");
   const [filterTest, setFilterTest] = useState<string>("include");
   const [filterPeriod, setFilterPeriod] = useState<string>("all");
+  const [filterDay, setFilterDay] = useState<string>("");
 
   useEffect(() => {
     setSelected(new Set());
@@ -528,6 +529,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
                   setFilterAvulso("all");
                   setFilterShipping("all");
                   setFilterPeriod("all");
+                  setFilterDay("");
                   setFilterTest("hide");
                 }}
               >
@@ -793,6 +795,17 @@ export function POSExpedition({ storeId, storeName }: Props) {
                               <ScanBarcode className="h-5 w-5 mr-1" /> CONFERIR E FINALIZAR
                             </Button>
                           )}
+                          {stage === "concluido" && o.resolved_phone && (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-2 border-exp-done text-exp-done text-base font-black"
+                              onClick={() => setTrackingOrder(o)}
+                              title="Reenviar a mensagem de rastreio no WhatsApp"
+                            >
+                              <Send className="h-5 w-5 mr-1" /> ENVIAR RASTREIO
+                            </Button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -889,6 +902,16 @@ export function POSExpedition({ storeId, storeName }: Props) {
           wide
         />
       )}
+
+      <ExpTrackingSendDialog
+        order={trackingOrder}
+        open={!!trackingOrder}
+        onOpenChange={(v) => {
+          if (!v) setTrackingOrder(null);
+          else return;
+          load();
+        }}
+      />
 
     </div>
   );
