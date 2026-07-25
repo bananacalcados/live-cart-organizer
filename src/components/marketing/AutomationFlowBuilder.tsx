@@ -2466,7 +2466,7 @@ function PosSaleTriggerConfig({ triggerConfig, onChange }: { triggerConfig: any;
 
   useEffect(() => {
     (async () => {
-      const { data: s } = await supabase.from("pos_stores").select("id, name").order("name");
+      const { data: s } = await supabase.from("pos_stores").select("id, name").eq("is_simulation", false).order("name");
       setStores((s as any) || []);
       const { data: sl } = await supabase.from("pos_sellers").select("id, name, store_id").order("name");
       setSellers((sl as any) || []);

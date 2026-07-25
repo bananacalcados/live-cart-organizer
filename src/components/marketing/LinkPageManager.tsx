@@ -139,7 +139,7 @@ export function LinkPageManager() {
   }, []);
   const fetchRefs = useCallback(async () => {
     const [s, se, wa] = await Promise.all([
-      supabase.from("pos_stores").select("id, name").eq("is_active", true),
+      supabase.from("pos_stores").select("id, name").eq("is_active", true).eq("is_simulation", false),
       supabase.from("pos_sellers").select("id, name, store_id").eq("is_active", true),
       supabase.from("whatsapp_numbers").select("id, label, provider, is_online, is_active, phone_display, wasender_phone_number, uazapi_owner").eq("is_active", true),
     ]);
