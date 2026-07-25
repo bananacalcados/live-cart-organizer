@@ -82,35 +82,48 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
   }, [orders]);
 
   const loadStock = async () => {
-    const barcodes = lines.map((l) => l.barcode).filter(Boolean) as string[];
-    const skus = lines.map((l) => l.sku).filter(Boolean) as string[];
-    if (!barcodes.length && !skus.length) return;
-    try {
-      const filters: string[] = [];
-      if (barcodes.length) filters.push(`barcode.in.(${barcodes.map((b) => `"${b}"`).join(",")})`);
-      if (skus.length) filters.push(`sku.in.(${skus.map((s) => `"${s}"`).join(",")})`);
-      const { data } = await supabase
+    const barcodes = [...new Set(lines.map((l) => (l.barcode || "").trim()).filter(Boolean))];
+    const skus = [...new Set(lines.map((l) => (l.sku || "").trim()).filter(Boolean))];
+    const codes = [...new Set([...barcodes, ...skus])];
+    if (!codes.length) return;
+
+    const select =
+      "id, name, variant, size, barcode, sku, stock, store_id, pos_stores!inner(name, is_simulation, is_active)";
+    const base = () =>
+      supabase
         .from("pos_products")
-        .select(
-          "id, name, variant, size, barcode, sku, stock, store_id, pos_stores!inner(name, is_simulation, is_active)",
-        )
-        .or(filters.join(","))
+        .select(select)
         .eq("pos_stores.is_simulation", false)
         .eq("pos_stores.is_active", true)
-        .limit(1000);
+        .limit(2000);
+
+    try {
+      // Consultas separadas (barcode / sku) evitam quebrar o filtro `or` com valores especiais.
+      const [byBarcode, bySku] = await Promise.all([base().in("barcode", codes), base().in("sku", codes)]);
+      if (byBarcode.error) console.error("[picking] barcode lookup", byBarcode.error);
+      if (bySku.error) console.error("[picking] sku lookup", bySku.error);
+
+      const rows = [...(byBarcode.data || []), ...(bySku.data || [])] as any[];
       const map: Record<string, StockRow[]> = {};
       const names: Record<string, { name: string; variant: string | null; size: string | null; sku: string | null }> = {};
-      for (const r of (data || []) as any[]) {
-        const row: StockRow = {
-          product_id: r.id,
-          store_id: r.store_id,
-          store: r.pos_stores?.name || "Loja",
-          stock: Number(r.stock) || 0,
-        };
-        for (const k of [r.barcode, r.sku].filter(Boolean)) {
-          const arr = map[k] || [];
-          arr.push(row);
-          map[k] = arr;
+      const seen = new Set<string>();
+      for (const r of rows) {
+        const dedup = `${r.id}`;
+        const keys = [r.barcode, r.sku]
+          .map((v: any) => (v ? String(v).trim() : ""))
+          .filter((v: string) => v && codes.includes(v));
+        for (const k of keys) {
+          if (!seen.has(`${dedup}|${k}`)) {
+            seen.add(`${dedup}|${k}`);
+            const arr = map[k] || [];
+            arr.push({
+              product_id: r.id,
+              store_id: r.store_id,
+              store: r.pos_stores?.name || "Loja",
+              stock: Number(r.stock) || 0,
+            });
+            map[k] = arr;
+          }
           if (!names[k] && r.name) {
             names[k] = { name: r.name, variant: r.variant || null, size: r.size || null, sku: r.sku || null };
           }
@@ -118,10 +131,11 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
       }
       setStock(map);
       setResolved(names);
-    } catch {
-      /* best-effort */
+    } catch (e) {
+      console.error("[picking] loadStock", e);
     }
   };
+
 
   useEffect(() => {
     loadStock();
@@ -193,7 +207,7 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
         <td><strong>${l.product_name}</strong><br/><span style="font-size:11px;color:#555">${[l.variant_name, l.size && `Tam ${l.size}`, l.sku]
           .filter(Boolean)
           .join(" • ")}</span></td>
-        <td style="font-size:11px">${((l.barcode && stock[l.barcode]) || (l.sku && stock[l.sku]) || [])
+        <td style="font-size:11px">${(stock[(l.barcode || "").trim()] || stock[(l.sku || "").trim()] || [])
           .map((s) => `${s.store}: ${s.stock}`)
           .join(" | ") || "—"}</td>
         <td style="text-align:center;font-size:18px;font-weight:bold">${l.quantity}</td>
@@ -257,8 +271,10 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
 
       {lines.map((l) => {
         const done = separated[l.key] || 0;
-        const locs = (l.barcode && stock[l.barcode]) || (l.sku && stock[l.sku]) || [];
-        const res = (l.barcode && resolved[l.barcode]) || (l.sku && resolved[l.sku]) || null;
+        const bc = (l.barcode || "").trim();
+        const sk = (l.sku || "").trim();
+        const locs = stock[bc] || stock[sk] || [];
+        const res = resolved[bc] || resolved[sk] || null;
         const displayName = res?.name || l.product_name;
         const displayVariant = res?.variant || l.variant_name;
         const displaySize = res?.size || l.size;
