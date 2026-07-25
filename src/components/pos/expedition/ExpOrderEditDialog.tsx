@@ -155,6 +155,7 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
           tracking_carrier: shipping.carrier || null,
           courier_name: shipping.courier.trim() || null,
           pickup_store_id: isPickup(shipping.carrier) ? storeId : null,
+          seller_id: sellerId || null,
         } as any)
         .eq("id", order.id);
       if (error) throw error;
