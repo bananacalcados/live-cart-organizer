@@ -135,6 +135,7 @@ export const isAvulsoReady = (sale: any): boolean =>
 export const SHIPPING_OPTIONS = [
   "Correios PAC",
   "Correios SEDEX",
+  "J&T Express",
   "Jadlog",
   "Loggi",
   "Transportadora",
@@ -142,8 +143,34 @@ export const SHIPPING_OPTIONS = [
   "Retirada na loja",
 ];
 
-export const isCarrierWithTracking = (c: string) =>
-  !!c && c !== "Mototaxi" && c !== "Retirada na loja";
+/**
+ * Formas de envio = lista padrão + transportadoras cadastradas em
+ * Configurações > Prestadores de serviço (nunca quebra se a consulta falhar).
+ */
+export async function fetchShippingOptions(): Promise<string[]> {
+  try {
+    const { data } = await supabase
+      .from("service_providers" as any)
+      .select("name, provider_type, is_active")
+      .eq("is_active", true);
+    const extra = ((data || []) as any[])
+      .filter((p) => p.provider_type === "transportadora")
+      .map((p) => String(p.name).trim())
+      .filter(Boolean);
+    const all = [...SHIPPING_OPTIONS];
+    for (const n of extra) if (!all.some((o) => o.toLowerCase() === n.toLowerCase())) all.splice(all.length - 2, 0, n);
+    return all;
+  } catch {
+    return [...SHIPPING_OPTIONS];
+  }
+}
+
+export const isPickup = (c?: string | null) => (c || "").toLowerCase().includes("retirada");
+
+export const isMototaxi = (c?: string | null) => (c || "").toLowerCase().includes("moto");
+
+export const isCarrierWithTracking = (c: string) => !!c && !isMototaxi(c) && !isPickup(c);
+
 
 export const trackingLink = (code: string) =>
   `https://www.melhorrastreio.com.br/rastreio/${encodeURIComponent(code)}`;
