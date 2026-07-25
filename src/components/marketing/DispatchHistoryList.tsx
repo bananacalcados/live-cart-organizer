@@ -923,6 +923,17 @@ export function DispatchHistoryList({ onDuplicate }: DispatchHistoryListProps = 
                               <Button variant="ghost" size="sm" className="h-7 px-2">
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
+                              {canDeleteDispatch(d) && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-destructive"
+                                  title="Apagar campanha (nenhum envio realizado)"
+                                  onClick={(e) => handleDeleteDispatch(d, e)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
                             </>
                           )}
                         </div>
