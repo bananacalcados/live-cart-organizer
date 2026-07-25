@@ -391,8 +391,10 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
           shipping_carrier: carrier,
           tracking_carrier: carrier,
           tracking_code: tracking.trim() || null,
+          tracking_url: trackingUrl.trim() || null,
+          delivery_days: deliveryDays.trim() || null,
           courier_name: courier.trim() || null,
-        })
+        } as any)
         .eq("id", order.id);
       if (error) throw error;
 
