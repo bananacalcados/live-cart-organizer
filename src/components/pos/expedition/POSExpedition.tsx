@@ -764,6 +764,24 @@ export function POSExpedition({ storeId, storeName }: Props) {
           }}
         />
       )}
+
+      {chatOrder && (
+        <WhatsAppChatDialog
+          open={!!chatOrder}
+          onOpenChange={(v) => !v && setChatOrder(null)}
+          order={{
+            id: chatOrder.id,
+            instagramHandle: chatOrder.instagram || chatOrder.customer_name || "",
+            whatsapp: chatOrder.resolved_phone || "",
+            products: [],
+            stage: "paid",
+            createdAt: new Date(chatOrder.created_at),
+            updatedAt: new Date(chatOrder.created_at),
+          } as any}
+          wide
+        />
+      )}
+
     </div>
   );
 }
