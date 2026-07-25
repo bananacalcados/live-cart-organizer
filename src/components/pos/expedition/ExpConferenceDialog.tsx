@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Loader2, ScanBarcode, FileText, Truck, Send, Link2, Pencil } from "lucide-react";
+import { CheckCircle2, Loader2, ScanBarcode, FileText, Truck, Send, Link2, Pencil, Copy, Download, FileCode2 } from "lucide-react";
+import { openFiscalDocument } from "@/lib/openFiscalDocument";
+
 import { ExpOrder, brl, isCarrierWithTracking, isMototaxi, isPickup, trackingLink } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
@@ -45,16 +47,19 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
   const courier = shipping.courier;
   const [nfeStatus, setNfeStatus] = useState<string | null>(null);
   const [nfeReject, setNfeReject] = useState<string | null>(null);
+  const [nfeDoc, setNfeDoc] = useState<any | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
 
   // Busca o último documento fiscal do pedido para exibir status e o MOTIVO REAL da rejeição.
   const loadNfeStatus = async () => {
     const { data } = await supabase
       .from("fiscal_documents")
-      .select("status, numero, rejection_code, rejection_message")
+      .select("id, status, numero, serie, chave_acesso, danfe_url, xml_url, xml_content, rejection_code, rejection_message")
       .eq("pos_sale_id", order.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    setNfeDoc(data || null);
     setNfeStatus(data ? `${data.status}${data.numero ? ` nº ${data.numero}` : ""}` : null);
     const msg = (data as any)?.rejection_message || null;
     const code = (data as any)?.rejection_code || null;
@@ -63,7 +68,63 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
         ? [code ? `Rejeição ${code}` : null, msg].filter(Boolean).join(": ")
         : null,
     );
+    return data as any;
   };
+
+  const isAuthorized = ["authorized", "autorizada", "autorizado"].includes(String(nfeDoc?.status || ""));
+
+  const copyChave = async () => {
+    if (!nfeDoc?.chave_acesso) return;
+    try {
+      await navigator.clipboard.writeText(nfeDoc.chave_acesso);
+      toast.success("Chave de acesso copiada");
+    } catch {
+      toast.error("Não foi possível copiar");
+    }
+  };
+
+  const downloadXml = async () => {
+    let xml = nfeDoc?.xml_content as string | undefined;
+    if (!xml) {
+      setBackfilling(true);
+      try {
+        await supabase.functions.invoke("fiscal-backfill-danfe", { body: { document_id: nfeDoc?.id } });
+        const fresh = await loadNfeStatus();
+        xml = fresh?.xml_content;
+      } finally {
+        setBackfilling(false);
+      }
+    }
+    if (!xml) return toast.error("XML ainda não disponível para esta NF-e");
+    const blob = new Blob([xml], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `NFe-${nfeDoc?.chave_acesso || nfeDoc?.numero}.xml`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const openDanfe = async () => {
+    let url = nfeDoc?.danfe_url as string | undefined;
+    if (!url) {
+      setBackfilling(true);
+      try {
+        await supabase.functions.invoke("fiscal-backfill-danfe", { body: { document_id: nfeDoc?.id } });
+        const fresh = await loadNfeStatus();
+        url = fresh?.danfe_url;
+      } finally {
+        setBackfilling(false);
+      }
+    }
+    if (!url) return toast.error("DANFE ainda não disponível para esta NF-e");
+    try {
+      await openFiscalDocument(url, { autoPrint: true });
+    } catch (e: any) {
+      toast.error(e?.message || "Erro ao abrir DANFE");
+    }
+  };
+
 
   const [emitting, setEmitting] = useState(false);
   const [finishing, setFinishing] = useState(false);
@@ -396,12 +457,42 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
               </Badge>
               <Button onClick={emitNfe} disabled={emitting} className="bg-exp-prep hover:bg-exp-prep/90 text-white font-bold">
                 {emitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileText className="h-4 w-4 mr-1" />}
-                Emitir NF-e
+                {isAuthorized ? "Reemitir NF-e" : "Emitir NF-e"}
               </Button>
               <Button variant="outline" className="font-bold" onClick={() => setShowEdit(true)}>
                 <Pencil className="h-4 w-4 mr-1" /> Editar dados do pedido / NF-e
               </Button>
             </div>
+
+            {isAuthorized && (
+              <div className="mt-3 rounded-lg border-2 border-exp-prep/30 bg-exp-prep/5 p-3 space-y-2">
+                <div>
+                  <p className="text-xs font-black uppercase text-pos-muted-text">Chave de acesso (44 dígitos)</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <code className="text-sm font-bold break-all">{nfeDoc?.chave_acesso || "—"}</code>
+                    {nfeDoc?.chave_acesso && (
+                      <Button size="sm" variant="outline" className="font-bold" onClick={copyChave}>
+                        <Copy className="h-3.5 w-3.5 mr-1" /> Copiar
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs font-semibold text-pos-muted-text mt-1">
+                    NF-e nº {nfeDoc?.numero ?? "—"} • Série {nfeDoc?.serie ?? "—"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button size="sm" variant="outline" className="font-bold" onClick={openDanfe} disabled={backfilling}>
+                    {backfilling ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Download className="h-3.5 w-3.5 mr-1" />}
+                    Baixar / imprimir DANFE (PDF)
+                  </Button>
+                  <Button size="sm" variant="outline" className="font-bold" onClick={downloadXml} disabled={backfilling}>
+                    {backfilling ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <FileCode2 className="h-3.5 w-3.5 mr-1" />}
+                    Baixar XML
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {nfeReject ? (
               <div className="mt-2 rounded-lg border-2 border-destructive/50 bg-destructive/10 p-3">
                 <p className="text-sm font-black text-destructive">Motivo da rejeição</p>
