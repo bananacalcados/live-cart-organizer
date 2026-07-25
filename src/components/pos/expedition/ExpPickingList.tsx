@@ -91,12 +91,15 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
       if (skus.length) filters.push(`sku.in.(${skus.map((s) => `"${s}"`).join(",")})`);
       const { data } = await supabase
         .from("pos_products")
-        .select("id, barcode, sku, stock, store_id, pos_stores!inner(name, is_simulation, is_active)")
+        .select(
+          "id, name, variant, size, barcode, sku, stock, store_id, pos_stores!inner(name, is_simulation, is_active)",
+        )
         .or(filters.join(","))
         .eq("pos_stores.is_simulation", false)
         .eq("pos_stores.is_active", true)
         .limit(1000);
       const map: Record<string, StockRow[]> = {};
+      const names: Record<string, { name: string; variant: string | null; size: string | null; sku: string | null }> = {};
       for (const r of (data || []) as any[]) {
         const row: StockRow = {
           product_id: r.id,
@@ -108,9 +111,13 @@ export function ExpPickingList({ orders, stage, onRefresh }: Props) {
           const arr = map[k] || [];
           arr.push(row);
           map[k] = arr;
+          if (!names[k] && r.name) {
+            names[k] = { name: r.name, variant: r.variant || null, size: r.size || null, sku: r.sku || null };
+          }
         }
       }
       setStock(map);
+      setResolved(names);
     } catch {
       /* best-effort */
     }
