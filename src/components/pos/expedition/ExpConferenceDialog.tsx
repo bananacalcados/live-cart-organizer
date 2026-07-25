@@ -457,12 +457,42 @@ export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFini
               </Badge>
               <Button onClick={emitNfe} disabled={emitting} className="bg-exp-prep hover:bg-exp-prep/90 text-white font-bold">
                 {emitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileText className="h-4 w-4 mr-1" />}
-                Emitir NF-e
+                {isAuthorized ? "Reemitir NF-e" : "Emitir NF-e"}
               </Button>
               <Button variant="outline" className="font-bold" onClick={() => setShowEdit(true)}>
                 <Pencil className="h-4 w-4 mr-1" /> Editar dados do pedido / NF-e
               </Button>
             </div>
+
+            {isAuthorized && (
+              <div className="mt-3 rounded-lg border-2 border-exp-prep/30 bg-exp-prep/5 p-3 space-y-2">
+                <div>
+                  <p className="text-xs font-black uppercase text-pos-muted-text">Chave de acesso (44 dígitos)</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <code className="text-sm font-bold break-all">{nfeDoc?.chave_acesso || "—"}</code>
+                    {nfeDoc?.chave_acesso && (
+                      <Button size="sm" variant="outline" className="font-bold" onClick={copyChave}>
+                        <Copy className="h-3.5 w-3.5 mr-1" /> Copiar
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs font-semibold text-pos-muted-text mt-1">
+                    NF-e nº {nfeDoc?.numero ?? "—"} • Série {nfeDoc?.serie ?? "—"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button size="sm" variant="outline" className="font-bold" onClick={openDanfe} disabled={backfilling}>
+                    {backfilling ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Download className="h-3.5 w-3.5 mr-1" />}
+                    Baixar / imprimir DANFE (PDF)
+                  </Button>
+                  <Button size="sm" variant="outline" className="font-bold" onClick={downloadXml} disabled={backfilling}>
+                    {backfilling ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <FileCode2 className="h-3.5 w-3.5 mr-1" />}
+                    Baixar XML
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {nfeReject ? (
               <div className="mt-2 rounded-lg border-2 border-destructive/50 bg-destructive/10 p-3">
                 <p className="text-sm font-black text-destructive">Motivo da rejeição</p>
