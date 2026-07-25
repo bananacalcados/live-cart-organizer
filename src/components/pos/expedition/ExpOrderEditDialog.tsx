@@ -11,6 +11,8 @@ import { ExpOrder, isPickup } from "./expeditionTypes";
 import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
 import { saveExpeditionShippingCost } from "./shippingCost";
 import { isValidCpf, formatCpf, onlyDigitsCpf } from "@/lib/cpfUtils";
+import { isOnlineOnlyStore } from "@/lib/pos/onlineStore";
+
 
 
 interface Props {
@@ -54,9 +56,16 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
   });
   const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
   const [sellerId, setSellerId] = useState<string>("");
+  const [onlineOnlyStore, setOnlineOnlyStore] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    supabase
+      .from("pos_stores")
+      .select("name")
+      .eq("id", storeId)
+      .maybeSingle()
+      .then(({ data }) => setOnlineOnlyStore(isOnlineOnlyStore((data as any)?.name)));
     supabase
       .from("pos_sellers")
       .select("id, name")
@@ -65,6 +74,7 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
       .order("name")
       .then(({ data }) => setSellers((data as any) || []));
   }, [open, storeId]);
+
 
   useEffect(() => {
     if (!open) return;
@@ -163,7 +173,7 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
           tracking_carrier: shipping.carrier || null,
           courier_name: shipping.courier.trim() || null,
           pickup_store_id: isPickup(shipping.carrier) ? storeId : null,
-          seller_id: sellerId || null,
+          seller_id: onlineOnlyStore ? null : sellerId || null,
         } as any)
         .eq("id", order.id);
       if (error) throw error;
@@ -283,32 +293,42 @@ export function ExpOrderEditDialog({ order, storeId, open, onOpenChange, onSaved
             </div>
           </div>
 
-          <div>
-            <h3 className="text-lg font-black mb-2">3. Vendedora</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <Label>Vendedora responsável</Label>
-                <Select value={sellerId || "none"} onValueChange={(v) => setSellerId(v === "none" ? "" : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecionar vendedora" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem vendedora definida</SelectItem>
-                    {sellers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!order.seller_id && order.seller_label && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Atribuição atual (automática): {order.seller_label}
-                  </p>
-                )}
+          {onlineOnlyStore ? (
+            <div>
+              <h3 className="text-lg font-black mb-2">3. Vendedora</h3>
+              <p className="text-sm text-muted-foreground">
+                Loja Site/Live não possui vendedora humana — estes pedidos não são atribuídos a ninguém.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <h3 className="text-lg font-black mb-2">3. Vendedora</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label>Vendedora responsável</Label>
+                  <Select value={sellerId || "none"} onValueChange={(v) => setSellerId(v === "none" ? "" : v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar vendedora" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem vendedora definida</SelectItem>
+                      {sellers.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!order.seller_id && order.seller_label && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Atribuição atual (automática): {order.seller_label}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
 
           <div>
             <h3 className="text-lg font-black mb-2">4. Envio</h3>

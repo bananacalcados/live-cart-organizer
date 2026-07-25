@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isOnlineOnlyStore } from "@/lib/pos/onlineStore";
+
 
 export type ExpStage = "novo" | "preparacao" | "separacao" | "conferencia" | "concluido";
 
@@ -211,12 +213,26 @@ export async function fetchExpeditionOrders(
   const rows = (sales || []) as any[];
   if (!rows.length) return [];
 
+  // Loja 100% online (Site/Live) não tem vendedora humana: nenhuma venda dela
+  // pode ser atribuída a vendedora/atendente.
+  let storeIsOnlineOnly = false;
+  try {
+    const { data: storeRow } = await supabase
+      .from("pos_stores")
+      .select("name")
+      .eq("id", storeId)
+      .maybeSingle();
+    storeIsOnlineOnly = isOnlineOnlyStore((storeRow as any)?.name);
+  } catch {
+    /* best-effort */
+  }
 
   const ids = rows.map((s) => s.id);
   const sellerIds = [...new Set(rows.map((s) => s.seller_id).filter(Boolean))];
   const eventIds = [...new Set(rows.map((s) => s.event_id).filter(Boolean))];
   const orderIds = [...new Set(rows.map((s) => s.source_order_id).filter(Boolean))];
   const phones = [...new Set(rows.map((s) => salePhone(s)).filter(Boolean))] as string[];
+
 
   const [itemsRes, sellersRes, eventsRes, ordersRes] = await Promise.all([
     supabase.from("pos_sale_items").select("*").in("sale_id", ids),
@@ -279,10 +295,10 @@ export async function fetchExpeditionOrders(
     const src = s.source_order_id ? orderMap.get(s.source_order_id) : null;
     const phone = salePhone(s);
     const suf = phone ? phone.slice(-8) : "";
-    const saleSeller = s.seller_id ? sellerMap.get(s.seller_id) || null : null;
-    const linkSeller = s.payment_details?.seller_name || null;
-    const chatSeller = suf ? attendantBySuffix.get(suf) || null : null;
-    const seller_label = saleSeller || linkSeller || chatSeller;
+    const saleSeller = storeIsOnlineOnly ? null : s.seller_id ? sellerMap.get(s.seller_id) || null : null;
+    const linkSeller = storeIsOnlineOnly ? null : s.payment_details?.seller_name || null;
+    const chatSeller = storeIsOnlineOnly ? null : suf ? attendantBySuffix.get(suf) || null : null;
+    const seller_label = saleSeller || linkSeller || chatSeller || null;
     const waId = suf ? instBySuffix.get(suf) || null : null;
     return {
       ...s,
@@ -294,6 +310,7 @@ export async function fetchExpeditionOrders(
       seller_name: saleSeller,
       seller_label,
       seller_source: saleSeller ? "sale" : linkSeller ? "link" : chatSeller ? "chat" : null,
+
       resolved_phone: phone,
       wa_number_id: waId,
       wa_instance_label: waId ? instMap.get(waId) || null : null,
