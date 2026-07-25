@@ -8,12 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Loader2, ScanBarcode, FileText, Truck, Send } from "lucide-react";
-import { ExpOrder, SHIPPING_OPTIONS, brl, isCarrierWithTracking, trackingLink } from "./expeditionTypes";
+import { CheckCircle2, Loader2, ScanBarcode, FileText, Truck, Send, Link2, Pencil } from "lucide-react";
+import { ExpOrder, brl, isCarrierWithTracking, isMototaxi, isPickup, trackingLink } from "./expeditionTypes";
+import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
+import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
+import { saveExpeditionShippingCost } from "./shippingCost";
 import { extractEdgeError } from "@/lib/edgeFunctionError";
 
 interface Props {
   order: ExpOrder;
+  storeId?: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onFinished: () => void;
@@ -25,18 +29,29 @@ interface CheckState {
   has_defect: boolean;
 }
 
-export function ExpConferenceDialog({ order, open, onOpenChange, onFinished }: Props) {
+export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFinished }: Props) {
   const [checks, setChecks] = useState<Record<string, CheckState>>({});
   const [scanInput, setScanInput] = useState("");
-  const [carrier, setCarrier] = useState(order.shipping_carrier || order.delivery_method || "");
-  const [courier, setCourier] = useState(order.courier_name || "");
   const [tracking, setTracking] = useState(order.tracking_code || "");
+  const [shipping, setShipping] = useState<ShippingFieldsValue>({
+    carrier: order.shipping_carrier || order.delivery_method || "",
+    courier: order.courier_name || "",
+    courierProviderId: "",
+    cost: order.shipping_cost != null ? String(order.shipping_cost) : "",
+  });
+  const carrier = shipping.carrier;
+  const courier = shipping.courier;
   const [nfeStatus, setNfeStatus] = useState<string | null>(null);
   const [emitting, setEmitting] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [sendingWa, setSendingWa] = useState(false);
   const [numbers, setNumbers] = useState<any[]>([]);
   const [numberId, setNumberId] = useState<string>("");
+  const [showEdit, setShowEdit] = useState(false);
+  const [linkCode, setLinkCode] = useState<string | null>(null);
+  const [linkItemId, setLinkItemId] = useState<string>("");
+  const [linking, setLinking] = useState(false);
+
 
   useEffect(() => {
     const init: Record<string, CheckState> = {};
