@@ -43,6 +43,7 @@
     --radius: 0.75rem;
 
     /* Kanban stage colors */
+    --stage-pre-sale: 265 70% 58%;
     --stage-incomplete: 48 90% 50%;
     --stage-awaiting-confirm: 30 90% 55%;
     --stage-new: 200 80% 50%;

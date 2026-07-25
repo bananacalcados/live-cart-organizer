@@ -81,6 +81,7 @@ export default {
           done: "hsl(var(--exp-done))",
         },
         stage: {
+          "pre-sale": "hsl(var(--stage-pre-sale))",
           incomplete: "hsl(var(--stage-incomplete))",
           "awaiting-confirm": "hsl(var(--stage-awaiting-confirm))",
           new: "hsl(var(--stage-new))",
