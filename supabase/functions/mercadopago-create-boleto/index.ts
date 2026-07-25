@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, StandardFonts, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import QRCode from "https://esm.sh/qrcode@1.5.3";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
+import { resolvePayerEmail } from "../_shared/payer-email.ts";
 
 // Boleto Mercado Pago sob demanda (vendedor no chat do PDV).
 // Fluxo:
@@ -146,6 +147,13 @@ serve(async (req) => {
     const firstName = nameParts.shift() || "Cliente";
     const lastName = nameParts.join(" ") || "Banana";
 
+    // E-mail saneado (corrige typos e evita 400 "payer.email must be a valid email")
+    const emailResolution = resolvePayerEmail({ email: customer_email, phone: customer_phone, cpf });
+    const payerEmailSafe = emailResolution.email;
+    if (emailResolution.fallbackUsed) {
+      console.warn(`[mp-boleto] E-mail ajustado/substituído (original inválido) → ${payerEmailSafe}`);
+    }
+
     // 1) INSERT pos_boletos (pending)
     const authHeader = req.headers.get("authorization") || "";
     let createdBy: string | null = null;
@@ -203,7 +211,7 @@ serve(async (req) => {
       external_reference: externalRef,
       notification_url: `${supabaseUrl}/functions/v1/payment-webhook?gateway=mercadopago`,
       payer: {
-        email: String(customer_email),
+        email: payerEmailSafe,
         first_name: firstName,
         last_name: lastName,
         identification: { type: "CPF", number: cpf },

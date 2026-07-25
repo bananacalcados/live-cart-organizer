@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getActiveMpAccount } from "../_shared/mp-account.ts";
 import { checkOrderStock } from "../_shared/check-order-stock.ts";
+import { resolvePayerEmail } from "../_shared/payer-email.ts";
 
 const ALLOWED_ORIGINS = [
   "https://www.bananacalcados.com.br",
@@ -163,11 +164,19 @@ serve(async (req) => {
       console.log(`[mp-pix] Aplicado desconto PIX ${pixDiscountPct}% (-R$ ${pixDiscount.toFixed(2)}) → total R$ ${totalAmount.toFixed(2)}`);
     }
 
-    // Use payer data from request, or fallback to customer data
-    const payerEmail = payer?.email || 
-      ((customer?.whatsapp as string) 
-        ? `${(customer.whatsapp as string).replace(/\D/g, "")}@pix.mercadopago.com`
-        : "customer@email.com");
+    // Use payer data from request, or fallback to customer data.
+    // O e-mail é sempre saneado (typos como "@gmail.coma") para o MP não rejeitar o pagamento.
+    const emailResolution = resolvePayerEmail({
+      email: (payer?.email as string) || null,
+      phone: (payer?.phone as string) || (customer?.whatsapp as string) || null,
+      cpf: (payer?.cpf as string) || null,
+      orderId: String(orderId),
+    });
+    const payerEmail = emailResolution.email;
+    if (emailResolution.fallbackUsed) {
+      console.warn(`[mp-pix] E-mail do pagador ajustado/substituído (original inválido) → ${payerEmail}`);
+    }
+
 
     const payerFirstName = payer?.firstName || (customer?.instagram_handle as string) || "Cliente";
     const payerLastName = payer?.lastName || "";

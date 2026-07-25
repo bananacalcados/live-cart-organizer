@@ -73,9 +73,34 @@ interface CustomerFormData {
 }
 
 // ── Validators ──────────────────────────────────────────────────
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+const EMAIL_DOMAIN_TYPOS: Record<string, string> = {
+  "gmail.coma": "gmail.com", "gmail.con": "gmail.com", "gmail.comm": "gmail.com",
+  "gmail.cim": "gmail.com", "gmail.c0m": "gmail.com", "gmail.om": "gmail.com",
+  "gmail.cm": "gmail.com", "gmail.co": "gmail.com", "gamil.com": "gmail.com",
+  "gmial.com": "gmail.com", "hotmail.coma": "hotmail.com", "hotmail.con": "hotmail.com",
+  "hotmail.cm": "hotmail.com", "hotmail.co": "hotmail.com", "hotmial.com": "hotmail.com",
+  "outlook.con": "outlook.com", "outlook.coma": "outlook.com",
+  "yahoo.con": "yahoo.com", "yahoo.coma": "yahoo.com",
+  "icloud.con": "icloud.com", "icloud.coma": "icloud.com",
+};
+
+/** Normaliza e corrige erros de digitação comuns no domínio do e-mail. */
+export function normalizeEmailInput(raw: string): string {
+  let email = (raw || "").trim().toLowerCase().replace(/\s+/g, "").replace(/[.,;:]+$/, "");
+  const at = email.lastIndexOf("@");
+  if (at <= 0) return email;
+  const local = email.slice(0, at);
+  let domain = email.slice(at + 1);
+  if (EMAIL_DOMAIN_TYPOS[domain]) domain = EMAIL_DOMAIN_TYPOS[domain];
+  domain = domain.replace(/\.com\.brr?$/, ".com.br").replace(/\.com\.b$/, ".com.br");
+  return `${local}@${domain}`;
 }
+
+function isValidEmail(email: string): boolean {
+  // TLD só com letras (2–24) — evita casos como "@gmail.coma" que o gateway recusa
+  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}$/.test(email.trim());
+}
+
 
 function isValidCPF(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, "");
@@ -409,7 +434,7 @@ function StepIdentification({ form, setForm, onNext }: { form: CustomerFormData;
     if (!form.fullName.trim()) newErrors.fullName = "Nome é obrigatório";
     else if (form.fullName.trim().split(/\s+/).length < 2) newErrors.fullName = "Informe nome e sobrenome";
 
-    const emailTrimmed = form.email.trim();
+    const emailTrimmed = normalizeEmailInput(form.email);
     if (!emailTrimmed) newErrors.email = "E-mail é obrigatório";
     else if (!isValidEmail(emailTrimmed)) newErrors.email = "E-mail inválido (ex: nome@email.com)";
 
@@ -425,7 +450,7 @@ function StepIdentification({ form, setForm, onNext }: { form: CustomerFormData;
       toast.error("Corrija os campos destacados");
       return;
     }
-    // Sanitize email before proceeding
+    // Sanitize email before proceeding (corrige typos como "@gmail.coma")
     setForm({ ...form, email: emailTrimmed });
     onNext();
   };
