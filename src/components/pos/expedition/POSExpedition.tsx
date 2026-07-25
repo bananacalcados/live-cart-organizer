@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, User, MessageCircle } from "lucide-react";
+import { Loader2, RefreshCw, Search, Package, Truck, ScanBarcode, CheckCircle2, PlayCircle, Layers, ChevronRight, ChevronLeft, MapPin, Store, Pencil, FlaskConical, Trash2, Filter, X, CheckSquare, Square, User, MessageCircle } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -16,13 +16,17 @@ import {
   customerKey,
   fetchExpeditionOrders,
   nextStage,
+  prevStage,
   trackingLink,
   UNPAID_STATUSES,
   PAID_FILTER,
 } from "./expeditionTypes";
 import { ExpConferenceDialog } from "./ExpConferenceDialog";
 import { ExpAvulsoEditDialog } from "./ExpAvulsoEditDialog";
+import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
+import { ExpPickingList } from "./ExpPickingList";
 import { WhatsAppChatDialog } from "@/components/WhatsAppChatDialog";
+
 
 
 interface Props {
@@ -57,6 +61,9 @@ export function POSExpedition({ storeId, storeName }: Props) {
   const [conferenceOrder, setConferenceOrder] = useState<ExpOrder | null>(null);
   const [avulsoOrder, setAvulsoOrder] = useState<ExpOrder | null>(null);
   const [chatOrder, setChatOrder] = useState<ExpOrder | null>(null);
+  const [editOrder, setEditOrder] = useState<ExpOrder | null>(null);
+
+
 
   const [stockByBarcode, setStockByBarcode] = useState<Record<string, { store: string; stock: number }[]>>({});
   const [testBusy, setTestBusy] = useState(false);
@@ -218,6 +225,27 @@ export function POSExpedition({ storeId, storeName }: Props) {
       setBusyId(null);
     }
   };
+
+  /** Volta o pedido para a etapa anterior (permite corrigir dados/NF-e). */
+  const goBack = async (o: ExpOrder) => {
+    const to = prevStage(o.expedition_stage);
+    if (!to) return;
+    setBusyId(o.id);
+    try {
+      const { error } = await supabase
+        .from("pos_sales")
+        .update({ expedition_stage: to, expedition_finished_at: null })
+        .eq("id", o.id);
+      if (error) throw error;
+      toast.success(`Pedido voltou para ${EXP_STAGES.find((s) => s.id === to)?.label}`);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao voltar etapa");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
 
   const unifyGroup = async (list: ExpOrder[]) => {
     if (list.length < 2) return;
@@ -518,7 +546,17 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
       {/* List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {stage === "separacao" && !loading && filtered.length > 0 && (
+          <>
+            <ExpPickingList orders={filtered} stage={stage} onRefresh={load} />
+            <p className="text-base font-black text-pos-text uppercase pt-2">
+              Pedidos desta etapa ({filtered.length})
+            </p>
+
+          </>
+        )}
         {loading ? (
+
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-10 w-10 animate-spin text-exp-prep" />
           </div>
@@ -657,7 +695,7 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             </Button>
                           )}
 
-                          {stage === "novo" && o.is_avulso && (
+                          {stage === "novo" && o.is_avulso ? (
                             <Button
                               size="lg"
                               variant="outline"
@@ -666,7 +704,30 @@ export function POSExpedition({ storeId, storeName }: Props) {
                             >
                               <Pencil className="h-5 w-5 mr-1" /> EDITAR PEDIDO
                             </Button>
+                          ) : (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-2 border-exp-prep text-exp-prep text-base font-black"
+                              onClick={() => setEditOrder(o)}
+                              title="Editar dados do pedido / NF-e"
+                            >
+                              <Pencil className="h-5 w-5 mr-1" /> EDITAR DADOS
+                            </Button>
                           )}
+                          {prevStage(o.expedition_stage) && (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="text-base font-black"
+                              disabled={busyId === o.id}
+                              onClick={() => goBack(o)}
+                              title="Voltar para a etapa anterior"
+                            >
+                              <ChevronLeft className="h-5 w-5 mr-1" /> VOLTAR
+                            </Button>
+                          )}
+
                           {stage === "novo" && (
                             <Button
                               size="lg"
@@ -749,6 +810,8 @@ export function POSExpedition({ storeId, storeName }: Props) {
 
       {conferenceOrder && (
         <ExpConferenceDialog
+          storeId={storeId}
+
           order={conferenceOrder}
           open={!!conferenceOrder}
           onOpenChange={(v) => !v && setConferenceOrder(null)}
@@ -771,6 +834,20 @@ export function POSExpedition({ storeId, storeName }: Props) {
           }}
         />
       )}
+
+      {editOrder && (
+        <ExpOrderEditDialog
+          order={editOrder}
+          storeId={storeId}
+          open={!!editOrder}
+          onOpenChange={(v) => !v && setEditOrder(null)}
+          onSaved={() => {
+            setEditOrder(null);
+            load();
+          }}
+        />
+      )}
+
 
       {chatOrder && (
         <WhatsAppChatDialog

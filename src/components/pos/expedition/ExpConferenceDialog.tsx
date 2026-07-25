@@ -8,12 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CheckCircle2, Loader2, ScanBarcode, FileText, Truck, Send } from "lucide-react";
-import { ExpOrder, SHIPPING_OPTIONS, brl, isCarrierWithTracking, trackingLink } from "./expeditionTypes";
+import { CheckCircle2, Loader2, ScanBarcode, FileText, Truck, Send, Link2, Pencil } from "lucide-react";
+import { ExpOrder, brl, isCarrierWithTracking, isMototaxi, isPickup, trackingLink } from "./expeditionTypes";
+import { ExpShippingFields, ShippingFieldsValue } from "./ExpShippingFields";
+import { ExpOrderEditDialog } from "./ExpOrderEditDialog";
+import { saveExpeditionShippingCost } from "./shippingCost";
 import { extractEdgeError } from "@/lib/edgeFunctionError";
 
 interface Props {
   order: ExpOrder;
+  storeId?: string;
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onFinished: () => void;
@@ -25,18 +29,29 @@ interface CheckState {
   has_defect: boolean;
 }
 
-export function ExpConferenceDialog({ order, open, onOpenChange, onFinished }: Props) {
+export function ExpConferenceDialog({ order, storeId, open, onOpenChange, onFinished }: Props) {
   const [checks, setChecks] = useState<Record<string, CheckState>>({});
   const [scanInput, setScanInput] = useState("");
-  const [carrier, setCarrier] = useState(order.shipping_carrier || order.delivery_method || "");
-  const [courier, setCourier] = useState(order.courier_name || "");
   const [tracking, setTracking] = useState(order.tracking_code || "");
+  const [shipping, setShipping] = useState<ShippingFieldsValue>({
+    carrier: order.shipping_carrier || order.delivery_method || "",
+    courier: order.courier_name || "",
+    courierProviderId: "",
+    cost: order.shipping_cost != null ? String(order.shipping_cost) : "",
+  });
+  const carrier = shipping.carrier;
+  const courier = shipping.courier;
   const [nfeStatus, setNfeStatus] = useState<string | null>(null);
   const [emitting, setEmitting] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [sendingWa, setSendingWa] = useState(false);
   const [numbers, setNumbers] = useState<any[]>([]);
   const [numberId, setNumberId] = useState<string>("");
+  const [showEdit, setShowEdit] = useState(false);
+  const [linkCode, setLinkCode] = useState<string | null>(null);
+  const [linkItemId, setLinkItemId] = useState<string>("");
+  const [linking, setLinking] = useState(false);
+
 
   useEffect(() => {
     const init: Record<string, CheckState> = {};
@@ -76,18 +91,69 @@ export function ExpConferenceDialog({ order, open, onOpenChange, onFinished }: P
     [order.items, checks],
   );
 
-  const handleScan = (raw?: string) => {
+  const handleScan = async (raw?: string) => {
     const code = (raw ?? scanInput).replace(/\s/g, "");
     if (!code) return;
     const item = order.items.find((i) => i.barcode === code && !checks[i.id]?.scanned);
-    if (!item) {
-      toast.error("Código não pertence a este pedido (ou já bipado)");
+    if (item) {
+      setChecks((p) => ({ ...p, [item.id]: { ...p[item.id], scanned: true } }));
+      setScanInput("");
+      toast.success(`Bipado: ${item.product_name}`);
       return;
     }
-    setChecks((p) => ({ ...p, [item.id]: { ...p[item.id], scanned: true } }));
-    setScanInput("");
-    toast.success(`Bipado: ${item.product_name}`);
+    if (order.items.some((i) => i.barcode === code)) {
+      toast.error("Este código já foi bipado");
+      setScanInput("");
+      return;
+    }
+    // Código não vinculado (ex.: produto veio da Shopify/Tiny com outro GTIN).
+    // Buscamos o produto no catálogo do PDV e oferecemos vincular ao item do pedido.
+    let found: any = null;
+    try {
+      const { data } = await supabase
+        .from("pos_products")
+        .select("name, sku, barcode")
+        .or(`barcode.eq.${code},sku.eq.${code}`)
+        .limit(1)
+        .maybeSingle();
+      found = data;
+    } catch {
+      /* ignore */
+    }
+    const pending = order.items.filter((i) => !checks[i.id]?.scanned);
+    if (!pending.length) {
+      toast.error("Todos os itens deste pedido já foram bipados");
+      setScanInput("");
+      return;
+    }
+    setLinkItemId(pending.length === 1 ? pending[0].id : "");
+    setLinkCode(code);
+    toast.info(found ? `Código de "${found.name}" não vinculado a este pedido` : "Código não encontrado no pedido");
   };
+
+  const confirmLink = async () => {
+    if (!linkCode || !linkItemId) return toast.error("Selecione o item correspondente");
+    setLinking(true);
+    try {
+      const { error } = await supabase
+        .from("pos_sale_items")
+        .update({ barcode: linkCode })
+        .eq("id", linkItemId);
+      if (error) throw error;
+      const it = order.items.find((i) => i.id === linkItemId);
+      if (it) it.barcode = linkCode;
+      setChecks((p) => ({ ...p, [linkItemId]: { ...p[linkItemId], scanned: true } }));
+      toast.success("Código vinculado ao item e bipado");
+      setLinkCode(null);
+      setLinkItemId("");
+      setScanInput("");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao vincular código");
+    } finally {
+      setLinking(false);
+    }
+  };
+
 
   const emitNfe = async () => {
     setEmitting(true);
@@ -143,7 +209,9 @@ export function ExpConferenceDialog({ order, open, onOpenChange, onFinished }: P
     if (!carrier) return toast.error("Selecione a forma de envio");
     if (isCarrierWithTracking(carrier) && !tracking.trim())
       return toast.error("Informe o código de rastreio");
-    if (carrier === "Mototaxi" && !courier.trim()) return toast.error("Informe o entregador");
+    if (isMototaxi(carrier) && !courier.trim()) return toast.error("Informe o entregador");
+    if (!isPickup(carrier) && !(Number(shipping.cost) >= 0))
+      return toast.error("Informe o valor do envio");
 
     setFinishing(true);
     try {
@@ -171,6 +239,17 @@ export function ExpConferenceDialog({ order, open, onOpenChange, onFinished }: P
         })
         .eq("id", order.id);
       if (error) throw error;
+
+      await saveExpeditionShippingCost({
+        saleId: order.id,
+        storeId: storeId || order.store_id,
+        carrier,
+        courierProviderId: shipping.courierProviderId,
+        courierName: courier,
+        cost: Number(shipping.cost) || 0,
+        customerName: order.customer_name,
+      });
+
 
       toast.success("Expedição concluída — pedido liberado na aba PEDIDOS");
       onFinished();
@@ -282,7 +361,13 @@ export function ExpConferenceDialog({ order, open, onOpenChange, onFinished }: P
                 {emitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileText className="h-4 w-4 mr-1" />}
                 Emitir NF-e
               </Button>
+              <Button variant="outline" className="font-bold" onClick={() => setShowEdit(true)}>
+                <Pencil className="h-4 w-4 mr-1" /> Editar dados do pedido / NF-e
+              </Button>
             </div>
+            <p className="mt-2 text-sm font-semibold text-pos-muted-text">
+              Rejeição de endereço? Corrija os dados aqui e emita novamente.
+            </p>
           </div>
 
           {/* Envio */}
@@ -290,30 +375,14 @@ export function ExpConferenceDialog({ order, open, onOpenChange, onFinished }: P
             <p className="text-lg font-black flex items-center gap-2">
               <Truck className="h-5 w-5 text-exp-pick" /> 3. Envio e rastreio
             </p>
-            <div className="grid md:grid-cols-2 gap-3">
+            <ExpShippingFields value={shipping} onChange={setShipping} />
+            {!isMototaxi(carrier) && !isPickup(carrier) && (
               <div>
-                <Label className="text-base font-bold">Forma de envio</Label>
-                <Select value={carrier} onValueChange={setCarrier}>
-                  <SelectTrigger className="h-12 text-base"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {SHIPPING_OPTIONS.map((s) => (
-                      <SelectItem key={s} value={s} className="text-base">{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-base font-bold">Código de rastreio</Label>
+                <Input value={tracking} onChange={(e) => setTracking(e.target.value)} className="h-12 text-base" placeholder="Ex: AA123456789BR" />
               </div>
-              {carrier === "Mototaxi" ? (
-                <div>
-                  <Label className="text-base font-bold">Entregador</Label>
-                  <Input value={courier} onChange={(e) => setCourier(e.target.value)} className="h-12 text-base" placeholder="Nome do mototaxista" />
-                </div>
-              ) : (
-                <div>
-                  <Label className="text-base font-bold">Código de rastreio</Label>
-                  <Input value={tracking} onChange={(e) => setTracking(e.target.value)} className="h-12 text-base" placeholder="Ex: AA123456789BR" />
-                </div>
-              )}
-            </div>
+            )}
+
 
             {isCarrierWithTracking(carrier) && (
               <div className="flex items-end gap-2 flex-wrap">
@@ -348,7 +417,58 @@ export function ExpConferenceDialog({ order, open, onOpenChange, onFinished }: P
             CONCLUIR EXPEDIÇÃO
           </Button>
         </div>
+
+        {/* Vincular código de barras desconhecido a um item do pedido */}
+        <Dialog open={!!linkCode} onOpenChange={(v) => !v && setLinkCode(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-black flex items-center gap-2">
+                <Link2 className="h-5 w-5 text-exp-check" /> Vincular código {linkCode}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-base font-semibold text-pos-muted-text">
+                Este código não está cadastrado no item. Selecione o produto correspondente para vincular
+                permanentemente — as próximas bipagens vão funcionar.
+              </p>
+              <Select value={linkItemId} onValueChange={setLinkItemId}>
+                <SelectTrigger className="h-12 text-base">
+                  <SelectValue placeholder="Selecione o item do pedido" />
+                </SelectTrigger>
+                <SelectContent>
+                  {order.items
+                    .filter((i) => !checks[i.id]?.scanned)
+                    .map((i) => (
+                      <SelectItem key={i.id} value={i.id} className="text-base">
+                        {[i.product_name, i.variant_name, i.size && `Tam ${i.size}`].filter(Boolean).join(" • ")}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setLinkCode(null)}>
+                  Cancelar
+                </Button>
+                <Button onClick={confirmLink} disabled={linking} className="font-black bg-exp-check text-white">
+                  {linking ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Link2 className="h-4 w-4 mr-1" />}
+                  VINCULAR E BIPAR
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {showEdit && (
+          <ExpOrderEditDialog
+            order={order}
+            storeId={storeId || order.store_id}
+            open={showEdit}
+            onOpenChange={setShowEdit}
+            onSaved={() => setShowEdit(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
+
 }

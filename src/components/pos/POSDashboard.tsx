@@ -21,6 +21,8 @@ import { POSTaskWhatsAppDialog } from "./POSTaskWhatsAppDialog";
 import { POSMetaPixelCard } from "./POSMetaPixelCard";
 import { POSStoreScaledGoals } from "./POSStoreScaledGoals";
 import { POSStoreGoalCards } from "./POSStoreGoalCards";
+import { DeliveryCostsCard } from "./DeliveryCostsCard";
+
 import { POSChannelSalesModal, type ChannelSale } from "./POSChannelSalesModal";
 
 import type { DateRange } from "react-day-picker";
@@ -314,6 +316,15 @@ export function POSDashboard({ storeId, onNavigateToSection }: Props) {
               <KPICard icon={TrendingUp} label="Ticket Médio" value={`R$ ${avgTicket.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`} sub={periodLabel} trend="line" />
               <KPICard icon={Package} label="Itens/Venda" value={avgItemsPerSale.toFixed(1)} sub={periodLabel} trend="wave" />
             </div>
+
+            <DeliveryCostsCard
+              storeId={storeId}
+              periodStart={getPeriodRange(period, customRange).start}
+              periodEnd={getPeriodRange(period, customRange).end}
+              periodLabel={periodLabel}
+            />
+
+
 
             {/* Metas da Loja (Dia / Semana / Mês) */}
             <div className="space-y-3">

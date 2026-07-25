@@ -15,6 +15,12 @@ export const nextStage = (s: ExpStage): ExpStage | null => {
   return idx >= 0 && idx < EXP_STAGES.length - 1 ? EXP_STAGES[idx + 1].id : null;
 };
 
+export const prevStage = (s: ExpStage): ExpStage | null => {
+  const idx = EXP_STAGES.findIndex((e) => e.id === s);
+  return idx > 0 ? EXP_STAGES[idx - 1].id : null;
+};
+
+
 export type ExpOrigin = "live" | "whatsapp" | "online";
 
 export const ORIGIN_LABEL: Record<ExpOrigin, string> = {
@@ -66,6 +72,7 @@ export interface ExpOrder {
   expedition_group_id: string | null;
   expedition_finished_at: string | null;
   shipping_carrier: string | null;
+  shipping_cost: number | null;
   tracking_code: string | null;
   tracking_carrier: string | null;
   courier_name: string | null;
@@ -129,6 +136,7 @@ export const isAvulsoReady = (sale: any): boolean =>
 export const SHIPPING_OPTIONS = [
   "Correios PAC",
   "Correios SEDEX",
+  "J&T Express",
   "Jadlog",
   "Loggi",
   "Transportadora",
@@ -136,8 +144,34 @@ export const SHIPPING_OPTIONS = [
   "Retirada na loja",
 ];
 
-export const isCarrierWithTracking = (c: string) =>
-  !!c && c !== "Mototaxi" && c !== "Retirada na loja";
+/**
+ * Formas de envio = lista padrão + transportadoras cadastradas em
+ * Configurações > Prestadores de serviço (nunca quebra se a consulta falhar).
+ */
+export async function fetchShippingOptions(): Promise<string[]> {
+  try {
+    const { data } = await supabase
+      .from("service_providers" as any)
+      .select("name, provider_type, is_active")
+      .eq("is_active", true);
+    const extra = ((data || []) as any[])
+      .filter((p) => p.provider_type === "transportadora")
+      .map((p) => String(p.name).trim())
+      .filter(Boolean);
+    const all = [...SHIPPING_OPTIONS];
+    for (const n of extra) if (!all.some((o) => o.toLowerCase() === n.toLowerCase())) all.splice(all.length - 2, 0, n);
+    return all;
+  } catch {
+    return [...SHIPPING_OPTIONS];
+  }
+}
+
+export const isPickup = (c?: string | null) => (c || "").toLowerCase().includes("retirada");
+
+export const isMototaxi = (c?: string | null) => (c || "").toLowerCase().includes("moto");
+
+export const isCarrierWithTracking = (c: string) => !!c && !isMototaxi(c) && !isPickup(c);
+
 
 export const trackingLink = (code: string) =>
   `https://www.melhorrastreio.com.br/rastreio/${encodeURIComponent(code)}`;
@@ -150,7 +184,7 @@ export async function fetchExpeditionOrders(
   stage: ExpStage,
 ): Promise<ExpOrder[]> {
   const SALE_COLS =
-    "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id";
+    "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, shipping_cost, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id";
 
   const baseQuery = () =>
     supabase
