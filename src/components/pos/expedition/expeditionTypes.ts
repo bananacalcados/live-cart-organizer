@@ -72,6 +72,7 @@ export interface ExpOrder {
   expedition_group_id: string | null;
   expedition_finished_at: string | null;
   shipping_carrier: string | null;
+  shipping_cost: number | null;
   tracking_code: string | null;
   tracking_carrier: string | null;
   courier_name: string | null;
@@ -183,7 +184,7 @@ export async function fetchExpeditionOrders(
   stage: ExpStage,
 ): Promise<ExpOrder[]> {
   const SALE_COLS =
-    "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id";
+    "id, store_id, created_at, total, discount, subtotal, status, sale_type, payment_method, payment_method_detail, payment_gateway, payment_details, notes, customer_id, customer_name, customer_phone, customer_email, customer_cpf, shipping_address, shipping_notes, shipping_cost, seller_id, event_id, source_order_id, expedition_stage, expedition_group_id, expedition_finished_at, shipping_carrier, tracking_code, tracking_carrier, courier_name, pickup_store_id";
 
   const baseQuery = () =>
     supabase
